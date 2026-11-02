@@ -42,6 +42,7 @@ target and each quick action is off until the device's own user turns it on.
 | TCP 443 | a forwarder with VLESS | the internet | VLESS with REALITY |
 | TCP 6466 and 6467 | an Android TV or a Google TV | a computer at home | its remote and its pairing, for [`cbb remote`](cli.md) |
 | TCP 8060 | a Roku | a computer at home | its External Control Protocol, for [`cbb remote`](cli.md) |
+| TCP 8769 | `cbb next link` on a ZX Spectrum Next's Pi | the loopback address only | the lite member's connections through the Next's ESP8266 |
 
 The member port can be changed when installing (`--port`, [settings](config.md)). The TVs' ports are
 on the TV; a computer only connects to them. The installers ask before they open any of the

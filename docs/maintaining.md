@@ -142,8 +142,8 @@ environment secret**.
 - **lite core on the ESP32**: the lite protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
   ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`lite/esp32`) built, its console and
   flash settings tested and its self-test run in Espressif's QEMU (both downloaded by hash);
-- **ZX Spectrum Next**: the tests of the `.cbb` frame parser on the host, and the dot command
-  built with z88dk (from its release source, checked by hash, cached);
+- **ZX Spectrum Next**: the tests of the `.cbb` frame parser on the host, and the dot commands `.cbb`
+  and `.pibridge` built with z88dk (from its release source, checked by hash, cached);
 - **ci-ok**: the summary that the ruleset requires.
 
 Rules for workflows:

@@ -20,6 +20,7 @@ mod files;
 mod identity;
 mod interfaces;
 mod next;
+mod nextlink;
 mod node;
 mod pair;
 mod pastehelper;
@@ -447,11 +448,22 @@ fn connect(g: &Global) -> Result<UnixStream> {
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Err(Error::msg(
             "no permission to use the Clipboard Bridge service; add your user to the clipboardbridge group and log in again",
         )),
-        c => c.context(format!(
-            "cannot reach the lite member's service at {}; is it running ({} status clipboardbridge)?",
-            g.socket.display(),
-            rootless::systemctl()
-        )),
+        c => c.context(format!("cannot reach the lite member's service at {}; {}", g.socket.display(), not_running())),
+    }
+}
+
+/// The hint when the service cannot be reached: systemd's command where
+/// systemd runs, else `cbb run` itself (NextPi on the ZX Spectrum Next, say,
+/// has no systemd).
+fn not_running() -> String {
+    hint(std::path::Path::new("/run/systemd/system").is_dir(), rootless::systemctl())
+}
+
+fn hint(systemd: bool, systemctl: &str) -> String {
+    if systemd {
+        format!("is it running ({systemctl} status clipboardbridge)?")
+    } else {
+        "is it running (start it with cbb run)?".to_string()
     }
 }
 
@@ -465,11 +477,9 @@ fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
                     "this command changes the group, so only the administrator may run it; run it with sudo",
                 ));
             }
-            c => c.context(format!(
-                "cannot reach the lite member's service at {}; is it running ({} status clipboardbridge)?",
-                path.display(),
-                rootless::systemctl()
-            ))?,
+            c => {
+                c.context(format!("cannot reach the lite member's service at {}; {}", path.display(), not_running()))?
+            }
         }
     } else {
         connect(g)?
@@ -1204,7 +1214,14 @@ fn core_version() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{core_version, terminal_text};
+    use super::{core_version, hint, terminal_text};
+
+    /// Without systemd (NextPi), the hint names cbb run, not systemctl.
+    #[test]
+    fn hint_without_systemd() {
+        assert_eq!(hint(true, "systemctl --user"), "is it running (systemctl --user status clipboardbridge)?");
+        assert_eq!(hint(false, "systemctl"), "is it running (start it with cbb run)?");
+    }
 
     /// cbb version names the core's version and the ABI of its entry
     /// point.

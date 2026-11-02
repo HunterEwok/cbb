@@ -23,6 +23,27 @@ All notable changes to clipboardbridge are documented in this file. The format f
   it at every sign-in and adds Clipboard Bridge to the Start menu; on Linux (x86-64 and
   ARM64) the installer adds it with an autostart entry and a menu entry when the desktop has
   GTK 4 and WebKitGTK 6.0, and names the packages otherwise. The uninstallers remove it.
+- `.pibridge`, a test tool for the ZX Spectrum Next (`apps/zxnext`): it opens NextPi's shell
+  to a computer on the home network through the Next's ESP8266, so a test can drive the Pi
+  without typing on the Next, even on a Pi Zero without a radio. It carries the shell in the
+  clear, for a test bench only, and counts the times a UART's receive buffer filled up. It
+  passes bytes through rings in both directions, so the Pi's long output arrives whole. It
+  remembers the computer's address, and the computer can replace a file in its folder while
+  it runs, checked by CRC-32, so a test needs no card taken out.
+- `cbb next link` on the lite member: a network through the ZX Spectrum Next's ESP8266 for a
+  Pi without a radio. It runs at NextPi's shell on the Pi's UART, exchanges frames with a
+  driver on the Next, drives the ESP's stock AT firmware inside them, and leads the lite
+  member's connections through the ESP to a member at home, and the ESP's own connections
+  (a phone that syncs or admits it) to the lite member; the TLS stays on the Pi. The Next's
+  clock sets the Pi's. The link is a remote paste target too (`next`): an admin's paste is
+  typed on the Next, 50 characters a second.
+- `CBB.DRV`, a NextZXOS driver for the ZX Spectrum Next (`apps/zxnext/drv`): on every
+  frame's interrupt it passes bytes between the ESP8266 and the Pi in `cbb next link`'s
+  frames and types the characters the Pi sends, while any program runs; a host test runs
+  its code in a Z80 emulator.
+- `.cbb net on`, `off` and `.cbb net` on the ZX Spectrum Next: start `cbb next link` at
+  NextPi's shell with the settings kept in `/cbb/NET.CFG` and turn `CBB.DRV` on, stop both,
+  and show how they stand.
 - A `handover` record: the group's root hands the group to an admin, whose claim then takes
   effect at once instead of after the delay, for moving the root to a new phone or from a
   computer to a phone. A `recovery` record carries the recovery key's admin CA (`cert`), so a
@@ -974,6 +995,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Fixed
 
+- The lite member's hint when its service cannot be reached names `cbb run` where there is no
+  systemd (NextPi on the ZX Spectrum Next), not `systemctl`.
 - The phones show where the hub can move while it has no forwarder yet, and ask for the
   forwarder first, instead of hiding the choice.
 - A remote paste to a Mac answers in time when the Mac's clipboard holds what Universal
