@@ -51,10 +51,10 @@ Haz administrador a un segundo ordenador, para que también pueda añadir y quit
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, a Windows PC or a Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
 ```
 
-Un ordenador Linux con TPM guarda allí su clave de administrador. Un Mac, un PC con Windows o un ordenador Linux sin TPM la guarda en un archivo, así que `cbb admin` pide antes `-allow-file-key`: quien copie ese archivo actúa como administrador hasta que otro administrador quite el ordenador, así que haz administrador solo a un ordenador que guardes con seguridad.
+Un ordenador Linux o un PC con Windows con TPM guarda allí su clave de administrador. Un Mac, o un PC con Windows u ordenador Linux sin TPM, la guarda en un archivo, así que `cbb admin` pide antes `-allow-file-key`: quien copie ese archivo actúa como administrador hasta que otro administrador quite el ordenador, así que haz administrador solo a un ordenador que guardes con seguridad.
 
 Si la raíz se pierde o se estropea, el administrador toma el control del grupo, y todos los demás dispositivos se quedan:
 
@@ -73,10 +73,6 @@ Un ordenador que no está en casa se une con una invitación del hub ([Fuera de 
 
 El código nunca viaja en claro: el emparejamiento se hace dentro de SSH o de tu VPN, y dentro de TLS. El ordenador nuevo se sincroniza por ese camino hasta que su servicio se reinicia; para seguir sincronizando después, activa la [sincronización fuera de casa](away-from-home.md) en ambos antes de cerrar la conexión.
 
-## Un grupo anterior a la 0.4
+## Un grupo anterior a la 0.6
 
-Un grupo creado antes de la 0.4 no tiene raíz: cada miembro de Linux y de Windows guarda sus claves. Cuando todos los dispositivos ejecuten la 0.4 o posterior, dale una raíz, en uno de ellos; nadie se empareja de nuevo, salvo los iPhone con el atajo:
-
-```sh
-sudo cbb upgrade
-```
+La 0.6 solo lee registros de grupo de la versión 2 y no ofrece vuelta atrás a grupos antiguos. Un ordenador actualizado desde una versión anterior deja su grupo antiguo al arrancar por primera vez: mueve los archivos del grupo a `before-0.6` en su directorio de estado, conserva sus ajustes y `cbb status` lo indica. Vuelve a crear el grupo: `cbb new` en un ordenador y luego `cbb pair` en los demás.

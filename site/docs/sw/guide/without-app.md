@@ -51,10 +51,10 @@ Fanya kompyuta ya pili kuwa msimamizi, ili iweze pia kuongeza na kuondoa vifaa:
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, a Windows PC or a Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
 ```
 
-Kompyuta ya Linux yenye TPM huweka ufunguo wa msimamizi humo. Mac, Kompyuta ya Windows au kompyuta ya Linux isiyo na TPM huuweka kwenye faili, kwa hivyo `cbb admin` huomba kwanza `-allow-file-key`: yeyote anayenakili faili hiyo hutenda kama msimamizi hadi msimamizi mwingine aondoe kompyuta hiyo, kwa hivyo fanya msimamizi kompyuta unayoitunza salama tu.
+Kompyuta ya Linux au ya Windows yenye TPM huweka ufunguo wa msimamizi humo. Mac, au kompyuta ya Windows au ya Linux isiyo na TPM, huuweka kwenye faili, kwa hivyo `cbb admin` huomba kwanza `-allow-file-key`: yeyote anayenakili faili hiyo hutenda kama msimamizi hadi msimamizi mwingine aondoe kompyuta hiyo, kwa hivyo fanya msimamizi kompyuta unayoitunza salama tu.
 
 Mzizi ukipotea au kuharibika, msimamizi huchukua kikundi, na kila kifaa kingine kinabaki:
 
@@ -73,10 +73,6 @@ Kompyuta isiyo nyumbani hujiunga kwa mwaliko kutoka kitovu ([Nje ya nyumbani](aw
 
 Msimbo haupiti wazi kamwe: uoanishaji hufanyika ndani ya SSH au VPN yako, na ndani ya TLS. Kompyuta mpya husawazisha kupitia njia hiyo hadi huduma yake ianzishwe upya; ili kuendelea kusawazisha baadaye, washa [usawazishaji nje ya nyumbani](away-from-home.md) kwenye zote mbili kabla ya kufunga muunganisho.
 
-## Kikundi cha kabla ya 0.4
+## Kikundi cha kabla ya 0.6
 
-Kikundi kilichotengenezwa kabla ya 0.4 hakina mzizi: kila mwanachama wa Linux na Windows anashikilia funguo zake. Kila kifaa kikiendesha 0.4 au mpya zaidi, kipe mzizi, kwenye kimojawapo; hakuna anayeoanisha tena, isipokuwa iPhone zenye njia ya mkato:
-
-```sh
-sudo cbb upgrade
-```
+0.6 inasoma rekodi za kikundi za toleo 2 pekee, na haina njia ya kurudi kwenye vikundi vya zamani. Kompyuta iliyosasishwa kutoka toleo la awali huacha kikundi chake cha zamani inapoanza kwa mara ya kwanza: huhamisha faili za kikundi hadi `before-0.6` kwenye saraka yake ya hali, huhifadhi mipangilio yake, na `cbb status` husema hivyo. Unda kikundi upya: `cbb new` kwenye kompyuta moja, kisha `cbb pair` kwenye nyingine.
