@@ -98,12 +98,9 @@ TLS. The new computer syncs through that path until its service restarts; to kee
 afterwards, turn on [sync away from home](away-from-home.md) on both before you close the
 connection.
 
-## A group from before 0.4
+## A group from before 0.6
 
-A group made before 0.4 has no root: every Linux and Windows member holds its keys. Once
-every device runs 0.4 or later, give it a root, on one of them; nobody pairs again, except
-iPhones with the shortcut:
-
-```sh
-sudo cbb upgrade
-```
+0.6 reads only group records of version 2, and keeps no way back to older groups. A computer
+updated from an earlier version leaves its old group at its first start: it moves the
+group's files into `before-0.6` in its state directory, keeps its settings, and `cbb status`
+says so. Set the group up again: `cbb new` on one computer, then `cbb pair` on the others.

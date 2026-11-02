@@ -155,11 +155,10 @@ the same text is on every device at the end.
 - Removing a member that is no admin in layout A (a Linux one, a Windows one, the Mac): the
   group stays, nobody pairs again.
 - The holder of `clipboardbridge.local` goes away; another member takes it over.
-- Upgrade: every device on 0.3.x, then updated one by one to the 0.4 candidate; mixed
-  versions keep syncing during the upgrade; state and keys survive. Then `cbb upgrade` on
-  `desktop` with `win` off: `desktop` is the root, the others delete the old keys, `cbb status`
-  marks `win` until it is back, `cbb revoke win` is refused until then, and nobody pairs
-  again except the shortcut iPhones.
+- Upgrade: every device on the last release, then updated one by one to the candidate
+  (`tools/e2e/upgrade.sh` does it in CI): from 0.6 on, mixed versions keep syncing during the
+  upgrade and state and keys survive; from 0.5, each device leaves its old group at its first
+  start, `cbb status` says so, and a group set up again works.
 - Uninstall: no service, no firewall rule, no leftover files (except keys without
   `--purge`).
 

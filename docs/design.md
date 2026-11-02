@@ -1765,7 +1765,8 @@ group is set up again to get a root.
 
 **The shortcut is a legacy way.** An iPhone without the app joins through a shortcut and a
 token (section "The iPhone button"), never with a key of its own. It stays for now, since
-the app does not yet run on a real iPhone, but it is not developed further, and every user
+the app is not yet in TestFlight (it runs on a real iPhone only when built with a developer's
+own team, apps/ios/device.sh), but it is not developed further, and every user
 is expected to use the app. Everything it needs comes with it: the iPhone CA, its key on the
 admins, and the rule for who holds `clipboardbridge.local`. It is removed with all of these
 once the app runs on real iPhones through TestFlight (roadmap.md, item 17): the group is

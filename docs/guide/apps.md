@@ -8,11 +8,11 @@ the desktop apps are a window onto the service that already runs on the computer
 |---|---|---|
 | Android | `clipboardbridge-X.Y.Z.apk` in each [release](https://github.com/HunterEwok/clipboardbridge/releases) | built and tested in CI, not yet on a real phone |
 | Android without Google | `clipboardbridge-fdroid-X.Y.Z.apk`, and F-Droid once it is accepted: the same app without the Wear OS watch | built and tested in CI |
-| iPhone and iPad | TestFlight, when it opens | built and tested in CI, not yet on a real phone |
+| iPhone and iPad | TestFlight, when it opens | built and tested in CI; runs on an iPhone built with a developer's own team |
 | Wear OS | `clipboardbridge-wear-X.Y.Z.apk`, put on the watch from a computer with `adb install` over the watch's wireless debugging, until the app is on Google Play | built |
-| Apple Watch | with the iPhone app | built |
+| Apple Watch | with the iPhone app | built; runs on an Apple Watch with the iPhone app |
 | Mac app | not yet a download: built from `apps/macos` for now | built |
-| Tray app for Linux and Windows | not yet a download: built from `apps/desktop` for now | built |
+| Tray app for Linux and Windows | in the Windows and Linux archives of each release, installed with the service | built; run in a Windows 11 virtual machine |
 
 ## Phones
 

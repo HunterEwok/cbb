@@ -71,7 +71,7 @@ on every platform of the class, on the roadmap).
 | Remote invitations | planned | planned | roadmap item 12; computers have them |
 | Arrange the tiles and collections | yes | yes | kept on each installation; the watches show their phone's |
 | Act as a Bluetooth keyboard for a TV, tablet or computer | yes | **OS** | iOS keeps the HID service to the system; some Android makers leave the profile out, which the app says |
-| Tested on a real phone | not yet | not yet | |
+| Tested on a real phone | not yet | yes | the iPhone app on an iPhone 12 Pro Max, built with a developer's own team |
 
 ## Lite devices
 
