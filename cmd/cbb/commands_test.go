@@ -337,7 +337,8 @@ func TestWriteAway(t *testing.T) {
 		var b strings.Builder
 		writeAway(&b, a)
 		out := b.String()
-		if !strings.Contains(out, "Problem: the hub did not answer") || !strings.Contains(out, "keys in files") {
+		// The status does not repeat where the keys are: cbb global on says it once.
+		if !strings.Contains(out, "Problem: the hub did not answer") || strings.Contains(out, "keys in files") {
 			t.Errorf("CBB_DEBUG=%s: %q", tc.debug, out)
 		}
 		if got := strings.Contains(out, "i/o timeout"); got != tc.detail {

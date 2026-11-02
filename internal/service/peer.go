@@ -19,11 +19,15 @@ type peer struct {
 	uid     uint32 // on Unix
 	sid     string // on Windows, the user's SID
 	session uint32 // on Windows, the session of its process
+	// why says, for a peer not known, what the system did not tell.
+	why string
 }
 
 // String names the user for the log.
 func (p peer) String() string {
 	switch {
+	case !p.known && p.why != "":
+		return "a user the system does not name (" + p.why + ")"
 	case !p.known:
 		return "a user the system does not name"
 	case p.sid != "":

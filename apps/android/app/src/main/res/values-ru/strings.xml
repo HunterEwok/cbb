@@ -251,6 +251,7 @@
     <string name="hub_move_title">Перенести хаб на компьютер</string>
     <string name="hub_move_body">Компьютер, который всегда включён, держит синхронизацию вне дома, пока приложение закрыто. Устройства, которые подключаются к этому телефону издалека, переходят вместе с хабом.</string>
     <string name="hub_move_to">Сделать хабом %1$s</string>
+    <string name="hub_move_needs_forwarder">Сначала сохраните форвардер выше: вне дома устройства находят новый хаб через него.</string>
     <string name="hub_suggest">%1$s всегда включён. Сделать его хабом, чтобы синхронизация вне дома работала, пока приложение закрыто?</string>
     <string name="hub_suggest_yes">Сделать хабом</string>
     <string name="hub_suggest_keep">Оставить телефон</string>
@@ -279,7 +280,8 @@
     <string name="paste_on_title">Вставить на %1$s</string>
     <string name="paste_on_body">Текст попадёт туда, где фокус клавиатуры устройства %1$s, если его пользователь включил там удалённую вставку.</string>
     <string name="paste_text">Текст</string>
-    <string name="paste_from_clipboard">Из буфера обмена</string>
+    <string name="paste_empty_clipboard">Если оставить пустым, уйдёт буфер обмена телефона.</string>
+    <string name="paste_clipboard_empty">В буфере обмена нет текста.</string>
     <string name="paste_type">Набрать по клавишам</string>
     <string name="paste_enter">Нажать Enter после него</string>
     <string name="paste_secret">Секрет</string>

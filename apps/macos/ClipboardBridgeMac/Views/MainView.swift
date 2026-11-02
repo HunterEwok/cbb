@@ -103,10 +103,11 @@ struct MainView: View {
     /// The group in a line: how many devices are online, and sync away
     /// from home.
     private var summary: some View {
-        let online = model.others.filter(\.online).count
+        // This Mac counts too, online as it is the one in front of the user.
+        let online = model.devices.filter { $0.online || $0.isSelf }.count
         return HStack(spacing: Tokens.spacingMedium) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(online) of \(model.others.count) online").font(.title2.weight(.semibold))
+                Text("\(online) of \(model.devices.count) online").font(.title2.weight(.semibold))
                 Text(verbatim: model.status?.group ?? "").font(.system(.caption, design: .monospaced)).foregroundStyle(palette.textDim)
             }
             Spacer()
@@ -140,8 +141,9 @@ struct MainView: View {
             Text("No devices match.").foregroundStyle(palette.textDim).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             if many { DeviceSearchBar(query: $query, filter: $filter) }
-            // A search shows the devices it finds, flat; the orbit keeps the group's order.
-            let list = searching ? found : others
+            // A search shows the devices it finds, flat; the orbit keeps the
+            // group's order around this Mac in the middle.
+            let list = searching ? found : shown == .orbit ? others : model.devices
             switch searching && shown == .orbit ? DeviceLayout.tiles : shown {
             case .tiles:
                 ScrollView {
@@ -173,7 +175,7 @@ struct MainView: View {
 
     /// The devices the search and the filter leave.
     private var found: [Control.Device] {
-        model.others.filter { d in
+        model.devices.filter { d in
             (query.isEmpty || d.name.localizedCaseInsensitiveContains(query) || (d.system?.localizedCaseInsensitiveContains(query) ?? false))
                 && (filter != .online || d.online) && (filter != .attention || d.frozen)
         }

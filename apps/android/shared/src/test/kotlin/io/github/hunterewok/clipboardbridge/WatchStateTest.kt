@@ -12,7 +12,7 @@ class WatchStateTest {
     fun roundTrip() {
         val s = WatchState(
             hasGroup = true,
-            devices = listOf(WatchState.Device("a1", "deck", "desktop", true), WatchState.Device("b2", "pi \"4\" ü", "board", false, collection = "Office")),
+            devices = listOf(WatchState.Device("a1", "deck", "phone", true, phone = true), WatchState.Device("b2", "pi \"4\" ü", "board", false, collection = "Office")),
             away = WatchState.Away.CONNECTED,
             events = listOf("deck joined the group.", "pi was removed from the group."),
             color = "ocean",

@@ -805,7 +805,9 @@ the app on real devices.
 - `apps/desktop/` — the tray app for Linux and Windows (Go, Wails 3), a Go module of its own.
 - `apps/design/` — tokens and the icon (`icon/light.png` and `icon/dark.png`, the clipboard
   drawings; `go run ./tools/icon` sets each on a fill of its colour as the iPhone app's icon
-  for light and dark mode, and the Android app takes the same drawings); `go run ./tools/tokens` turns `tokens.json` into
+  for light and dark mode, and the Android app takes the same drawings; `icon/tray/` holds the single-colour glyph of
+  the Mac's menu bar and the tray in three states, which the tool copies into the Mac app's asset catalog as template
+  images and turns into the tray's symbolic SVGs for Linux and white and black ICOs for Windows in `apps/desktop/trayicon`); `go run ./tools/tokens` turns `tokens.json` into
   `apps/ios/ClipboardBridge/Theme/Tokens.swift` and the Android apps' `Tokens.kt` and fails when a palette misses the
   WCAG AA contrast, and CI checks that the generated files are up to date; `apps/l10n/` — the shared glossary of terms, so
   both apps use the same words.

@@ -478,15 +478,12 @@ func (d *Desk) headline(s State) string {
 	case s.Status == nil || s.Status.Group == "":
 		return d.T("This computer is in no group yet")
 	}
-	online, others := 0, 0
+	// This computer counts too, online as it is the one in front of the user.
+	online := 0
 	for _, dev := range s.Devices {
-		if dev.Self {
-			continue
-		}
-		others++
-		if dev.Online {
+		if dev.Online || dev.Self {
 			online++
 		}
 	}
-	return fmt.Sprintf(d.T("%d of %d online"), online, others)
+	return fmt.Sprintf(d.T("%d of %d online"), online, len(s.Devices))
 }

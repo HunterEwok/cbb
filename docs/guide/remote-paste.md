@@ -49,8 +49,10 @@ cbb paste -on DEVICE -enter -secret < pass.txt  # presses Enter after it; kept a
 `DEVICE` is the device's name or its ID from `cbb status`. The command says when the text is
 in, or why the device refused it.
 
-On an admin phone, open the device's page and choose "Paste on it…": type the text or take
-it from the clipboard, choose paste or type, and confirm with Face ID or the fingerprint.
+On an admin phone, open the device's page and choose "Paste on it…": type the text, or leave
+the field empty to send what the clipboard holds, choose paste or type, and confirm with Face
+ID or the fingerprint. An iPhone asks each time whether the app may read the clipboard, until
+Settings, Apps, CBB, "Paste from Other Apps" is set to Allow.
 
 Typing works in any keyboard layout on X11, Wayland compositors with a virtual keyboard,
 Windows and the Mac. On GNOME and KDE through the dialog, a paste works but typing does not,

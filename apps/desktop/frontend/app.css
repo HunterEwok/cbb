@@ -52,7 +52,10 @@ button {
   cursor: pointer;
 }
 button:disabled { opacity: .5; cursor: default; }
-button.icon { width: 36px; height: 36px; padding: 0; border-radius: 50%; font-size: 18px; }
+button.icon { width: 36px; height: 36px; padding: 0; border-radius: 50%; }
+/* An icon in the middle of its button, whatever the font's metrics. */
+button.icon, #layouts button, .cell .more { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.icon-svg { display: block; flex: none; }
 button.accent {
   background: var(--accent);
   color: var(--on-accent);
@@ -72,6 +75,7 @@ button.danger { color: var(--danger); }
 
 .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .segmented button { border: none; border-radius: 0; background: transparent; padding: 6px 12px; }
+#layouts button { width: 44px; height: 34px; padding: 0; }
 .segmented button[aria-checked="true"] { background: var(--soft); color: var(--accent); }
 
 .switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -126,6 +130,7 @@ main { flex: 1; display: flex; min-height: 0; }
   width: 112px; height: 112px; border-radius: 50%;
   background: var(--accent); color: var(--on-accent); border: none;
   box-shadow: 0 0 0 12px var(--soft); font-weight: 600;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
 }
 
 .detail-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 24px; }

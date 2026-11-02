@@ -115,13 +115,19 @@ struct SettingsView: View {
     /// button for each computer the hub can move to, each asking first.
     private func moveHubSection(_ hub: AppModel.Hub) -> some View {
         Section {
+            if hub.forwarder == nil {
+                Text("Save a forwarder above first: away from home, the devices reach the new hub through it.")
+                    .foregroundStyle(palette.textDim)
+            }
             if let s = hub.suggested {
                 Text("\(s.name) is always on. Make it the hub, so that sync away from home works while this app is closed?")
                 Button { moving = s } label: { Text("Make it the hub") }
+                    .disabled(hub.forwarder == nil)
                 Button { Task { await model.keepPhoneHub() } } label: { Text("Keep this phone") }
             }
             ForEach(hub.computers.filter { $0 != hub.suggested }) { c in
                 Button { moving = c } label: { Text("Make \(c.name) the hub") }
+                    .disabled(hub.forwarder == nil)
             }
         } header: {
             Text("Move the hub to a computer")

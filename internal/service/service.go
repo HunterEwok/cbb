@@ -167,10 +167,13 @@ func mdnsDiscovery(c DiscoveryConfig) (Discovery, error) {
 
 // Service is a running clipboardbridge service.
 type Service struct {
-	cfg    Config
-	clock  *hlc.Clock
-	logf   func(string, ...any)
-	broken *control.RequestError // the group's files cannot be read; set once at start
+	cfg   Config
+	clock *hlc.Clock
+	logf  func(string, ...any)
+	// repeated holds the lines logRepeat logged lately, with their time.
+	repeatMu sync.Mutex
+	repeated map[string]time.Time
+	broken   *control.RequestError // the group's files cannot be read; set once at start
 
 	// The Bluetooth keyboard, on Linux (keyboard_linux.go).
 	kbd keyboardState
@@ -650,7 +653,9 @@ func (s *Service) accept(ctx context.Context, ln net.Listener) {
 			return
 		}
 		if !ap.Addr().Unmap().IsLoopback() && !s.takesOn(raw.LocalAddr()) {
-			raw.Close() // a network this device has not met its group on
+			// A network this device has not met its group on.
+			s.logRepeat("cbb: a connection from %v to %v, on a network this device has not met its group on; closed", ap.Addr(), raw.LocalAddr())
+			raw.Close()
 			return
 		}
 		if !s.arrivedOn(raw) {

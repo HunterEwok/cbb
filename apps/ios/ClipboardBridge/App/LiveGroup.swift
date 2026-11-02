@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 
 private let awayLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "away")
 private let relayLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "relay")
+private let browseLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "browse")
 private let hubLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "hub")
 private let modeLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "mode")
 private let keysLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "keys")
@@ -992,7 +993,7 @@ final class LiveGroup: GroupController {
             serve: { t, peer in try await node.serve(t, peer: peer) },
             elsewhere: { relay.found($0) },
             log: { what, error in relayLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
-        let browser = BonjourBrowser { found in relay.update(found) }
+        let browser = BonjourBrowser(log: { browseLog.notice("\($0, privacy: .public)") }) { found in relay.update(found) }
         let dialer = MemberDialer(node: node, group: g.tag,
                                   dial: browser.dialer(identity: id, chain: Self.chain(g), roots: g.trusted) { relay.addresses[$0] ?? [] })
         relay.dialer = dialer
@@ -1030,7 +1031,9 @@ final class LiveGroup: GroupController {
         let (status, error) = hub.status(paused: !foreground)
         var h = AppModel.Hub(on: hub.isOn, status: status, error: error, forwarder: hub.forwarder,
                              home: hub.isHome(network), clients: hub.clients.count)
-        if hub.isOn, hub.forwarder != nil {
+        // The computers show without a forwarder too, so that the user sees
+        // where the hub can go; Settings asks for the forwarder first.
+        if hub.isOn {
             let movable = computers.filter { $0.online && $0.role == "full" && ($0.admin || $0.canMakeAdmin) }
             h.computers = movable.map { .init(id: $0.id, name: $0.name) }
             if !UserDefaults.standard.bool(forKey: Self.keepsPhoneHubKey),
@@ -1097,6 +1100,17 @@ final class LiveGroup: GroupController {
     func setForeground(_ on: Bool) {
         foreground = on
         refreshHub()
+        // Back at the front without a computer: iOS may have ended the
+        // browsing in the background, so it starts again.
+        if on, let node, let browser {
+            let dialer = dialer
+            Task {
+                if await node.connected.isEmpty {
+                    browser.restart()
+                    await dialer?.hurry()
+                }
+            }
+        }
     }
 
     /// Makes this phone the group's hub, or stops it being the hub. A hub
@@ -1589,7 +1603,8 @@ final class LiveGroup: GroupController {
             } else if let u = usable {
                 write(u.text, kind: u.kind)
             }
-            return .fetched
+            let preview = curImage == nil && usable?.kind == .text ? usable.map { Self.preview($0.text) } : nil
+            return .fetched(from: cur.flatMap { c in devices.first { $0.id == c.origin && !$0.isSelf }?.name }, preview: preview)
         }
         if let cur, let u = usable, cur.origin != g.device, cur.via == .copy, cur.ageMS < Self.recentCopyMS, u.text != board {
             return try await fetch()
@@ -1601,13 +1616,21 @@ final class LiveGroup: GroupController {
             } else {
                 await node.send(text: t, kind: .text)
             }
-            return .sent
+            return .sent(to: devices.filter { online.contains($0.id) && !$0.isSelf }.map(\.name).sorted())
         }
         if let u = usable, u.text != board {
             return try await fetch()
         }
         if !(await connected(node)) { throw PendingGroup.Failure.noComputers }
         return .nothingNew
+    }
+
+    /// The start of a text the button fetched, on one line, for the line
+    /// that says it is ready to paste.
+    nonisolated static func preview(_ text: String, max: Int = 30) -> String {
+        let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.count > max ? String(trimmed.prefix(max)) + "…" : trimmed
     }
 
     /// Whether a computer is connected, waiting up to connectWait for one:

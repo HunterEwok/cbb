@@ -85,7 +85,7 @@ struct MenuContent: View {
         if let problem = model.problem {
             Text(verbatim: problem)
         } else if model.inGroup {
-            Text("\(model.others.filter(\.online).count) of \(model.others.count) online")
+            Text("\(model.devices.filter { $0.online || $0.isSelf }.count) of \(model.devices.count) online")
             if model.awayOn { Text("Sync away from home is on") }
         } else {
             Text("This Mac is in no group yet")
