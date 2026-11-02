@@ -207,7 +207,7 @@ func provision(t *testing.T) {
 	if _, err := (tpm2.EvictControl{
 		Auth:             tpm2.TPMRHOwner,
 		ObjectHandle:     &tpm2.NamedHandle{Handle: srk.ObjectHandle, Name: srk.Name},
-		PersistentHandle: tpmkey.PersistentSRK,
+		PersistentHandle: tpm2.TPMIDHPersistent(tpmkey.PersistentSRK),
 	}).Execute(tr); err != nil {
 		t.Fatal(err)
 	}

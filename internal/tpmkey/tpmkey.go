@@ -128,7 +128,7 @@ func (t *TPM) evict() {
 // PersistentSRK is where Windows, and other systems that keep the owner
 // hierarchy's password, keep a storage root key that needs none (TCG's
 // "Provisioning Guidance", the SRK's handle).
-const PersistentSRK = 0x81000001
+const PersistentSRK uint32 = 0x81000001
 
 // parent returns the storage root key for a new object, and the handle a
 // blob records for it: the one made from the standard template, the same
