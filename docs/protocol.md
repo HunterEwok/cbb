@@ -1503,7 +1503,8 @@ and `a`-`f`.
 | `settings` | `takeover_delay_ms`, `key_level` | the root's settings for the group |
 | `checkpoint` | `heads`, `keep` | a root's checkpoint: the records it covers and does not keep may be dropped |
 | `hubs` | `hubs` | the user's main hubs for sync away from home, in the order they serve |
-| `recovery` | `admin` | names the group's recovery key, an offline admin key that may only claim the group ("The recovery key") |
+| `recovery` | `admin`, `cert` | names the group's recovery key, an offline admin key that may only claim the group ("The recovery key") |
+| `handover` | `admin` | the current root hands the group to an admin, whose claim then takes effect without the delay ("Handing the group over") |
 
 #### Field rows
 
@@ -1514,7 +1515,7 @@ and `a`-`f`.
 | `role` | string | `device` | `full`, `phone`, `lite`, `watch` or `shortcut` |
 | `os` | string | none | `linux`, `windows`, `macos`, `ios`, `android`, `watchos`, `wearos` or `none` |
 | `key` | string | `device` | a key hash: the member key (for a watch, its admin key; for `shortcut`, the phone ID) |
-| `admin` | string | `recovery` | a key hash: the admin key its admin CA certifies; only in a record a root's own key signed |
+| `admin` | string | `recovery`, `handover` | a key hash: the admin key its admin CA certifies; only in a record a root's own key signed |
 | `powers` | array of strings | none | sorted; from `admit`, `renew`, `remove`, `remove-admins`, `freeze`, `thaw`, `takeover`, `hub`; only with `admin` |
 | `commands` | array of strings | none | sorted; the command types (section 15) the admin may sign; only with `admin` |
 | `store`, `kind`, `proof` | string | none | as in section 17 |
@@ -1524,6 +1525,7 @@ and `a`-`f`.
 | `seen` | array of objects | `revoke`, `freeze`, `claim`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": the highest seq of that signer the author held, 0 or more}`; `seq` here is never left out, 0 included |
 | `records` | array of strings | `thaw`, `resolve`, one at least | sorted record IDs |
 | `root` | string | `claim` | the new root CA certificate, DER, base64: self-signed, a CA with path length 1, a P-256 key |
+| `cert` | string | `recovery` | the recovery key's admin CA certificate, DER, base64, whose key hash is `admin` |
 | `takeover_delay_ms` | integer | none | from 0 to 604 800 000 (7 days); absent means 259 200 000 (72 hours) |
 | `key_level` | string | none | `proven`, `hardware` or `files`: which devices may be the group's root, an admin or a hub ([roadmap](roadmap.md), "Key levels"); absent means `hardware`. The state carries it; the rules do not check it yet, the apps and `cbb` do when they make an admin or a hub |
 | `heads` | array of objects | `checkpoint`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": 1 or more, "id": the ID of that signer's record with that seq}` |
@@ -1559,7 +1561,7 @@ those of the newest such record (the highest `seq` of that root) that names it.
 | `freeze` | a root's own key, or an admin with `freeze`; each key it names is an admin key without `remove-admins` |
 | `thaw` | a root's own key, or an admin with `thaw` and `remove-admins` |
 | `claim` | an admin with `takeover`, under the current root |
-| `resolve`, `settings` | the current root's own key |
+| `resolve`, `settings`, `handover` | the current root's own key |
 | `checkpoint` | a root's own key |
 | `hubs` | a root's own key, or an admin with `hub` |
 | `recovery` | a root's own key |
@@ -1818,6 +1820,15 @@ whose root is lost is set up again. A disputed claim stops the group the same wa
 After a claim takes effect the new root signs `device` records for the admins it keeps
 (their admin keys stay, so their `seq` goes on) and issues them admin CAs under itself; an admin CA from the old root still signs while the old root is on the path.
 
+**Handing the group over on purpose.** The current root's own key signs a `handover` that names
+an admin key, as when the user moves the root to a new phone, or a computer that took the group
+back with the recovery key hands it to a phone. A claim by that admin under this root whose
+`seen` holds the handover (its entry for the current root is at least the handover's `seq`)
+takes effect without the delay: it is a claim as above in every other way, so the root still
+cancels it, and a second claim or a removal of the claimant still stops the group. Of the
+current root's `handover` records that count, the one with the highest `seq` counts; a claim by
+any other admin, or one made before the handover, waits as before.
+
 So a removed or stolen admin phone cannot take the group: its claim waits, the root cancels
 it, a second claim or a removal of the claimant stops the group instead of choosing, and
 once a new root removes it, nothing it signs counts under that root. What it can do without
@@ -1829,7 +1840,10 @@ admin CA, is stop the group: never take it.
 A recovery key lets the user take the group back when every phone with the root or
 `takeover` is lost: an offline key, printed or on a hardware key, kept away from the devices.
 The root's own key issues it an admin CA, as for an admin, and signs a `recovery` record whose
-`admin` is its key hash. It has no device and no `device` record.
+`cert` is that admin CA and `admin` its key hash; so a computer of the group holds the admin CA
+too, and the key alone is enough to claim from it. A `recovery` record whose `cert` is not an
+admin CA that the record's signer issued names no key. The recovery key has no device and no
+`device` record.
 
 Of the `recovery` records that count (a root's own key on the path signed them, within its
 cut), the newest counts. The key it names is an admin key with only `takeover` and no
@@ -1840,12 +1854,22 @@ above: it waits the root's `takeover_delay_ms`, the root cancels it with a `reso
 `revoke` of the key, a counting admin removal or freeze of the key disputes it, and one claim
 at a time holds.
 
+Its claim counts only under the root that issued its admin CA, as any admin's: after a
+handover the new root makes a new recovery key.
+
+A device that holds the recovery key and no member certificate of the group, as a new phone
+after every phone was lost, issues itself a member certificate under the recovery key's admin
+CA. Its device has no `device` record, so its connections carry records only ("Certificates"):
+it fetches the records, signs its claim with what it holds as `seen`, and leaves it there. Once
+the claim takes effect, its new root certifies the device as a member.
+
 A newer `recovery` record replaces the older one: the key the older one named is no admin
 any more, and its claims do not count. A `revoke` of the key removes it (a root's own key, or
 an admin with `remove-admins`, as for any admin key). The state names the key in `recovery`
 while it is neither removed nor frozen.
 
-The apps make the key and sign the record later; 0.6 has the record and its rules.
+The apps make the key and `cbb` claims with it in later changes; this section has the record
+and its rules.
 
 #### Certificates
 
@@ -1857,7 +1881,9 @@ is taken when it is under a root on the path and its key is an admin key that is
 revoked. A certificate that passes everything but the rule on its `device` record, as a
 device whose record has not reached this member yet or a new member that holds no records
 yet, gets a connection that carries records only, so the records reach whichever side lacks
-them; it connects as a member once they name it. The **root's own device** is the device of the newest `device` record with `holds_root` that
+them; it connects as a member once they name it. So does a certificate the recovery key's
+admin CA issued ("The recovery key"), which no `device` record names. A certificate no
+`device` record names whose issuer is an admin key that was removed (`revoke`) gets nothing. The **root's own device** is the device of the newest `device` record with `holds_root` that
 the current root's own key signed (the apps and `cbb` sign it right after making the group
 or taking it over); a peer is the root only when its member key is that record's `key`.
 
