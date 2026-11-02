@@ -1367,7 +1367,7 @@ jobs:
           security unlock-keychain -p ci ci.keychain
           security set-keychain-settings ci.keychain
           CBB_SWIFT_INTEROP_TLS="$PWD/clipboardbridge-interop" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
-          CBB_SWIFT_INTEROP_TLS="$PWD/clipboardbridge-interop" go test -timeout 3m ./internal/node -run TestSwiftMemberTLS -v
+          CBB_SWIFT_INTEROP_TLS="$PWD/clipboardbridge-interop" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: runner.os == 'macOS'
         with:
@@ -1615,7 +1615,7 @@ jobs:
           tool="$PWD/apps/android/kit/build/interop/clipboardbridge-interop"
           CBB_SWIFT_INTEROP="$tool" go test ./internal/pair -run 'TestSwiftMemberAdmitsGoJoiner$' -v
           CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
-          CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/node -run TestSwiftMemberTLS -v
+          CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
       - name: the NDK the tunnel and the core are built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'

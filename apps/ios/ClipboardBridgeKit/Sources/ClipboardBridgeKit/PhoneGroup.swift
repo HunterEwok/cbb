@@ -176,6 +176,8 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         case notForWatch
         /// The group has no recovery key to remove.
         case noRecovery
+        /// The group's recovery key now is not the one this phone holds.
+        case notTheRecoveryKey
     }
 
     /// Adds records from other members, then follows the roots they lead
@@ -266,6 +268,23 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         return try makeClaim(lost: nil, adminSigner: adminSigner, newRoot: newRoot, now: now)
     }
 
+    /// Claims the group with its recovery key (docs/protocol.md, section
+    /// 10, "The recovery key"), on a new phone that Restore made a member of
+    /// it under the key's admin CA: a claim, signed with the recovery key
+    /// (recoverySigner), that hands the group to newRoot, as in takeOver.
+    /// The lost root's device goes when it takes effect. It returns the
+    /// record to send.
+    mutating func claimWithRecovery(recoverySigner: CertificateSigner, newRoot: Data, now: Date) throws -> Member.Record {
+        guard let adminCA, !isRoot else { throw Failure.notAdmin }
+        guard claim == nil else { throw Failure.claimWaiting }
+        guard let k = try? Records.keyHash(cert: adminCA), records.recovery == k else { throw Failure.notTheRecoveryKey }
+        var b = Records.Body(type: "claim", signer: Self.signer(recoverySigner), timeMS: Records.ms(now))
+        b.root = newRoot
+        let r = try sign(b, caSigner: recoverySigner)
+        (claim, claimedFrom) = (newRoot, records.rootDevice)
+        return r
+    }
+
     private mutating func makeClaim(lost: String?, adminSigner: CertificateSigner, newRoot: Data, now: Date) throws -> Member.Record {
         guard claim == nil else { throw Failure.claimWaiting }
         guard let me = devices.first(where: { $0.id == device }), me.may("takeover") else { throw Failure.noTakeover }
@@ -297,9 +316,14 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// the current root, and signs what a new root starts with: its own
     /// device that holds the root, the admins it keeps, and a removal of
     /// the lost root's device and the shortcuts. rootSigner is the new
-    /// root's key. A claim that was cancelled or became void is dropped.
-    /// It returns the records to send; none while the claim waits.
-    public mutating func finishTakeOver(rootSigner: CertificateSigner, now: Date) throws -> [Member.Record] {
+    /// root's key. A phone that claimed with the recovery key has no device
+    /// record yet: the new root signs one, under name, with seal. This
+    /// phone's member certificate is reissued from the new root, as a root
+    /// admits only with a certificate of its own, after which the TLS
+    /// identity must be made again. A claim that was cancelled or became
+    /// void is dropped. It returns the records to send; none while the
+    /// claim waits.
+    public mutating func finishTakeOver(rootSigner: CertificateSigner, now: Date, name: String = "iPhone", seal: Data? = nil) throws -> [Member.Record] {
         records.refresh()
         adoptRoots()
         guard let claim else { return [] }
@@ -311,9 +335,15 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         let list = devices
         (isRoot, self.claim, claimedFrom) = (true, nil, nil)
         var out: [Member.Record] = []
+        let memberKey = try CertificateInfo(der: memberCert).publicKey
+        memberCert = try GroupCertificates.member(device: device, publicKey: memberKey, ca: currentRoot, caSigner: rootSigner, now: now)
+        memberIssuer = nil
         if let me = list.first(where: { $0.id == device }) {
             out.append(try record(device: device, name: me.name, role: "phone", os: me.os ?? "ios", key: me.key, store: me.store,
-                                  kind: me.kind, proof: me.proof, caSigner: rootSigner, now: now))
+                                  kind: me.kind, proof: me.proof, seal: me.seal, caSigner: rootSigner, now: now))
+        } else {
+            out.append(try record(device: device, name: Self.validName(name), role: "phone", os: "ios", key: Records.keyHash(spki: memberKey),
+                                  store: Records.hardware, seal: seal, caSigner: rootSigner, now: now))
         }
         var revoke: [Data] = []
         for d in list where d.id != device {

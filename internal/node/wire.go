@@ -330,6 +330,12 @@ type helloOut struct {
 	// Features are what this member supports beyond the protocol of its
 	// ALPN version.
 	Features []string `json:"features,omitempty"`
+	// GroupCA is the group's first root, DER, which a full member sends
+	// on a records-only connection with a device no record names yet, as a
+	// new phone restoring the group with the recovery key: so it builds
+	// the group's path from the records (docs/protocol.md, section 10,
+	// "The recovery key").
+	GroupCA []byte `json:"group_ca,omitempty"`
 	// Seal is this member's public key for sealed messages, for the root
 	// or an admin to put in its device record.
 	Seal []byte `json:"seal,omitempty"`

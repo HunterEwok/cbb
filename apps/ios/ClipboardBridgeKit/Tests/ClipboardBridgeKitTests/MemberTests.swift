@@ -374,6 +374,9 @@ final class Pipe: ClosableTransport, @unchecked Sendable {
     weak var peer: Pipe?
     /// What a TLS transport would report as the peer's certificate.
     var peerCertificate: Data?
+    /// What a TLS transport would report as the peer's chain.
+    var chain: [Data] = []
+    var peerChain: [Data] { chain }
 
     /// Whether either end closed it.
     var isClosed: Bool { lock.withLock { closed } }

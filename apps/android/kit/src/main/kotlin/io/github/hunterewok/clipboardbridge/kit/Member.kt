@@ -260,13 +260,21 @@ object Member {
         val actions: List<String> = emptyList(),
         /** Whether the sender serves the content of media events (section 4, "Content"). */
         val media: Boolean = false,
+        /**
+         * The group's first root, DER, which a computer sends on a
+         * records-only connection with a device no record names yet, as a
+         * new phone restoring the group with the recovery key (section 10,
+         * "The recovery key").
+         */
+        val groupCA: ByteArray? = null,
     ) {
         override fun equals(other: Any?): Boolean =
             other is Hello && wallMS == other.wallMS && current == other.current && records == other.records && keyStore == other.keyStore &&
                 actions == other.actions && media == other.media &&
                 name == other.name && os == other.os && adminKey.contentEqualsOrNull(other.adminKey) &&
                 tunnelKey.contentEqualsOrNull(other.tunnelKey) &&
-                tunnelPSK.contentEqualsOrNull(other.tunnelPSK) && device == other.device && mode == other.mode
+                tunnelPSK.contentEqualsOrNull(other.tunnelPSK) && device == other.device && mode == other.mode &&
+                groupCA.contentEqualsOrNull(other.groupCA)
 
         override fun hashCode(): Int = wallMS.hashCode()
     }
@@ -648,6 +656,7 @@ object Member {
                 "mode" to Wire.str(m.hello.mode),
                 "key_store" to Wire.str(m.hello.keyStore),
                 "features" to if (m.hello.media) JsonArray(listOf(JsonPrimitive(FEATURE_MEDIA))) else null,
+                "group_ca" to Wire.bytes(m.hello.groupCA),
             ),
         )
         is Message.Event -> Wire.obj("t" to Wire.str("event"), "event" to m.event?.toJson())
@@ -766,6 +775,7 @@ object Member {
                                 .take(Commands.MAX_HELLO_ACTIONS),
                             media = (h.opt("features") as? JsonArray).orEmpty().take(MAX_FEATURES)
                                 .any { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content == FEATURE_MEDIA },
+                            groupCA = h.optBytes("group_ca"),
                         ),
                     )
                 }

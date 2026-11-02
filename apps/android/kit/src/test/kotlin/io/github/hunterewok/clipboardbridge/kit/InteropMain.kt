@@ -34,6 +34,15 @@
 // waits for "from go", then for Go's picture "go picture", which it
 // fetches, sends its bytes reversed as "phone picture", which Go fetches,
 // waits for "done", and prints "ok". Test use only.
+//
+//   restore-tls HOST PORT KEY CERT GROUP
+//
+// restores the group of the Go member at HOST:PORT on a new phone with the
+// group's recovery key: KEY (its 32 bytes) and CERT (its admin CA, DER),
+// both base64, and GROUP, the group's tag, make the sheet's QR code, which
+// the tool reads as the app does. It takes the records, checks them,
+// claims the group for a new root, sends the claim on a second connection,
+// and prints its device ID, then the new root in base64. Test use only.
 
 package io.github.hunterewok.clipboardbridge.kit
 
@@ -154,6 +163,23 @@ private fun memberTLS(host: String, port: Int, peer: String) {
     serving.join()
 }
 
+private fun restoreTLS(host: String, port: Int, key: ByteArray, cert: ByteArray, tag: String) {
+    val qr = Core.recoverySheet(key, cert, tag).qr
+    val sheet = (Core.readRecoverySheet(qr) as? Core.SheetReading.Key)?.key ?: fail("the sheet's QR code does not read")
+    val memberKey = SoftwareSigner()
+    val now = Instant.now()
+    val r = Restore(sheet, memberKey.publicKeyDER, now)
+    // The handshake takes any certificate; Restore.group checks the computer's against the records.
+    fun dial() = TLSTransport.dial(host, port, Member.ALPN, memberKey.keyPair.private, r.chain) { true }
+    val g = r.group(Restore.exchange(dial(), "Android", "android", now), now)
+    val newRoot = GroupCertificates.groupCA(SoftwareSigner(), now, pathLength = 1)
+    val claim = r.claim(g, newRoot, now)
+    Restore.exchange(dial(), "Android", "android", Instant.now(), send = listOf(claim))
+    println(r.device)
+    println(Base64.getEncoder().encodeToString(newRoot))
+    System.out.flush()
+}
+
 private fun inviteWindow(secret: ByteArray, yes: Boolean) {
     val now = Instant.now()
     val caSigner = SoftwareSigner()
@@ -187,9 +213,11 @@ fun main(args: Array<String>) {
             args.size == 4 && args[0] == "admit" && port != null -> admit(args[1], port, args[3], null)
             args.size == 5 && args[0] == "admit-tls" && port != null -> admit(args[1], port, args[3], args[4])
             args.size == 4 && args[0] == "join-tls" && port != null -> joinTLS(args[1], port, args[3])
+            args.size == 6 && args[0] == "restore-tls" && port != null ->
+                restoreTLS(args[1], port, Base64.getDecoder().decode(args[3]), Base64.getDecoder().decode(args[4]), args[5])
             args.size == 3 && args[0] == "invite-window" -> inviteWindow(Base64.getDecoder().decode(args[1]), args[2] == "yes")
             else -> {
-                System.err.println("usage: clipboardbridge-interop admit HOST PORT CODE | admit-tls HOST PORT CODE FINGERPRINT | join-tls HOST PORT CODE | invite-window SECRET yes|no | member-tls HOST PORT PEER")
+                System.err.println("usage: clipboardbridge-interop admit HOST PORT CODE | admit-tls HOST PORT CODE FINGERPRINT | join-tls HOST PORT CODE | invite-window SECRET yes|no | member-tls HOST PORT PEER | restore-tls HOST PORT KEY CERT GROUP")
                 exitProcess(2)
             }
         }
