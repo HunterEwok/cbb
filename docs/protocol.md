@@ -1392,9 +1392,9 @@ job checks it from 0.5.0.
 ### Admins
 
 Any full member can be an admin, in a group a phone created and in one a computer created.
-Its admin key is in its TPM on Linux (section 17) and otherwise a file next to its identity,
-not a Secure Enclave key, so a thief with such a computer can act as an admin until another
-admin removes it.
+Its admin key is in its TPM or a Mac's Secure Enclave (section 17) and otherwise a file next
+to its identity, so a thief with such a computer can act as an admin until another admin
+removes it.
 
 - Every full member that is not the root makes a P-256 admin key when it starts in a group
   and keeps it in the identity file (`admin_key`,
@@ -3184,7 +3184,8 @@ far.
 
 - A **hello** says where the sender's keys live in `key_store` (section 4); a receiver MUST
   NOT trust it for anything but what the root records, below: the phones send
-  `hardware`, a Linux computer whose member key is in its TPM `hardware`, a rootless
+  `hardware`, a Linux computer whose member key is in its TPM and a Mac whose member key is in
+  its Secure Enclave `hardware`, a rootless
   install (below) `rootless`, the other computers and the lite member `file`. A device that
   cannot tell sends `file`.
 - **Rootless installs** (D-79). A full member or a lite member installed and run without root, as its
@@ -3203,11 +3204,31 @@ far.
   in `key_tpm` and `admin_key_tpm` instead of `key` and `admin_key`; the blob loads only in
   that TPM. `CBB_TPM=off` makes new keys in a file; a key already in a file stays there
   until the device joins again. The CA keys of a root computer stay in the file.
+- **Keys in the Secure Enclave.** A full member on a Mac with a Secure Enclave (Apple
+  silicon, or an Intel Mac with the T2 chip) makes its member key, its admin key and its
+  server keys (section 18) there: a P-256 signing key that no keychain keeps, usable after
+  the Mac's first unlock since it started and without the user's presence, so the service,
+  a LaunchDaemon running as root, signs from boot on. The identity file keeps the enclave's
+  encrypted copy of the key (what CryptoKit calls its `dataRepresentation`) in `key_se`
+  and `admin_key_se`, `server-keys.json` in `se`; only that Mac's enclave opens it. A build
+  without cgo, or `CBB_TPM=off`, makes new keys in a file. The CA keys of a root computer
+  stay in the file.
 - **The WireGuard key** (section 11) is sealed by the same TPM: a sealed data object under
   the storage root key, its blob in `tunnel.json` as `key_tpm` in place of `key`. The key
   crosses to and from the TPM in a session salted with the storage root key that encrypts
   it, so it never shows on the chip's bus. A key in the file moves into the TPM when the
-  service next reads the state; WireGuard itself still uses it in memory.
+  service next reads the state; WireGuard itself still uses it in memory. The hub's keys
+  for its clients (`serving_tpm`, `next_tpm`) and the secret for sealed commands
+  (`seal.json`, `tpm`, section 15) are sealed the same way.
+- **Sealed by the Secure Enclave.** On a Mac the same secrets are sealed to a new P-256 key
+  in the enclave, which cannot hold an X25519 key itself: an ephemeral P-256 key agrees on
+  a secret with the enclave's key (ECDH), and AES-256-GCM, keyed with HKDF-SHA256 of that
+  secret (salt the ephemeral and then the enclave's public key, uncompressed; info
+  `cbb sekey seal v1`), seals the secret with a random 12-byte nonce and the info as
+  associated data. The file keeps `{"v":1,"key":…,"eph":…,"box":…}`: the enclave key's
+  encrypted copy, the ephemeral public key and the nonce followed by the sealed secret,
+  each in base64, as `key_se`, `serving_se` and `next_se` in `tunnel.json` and `se` in
+  `seal.json`.
   `CBB_TPM_SIMULATOR=host:port` points the service at a software TPM (swtpm), for tests.
 - A **device record** says it in `store`: `file`, `hardware`, `rootless`, or `proven` once the group's
   root checked a proof of hardware (an attestation, "Evidence" below), with `kind`, the kind
@@ -3225,9 +3246,8 @@ far.
   `store` `file`. Moving the hub to such a computer makes it an admin only through that
   dialog.
 - **The root.** `cbb new` on a computer warns that its root key is a file: the group's CA
-  keys are not in the TPM yet, and Macs keep all their keys in a file until the service
-  uses the Secure Enclave (roadmap, D-44). From then on
-  making a group or an admin with keys in a file asks first too.
+  keys are not in the TPM or the Secure Enclave yet (roadmap, D-44). Making a group or an
+  admin with keys in a file asks first too.
 - **The attestation challenge.** An Android key is made with the attestation challenge
   `SHA-256("cbb attest v1" || field(group tag) || field(member key) || salt)`, where
   `field` is a two-byte big-endian length followed by the bytes, the group tag is its

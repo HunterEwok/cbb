@@ -12,6 +12,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
   set the text of the field open on it at once, through the Companion protocol of Apple's own
   remote (`internal/tvremote/appletv`), with no key presses. The TV must allow access to
   everyone on the same network. Tested against a fake Apple TV; not yet on a real one.
+- A Mac with a Secure Enclave (Apple silicon or the T2 chip) keeps its member, admin and server
+  keys there (`internal/sekey`, through Security.framework): the service, a LaunchDaemon, makes
+  them without a keychain and keeps only the enclave's encrypted copy, which opens on no other
+  Mac. `CBB_TPM=off` keeps new keys in a file, and a Mac that joined earlier keeps its file until
+  it joins again.
 - A computer or a lite member updated from 0.5 leaves its old group at its first start, since
   0.6 does not read records of version 1: the group's files go into `before-0.6` in the state
   directory, the settings stay, and `cbb status` says that the group is set up again. Until now

@@ -91,16 +91,21 @@ static SecKeyRef cbbCreate(CFDataRef *blob, CFDataRef *pub, char *err, size_t n)
 	return key;
 }
 
-// cbbLoad opens a key from what cbbCreate gave.
+// cbbLoad opens a key from what cbbCreate gave. SecKeyCreateWithData
+// would make a new key from it; SecKeyCreateRandomKey with the blob as the
+// token's object ID ("toid") opens the one it names, as CryptoKit does.
 static SecKeyRef cbbLoad(const void *b, size_t len, CFDataRef *pub, char *err, size_t n) {
 	CFErrorRef e = NULL;
 	CFDataRef blob = CFDataCreate(NULL, b, (CFIndex)len);
-	const void *k[] = {kSecAttrKeyType, kSecAttrKeyClass, kSecAttrTokenID};
-	const void *v[] = {kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeyClassPrivate, kSecAttrTokenIDSecureEnclave};
-	CFDictionaryRef attrs = CFDictionaryCreate(NULL, k, v, 3,
+	int bits = 256;
+	CFNumberRef nb = CFNumberCreate(NULL, kCFNumberIntType, &bits);
+	const void *k[] = {kSecAttrKeyType, kSecAttrKeySizeInBits, kSecAttrTokenID, CFSTR("toid"), kSecAttrIsPermanent};
+	const void *v[] = {kSecAttrKeyTypeECSECPrimeRandom, nb, kSecAttrTokenIDSecureEnclave, blob, kCFBooleanFalse};
+	CFDictionaryRef attrs = CFDictionaryCreate(NULL, k, v, 5,
 		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-	SecKeyRef key = SecKeyCreateWithData(blob, attrs, &e);
+	SecKeyRef key = SecKeyCreateRandomKey(attrs, &e);
 	CFRelease(attrs);
+	CFRelease(nb);
 	CFRelease(blob);
 	if (key == NULL) {
 		cbbError(e, "opening the key", err, n);
@@ -131,6 +136,31 @@ static CFDataRef cbbSign(SecKeyRef key, const void *d, size_t len, char *err, si
 	CFRelease(digest);
 	if (sig == NULL) cbbError(e, "signing", err, n);
 	return sig;
+}
+
+// cbbAgree agrees on a secret between key and the uncompressed point pub
+// (ECDH, the shared X coordinate).
+static CFDataRef cbbAgree(SecKeyRef key, const void *p, size_t len, char *err, size_t n) {
+	CFErrorRef e = NULL;
+	CFDataRef data = CFDataCreate(NULL, p, (CFIndex)len);
+	const void *k[] = {kSecAttrKeyType, kSecAttrKeyClass};
+	const void *v[] = {kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeyClassPublic};
+	CFDictionaryRef attrs = CFDictionaryCreate(NULL, k, v, 2,
+		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	SecKeyRef pub = SecKeyCreateWithData(data, attrs, &e);
+	CFRelease(attrs);
+	CFRelease(data);
+	if (pub == NULL) {
+		cbbError(e, "reading the other public key", err, n);
+		return NULL;
+	}
+	CFDictionaryRef params = CFDictionaryCreate(NULL, NULL, NULL, 0,
+		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	CFDataRef shared = SecKeyCopyKeyExchangeResult(key, kSecKeyAlgorithmECDHKeyExchangeStandard, pub, params, &e);
+	CFRelease(params);
+	CFRelease(pub);
+	if (shared == NULL) cbbError(e, "agreeing on a secret", err, n);
+	return shared;
 }
 
 static void cbbRelease(CFTypeRef r) { CFRelease(r); }
@@ -170,6 +200,16 @@ func (r ref) sign(digest []byte) ([]byte, error) {
 		return nil, errors.New("sekey: " + C.GoString(&buf[0]))
 	}
 	return data(sig), nil
+}
+
+func (r ref) agree(pub []byte) ([]byte, error) {
+	var buf [256]C.char
+	shared := C.cbbAgree(r.h.key, unsafe.Pointer(&pub[0]), C.size_t(len(pub)), &buf[0], C.size_t(len(buf)))
+	runtime.KeepAlive(r.h)
+	if shared == 0 {
+		return nil, errors.New("sekey: " + C.GoString(&buf[0]))
+	}
+	return data(shared), nil
 }
 
 // data copies d and releases it.

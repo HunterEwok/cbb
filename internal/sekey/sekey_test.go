@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/json"
 	"errors"
 	"os"
 	"testing"
@@ -61,5 +62,37 @@ func TestEnclave(t *testing.T) {
 	bad[len(bad)/2] ^= 1
 	if _, err := Load(bad); err == nil {
 		t.Fatal("loaded a damaged blob")
+	}
+}
+
+// TestSeal seals a secret in the enclave and opens it again.
+func TestSeal(t *testing.T) {
+	if os.Getenv(testEnv) != "1" {
+		if _, err := Seal([]byte("x")); !errors.Is(err, ErrNoEnclave) {
+			t.Fatalf("Seal in a test without %s=1: %v, want ErrNoEnclave", testEnv, err)
+		}
+		t.Skipf("set %s=1 on a Mac with a Secure Enclave", testEnv)
+	}
+	secret := []byte("the WireGuard key, 32 bytes long")
+	b, err := Seal(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("sealed: %s", b)
+	got, err := Unseal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(secret) {
+		t.Fatalf("Unseal = %q, want %q", got, secret)
+	}
+	var s sealed
+	if err := json.Unmarshal(b, &s); err != nil {
+		t.Fatal(err)
+	}
+	s.Box[len(s.Box)-1] ^= 1
+	bad, _ := json.Marshal(s)
+	if _, err := Unseal(bad); err == nil {
+		t.Fatal("opened a damaged box")
 	}
 }

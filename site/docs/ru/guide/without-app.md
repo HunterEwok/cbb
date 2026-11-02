@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 2bdb30278c1f -->
+<!-- source: 00a76d11e6c5 -->
 # Без приложения
 
 Группе не обязательно приложение на телефоне. Группу может держать компьютер, а iPhone без
@@ -65,11 +65,11 @@ sudo cbb pair -phone
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-Компьютер с Linux или ПК с Windows с TPM хранит свой ключ администратора в нём. Mac, ПК с Windows
-или компьютер с Linux без TPM хранит его в файле, поэтому `cbb admin` сначала требует `-allow-file-key`: кто
+Компьютер с Linux или ПК с Windows с TPM хранит свой ключ администратора в нём, Mac — в
+Secure Enclave. Компьютер без них хранит его в файле, поэтому `cbb admin` сначала требует `-allow-file-key`: кто
 скопирует этот файл, действует как администратор, пока другой администратор не удалит
 компьютер, так что делайте администратором только тот компьютер, который вы бережёте.
 

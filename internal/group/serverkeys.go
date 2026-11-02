@@ -45,6 +45,7 @@ type ServerKeys struct {
 type savedServerKey struct {
 	Key []byte       `json:"key,omitempty"` // PKCS #8
 	TPM *tpmkey.Blob `json:"tpm,omitempty"`
+	SE  []byte       `json:"se,omitempty"` // the Secure Enclave's blob
 }
 
 // NewServerKeys returns an empty set that saves to dir/server-keys.json.
@@ -67,12 +68,7 @@ func LoadServerKeys(dir string) (*ServerKeys, error) {
 		return nil, fmt.Errorf("%s: %w", k.file, err)
 	}
 	for name, s := range saved {
-		var key crypto.Signer
-		if s.TPM != nil {
-			key, err = loadTPMKey(s.TPM)
-		} else {
-			key, err = parseKey(s.Key)
-		}
+		key, err := (storedKey{s.Key, s.TPM, s.SE}).load()
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", k.file, err)
 		}
@@ -129,16 +125,11 @@ func (k *ServerKeys) Keep(tag string) error {
 func (k *ServerKeys) saveLocked() error {
 	saved := map[string]savedServerKey{}
 	for _, name := range slices.Sorted(maps.Keys(k.keys)) {
-		key := k.keys[name]
-		s := savedServerKey{TPM: keyBlob(key)}
-		if s.TPM == nil {
-			der, err := x509.MarshalPKCS8PrivateKey(key)
-			if err != nil {
-				return err
-			}
-			s.Key = der
+		s, err := storeKey(k.keys[name])
+		if err != nil {
+			return err
 		}
-		saved[name] = s
+		saved[name] = savedServerKey{Key: s.der, TPM: s.tpm, SE: s.se}
 	}
 	data, err := json.MarshalIndent(saved, "", "\t")
 	if err != nil {

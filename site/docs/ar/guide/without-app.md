@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 2bdb30278c1f -->
+<!-- source: 00a76d11e6c5 -->
 # بدون التطبيق
 
 لا تحتاج المجموعة إلى تطبيق الهاتف. يمكن لحاسوب أن يحمل المجموعة، وينضم iPhone بلا تطبيق عبر اختصار. وهذا هو الطريق أيضًا ما دام تطبيق iPhone ينتظر TestFlight.
@@ -51,10 +51,10 @@ sudo cbb pair -phone
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-يحتفظ حاسوب Linux أو Windows الذي فيه TPM بمفتاح المشرف هناك. أما Mac أو حاسوب Windows أو Linux بلا TPM فيحتفظ به في ملف، ولذلك يطلب `cbb admin` أولًا `-allow-file-key`: من ينسخ ذلك الملف يتصرف كمشرف إلى أن يزيل مشرف آخر الحاسوب، فلا تجعل مشرفًا إلا حاسوبًا تحفظه في مكان آمن.
+يحتفظ حاسوب Linux أو Windows الذي فيه TPM بمفتاح المشرف هناك، وجهاز Mac في Secure Enclave. أما الحاسوب الذي ليس فيه أيّ منهما فيحتفظ به في ملف، ولذلك يطلب `cbb admin` أولًا `-allow-file-key`: من ينسخ ذلك الملف يتصرف كمشرف إلى أن يزيل مشرف آخر الحاسوب، فلا تجعل مشرفًا إلا حاسوبًا تحفظه في مكان آمن.
 
 إذا فُقد الجذر أو تعطل، يتولى المشرف المجموعة، وتبقى كل الأجهزة الأخرى:
 

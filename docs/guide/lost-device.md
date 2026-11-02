@@ -61,11 +61,11 @@ Only each device's own user turns them on again.
 
 It depends on where the device kept its keys ([keys and attestation](keys.md)):
 
-- **Keys in hardware** (phones, Linux computers with a TPM): nothing to copy. The keys sign
+- **Keys in hardware** (phones, Macs with a Secure Enclave, computers with a TPM): nothing to copy. The keys sign
   only on that device, and a phone's root and admin keys sign only after your face,
   fingerprint or passcode.
-- **Keys in a file** (Macs, Windows PCs and Linux computers without a TPM, the lite
-  member): whoever copies the file can act as that device until you remove it. Encrypt the
+- **Keys in a file** (Intel Macs without the T2 chip, Windows PCs and Linux computers
+  without a TPM, the lite member): whoever copies the file can act as that device until you remove it. Encrypt the
   disk (FileVault, BitLocker, LUKS) so a stolen device gives nothing away.
 
 The clipboard's history is not kept on the devices, and a secret is gone 60 seconds after it

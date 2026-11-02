@@ -42,7 +42,7 @@ var ErrOldGroup = errors.New("group: this device's group was made before 0.4 and
 // An Identity is not changed after it is made; renewing returns a new one.
 type Identity struct {
 	ID   DeviceID
-	Key  crypto.Signer     // a P-256 key: an *ecdsa.PrivateKey in the file, or a *tpmkey.Key
+	Key  crypto.Signer     // a P-256 key: an *ecdsa.PrivateKey in the file, a *tpmkey.Key or a *sekey.Key
 	Cert *x509.Certificate // from the group CA, or from Issuer
 	// Issuer is the admin CA that issued Cert, in a group whose root is a
 	// phone and where another admin phone admitted this device; nil when
@@ -654,6 +654,10 @@ type identityFile struct {
 	// in the TPM: the blob that only this machine's TPM loads.
 	KeyTPM      *tpmkey.Blob `json:"key_tpm,omitempty"`
 	AdminKeyTPM *tpmkey.Blob `json:"admin_key_tpm,omitempty"`
+	// KeySE and AdminKeySE stand for them when they live in a Mac's
+	// Secure Enclave: the blob that only this Mac's enclave loads.
+	KeySE      []byte `json:"key_se,omitempty"`
+	AdminKeySE []byte `json:"admin_key_se,omitempty"`
 }
 
 const fileVersion = 1
@@ -677,12 +681,11 @@ func (id *Identity) Save(dir string) error {
 	for _, r := range id.Roots {
 		f.Roots = append(f.Roots, r.Raw)
 	}
-	var err error
-	if f.KeyTPM = keyBlob(id.Key); f.KeyTPM == nil {
-		if f.Key, err = x509.MarshalPKCS8PrivateKey(id.Key); err != nil {
-			return err
-		}
+	key, err := storeKey(id.Key)
+	if err != nil {
+		return err
 	}
+	f.Key, f.KeyTPM, f.KeySE = key.der, key.tpm, key.se
 	if id.GroupCA.Key != nil {
 		if f.GroupCAKey, err = x509.MarshalPKCS8PrivateKey(id.GroupCA.Key); err != nil {
 			return err
@@ -702,11 +705,11 @@ func (id *Identity) Save(dir string) error {
 		}
 	}
 	if id.AdminKey != nil {
-		if f.AdminKeyTPM = keyBlob(id.AdminKey); f.AdminKeyTPM == nil {
-			if f.AdminKey, err = x509.MarshalPKCS8PrivateKey(id.AdminKey); err != nil {
-				return err
-			}
+		key, err := storeKey(id.AdminKey)
+		if err != nil {
+			return err
 		}
+		f.AdminKey, f.AdminKeyTPM, f.AdminKeySE = key.der, key.tpm, key.se
 	}
 	if id.AdminCA != nil {
 		f.AdminCA = id.AdminCA.Raw
@@ -757,12 +760,7 @@ func parseIdentity(data []byte) (*Identity, error) {
 	}
 	id := &Identity{ID: DeviceID(f.Device)}
 	var err error
-	if f.KeyTPM != nil {
-		id.Key, err = loadTPMKey(f.KeyTPM)
-	} else {
-		id.Key, err = parseKey(f.Key)
-	}
-	if err != nil {
+	if id.Key, err = (storedKey{f.Key, f.KeyTPM, f.KeySE}).load(); err != nil {
 		return nil, err
 	}
 	if id.Cert, err = x509.ParseCertificate(f.Cert); err != nil {
@@ -798,13 +796,8 @@ func parseIdentity(data []byte) (*Identity, error) {
 			return nil, err
 		}
 	}
-	switch {
-	case f.AdminKeyTPM != nil:
-		if id.AdminKey, err = loadTPMKey(f.AdminKeyTPM); err != nil {
-			return nil, err
-		}
-	case f.AdminKey != nil:
-		if id.AdminKey, err = parseKey(f.AdminKey); err != nil {
+	if f.AdminKey != nil || f.AdminKeyTPM != nil || f.AdminKeySE != nil {
+		if id.AdminKey, err = (storedKey{f.AdminKey, f.AdminKeyTPM, f.AdminKeySE}).load(); err != nil {
 			return nil, err
 		}
 	}

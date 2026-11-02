@@ -90,8 +90,8 @@ The group works with just the phone, but two things are better on a computer tha
 such as a home server, a Raspberry Pi or a desktop:
 
 - **Make it an admin.** On the phone, tap the computer on Home and then
-  **Make it an admin**. A Mac, or a Windows PC or Linux computer without a TPM, keeps its
-  keys in a file, and the app warns you about that first
+  **Make it an admin**. A computer without a TPM or a Secure Enclave keeps its keys in a
+  file, and the app warns you about that first
   ([keys](keys.md#the-three-levels)). It can then add and remove devices too (`sudo cbb pair`,
   `sudo cbb revoke NAME`), so you do not need the phone at hand every time. The phone stays
   the group's root, its most trusted device: the root's key never leaves the phone's

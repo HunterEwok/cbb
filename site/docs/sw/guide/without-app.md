@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 2bdb30278c1f -->
+<!-- source: 00a76d11e6c5 -->
 # Bila programu
 
 Kikundi hakihitaji programu ya simu. Kompyuta inaweza kushikilia kikundi, na iPhone isiyo na programu hujiunga kwa njia ya mkato. Hii pia ndiyo njia wakati programu ya iPhone inasubiri TestFlight.
@@ -51,10 +51,10 @@ Fanya kompyuta ya pili kuwa msimamizi, ili iweze pia kuongeza na kuondoa vifaa:
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-Kompyuta ya Linux au ya Windows yenye TPM huweka ufunguo wa msimamizi humo. Mac, au kompyuta ya Windows au ya Linux isiyo na TPM, huuweka kwenye faili, kwa hivyo `cbb admin` huomba kwanza `-allow-file-key`: yeyote anayenakili faili hiyo hutenda kama msimamizi hadi msimamizi mwingine aondoe kompyuta hiyo, kwa hivyo fanya msimamizi kompyuta unayoitunza salama tu.
+Kompyuta ya Linux au ya Windows yenye TPM huweka ufunguo wa msimamizi humo, na Mac kwenye Secure Enclave yake. Kompyuta isiyo na chochote kati ya hivyo huuweka kwenye faili, kwa hivyo `cbb admin` huomba kwanza `-allow-file-key`: yeyote anayenakili faili hiyo hutenda kama msimamizi hadi msimamizi mwingine aondoe kompyuta hiyo, kwa hivyo fanya msimamizi kompyuta unayoitunza salama tu.
 
 Mzizi ukipotea au kuharibika, msimamizi huchukua kikundi, na kila kifaa kingine kinabaki:
 

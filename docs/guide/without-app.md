@@ -64,11 +64,11 @@ Make a second computer an admin, so it can add and remove devices too:
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-A Linux computer or a Windows PC with a TPM keeps its admin key there. A Mac, or a Windows
-PC or Linux computer without a TPM, keeps it in a file, so `cbb admin` asks for `-allow-file-key` first:
+A Linux computer or a Windows PC with a TPM keeps its admin key there, a Mac in its Secure
+Enclave. A computer without either keeps it in a file, so `cbb admin` asks for `-allow-file-key` first:
 whoever copies that file acts as an admin until another admin removes the computer, so make
 an admin only of a computer you keep safe.
 

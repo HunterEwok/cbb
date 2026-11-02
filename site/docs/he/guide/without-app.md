@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 2bdb30278c1f -->
+<!-- source: 00a76d11e6c5 -->
 # בלי האפליקציה
 
 קבוצה לא צריכה את אפליקציית הטלפון. מחשב יכול להחזיק את הקבוצה, ו-iPhone בלי האפליקציה מצטרף באמצעות קיצור דרך. זו גם הדרך כל עוד אפליקציית ה-iPhone ממתינה ל-TestFlight.
@@ -51,10 +51,10 @@ sudo cbb pair -phone
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-מחשב Linux או Windows עם TPM שומר שם את מפתח המנהל. Mac, או מחשב Windows או Linux בלי TPM, שומרים אותו בקובץ, ולכן `cbb admin` דורש קודם `-allow-file-key`: מי שמעתיק את הקובץ הזה פועל כמנהל עד שמנהל אחר מסיר את המחשב, ולכן הפוך למנהל רק מחשב ששמור אצלך היטב.
+מחשב Linux או Windows עם TPM שומר שם את מפתח המנהל, ו-Mac ב-Secure Enclave שלו. מחשב בלי אף אחד מהם שומר אותו בקובץ, ולכן `cbb admin` דורש קודם `-allow-file-key`: מי שמעתיק את הקובץ הזה פועל כמנהל עד שמנהל אחר מסיר את המחשב, ולכן הפוך למנהל רק מחשב ששמור אצלך היטב.
 
 אם השורש אבד או התקלקל, המנהל משתלט על הקבוצה, וכל שאר המכשירים נשארים:
 

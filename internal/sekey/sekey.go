@@ -12,6 +12,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -68,7 +69,18 @@ func Load(blob []byte) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newKey(r, append([]byte(nil), blob...), pub)
+	k, err := newKey(r, append([]byte(nil), blob...), pub)
+	if err != nil {
+		return nil, err
+	}
+	// The enclave opens the key's sealed part only when it signs, so a
+	// damaged blob loads; one signature tells.
+	d := sha256.Sum256([]byte("sekey: the key loads"))
+	if _, err := k.Sign(nil, d[:], crypto.SHA256); err != nil {
+		k.ref.release()
+		return nil, fmt.Errorf("sekey: the key does not open: %w", err)
+	}
+	return k, nil
 }
 
 func newKey(r ref, blob, pub []byte) (*Key, error) {

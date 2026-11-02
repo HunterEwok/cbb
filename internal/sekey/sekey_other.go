@@ -7,8 +7,9 @@ package sekey
 
 type ref struct{}
 
-func (ref) release()                    {}
-func (ref) sign([]byte) ([]byte, error) { return nil, ErrNoEnclave }
+func (ref) release()                     {}
+func (ref) sign([]byte) ([]byte, error)  { return nil, ErrNoEnclave }
+func (ref) agree([]byte) ([]byte, error) { return nil, ErrNoEnclave }
 
 func available() bool { return false }
 

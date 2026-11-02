@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: fa38a51ac3b5 -->
+<!-- source: d9f2991969be -->
 # 快速入门
 
 Clipboard Bridge 让你的手机和电脑共用一个剪贴板：在一台设备上复制，在另一台上粘贴。这些设备在你的家庭网络中组成一个**群组**。手机保管群组的密钥，并由它放行每台新设备，所以没有你的许可，谁也无法加入。
@@ -70,7 +70,7 @@ sudo cbb mode shared
 
 只用手机，群组也能工作，但如果有一台一直开着的电脑，比如家用服务器、树莓派或台式机，有两件事会做得更好：
 
-- **把它设为管理员。**在手机上，点主页上的这台电脑，再点 **Make it an admin**。Mac，或没有 TPM 的 Windows 电脑或 Linux 电脑，会把密钥保存在文件中，应用会先就此提醒你（见[密钥](keys.md#the-three-levels)）。之后它也能添加和移除设备（`sudo cbb pair`、`sudo cbb revoke NAME`），这样你就不必每次都带着手机。手机仍然是群组的根，也就是最受信任的设备：根密钥永远不会离开手机的安全芯片。
+- **把它设为管理员。**在手机上，点主页上的这台电脑，再点 **Make it an admin**。没有 TPM 也没有 Secure Enclave 的电脑会把密钥保存在文件中，应用会先就此提醒你（见[密钥](keys.md#the-three-levels)）。之后它也能添加和移除设备（`sudo cbb pair`、`sudo cbb revoke NAME`），这样你就不必每次都带着手机。手机仍然是群组的根，也就是最受信任的设备：根密钥永远不会离开手机的安全芯片。
 - **把它设为中枢**，这样你的设备离家后也能继续同步。参见[离家使用](away-from-home.md)。
 
 也建议再添加一部手机，这样丢了一部手机也不会损失任何东西：在第二部手机上点按 **I already use Clipboard Bridge on another phone**，并在第一部手机上用 **+** 扫描它的二维码。第一部手机会把它设为管理员。

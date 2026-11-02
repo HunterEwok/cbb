@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 2bdb30278c1f -->
+<!-- source: 00a76d11e6c5 -->
 # Sin la app
 
 Un grupo no necesita la app del teléfono. Un ordenador puede sostener el grupo, y un iPhone sin la app se une con un atajo. Este es también el camino mientras la app del iPhone espera a TestFlight.
@@ -51,10 +51,10 @@ Haz administrador a un segundo ordenador, para que también pueda añadir y quit
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-Un ordenador Linux o un PC con Windows con TPM guarda allí su clave de administrador. Un Mac, o un PC con Windows u ordenador Linux sin TPM, la guarda en un archivo, así que `cbb admin` pide antes `-allow-file-key`: quien copie ese archivo actúa como administrador hasta que otro administrador quite el ordenador, así que haz administrador solo a un ordenador que guardes con seguridad.
+Un ordenador Linux o un PC con Windows con TPM guarda allí su clave de administrador, y un Mac en su Secure Enclave. Un ordenador sin ninguno de los dos la guarda en un archivo, así que `cbb admin` pide antes `-allow-file-key`: quien copie ese archivo actúa como administrador hasta que otro administrador quite el ordenador, así que haz administrador solo a un ordenador que guardes con seguridad.
 
 Si la raíz se pierde o se estropea, el administrador toma el control del grupo, y todos los demás dispositivos se quedan:
 

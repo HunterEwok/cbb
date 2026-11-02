@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 2bdb30278c1f -->
+<!-- source: 00a76d11e6c5 -->
 # 不用应用
 
 群组并不需要手机应用。群组可以由一台电脑来持有，没有应用的 iPhone 则通过快捷指令加入。在 iPhone 应用还在等待 TestFlight 的这段时间，这也是可行的办法。
@@ -51,10 +51,10 @@ sudo cbb pair -phone
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, or a Windows PC or Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-带 TPM 的 Linux 或 Windows 电脑把管理员密钥保存在 TPM 里。Mac，或没有 TPM 的 Windows、Linux 电脑则把它保存在文件里，所以 `cbb admin` 会先要求你加上 `-allow-file-key`：谁复制了这个文件，谁就能以管理员身份行事，直到另一位管理员移除这台电脑，所以只把你妥善保管的电脑设为管理员。
+带 TPM 的 Linux 或 Windows 电脑把管理员密钥保存在 TPM 里，Mac 则保存在 Secure Enclave 里。两者都没有的电脑则把它保存在文件里，所以 `cbb admin` 会先要求你加上 `-allow-file-key`：谁复制了这个文件，谁就能以管理员身份行事，直到另一位管理员移除这台电脑，所以只把你妥善保管的电脑设为管理员。
 
 如果根丢失或损坏，管理员可以接管群组，其他所有设备都保留：
 
