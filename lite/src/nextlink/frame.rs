@@ -20,7 +20,8 @@ pub const FROM_ESP: u8 = b'E';
 pub const TO_ESP: u8 = b'e';
 /// The driver's hello: its version and what it counted (driver to Pi).
 pub const HELLO: u8 = b'H';
-/// The Next's clock, seven bytes as the DS1307 holds them (driver to Pi).
+/// The Next's clock: the date and the time in MS-DOS's form, as
+/// NextZXOS gives them to a driver, each 16 bits little-endian (driver to Pi).
 pub const TIME: u8 = b'T';
 /// How many of the Pi's bytes on the wire the driver has taken, as a 16-bit
 /// little-endian count (driver to Pi); the Pi sends no more than WINDOW

@@ -153,7 +153,7 @@ impl<W: Write> Link<W> {
                 }
                 frame::ACK if f.data.len() == 2 => self.acked = u16::from_le_bytes([f.data[0], f.data[1]]),
                 frame::FROM_ESP => self.esp.input(&f.data),
-                frame::TIME => match ds1307(&f.data) {
+                frame::TIME => match msdos_time(&f.data) {
                     Some(local) => self.clock = Some(local - self.zone),
                     None => (self.log)("the Next's clock gave no valid time"),
                 },
@@ -280,29 +280,17 @@ impl<W: Write> Link<W> {
     }
 }
 
-/// The DS1307's seven registers (BCD: seconds, minutes, hours, day of the
-/// week, date, month, year in the century) as seconds since 1970 in the
-/// clock's own time.
-pub fn ds1307(r: &[u8]) -> Option<i64> {
-    if r.len() < 7 {
+/// The Next's clock as NextZXOS gives it to a driver (drv_drvrtc, as
+/// M_DATE): the date and the time in MS-DOS's form, each 16 bits
+/// little-endian, date first; seconds since 1970 in the clock's own time.
+pub fn msdos_time(r: &[u8]) -> Option<i64> {
+    if r.len() < 4 {
         return None;
     }
-    let bcd = |b: u8| -> Option<i64> {
-        let (hi, lo) = (b >> 4, b & 15);
-        (hi < 10 && lo < 10).then_some((hi * 10 + lo) as i64)
-    };
-    let sec = bcd(r[0] & 0x7F)?;
-    let min = bcd(r[1])?;
-    let hour = if r[2] & 0x40 != 0 {
-        // 12-hour mode: bit 5 is PM.
-        let h = bcd(r[2] & 0x1F)? % 12;
-        h + if r[2] & 0x20 != 0 { 12 } else { 0 }
-    } else {
-        bcd(r[2] & 0x3F)?
-    };
-    let day = bcd(r[4])?;
-    let month = bcd(r[5])?;
-    let year = 2000 + bcd(r[6])?;
+    let date = u16::from_le_bytes([r[0], r[1]]) as i64;
+    let time = u16::from_le_bytes([r[2], r[3]]) as i64;
+    let (year, month, day) = (1980 + (date >> 9), (date >> 5) & 15, date & 31);
+    let (hour, min, sec) = (time >> 11, (time >> 5) & 63, (time & 31) * 2);
     if sec > 59 || min > 59 || hour > 23 || !(1..=31).contains(&day) || !(1..=12).contains(&month) {
         return None;
     }
@@ -606,14 +594,15 @@ mod tests {
 
     #[test]
     fn clock() {
-        // 2026-11-02 01:30:15 local, an hour ahead of UTC.
+        // 2026-11-02 01:30:14 local, an hour ahead of UTC.
+        let date: u16 = (46 << 9) | (11 << 5) | 2;
+        let time: u16 = (1 << 11) | (30 << 5) | 7;
         let (mut link, _, now) = new_link();
-        link.handle(Msg::Uart(encode(frame::TIME, &[0x15, 0x30, 0x01, 0x02, 0x02, 0x11, 0x26])), now);
-        assert_eq!(link.clock, Some(1_793_583_015 - 3600));
-        // 12-hour mode, 1 PM.
-        assert_eq!(ds1307(&[0, 0, 0x61, 1, 1, 1, 0]), Some(946_731_600));
-        assert_eq!(ds1307(&[0x60, 0, 0, 1, 1, 1, 0]), None);
-        assert_eq!(ds1307(&[0, 0, 0, 1, 0, 1, 0]), None);
+        link.handle(Msg::Uart(encode(frame::TIME, &[date.to_le_bytes(), time.to_le_bytes()].concat())), now);
+        assert_eq!(link.clock, Some(1_793_583_014 - 3600));
+        assert_eq!(msdos_time(&[0x21, 0, 0, 0]), Some(315_532_800)); // 1980-01-01
+        assert_eq!(msdos_time(&[0x20, 0, 0, 0]), None); // day 0
+        assert_eq!(msdos_time(&[0x21, 0, 0, 0xC0]), None); // hour 24
     }
 
     #[test]

@@ -302,7 +302,8 @@ cbb run -peer 127.0.0.1:8769
 On the UART, the driver and the link exchange frames: the byte 0x7E, a type, a length (0
 to 255), that many bytes and the sum of the type, the length and the bytes modulo 256; a
 0x7E inside a frame is sent twice. The types: `H` the driver's hello (nothing goes to it
-before), `E` bytes from the ESP, `e` bytes for the ESP, `T` the clock's seven registers,
+before), `E` bytes from the ESP, `e` bytes for the ESP, `T` the clock (the date and the time in
+MS-DOS's form, as NextZXOS's `M_DATE` gives them, each 16 bits little-endian),
 `A` how many bytes on the wire the driver has taken (16 bits, little-endian; the link
 sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters to type and
 `Q` to stop. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
