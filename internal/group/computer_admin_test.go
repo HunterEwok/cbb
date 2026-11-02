@@ -122,12 +122,9 @@ func TestComputerAdmin(t *testing.T) {
 		t.Errorf("a record the admin computer signed: %v, %v", ok, err)
 	}
 
-	// Neither the root nor a member of a legacy group gets an admin key.
+	// The root gets no admin key.
 	if _, err := newGroup(t).WithAdminKey(); err == nil {
 		t.Error("the root got an admin key")
-	}
-	if _, err := join(t, newLegacyGroup(t), false, t0).WithAdminKey(); err == nil {
-		t.Error("a legacy group's member got an admin key")
 	}
 }
 
@@ -136,7 +133,7 @@ func TestComputerAdmin(t *testing.T) {
 // serves the shortcut with it; a member that is no admin never holds it.
 func TestComputerRoot(t *testing.T) {
 	root := newGroup(t)
-	m := join(t, root, false, t0)
+	m := join(t, root, t0)
 	if !m.NeedsAdminKey() || m.IsAdmin() || m.ServesPhone() || m.IsRoot() {
 		t.Fatal("a new member is not a plain member waiting for an admin key")
 	}
@@ -199,7 +196,7 @@ func TestComputerRoot(t *testing.T) {
 // more, keeps that across a save, and is no root once the group moves on.
 func TestTakenOver(t *testing.T) {
 	root := newGroup(t)
-	m, err := join(t, root, false, t0).WithAdminKey()
+	m, err := join(t, root, t0).WithAdminKey()
 	if err != nil {
 		t.Fatal(err)
 	}

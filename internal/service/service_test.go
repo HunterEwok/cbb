@@ -1960,68 +1960,6 @@ func TestTakeoverUndone(t *testing.T) {
 	waitFor(t, "b has it", func() bool { return b.paste(t) == "after the undo" })
 }
 
-// startLegacy starts Linux members of one legacy group, made before roots
-// and admins: each holds the group CA key and the iPhone CA key.
-func startLegacy(t *testing.T, h *hub, names ...string) []*testService {
-	t.Helper()
-	now := time.Now()
-	ca, err := group.NewGroupCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	phoneCA, err := group.NewPhoneCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out []*testService
-	for _, name := range names {
-		dir, err := os.MkdirTemp("", "cb")
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { os.RemoveAll(dir) })
-		key, err := group.NewKey()
-		if err != nil {
-			t.Fatal(err)
-		}
-		dev := group.NewDeviceID()
-		cert, err := ca.IssueMember(dev, &key.PublicKey, now)
-		if err != nil {
-			t.Fatal(err)
-		}
-		phone, err := phoneCA.IssuePhone(&key.PublicKey, now)
-		if err != nil {
-			t.Fatal(err)
-		}
-		pc := *phoneCA
-		id := &group.Identity{ID: dev, Key: key, Cert: cert, GroupCA: *ca, PhoneCA: &pc, Phone: phone}
-		if err := id.Save(dir); err != nil {
-			t.Fatal(err)
-		}
-		out = append(out, startIn(t, h, &testService{name: name, dir: dir, os: group.OSLinux}))
-	}
-	return out
-}
-
-// TestUpgrade checks that cbb upgrade is gone with records v:2, which
-// have no legacy groups: the service refuses the operation and changes
-// nothing (docs/records-v2.md, "What else changes with it").
-func TestUpgrade(t *testing.T) {
-	var h hub
-	ss := startLegacy(t, &h, "pi")
-	pi := ss[0]
-	before, err := os.ReadFile(filepath.Join(pi.dir, "identity.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pi.do(t, control.Header{Op: "upgrade"}, ""); err == nil {
-		t.Error("the service took cbb upgrade")
-	}
-	if after, err := os.ReadFile(filepath.Join(pi.dir, "identity.json")); err != nil || !bytes.Equal(after, before) {
-		t.Errorf("a refused upgrade changed the identity: %v", err)
-	}
-}
-
 // TestFreezeAnAdmin checks that an admin computer freezes another one,
 // which then changes nothing and is refused, and that only the root
 // unfreezes it.

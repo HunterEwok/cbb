@@ -182,7 +182,6 @@ rely on them. Source: `internal/group/cert.go`, `internal/group/tls.go`, `intern
 | Certificate | Subject CN | SAN | Validity | Extensions |
 |-------------|-----------|-----|----------|------------|
 | Group root CA | `clipboardbridge group root YYYY-MM-DD` (UTC creation date) | none | NotBefore = creation - 24 h; NotAfter = creation + 20 years | CA, path length 1 (MaxPathLen 1); key usage certSign, cRLSign |
-| Group CA of a legacy group | `clipboardbridge group CA YYYY-MM-DD` | none | as the root CA | CA, path length 0 (MaxPathLen 0); key usage certSign, cRLSign |
 | iPhone CA | `clipboardbridge iPhone CA YYYY-MM-DD` | none | as the root CA | CA, path length 0; key usage certSign, cRLSign; plus critical name constraints (below) |
 | Member certificate (from the group CA) | the device ID | DNS `cb-<device ID>.local`, exactly one | NotBefore = the group CA's NotBefore; NotAfter = min(issue + 2 years, CA NotAfter) | key usage digitalSignature; EKU serverAuth and clientAuth; not a CA |
 | `clipboardbridge.local` server certificate (from the iPhone CA) | `clipboardbridge.local` | DNS `clipboardbridge.local` | NotBefore = max(issue - 24 h, CA NotBefore); NotAfter = min(NotBefore + 397 days, CA NotAfter) | key usage digitalSignature; EKU serverAuth; not a CA |
@@ -198,13 +197,10 @@ clock is outside its own validity. The computer that creates a group is its **ro
 makes the group root CA (the `group_ca` that names the group, as a phone does, section 9) and
 the iPhone CA and holds both keys. The admins it makes (section 10, "Admins") hold an admin
 CA under the root and the iPhone CA key; every other member holds neither and has no
-`clipboardbridge.local` certificate. A **legacy group**, made before admin CAs, has a group CA
-with path length 0, and every Linux and Windows member of it holds both CA keys, a Mac
-neither (design.md, "Full members, admins and the operating system"). Records of version 2
-have no upgrade from it: a legacy group is set up again to get a root.
-Implementations other than Go MAY refuse legacy groups. A phone never takes part in one: only
-a phone admits a phone (section 6), and a phone's group always has a root, so the phone kits
-join only a group whose CA has path length 1. The joiner's certificate carries the key that the member certifies in the welcome
+`clipboardbridge.local` certificate. A group CA MUST have path length 1. A group made before
+0.4 had a group CA with path length 0 (`clipboardbridge group CA YYYY-MM-DD`), whose key every
+Linux and Windows member held; such groups went with records of version 1, and a member that
+finds one leaves it at start, as section 10 says of version 1, and the group is set up again. The joiner's certificate carries the key that the member certifies in the welcome
 (section 6).
 
 Checking a member certificate (`checkPeer`, `DeviceOf`): the chain MUST verify to the group
@@ -216,8 +212,7 @@ Renewal rules (`Identity.Renew`): a member certificate SHOULD be renewed when le
 remain, a `clipboardbridge.local` certificate when less than 60 days remain or when its NotBefore
 is in the future; neither is renewed when it already ends with its CA.
 
-When renewal runs: a member that holds a CA key (the root, an admin, a key holder of a legacy
-group) checks its own certificates when the group
+When renewal runs: a member that holds a CA key (the root or an admin) checks its own certificates when the group
 starts and every 12 hours, saves renewed ones and presents them on new connections at once
 (running connections keep theirs). It renews the certificates of other members too: when a
 peer's hello arrives, and every 12 hours for the running connections, it checks the
@@ -534,7 +529,7 @@ depends on a version number.
 | `records` | string or absent | the digest of the sender's records (section 10) |
 | `name` | string or absent | the sender's device name, 1-64 bytes; a receiver ignores an invalid one |
 | `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos` or `wearos` (section 10) |
-| `admin_key` | string or absent | from a full member that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one, outside a legacy group: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
+| `admin_key` | string or absent | from a full member that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
 | `phone_ca` | string or absent | from a member that holds the iPhone CA key: SHA-256 of that CA's SubjectPublicKeyInfo, in base64, so another admin knows whether to send it a newer one (section 10, "Admins") |
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
@@ -792,8 +787,7 @@ Source: `internal/pair`, `internal/third_party/cpace`, `internal/service/socket.
 
 ### Window
 
-The root or an admin (section 10, "Admins"), or in a legacy group a Linux or Windows member
-that holds the CA keys, opens a window with a six-digit code. The code MUST be drawn
+The root or an admin (section 10, "Admins") opens a window with a six-digit code. The code MUST be drawn
 uniformly at random, and MUST NOT be taken from a command line, where other users of the
 machine could read it. While it is open
 the member publishes `p=1`. The window lives 5 minutes (counting sleep); an attempt that has
@@ -911,8 +905,7 @@ The Welcome carries no CA key: no device gets the key of the group CA or of the 
 joining. A new computer is a member without CA keys: it publishes and listens, but admits
 nobody until the root makes it an admin (section 10, "Admins"), and until then serves no
 iPhone and never holds `clipboardbridge.local`. A joiner reads a Welcome by the fields of this
-table only; the `group_ca_key`, `phone_ca` and `phone_ca_key` of the legacy groups (section 2)
-are gone with them.
+table only.
 
 The Welcome carries no group state and no token hashes: tokens need no hashes (section 7),
 and the group state arrives in the first hello.
@@ -1326,8 +1319,7 @@ iPhone CA as well (section 10, "Admins").
   phone has an admin CA (section 10). Computers get member certificates; a computer holds a
   CA key only when the root phone makes it an admin (section 10, "A computer as admin").
   A phone MUST ask for the user's presence (Face ID, the fingerprint or the passcode) before
-  it signs with the root or an admin key. Go accepts a group CA with path length 0 (a legacy
-  group) or 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
+  it signs with the root or an admin key. A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
   6). There is no iPhone
   CA in such a group, so no member of it holds `clipboardbridge.local`.
 - **The app is a member.** It holds a member certificate of its own group with role
@@ -1368,10 +1360,9 @@ differential run compare the whole state; why the records changed from version 1
 they are tested is in [records-v2.md](records-v2.md).
 
 There is no migration from version 1: a member that holds records of version 1, or a group
-made before them, refuses them, and the group is set up again. `cbb upgrade` of a legacy
-group went with version 1.
+made before them, refuses them, and the group is set up again.
 A computer or a lite member that finds a group of version 1 at start (its `records.json` is a
-JSON array) leaves it: it moves the group's files into `before-0.6` in its state directory,
+JSON array, or, on a computer, its group CA has path length 0, section 2) leaves it: it moves the group's files into `before-0.6` in its state directory,
 keeps its settings, and says so in its log and, on a computer, in `cbb status`; CI's upgrade
 job checks it from 0.5.0.
 
@@ -1404,7 +1395,7 @@ not a Secure Enclave key, so a thief with such a computer can act as an admin un
 admin removes it.
 
 - Every full member that is not the root makes a P-256 admin key when it starts in a group
-  with a root (not in a legacy group) and keeps it in the identity file (`admin_key`,
+  and keeps it in the identity file (`admin_key`,
   PKCS #8, or `admin_key_tpm`, section 17). Until it holds an admin CA, and while the admin CA
   it holds is from a root before the current one, its hello carries `admin_key`: the key's
   SubjectPublicKeyInfo.
@@ -1455,8 +1446,7 @@ admin removes it.
 - In the member handshake (section 4) a member MUST send its certificate followed by its
   issuer when the issuer is not the group CA. Checking a peer: the chain MUST verify to the
   group CA through at most one intermediate that is a CA with path length 0, with the time
-  rule of section 2; then the rules of "Certificates" below apply. A legacy group, whose CA
-  has path length 0, has no intermediates. The issuer those rules check, and the admin CA that makes a
+  rule of section 2; then the rules of "Certificates" below apply. The issuer those rules check, and the admin CA that makes a
   peer count as an admin, is the certificate that signed the leaf, found wherever it is in
   the chain; other certificates the peer sends are ignored, and a leaf whose issuer is in
   neither the chain nor the roots is refused.
@@ -2861,7 +2851,7 @@ signed bodies (Conventions):
 | `v` | integer | `1`, or `2` for a sealed command (below) |
 | `type` | string | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off` or `away-off` |
 | `group` | string | the group tag |
-| `by` | string | the signer's device ID (32 of `0`-`9` and `a`-`f`): a receiver refuses a command whose `by` is no device ID, or, when its records show which device holds the signing key (the root's own device for the root's key, the device whose record names the admin CA), names another device, or, when they show none, names a device they show (a computer takes a legacy group CA's command that names a `full` member, since each holds that key) |
+| `by` | string | the signer's device ID (32 of `0`-`9` and `a`-`f`): a receiver refuses a command whose `by` is no device ID, or, when its records show which device holds the signing key (the root's own device for the root's key, the device whose record names the admin CA), names another device, or, when they show none, names a device they show |
 | `to` | string | the receiver's device ID (32 of `0`-`9` and `a`-`f`) |
 | `id` | string | 128 random bits as 32 lowercase hex characters; IDs compare as byte strings |
 | `time_ms` | integer | when it was signed, milliseconds since the Unix epoch, not negative |
@@ -3518,7 +3508,7 @@ within version 1, and a new ALPN version would rename them.
 | Common name | Certificate | Section |
 |---|---|---|
 | `clipboardbridge group root YYYY-MM-DD` | a group root CA | 2, 9 |
-| `clipboardbridge group CA YYYY-MM-DD` | the group CA of a legacy group | 2 |
+| `clipboardbridge group CA YYYY-MM-DD` | the group CA of a group made before 0.4, refused | 2 |
 | `clipboardbridge iPhone CA YYYY-MM-DD` | the iPhone CA | 2 |
 | `clipboardbridge admin <device ID>` | an admin CA | 10 |
 | `<device ID>` | a member certificate, DNS name `cb-<device ID>.local` | 2 |

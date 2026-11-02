@@ -30,9 +30,9 @@ a minute. A release that went back this way is skipped by the automatic updates;
 
 ### Groups made before 0.4
 
-A group whose computers all hold the group's key (made before 0.4) gets a root once: after
-every computer runs 0.4 or later, run `sudo cbb upgrade` on one of them. That computer
-becomes the root, and the others delete their copies of the old key.
+A group whose computers all hold the group's key (made before 0.4) is not read from 0.6 on,
+as a group of 0.5 is not: each computer leaves it at its first start, keeps its settings, and
+the group is set up again (`cbb new` on one computer, `cbb pair` on the others).
 
 ## What to back up
 

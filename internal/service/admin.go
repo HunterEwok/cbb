@@ -247,7 +247,7 @@ func (s *Service) phoneCAFor(dev group.DeviceID, chain []*x509.Certificate, thei
 	s.mu.Lock()
 	id := s.id
 	s.mu.Unlock()
-	if id == nil || id.Legacy() || !id.ServesPhone() {
+	if id == nil || !id.ServesPhone() {
 		return nil
 	}
 	mine := group.KeyHashOf(id.PhoneCA.Cert)
@@ -291,7 +291,7 @@ func (s *Service) phoneCAReceived(from group.DeviceID, chain []*x509.Certificate
 	s.mu.Lock()
 	id := s.id
 	switch {
-	case id == nil || id.Legacy() || (!id.IsRoot() && id.AdminCA == nil):
+	case id == nil || (!id.IsRoot() && id.AdminCA == nil):
 		s.mu.Unlock()
 		return errors.New("this member is no admin of a group a computer created")
 	case id.ServesPhone():
@@ -341,7 +341,7 @@ func (s *Service) dropRevokedPhoneCA() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	id := s.id
-	if id == nil || id.Legacy() || !id.ServesPhone() || !s.revoked(group.KeyHashOf(id.PhoneCA.Cert)) {
+	if id == nil || !id.ServesPhone() || !s.revoked(group.KeyHashOf(id.PhoneCA.Cert)) {
 		return
 	}
 	if _, _, taken := s.takenOver(id); taken {

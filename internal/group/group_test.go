@@ -38,33 +38,10 @@ func newGroup(t *testing.T) *Identity {
 	return id
 }
 
-// newLegacyGroup is a group as computers made them before admin CAs: a
-// group CA with path length 0, whose key every Linux member holds.
-func newLegacyGroup(t *testing.T) *Identity {
+// join admits a new device to admin's group, as pairing does: the member
+// gets no CA keys.
+func join(t *testing.T, admin *Identity, now time.Time) *Identity {
 	t.Helper()
-	id := newGroup(t)
-	ca, err := NewGroupCA(t0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	id.GroupCA = *ca
-	if id.Cert, err = ca.IssueMember(id.ID, PublicKey(id.Key), t0); err != nil {
-		t.Fatal(err)
-	}
-	if err := id.Check(); err != nil {
-		t.Fatalf("a legacy identity does not check: %v", err)
-	}
-	return id
-}
-
-// join admits a new device to admin's group, as pairing does: in a legacy
-// group a Linux member gets the CA keys and its own clipboardbridge.local
-// certificate, a Mac neither; in a group with a root no member gets them.
-func join(t *testing.T, admin *Identity, linux bool, now time.Time) *Identity {
-	t.Helper()
-	if linux && !admin.Legacy() {
-		t.Fatal("join: only a legacy group gives a member the CA keys")
-	}
 	key, err := NewKey()
 	if err != nil {
 		t.Fatal(err)
@@ -75,14 +52,6 @@ func join(t *testing.T, admin *Identity, linux bool, now time.Time) *Identity {
 		t.Fatal(err)
 	}
 	member := &Identity{ID: id, Key: key, Cert: cert, GroupCA: CA{Cert: admin.GroupCA.Cert}}
-	if linux {
-		member.GroupCA.Key = admin.GroupCA.Key
-		phoneCA := *admin.PhoneCA
-		member.PhoneCA = &phoneCA
-		if member.Phone, err = phoneCA.IssuePhone(&key.PublicKey, now); err != nil {
-			t.Fatal(err)
-		}
-	}
 	if err := member.Check(); err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +85,7 @@ func TestCAs(t *testing.T) {
 	if ca := id.PhoneCA.Cert; ca.MaxPathLen != 0 || !ca.MaxPathLenZero {
 		t.Errorf("%s: not a CA with path length 0", ca.Subject.CommonName)
 	}
-	if !id.IsRoot() || id.Legacy() || !id.IsAdmin() || !id.ServesPhone() || id.NeedsAdminKey() {
+	if !id.IsRoot() || !id.IsAdmin() || !id.ServesPhone() || id.NeedsAdminKey() {
 		t.Error("the creator of a group is not its root")
 	}
 	for _, ca := range []*x509.Certificate{id.GroupCA.Cert, id.PhoneCA.Cert} {
@@ -236,7 +205,7 @@ func TestPhoneCACannotCertifyOtherSites(t *testing.T) {
 func TestMemberCertificate(t *testing.T) {
 	admin := newGroup(t)
 	later := t0.AddDate(1, 0, 0)
-	mac := join(t, admin, false, later)
+	mac := join(t, admin, later)
 	c := mac.Cert
 	if !c.NotBefore.Equal(admin.GroupCA.Cert.NotBefore) {
 		t.Errorf("NotBefore = %v, want the CA's %v", c.NotBefore, admin.GroupCA.Cert.NotBefore)
@@ -324,15 +293,14 @@ func TestIssueErrors(t *testing.T) {
 }
 
 func TestSaveLoad(t *testing.T) {
-	admin := newLegacyGroup(t)
-	mac := join(t, admin, false, t0)
-	linux := join(t, admin, true, t0)
+	admin := newGroup(t)
+	mac := join(t, admin, t0)
 	for _, tt := range []struct {
 		name  string
 		id    *Identity
 		admin bool
 	}{
-		{"group creator", admin, true}, {"Mac", mac, false}, {"Linux member", linux, true},
+		{"group creator", admin, true}, {"member", mac, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -362,7 +330,7 @@ func TestSaveLoad(t *testing.T) {
 				t.Error("the loaded CA keys or the clipboardbridge.local certificate differ")
 			}
 			if !tt.admin && (got.GroupCA.Key != nil || got.PhoneCA != nil || got.Phone != nil || got.PhoneTLS() != nil) {
-				t.Error("a Mac identity holds CA keys or a clipboardbridge.local certificate")
+				t.Error("a member identity holds CA keys or a clipboardbridge.local certificate")
 			}
 		})
 	}
@@ -442,7 +410,7 @@ func TestLoadRejectsBadFiles(t *testing.T) {
 
 func TestRenew(t *testing.T) {
 	admin := newGroup(t)
-	mac := join(t, admin, false, t0)
+	mac := join(t, admin, t0)
 	if next, changed, err := admin.Renew(t0.AddDate(0, 6, 0)); err != nil || changed || next.Cert != admin.Cert {
 		t.Errorf("Renew half a year in = changed %v, %v; want no change", changed, err)
 	}
@@ -488,7 +456,7 @@ func TestRenew(t *testing.T) {
 
 func TestRenewMember(t *testing.T) {
 	admin := newGroup(t)
-	mac := join(t, admin, false, t0)
+	mac := join(t, admin, t0)
 	other := newGroup(t)
 	// Half a year in, nothing is due.
 	if c, _, err := admin.RenewMember(mac.Cert, t0.AddDate(0, 6, 0)); c != nil || err != nil {
@@ -600,7 +568,7 @@ func TestCheckRejectsPartialAdmins(t *testing.T) {
 		})
 	}
 	// A Mac holds no clipboardbridge.local certificate either.
-	mac := *join(t, admin, false, t0)
+	mac := *join(t, admin, t0)
 	mac.Phone = admin.Phone
 	if err := mac.Check(); err == nil {
 		t.Error("Check accepted a Mac with a clipboardbridge.local certificate")
@@ -642,7 +610,7 @@ func TestCheckRejectsOtherCurves(t *testing.T) {
 
 func TestFileIsJSON(t *testing.T) {
 	dir := t.TempDir()
-	if err := join(t, newGroup(t), false, t0).Save(dir); err != nil {
+	if err := join(t, newGroup(t), t0).Save(dir); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(filepath.Join(dir, FileName))

@@ -234,11 +234,11 @@ holds it.
 **L9. Upgrade from the previous release.** Runs: manual, before each release.
 1. Every device on the previous release in one group; copy a marker.
 2. Update one device at a time to the candidate; after each, copy from an old and from a new one.
-3. When all run the candidate, with the Windows member off: on the hub `cbb upgrade`.
-4. Check `cbb status` marks the Windows member; `cbb revoke WIN` is refused; turn it on.
-Pass: mixed versions sync during step 2; state and keys survive; after step 4 the hub is root,
-the others deleted the old keys, nobody but the shortcut iPhones pairs again. Fail: sync stops,
-a device leaves the group, or keys are lost.
+3. When all run the candidate, check `cbb status` on each and copy once more.
+Pass: mixed versions sync during step 2; state and keys survive; no device pairs again. From a
+release before 0.6 instead: each device leaves the old group at its first start (`cbb status`
+says so) and a new group works. Fail: sync stops, a device leaves a group of 0.6 or later, or
+keys are lost.
 
 **L10. Uninstall.** Runs: manual.
 1. `uninstall.sh` (Windows `uninstall.ps1`), then `--purge` (`-Purge`).

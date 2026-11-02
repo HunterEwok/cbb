@@ -488,8 +488,9 @@ sync away from home, the admins, and remote paste.
   computer that is in no group creates it: the root CA and the iPhone CA. That computer is
   the group's root; any computer, a Mac included, may create a group.
 - **Root CA**: ECDSA P-256, valid 20 years, path length 1, so it certifies the admins' admin
-  CAs (path length 0) as well as members. Groups made before 0.4 have a group CA with path
-  length 0, which `cbb upgrade` replaces ("Full members, admins and the operating system").
+  CAs (path length 0) as well as members. Groups made before 0.4 had a group CA with path
+  length 0; from 0.6 on a computer leaves such a group ("Full members, admins and the
+  operating system").
   Every member has its own P-256
   key and a certificate from the group CA, valid 2 years and renewed when less than 240 days
   remain. Its `NotBefore` is the CA's, and members check certificates with their own clock but
@@ -1759,8 +1760,8 @@ in a phone group, without a new group:
 
 **Groups made before admin CAs.** A group made before this change has a group CA with path
 length 0, and every Linux and Windows member holds the keys of both CAs. Records of version 2
-have no upgrade from it (`cbb upgrade` went with version 1), so such a group is set up again
-to get a root.
+have no upgrade from it, so a computer leaves such a group at its first start of 0.6, and the
+group is set up again to get a root.
 
 **The shortcut is a legacy way.** An iPhone without the app joins through a shortcut and a
 token (section "The iPhone button"), never with a key of its own. It stays for now, since
@@ -1786,7 +1787,7 @@ then simpler, with one kind of trust, and every key in it can be revoked by a re
    removing any device but the root by record, and replacing the iPhone CA when an admin
    goes. A Mac can create a group and be an admin from here on.
 5. Taking over from a lost root computer (`cbb takeover`).
-6. `cbb upgrade` for groups made before.
+6. `cbb upgrade` for groups made before (gone with records of version 2 in 0.6).
 
 ### Who may remove an admin
 

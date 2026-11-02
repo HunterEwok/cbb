@@ -1067,11 +1067,15 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - The Rust core's reader of group records of version 1 (`records`): commands now live in
   `command`, and the interop vectors of version 1 (`go-*.json` for records, commands, hubs
   and credentials) give way to the `v2-*.json` vectors of the same cases.
+- What was left of groups made before 0.4, whose group CA certified no admin CAs and whose
+  key every Linux and Windows member held: such a group went with records of version 1, so a
+  computer now leaves it at its first start, as it leaves a group of 0.5, even without a
+  records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+
 - A new root after a takeover signs the old root's settings again, so the group keeps its
   takeover delay and key level instead of falling back to the defaults.
-
 - On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
   network, instead of doing nothing.
 - Android: making the phone's first group on a new install no longer fails while saving the

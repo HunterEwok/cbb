@@ -3,9 +3,8 @@
 
 // Package pair admits a new computer to a group with a six-digit code.
 //
-// An admin opens a pairing window: the group's root, a member the root (a
-// computer or a phone) made an admin, or a key holder of a legacy group. The
-// window has a code, valid for five minutes, one attempt at a time, closed
+// An admin opens a pairing window: the group's root, or a member the root (a
+// computer or a phone) made an admin. The window has a code, valid for five minutes, one attempt at a time, closed
 // after a success or the third failed attempt. The new device connects to the member's port
 // over TLS 1.3 with the ALPN protocol clipboardbridge-pair/2 and presents a
 // self-signed certificate for the key it will keep. Neither side can check

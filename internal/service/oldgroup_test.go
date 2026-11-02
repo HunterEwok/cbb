@@ -4,9 +4,13 @@
 package service
 
 import (
+	"crypto/x509"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/HunterEwok/clipboardbridge/internal/group"
 )
@@ -55,5 +59,49 @@ func TestLeaveVersion1Group(t *testing.T) {
 	}
 	if left, err := leaveVersion1Group(dir); left || err != nil {
 		t.Fatalf("again: %v %v", left, err)
+	}
+}
+
+// TestLeaveGroupBefore04 checks that a group made before 0.4, whose group
+// CA certifies no admin CAs, leaves even without a records file.
+func TestLeaveGroupBefore04(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	ca, err := group.NewGroupCA(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := group.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev := group.NewDeviceID()
+	cert, err := ca.IssueMember(dev, &key.PublicKey, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Save refuses such an identity, so the file is written as 0.3 did.
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(map[string]any{"v": 1, "device": dev, "key": keyDER, "cert": cert.Raw, "group_ca": ca.Cert.Raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, group.FileName), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := group.Load(dir); !errors.Is(err, group.ErrOldGroup) {
+		t.Fatalf("Load: %v, want ErrOldGroup", err)
+	}
+	if left, err := leaveVersion1Group(dir); !left || err != nil {
+		t.Fatalf("a group of 0.3: %v %v", left, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, oldGroupDir, group.FileName)); err != nil {
+		t.Error("the identity did not move")
+	}
+	if _, err := group.Load(dir); !errors.Is(err, group.ErrNoGroup) {
+		t.Errorf("the device is still in a group: %v", err)
 	}
 }

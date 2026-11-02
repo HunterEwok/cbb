@@ -29,17 +29,20 @@ var oldGroupFiles = []string{
 // directory, so the device starts in no group: 0.6 reads only records of
 // version 2, with no migration (docs/records-v2.md), so such a group can
 // no longer work, and is set up again. Such a group's records file is a
-// JSON array; version 2's is an object. Nothing else of the state moves,
-// so the device's settings stay.
+// JSON array; version 2's is an object. A group made before 0.4, whose
+// group CA certifies no admin CAs, leaves too, with or without records
+// (group.ErrOldGroup). Nothing else of the state moves, so the device's
+// settings stay.
 func leaveVersion1Group(dir string) (bool, error) {
-	data, err := os.ReadFile(filepath.Join(dir, group.RecordsFileName))
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
-	}
+	old, err := version1Records(dir)
 	if err != nil {
 		return false, err
 	}
-	if !bytes.HasPrefix(bytes.TrimSpace(data), []byte("[")) {
+	if !old {
+		_, err := group.Load(dir)
+		old = errors.Is(err, group.ErrOldGroup)
+	}
+	if !old {
 		return false, nil
 	}
 	to := filepath.Join(dir, oldGroupDir)
@@ -53,4 +56,16 @@ func leaveVersion1Group(dir string) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// version1Records reports whether dir holds records of version 1.
+func version1Records(dir string) (bool, error) {
+	data, err := os.ReadFile(filepath.Join(dir, group.RecordsFileName))
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return bytes.HasPrefix(bytes.TrimSpace(data), []byte("[")), nil
 }
