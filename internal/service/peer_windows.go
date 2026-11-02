@@ -4,6 +4,7 @@
 package service
 
 import (
+	"fmt"
 	"net"
 	"unsafe"
 
@@ -18,7 +19,7 @@ const sioAFUnixGetPeerPID = 0x58000100
 func connPeer(c net.Conn) peer {
 	raw, ok := rawConn(c)
 	if !ok {
-		return peer{}
+		return peer{why: "not a socket"}
 	}
 	var pid uint32
 	var err error
@@ -27,15 +28,15 @@ func connPeer(c net.Conn) peer {
 		err = windows.WSAIoctl(windows.Handle(fd), sioAFUnixGetPeerPID, nil, 0, (*byte)(unsafe.Pointer(&pid)), 4, &n, nil, 0)
 	})
 	if err != nil || pid == 0 {
-		return peer{}
+		return peer{why: fmt.Sprintf("its process: %v", err)}
 	}
 	var session uint32
-	if windows.ProcessIdToSessionId(pid, &session) != nil {
-		return peer{}
+	if err := windows.ProcessIdToSessionId(pid, &session); err != nil {
+		return peer{why: fmt.Sprintf("the session of process %d: %v", pid, err)}
 	}
 	sid, err := processSID(pid)
 	if err != nil {
-		return peer{}
+		return peer{why: fmt.Sprintf("the user of process %d: %v", pid, err)}
 	}
 	return peer{known: true, sid: sid, session: session}
 }

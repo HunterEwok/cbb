@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -142,7 +143,10 @@ private fun DeviceRow(d: WatchState.Device, palette: Palette, onClick: (() -> Un
     ) {
         FormGlyph(d.form, if (d.online) palette.accent else palette.textDim, 20.dp)
         Spacer(Modifier.width(8.dp))
-        Text(d.name, color = palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(d.name, color = palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (d.phone) Text(stringResource(R.string.watch_phone), color = palette.textDim, style = MaterialTheme.typography.bodySmall)
+        }
         Spacer(Modifier.width(8.dp))
         Box(Modifier.size(8.dp).clip(CircleShape).background(if (d.online) palette.accent else palette.textDim.copy(alpha = 0.4f)))
     }

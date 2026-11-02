@@ -1,6 +1,66 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Sent to %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправлено на %@."
+          }
+        }
+      }
+    },
+    "Ready to paste: “%@” from %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Можно вставлять: «%@» с %@."
+          }
+        }
+      }
+    },
+    "Ready to paste, from %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Можно вставлять, получено с %@."
+          }
+        }
+      }
+    },
+    "Ready to paste.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Можно вставлять."
+          }
+        }
+      }
+    },
+    "Connecting to the computers…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключаюсь к компьютерам…"
+          }
+        }
+      }
+    },
+    "Syncing…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизирую…"
+          }
+        }
+      }
+    },
     "Void both histories" : {
       "localizations" : {
         "ru" : {
@@ -954,16 +1014,6 @@
         }
       }
     },
-    "Fetched from the computers.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Получено с компьютеров."
-          }
-        }
-      }
-    },
     "Full member": {
       "localizations": {
         "ru": {
@@ -1054,12 +1104,12 @@
         }
       }
     },
-    "It goes where %@'s keyboard focus is, once its user turned remote paste on there." : {
+    "It goes where %@'s keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds." : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Текст попадёт туда, где фокус клавиатуры устройства %@, если его пользователь включил там удалённую вставку."
+            "value" : "Текст попадёт туда, где фокус клавиатуры устройства %@, если его пользователь включил там удалённую вставку. Если поле пустое, «Вставить» отправит то, что в буфере обмена."
           }
         }
       }
@@ -1944,6 +1994,16 @@
         }
       }
     },
+    "The clipboard holds no text.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В буфере обмена нет текста."
+          }
+        }
+      }
+    },
     "The code did not match. Run cbb pair on the computer again and scan the new code.": {
       "localizations": {
         "ru": {
@@ -2700,6 +2760,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сделать хабом"
+          }
+        }
+      }
+    },
+    "Save a forwarder above first: away from home, the devices reach the new hub through it." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сначала сохраните форвардер выше: вне дома устройства находят новый хаб через него."
           }
         }
       }

@@ -609,7 +609,7 @@ func (s *Service) serveTunnelMember(ctx context.Context, raw net.Conn, release f
 		return
 	}
 	if err := nd.Serve(ctx, tc); err != nil && ctx.Err() == nil {
-		s.logf("cbb: connection from %s through the tunnel: %v", id, err)
+		s.logEnd(err, "cbb: connection from %s through the tunnel: %v", id, err)
 	}
 }
 

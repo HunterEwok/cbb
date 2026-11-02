@@ -53,15 +53,20 @@ struct ArrangedDevices: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let items = model.arranged
+        let items = model.arranged, me = model.this
         let refs = items.map(\.ref)
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.spacingMedium) {
                 if arrange.on { ArrangeBar() }
                 if layout == .list {
                     VStack(spacing: 0) {
+                        // This Mac first, as on the phones; it stays out of the arrangement.
+                        if let me {
+                            Button { select(me.id) } label: { DeviceRow(device: me, selected: me.id == selected) }
+                                .buttonStyle(.plain)
+                        }
                         ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
-                            if i > 0 { Divider().overlay(palette.line) }
+                            if i > 0 || me != nil { Divider().overlay(palette.line) }
                             switch item {
                             case .device(let d):
                                 ArrangedTile(ref: item.ref, level: refs, select: select) { DeviceRow(device: d, selected: d.id == selected) }
@@ -73,6 +78,10 @@ struct ArrangedDevices: View {
                     .glassTile(cornerRadius: Tokens.radiusCard)
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Tokens.spacingMedium)], spacing: Tokens.spacingMedium) {
+                        if let me {
+                            Button { select(me.id) } label: { DeviceTile(device: me, selected: me.id == selected) }
+                                .buttonStyle(.plain)
+                        }
                         ForEach(items) { item in
                             switch item {
                             case .device(let d):

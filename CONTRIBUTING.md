@@ -98,7 +98,7 @@ go tool actionlint             # GitHub Actions workflows
 pipx run zizmor==1.31.1 --offline --min-severity low .github/workflows   # their security
 go run ./tools/repocheck       # English only, license headers, copied code, no programs or files over 1 MiB, documentation links and names
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
-go run ./tools/icon -check     # the app icon
+go run ./tools/icon -check     # the apps' icons
 go test -race ./...
 go build -o /dev/null ./cmd/cbb
 GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/cbb   # Raspberry Pi Zero W
@@ -223,7 +223,32 @@ xcodebuild test -project ClipboardBridge.xcodeproj -scheme ClipboardBridge \
   -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=  # any installed iPhone simulator
 ```
 
-To run it on a phone, open the project in Xcode, pick your team under Signing, and run.
+#### The iPhone app on your own phone
+
+No developer account is needed: Xcode signs the app with a free Personal Team, any Apple ID.
+Such a build runs for 7 days, and a free team may have three apps on a phone at a time.
+
+1. Sign in to Xcode (Settings, Accounts) with your Apple ID.
+2. On the iPhone turn on Developer Mode (Settings, Privacy & Security), connect it by cable,
+   unlock it and trust the Mac; for the watch app turn on Developer Mode on the paired
+   Apple Watch too.
+3. Run `apps/ios/device.sh`: it builds the tunnel and the core when missing, generates the
+   project, builds the Debug app with the watch app, installs both and launches the app
+   (`--test` runs the app's unit tests on the phone instead; `--all` adds the share
+   extension and the widgets).
+4. On the first run trust the developer on the phone (Settings, General, VPN & Device
+   Management).
+
+A free team's app runs only on the devices its profile lists, and a build for a device adds
+it: when Xcode reaches the watch, `device.sh` builds the watch app for it first, which adds
+the watch. When the watch shows only as paired (a watch new to Xcode often does), keep it
+unlocked near the phone and open Xcode's Devices and Simulators window until the watch shows
+as connected, then run the script again; otherwise the watch refuses the app as one whose
+integrity it could not verify.
+
+The build has its own bundle identifier (`CBB_BUNDLE_ID`, `dev.<team>.clipboardbridge`)
+and goes without the app group and the shared keychain, which need the developer account,
+as the simulator's build does: the share extension finds no group in it.
 
 The tray app for Linux and Windows, a Go module of its own (Linux needs GTK 4 and
 WebKitGTK: `sudo apt-get install libgtk-4-dev libwebkitgtk-6.0-dev`):

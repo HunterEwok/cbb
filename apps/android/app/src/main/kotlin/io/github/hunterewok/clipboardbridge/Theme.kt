@@ -188,10 +188,11 @@ fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
 
 /** The quieter button next to the big one: the accent colour on a surface. */
 @Composable
-fun QuietButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun QuietButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val palette = LocalPalette.current
     OutlinedButton(
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(Tokens.radiusButton),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = palette.surface.copy(alpha = 0.85f), contentColor = palette.accent),
         border = null,

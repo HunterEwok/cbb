@@ -34,7 +34,7 @@ sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches you
 在家里，中枢开机的状态下：
 
 - **电脑**：`sudo cbb global on`（在 Windows 上，在管理员终端中）。
-- **手机**：在应用中，设置，**Sync away from home**。然后在家里让应用保持打开片刻，让它与中枢碰面。iPhone 只在应用打开时才进行离家同步；Android 在后台也可以。
+- **手机**：在应用中，设置，**Sync away from home**。然后在家里让应用保持打开片刻，让它与中枢碰面。iPhone 只在应用打开时才进行离家同步；Android 在后台也可以。在手机上创建的群组中，这部手机一开始就是中枢，等它不再是中枢时才会出现这个开关：在 **Move the hub to a computer** 下把电脑设为中枢（先在手机上保存转发器），或关闭 **This phone as the hub**。
 - **轻量成员**：在该设备上运行 `sudo cbb global on`（[轻量成员](../../lite/README.md#sync-away-from-home)）。
 
 ## 4. 检查

@@ -27,7 +27,9 @@ data class WatchState(
     /**
      * can: what this watch may do to it (the kit's PhoneGroup.WatchAction
      * keys); actions: the quick actions it has on, while connected;
-     * collection: the name of the phone's collection it is in, if any.
+     * collection: the name of the phone's collection it is in, if any;
+     * phone: the watch's own phone, which the phone lists first as every
+     * app lists the device it runs on.
      */
     data class Device(
         val id: String,
@@ -37,6 +39,7 @@ data class WatchState(
         val can: List<String> = emptyList(),
         val actions: List<String> = emptyList(),
         val collection: String? = null,
+        val phone: Boolean = false,
     )
 
     /**
@@ -191,7 +194,7 @@ data class WatchState(
                 devices.map {
                     JSONObject().put("id", it.id).put("name", it.name).put("form", it.form).put("online", it.online)
                         .put("can", JSONArray(it.can)).put("actions", JSONArray(it.actions))
-                        .put("collection", it.collection ?: JSONObject.NULL)
+                        .put("collection", it.collection ?: JSONObject.NULL).put("phone", it.phone)
                 },
             ),
         )
@@ -249,6 +252,7 @@ data class WatchState(
                             d.getString("id"), d.getString("name"), d.optString("form", "other"), d.optBoolean("online"),
                             strings(d.optJSONArray("can")), strings(d.optJSONArray("actions")),
                             if (d.isNull("collection")) null else d.getString("collection"),
+                            d.optBoolean("phone"),
                         )
                     },
                     away = if (o.isNull("away")) null else Away.of(o.optString("away")),

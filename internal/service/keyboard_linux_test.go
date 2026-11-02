@@ -106,3 +106,20 @@ func TestKeyboard(t *testing.T) {
 		t.Errorf("after off: %+v", k)
 	}
 }
+
+// TestKeyboardNoGroup: a computer in no group is a keyboard too, and its
+// replies say how the keyboard stands, as cbb keyboard prints them.
+func TestKeyboardNoGroup(t *testing.T) {
+	f := bluetest.Start(t)
+	var h hub
+	deck := startWith(t, &h, "deck", group.OSLinux, func(c *Config) {
+		c.KeyboardBus = func() (*dbus.Conn, error) { return dbus.Connect(f.Addr) }
+	})
+	m, err := deck.do(t, control.Header{Op: control.OpKeyboard, Name: "on", Keyboard: &control.Keyboard{Layout: "us"}}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := m.Status.Keyboard; k == nil || !k.On || k.Layout != "us" {
+		t.Fatalf("after on: %+v", k)
+	}
+}

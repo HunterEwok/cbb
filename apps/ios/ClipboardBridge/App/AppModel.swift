@@ -4,6 +4,7 @@ import ClipboardBridgeKit
 import Foundation
 import os
 import SwiftUI
+import UIKit
 
 private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "app")
 
@@ -169,7 +170,12 @@ final class AppModel: ObservableObject {
     }
 
     enum SyncResult: Equatable {
-        case sent, fetched, nothingNew
+        /// Sent to the computers connected, by name (none known: empty).
+        case sent(to: [String])
+        /// Fetched into the clipboard: from the computer that copied it, and
+        /// the start of a text.
+        case fetched(from: String?, preview: String?)
+        case nothingNew
         /// Files a computer copied, saved in the app's folder in Files.
         case savedFiles
     }
@@ -394,29 +400,64 @@ final class AppModel: ObservableObject {
         busy = true
         defer { busy = false }
         do {
-            switch try await group.sync() {
-            case .sent: message = String(localized: "Sent to the computers.", bundle: .app)
-            case .fetched: message = String(localized: "Fetched from the computers.", bundle: .app)
-            case .nothingNew: message = String(localized: "Nothing new to send or fetch.", bundle: .app)
-            case .savedFiles: message = String(localized: "Saved in Files, On My iPhone, Clipboard Bridge.", bundle: .app)
-            }
+            let result = try await group.sync()
+            message = Self.said(result)
             if let message { Island.flash(message) }
+            feel(result == .nothingNew ? .warning : .success)
         } catch {
             message = Self.describe(error)
+            feel(.error)
         }
         computers = group.computers
+    }
+
+    /// What the button says it did: where a text went or came from, and
+    /// that it is ready to paste.
+    nonisolated static func said(_ result: SyncResult) -> String {
+        switch result {
+        case .sent(let to) where !to.isEmpty:
+            let names = to.formatted(.list(type: .and))
+            return String(localized: "Sent to \(names).", bundle: .app)
+        case .sent:
+            return String(localized: "Sent to the computers.", bundle: .app)
+        case .fetched(let from?, let preview?):
+            return String(localized: "Ready to paste: “\(preview)” from \(from).", bundle: .app)
+        case .fetched(let from?, nil):
+            return String(localized: "Ready to paste, from \(from).", bundle: .app)
+        case .fetched:
+            return String(localized: "Ready to paste.", bundle: .app)
+        case .nothingNew:
+            return String(localized: "Nothing new to send or fetch.", bundle: .app)
+        case .savedFiles:
+            return String(localized: "Saved in Files, On My iPhone, Clipboard Bridge.", bundle: .app)
+        }
+    }
+
+    /// A tap in the hand when the button is done, while the app is in front:
+    /// iOS plays none for an app in the background, as for Back Tap.
+    private func feel(_ kind: UINotificationFeedbackGenerator.FeedbackType) {
+        guard UIApplication.shared.applicationState == .active else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(kind)
     }
 
     /// The sync the Shortcuts action runs, with the app perhaps just
     /// started for it: the Home button's, after waiting up to wait for a
     /// computer to connect. Returns what it says.
-    func syncFromShortcut(wait: Duration = .seconds(5)) async -> String {
+    func syncFromShortcut(wait: Duration = .seconds(5), progress: Progress? = nil) async -> String {
         let deadline = ContinuousClock.now + wait
+        if group.hasGroup, !computers.contains(where: \.online) {
+            let line = String(localized: "Connecting to the computers…", bundle: .app)
+            progress?.localizedDescription = line
+            Island.show(.exchange, line)
+        }
+        defer { progress?.completedUnitCount = progress?.totalUnitCount ?? 0 }
         while group.hasGroup, ContinuousClock.now < deadline {
             await refresh()
             if computers.contains(where: \.online) { break }
             try? await Task.sleep(for: .milliseconds(250))
         }
+        progress?.completedUnitCount = 1
+        progress?.localizedDescription = String(localized: "Syncing…", bundle: .app)
         await sync()
         return message ?? ""
     }

@@ -1443,6 +1443,9 @@ jobs:
               fi
               xcrun simctl shutdown "$1" || true
               if [ "$status" -eq 0 ] || grep -q "^Test Case " "$log"; then
+                # A failed assertion is printed where it happens, often
+                # long before the tail: show those lines first.
+                grep -E "error: |^Test Case .* failed" "$log" || true
                 tail -n 100 "$log"
                 [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 10 minutes"
                 return "$status"

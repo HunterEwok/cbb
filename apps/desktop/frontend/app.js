@@ -126,6 +126,30 @@ const shapes = {
   other: '<rect x="4" y="7" width="16" height="13" rx="1.5"/><path d="M4 11h16M9 3.5L4 7M15 3.5l5 3.5M9 3.5h6"/>',
 };
 
+// The buttons' icons, drawn as the devices' glyphs: a text symbol sits where
+// its font puts it, which is off the button's centre in the fallback fonts
+// Windows draws such symbols with.
+const icons = {
+  tiles: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/>' +
+    '<rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>',
+  list: '<path d="M5 6.5h14M5 12h14M5 17.5h14"/>',
+  orbit: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/>',
+  arrange: '<path d="M8 19V5M4.5 8.5L8 5l3.5 3.5M16 5v14M12.5 15.5L16 19l3.5-3.5"/>',
+  add: '<path d="M12 5v14M5 12h14"/>',
+  settings: '<path d="M10.61 5.14L10.85 2.47L13.15 2.47L13.39 5.14L15.87 6.17L17.93 4.45L19.55 6.07L17.83 8.13L18.86 10.61' +
+    'L21.53 10.85L21.53 13.15L18.86 13.39L17.83 15.87L19.55 17.93L17.93 19.55L15.87 17.83L13.39 18.86L13.15 21.53L10.85 21.53' +
+    'L10.61 18.86L8.13 17.83L6.07 19.55L4.45 17.93L6.17 15.87L5.14 13.39L2.47 13.15L2.47 10.85L5.14 10.61L6.17 8.13L4.45 6.07' +
+    'L6.07 4.45L8.13 6.17Z"/><circle cx="12" cy="12" r="3"/>',
+  back: '<path d="M14.5 5.5L8 12l6.5 6.5"/>',
+  close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  more: ['6', '12', '18'].map((y) => `<circle cx="12" cy="${y}" r="1.2" fill="currentColor"/>`).join(""),
+};
+
+const icon = (name, size = 18) => `<svg class="icon-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" ` +
+  `stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
+
+for (const el of document.querySelectorAll("[data-icon]")) el.innerHTML = icon(el.dataset.icon);
+
 function glyph(d, size = 44) {
   const on = d.online || d.self;
   return `<span class="glyph${on ? " on" : ""}" style="width:${size}px;height:${size}px" aria-hidden="true">` +
@@ -152,9 +176,10 @@ function render() {
   const s = state;
   const others = s.devices.filter((d) => !d.self);
   const inGroup = !s.problem && s.status && s.status.group && !s.status.removed;
-  const online = others.filter((d) => d.online).length;
+  // This computer counts too, online as it is the one in front of the user.
+  const online = s.devices.filter((d) => d.online || d.self).length;
   $("headline").textContent = s.problem ? t("The service does not answer")
-    : !inGroup ? t("This computer is in no group yet") : t("%d of %d online", online, others.length);
+    : !inGroup ? t("This computer is in no group yet") : t("%d of %d online", online, s.devices.length);
   $("tag").textContent = inGroup ? s.status.group : "";
   renderAway(inGroup ? s.status.away : undefined, inGroup);
   renderAlerts(inGroup ? s.status : undefined);
@@ -289,7 +314,7 @@ function renderArranged(box, others) {
   let body;
   if (searching()) {
     const q = query.trim().toLowerCase();
-    const found = others.filter((d) => (!q || d.name.toLowerCase().includes(q) || systemWithVersion(d).toLowerCase().includes(q)) &&
+    const found = state.devices.filter((d) => (!q || d.name.toLowerCase().includes(q) || systemWithVersion(d).toLowerCase().includes(q)) &&
       (filter !== "online" || d.online) && (filter !== "attention" || d.frozen));
     body = found.length === 0 ? `<p class="dim">${esc(t("No devices match."))}</p>`
       : list ? `<div class="list">${found.map((d) => deviceRow(d)).join("")}</div>`
@@ -303,21 +328,23 @@ function renderArranged(box, others) {
     }
     const ds = c.devices.map((id) => byId.get(id)).filter(Boolean);
     const level = "c:" + c.id;
-    head = `<div class="collection-head"><button class="icon" id="collection-back" title="${esc(t("Back"))}" aria-label="${esc(t("Back"))}">‹</button>` +
+    head = `<div class="collection-head"><button class="icon" id="collection-back" title="${esc(t("Back"))}" aria-label="${esc(t("Back"))}">${icon("back")}</button>` +
       `<h2>${esc(c.name)}</h2><button class="glass" data-menu="c:${esc(c.id)}" data-level="top">${esc(t("Menu"))}</button></div>` + head;
     body = ds.length === 0 ? `<p class="dim">${esc(t("Drag devices here, or add them with Move to collection in a device's menu."))}</p>`
       : list ? `<div class="list">${ds.map((d) => deviceRow(d, level)).join("")}</div>`
         : `<div class="tiles">${ds.map((d) => deviceTile(d, level)).join("")}</div>`;
   } else {
     const items = (state.arranged ?? []).filter((it) => it.collection || byId.has(it.device));
+    // This computer first, as on the phones; it stays out of the arrangement.
+    const me = state.devices.find((d) => d.self);
     if (list) {
-      body = `<div class="list">${items.map((it) => {
+      body = `<div class="list">${me ? deviceRow(me) : ""}${items.map((it) => {
         if (!it.collection) return deviceRow(byId.get(it.device), "top");
         const c = it.collection, ds = c.devices.map((id) => byId.get(id)).filter(Boolean);
         return collectionRow(c, ds) + ds.map((d) => deviceRow(d, "c:" + c.id, true)).join("");
       }).join("")}</div>`;
     } else {
-      body = `<div class="tiles">${items.map((it) => it.collection
+      body = `<div class="tiles">${me ? deviceTile(me) : ""}${items.map((it) => it.collection
         ? collectionTile(it.collection, it.collection.devices.map((id) => byId.get(id)).filter(Boolean))
         : deviceTile(byId.get(it.device), "top")).join("")}</div>`;
     }
@@ -341,20 +368,20 @@ const collectionOf = (id) => (state.arranged ?? []).find((it) => it.collection?.
 function cell(ref, level, name, inner) {
   if (!level) return inner;
   const more = arranging ? `<button class="more" data-menu="${esc(ref)}" data-level="${esc(level)}" ` +
-    `title="${esc(t("Menu: %s", name))}" aria-label="${esc(t("Menu: %s", name))}">⋮</button>` : "";
+    `title="${esc(t("Menu: %s", name))}" aria-label="${esc(t("Menu: %s", name))}">${icon("more", 16)}</button>` : "";
   return `<div class="cell${arranging ? " arranging" : ""}" data-ref="${esc(ref)}" data-level="${esc(level)}"` +
     `${arranging ? ' draggable="true"' : ""}>${inner}${more}</div>`;
 }
 
 function deviceTile(d, level) {
   return cell("d:" + d.id, level, d.name, `<button class="tile${d.id === selected ? " selected" : ""}" data-id="${esc(d.id)}">` +
-    `<span class="top">${glyph(d)}${dot(d.online)}</span><span class="name">${esc(d.name)}</span>` +
-    `<span class="dim small">${esc(systems[d.os] ?? "")}</span></button>`);
+    `<span class="top">${glyph(d)}${dot(d.online || d.self)}</span><span class="name">${esc(d.name)}</span>` +
+    `<span class="dim small">${esc([systems[d.os], d.self && t("This computer")].filter(Boolean).join(" · "))}</span></button>`);
 }
 
 function deviceRow(d, level, inside) {
   return cell("d:" + d.id, level, d.name, `<button class="row${d.id === selected ? " selected" : ""}${inside ? " inside" : ""}" data-id="${esc(d.id)}">${glyph(d, 32)}` +
-    `<span class="name">${esc(d.name)}</span><span class="dim">${esc(systemWithVersion(d))}</span>${dot(d.online)}</button>`);
+    `<span class="name">${esc(d.name)}</span><span class="dim">${esc([systemWithVersion(d), d.self && t("This computer")].filter(Boolean).join(" · "))}</span>${dot(d.online || d.self)}</button>`);
 }
 
 // A collection as a tile: up to four of its devices' icons, its name and
@@ -532,7 +559,7 @@ function renderOrbit(box, others) {
   const lines = others.map((d, i) => d.online
     ? `<line x1="${cx}" y1="${cy}" x2="${at[i][0]}" y2="${at[i][1]}" stroke="var(--accent)" stroke-opacity=".35" stroke-width="1.5" stroke-dasharray="4 6"/>` : "").join("");
   box.innerHTML = `<div class="orbit"><svg class="rings">${rings}${lines}</svg>` +
-    `<button class="hub" id="orbit-send" style="left:${cx}px;top:${cy}px" ${state.busy ? "disabled" : ""}>⇅<br>${esc(t("Send"))}</button>` +
+    `<button class="hub" id="orbit-send" style="left:${cx}px;top:${cy}px" ${state.busy ? "disabled" : ""}>${icon("arrange", 22)}<span>${esc(t("Send"))}</span></button>` +
     others.map((d, i) => `<button class="node${d.id === selected ? " selected" : ""}" data-id="${esc(d.id)}" style="left:${at[i][0]}px;top:${at[i][1]}px">` +
       `${glyph(d, 48)}<span class="name">${esc(d.name)}</span></button>`).join("") + `</div>`;
 }
@@ -574,7 +601,7 @@ function renderDetail() {
   }
   pane.innerHTML = `<div class="detail-head">${glyph(d, 56)}<div><div class="name">${esc(d.name)}</div>` +
     `<div>${dot(d.online)} <span class="${d.online ? "" : "dim"}">${esc(d.online ? t("online") : t("offline"))}</span></div></div>` +
-    `<button class="icon close" id="close" title="${esc(t("Close"))}">✕</button></div>` +
+    `<button class="icon close" id="close" title="${esc(t("Close"))}" aria-label="${esc(t("Close"))}">${icon("close")}</button></div>` +
     `<div class="card">${lines.map(([k, v, mono]) => `<div class="line"><span class="dim">${esc(k)}</span><span class="value${mono ? " mono" : ""}">${esc(v)}</span></div>`).join("")}</div>` +
     // An admin sets the mode of a computer that is online; the phones and
     // lite members have no modes yet and refuse.

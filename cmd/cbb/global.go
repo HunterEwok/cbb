@@ -410,7 +410,11 @@ func writeAway(w io.Writer, a *control.Away) {
 			fmt.Fprintln(w, "Sync away from home: on; this device is one of the group's hubs. It looks for the hubs above it, and serves if none answers.")
 		}
 	case a.Hub:
-		fmt.Fprintf(w, "Sync away from home: on; this device is the hub, on UDP port %d, for %d devices.\n", a.Port, a.Clients)
+		devices := "devices"
+		if a.Clients == 1 {
+			devices = "device"
+		}
+		fmt.Fprintf(w, "Sync away from home: on; this device is the hub, on UDP port %d, for %d %s.\n", a.Port, a.Clients, devices)
 		if a.Obfuscated {
 			fmt.Fprintln(w, "  Obfuscated: the tunnel speaks AmneziaWG, so it does not look like WireGuard.")
 		}
@@ -469,9 +473,8 @@ func writeAway(w io.Writer, a *control.Away) {
 	if a.VLESS && !a.Hub {
 		fmt.Fprintln(w, "  VLESS: the tunnel goes inside VLESS to the hub's forwarder, which looks like HTTPS to a well-known site.")
 	}
-	if a.KeysInFile {
-		fmt.Fprintln(w, "  This device keeps its keys in files, not in a security chip.")
-	}
+	// Where the keys are is said once, when the user turns it on (keysWarning),
+	// not every time the status is shown.
 	if a.Error != "" {
 		fmt.Fprintf(w, "  Problem: %s.\n", a.Error)
 		if a.Detail != "" && debugErrors() {

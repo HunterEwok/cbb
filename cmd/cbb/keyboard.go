@@ -22,23 +22,37 @@ func cmdKeyboard(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	layout := fs.String("layout", "", "with on: the layout active on the device it types into, us or ru")
 	rate := fs.Int("rate", 0, "with on: characters a second, 5 to 60 (20 if not set)")
 	pastes := fs.Bool("pastes", false, "with on: type the group's remote pastes there instead of on this computer")
-	if fs.Parse(args) != nil {
-		return 2
+	// The verb comes first, as the usage shows; before the flags, it would
+	// end them. A text to type is never read as flags.
+	verb := ""
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		verb, args = args[0], args[1:]
+	}
+	var rest []string
+	if verb == "type" {
+		rest = args
+	} else {
+		if fs.Parse(args) != nil {
+			return 2
+		}
+		rest = fs.Args()
+	}
+	if verb == "" && len(rest) > 0 {
+		verb, rest = rest[0], rest[1:]
 	}
 	usage := "usage: cbb keyboard [on [-layout us|ru] [-rate N] [-pastes] | off | pair | type [TEXT]]"
-	verb := fs.Arg(0)
 	h := control.Header{Op: control.OpKeyboard, Name: verb}
 	var payload []byte
 	switch {
-	case verb == "on" && fs.NArg() == 1:
+	case verb == "on" && len(rest) == 0:
 		h.Keyboard = &control.Keyboard{Layout: *layout, Rate: *rate, Pastes: *pastes}
 	case *layout != "" || *rate != 0 || *pastes:
 		fmt.Fprintln(stderr, usage)
 		return 2
-	case (verb == "" || verb == "off" || verb == "pair") && fs.NArg() <= 1:
-	case verb == "type" && fs.NArg() == 2:
-		payload = []byte(fs.Arg(1))
-	case verb == "type" && fs.NArg() == 1:
+	case (verb == "" || verb == "off" || verb == "pair") && len(rest) == 0:
+	case verb == "type" && len(rest) == 1:
+		payload = []byte(rest[0])
+	case verb == "type" && len(rest) == 0:
 		b, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
 		if err != nil {
 			return fail(stderr, err)

@@ -106,6 +106,61 @@ final class DiscoveryTests: XCTestCase {
         XCTAssertLessThanOrEqual(peers.count, 6)
     }
 
+    /// hurry dials a member at once instead of after its wait, and the task
+    /// it replaces ends without taking the member from the new one.
+    func testHurry() async throws {
+        let phone = MemberNode(engine: SyncEngine(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", clock: HybridClock()), name: nil)
+        let peers = Peers()
+        let d = MemberDialer(node: phone, group: "g1", firstWait: 30, maxWait: 30) { m in
+            peers.dialed(m.device)
+            throw POSIXError(.ECONNREFUSED)
+        }
+        await d.update([FoundMember(device: dev, group: "g1")])
+        try await waitUntil { peers.count == 1 }
+        // The next try would come after 30 s; hurry makes it now.
+        await d.hurry()
+        try await waitUntil { peers.count == 2 }
+        await d.hurry()
+        try await waitUntil { peers.count == 3 }
+        let dialing = await d.dialing
+        XCTAssertEqual(dialing, [dev])
+        await d.stop()
+        // A stopped dialer does not hurry.
+        await d.hurry()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(peers.count, 3)
+    }
+
+    /// A hurry while a dial is under way: the connection that dial makes is
+    /// closed, and the new task keeps the member.
+    func testHurryWhileDialing() async throws {
+        let phone = MemberNode(engine: SyncEngine(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", clock: HybridClock()), name: nil)
+        let peers = Peers()
+        let pi = MemberNode(engine: SyncEngine(device: dev, clock: HybridClock()), name: "pi", role: .full)
+        let d = MemberDialer(node: phone, group: "g1", firstWait: 30, maxWait: 30) { m in
+            peers.dialed(m.device)
+            let first = peers.count == 1
+            // The first dial takes a while, long enough for a hurry, and
+            // does not notice that its task was cancelled.
+            if first {
+                await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { c.resume() }
+                }
+            }
+            let (mine, theirs) = Pipe.pair()
+            Task { try? await pi.serve(theirs) }
+            return mine
+        }
+        await d.update([FoundMember(device: dev, group: "g1")])
+        try await waitUntil { peers.count == 1 }
+        await d.hurry()
+        try await waitUntil { peers.count == 2 }
+        try await Task.sleep(nanoseconds: 400_000_000)
+        let dialing = await d.dialing
+        XCTAssertEqual(dialing, [dev])
+        await d.stop()
+    }
+
     #if canImport(Network) && os(macOS)
     /// Publishes a service as a Linux member does and finds it with
     /// BonjourBrowser, through the system's mDNSResponder.
@@ -126,6 +181,17 @@ final class DiscoveryTests: XCTestCase {
         }
         XCTAssertEqual(seen.get(device), FoundMember(device: device, group: "0011223344556677"))
         XCTAssertNotNil(browser.endpoint(of: device))
+        // Browsing again from the start finds it again.
+        seen.set([])
+        browser.restart()
+        for _ in 0..<200 where !seen.has(device) {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertTrue(seen.has(device))
+        // Stopped, it does not start again on restart.
+        browser.stop()
+        browser.restart()
+        XCTAssertNil(browser.endpoint(of: "none"))
     }
 
     final class Seen: @unchecked Sendable {

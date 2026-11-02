@@ -622,6 +622,9 @@ func cmdAgent(args []string, stderr io.Writer) int {
 		return 0 // another agent links this session's clipboard already
 	}
 	logf := func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
+	if err := letServiceQuery(); err != nil {
+		logf("cbb: the service may not see who runs this agent, so it gets no remote pastes or quick actions: %v", err)
+	}
 	b := pasteboard.General()
 	if _, _, err := b.Read(); errors.Is(err, pasteboard.ErrUnsupported) {
 		return fail(stderr, err)
