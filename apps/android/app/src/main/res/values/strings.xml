@@ -57,6 +57,7 @@
     <string name="scan_hint">Point the camera at the QR code of cbb pair, or at the one your other phone shows.</string>
     <string name="paste_hint">Paste the text of the QR code of cbb pair.</string>
     <string name="camera_denied">The camera is not allowed. Allow it in the app\'s settings to scan, or paste the text of the QR code of cbb pair.</string>
+    <string name="camera_failed">The camera did not start. Paste the text of the QR code of cbb pair instead.</string>
     <string name="qr_text">QR code text</string>
     <string name="connecting">Connecting to the device…</string>
     <string name="not_a_code">Not a Clipboard Bridge QR code.</string>

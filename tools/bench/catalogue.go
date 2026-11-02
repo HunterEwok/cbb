@@ -66,6 +66,10 @@ var automated = map[string][]string{
 	"Y26": {"desktop"}, "O12": {"desktop"}, "Q3": {"desktop"}, "I18": {"desktop"}, "H7": {"desktop"}, "H8": {"desktop"}, "O1": {"desktop"}, "O4": {"desktop"}, "H1": {"desktop"}, "T15": {"desktop"}, "H4": {"desktop"}, "K13": {"desktop"},
 	// CI's tests of the apps' windows: the tray app in a headless browser,
 	// XCUITest of the iPhone app and the Mac app, the Android app on Robolectric.
+	// The Android app on an emulator in a group with the fleet (the phone suite).
+	"A1": {"phone"}, "M7": {"phone"}, "T16": {"phone"}, "Q8": {"phone"}, "A6": {"phone"},
+	"A12": {"phone"}, "O11": {"phone"}, "Y35": {"phone"}, "W5": {"phone"}, "W42": {"phone"},
+	"W16": {"phone"}, "G14": {"phone"},
 	"A2": {"ci"}, "A4": {"ci"}, "A5": {"ci"}, "A8": {"ci"}, "A9": {"ci"}, "A14": {"ci"}, "A15": {"ci"}, "A16": {"ci"}, "U12": {"ci"},
 	// CI's OpenWrt job (the apk feed, procd, UCI, fw4, the NTP wait, a
 	// sysupgrade's kept files) and the mips tests under qemu, its FreeBSD
@@ -88,7 +92,7 @@ var automated = map[string][]string{
 }
 
 // suites lists every suite `testbench` runs, in the order `all` runs them.
-var suites = []string{"check", "smoke", "full", "faults", "desktop", "away", "relay", "fleet", "time"}
+var suites = []string{"check", "smoke", "full", "faults", "desktop", "away", "relay", "fleet", "time", "phone"}
 
 // catCase is one case of the catalogue.
 type catCase struct {

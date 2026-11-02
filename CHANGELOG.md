@@ -975,6 +975,26 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Fixed
 
+- Android: making the phone's first group on a new install no longer fails while saving the
+  phone's sync mode, whose folder did not exist yet.
+- Android: the phone's first group on a new install now gets its key for sealed messages;
+  the secret was saved before its folder existed, so the commands for the phone came in the
+  open.
+- Android: the phone stays the hub while its app is open when one of the app's screens stops
+  after the next one started, as a finished screen may: the app counted as in the background
+  and the hub stopped.
+- Android: a camera that does not start on the add-device screen (none at the back, or held
+  by another app) no longer ends the app; it says so, and the QR code's text still works.
+- A member away from home whose hub ends the connection through the tunnel at once waits
+  before it tries again, as after a try that got no answer, instead of trying again at
+  once: each try came from a new UDP port, so a few seconds of it used up the forwarder's
+  16 client addresses for the group, and every member of the group was shut out there for
+  minutes. The phone's hub logs why a connection through its tunnel ended at once.
+- Android: a computer away from home now gets through the phone's hub, and a computer with
+  the phone's invitation reaches its pairing window: the kit's member listener and invitation
+  window listened on Android's loopback address, ::1, while the tunnel joins each connection
+  to 127.0.0.1, so every one was refused. The hub also starts its tunnel again when its
+  member listener comes back on another port.
 - The lite member's hint when its service cannot be reached names `cbb run` where there is no
   systemd (NextPi on the ZX Spectrum Next), not `systemctl`.
 - The phones show where the hub can move while it has no forwarder yet, and ask for the
@@ -1410,6 +1430,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Added
 
+- The bench's `phone` suite: the Android app on an emulator in a group with members of the
+  fleet, driven by instrumented tests (`apps/android/app/src/androidTest`) through a helper
+  that runs cbb on the members: the phone makes its own group, admits computers, syncs both
+  ways, pastes on a computer, runs a quick action, notifies of the group's events, sends from
+  the tile and the widget, shares files, takes a computer's secret, syncs through a
+  computer hub's tunnel and is the hub itself at a forwarder. CI's new `Android app on an emulator` job runs it.
 - An open blind relay: `cbb relay -open` serves every group that registers, as the project's
   relay at `cbb.tools` will, within limits that keep groups nobody vouches for from filling
   it: 4096 groups, 16 registrations from one address and 64 from one network, and 1 MiB a
