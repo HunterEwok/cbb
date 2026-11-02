@@ -71,6 +71,9 @@ targets:
         NSLocalNetworkUsageDescription: Clipboard Bridge finds your computers on the home network and keeps their clipboard in sync with this phone.
         NSCameraUsageDescription: Clipboard Bridge scans the QR code a computer shows, to add it to your group.
         NSFaceIDUsageDescription: Clipboard Bridge asks for Face ID before it signs with your group's key, to add or remove a device.
+        # The recovery key on a YubiKey (App/YubiKeyNfc.swift): Core NFC selects its PIV application.
+        NFCReaderUsageDescription: Clipboard Bridge puts your group's recovery key on a YubiKey, and restores the group with it.
+        com.apple.developer.nfc.readersession.iso7816.select-identifiers: [A000000308]
         # Files a computer copied, saved by the button, show in the Files app.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
@@ -83,8 +86,11 @@ targets:
         # OpenAndSyncIntent syncs only in the app.
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) CBB_APP
       configs:
-        # The app group and the shared keychain need the Apple developer account;
-        # debug builds, signed ad hoc, go without (Shared.swift).
+        # The app group, the shared keychain and NFC need the Apple developer account;
+        # debug builds, signed ad hoc, go without (Shared.swift). device.sh with
+        # CBB_NFC=1 gives a debug build NFC alone, for a team that has it.
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: $(CBB_DEBUG_ENTITLEMENTS)
         Release:
           CODE_SIGN_ENTITLEMENTS: ClipboardBridge/ClipboardBridge.entitlements
   ShareExtension:

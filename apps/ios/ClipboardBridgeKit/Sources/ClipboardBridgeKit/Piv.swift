@@ -46,6 +46,10 @@ public enum Piv {
         /// The PIN's tries left after .wrongPIN.
         public var left = 0
         public var description: String { message }
+
+        public init(kind: Kind, message: String, left: Int = 0) {
+            (self.kind, self.message, self.left) = (kind, message, left)
+        }
     }
 
     /// The retired slots, where the recovery key goes.
