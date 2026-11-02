@@ -1056,6 +1056,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and credentials) give way to the `v2-*.json` vectors of the same cases.
 
 ### Fixed
+- `.cbb` on the ZX Spectrum Next (0.4.1) runs the ESP8266's UART at 19200 while the network
+  runs, and puts it back at 115200 on `.cbb net off`: at 115200 a burst from the ESP, such as a
+  phone's TLS hello under `.cbb pair`, overflowed the Next's receive buffer faster than the
+  driver hands the Pi its bytes, and the phone's pairing timed out.
 
 - On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
   network, instead of doing nothing.

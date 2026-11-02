@@ -16,7 +16,7 @@
 #include "frame.h"
 #include "link.h"
 
-#define VERSION "0.4.0"
+#define VERSION "0.4.1"
 // The lite member on the Pi; the NextPi set-up puts it on the shell's PATH.
 #define CBB_LITE "cbb"
 // The longest text pasted or copied.
@@ -338,6 +338,42 @@ static void link_quit(void)
     for (i = 0; i < sizeof quit; i++) link_send(quit[i]);
 }
 
+// The ESP's stock speed, and its speed while the network runs: the driver
+// hands the Pi at most 48 of its bytes a frame (2400 a second), and the ESP
+// has no flow control, so at 115200 a burst, such as a phone's TLS hello,
+// overflows the Next's 512-byte buffer. 19200 is 1920 bytes a second.
+#define ESP_SPEED 115200UL
+#define ESP_NET_SPEED 19200UL
+
+// Whether the ESP answers AT at speed; leaves it selected. The CR LF first
+// ends whatever an earlier try at the other speed left in its line.
+static uint8_t esp_at(uint32_t speed)
+{
+    link_open_esp(speed);
+    while (link_line(line, sizeof line, 1) == LINK_OK) {
+    }
+    link_send_str("\r\nAT\r\n");
+    while (link_line(line, sizeof line, 2) == LINK_OK) {
+        if (strcmp(line, "OK") == 0) return 1;
+    }
+    return 0;
+}
+
+// Puts the ESP's UART at speed, from either speed it may be at (a reset of
+// the Next leaves the ESP as it was; AT+UART_CUR is not kept in its flash,
+// so a power cycle brings back 115200); 1 if it answers, the ESP selected.
+static uint8_t esp_speed(uint32_t speed)
+{
+    if (esp_at(speed)) return 1;
+    if (!esp_at(speed == ESP_SPEED ? ESP_NET_SPEED : ESP_SPEED)) return 0;
+    link_send_str(speed == ESP_SPEED ? "AT+UART_CUR=115200,8,1,0,0\r\n" : "AT+UART_CUR=19200,8,1,0,0\r\n");
+    // The OK comes at the old speed; then the ESP switches.
+    while (link_line(line, sizeof line, 2) == LINK_OK) {
+        if (strcmp(line, "OK") == 0) break;
+    }
+    return esp_at(speed);
+}
+
 // net_pair starts the network under its QR code, without a word.
 static uint8_t quiet;
 
@@ -362,7 +398,14 @@ static int net_start(int argc, char **argv)
     } else if (net_load()) {
         return fail("no settings yet: .cbb net on -to \"HOST:PORT\"", NET_CFG);
     }
+    if (!esp_speed(ESP_NET_SPEED)) {
+        link_use(LINK_PI);
+        return fail("the ESP does not answer AT", line);
+    }
+    link_use(LINK_PI);
     if (link_shell()) {
+        esp_speed(ESP_SPEED);
+        link_use(LINK_PI);
         return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
     }
     link_send_str(CBB_LITE " next link ");
@@ -404,8 +447,9 @@ static uint8_t esp_address(char *ip, uint8_t max)
 {
     static const char want[] = "+CIFSR:STAIP,\"";
     uint8_t i, found = 0;
-    link_open_esp(115200UL);
-    while (link_line(line, sizeof line, 1) == LINK_OK) {
+    if (!esp_speed(ESP_SPEED)) {
+        link_use(LINK_PI);
+        return 0;
     }
     link_send_str("AT+CIFSR\r\n");
     while (link_line(line, sizeof line, 3) == LINK_OK) {
@@ -458,6 +502,9 @@ static int net_stop(void)
     if (!net_on()) return fail("the network does not run", 0);
     driver(DRV_SWITCH, 0);
     link_quit();
+    // Back to the stock speed, for NextZXOS's own tools and .pibridge.
+    if (!esp_speed(ESP_SPEED)) printf("The ESP did not answer AT.\n");
+    link_use(LINK_PI);
     if (link_shell()) return fail("the network stopped, but the Pi does not answer", "no SUP> prompt");
     printf("The network stopped.\n");
     return 0;
