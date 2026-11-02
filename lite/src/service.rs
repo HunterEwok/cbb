@@ -115,6 +115,9 @@ pub struct Config {
     /// The member port, where phones and other lite members dial
     /// this one; None listens nowhere.
     pub port: Option<u16>,
+    /// Where the tunnel sends its packets instead of the hub's addresses: a
+    /// local UDP port that leads to the hub, such as `cbb next link -udp`.
+    pub tunnel_via: Option<SocketAddr>,
 }
 
 struct Service {
@@ -217,7 +220,8 @@ pub fn run(cfg: Config) -> Result<()> {
         Box::new(uptime::now),
     ));
     let tag = ident.tag();
-    let away = Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()));
+    let away =
+        Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
     let node = {
         let svc = svc.clone();
         Arc::new(Node::new(

@@ -14,7 +14,7 @@
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpListener, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -23,8 +23,7 @@ use super::esp::{self, Esp, Event};
 use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
-pub const USAGE: &str =
-    "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file] [-trace]";
+pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-log file] [-trace]";
 
 /// The line the link writes once the UART is raw, which `.cbb net on`
 /// waits for before it turns the driver on.
@@ -36,6 +35,14 @@ pub const PORT: u16 = 8769;
 const ESP_TIMEOUT: Duration = Duration::from_secs(10);
 /// How far the Pi's clock may be off before the Next's sets it.
 const CLOCK_SLACK: i64 = 2;
+/// The ESP's connection that carries the datagrams of `-udp`: the last, as
+/// the ESP gives its own connections from 0 and the dialled TCP ones take
+/// the slots below it.
+const UDP_ID: u8 = esp::LINKS - 1;
+/// The datagrams kept while the ESP's UDP connection opens; older ones are
+/// dropped, as UDP may.
+const UDP_QUEUE: usize = 8;
+
 /// The characters sent to type each second: the driver types one a frame,
 /// 50 a second, and its ring holds 255, so it never fills.
 const KEYS_PER_SECOND: usize = 50;
@@ -51,11 +58,40 @@ struct Conn {
     pending: Vec<u8>,
 }
 
+/// A local UDP port that leads, through one UDP connection of the ESP, to
+/// a fixed peer: the hub, or the forwarder, for the tunnel of sync away
+/// from home (`cbb run -tunnel-via`).
+pub struct Udp {
+    sock: UdpSocket,
+    target: (String, u16),
+    /// The ESP's own port for the connection.
+    esp_port: u16,
+    /// Where the last datagram came from, which the answers go to.
+    peer: Option<SocketAddr>,
+    state: UdpState,
+    queue: VecDeque<Vec<u8>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum UdpState {
+    Down,
+    Dialing,
+    Up,
+}
+
+impl Udp {
+    pub fn new(sock: UdpSocket, target: (String, u16), esp_port: u16) -> Udp {
+        Udp { sock, target, esp_port, peer: None, state: UdpState::Down, queue: VecDeque::new() }
+    }
+}
+
 /// What the threads around Link tell it.
 pub enum Msg {
     Uart(Vec<u8>),
     UartClosed,
     Accepted(TcpStream),
+    /// A datagram to the local UDP port, and where it came from.
+    Datagram(SocketAddr, Vec<u8>),
     Local(u8, u64, Vec<u8>),
     LocalClosed(u8, u64),
     /// Characters to type, in the Spectrum character set.
@@ -71,6 +107,7 @@ pub struct Link<W: Write> {
     target: (String, u16),
     /// The local port the ESP's own connections lead to.
     serve_to: Option<u16>,
+    udp: Option<Udp>,
     /// New connections the threads must read from: slot, use and stream.
     pub readers: Vec<(u8, u64, TcpStream)>,
     /// The local time's offset from UTC, in seconds.
@@ -102,6 +139,7 @@ impl<W: Write> Link<W> {
             esp: Esp::new(),
             target,
             serve_to: None,
+            udp: None,
             readers: Vec::new(),
             zone,
             hello: false,
@@ -128,12 +166,18 @@ impl<W: Write> Link<W> {
         self.esp.serve(esp_port);
     }
 
+    /// Carries the datagrams of a local UDP port through the ESP.
+    pub fn udp(&mut self, u: Udp) {
+        self.udp = Some(u);
+    }
+
     /// Hands one word of the threads to the link.
     pub fn handle(&mut self, m: Msg, now: Instant) {
         match m {
             Msg::Uart(b) => self.uart(&b),
             Msg::UartClosed => self.quit = true,
             Msg::Accepted(s) => self.accepted(s),
+            Msg::Datagram(from, data) => self.datagram(from, data),
             Msg::Local(id, use_, data) => {
                 if let Some(c) = self.conn(id, use_) {
                     if c.up {
@@ -193,7 +237,8 @@ impl<W: Write> Link<W> {
     /// The member dialled the local port. Dialled connections take the
     /// ESP's slots from the top, since the ESP gives its own from 0.
     fn accepted(&mut self, stream: TcpStream) {
-        let free = self.conns.iter().rposition(Option::is_none);
+        let top = if self.udp.is_some() { UDP_ID as usize } else { self.conns.len() };
+        let free = self.conns[..top].iter().rposition(Option::is_none);
         let (Some(id), true) = (free, self.esp.ready()) else {
             (self.log)("no connection of the ESP is free, or the ESP is not ready");
             stream.shutdown(Shutdown::Both).ok();
@@ -203,6 +248,59 @@ impl<W: Write> Link<W> {
             let (host, port) = self.target.clone();
             self.esp.dial_tcp(id as u8, &host, port);
         }
+    }
+
+    /// A datagram to the local UDP port goes out on the ESP's UDP
+    /// connection, which opens first when it is not up.
+    fn datagram(&mut self, from: SocketAddr, data: Vec<u8>) {
+        let ready = self.esp.ready();
+        let Some(u) = self.udp.as_mut() else { return };
+        u.peer = Some(from);
+        if u.state == UdpState::Up {
+            self.esp.send(UDP_ID, &data);
+            return;
+        }
+        if u.queue.len() == UDP_QUEUE {
+            u.queue.pop_front();
+        }
+        u.queue.push_back(data);
+        if u.state == UdpState::Down && ready && self.conns[UDP_ID as usize].is_none() {
+            u.state = UdpState::Dialing;
+            let ((host, port), local) = (u.target.clone(), u.esp_port);
+            self.esp.dial_udp(UDP_ID, &host, port, local);
+        }
+    }
+
+    /// Handles an event of the ESP's UDP connection; false when the event
+    /// is not one.
+    fn udp_event(&mut self, ev: &Event) -> bool {
+        let Some(u) = self.udp.as_mut() else { return false };
+        match ev {
+            Event::Connected(UDP_ID) if u.state == UdpState::Dialing => {
+                u.state = UdpState::Up;
+                for d in std::mem::take(&mut u.queue) {
+                    self.esp.send(UDP_ID, &d);
+                }
+            }
+            Event::Data(UDP_ID, d) if u.state == UdpState::Up => {
+                if let Some(p) = u.peer {
+                    u.sock.send_to(d, p).ok();
+                }
+            }
+            Event::Failed(UDP_ID, why) if u.state != UdpState::Down => {
+                u.state = UdpState::Down;
+                u.queue.clear();
+                let (host, port) = u.target.clone();
+                (self.log)(&format!("cannot reach {host}:{port} over UDP: {why}"));
+            }
+            Event::Closed(UDP_ID) if u.state != UdpState::Down => u.state = UdpState::Down,
+            Event::Reset => {
+                u.state = UdpState::Down;
+                return false;
+            }
+            _ => return false,
+        }
+        true
     }
 
     fn add(&mut self, id: u8, stream: TcpStream, up: bool) -> bool {
@@ -235,6 +333,9 @@ impl<W: Write> Link<W> {
             self.busy_since = None;
         }
         for ev in self.esp.take_events() {
+            if self.udp_event(&ev) {
+                continue;
+            }
             match ev {
                 Event::Ready => (self.log)("the ESP is ready"),
                 Event::Connected(id) if self.conns[id as usize].is_none() => self.inbound(id),
@@ -416,6 +517,7 @@ impl crate::pastehelper::Target for NextKeys {
 pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
     let mut trace = false;
+    let mut udp = None;
     let mut i = 0;
     while i < args.len() {
         if crate::flag(&args[i]) == Some("trace") {
@@ -437,6 +539,11 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
                     b.parse::<u16>().context("the local port is a number")?,
                 ));
             }
+            Some("udp") => {
+                let v = value()?;
+                let (a, rest) = v.split_once(':').ok_or_else(|| Error::msg(USAGE))?;
+                udp = Some((a.parse::<u16>().context("the local UDP port is a number")?, host_port(rest)?));
+            }
             _ => return Err(Error::msg(USAGE)),
         }
         i += 2;
@@ -453,6 +560,13 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
         }
     });
     let listener = TcpListener::bind(("127.0.0.1", port)).context(format!("cannot listen on 127.0.0.1:{port}"))?;
+    let udp = match udp {
+        Some((p, target)) => {
+            let s = UdpSocket::bind(("127.0.0.1", p)).context(format!("cannot open UDP port 127.0.0.1:{p}"))?;
+            Some((s, target, p))
+        }
+        None => None,
+    };
     let _raw = crate::next::RawTerminal::new(1, true);
     // Tells .cbb net on that the link runs and the UART is raw, so it may
     // turn the driver on: before that the shell's echo and its flow control
@@ -506,6 +620,18 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     }
     let mut link = Link::new(std::io::stdout(), target, zone_s, log);
     link.trace = trace;
+    if let Some((s, target, p)) = udp {
+        let (tx, reader) = (tx.clone(), s.try_clone().context("cannot open the UDP port")?);
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 2048];
+            while let Ok((n, from)) = reader.recv_from(&mut buf) {
+                if tx.send(Msg::Datagram(from, buf[..n].to_vec())).is_err() {
+                    return;
+                }
+            }
+        });
+        link.udp(Udp::new(s, target, p));
+    }
     if let Some((a, b)) = serve {
         link.serve(a, b);
     }
@@ -630,6 +756,61 @@ mod tests {
         // A late word of that connection changes nothing.
         link.handle(Msg::LocalClosed(id, use_), now);
         assert!(sent(&link, &mut next, &mut at).0.is_empty());
+    }
+
+    /// The datagrams of the local UDP port go out on the ESP's UDP
+    /// connection, opened at the first, and the answers come back to
+    /// where they came from; the dialled TCP connections keep off its slot.
+    #[test]
+    fn udp_through_the_esp() {
+        let (mut link, mut next, now) = new_link();
+        let mut at = 0;
+        let ours = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tunnel = UdpSocket::bind("127.0.0.1:0").unwrap();
+        tunnel.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        link.udp(Udp::new(ours, ("hub.example".into(), 51820), 8770));
+        link.handle(Msg::Uart(encode(frame::HELLO, b"")), now);
+        for cmd in ["AT\r\n", "ATE0\r\n", "AT+CIPMUX=1\r\n"] {
+            let (esp, ack) = sent(&link, &mut next, &mut at);
+            assert_eq!(esp, cmd);
+            link.handle(Msg::Uart(ack), now);
+            link.handle(from_esp(b"\r\nOK\r\n"), now);
+        }
+        let me = tunnel.local_addr().unwrap();
+        link.handle(Msg::Datagram(me, b"one".to_vec()), now);
+        link.handle(Msg::Datagram(me, b"two".to_vec()), now);
+        let (esp, ack) = sent(&link, &mut next, &mut at);
+        assert_eq!(esp, "AT+CIPSTART=4,\"UDP\",\"hub.example\",51820,8770,0\r\n");
+        link.handle(Msg::Uart(ack), now);
+        link.handle(from_esp(b"4,CONNECT\r\n\r\nOK\r\n"), now);
+        for d in ["one", "two"] {
+            let (esp, ack) = sent(&link, &mut next, &mut at);
+            assert_eq!(esp, "AT+CIPSEND=4,3\r\n");
+            link.handle(Msg::Uart(ack), now);
+            link.handle(from_esp(b"\r\nOK\r\n> "), now);
+            let (esp, ack) = sent(&link, &mut next, &mut at);
+            assert_eq!(esp, d, "each datagram in a send of its own");
+            link.handle(Msg::Uart(ack), now);
+            link.handle(from_esp(b"\r\nSEND OK\r\n"), now);
+        }
+        link.handle(from_esp(b"+IPD,4,5:hello"), now);
+        let mut buf = [0u8; 16];
+        let (n, _) = tunnel.recv_from(&mut buf).unwrap();
+        assert_eq!(&buf[..n], b"hello");
+        // The member's TCP connection takes the slot below.
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let _member = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        link.handle(Msg::Accepted(l.accept().unwrap().0), now);
+        assert_eq!(link.readers.pop().expect("taken").0, 3);
+        let (esp, ack) = sent(&link, &mut next, &mut at);
+        assert_eq!(esp, "AT+CIPSTART=3,\"TCP\",\"192.168.0.10\",8763\r\n");
+        link.handle(Msg::Uart(ack), now);
+        link.handle(from_esp(b"3,CONNECT\r\n\r\nOK\r\n"), now);
+        // The connection drops: the next datagram opens it again.
+        link.handle(from_esp(b"4,CLOSED\r\n"), now);
+        link.handle(Msg::Datagram(me, b"three".to_vec()), now);
+        let (esp, _) = sent(&link, &mut next, &mut at);
+        assert_eq!(esp, "AT+CIPSTART=4,\"UDP\",\"hub.example\",51820,8770,0\r\n");
     }
 
     /// A connection the ESP took leads to the member's local port.

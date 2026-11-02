@@ -9,6 +9,7 @@
 //! ("Several hubs"). It fails closed: without the tunnel, it syncs at home
 //! only, and cbb global says why.
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -49,6 +50,8 @@ pub struct Away {
     /// The hub this member dials through the tunnel now, and how many
     /// links it started, so a timer ends only its own.
     using: Mutex<Option<(String, u64)>>,
+    /// Where the tunnel sends its packets instead of the hubs' addresses.
+    via: Option<SocketAddr>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -81,8 +84,16 @@ impl Away {
             error: Mutex::new(error),
             through: AtomicBool::new(false),
             using: Mutex::new(None),
+            via: None,
             log,
         }
+    }
+
+    /// Sends the tunnel's packets to via, a local UDP port that leads to
+    /// the hub, instead of the hubs' own addresses.
+    pub fn via(mut self, via: Option<SocketAddr>) -> Away {
+        self.via = via;
+        self
     }
 
     /// The tunnel key and preshared key the hellos offer; None while sync
@@ -253,7 +264,11 @@ impl Away {
             }
             let mut reached = false;
             for (hub, id) in hubs.iter().zip(&ids) {
-                let link = match Link::start(&st, hub, &self.me, self.log.clone()) {
+                let mut hub = hub.clone();
+                if let Some(v) = self.via {
+                    hub.endpoints = vec![v];
+                }
+                let link = match Link::start(&st, &hub, &self.me, self.log.clone()) {
                     Ok(l) => l,
                     Err(e) => {
                         self.fail(&e);

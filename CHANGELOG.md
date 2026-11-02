@@ -78,7 +78,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   member's connections through the ESP to a member at home, and the ESP's own connections
   (a phone that syncs or admits it) to the lite member; the TLS stays on the Pi. The Next's
   clock sets the Pi's. The link is a remote paste target too (`next`): an admin's paste is
-  typed on the Next, 50 characters a second.
+  typed on the Next, 50 characters a second. With `-udp` it also leads a local UDP port to
+  the hub or a forwarder, and `cbb run -tunnel-via` sends the tunnel of sync away from home
+  there, so the Pi syncs away from home through the ESP.
 - `CBB.DRV`, a NextZXOS driver for the ZX Spectrum Next (`apps/zxnext/drv`): on every
   frame's interrupt it passes bytes between the ESP8266 and the Pi in `cbb next link`'s
   frames and types the characters the Pi sends, while any program runs; a host test runs
@@ -87,7 +89,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   NextPi's shell with the settings kept in `/cbb/NET.CFG` and turn `CBB.DRV` on once the link
   says it runs, stop both, and show how they stand (`-d`: the last dropped frame and the last
   bytes from the Pi; `cbb next link -trace` logs the ESP's lines). Run on a real Next: the
-  Pi dials a computer and takes connections through the ESP.
+  Pi dials a computer and takes connections through the ESP. With them, `.cbb join` joins
+  the group through the ESP: the QR code names the ESP's address, and the network runs under it.
 - A `handover` record: the group's root hands the group to an admin, whose claim then takes
   effect at once instead of after the delay, for moving the root to a new phone or from a
   computer to a phone. A `recovery` record carries the recovery key's admin CA (`cert`), so a
