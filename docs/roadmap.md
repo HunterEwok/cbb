@@ -320,6 +320,19 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     a package for `openwrt/packages` built from source with OpenWrt's Go or Rust package
     rules (likely the lite member, since the full `cbb` is too large for routers with 16 MB
     of flash) and the page for `openwrt/luci`, with a maintainer for each.
+- **51.** **Planned for 0.7, research.** Arduino boards whose Wi-Fi module is an ESP32, as
+    devices of their own: the Uno R4 WiFi (an RA4M1 with an ESP32-S3 module), and the Nano 33
+    IoT, MKR WiFi 1010 and Nano RP2040 Connect (u-blox NINA-W10x, a classic ESP32). Our
+    firmware on the module makes it the lite member (`lite/core`, TLS 1.3, joining by the
+    phone's QR code), and the board's main chip only types the texts as a USB keyboard and
+    shows them, over the UART or SPI already between the two, in frames like `cbb next`'s:
+    the split of the ZX Spectrum Next, where the Pi is the member and the Z80 only types.
+    Everything runs on the board's own hardware, so it is no gateway. The cost: Arduino's
+    own Wi-Fi firmware is gone while ours is on (its updater puts it back). To find out:
+    whether each module takes new firmware without an external programmer (the Uno R4
+    WiFi's through Arduino's own tool, NINA through the SerialNINAPassthrough sketch), and
+    whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `lite/core` with TLS 1.3, which
+    builds today for the C6 and the S3 only. The Uno R4 WiFi first.
 
 ## Devices that are hard to type into
 
@@ -784,8 +797,9 @@ Questions to study before anything is planned for them.
   a simpler encrypted protocol nor in the clear. Such a device joins through hardware of
   its own (the Next's Pi, an ESP32 on the board) or not at all. Arduino boards whose
   Wi-Fi chip runs its own TLS (Uno R4 WiFi, Nano 33 IoT, MKR WiFi 1010) cannot be lite
-  members, because that TLS gives no access to the exporter the member protocol needs,
-  so they are not supported; boards without a network are not either.
+  members with their stock firmware, because that TLS gives no access to the exporter the
+  member protocol needs; with our firmware on that chip they may be (item 51). Boards
+  without a network are not supported.
 
 ### Research: the iPhone hub in a Network Extension
 
