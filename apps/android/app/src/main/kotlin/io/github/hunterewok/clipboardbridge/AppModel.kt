@@ -491,7 +491,12 @@ class AppModel(private val app: Context) {
     suspend fun setHubInBackground(on: Boolean) = hubChange { group.setHubInBackground(on) }
 
     /** Remembers the network the phone is on as home. */
-    suspend fun addHomeNetwork() = hubChange { group.addHomeNetwork() }
+    suspend fun addHomeNetwork() {
+        hubChange { if (!group.addHomeNetwork()) throw NoHomeNetwork() }
+    }
+
+    /** The phone is on no Wi-Fi or Ethernet network to call home. */
+    private class NoHomeNetwork : Exception("the phone is on no Wi-Fi or Ethernet network with an address")
 
     private suspend fun hubChange(f: () -> Unit) {
         hubNote = try {
@@ -499,6 +504,8 @@ class AppModel(private val app: Context) {
             null
         } catch (e: CancellationException) {
             throw e
+        } catch (e: NoHomeNetwork) {
+            describe(e, R.string.hub_no_network)
         } catch (e: IllegalArgumentException) {
             describe(e, R.string.hub_bad_forwarder)
         } catch (e: Exception) {

@@ -140,6 +140,7 @@
     <string name="hub_on_home">On a home network: devices here connect to this phone.</string>
     <string name="hub_not_home">This network is not one of the hub\'s home networks: devices here do not see this phone.</string>
     <string name="hub_add_home">This is my home network</string>
+    <string name="hub_no_network">This phone is on no Wi-Fi or Ethernet network now, so there is none to call home.</string>
     <string name="hub_forwarder">Forwarder</string>
     <string name="hub_forwarder_address">Address, such as 198.51.100.9:8764</string>
     <string name="hub_forwarder_key">Key, 44 characters</string>

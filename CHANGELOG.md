@@ -1014,6 +1014,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and credentials) give way to the `v2-*.json` vectors of the same cases.
 
 ### Fixed
+- On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
+  network, instead of doing nothing.
 
 - Android: making the phone's first group on a new install no longer fails while saving the
   phone's sync mode, whose folder did not exist yet.

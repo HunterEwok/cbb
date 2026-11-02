@@ -138,6 +138,7 @@
     <string name="hub_on_home">Домашняя сеть: устройства здесь подключаются к этому телефону.</string>
     <string name="hub_not_home">Эта сеть не входит в домашние сети хаба: устройства здесь не видят этот телефон.</string>
     <string name="hub_add_home">Это моя домашняя сеть</string>
+    <string name="hub_no_network">Телефон сейчас не подключён ни к Wi-Fi, ни к Ethernet, поэтому домашней сети нет.</string>
     <string name="hub_forwarder">Форвардер</string>
     <string name="hub_forwarder_address">Адрес, например 198.51.100.9:8764</string>
     <string name="hub_forwarder_key">Ключ, 44 символа</string>
