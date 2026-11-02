@@ -2432,6 +2432,21 @@ a text, the other devices' records or names, or which client address is which de
 disk it keeps only a keyed hash of each period's tag with the version of its newest
 credential and a hash of its period key ("What it keeps").
 
+### The project's forwarder
+
+The project runs a forwarder at `cbb.tools:8764`, which every program knows: `cbb global hub`
+without addresses, or with `-forwarder default`, and a phone that is the hub without a
+forwarder of the user's own take its address, looked up when the hub is set, and its pin,
+so that nobody types either. The control request carries the address the command line
+looked up and `forwarder_key` `default`; the service fills in the pin. The pins a hub
+accepts from it are those of the `keys.json` of the newest release the group passed around
+when that lists any for `cbb.tools:8764` (section 16, "Keys"), else those built in
+(`internal/forward/project.go`, `HubState.Forwarder.projectPin` in the kits); while its key
+changes both pins are listed and either is taken. A hub command carries the pin the old hub
+accepts, and a hub that knows it as the project's follows its key from then on, as the hub
+state's `project` says. The clients get the forwarder from the hub's offer, as for any
+other.
+
 ### Registration
 
 Framing: inside TLS, each message of this section is one frame (Conventions, "Frames").
@@ -2908,7 +2923,8 @@ An `action` command carries only the action's name: what it does is defined on t
 which knows the presets `lock` (lock the screen), `sleep`, `reboot` and `shutdown` (both a
 minute after the command, so that `cancel-shutdown` can stop them), `cancel-shutdown` and
 `restart` (the service ends and its service manager starts it again, after the result is
-sent), and the actions its user added there, each a program with fixed arguments that the
+sent), `keyboard-layout` (the computer's Bluetooth keyboard types in the next of its layouts,
+`us` then `ru`; refused where it is off or there is none), and the actions its user added there, each a program with fixed arguments that the
 agent of the user signed in runs; nothing in the command reaches its arguments, and only
 the exit status comes back. The receiver MUST refuse it unless its user turned that action
 on there, and then:
@@ -2986,6 +3002,13 @@ them alike, against `testdata/interop/go-release.json`.
   cbb.tools and signs only channel files, to renew them every week with the release they
   already name; it signs no `release.json`, so whoever takes it can at most hold a channel
   on a release the project signed, which a device that has seen a newer version refuses.
+- **The project's forwarder's keys**, P-256, which `keys.json` lists with `use` `forwarder`
+  and the forwarder's address as `name` (`cbb.tools:8764`). They sign nothing: a hub takes
+  their pins (SHA-256 of each SubjectPublicKeyInfo, as `cbb forward` prints its key) as the
+  ones it accepts from that forwarder, in place of the pins built into the program, when the
+  `keys.json` of the newest release it holds lists any (section 13, "The project's
+  forwarder"). A new key is listed beside the old one before the forwarder changes to it, and
+  the old one is dropped after.
 
 ### The envelope
 
@@ -3005,14 +3028,14 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
 
 | `type` | Signed by | Fields |
 |--------|-----------|--------|
-| `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 8 of `{key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status` or `channel`)`}` |
+| `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 8 of `{key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status`, `channel` or `forwarder`)`}` |
 | `release` (`release.json`) | a release key | `version`, `channel`, `time_ms`, `min_from` (a version, optional), `files`: 1 to 256 of `{name, size, sha256, binaries?}`, `docker` (optional `{image, digest}`) |
 | `channel` (`stable.json`, ...) | a release key or a channel key | `channel`, `seq` (from 1), `time_ms`, `expires_ms`, `release` (the version), `release_sha256` (SHA-256 of that `release.json`'s body, hex) |
 | `attest-status` (`attest-status.json`) | a status key | `seq` (from 1), `time_ms`, `expires_ms`, `source_ms` (when Google last changed its list, optional), `android_revoked`: the serial numbers |
 
 - A key of a `use` the reader does not know is in `keys.json` for newer programs and signs
   nothing for it; a release key signs no `attest-status.json`, a status key no release
-  or channel file, and a channel key nothing but channel files.
+  or channel file, a channel key nothing but channel files, and a forwarder key nothing.
 
 - A version is `X.Y.Z` or, for a release candidate, `X.Y.Z-rc.N`: decimal numbers of at
   most 6 digits without leading zeros (`N` from 1), compared number by number, a release
@@ -3477,7 +3500,7 @@ frames (section 4, "Content"); `records`, `admin`, `phone_ca` (section 10); `tun
 | Record `type` | `device`, `revoke`, `root`, `freeze`, `thaw` | 10 |
 | Command `type` | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off` | 15 |
 | Command result `status` | `done`, `refused`, `failed` | 15 |
-| Quick action presets | `lock`, `sleep`, `reboot`, `shutdown`, `cancel-shutdown`, `restart` | 15 |
+| Quick action presets | `lock`, `sleep`, `reboot`, `shutdown`, `cancel-shutdown`, `restart`, `keyboard-layout` | 15 |
 | Signer kinds of an action | `root`, `phone`, `computer`, `watch` | 15 |
 | Pairing errors | `wrong-code`, `closed`, `busy`, `expired`, `too-many`, `refused`, `declined`, `taken` | 6 |
 | iPhone `direction` | `to_iphone`, `from_iphone`, `none`, `unpaired`, `error` | 7 |

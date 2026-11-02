@@ -293,17 +293,19 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (on) {
             awayFromHome?.takeIf { it.isOn }?.turnOff()
             h.turnOn(currentNetwork())
+            // Reached from afar through the project's forwarder, unless the user saved their own.
+            if (h.forwarder == null) HubState.Forwarder.project()?.let { h.setForwarder(it) }
         } else {
             h.turnOff()
         }
         restartSync()
     }
 
-    /** Sets the hub's forwarder from what the user typed, or none for a hub at home only; on the caller's IO thread. */
+    /** Sets the hub's forwarder from what the user typed, or the project's when both are empty (none when its name cannot be looked up now); on the caller's IO thread. */
     fun setForwarder(address: String, pin: String) {
         val h = phoneHub ?: return
         if (address.isBlank() && pin.isBlank()) {
-            h.setForwarder(null)
+            h.setForwarder(HubState.Forwarder.project())
         } else {
             val ep = HubState.resolve(address) ?: throw IllegalArgumentException("not an address")
             h.setForwarder(HubState.Forwarder(ep, pin.trim()))

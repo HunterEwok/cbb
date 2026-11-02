@@ -25,6 +25,8 @@ type Desk struct {
 	app    *application.App
 	window *application.WebviewWindow
 	tray   *application.SystemTray
+	// trayState is the glyph the tray shows now (trayState).
+	trayState string
 
 	socket       string
 	lang         string
@@ -467,6 +469,10 @@ func (d *Desk) updateTray() {
 	menu.Add(d.T("Open Clipboard Bridge")).OnClick(func(*application.Context) { d.Open() })
 	menu.Add(d.T("Quit")).OnClick(func(*application.Context) { d.app.Quit() })
 	d.tray.SetMenu(menu)
+	if state := trayState(s); state != d.trayState {
+		d.trayState = state
+		setTrayIcon(d.tray, state)
+	}
 	d.tray.SetTooltip("Clipboard Bridge · " + d.headline(s))
 }
 

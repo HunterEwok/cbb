@@ -20,7 +20,9 @@ final class MacUITests: XCTestCase {
         // enough to pass a socket address's 104 bytes, which the app reports
         // as an unexpected answer instead of a stopped service.
         app.launchEnvironment["CBB_SOCKET"] = "/tmp/cbb-ui-no-service-\(ProcessInfo.processInfo.processIdentifier).sock"
-        app.launchArguments = ["-AppleLanguages", "(\(language))"] + extra
+        // The app opens no window at launch, living in the menu bar; the
+        // tests ask for the window as an ordinary app's.
+        app.launchArguments = ["-AppleLanguages", "(\(language))", "-WindowAtLaunch", "YES"] + extra
         app.launch()
         return app
     }

@@ -154,6 +154,7 @@ type Keyboard struct {
 	conn    *dbus.Conn
 	adapter dbus.ObjectPath
 	name    string
+	dir     string // where it keeps its hosts; "" keeps none
 	logf    func(string, ...any)
 
 	mu        sync.Mutex
@@ -165,19 +166,22 @@ type Keyboard struct {
 	visible   time.Time
 	advertise bool // an advertisement is registered
 	agent     bool // the pairing agent is registered
+	hosts     []dbus.ObjectPath
+	stopWatch func()
 	typing    sync.Mutex
 }
 
 // Open exports the keyboard on conn, the system bus, and registers it
 // with BlueZ's first adapter, which must be powered. It advertises to the
 // hosts it bonded with, without being discoverable; Visible makes it
-// discoverable for a while. name is what a host shows.
-func Open(conn *dbus.Conn, name string, logf func(string, ...any)) (*Keyboard, error) {
+// discoverable for a while. name is what a host shows; dir keeps the hosts
+// it had (hosts.go).
+func Open(conn *dbus.Conn, name, dir string, logf func(string, ...any)) (*Keyboard, error) {
 	adapter, err := findAdapter(conn)
 	if err != nil {
 		return nil, err
 	}
-	k := &Keyboard{conn: conn, adapter: adapter, name: name, logf: logf}
+	k := &Keyboard{conn: conn, adapter: adapter, name: name, dir: dir, logf: logf, hosts: loadHosts(dir)}
 	if err := k.export(); err != nil {
 		k.unexport()
 		return nil, err
@@ -191,6 +195,7 @@ func Open(conn *dbus.Conn, name string, logf func(string, ...any)) (*Keyboard, e
 		k.Close()
 		return nil, err
 	}
+	k.watchDisconnects()
 	return k, nil
 }
 
@@ -225,9 +230,12 @@ func findAdapter(conn *dbus.Conn) (dbus.ObjectPath, error) {
 func (k *Keyboard) Close() {
 	obj := k.conn.Object(bluezBus, k.adapter)
 	k.mu.Lock()
-	adv, agent := k.advertise, k.agent
-	k.advertise, k.agent = false, false
+	adv, agent, stop := k.advertise, k.agent, k.stopWatch
+	k.advertise, k.agent, k.stopWatch = false, false, nil
 	k.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
 	if adv {
 		obj.Call(advManager+".UnregisterAdvertisement", 0, root+"/advertisement")
 	}
@@ -529,7 +537,8 @@ func (c *characteristic) desc(name, uuid string, v []byte) {
 	c.descs = append(c.descs, &descriptor{path: c.path + "/" + dbus.ObjectPath(name), uuid: uuid, val: v})
 }
 
-func (c *characteristic) ReadValue(map[string]dbus.Variant) ([]byte, *dbus.Error) {
+func (c *characteristic) ReadValue(opts map[string]dbus.Variant) ([]byte, *dbus.Error) {
+	c.k.sawHost(opts)
 	return c.value(), nil
 }
 

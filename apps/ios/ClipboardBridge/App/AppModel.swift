@@ -76,7 +76,7 @@ protocol GroupController: AnyObject {
     func hubStatus() async -> AppModel.Hub?
     /// Makes this phone the group's hub, or stops it being the hub.
     func setPhoneHub(_ on: Bool) async throws
-    /// Sets the hub's forwarder; both empty for a hub at home only.
+    /// Sets the hub's forwarder; both empty for the project's.
     func setForwarder(address: String, pin: String) async throws
     /// Remembers the network the phone is on as a home network of the hub.
     func addHomeNetwork() async throws
@@ -575,7 +575,7 @@ final class AppModel: ObservableObject {
         await refreshHub()
     }
 
-    /// Sets the hub's forwarder; both empty for a hub at home only.
+    /// Sets the hub's forwarder; both empty for the project's.
     func setForwarder(address: String, pin: String) async {
         await hubChange {
             let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)

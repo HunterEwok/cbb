@@ -11,6 +11,8 @@ struct SettingsView: View {
     @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
     @AppStorage("ShowErrorDetails") private var errorDetails = MacModel.showsErrorDetails
+    @State private var atLogin = LoginItem.isOn
+    @State private var loginError: String?
 
     var body: some View {
         Form {
@@ -33,6 +35,15 @@ struct SettingsView: View {
                     ForEach(Appearance.allCases) { a in Text(a.title).tag(a.rawValue) }
                 } label: { Text("Appearance") }
             } header: { Text("Look") }
+            Section {
+                Toggle(isOn: Binding(get: { atLogin }, set: { on in
+                    loginError = LoginItem.set(on)
+                    atLogin = LoginItem.isOn
+                })) { Text("Open at login") }
+                if let loginError { Text(verbatim: loginError).foregroundStyle(palette.danger) }
+            } footer: {
+                Text("Clipboard Bridge lives in the menu bar; its window opens from there.")
+            }
             if model.inGroup, let mode = model.status?.mode.flatMap(SyncMode.init(rawValue:)) {
                 Section {
                     Picker(selection: Binding(get: { mode }, set: { new in Task { await model.setMode(new) } })) {

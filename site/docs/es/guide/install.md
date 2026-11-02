@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: bfd0846e196a -->
+<!-- source: 75a4b281a1c4 -->
 # Instalación
 
 Clipboard Bridge se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
@@ -13,6 +13,8 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 ```
 
 Después, cierra sesión y vuelve a entrar una vez, para que tu usuario pueda usar `cbb` sin `sudo`. Una máquina sin escritorio obtiene copiar y pegar dentro de tmux con `--console` (`... | sudo sh -s -- --console`).
+
+En un escritorio con GTK 4 y WebKitGTK 6.0 (x86-64 y ARM64) también instala la app de la bandeja, que se abre con tu sesión y está en el menú de aplicaciones. Sin ellos, indica qué paquetes añadir; después ejecútalo de nuevo para tener la app de la bandeja.
 
 El pegado remoto en GNOME y KDE pregunta una vez, en un cuadro de diálogo en el ordenador, antes de que el primer pegado de un administrador pueda pulsar las teclas. Para saltarte el cuadro de diálogo, añade `--uinput` (`... | sudo sh -s -- --uinput`): un pequeño ayudante pulsa entonces las teclas de pegado (Mayús+Insert e Intro) por quien esté usando la pantalla, nunca en una pantalla de inicio de sesión o de bloqueo.
 
@@ -61,6 +63,8 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 ```
 
 Permite que el usuario con sesión iniciada en la pantalla use `cbb` (en una terminal nueva) e inicia para él el agente del portapapeles. Los comandos que cambian el grupo se ejecutan en una terminal abierta como administrador, donde Linux y macOS usan `sudo`.
+
+También instala la app de la bandeja, que se abre al iniciar sesión y está en el menú Inicio como Clipboard Bridge.
 
 Con winget, cuando el paquete esté en el repositorio de winget:
 

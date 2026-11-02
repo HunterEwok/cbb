@@ -99,7 +99,9 @@ With firewalld: `sudo firewall-cmd --permanent --add-port=8764/udp --add-port=87
 
 ## A forwarder
 
-Once it runs, give the hub its address and key:
+Without a forwarder of your own, a hub without addresses uses the project's at `cbb.tools`
+([Sync away from home](../guide/away-from-home.md#5-when-the-internet-cannot-reach-your-home-a-forwarder)).
+Once yours runs, give the hub its address and key instead:
 
 ```sh
 sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>

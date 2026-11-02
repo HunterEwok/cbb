@@ -17,6 +17,10 @@ Then log out and in again once, so your user may use `cbb` without `sudo`. A mac
 without a desktop gets copy and paste inside tmux with `--console`
 (`... | sudo sh -s -- --console`).
 
+On a desktop with GTK 4 and WebKitGTK 6.0 (x86-64 and ARM64) it also installs the tray app,
+which starts with your session and is in the applications menu. Without them it names the
+packages to add; run it again afterwards for the tray app.
+
 Remote paste on GNOME and KDE asks once, in a dialog on the computer, before an admin's
 first paste may press the keys. To skip the dialog, add `--uinput` (`... | sudo sh -s -- --uinput`): a small helper then
 presses the paste keys (Shift+Insert and Enter) for whoever uses the screen, never on a
@@ -87,6 +91,9 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 It lets the user signed in at the screen use `cbb` (in a new terminal) and starts the
 clipboard agent for them. Commands that change the group run in a terminal opened as
 administrator, where Linux and macOS use `sudo`.
+
+It also installs the tray app, which starts at sign-in and is in the Start menu as Clipboard
+Bridge.
 
 With winget, once the package is in winget's repository:
 
