@@ -457,7 +457,7 @@ function startAsUser {
 		Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
 	}
 }
-startAsUser 'agent' $cbbw 'agent'
+startAsUser -what 'agent' -program $cbbw -arguments 'agent'
 
 if ($binTray) {
 	$step = 'starting the tray app with every sign-in'
@@ -470,7 +470,7 @@ if ($binTray) {
 	$link.Description = 'One clipboard for the devices of your home'
 	$link.Save()
 	# Its window stays hidden until the tray item or the Start menu opens it.
-	startAsUser 'tray app' $tray ''
+	startAsUser -what 'tray app' -program $tray -arguments ''
 }
 
 $step = 'registering the uninstaller'
