@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import ClipboardBridgeKit
 import SwiftUI
 
 /// One device: a summary of what it is and where it stands, then what an
@@ -60,7 +61,11 @@ struct DeviceDetailView: View {
                 Task { await model.makeAdmin(id) }
             } label: { Text("Make it an admin") }
         } message: {
-            if device?.keysInFile != false {
+            if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
+                Text("It can then add and remove devices with cbb pair and cbb revoke. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.")
+                    + Text(verbatim: " ")
+                    + Text("The group then lets keys in files be admins and hubs (Settings, Admin keys).")
+            } else if device?.keysInFile != false {
                 Text("It can then add and remove devices with cbb pair and cbb revoke. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.")
             } else {
                 Text("It can then add and remove devices with cbb pair and cbb revoke. Its keys are in its hardware, which never lets them out.")

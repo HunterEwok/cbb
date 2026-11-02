@@ -438,6 +438,16 @@
     <string name="remove_device">Удалить %1$s</string>
     <string name="reason_make_recovery">Сделать ключ восстановления</string>
     <string name="reason_remove_recovery">Удалить ключ восстановления</string>
+    <string name="reason_key_level">Изменить, какие ключи могут быть у админов</string>
+    <string name="key_level_title">Ключи админов</string>
+    <string name="key_level_proven">Только доказанное железо</string>
+    <string name="key_level_hardware">Ключи в железе</string>
+    <string name="key_level_files">Ключи и в файлах</string>
+    <string name="key_level_body">Какие устройства могут быть админами и хабами группы. Ключи в железе никогда не покидают устройство, а ключ в файле может скопировать любой, кто получит файл. Уже назначенные админы остаются, пока вы их не удалите.</string>
+    <string name="key_level_saved">Сохранено. Все устройства группы следуют этой настройке.</string>
+    <string name="key_level_own_key">Ключ этого телефона не доказан, поэтому группа пока не может требовать доказанных ключей.</string>
+    <string name="error_below_key_level">Настройка группы «Ключи админов» не позволяет ключам этого устройства быть админом. Измените её в Настройках, раздел «Ключи админов».</string>
+    <string name="make_admin_files_body">Тогда группа разрешит ключи в файлах для админов и хабов (Настройки, «Ключи админов»).</string>
     <string name="recovery_title">Ключ восстановления</string>
     <string name="recovery_made">Сделан %1$s.</string>
     <string name="recovery_none">Пока нет.</string>

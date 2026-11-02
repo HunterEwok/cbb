@@ -12,6 +12,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   status` show it. `cbb admin`, `cbb hubs` and a hub's own tunnel check it; a group whose
   root key is in a file starts at `files`, and its root cannot set a level its own key does
   not pass (docs/guide/keys.md, "The three levels").
+- The phone apps set the group's key level too: Settings, Admin keys, on the root phone.
+  "Make it an admin" checks it, and making a computer whose keys are in a file an admin,
+  after the warning, moves the group to keys in files too. A phone that takes the group
+  over keeps the old root's takeover delay and key level.
 - A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both

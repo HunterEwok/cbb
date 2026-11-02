@@ -1272,9 +1272,20 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (KitRecords.storeOf(store, "full") == KitRecords.FILE && !allowFileKey) throw PhoneGroup.FileKey()
         val root = caSigner(R.string.reason_make_admin)
         val g = copyOfState() ?: return
-        val (ca, r) = withContext(Dispatchers.IO) { g.makeAdmin(id, key, root, Instant.now(), store, allowFileKey) }
+        val rs = withContext(Dispatchers.IO) {
+            // The user's consent to a key in a file, after the dialog's
+            // warning, lets the group take keys in files too.
+            val level = if (KitRecords.storeOf(store, "full") == KitRecords.FILE && allowFileKey && g.keyLevel != KitRecords.LEVEL_FILES) {
+                listOf(g.setKeyLevel(KitRecords.LEVEL_FILES, root, Instant.now()))
+            } else {
+                emptyList()
+            }
+            val (ca, r) = g.makeAdmin(id, key, root, Instant.now(), store, allowFileKey)
+            ca to level + r
+        }
+        val ca = rs.first
         withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
+        published(rs.second)
         currentNode?.sendAdminCA(ca, id)
     }
 
@@ -1320,6 +1331,24 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         withContext(Dispatchers.IO) { adopt(g) }
         published(listOf(made.record))
         return made.sheet
+    }
+
+    /** The group's key level (KitRecords.KEY_LEVELS) on the root phone; null elsewhere. */
+    val keyLevel: String? get() = synchronized(lock) { state?.takeIf { it.isRoot }?.keyLevel }
+
+    /**
+     * Sets the group's key level (docs/guide/keys.md, "The three levels"): a
+     * settings record, signed with the root key after the fingerprint, the
+     * face or the screen lock and sent to every member, which keeps the
+     * takeover delay.
+     */
+    suspend fun setKeyLevel(level: String) {
+        if (!isRoot) throw PhoneGroup.Failure("only the root sets the key level")
+        val root = caSigner(R.string.reason_key_level)
+        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
+        val r = withContext(Dispatchers.IO) { g.setKeyLevel(level, root, Instant.now()) }
+        withContext(Dispatchers.IO) { adopt(g) }
+        published(listOf(r))
     }
 
     /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */
