@@ -959,6 +959,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and the hub stopped.
 - Android: a camera that does not start on the add-device screen (none at the back, or held
   by another app) no longer ends the app; it says so, and the QR code's text still works.
+- A member away from home whose hub ends the connection through the tunnel at once waits
+  before it tries again, as after a try that got no answer, instead of trying again at
+  once: each try came from a new UDP port, so a few seconds of it used up the forwarder's
+  16 client addresses for the group, and every member of the group was shut out there for
+  minutes. The phone's hub logs why a connection through its tunnel ended at once.
 - The phones show where the hub can move while it has no forwarder yet, and ask for the
   forwarder first, instead of hiding the choice.
 - A remote paste to a Mac answers in time when the Mac's clipboard holds what Universal

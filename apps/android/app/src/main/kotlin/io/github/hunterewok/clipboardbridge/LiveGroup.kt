@@ -414,7 +414,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val trusted = { synchronized(lock) { state?.trusted }.orEmpty() }
         val onError: (Exception) -> Unit = { e -> Log.w(TAG, "a member connection to the hub failed", e) }
         val loop = synchronized(lock) { tunnelListener } ?: runCatching {
-            MemberListener(n, member.privateKey, g.memberChain, trusted, onError = onError)
+            MemberListener(n, member.privateKey, g.memberChain, trusted, onError = onError,
+                onEnded = { id -> Log.i(TAG, "a member connection to the hub through its tunnel ended: $id") })
         }.onFailure { Log.w(TAG, "the hub cannot listen", it) }.getOrNull()?.also { l -> synchronized(lock) { tunnelListener = l } } ?: return
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         h.start(HubOnPhone.Group(loop.port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords))
@@ -1386,6 +1387,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Stops syncing and starts again, with a new certificate or new roots. */
     private fun restartSync() {
+        Log.i(TAG, "connecting to the group again")
         val (d, b, n) = synchronized(lock) {
             Triple(dialer, browser, node).also {
                 dialer = null
@@ -1602,6 +1604,18 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Whether a computer is connected now. */
     val online: Boolean get() = currentNode?.connected?.isNotEmpty() == true
+
+    /**
+     * The group's latest copy while the button would fetch it first
+     * (SyncRule.decide): another device's, younger than RECENT_COPY_MS;
+     * null otherwise. The tests wait it out before they send.
+     */
+    internal val recentCopy: Member.Event?
+        get() {
+            val (n, device) = synchronized(lock) { node to state?.device }
+            val e = n?.current ?: return null
+            return e.takeIf { it.origin != device && it.via == Member.Via.COPY && it.ageMS < SyncRule.RECENT_COPY_MS }
+        }
 
     /** What the button fetched for the phone's clipboard: a text, or an image in the app's cache with its text. */
     sealed class Got {

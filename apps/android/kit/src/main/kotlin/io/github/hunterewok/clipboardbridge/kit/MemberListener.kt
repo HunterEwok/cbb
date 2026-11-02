@@ -29,6 +29,8 @@ class MemberListener(
     private val onError: (Exception) -> Unit = {},
     /** For a relay's calls: the device each connection is by its source port, once (RelayOnPhone.caller). */
     private val caller: ((Int) -> String?)? = null,
+    /** Gets the peer's device ID when its connection ended without an error, for the log. */
+    private val onEnded: (String) -> Unit = {},
 ) {
     private val listener = TLSListener(port, Member.ALPN, key, chain, address) { peerID(it) != null }
 
@@ -67,7 +69,10 @@ class MemberListener(
                             t.close()
                             onError(NotTheCaller(id))
                         }
-                        else -> node.serve(t, id)
+                        else -> {
+                            node.serve(t, id)
+                            onEnded(id)
+                        }
                     }
                 } catch (e: Exception) {
                     onError(e)

@@ -256,6 +256,11 @@ class GroupTest {
         try {
             // Settles what earlier tests left, so the send screen finds the group connected.
             runBlocking { model.sync() }
+            // A computer's copy of a moment ago, from an earlier test, is what the button
+            // fetches first instead of sending.
+            until((SyncRule.RECENT_COPY_MS / 1000).toInt() + 15, "no copy of a moment ago from another device: ${model.group.recentCopy}") {
+                model.group.recentCopy == null
+            }
             setClip(text)
             InstrumentationRegistry.getInstrumentation().runOnMainSync { model.message = null }
             // What the widget's and the tile's PendingIntent start.
@@ -264,7 +269,7 @@ class GroupTest {
             try {
                 Bench.arrives(Bench.PC, text)
             } catch (e: Throwable) {
-                throw AssertionError("${e.message}; the send screen says ${model.message}; the phone's clipboard has ${clip()}", e)
+                throw AssertionError("${e.message}; the send screen says ${model.message}; the latest copy ${model.group.recentCopy}; the phone's clipboard has ${clip()}", e)
             }
             until(10, "the send screen says it sent; it says ${model.message}") { model.message?.text == R.string.sent }
         } finally {
