@@ -24,11 +24,13 @@ class MemberListener(
     chain: List<ByteArray>,
     private val trusted: () -> List<ByteArray>,
     port: Int = 0,
-    address: InetAddress? = InetAddress.getLoopbackAddress(),
+    address: InetAddress? = TLSTransport.LOOPBACK,
     /** Gets why a connection failed, for the log. */
     private val onError: (Exception) -> Unit = {},
     /** For a relay's calls: the device each connection is by its source port, once (RelayOnPhone.caller). */
     private val caller: ((Int) -> String?)? = null,
+    /** Gets the peer's device ID when its connection ended without an error, for the log. */
+    private val onEnded: (String) -> Unit = {},
 ) {
     private val listener = TLSListener(port, Member.ALPN, key, chain, address) { peerID(it) != null }
 
@@ -41,8 +43,8 @@ class MemberListener(
         Thread(::run, "cbb-member-listener").apply { isDaemon = true; start() }
     }
 
-    private fun peerID(chain: List<ByteArray>): String? =
-        runCatching { GroupCertificates.verifyMember(chain, trusted(), Instant.now()) }.getOrNull()
+    private fun peerID(chain: List<ByteArray>): Result<String> =
+        runCatching { GroupCertificates.verifyMember(chain, trusted(), Instant.now()) }
 
     private fun run() {
         while (!stopped) {
@@ -55,15 +57,22 @@ class MemberListener(
             Thread({
                 try {
                     val t = handshake(TLSTransport.HANDSHAKE_TIMEOUT_MS)
-                    val id = peerID(t.peerChain)
+                    val checked = peerID(t.peerChain)
+                    val id = checked.getOrNull()
                     when {
-                        id == null -> t.close()
+                        id == null -> {
+                            t.close()
+                            onError(NotAMember(checked.exceptionOrNull()))
+                        }
                         // The relay said who calls; the certificate must say the same.
                         caller != null && caller.invoke(t.remotePort) != id -> {
                             t.close()
                             onError(NotTheCaller(id))
                         }
-                        else -> node.serve(t, id)
+                        else -> {
+                            node.serve(t, id)
+                            onEnded(id)
+                        }
                     }
                 } catch (e: Exception) {
                     onError(e)
@@ -71,6 +80,9 @@ class MemberListener(
             }, "cbb-member").apply { isDaemon = true; start() }
         }
     }
+
+    /** A caller whose certificate chain is no member's of the group; cause says why. */
+    class NotAMember(cause: Throwable?) : Exception("the caller is no member of the group: ${cause?.message ?: "no certificate"}", cause)
 
     /** A relay call whose certificate names another device than the relay said, or one the relay did not announce. */
     class NotTheCaller(device: String) : Exception("the relay did not announce a call from $device on this connection")

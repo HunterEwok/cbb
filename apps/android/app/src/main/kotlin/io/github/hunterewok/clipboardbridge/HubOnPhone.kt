@@ -181,6 +181,7 @@ class HubOnPhone(
     private var state: HubState? = runCatching { load() }.onFailure { log("cannot read the hub's state", it) }.getOrNull()
     private var hub: PhoneHub? = state?.let(::phoneHub)
     private var tunnel: HubTunnel? = null
+    private var tunnelPort = 0 // the member listener's port the tunnel joins its connections to
 
     val isOn: Boolean get() = synchronized(lock) { state?.on == true }
     val forwarder: HubState.Forwarder? get() = synchronized(lock) { state?.forwarder }
@@ -322,6 +323,12 @@ class HubOnPhone(
 
     /** Starts the tunnel and the registration when the hub is on and has a forwarder; nothing when it runs already. */
     fun start(g: Group) {
+        // A tunnel that joins its connections to another member listener's
+        // port, one that stopped, starts again with this one.
+        if (synchronized(lock) { tunnel != null && tunnelPort != g.memberPort }) {
+            log("the hub's member listener moved to port ${g.memberPort}; the tunnel starts again", null)
+            stop()
+        }
         val (s, h) = synchronized(lock) {
             if (tunnel != null) return
             val s = state?.takeIf { it.on } ?: return
@@ -341,6 +348,7 @@ class HubOnPhone(
             (tunnel == null && state?.on == true).also {
                 if (it) {
                     tunnel = t
+                    tunnelPort = g.memberPort
                     failure = null
                 }
             }
