@@ -240,15 +240,23 @@ class GroupTest {
     private fun typeAndAdd(code: String) {
         compose.onNode(hasSetTextAction()).performScrollTo().performTextInput(code)
         val add = compose.onNodeWithText(str(R.string.add))
-        add.performScrollTo()
         until(10, "Add takes the code") { runCatching { add.assertIsEnabled() }.isSuccess }
-        add.performClick()
+        // The keyboard that the text brought up shrinks the page as it
+        // slides in, and a tap below the page's new bottom reaches nothing:
+        // scroll to Add once the page settled, and again if a tap was lost
+        // (a second tap while the app admits does nothing).
         // Pairing takes seconds: the app is busy, or it says why it is not.
-        try {
-            until(10, "the app starts admitting") { model.busy || model.message != null }
-        } catch (e: AssertionError) {
-            throw AssertionError("${e.message}\n${appState()}")
+        val started = { model.busy || model.message != null }
+        for (i in 1..3) {
+            // Admitted already, the page closed.
+            if (i > 1 && runCatching { add.assertExists() }.isFailure) return
+            compose.waitForIdle()
+            add.performScrollTo()
+            compose.waitForIdle()
+            add.performClick()
+            if (runCatching { until(5, "the app starts admitting") { started() } }.isSuccess) return
         }
+        throw AssertionError("not within 15s: the app starts admitting\n${appState()}")
     }
 
     /** Admits a member in no group from Home's add button, by its QR code's text. */
