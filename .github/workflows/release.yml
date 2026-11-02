@@ -79,15 +79,15 @@ jobs:
           ldflags="-s -w -X github.com/HunterEwok/clipboardbridge/internal/version.Version=$GITHUB_REF_NAME"
           # Every release build runs the Rust core under wazero, never Go's
           # own rules, which only the tests use.
-          core="-overlay $GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json -tags cbbwasm"
+          overlay=$GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json
           if [ "$GOOS" = windows ]; then
             # cbbw.exe is the same program without a console window, for the agent.
-            go build $core -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
-            go build $core -trimpath -ldflags "$ldflags -H=windowsgui" -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags -H=windowsgui" -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
             # The tray app, a module of its own; on Windows it needs no cgo.
             (cd apps/desktop && go build -trimpath -ldflags "-s -w -H=windowsgui" -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           else
-            go build $core -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
           for f in "$RUNNER_TEMP"/cbb "$RUNNER_TEMP"/cbb.exe "$RUNNER_TEMP"/cbbw.exe; do
             [ ! -f "$f" ] || go version -m "$f" | grep -q -- '-tags=cbbwasm'

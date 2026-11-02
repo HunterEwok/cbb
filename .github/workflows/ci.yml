@@ -311,15 +311,15 @@ jobs:
           sh lite/packaging/notices.sh wasm32-unknown-unknown clipboardbridge-wasm >"$RUNNER_TEMP/core-notices"
       - name: go build, with the core as at a release
         run: |
-          core="-overlay $GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json -tags cbbwasm"
+          overlay=$GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json
           if [ "$GOOS" = windows ]; then
             # cbbw.exe is the same program without a console window, for the agent.
-            go build $core -trimpath -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
-            go build $core -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
             # The tray app goes in the archive too, as at a release.
             (cd apps/desktop && go build -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           else
-            go build $core -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
       - name: the release archive
         run: |
