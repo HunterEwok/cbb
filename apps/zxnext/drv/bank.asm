@@ -53,7 +53,8 @@ ESP_BUF         equ     $F500   ; the ESP's bytes on their way to the Pi
 ; ---------------------------------------------------------------------------
 ; The API: B = 1 the counters (BC = the ESP's overflows, DE = dropped
 ; frames, HL = bytes taken from the Pi); B = 2 on (D = 1) or off (D = 0);
-; B = 3 the state (A = 1 when on). Carry set for an unknown call.
+; B = 3 the state (A and DE = 1 when on; NextZXOS's M_DRVAPI gives a
+; program only BC, DE and HL). Carry set for an unknown call.
 api:
         ld      a,b
         cp      1
@@ -84,6 +85,8 @@ api3:
         cp      3
         jr      nz,api_bad
         ld      a,(enabled)
+        ld      e,a
+        ld      d,0
         and     a
         ret
 api_bad:

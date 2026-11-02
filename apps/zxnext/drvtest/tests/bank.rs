@@ -335,4 +335,8 @@ fn quit_turns_it_off() {
     d.interrupt();
     d.call(0xE000, 0x0300, 0);
     assert_eq!(d.cpu.registers().get8(Reg8::A), 0);
+    assert_eq!(d.cpu.registers().get16(Reg16::DE), 0);
+    d.on();
+    d.call(0xE000, 0x0300, 0);
+    assert_eq!(d.cpu.registers().get16(Reg16::DE), 1, "the state in DE for M_DRVAPI");
 }

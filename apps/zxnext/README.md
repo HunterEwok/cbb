@@ -20,6 +20,10 @@ tools. Test them on the machine before relying on them.
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
 .cbb join             join the group: scan the code on the screen with the phone app
+.cbb net on -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00
+                      the Pi's network through the ESP, in the background
+.cbb net off          stop it
+.cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb -d paste         the same, with the cause under each error (debug mode)
 ```
 
@@ -36,7 +40,7 @@ comes later.
    `clipboardbridge-lite-linux-armv6` of a release) to the Pi, for example with `.piput`, and put it on the shell's `PATH` (NextPi's root is
    read-only: `mount -o remount,rw /`, copy, `mount -o remount,ro /`).
 3. Give the Pi a network: the Zero W's own Wi-Fi, which NextPi turns off, or the Next's
-   ESP8266 (planned). Many Accelerated boards carry a Pi Zero without a radio: NextPi's
+   ESP8266 through `CBB.DRV` (below). Many Accelerated boards carry a Pi Zero without a radio: NextPi's
    shell shows which (`cat /proc/device-tree/model`), and `ls /sys/class/net` lists only
    `lo` on such a Pi.
 4. Start `cbb run` at boot, then run `.cbb join` on the Next.
@@ -103,8 +107,24 @@ the work:
 The frames are those of `cbb next link` (lite/README.md, "The network through the Next's
 ESP8266"). The driver starts off, so that nothing reaches NextPi's shell before the link
 runs; its API turns it on: `DRIVER 124,2,1` (1 the counters: the ESP's overflows, dropped
-frames, bytes taken; 2 on or off; 3 whether it is on). Its id, 124, is not assigned by
-NextZXOS's maintainers yet.
+frames, bytes taken; 2 on or off; 3 whether it is on, in A and DE). Its id, 124, is not
+assigned by NextZXOS's maintainers yet.
+
+To use it, copy `CBB` to `C:/DOT` and `CBB.DRV` to `/cbb`, install the driver once after
+each start (`.install /cbb/CBB.DRV`), join the ESP to the Wi-Fi network as NextZXOS's own
+tools do, and run:
+
+```
+.cbb net on -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00
+```
+
+It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
+keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
+member at home, `-serve` the ESP's port for the phones and the lite member's own,
+`-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's
+ESP8266"). The lite member (`cbb run -peer 127.0.0.1:8769`) has to run on the Pi as well.
+While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
+`join` ask for `.cbb net off` first.
 
 ## Build
 
