@@ -112,6 +112,12 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     ([design](design.md#secure-updates)); the project's root and release keys wait for the
     owner's hardware keys, then Sparkle in the Mac app and OTA on the Nano ESP32.
 
+- **34.** **Collections** in the apps: the user's own sets of devices and the order of the
+    tiles, personal to each app installation (D-72), are done: the model, the same in Go,
+    Kotlin and Swift against shared vectors
+    ([apps.md](apps.md#collections-and-the-order-of-the-tiles)), and the Arrange screens on
+    the iPhone and the iPad, on Android, in the Mac app and in the tray app; both watches show
+    their phone's collections as sections. See "Collections" below.
 - **35.** The review of all the documentation against the code for 0.6: in progress.
 
 ### Next
@@ -190,11 +196,6 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     theirs. Level 1's outside checks (App Attest, the TPM makers' services) are next. See "Key levels" below.
 - **33.** **Researched; not built (D-73).** The iPhone as a hub in the background, as a Network
     Extension. See "Research: the iPhone hub in a Network Extension" below.
-- **34.** **Collections** in the apps: the user's own sets of devices and the order of the tiles,
-    arranged by dragging, personal to each app installation (D-72). The model, the same in Go,
-    Kotlin and Swift against shared vectors, is done
-    ([apps.md](apps.md#collections-and-the-order-of-the-tiles)); the apps' Arrange screens
-    follow. See "Collections" below.
 - **36.** **Russian versions of the documentation for users**, postponed: the README, the guide
     and the reference pages for users, in `docs/ru/` and `README.ru.md`; the documents for
     developers stay in English. The rule of D-8 then allows Cyrillic in those two places as
@@ -501,7 +502,7 @@ settings also erases its Bluetooth pairings.
 
 ## Collections
 
-Planned for 0.6 (D-72); the model and its rules are built ([apps.md](apps.md#collections-and-the-order-of-the-tiles)), the screens follow. A user with many devices puts them into collections and sets the
+Built in 0.6 (D-72; the model and its rules in [apps.md](apps.md#collections-and-the-order-of-the-tiles)). A user with many devices puts them into collections and sets the
 order of the tiles in every graphical app: the phones, the Mac app, the tray app, and the
 watches, which show their phone's arrangement as sections.
 
