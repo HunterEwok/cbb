@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+[Desktop Entry]
+Type=Application
+Name=Clipboard Bridge
+Comment=One clipboard for the devices of your home
+Exec=/usr/local/bin/cbb-desktop
+Icon=/usr/local/share/clipboardbridge/clipboardbridge.png
+Categories=Utility;
+StartupNotify=false

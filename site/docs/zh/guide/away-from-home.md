@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 7ef91335d714 -->
+<!-- source: 985320ae0bdc -->
 # 离家使用
 
 在家时，你的设备会自动同步。要让笔记本或手机在别处也能继续同步，需要让家里的一台电脑成为群组的**中枢**，外出的设备通过群组自己的加密隧道连接到它。各种情形的图示见[工作原理](how-it-works.md#away-from-home-the-hub)。
@@ -54,10 +54,10 @@ cbb global
 在运营商级 NAT 之后，中枢改为通过一条出站连接向互联网上的**转发器**注册，所以家里不需要开放任何端口。转发器只传递加密数据包，不持有任何密钥。
 
 ```sh
-sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>
+sudo cbb global hub
 ```
 
-地址和密钥由转发器提供。你可以在任何小型服务器上[运行自己的转发器](../admin/self-hosting.md#a-forwarder)。项目在 `cbb.tools` 的转发器尚未向所有人开放；开放时，它的地址和密钥会写在这里。
+中枢没有自己的地址时，会经由项目在 `cbb.tools` 的转发器：cbb 知道它的地址和密钥，充当中枢的手机也会使用它。`-forwarder default` 会把它加到同时拥有自己地址的中枢上。若要使用在任何小型服务器上运行的[自己的转发器](../admin/self-hosting.md#a-forwarder)，请改为给出它的地址和密钥：`sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`；在手机上则在 **This phone as the hub** 中填写。
 
 中枢可以同时拥有自己的地址和一个转发器：设备先尝试中枢，最后才尝试转发器。
 

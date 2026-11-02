@@ -101,6 +101,13 @@ class TLSTransport private constructor(private val socket: SSLSocket, private va
         const val HANDSHAKE_TIMEOUT_MS = 10_000
 
         /**
+         * 127.0.0.1, where cbbtun's hub and relay dial the kit's listeners.
+         * Android's InetAddress.getLoopbackAddress() is ::1, which takes no
+         * connection to 127.0.0.1; the JVM's is 127.0.0.1.
+         */
+        val LOOPBACK: InetAddress = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
+
+        /**
          * Dials host:port with TLS 1.3 and the ALPN protocol, presenting
          * chain (DER, leaf first: key's certificate, then the admin CA that
          * issued it, if one did), and runs the handshake.

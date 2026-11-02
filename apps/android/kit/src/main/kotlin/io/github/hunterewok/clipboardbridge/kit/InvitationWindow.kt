@@ -3,7 +3,6 @@
 
 package io.github.hunterewok.clipboardbridge.kit
 
-import java.net.InetAddress
 import java.security.PrivateKey
 import java.time.Instant
 
@@ -28,7 +27,7 @@ class InvitationWindow(
     /** Why the window ended without a device. */
     class Ended(message: String, val code: Pairing.ErrorCode) : Exception(message)
 
-    private val listener = TLSListener(0, Pairing.ALPN, key, listOf(memberCert), InetAddress.getLoopbackAddress()) { it.isNotEmpty() }
+    private val listener = TLSListener(0, Pairing.ALPN, key, listOf(memberCert), TLSTransport.LOOPBACK) { it.isNotEmpty() }
     private val expiry = Thread({
         val wait = expires.toEpochMilli() - System.currentTimeMillis()
         try {

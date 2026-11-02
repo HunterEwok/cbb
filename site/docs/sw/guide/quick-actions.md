@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 6884007eb15c -->
+<!-- source: ce6e8f0e4357 -->
 # Vitendo vya haraka
 
 Kwa yeyote anayetaka kufunga, kulaza au kuwasha upya kompyuta kutoka kwenye simu au kompyuta nyingine ya kikundi. Msimamizi huendesha kitendo kwa mguso mmoja au amri moja; kifaa hukiendesha tu ikiwa mtumiaji wake mwenyewe aliwasha kitendo hicho hapo.
@@ -14,6 +14,7 @@ Kwa yeyote anayetaka kufunga, kulaza au kuwasha upya kompyuta kutoka kwenye simu
 | `shutdown` | huzima kompyuta dakika moja baadaye | kompyuta |
 | `cancel-shutdown` | hughairi kuwasha upya au kuzima kunakosubiri | kompyuta, mwanachama mwepesi |
 | `restart` | huwasha upya huduma ya Clipboard Bridge | kompyuta, mwanachama mwepesi |
+| `keyboard-layout` | hubadilisha mpangilio ambao [kibodi yake ya Bluetooth](keyboards-and-tvs.md) huandika nao hadi unaofuata, baada ya kubadilisha ule wa kifaa chenyewe | kompyuta za Linux zenye kibodi imewashwa |
 | chako mwenyewe | huendesha programu uliyoichagua, kama mtumiaji aliyeingia | kompyuta |
 
 Onyo la dakika moja kabla ya kuwasha upya au kuzima humpa yeyote aliye kwenye kompyuta muda wa kuhifadhi kazi yake au kuendesha `cancel-shutdown`. Windows pia huwaonya watumiaji walioingia.

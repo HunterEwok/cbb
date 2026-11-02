@@ -41,7 +41,7 @@ Commands:
                           type types TEXT or standard input in its open text field.
   action [enable NAME [-by KINDS] [-any-key] | disable NAME | off]
                           Show this device's quick actions (lock, sleep, reboot, shutdown,
-                          cancel-shutdown, restart), or turn one on or off here.
+                          cancel-shutdown, restart, keyboard-layout), or turn one on or off here.
   action -on DEVICE NAME  On an admin: run the quick action NAME on another device;
                           action off -on DEVICE or -all turns them off elsewhere.
   status                  Show this device, its group and the group's devices.

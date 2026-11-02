@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/clipboardbridge/internal/forward"
 	"github.com/HunterEwok/clipboardbridge/internal/version"
 )
 
@@ -58,11 +60,12 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       cbb global off [-yes]          turn it off here and forget its keys\n" +
 		"       cbb global off -on DEVICE      on an admin: turn it off on another device, whose own user\n" +
 		"                                      turns it on again\n" +
-		"       cbb global hub [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder address:port -forwarder-key KEY [-vless]] [address:port...]\n" +
+		"       cbb global hub [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder default|address:port -forwarder-key KEY [-vless]] [address:port...]\n" +
 		"                                      make this device the group's hub, reached at these addresses\n" +
-		"                                      or through the forwarder; -obfuscate for networks that block WireGuard,\n" +
+		"                                      or through the forwarder (without addresses, the project's at\n" +
+		"                                      " + forward.ProjectHost + "); -obfuscate for networks that block WireGuard,\n" +
 		"                                      -vless for clients that reach the forwarder only over VLESS\n" +
-		"       cbb global move DEVICE [-forwarder address:port -forwarder-key KEY] [address:port...]\n" +
+		"       cbb global move DEVICE [-forwarder default|address:port -forwarder-key KEY] [address:port...]\n" +
 		"                                      on the hub: make DEVICE, an admin computer with sync away from\n" +
 		"                                      home on, the hub in its place, reached through this hub's\n" +
 		"                                      forwarder unless others are given; its clients move with it\n" +
@@ -148,16 +151,24 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fs.SetOutput(stderr)
 		port := fs.Int("port", 0, "the UDP port the hub listens on (default 8764)")
 		fs.StringVar(&firewall, "firewall", "ask", "open the hub's UDP port in the firewall: ask, yes (without asking) or no (print the commands)")
-		fwd := fs.String("forwarder", "", "the forwarder's address, for clients that cannot reach the hub directly")
-		fwdKey := fs.String("forwarder-key", "", "the forwarder's key, which cbb forward prints")
+		fwd := fs.String("forwarder", "", "the forwarder's address, for clients that cannot reach the hub directly; default for the project's (the default without addresses)")
+		fwdKey := fs.String("forwarder-key", "", "the forwarder's key, which cbb forward prints (not for the project's)")
 		obfuscate := fs.Bool("obfuscate", false, "speak AmneziaWG, which hides that the packets are WireGuard, for networks that block it")
 		vlessOnly := fs.Bool("vless", false, "the clients reach the forwarder only over VLESS, which looks like HTTPS to a well-known site")
 		if fs.Parse(args[1:]) != nil {
 			return 2
 		}
-		if fs.NArg() == 0 && *fwd == "" || !slices.Contains([]string{"ask", "yes", "no"}, firewall) {
+		if !slices.Contains([]string{"ask", "yes", "no"}, firewall) {
 			fmt.Fprintln(stderr, usage)
 			return 2
+		}
+		// A hub without addresses of its own is reached through the
+		// project's forwarder, whose address and key cbb knows.
+		if fs.NArg() == 0 && *fwd == "" && *fwdKey == "" {
+			*fwd = forward.ProjectKey
+		}
+		if err := projectForwarder(fwd, fwdKey); err != nil {
+			return fail(stderr, err)
 		}
 		if *fwd != "" {
 			var err error
@@ -173,10 +184,13 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		fs := flag.NewFlagSet("global move", flag.ContinueOnError)
 		fs.SetOutput(stderr)
-		fwd := fs.String("forwarder", "", "the forwarder through which the new hub is reached (default: this hub's)")
-		fwdKey := fs.String("forwarder-key", "", "the forwarder's key, which cbb forward prints")
+		fwd := fs.String("forwarder", "", "the forwarder through which the new hub is reached (default: this hub's); default for the project's")
+		fwdKey := fs.String("forwarder-key", "", "the forwarder's key, which cbb forward prints (not for the project's)")
 		if fs.Parse(args[2:]) != nil {
 			return 2
+		}
+		if err := projectForwarder(fwd, fwdKey); err != nil {
+			return fail(stderr, err)
 		}
 		if *fwd != "" {
 			var err error
@@ -499,6 +513,9 @@ func debugErrors() bool {
 // resolveAddrPort turns a server's name and port, such as cbb.tools:8764,
 // into an address with the port; the service keeps the address, so a
 // server that moves needs the command again.
+// lookupNetIP finds a name's addresses; the tests answer for it.
+var lookupNetIP = net.DefaultResolver.LookupNetIP
+
 func resolveAddrPort(s string, stdout io.Writer) (string, error) {
 	if _, err := netip.ParseAddrPort(s); err == nil {
 		return s, nil
@@ -509,7 +526,7 @@ func resolveAddrPort(s string, stdout io.Writer) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	ips, err := lookupNetIP(ctx, "ip", host)
 	if err != nil {
 		return "", fmt.Errorf("could not find the address of %s: %w", host, err)
 	}
@@ -526,4 +543,20 @@ func resolveAddrPort(s string, stdout io.Writer) (string, error) {
 	ep := net.JoinHostPort(ips[0].Unmap().String(), port)
 	fmt.Fprintf(stdout, "%s is at %s.\n", host, ep)
 	return ep, nil
+}
+
+// projectForwarder turns -forwarder default into the project's forwarder:
+// its address, resolved like any other, and the key the service fills in.
+func projectForwarder(fwd, fwdKey *string) error {
+	if *fwd != forward.ProjectKey {
+		if *fwdKey == forward.ProjectKey {
+			return errors.New("-forwarder-key default goes with -forwarder default, the project's forwarder")
+		}
+		return nil
+	}
+	if *fwdKey != "" {
+		return errors.New("the project's forwarder (-forwarder default) takes no -forwarder-key: cbb knows its key")
+	}
+	*fwd, *fwdKey = forward.ProjectHost, forward.ProjectKey
+	return nil
 }

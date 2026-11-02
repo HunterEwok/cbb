@@ -10,7 +10,8 @@
 # (clipboardbridge-lite-linux-*) both carry this script, each with its own systemd unit beside it; cbb version
 # tells the two apart. It installs the binary to /usr/local/bin, the service
 # user, the systemd unit, for the full member the desktop autostart entry and user unit,
-# and the tmux configuration, adds the user
+# the tray app when the archive has it and the machine has GTK 4 and WebKitGTK
+# 6.0 (with its autostart and menu entries), and the tmux configuration, adds the user
 # who ran sudo to the clipboardbridge group, and starts or restarts the service.
 # --console also starts tmux after a login on the text console and the
 # console helper for remote paste there. --uinput, for the
@@ -154,10 +155,10 @@ else
 	share=/usr/local/share/clipboardbridge
 	sysusers=/usr/lib/sysusers.d/clipboardbridge.conf
 fi
-# place MODE FILE DEST installs FILE, a unit or the autostart entry, with
-# the binary's path of this system.
+# place MODE FILE DEST installs FILE, a unit or a desktop entry, with the
+# paths of this system.
 place() {
-	sed "s|/usr/local/bin/cbb|$cbb|g" "$2" >"$3.new"
+	sed -e "s|/usr/local/bin/cbb|$cbb|g" -e "s|/usr/local/share/clipboardbridge|$share|g" "$2" >"$3.new"
 	chmod "$1" "$3.new"
 	mv "$3.new" "$3"
 }
@@ -281,6 +282,31 @@ if [ "$kind" = full ]; then
 	systemctl --global enable clipboardbridge-agent.service >/dev/null 2>&1 || true
 fi
 
+# The tray app, when the archive has it (amd64 and arm64) and this machine
+# has the GTK 4 and WebKitGTK 6.0 it runs on; a server without them keeps
+# the service and the agent. It starts with each desktop session and is in
+# the applications menu.
+traybin=$(dirname "$bin")/cbb-desktop
+if [ "$kind" = full ] && [ -f "$traybin" ]; then
+	if ! command -v ldd >/dev/null 2>&1 || ldd "$traybin" 2>&1 | grep -q 'not found'; then
+		echo "Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu:"
+		echo "libgtk-4-1 libwebkitgtk-6.0-4; Fedora: gtk4 webkitgtk6.0). Install them and run this again to add it."
+	else
+		install -m 0755 "$traybin" "${cbb%/*}/cbb-desktop"
+		install -d -m 0755 "$share"
+		install -m 0644 "$here/clipboardbridge.png" "$share/clipboardbridge.png"
+		made /etc/xdg/autostart
+		install -d -m 0755 /etc/xdg/autostart
+		place 0644 "$here/clipboardbridge-tray.desktop" /etc/xdg/autostart/clipboardbridge-tray.desktop
+		# SteamOS replaces /usr with each update; its menu comes from the desktop.
+		if [ "$steamos" = no ]; then
+			made /usr/local/share/applications
+			install -d -m 0755 /usr/local/share/applications
+			place 0644 "$here/clipboardbridge.desktop" /usr/local/share/applications/clipboardbridge.desktop
+		fi
+	fi
+fi
+
 # tmux reads /etc/tmux.conf; source the clipboardbridge part from there once.
 install -d -m 0755 "$share"
 install -m 0644 "$here/../tmux/clipboardbridge.conf" "$share/tmux.conf"
@@ -329,6 +355,7 @@ if [ "$steamos" = yes ]; then
 /etc/systemd/user/clipboardbridge-agent.service
 /etc/systemd/user/graphical-session.target.wants/clipboardbridge-agent.service
 /etc/xdg/autostart/clipboardbridge-desktop.desktop
+/etc/xdg/autostart/clipboardbridge-tray.desktop
 /etc/profile.d/clipboardbridge-path.sh
 /etc/profile.d/clipboardbridge-console.sh
 /etc/modules-load.d/clipboardbridge-uinput.conf

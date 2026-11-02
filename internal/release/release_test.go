@@ -4,6 +4,7 @@
 package release
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -491,5 +492,30 @@ func TestStrictFiles(t *testing.T) {
 		if (err == nil) != c.Valid {
 			t.Errorf("%q (%s): valid %v, got %v", c.Name, c.Rule, c.Valid, err)
 		}
+	}
+}
+
+// A forwarder's key in keys.json names the project's forwarder for the
+// hubs and signs nothing.
+func TestForwarderKeys(t *testing.T) {
+	root, rel, fwd := newSigner(t), newSigner(t), newSigner(t)
+	kb := keysBody(1, nowMS-1000, 90*24*time.Hour, rel)
+	kb.Keys = append(kb.Keys, Key{Key: fwd.spki, Name: "cbb.tools:8764", Use: UseForwarder})
+	keys := sign(t, kb, root)
+	now := time.UnixMilli(nowMS)
+	k, err := VerifyKeys(keys, [][]byte{root.spki}, now, Seen{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := k.Forwarders("cbb.tools:8764"); len(got) != 1 || !bytes.Equal(got[0], fwd.spki) {
+		t.Errorf("Forwarders = %x", got)
+	}
+	if got := k.Forwarders("example.org:8764"); len(got) != 0 {
+		t.Errorf("another forwarder's keys: %x", got)
+	}
+	r := sign(t, releaseBody("0.6.0", "stable"), fwd)
+	ch := sign(t, channelBody("stable", 1, nowMS-1000, 30*24*time.Hour, r, "0.6.0"), rel)
+	if _, _, err := Check(keys, ch, r, [][]byte{root.spki}, "stable", now, Seen{}); err == nil {
+		t.Error("a forwarder's key signed a release")
 	}
 }

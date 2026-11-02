@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 04610b7181a2 -->
+<!-- source: 97be486697d2 -->
 # Kibodi na televisheni
 
 Kwa yeyote anayetaka kuandika nenosiri refu, kiungo au utafutaji kwenye televisheni, kompyuta kibao, kiweko cha michezo au kompyuta ambayo haina chochote cha Clipboard Bridge. Kifaa kimoja cha kikundi chako huandika maandishi hayo pale kama kibodi au kama rimoti ya televisheni, unapogusa wewe au msimamizi anapotuma ubandikaji wa mbali.
@@ -36,7 +36,7 @@ Ili ubandikaji wa mbali wa msimamizi uandikwe pale badala ya kwenye simu, washa 
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "CBB <this computer's name>" on the device, in its Bluetooth settings
+# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```

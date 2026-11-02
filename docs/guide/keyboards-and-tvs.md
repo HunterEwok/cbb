@@ -55,7 +55,7 @@ allowed for remote paste.
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "CBB <this computer's name>" on the device, in its Bluetooth settings
+# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```
