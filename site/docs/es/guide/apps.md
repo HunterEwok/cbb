@@ -20,7 +20,7 @@ Clipboard Bridge tiene apps para teléfonos, relojes y escritorios. Las apps de 
 
 1. [Instala](install.md) Clipboard Bridge en un ordenador y ejecuta allí `sudo cbb pair`. Muestra un código QR.
 2. Abre la app, pulsa **Connect a new device** y escanea el código. La app crea la clave del grupo en el chip de seguridad del teléfono (el Secure Enclave en un iPhone, el Keystore en Android), añade el ordenador y abre Inicio.
-3. Añade cada ordenador adicional con **+** en Inicio. Un miembro ligero se une de la misma manera (`sudo -u clipboardbridge cbb join` en él muestra su código).
+3. Añade cada ordenador adicional con **+** en Inicio. Un miembro ligero se une de la misma manera (`sudo -u clipboardbridge cbb pair` en él muestra su código).
 
 Cuando no se puede usar la cámara: en un iPhone, escribe los seis dígitos que muestra el ordenador; en Android, pega el texto del código QR, que `cbb pair` también imprime.
 

@@ -114,7 +114,7 @@ start_service() {
 	chmod 0750 "$RUNDIR"
 	chmod 0700 "$STATEDIR"
 
-	# The lite member's cbb join reads the list here; it is not started by
+	# The lite member's cbb pair reads the list here; it is not started by
 	# procd.
 	echo "$devices" >"$RUNDIR/interfaces"
 	chmod 0644 "$RUNDIR/interfaces"

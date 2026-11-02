@@ -243,7 +243,7 @@ func dialJoiner(t *testing.T, dir, qr string) *pair.Result {
 }
 
 // joinLite has the lite member join pi's group: cbb pair on pi shows a
-// code, and cbb join -code on the lite member reads it from standard input
+// code, and cbb pair -code on the lite member reads it from standard input
 // and joins at pi's address. It returns the lite member's state directory.
 func joinLite(t *testing.T, bin string, pi *testService) string {
 	t.Helper()
@@ -251,12 +251,12 @@ func joinLite(t *testing.T, bin string, pi *testService) string {
 	defer c.Close()
 	pa, _ := pi.addrs()
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "-debug", "join", "-name", "lite", "-code", pa)
+	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "lite", "-code", pa)
 	join.Stdin = strings.NewReader(code + "\n")
 	join.Stderr = testWriter{t, "lite join: ", nil}
 	out, err := join.Output()
 	if err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb join: %v; %s", err, out)
+		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
 	if m, err := c.Receive(); err != nil || m.Name != "lite" {
 		t.Fatalf("pair on pi ended with %+v, %v", m, err)

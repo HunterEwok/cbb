@@ -70,7 +70,7 @@ cbb> status
 | `status` | what the board knows and how its network is doing |
 | `wifi` | sets the Wi-Fi network to join: asks for its name and password, saves them and joins it |
 | `wifi forget` | leaves the Wi-Fi network and forgets it |
-| `join [NAME]` | joins a group by the phone, under NAME (default: Nano ESP32): see below |
+| `pair [NAME]` | joins a group by the phone, under NAME (default: Nano ESP32): see below |
 | `leave` | forgets the group; remove the board in the app too, so the group revokes it |
 | `debug on`, `debug off` | shows the details of errors under their message, or not; saved in flash. Without it a debug build shows them and a release build does not |
 | `selftest` | runs the TLS 1.3 self-test |
@@ -88,11 +88,11 @@ again after the connection drops.
 
 ## Joining a group
 
-Once the board has an address, type `join`. It prints a `clipboardbridge://join?...` link
+Once the board has an address, type `pair`. It prints a `clipboardbridge://join?...` link
 with a new pairing code, its address and port 8764 and the fingerprint of its pairing
 certificate; in the app, tap "Connect a new device" and paste it. The phone dials the
 board, and the two run the pairing of docs/protocol.md over TLS 1.3 (`lite/embassy`, the
-same exchange as the lite member's `cbb join`, with the core's `Joiner`). The phone proves the code
+same exchange as the lite member's `cbb pair`, with the core's `Joiner`). The phone proves the code
 first; three wrong codes, or five minutes without a phone, end the attempt. The board
 takes connections from private addresses only. It saves the identity the phone's Welcome
 gives it, as a lite member without CA keys, and `status` shows the group.
@@ -169,7 +169,7 @@ QEMU=path/to/qemu-system-xtensa ESPFLASH=path/to/espflash ./qemu-test.sh
 
 The script builds with the `qemu` feature (which includes `console-type`), writes a flash image with the partition table,
 and `qemu-test.py` boots it in [Espressif's QEMU](https://github.com/espressif/qemu)
-(machine `esp32s3`) three times, typing on the console over UART0: it checks that `join`
+(machine `esp32s3`) three times, typing on the console over UART0: it checks that `pair`
 says the build has no network, sets a Wi-Fi network and debug mode, runs the self-test, sets the keyboard's layout and rate, checks that `type` refuses what the layout cannot type and that the build has no keyboard and no Bluetooth, checks that all of it is still there after a restart,
 forgets the network and checks that it stays forgotten.
 
@@ -183,7 +183,7 @@ not secret, and it says so when it starts. Never flash the `qemu` build to a boa
 The pairing lives in the crate [`lite/embassy`](../embassy), on embassy-net and nothing of
 the chip. Its feature `host` builds `esp32-on-linux`, which runs the same code on Linux:
 embassy-net over a TAP interface with a fixed address takes the place of the Wi-Fi and
-DHCP, and `esp32-on-linux` joins a group by the phone as the board's `join` does. The Go test
+DHCP, and `esp32-on-linux` joins a group by the phone as the board's `pair` does. The Go test
 `TestEmbassyJoiner` plays the phone and has a Go member admit it (CONTRIBUTING.md, "The
 other parts", has the commands; CI's `lite` job runs it). Only the Wi-Fi driver and the
 flash stay for a real board.

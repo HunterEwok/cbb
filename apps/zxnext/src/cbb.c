@@ -38,7 +38,7 @@ static void usage(void)
            ".cbb text WORDS    send the words\n"
            ".cbb copy -s FILE  send a secret,\n"
            ".cbb text -s WORDS such as a password\n"
-           ".cbb join          join the group:\n"
+           ".cbb pair          join the group:\n"
            "                   scan the code with\n"
            "                   the phone app (with\n"
            "                   net settings: via\n"
@@ -273,7 +273,7 @@ static int qr(uint8_t size)
 static int join(void)
 {
     uint32_t len, crc;
-    if (command("join")) return 1;
+    if (command("pair")) return 1;
     if (expect(LINE_QR, &len, &crc, ANSWER_SECONDS) != LINE_QR) return 1;
     if (qr((uint8_t)len)) return 1;
     // The phone scans; the pairing ends with CBBOK. SPACE cancels.
@@ -421,8 +421,8 @@ static uint8_t esp_address(char *ip, uint8_t max)
     return found && plain(ip);
 }
 
-// Joins the group through the ESP (.cbb join when /cbb/NET.CFG holds the
-// network's settings): cbb next join waits on the Pi for the
+// Joins the group through the ESP (.cbb pair when /cbb/NET.CFG holds the
+// network's settings): cbb next pair waits on the Pi for the
 // phone, at the ESP's address and the port -serve leads to, while the
 // network runs under the QR code the phone scans.
 static int net_join(void)
@@ -439,7 +439,7 @@ static int net_join(void)
     *colon = 0;
     end = strchr(colon + 1, ' ');
     if (end) *end = 0;
-    sprintf(cmd, CBB_LITE " next join -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null &\n", ip, serve + 7,
+    sprintf(cmd, CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null &\n", ip, serve + 7,
             colon + 1);
     if (link_shell()) return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
     link_send_str(cmd);
@@ -539,7 +539,7 @@ static int run(int argc, char **argv)
     if (strcmp(argv[i], "copy") == 0 && argc - i == 2) return copy_file(argv[i + 1]);
     if (strcmp(argv[i], "text") == 0 && argc - i >= 2) return copy_words(argc - i - 1, argv + i + 1);
     // With the network's settings, the Pi has no network but the ESP's.
-    if (strcmp(argv[i], "join") == 0 && argc - i == 1) return net_load() ? join() : net_join();
+    if (strcmp(argv[i], "pair") == 0 && argc - i == 1) return net_load() ? join() : net_join();
     if (strcmp(argv[i], "net") == 0) return net(argc - i - 1, argv + i + 1);
     usage();
     return 1;

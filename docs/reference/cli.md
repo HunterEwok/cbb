@@ -88,14 +88,14 @@ member (`/var/lib/clipboardbridge`, `clipboardbridge.service`) and the commands 
 commands of a full member, such as `pair` or `invite`, answer that this is the lite member.
 Global flags, before the command: `-state DIR` (default `/var/lib/clipboardbridge`, or
 `CBB_STATE`), `-socket PATH` (default `/run/clipboardbridge/control.sock`, or `CBB_SOCKET`),
-`-debug` (the details of errors). The commands that change its state, such as `join`, run
-as the service's user: `sudo -u clipboardbridge cbb join`. Install and use are in
+`-debug` (the details of errors). The commands that change its state, such as `pair`, run
+as the service's user: `sudo -u clipboardbridge cbb pair`. Install and use are in
 [lite/README.md](../../lite/README.md).
 
 | Command | What it does |
 |---|---|
-| `cbb join [-name NAME] [-port PORT] [-addr HOST[:PORT]]...` | Joins a group by QR code, scanned by the phone app or the shortcut. `-addr` names where the phone reaches this device, when the QR code would name the wrong addresses. |
-| `cbb join -code HOST:PORT` | Joins with the code from `cbb pair` on the group's root or an admin. |
+| `cbb pair [-name NAME] [-port PORT] [-addr HOST[:PORT]]...` | Joins a group by QR code, scanned by the phone app or the shortcut. `-addr` names where the phone reaches this device, when the QR code would name the wrong addresses. |
+| `cbb pair -code HOST:PORT` | Joins with the code from `cbb pair` on the group's root or an admin. |
 | `cbb run [-name NAME] [-port PORT] [-peer HOST:PORT]... [-no-mdns] [-no-listen]` | Runs the service (systemd or procd). `-peer` names a full member on the home network to dial, for networks without mDNS; `-no-mdns` turns mDNS off; `-no-listen` closes the member port, so the device only dials. |
 | `cbb global [on\|off]` | Shows sync away from home, or turns it on (after the warning about keys in files, typing yes) or off here. Once on, the device meets the group's hub at home, keeps its offer, and away from home reaches it through the group's WireGuard tunnel; a hub that hides its tunnel (`-obfuscate`, `-vless`) keeps the lite member at home. |
 | `cbb copy [-secret]` | Sends standard input to the group. |
@@ -106,7 +106,7 @@ as the service's user: `sudo -u clipboardbridge cbb join`. Install and use are i
 | `cbb action [enable NAME [-by root,phone,computer,watch] [-any-key] [-yes] \| disable NAME \| off]` | Shows the quick actions here, or turns one on or off, as on a full member, with `sudo`: `reboot` (a minute later; only for admins whose keys are in hardware unless `-any-key`), `cancel-shutdown` and `restart`. Enabling `reboot` writes the polkit rule that lets the service ask logind for it, so the device needs polkit. Any admin turns them off from afar. |
 | `cbb paste-receive [on [-enter] [-console] [-no-lock-check] \| off]` | Shows remote paste here, or turns it on or off, as on a full member; setting it needs `sudo`. On, the group's admins may put a text into the tmux pane in use; `-console` lets it reach the active text console and root's tmux, `-enter` lets a paste press Enter, and `-no-lock-check` lets it reach a console whose session logind says nothing about being locked. Any admin turns it off from afar. |
 | `cbb paste-helper tmux\|console` | The paste targets: tmux starts the one for tmux from clipboardbridge's `tmux.conf`, the `clipboardbridge-console` unit (`install.sh --console`) runs the one for the console. |
-| `cbb next paste [-max BYTES]`, `next copy LEN CRC32`, `next join [-name NAME] [-port PORT] [-addr HOST[:PORT]]...` | The same for the ZX Spectrum Next's `.cbb` dot command, in frames its Z80 reads; see [lite/README.md](../../lite/README.md#zx-spectrum-next). |
+| `cbb next paste [-max BYTES]`, `next copy LEN CRC32`, `next pair [-name NAME] [-port PORT] [-addr HOST[:PORT]]...` | The same for the ZX Spectrum Next's `.cbb` dot command, in frames its Z80 reads; see [lite/README.md](../../lite/README.md#zx-spectrum-next). |
 | `cbb update [-check] \| -auto [on\|off] \| -mirror [URL\|default]` (with sudo) | As on a full member, for the lite member's own archive on Linux and OpenWrt: the signed files checked, the download through the system's curl, wget or uclient-fetch, the archive's installer, and the previous program put back when the service does not report the new version within a minute. |
 | `cbb version`, `cbb help` | The version and that this is the lite member; this help. |
 

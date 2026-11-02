@@ -12,7 +12,7 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::OnceLock;
 
 /// The names in CBB_INTERFACES, separated by commas or spaces; empty when
-/// it is not set. On OpenWrt, a cbb join started by hand reads the list
+/// it is not set. On OpenWrt, a cbb pair started by hand reads the list
 /// that the init script gave the service.
 pub fn only() -> &'static [String] {
     static ONLY: OnceLock<Vec<String>> = OnceLock::new();

@@ -88,7 +88,7 @@ line here with every new function, and a case for it in the catalogue.
 | G.5 | `cbb pair` on an admitter (the code, the wait) | G3 |
 | G.6 | `cbb pair -code` found by mDNS | G3, G4 |
 | G.7 | `cbb pair -code ADDRESS` | G4 |
-| G.8 | `cbb join -code` on the lite member | G3 |
+| G.8 | `cbb pair -code` on the lite member | G3 |
 | G.9 | Joining through an SSH forward or one's own VPN | G4 |
 | G.10 | The CGNAT range refused, or taken with `CBB_HOME_CGNAT` | G4 |
 | G.11 | The pairing window's 5 minutes | G5 |
@@ -106,7 +106,7 @@ line here with every new function, and a case for it in the catalogue.
 | G.23 | A device in a group keeps it | G9 |
 | G.24 | The Welcome (certificate, records, `issuer`) | G3, K14 |
 | G.25 | A computer joins a phone's group by QR code | G10 |
-| G.26 | The lite member joins by QR code (`cbb join`, `-addr`) | G10 |
+| G.26 | The lite member joins by QR code (`cbb pair`, `-addr`) | G10 |
 | G.27 | The Nano joins by the phone | G10, H11 |
 | G.28 | A QR code of another session refused | G10 |
 | G.29 | The joining computer listens for the phone | G17 |

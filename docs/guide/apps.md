@@ -24,7 +24,7 @@ the desktop apps are a window onto the service that already runs on the computer
    group's key in the phone's security chip (the Secure Enclave on an iPhone, the Keystore
    on Android), adds the computer and opens Home.
 3. Add each further computer with **+** on Home. A lite member joins the same way
-   (`sudo -u clipboardbridge cbb join` on it shows its code).
+   (`sudo -u clipboardbridge cbb pair` on it shows its code).
 
 When the camera cannot be used: on an iPhone, type the six digits the computer shows; on
 Android, paste the text of the QR code, which `cbb pair` prints too.
