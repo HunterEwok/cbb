@@ -19,7 +19,7 @@ import (
 	"github.com/HunterEwok/clipboardbridge/internal/authority"
 )
 
-// The generator of testdata/interop/strict-generated.json: from the tables
+// The generator of testdata/interop/strict-generated-*.json: from the tables
 // of docs/protocol.md ("Signed bodies" in Conventions, the record fields of
 // section 10, the command fields of section 15 and the manifest of section
 // 4), a valid body of every kind and, for each of its fields, the changes a
@@ -28,7 +28,7 @@ import (
 // The verdicts come from the tables, never from what one implementation
 // does; strict.json keeps the vectors written by hand.
 
-// A genVector is one body of strict-generated.json. A body of more than a
+// A genVector is one body of strict-generated-*.json. A body of more than a
 // few kilobytes is written short: pad bytes "a" go in at pad_at.
 type genVector struct {
 	Name  string `json:"name"`
@@ -668,7 +668,7 @@ func genKindVectors(k genKind) []genVector {
 	return out
 }
 
-// makeGenVectors returns the vectors of strict-generated.json.
+// makeGenVectors returns the vectors of strict-generated-*.json.
 func makeGenVectors() genVectors {
 	var v genVectors
 	for _, k := range recordKinds() {
@@ -744,30 +744,104 @@ func encodeSections(sections []genSection) []byte {
 	return b.Bytes()
 }
 
-func encodeGenVectors(v genVectors) []byte {
-	return encodeSections([]genSection{{"records", v.Records}, {"commands", v.Commands}, {"manifests", v.Manifests}})
-}
+// genFileMax is the most bytes a file of the generated vectors holds, under
+// tools/repocheck's limit on a file.
+const genFileMax = 900 << 10
 
-// TestStrictGenerated checks that testdata/interop/strict-generated.json is
-// what the tables give (go test -update writes it), and Go's verdict on
-// every record and command of it; internal/clip checks the manifests.
-func TestStrictGenerated(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "interop", "strict-generated.json")
-	want := encodeGenVectors(makeGenVectors())
-	if *update {
-		if err := os.WriteFile(path, want, 0o644); err != nil {
-			t.Fatal(err)
+// genFileName is the name of the generated vectors' file i, from 1.
+func genFileName(i int) string { return fmt.Sprintf("strict-generated-%d.json", i) }
+
+// encodeGenFiles writes v as strict-generated-1.json, -2.json and so on:
+// each file has the three sections, the vectors in order, and at most
+// genFileMax bytes.
+func encodeGenFiles(v genVectors) [][]byte {
+	var files []genVectors
+	cur, size := genVectors{Records: []genVector{}, Commands: []genVector{}, Manifests: []genVector{}}, 0
+	add := func(l *[]genVector, c genVector) {
+		line, err := json.Marshal(c)
+		if err != nil {
+			panic(err)
+		}
+		if size+len(line) > genFileMax-100 && size > 0 {
+			files = append(files, cur)
+			cur, size = genVectors{Records: []genVector{}, Commands: []genVector{}, Manifests: []genVector{}}, 0
+		}
+		size += len(line) + 6
+		switch l {
+		case &v.Records:
+			cur.Records = append(cur.Records, c)
+		case &v.Commands:
+			cur.Commands = append(cur.Commands, c)
+		default:
+			cur.Manifests = append(cur.Manifests, c)
 		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	for _, l := range []*[]genVector{&v.Records, &v.Commands, &v.Manifests} {
+		for _, c := range *l {
+			add(l, c)
+		}
 	}
-	if !bytes.Equal(data, want) {
-		t.Fatal("strict-generated.json is not what the tables give: run go test ./internal/group -run TestStrictGenerated -update")
+	files = append(files, cur)
+	var out [][]byte
+	for _, f := range files {
+		out = append(out, encodeSections([]genSection{{"records", f.Records}, {"commands", f.Commands}, {"manifests", f.Manifests}}))
 	}
+	return out
+}
+
+// readGenFiles reads the generated vectors' files of dir, all of them.
+func readGenFiles(dir string) (genVectors, error) {
 	var v genVectors
-	if err := json.Unmarshal(data, &v); err != nil {
+	for i := 1; ; i++ {
+		data, err := os.ReadFile(filepath.Join(dir, genFileName(i)))
+		if errors.Is(err, fs.ErrNotExist) && i > 1 {
+			return v, nil
+		}
+		if err != nil {
+			return v, err
+		}
+		var f genVectors
+		if err := json.Unmarshal(data, &f); err != nil {
+			return v, fmt.Errorf("%s: %w", genFileName(i), err)
+		}
+		v.Records = append(v.Records, f.Records...)
+		v.Commands = append(v.Commands, f.Commands...)
+		v.Manifests = append(v.Manifests, f.Manifests...)
+	}
+}
+
+// TestStrictGenerated checks that testdata/interop/strict-generated-*.json
+// are what the tables give (go test -update writes them), and Go's verdict
+// on every record and command of them; internal/clip checks the manifests.
+func TestStrictGenerated(t *testing.T) {
+	dir := filepath.Join("..", "..", "testdata", "interop")
+	want := encodeGenFiles(makeGenVectors())
+	if *update {
+		for i, b := range want {
+			if err := os.WriteFile(filepath.Join(dir, genFileName(i+1)), b, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for i := len(want) + 1; ; i++ {
+			if err := os.Remove(filepath.Join(dir, genFileName(i))); err != nil {
+				break
+			}
+		}
+	}
+	for i, b := range want {
+		data, err := os.ReadFile(filepath.Join(dir, genFileName(i+1)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(data, b) {
+			t.Fatalf("%s is not what the tables give: run go test ./internal/group -run TestStrictGenerated -update", genFileName(i+1))
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, genFileName(len(want)+1))); err == nil {
+		t.Fatalf("%s is left over: run go test ./internal/group -run TestStrictGenerated -update", genFileName(len(want)+1))
+	}
+	v, err := readGenFiles(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range v.Records {

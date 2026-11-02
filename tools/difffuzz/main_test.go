@@ -50,7 +50,12 @@ func TestGenerateSeeded(t *testing.T) {
 // record seeds too, after those of the other files.
 func TestSeedsMutants(t *testing.T) {
 	dir := t.TempDir()
-	for _, f := range []string{"strict-generated.json", "strict-files.json"} {
+	files, err := filepath.Glob(filepath.Join(vectors, "strict-generated-*.json"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no generated vectors: %v", err)
+	}
+	for _, f := range append(files, filepath.Join(vectors, "strict-files.json")) {
+		f = filepath.Base(f)
 		data, err := os.ReadFile(filepath.Join(vectors, f))
 		if err != nil {
 			t.Fatal(err)

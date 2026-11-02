@@ -111,7 +111,7 @@ these words depends on it.
   otherwise. Go's `checkStrict`, the lite member's `strict`, and `Strict` in both phone kits
   implement these rules. Every one of them gives the same verdict on the vectors in
   `testdata/interop/strict.json`, written by hand, and in
-  `testdata/interop/strict-generated.json`, which Go's `TestStrictGenerated` writes from
+  `testdata/interop/strict-generated-*.json`, which Go's `TestStrictGenerated` writes from
   these rules and the tables, and in `testdata/interop/strict-files.json`, which
   `TestStrictGeneratedFiles` writes the same way for server credentials and release files: a
   valid body of every kind and, for every field, the body
@@ -125,7 +125,7 @@ these words depends on it.
   tables give, and when any implementation reads a vector otherwise. Record bodies are read
   by `internal/authority` and `cbb_core::authority` alone (the phones through the core), and
   only in their canonical form with no member their type does not know, so a record vector
-  that another kind takes with whitespace or an unknown member is refused; strict-generated.json
+  that another kind takes with whitespace or an unknown member is refused; strict-generated-*.json
   also holds the canonical form's own cases (`form/canonical`) and the sizes of a record and a
   checkpoint. The records of `strict.json` and of `strict-mutants-*.json` are of version 1,
   which every member refuses whatever the vector says.
@@ -620,7 +620,7 @@ grows past 255 bytes or a path past 4096 bytes that way, two paths become one (`
 and `COM0_.txt`), or a file becomes one that another path goes through. Every number in a manifest is an integer written as in signed
 bodies (Conventions, "Signed bodies"): no `-0`, fraction or exponent. A receiver MUST refuse a
 manifest that breaks any of these rules (the vectors of
-`strict-generated.json` cite them as `manifests/size` and `manifests/parts`; a manifest is no
+`strict-generated-*.json` cite them as `manifests/size` and `manifests/parts`; a manifest is no
 signed body, so only its numbers have the strict form),
 and MUST NOT follow or create links when it writes a copy of files. The Go code is
 `internal/clip/media.go`.

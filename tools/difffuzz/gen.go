@@ -36,7 +36,7 @@ type Record struct {
 	Chain [][]byte `json:"chain,omitempty"`
 }
 
-// A vector is a body of strict-generated.json, strict-files.json or
+// A vector is a body of strict-generated-*.json, strict-files.json or
 // strict-mutants-*.json.
 type vector struct {
 	Body  []byte `json:"body"`
@@ -64,15 +64,18 @@ type setSource struct {
 // seeds reads the bodies the corpus starts from, by kind.
 func seeds(dir string) ([]Case, error) {
 	var out []Case
-	read := func(file string, sections map[string]string) error {
+	load := func(file string) (map[string][]vector, error) {
 		data, err := os.ReadFile(filepath.Join(dir, file))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		var v map[string][]vector
 		if err := json.Unmarshal(data, &v); err != nil {
-			return fmt.Errorf("%s: %w", file, err)
+			return nil, fmt.Errorf("%s: %w", file, err)
 		}
+		return v, nil
+	}
+	take := func(file string, v map[string][]vector, sections map[string]string) error {
 		names := make([]string, 0, len(sections))
 		for s := range sections {
 			names = append(names, s)
@@ -92,7 +95,28 @@ func seeds(dir string) ([]Case, error) {
 		}
 		return nil
 	}
-	if err := read("strict-generated.json", map[string]string{"records": "record", "commands": "command", "manifests": "manifest"}); err != nil {
+	read := func(file string, sections map[string]string) error {
+		v, err := load(file)
+		if err != nil {
+			return err
+		}
+		return take(file, v, sections)
+	}
+	// The generated vectors, in as many files as they take.
+	generated := map[string][]vector{}
+	for i := 1; ; i++ {
+		v, err := load(fmt.Sprintf("strict-generated-%d.json", i))
+		if errors.Is(err, fs.ErrNotExist) && i > 1 {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for s, l := range v {
+			generated[s] = append(generated[s], l...)
+		}
+	}
+	if err := take("strict-generated-*.json", generated, map[string]string{"records": "record", "commands": "command", "manifests": "manifest"}); err != nil {
 		return nil, err
 	}
 	if err := read("strict-files.json", map[string]string{"credentials": "credential", "releases": ""}); err != nil {

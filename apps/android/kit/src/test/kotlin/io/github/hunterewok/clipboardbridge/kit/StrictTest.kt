@@ -72,14 +72,19 @@ class StrictTest {
     }
 
     /**
-     * testdata/interop/strict-generated.json, from the tables of docs/protocol.md: the kit takes exactly the bodies the
+     * testdata/interop/strict-generated-*.json, from the tables of docs/protocol.md: the kit takes exactly the bodies the
      * tables take, and says which row it reads otherwise.
      */
     @Test
     fun generated() {
-        val v = Interop.read("strict-generated.json").jsonObject
-        for (kind in listOf("records", "commands", "manifests")) assertTrue(v.getValue(kind).jsonArray.isNotEmpty(), "no $kind")
-        val wrong = strictWrong(v)
+        val wrong = mutableListOf<String>()
+        val n = mutableMapOf<String, Int>()
+        generateSequence(1) { it + 1 }.map { File(Interop.dir, "strict-generated-$it.json") }.takeWhile { it.exists() }.forEach { f ->
+            val v = Interop.read(f.name).jsonObject
+            for (kind in listOf("records", "commands", "manifests")) n[kind] = (n[kind] ?: 0) + v.getValue(kind).jsonArray.size
+            wrong += strictWrong(v)
+        }
+        for (kind in listOf("records", "commands", "manifests")) assertTrue((n[kind] ?: 0) > 0, "no $kind")
         assertTrue(wrong.isEmpty(), "${wrong.size} vectors read otherwise:\n" + wrong.joinToString("\n"))
     }
 
@@ -113,7 +118,7 @@ class StrictTest {
     }
 
     /**
-     * The vectors of a file in the form of strict-generated.json that the kit reads otherwise. A record is taken when
+     * The vectors of a file in the form of strict-generated-*.json that the kit reads otherwise. A record is taken when
      * its decoder returns a body and a command when its parser does; a reader refuses only by returning null or by its
      * own exception, so any other exception fails the test.
      */

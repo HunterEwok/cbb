@@ -103,12 +103,8 @@ func writeVerdictCorpus(t *testing.T) string {
 }
 
 func readStrictGenerated(t *testing.T) genVectors {
-	data, err := os.ReadFile("../../testdata/interop/strict-generated.json")
+	v, err := readGenFiles("../../testdata/interop")
 	if err != nil {
-		t.Fatal(err)
-	}
-	var v genVectors
-	if err := json.Unmarshal(data, &v); err != nil {
 		t.Fatal(err)
 	}
 	return v

@@ -79,7 +79,7 @@ final class StrictTests: XCTestCase {
         }
     }
 
-    /// testdata/interop/strict-generated.json, from the tables of
+    /// testdata/interop/strict-generated-*.json, from the tables of
     /// docs/protocol.md: the kit takes exactly the bodies the tables take,
     /// and says which row it reads otherwise.
     func testGenerated() throws {
@@ -97,7 +97,15 @@ final class StrictTests: XCTestCase {
         struct Vectors: Decodable { var records, commands, manifests: [Case] }
         var url = URL(fileURLWithPath: #filePath)
         for _ in 0..<6 { url.deleteLastPathComponent() }
-        let v = try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: url.appendingPathComponent("testdata/interop/strict-generated.json")))
+        var v = Vectors(records: [], commands: [], manifests: [])
+        for i in 1... {
+            let file = url.appendingPathComponent("testdata/interop/strict-generated-\(i).json")
+            guard FileManager.default.fileExists(atPath: file.path) else { break }
+            let part = try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: file))
+            v.records += part.records
+            v.commands += part.commands
+            v.manifests += part.manifests
+        }
         var wrong: [String] = []
         let kinds: [(String, [Case], (Data) -> Bool)] = [
             // Record bodies are the core's to check.

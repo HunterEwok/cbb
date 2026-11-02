@@ -208,10 +208,12 @@ mod tests {
                 wrong.push(format!("{kind} {}: valid {}, got {got}", c["name"], c["valid"]));
             }
         };
-        let mut files = vec!["strict.json".to_string(), "strict-generated.json".to_string()];
-        files.extend((1..).map(|i| format!("strict-mutants-{i}.json")).take_while(|f| {
+        let exists = |f: &String| {
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/interop").join(f).exists()
-        }));
+        };
+        let mut files = vec!["strict.json".to_string()];
+        files.extend((1..).map(|i| format!("strict-generated-{i}.json")).take_while(exists));
+        files.extend((1..).map(|i| format!("strict-mutants-{i}.json")).take_while(exists));
         for f in &files {
             let v = vectors(f);
             for (section, kind) in [("commands", "command"), ("manifests", "manifest")] {

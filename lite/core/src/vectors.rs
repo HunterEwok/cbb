@@ -664,7 +664,7 @@ fn strict() {
             .collect::<Vec<_>>()
     };
     // The records of strict.json are of version 1, which the core no longer
-    // reads; strict-generated.json has those of version 2.
+    // reads; strict-generated-*.json have those of version 2.
     assert!(!cases("records").is_empty());
     for (name, body, valid) in cases("commands") {
         let got = crate::command::Command::parse(&body);
@@ -678,16 +678,25 @@ fn strict() {
     }
 }
 
-/// The vectors the tables of docs/protocol.md give (strict-generated.json,
-/// as Go's TestStrictGenerated writes it): the lite member takes exactly
+/// The vectors the tables of docs/protocol.md give (strict-generated-*.json,
+/// as Go's TestStrictGenerated writes them): the lite member takes exactly
 /// the bodies the tables take, and says which row it reads otherwise.
 #[test]
 fn strict_generated() {
-    let v = vectors("strict-generated.json");
-    for kind in ["records", "commands", "manifests"] {
-        assert!(!v[kind].as_array().unwrap().is_empty(), "no {kind}");
+    let mut wrong = Vec::new();
+    let mut n = [0; 3];
+    for i in 1.. {
+        let name = format!("strict-generated-{i}.json");
+        if !PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/interop").join(&name).exists() {
+            break;
+        }
+        let v = vectors(&name);
+        for (j, kind) in ["records", "commands", "manifests"].iter().enumerate() {
+            n[j] += v[kind].as_array().unwrap().len();
+        }
+        wrong.extend(strict_wrong(&v));
     }
-    let wrong = strict_wrong(&v);
+    assert!(n.iter().all(|&k| k > 0), "no vectors of a kind: {n:?}");
     assert!(wrong.is_empty(), "{} vectors read otherwise:\n{}", wrong.len(), wrong.join("\n"));
 }
 
@@ -713,7 +722,7 @@ fn strict_mutants() {
 }
 
 /// strict_wrong returns the vectors of a file in the form of
-/// strict-generated.json that the lite member reads otherwise.
+/// strict-generated-*.json that the lite member reads otherwise.
 fn strict_wrong(v: &Value) -> Vec<String> {
     let mut wrong = Vec::new();
     for kind in ["records", "commands", "manifests"] {
