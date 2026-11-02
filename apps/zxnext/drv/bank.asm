@@ -76,7 +76,16 @@ api2:
         ld      (enabled),a
         and     a
         jr      z,api_ok
-        ; Turned on: a hello and the clock at the next interrupt.
+        ; Turned on: a hello and the clock at the next interrupt. The
+        ; counts start again: the link counts its bytes from 0, and an
+        ; ack with the count of an earlier run would close its window.
+        ld      hl,0
+        ld      (taken),hl
+        ld      (acked),hl
+        ld      (esp_over),hl
+        ld      (dropped),hl
+        ld      (esp_sent),hl
+        ld      (esp_got),hl
         xor     a
         ld      (dstate),a
         inc     a

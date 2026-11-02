@@ -328,6 +328,14 @@ static uint8_t plain(const char *s)
     return 1;
 }
 
+// Sends cbb next link the quit frame: the start byte, Q, no data, the sum.
+static void link_quit(void)
+{
+    static const uint8_t quit[] = {0x7E, 'Q', 0, 'Q'};
+    uint8_t i;
+    for (i = 0; i < sizeof quit; i++) link_send(quit[i]);
+}
+
 static int net_start(int argc, char **argv)
 {
     int i;
@@ -361,13 +369,19 @@ static int net_start(int argc, char **argv)
     // shell's echo or the link's error.
     for (i = 0;; i++) {
         uint8_t err = link_line(line, sizeof line, 15);
-        if (err) return fail("cbb next link did not start on the Pi", err == LINK_BREAK ? "stopped" : "no CBBLINK");
+        if (err) {
+            link_quit(); // it may run without having said so
+            return fail("cbb next link did not start on the Pi", err == LINK_BREAK ? "stopped" : "no CBBLINK");
+        }
         if (strstr(line, "CBBLINK")) break;
         if (i > 0 && (strncmp(line, "cbb:", 4) == 0 || strncmp(line, "usage", 5) == 0)) {
             link_prompt();
             return fail("cbb next link failed on the Pi", line);
         }
-        if (i == 8) return fail("cbb next link did not start on the Pi", line);
+        if (i == 8) {
+            link_quit();
+            return fail("cbb next link did not start on the Pi", line);
+        }
     }
     if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
     printf("The Pi's network runs through\nthe ESP in the background.\n");
@@ -376,12 +390,9 @@ static int net_start(int argc, char **argv)
 
 static int net_stop(void)
 {
-    // The quit frame: the start byte, Q, no data, the sum.
-    static const uint8_t quit[] = {0x7E, 'Q', 0, 'Q'};
-    uint8_t i;
     if (!net_on()) return fail("the network does not run", 0);
     driver(DRV_SWITCH, 0);
-    for (i = 0; i < sizeof quit; i++) link_send(quit[i]);
+    link_quit();
     if (link_shell()) return fail("the network stopped, but the Pi does not answer", "no SUP> prompt");
     printf("The network stopped.\n");
     return 0;

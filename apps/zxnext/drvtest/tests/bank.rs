@@ -373,3 +373,23 @@ fn bytes_one_at_a_time() {
     d.interrupt();
     assert_eq!(d.next.esp.tx, b"AT\r\nAT\r\nAT\r\n");
 }
+
+/// A second run counts the Pi's bytes from 0 again, as the link does: an
+/// ack with the count of the run before would close the link's window.
+#[test]
+fn turned_on_again_counts_from_zero() {
+    let mut d = Driver::new();
+    d.on();
+    d.next.pi.rx.extend(b"cbb next link\r\n");
+    d.next.pi.rx.extend(frame(b'Q', b""));
+    d.interrupt();
+    d.pi_frames();
+    d.on();
+    d.call(0xE000, 0x0100, 0);
+    assert_eq!(d.cpu.registers().get16(Reg16::HL), 0, "bytes taken");
+    d.next.pi.rx.push_back(b'\n'); // the end of CBBLINK's line
+    d.interrupt();
+    let f = d.pi_frames();
+    assert_eq!(kinds(&f), "AHT", "{f:?}");
+    assert_eq!(f[0].1, 1u16.to_le_bytes(), "the first ack counts this run only");
+}
