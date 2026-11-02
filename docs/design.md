@@ -456,7 +456,9 @@ human message; a secret never appears in `message`.
   with cgo.
 - Targets: `linux/amd64`, `linux/arm64`, `linux/arm` with ARMv7 and ARMv6, `darwin/arm64`,
   `darwin/amd64`, `windows/amd64` and `windows/arm64` (`cbb.exe`, and `cbbw.exe` linked with
-  `-H windowsgui` for the agent).
+  `-H windowsgui` for the agent). The tray app (`apps/desktop`) goes in the Windows archives
+  and, built with cgo on a runner of each architecture for GTK 4 and WebKitGTK, in the
+  `linux/amd64` and `linux/arm64` archives.
 - The Raspberry Pi Zero W (ARMv6) cannot run Ubuntu; it runs Raspberry Pi OS. Clipboard Bridge
   does not depend on distribution specifics. The systemd units use directives from systemd
   248 and later and are checked with `systemd-analyze verify`.

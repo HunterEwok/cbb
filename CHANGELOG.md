@@ -7,6 +7,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- The tray app comes with the release: the Windows installer puts it in Program Files, starts
+  it at every sign-in and adds Clipboard Bridge to the Start menu; on Linux (x86-64 and
+  ARM64) the installer adds it with an autostart entry and a menu entry when the desktop has
+  GTK 4 and WebKitGTK 6.0, and names the packages otherwise. The uninstallers remove it.
 - A single-colour glyph for the Mac's menu bar and the tray on Windows and Linux: the app icon's
   clipboard and key, in three states (no group, in a group, another device online). `tools/icon`
   makes the Mac's template images, the symbolic SVGs for Linux and white and black ICOs for

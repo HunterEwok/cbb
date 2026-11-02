@@ -345,7 +345,7 @@ secret the release still succeeds and warns that there is no feed.
 
 ## Signing for Windows
 
-The release workflow signs `cbb.exe` and `cbbw.exe` with Authenticode (`osslsigncode`, SHA-256,
+The release workflow signs `cbb.exe`, `cbbw.exe` and the tray app `cbb-desktop.exe` with Authenticode (`osslsigncode`, SHA-256,
 a timestamp from DigiCert) when the secrets hold a code signing certificate; without it they
 stay unsigned and SmartScreen warns on the first start. Setting it up, once:
 
@@ -367,7 +367,7 @@ which signs open-source projects for free with its own certificate:
   from tags, the code-signing policy page they ask for).
 - [ ] Once accepted, they give an organization id, a project slug and a signing policy; put
   `SIGNPATH_API_TOKEN` in the Actions secrets and the ids in Actions variables.
-- [ ] The release workflow then uploads the unsigned `cbb.exe` and `cbbw.exe` as an
+- [ ] The release workflow then uploads the unsigned `cbb.exe`, `cbbw.exe` and `cbb-desktop.exe` as an
   artifact, submits it with SignPath's GitHub action, and archives the signed programs it
   gets back, in place of the `osslsigncode` step (which stays for a bought certificate).
 

@@ -350,9 +350,14 @@ service and its clipboard agent keep syncing without it.
 - Languages: English and Russian (`frontend/l10n/ru.json`, keyed by the English text; the Go
   side reads it for the tray), picked from the system's language.
 
-CI's `tray app` jobs vet, test and build it on Linux and Windows. The installers do not carry
-it yet, and it does not start at sign-in by itself; not yet run on a real desktop beyond a
-virtual X display.
+CI's `tray app` jobs vet, test and build it on Linux and Windows. The release archives carry
+it: Windows' (`cbb-desktop.exe`, built without cgo beside `cbb.exe` and signed with it), whose
+`install.ps1` starts it at every sign-in (the Run value `clipboardbridge tray`) and puts
+"Clipboard Bridge" in the Start menu; and Linux's for amd64 and arm64 (`cbb-desktop`, built
+with cgo on a runner of each architecture), whose `install.sh` adds it with its autostart
+entry and applications menu entry when `ldd` finds GTK 4 and WebKitGTK 6.0, and otherwise
+names the packages and installs the rest. It starts with its window hidden. Run in the
+Windows 11 virtual machine; not yet on a real desktop beyond a virtual X display on Linux.
 
 ## Android: the clipboard without taps
 
