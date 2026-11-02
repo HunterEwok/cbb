@@ -49,9 +49,10 @@ updates:
       # godbus 5.2 (up to 5.2.4) panics in its reading goroutine on a message with an array of
       # file descriptors (`ah`): the array is made of UnixFDIndex but filled with UnixFD. Any
       # peer on the session bus could stop the service that way, and the tests of the
-      # FileTransfer portal do. Lift this when a release decodes `ah` again.
+      # FileTransfer portal do. Only the versions known to panic are skipped: a newer one comes
+      # as a pull request, and CI's tests of the portal tell whether it decodes `ah` again.
       - dependency-name: "github.com/godbus/dbus/v5"
-        versions: ["5.2.x"]
+        versions: [">= 5.2.0, <= 5.2.4"]
     groups:
       go:
         patterns: ["*"]
@@ -74,9 +75,10 @@ updates:
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       # trouble-host 0.8 builds on bt-hci 0.10, while esp-radio's BLE controller (esp-hal's
       # pinned commit, and its main branch) implements bt-hci 0.9, so the firmware's Bluetooth
-      # keyboard does not build with it. Lift this when esp-radio moves to bt-hci 0.10.
+      # keyboard does not build with it. Only 0.8 is skipped: a newer one comes as a pull
+      # request, and CI's firmware build tells whether it fits esp-radio by then.
       - dependency-name: "trouble-host"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        versions: ["0.8.x"]
     groups:
       cargo:
         patterns: ["*"]
