@@ -25,7 +25,7 @@
 #include "frame.h"
 #include "link.h"
 
-#define VERSION "0.4.1"
+#define VERSION "0.4.2"
 // Rings for each direction: the UARTs' own buffers are small, so the Z80
 // takes in what arrives at once and passes it on as the other side has
 // room, one byte at a time, without waiting on either.
@@ -323,8 +323,8 @@ static uint32_t copy_file(const char *from, const char *to)
     return crc;
 }
 
-// When the file exists (NextZXOS keeps a running dot command's file from
-// being renamed over), its contents are replaced instead and read back;
+// When the file exists and cannot be renamed over, its contents are
+// replaced instead and read back;
 // UPDATE.TMP goes only once the copy checks out, so a failure never leaves
 // the folder without either file.
 static const char *replace(const char *name, uint32_t want)
@@ -579,6 +579,11 @@ static int run(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
+    // NextZXOS leaves a dot command's file open while it runs, and an open
+    // file cannot be renamed, deleted or written; the startup code has
+    // loaded every page by now, so the bridge lets its file go, and an
+    // update can replace the bridge itself.
+    esx_f_close(esx_m_gethandle());
     speed = 0xFF;
     run(argc, argv);
     if (speed != 0xFF) nextreg_set(NR_CPU_SPEED, speed);

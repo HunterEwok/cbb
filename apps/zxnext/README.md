@@ -77,7 +77,9 @@ and the CRC-32 in 8 hex digits as zlib computes it. The bridge answers `CBBU GO`
 file in blocks of 256 bytes, answering `+` after writing each, so the computer sends the
 next block only then; it writes to `UPDATE.TMP` and replaces the file only when the CRC-32
 matches, then answers `CBBU OK` or `CBBU ERR` with the cause. The Pi waits (XOFF) meanwhile.
-Before the first such update, copy the bridge to the card once, for example with NextZXOS's
+NextZXOS keeps a running dot command's file open, and an open file cannot be renamed or
+written, so the bridge closes its own file once it has loaded (from 0.4.2); the new version
+runs from the next start. Before the first such update, copy the bridge to the card once, for example with NextZXOS's
 `.http`, which downloads through the same ESP.
 
 ## Build
