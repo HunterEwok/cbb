@@ -8,6 +8,7 @@ import java.security.SecureRandom
 import java.security.Signature
 import java.time.Instant
 import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -55,7 +56,7 @@ class FakePivCard(val aes: Boolean = false, val metadata: Boolean = true) : Smar
     private val block get() = if (aes) 16 else 8
 
     private fun crypt(mode: Int, b: ByteArray) =
-        Cipher.getInstance("$cipher/ECB/NoPadding").run { init(mode, SecretKeySpec(managementKey, cipher)); doFinal(b) }
+        Cipher.getInstance("$cipher/CBC/NoPadding").run { init(mode, SecretKeySpec(managementKey, cipher), IvParameterSpec(ByteArray(block))); doFinal(b) }
 
     override fun transmit(apdu: ByteArray): ByteArray {
         val cla = apdu[0].toInt() and 0xff
