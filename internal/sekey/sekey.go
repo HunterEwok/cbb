@@ -84,12 +84,12 @@ func Load(blob []byte) (*Key, error) {
 }
 
 func newKey(r ref, blob, pub []byte) (*Key, error) {
-	x, y := elliptic.Unmarshal(elliptic.P256(), pub) //nolint:staticcheck // the enclave gives the uncompressed point
-	if x == nil {
+	p, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), pub)
+	if err != nil {
 		r.release()
-		return nil, errors.New("sekey: the enclave gave a public key that is not on P-256")
+		return nil, fmt.Errorf("sekey: the enclave gave a public key that is not on P-256: %w", err)
 	}
-	return &Key{blob: blob, pub: &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, ref: r}, nil
+	return &Key{blob: blob, pub: p, ref: r}, nil
 }
 
 // Blob returns what to store of the key.
