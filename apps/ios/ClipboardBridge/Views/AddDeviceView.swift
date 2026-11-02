@@ -14,6 +14,8 @@ struct AddDeviceView: View {
     @State private var typed = ""
     /// The device being admitted; leaving the sheet cancels it.
     @State private var adding: Task<Void, Never>?
+    @State private var askingCard = false
+    @State private var pin = ""
 
     init(restore: Bool = false) { self.restore = restore }
 
@@ -49,6 +51,11 @@ struct AddDeviceView: View {
                     .buttonStyle(AccentButtonStyle())
                     .disabled(typed.isEmpty || model.busy)
                 }
+                if restore && YubiKeyNfc.available {
+                    Button { askingCard = true } label: { Text("Use a YubiKey instead") }
+                        .buttonStyle(GlassButtonStyle())
+                        .disabled(model.busy)
+                }
                 if model.busy {
                     ProgressView { Text("Connecting to the device…") }
                 } else if let message = model.message {
@@ -63,9 +70,27 @@ struct AddDeviceView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
+            .alert(Text("Restore with a YubiKey"), isPresented: $askingCard) {
+                YubiKeyPinField(pin: $pin)
+                Button { restoreWithCard() } label: { Text("Hold the YubiKey") }.disabled(!YubiKeyPinField.fits(pin))
+                Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
+            } message: {
+                Text("Type the YubiKey's PIN, then hold the YubiKey to the top of the phone: once for this phone's certificate and, once a computer of the group answered, again for the claim. Keep this phone on the network of a computer of the group.")
+            }
             // The Home screen's last line is not this sheet's, as on Android.
             .onAppear { model.message = nil }
             .onDisappear { adding?.cancel() }
+        }
+    }
+
+    /// Restores the group with the recovery key on a YubiKey.
+    private func restoreWithCard() {
+        guard adding == nil else { return }
+        let pin = pin
+        self.pin = ""
+        adding = Task {
+            if await model.restoreWithCard(pin: pin) { dismiss() }
+            adding = nil
         }
     }
 

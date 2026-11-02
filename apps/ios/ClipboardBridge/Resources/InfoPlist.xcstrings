@@ -33,6 +33,16 @@
           }
         }
       }
+    },
+    "NFCReaderUsageDescription": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clipboard Bridge записывает ключ восстановления вашей группы на YubiKey и восстанавливает группу с ним."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

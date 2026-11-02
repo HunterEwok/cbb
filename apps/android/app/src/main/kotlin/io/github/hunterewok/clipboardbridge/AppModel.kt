@@ -22,6 +22,7 @@ import io.github.hunterewok.clipboardbridge.kit.PairingJoiner
 import io.github.hunterewok.clipboardbridge.kit.PairingMember
 import io.github.hunterewok.clipboardbridge.kit.Pairing
 import io.github.hunterewok.clipboardbridge.kit.PhoneGroup
+import io.github.hunterewok.clipboardbridge.kit.Piv
 import io.github.hunterewok.clipboardbridge.kit.Restore
 import io.github.hunterewok.clipboardbridge.kit.TLSTransport
 import kotlinx.coroutines.CancellationException
@@ -142,6 +143,9 @@ class AppModel(private val app: Context) {
 
     /** What the last change to the recovery key said. */
     var recoveryNote by mutableStateOf<Note?>(null)
+
+    /** What the screen asks while the phone waits for a YubiKey over NFC: a string, or null when it does not wait. */
+    var cardPrompt by mutableStateOf<Int?>(null)
         private set
 
     /** What the last try to make the watch an admin said. */
@@ -844,6 +848,56 @@ class AppModel(private val app: Context) {
         return sheet
     }
 
+    /**
+     * Puts the group's recovery key on a YubiKey held to the phone; true
+     * when it is there, with recoveryNote saying so, or why not.
+     */
+    suspend fun makeRecoveryOnCard(pin: String): Boolean {
+        val ok = try {
+            cardPrompt = R.string.yubikey_hold
+            group.makeRecoveryOnCard(pin)
+            recoveryNote = Note(R.string.yubikey_made)
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            recoveryNote = describe(e)
+            false
+        } finally {
+            cardPrompt = null
+        }
+        update()
+        return ok
+    }
+
+    /**
+     * Restores the group with the recovery key on a YubiKey, on a phone
+     * without a group, as [restore] does with the sheet.
+     */
+    suspend fun restoreWithCard(pin: String): Boolean {
+        if (phase != Phase.START) {
+            message = Note(R.string.error_restore_has_group, error = true)
+            return false
+        }
+        busy = true
+        try {
+            cardPrompt = R.string.yubikey_hold
+            group.restoreWithCard(pin) { cardPrompt = R.string.yubikey_hold_again }
+            phase = Phase.HOME
+            message = Note(R.string.restore_started)
+            return true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+            return false
+        } finally {
+            cardPrompt = null
+            busy = false
+            update()
+        }
+    }
+
     /** Removes the group's recovery key. */
     suspend fun removeRecovery() {
         recoveryNote = try {
@@ -1021,6 +1075,18 @@ class AppModel(private val app: Context) {
                 Restore.Kind.NOT_THE_KEY -> R.string.error_restore_not_the_key
                 Restore.Kind.NOT_A_MEMBER -> R.string.error_restore_not_a_member
             }
+            is Piv.Failure -> when (e.kind) {
+                Piv.Kind.NO_PIV -> R.string.error_yubikey_no_piv
+                Piv.Kind.WRONG_PIN -> R.string.error_yubikey_wrong_pin
+                Piv.Kind.BLOCKED -> R.string.error_yubikey_blocked
+                Piv.Kind.MANAGEMENT_KEY -> R.string.error_yubikey_management_key
+                Piv.Kind.OLD_FIRMWARE -> R.string.error_yubikey_old
+                Piv.Kind.NO_FREE_SLOT -> R.string.error_yubikey_full
+                Piv.Kind.NO_KEY -> R.string.error_yubikey_no_key
+                Piv.Kind.CARD -> R.string.error_yubikey
+            }
+            is YubiKeyNfc.Unavailable -> if (e.off) R.string.error_nfc_off else R.string.error_no_nfc
+            is YubiKeyNfc.NoCard -> R.string.error_yubikey_none
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large
             is Arrangement.Refused -> R.string.error_arrangement

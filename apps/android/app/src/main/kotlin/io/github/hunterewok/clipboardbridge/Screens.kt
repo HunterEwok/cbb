@@ -472,6 +472,28 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
             modifier = Modifier.fillMaxWidth(),
         )
         AccentButton(stringResource(if (restore) R.string.restore_go else R.string.add), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
+        if (restore) {
+            var askingPin by remember { mutableStateOf(false) }
+            QuietButton(stringResource(R.string.yubikey_restore), onClick = { askingPin = true }, enabled = !model.busy)
+            if (askingPin) {
+                YubiKeyPinDialog(
+                    stringResource(R.string.yubikey_restore_title),
+                    stringResource(R.string.yubikey_restore_body),
+                    dismiss = { askingPin = false },
+                ) { pin ->
+                    if (adding == null) {
+                        adding = scope.launch {
+                            try {
+                                if (model.restoreWithCard(pin)) close()
+                            } finally {
+                                adding = null
+                            }
+                        }
+                    }
+                }
+            }
+            YubiKeyPrompt(model) { adding?.cancel() }
+        }
         if (model.busy) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)

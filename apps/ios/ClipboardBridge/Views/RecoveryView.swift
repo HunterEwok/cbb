@@ -14,16 +14,20 @@ struct RecoverySection: View {
     @State private var sheet: Core.RecoverySheet?
     @State private var askingReplace = false
     @State private var askingRemove = false
+    @State private var askingCard = false
+    @State private var pin = ""
 
     var body: some View {
         Section {
             if let made = model.recoveryMade {
                 Text("Made on \(made.formatted(date: .long, time: .omitted)).")
                 Button { askingReplace = true } label: { Text("Make a new recovery key") }
+                cardButton
                 Button(role: .destructive) { askingRemove = true } label: { Text("Remove the recovery key") }
             } else {
                 Text("None yet.").foregroundStyle(palette.textDim)
                 Button { make() } label: { Text("Make a recovery key") }
+                cardButton
             }
         } header: {
             Text("Recovery key")
@@ -43,9 +47,29 @@ struct RecoverySection: View {
         } message: {
             Text("The sheet printed for it stops working. Without a recovery key, losing every phone with this group loses the group.")
         }
+        .alert(Text("Put the recovery key on a YubiKey?"), isPresented: $askingCard) {
+            YubiKeyPinField(pin: $pin)
+            Button { putOnCard() } label: { Text("Hold the YubiKey") }.disabled(!YubiKeyPinField.fits(pin))
+            Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
+        } message: {
+            Text("The YubiKey makes the key in a free slot, and it never leaves the YubiKey. Type the YubiKey's PIN, then hold the YubiKey to the top of the phone. It replaces the recovery key the group has.")
+        }
         .fullScreenCover(item: Binding(get: { sheet.map(Shown.init) }, set: { if $0 == nil { sheet = nil } })) { shown in
             RecoverySheetView(sheet: shown.sheet, made: Date()) { sheet = nil }
         }
+    }
+
+    /// Putting the key on a YubiKey, where the phone has NFC.
+    @ViewBuilder private var cardButton: some View {
+        if YubiKeyNfc.available {
+            Button { askingCard = true } label: { Text("Put it on a YubiKey") }
+        }
+    }
+
+    private func putOnCard() {
+        let pin = pin
+        self.pin = ""
+        Task { _ = await model.makeRecoveryOnCard(pin: pin) }
     }
 
     private func make() {
@@ -188,5 +212,21 @@ struct RecoveryPage: View {
         out.closePDF()
         try (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
         return url
+    }
+}
+
+/// The YubiKey's PIN, typed in an alert before the phone waits for the
+/// card; it stays in memory only until the card took it.
+struct YubiKeyPinField: View {
+    @Binding var pin: String
+
+    /// A PIV PIN has six to eight characters, not only digits.
+    static func fits(_ pin: String) -> Bool { (6...8).contains(pin.utf8.count) }
+
+    var body: some View {
+        SecureField(String(localized: "YubiKey PIN", bundle: .app), text: $pin)
+            .keyboardType(.asciiCapable)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
     }
 }

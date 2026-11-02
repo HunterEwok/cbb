@@ -42,6 +42,7 @@ import io.github.hunterewok.clipboardbridge.kit.PhoneGroup
 import io.github.hunterewok.clipboardbridge.kit.PhoneHub
 import io.github.hunterewok.clipboardbridge.kit.RecordStore
 import io.github.hunterewok.clipboardbridge.kit.Records as KitRecords
+import io.github.hunterewok.clipboardbridge.kit.Piv
 import io.github.hunterewok.clipboardbridge.kit.Restore
 import io.github.hunterewok.clipboardbridge.kit.ServerCredentials
 import io.github.hunterewok.clipboardbridge.kit.SyncEngine
@@ -856,10 +857,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
-    /** The addresses of the computers of the group with tag that mDNS finds within BROWSE_MS. */
-    private suspend fun findComputers(tag: String): List<InetSocketAddress> {
+    /** The addresses of the computers of the group with tag, or of any group with null, that mDNS finds within BROWSE_MS. */
+    private suspend fun findComputers(tag: String?): List<InetSocketAddress> {
         val members = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
-        val b = NsdBrowser(context) { found -> members.set(found.filter { it.group == tag }.map { it.device }.toSet()) }
+        val b = NsdBrowser(context) { found -> members.set(found.filter { tag == null || it.group == tag }.map { it.device }.toSet()) }
         try {
             b.start()
             withTimeoutOrNull(BROWSE_MS) {
@@ -1350,6 +1351,94 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         withContext(Dispatchers.IO) { adopt(g) }
         published(listOf(r))
     }
+
+    /**
+     * Puts the group's recovery key on a YubiKey held to the phone (NFC):
+     * after the fingerprint, the face or the screen lock, the card checks
+     * pin, makes a key in its first free retired PIV slot, the root issues
+     * it an admin CA, which goes into the slot, and signs the `recovery`
+     * record (docs/protocol.md, section 10, "On a hardware key"). The key
+     * never leaves the YubiKey. It returns the slot.
+     */
+    suspend fun makeRecoveryOnCard(pin: String): Int {
+        if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
+        val root = caSigner(R.string.reason_make_recovery)
+        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
+        val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
+        val (slot, record) = YubiKeyNfc.withCard(ui) { card ->
+            Piv.select(card)
+            Piv.verify(card, pin)
+            Piv.authenticate(card)
+            val slot = Piv.freeSlot(card)
+            val (ca, r) = g.makeRecoveryOnCard(Piv.generate(card, slot), root, Instant.now())
+            Piv.putCertificate(card, slot, ca)
+            slot to r
+        }
+        withContext(Dispatchers.IO) { adopt(g) }
+        published(listOf(record))
+        return slot
+    }
+
+    /**
+     * Restores the group on this new phone with the recovery key on a
+     * YubiKey (docs/protocol.md, section 10, "On a hardware key"): the
+     * card, held once, issues this phone's member certificate from the
+     * slot whose certificate is an admin CA; the phone finds the group's
+     * computers by mDNS, takes and checks the records from one, and the
+     * card, held again, signs the claim. waitForSecondTap tells the screen
+     * to ask for it.
+     */
+    suspend fun restoreWithCard(pin: String, waitForSecondTap: () -> Unit) {
+        if (hasGroup) return
+        if (withContext(Dispatchers.IO) { LocalAddresses.current() }.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
+        val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
+        val member = withContext(Dispatchers.IO) { memberSigner() }
+        // One Restore for each key the card holds; the records say which is the group's.
+        val restores = YubiKeyNfc.withCard(ui) { card ->
+            Piv.select(card)
+            val keys = Piv.recoveryKeys(card)
+            if (keys.isEmpty()) throw Piv.Failure(Piv.Kind.NO_KEY, "this YubiKey holds no recovery key")
+            keys.map { (slot, cert) ->
+                Restore.onCard(Piv.Signer(card, slot, CertificateInfo(cert).publicKey, pin), cert, member.publicKeyDER, Instant.now()) to slot
+            }
+        }
+        val computers = findComputers(null)
+        val (r, slot, g, dial) = withContext(Dispatchers.IO) {
+            var last: Exception = Failure(Failure.Kind.NO_GROUP_COMPUTER)
+            for (addr in computers) for ((r, slot) in restores) {
+                // The handshake takes any certificate; Restore.group checks the computer's against the records.
+                val dial = { TLSTransport.dial(addr.hostString, addr.port, Member.ALPN, member.privateKey, r.chain) { it.isNotEmpty() } }
+                try {
+                    val g = r.group(Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now()), Instant.now())
+                    return@withContext Found(r, slot, g, dial)
+                } catch (e: Restore.Failure) {
+                    last = e
+                } catch (e: IOException) {
+                    last = e
+                }
+            }
+            throw last
+        }
+        val root = withContext(Dispatchers.IO) { Keys.create(context, Keys.ROOT, g.tag) }
+        val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
+        waitForSecondTap()
+        val claim = YubiKeyNfc.withCard(ui) { card ->
+            Piv.select(card)
+            r.claim(g, newRoot, Instant.now(), Piv.Signer(card, slot, CertificateInfo(r.adminCA).publicKey, pin))
+        }
+        withContext(Dispatchers.IO) {
+            synchronized(lock) {
+                newDeviceMode()
+                g.save(file)
+                state = g
+            }
+            runCatching { Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now(), send = listOf(claim)) }
+                .onFailure { Log.w(TAG, "sending the claim; sync sends it later", it) }
+            startSync()
+        }
+    }
+
+    private data class Found(val restore: Restore, val slot: Int, val group: PhoneGroup, val dial: () -> TLSTransport)
 
     /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */
     suspend fun removeRecovery() {

@@ -4,6 +4,9 @@
 
     <!-- The fingerprint or face before the group's keys sign. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- The group's recovery key on a YubiKey, held to the phone. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <!-- The computers on the home network: mDNS and the member connections. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
