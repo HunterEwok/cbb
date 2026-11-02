@@ -7,6 +7,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- The group's key level is a setting: `cbb keys proven|hardware|files` on a root computer
+  sets which devices may be the group's root, an admin or a hub, and `cbb keys` and `cbb
+  status` show it. `cbb admin`, `cbb hubs` and a hub's own tunnel check it; a group whose
+  root key is in a file starts at `files`, and its root cannot set a level its own key does
+  not pass (docs/guide/keys.md, "The three levels").
 - A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both
@@ -1044,6 +1049,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and credentials) give way to the `v2-*.json` vectors of the same cases.
 
 ### Fixed
+- A new root after a takeover signs the old root's settings again, so the group keeps its
+  takeover delay and key level instead of falling back to the defaults.
 
 - On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
   network, instead of doing nothing.

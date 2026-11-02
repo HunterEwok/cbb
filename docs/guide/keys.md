@@ -81,8 +81,10 @@ The levels above are the design; this version builds part of it:
 
 - Android phones prove their keys, and the root checks the proof and Google's list. The
   copy on `cbb.tools` starts once the project's signing keys exist.
-- The levels are not a setting yet. Groups work as at level 2, and a computer becomes an
-  admin only with the warning of level 3, unless it is a Linux computer with a TPM.
+- The level is a setting of `cbb keys` on a root computer; the phone apps' setting comes
+  next. A group made on a computer whose root key is in a file starts at level 3, since its
+  root does not pass level 2 itself; a group made on a phone starts at level 2. Level 1
+  does not yet ask the services outside your home.
 - Linux computers with a TPM keep their member and admin keys in it, from the moment they
   join a group; a computer that joined earlier keeps its file until it joins again. The
   group's root key on a computer, Macs (the Secure Enclave), Windows PCs (the TPM) and App

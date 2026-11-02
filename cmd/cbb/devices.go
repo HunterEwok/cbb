@@ -164,6 +164,59 @@ func cmdTakeoverDelay(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// cmdKeys shows the group's key level or sets it on the group's root:
+// which keys may be its root, an admin or a hub.
+func cmdKeys(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 1 || len(args) == 1 && helpFlag(args[0]) {
+		fmt.Fprintln(stderr, "cbb: usage: cbb keys [proven|hardware|files]")
+		return 2
+	}
+	if len(args) == 0 {
+		c, err := control.DialFor(control.OpStatus)
+		if err != nil {
+			return fail(stderr, err)
+		}
+		defer c.Close()
+		m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpStatus}})
+		if err != nil {
+			return fail(stderr, err)
+		}
+		if m.Status == nil || m.Status.Group == "" {
+			fmt.Fprintln(stderr, "cbb: this device is in no group")
+			return 1
+		}
+		fmt.Fprintln(stdout, keyLevelLine(m.Status.KeyLevel))
+		return 0
+	}
+	c, err := control.DialFor(control.OpKeyLevel)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	defer c.Close()
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpKeyLevel, Value: args[0]}})
+	if err != nil {
+		return fail(stderr, err)
+	}
+	fmt.Fprintln(stdout, keyLevelLine(args[0]))
+	if len(m.Below) > 0 {
+		fmt.Fprintf(stdout, "Below it: %s. They stay until you remove them (cbb revoke) or take back their admin or hub role.\n", strings.Join(m.Below, ", "))
+	}
+	return 0
+}
+
+// keyLevelLine tells what the group's key level lets in.
+func keyLevelLine(level string) string {
+	switch level {
+	case "proven":
+		return "Key level proven: only keys that attestation proves are in hardware may be the group's root, an admin or a hub."
+	case "hardware":
+		return "Key level hardware: only keys in hardware (a TPM, the Secure Enclave, a phone's keystore) may be the group's root, an admin or a hub."
+	case "files":
+		return "Key level files: keys in files may be the group's root, an admin or a hub too, each after a warning."
+	}
+	return ""
+}
+
 // cmdHubs sets the group's main hubs, in the order they serve.
 func cmdHubs(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || len(args) == 1 && helpFlag(args[0]) {

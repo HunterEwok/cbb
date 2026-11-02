@@ -50,6 +50,7 @@ const (
 	OpAdmin       = "admin"          // client → service: on the root, make the device Name names an admin
 	OpTakeover    = "takeover"       // client → service: on an admin, take the group over from the lost root Name names
 	OpDelay       = "takeover-delay" // client → service: on the root, set how long a claim waits to Value, a duration
+	OpKeyLevel    = "key-level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
 	OpRecovery    = "recovery"       // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
 	OpHandover    = "handover"       // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
@@ -147,6 +148,9 @@ type Header struct {
 	// Hubs, in hubs, are the group's main hubs in the order they serve, by
 	// name or device ID.
 	Hubs []string `json:"hubs,omitempty"`
+	// Below names, in the answer to key-level, the admins and hubs whose
+	// keys the new level would not let in: they stay until removed.
+	Below []string `json:"below,omitempty"`
 
 	// Keyboard, in keyboard on, are the Bluetooth keyboard's settings.
 	Keyboard *Keyboard `json:"keyboard,omitempty"`
@@ -233,6 +237,9 @@ type Conflict struct {
 type Status struct {
 	Device string `json:"device"`
 	Group  string `json:"group,omitempty"` // the group tag; empty when in no group
+	// KeyLevel is the group's key level: which keys may be its root, an
+	// admin or a hub (proven, hardware or files).
+	KeyLevel string `json:"key_level,omitempty"`
 	// Removed says that the group's records revoke this device: its
 	// members refuse it until it pairs again.
 	Removed bool `json:"removed,omitempty"`

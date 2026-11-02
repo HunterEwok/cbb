@@ -279,7 +279,7 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			fail(c, err)
 			return
 		}
-		reply(c, control.Header{Status: s.status(), Done: true}, nil)
+		reply(c, control.Header{Status: s.statusWithRemoved(), Done: true}, nil)
 	case control.OpPair:
 		s.pair(ctx, c, r)
 	case control.OpPairPhone:
@@ -356,6 +356,13 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			return
 		}
 		reply(c, control.Header{Done: true}, nil)
+	case control.OpKeyLevel:
+		below, err := s.setKeyLevel(m.Value)
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Below: below, Done: true}, nil)
 	case control.OpHubs:
 		if err := s.setHubs(m.Hubs); err != nil {
 			fail(c, err)
@@ -504,6 +511,10 @@ func (s *Service) groupStatus(st *control.Status) {
 		return
 	}
 	gs := s.records.State()
+	st.KeyLevel = gs.KeyLevel
+	if st.KeyLevel == "" {
+		st.KeyLevel = LevelHardware
+	}
 	if gs.Stop != authority.StopNone {
 		st.Stop = gs.Stop
 	}
@@ -680,6 +691,13 @@ func (s *Service) createGroup() (*group.Identity, error) {
 		return nil, fmt.Errorf("creating the group: %w", err)
 	}
 	s.logf("cbb: created a new group %s", group.Tag(id.GroupCA.Cert))
+	// A root whose key is in a file does not pass the level hardware
+	// itself, so its group starts at the level files.
+	if s.keyStore(id) == group.StoreFile {
+		if _, err := s.setKeyLevel(LevelFiles); err != nil {
+			s.logf("cbb: setting the new group's key level: %v", err)
+		}
+	}
 	return id, nil
 }
 
