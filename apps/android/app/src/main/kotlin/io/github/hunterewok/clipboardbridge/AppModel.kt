@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.hunterewok.clipboardbridge.kit.GroupAlert
 import io.github.hunterewok.clipboardbridge.kit.Arrangement
+import io.github.hunterewok.clipboardbridge.kit.Core
 import io.github.hunterewok.clipboardbridge.kit.Content
 import io.github.hunterewok.clipboardbridge.kit.InvitationWindow
 import io.github.hunterewok.clipboardbridge.kit.JoinCode
@@ -120,6 +121,14 @@ class AppModel(private val app: Context) {
 
     /** What turning it on or off said, when it failed. */
     var awayNote by mutableStateOf<Note?>(null)
+        private set
+
+    /** When the group's recovery key was made, on the root phone while the group has one. */
+    var recoveryMade by mutableStateOf<java.time.Instant?>(null)
+        private set
+
+    /** What the last change to the recovery key said. */
+    var recoveryNote by mutableStateOf<Note?>(null)
         private set
 
     /** What the last try to make the watch an admin said. */
@@ -371,6 +380,7 @@ class AppModel(private val app: Context) {
         val (root, a) = withContext(Dispatchers.IO) { group.isRoot to group.alerts }
         isRoot = root
         alerts = a
+        recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
         notifier.observe(d)
         away = group.awayFromHome?.let { a ->
             // The last failure only while it is still trying; once connected or at home it is old news.
@@ -710,6 +720,37 @@ class AppModel(private val app: Context) {
             Note(R.string.watch_not_reachable, error = true)
         } catch (e: WatchLink.NotProtected) {
             Note(R.string.watch_not_protected, error = true)
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
+    /**
+     * Makes the group's recovery key and returns its sheet, which only the
+     * screen that shows it keeps; null when it failed, with recoveryNote
+     * saying why.
+     */
+    suspend fun makeRecovery(): Core.RecoverySheet? {
+        val sheet = try {
+            group.makeRecovery().also { recoveryNote = null }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            recoveryNote = describe(e)
+            null
+        }
+        update()
+        return sheet
+    }
+
+    /** Removes the group's recovery key. */
+    suspend fun removeRecovery() {
+        recoveryNote = try {
+            group.removeRecovery()
+            Note(R.string.recovery_removed)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             describe(e)
         }

@@ -11,6 +11,17 @@ All notable changes to clipboardbridge are documented in this file. The format f
   with the recovery key typed from the sheet (or its QR code's text) and becomes the root after
   the group's wait, unless the root phone cancels the claim. `cbb handover NAME`, on the root,
   lets an admin, as a new phone, take the group over at once.
+- The recovery sheet's format in the Rust core: a QR code with the recovery key, its admin CA
+  and the group's tag, and the key as text in groups of four with a check group, which the core
+  makes and reads (`recovery_sheet`, `read_recovery_sheet`; docs/protocol.md, section 10). The
+  phones' kits make the group's recovery key with its admin CA and `recovery` record, and remove
+  it.
+- The Android app makes the group's recovery key on the root phone (Settings, "Recovery key"):
+  it shows the sheet once, out of screenshots, prints it or saves it as a PDF through Android's
+  printing, and makes a new key or removes it.
+- The iPhone app makes the recovery key: Settings, "Recovery key" on the root phone, after Face
+  ID. Its sheet shows once, to print or save as a PDF, and the phone forgets the key when it
+  closes; a new key replaces the old one, and the key can be removed.
 - The quick action `keyboard-layout` switches the layout a Linux computer's Bluetooth keyboard
   types in to the next one (`us`, `ru`), for when the device it types on switched its own; the
   apps show it as "Switch the keyboard's layout" once the computer's user turns it on.
@@ -760,6 +771,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Changed
 
+- Dependencies: der 0.8.3 for the lite member and the firmware, goldmark 1.8.6 (the website),
+  coder/websocket 1.8.15 (the tray app), the Android Gradle plugin 9.5.0 and Robolectric 4.17.
+  godbus stays at 5.1.0, as 5.2 panics on a message with an array of file descriptors, and
+  trouble-host at 0.7, as 0.8 needs a bt-hci that esp-radio does not implement yet; Dependabot
+  skips only those versions and proposes the next ones.
 - The Mac app lives in the menu bar only, as the tray app does on Windows and Linux: no Dock
   icon, no window at launch (the menu opens it), and it starts at login unless Settings turns
   that off. The menu bar and the tray show a single-colour glyph in three states, drawn

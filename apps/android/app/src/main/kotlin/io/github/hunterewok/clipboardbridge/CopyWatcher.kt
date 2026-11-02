@@ -192,7 +192,11 @@ class CopyWatcher : AccessibilityService() {
             ?: return InjectFailure(if (tv) "no text field has the focus on this TV: open a search or text field with the remote first" else "no text field has the focus on this phone")
         val ok = if (method == "paste") paste(node, text, secret) else insert(node, text)
         if (!ok) return InjectFailure("the text field took no text", refused = false)
-        if (enter && !node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) {
+        // Enter before Android 11 returned above; the check is repeated here for lint, which
+        // since the Android Gradle plugin 9.5 does not follow that return.
+        if (enter && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            !node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+        ) {
             return InjectFailure("the text is in, but the text field took no Enter", refused = false)
         }
         return null

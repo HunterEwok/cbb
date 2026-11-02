@@ -1868,6 +1868,24 @@ any more, and its claims do not count. A `revoke` of the key removes it (a root'
 an admin with `remove-admins`, as for any admin key). The state names the key in `recovery`
 while it is neither removed nor frozen.
 
+**The recovery sheet.** A recovery key on paper is a sheet with a QR code and a text, which
+the Rust core makes and reads (`recovery_sheet` and `read_recovery_sheet`, docs/core-api.md;
+`testdata/interop/recovery-sheet.json`):
+
+- The QR code is `clipboardbridge://recover?g=<group>&k=<key>&c=<admin CA>`: the group's tag
+  (16 lower-case hex digits), the private key's 32 bytes and its admin CA's DER, both in
+  base64url without padding. Each field once, no other field. It is enough on a new phone.
+- The text is the key's 32 bytes in Crockford's base32 (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`,
+  52 characters, the last 4 bits zero), then 4 check characters, the first 20 bits of
+  SHA-256 over `clipboardbridge recovery` and the 32 bytes, in groups of four joined by
+  hyphens. A reader takes lower case, spaces or no separators, `I` and `L` for `1` and `O` for
+  `0`. The text names no admin CA, so it needs a computer of the group, whose `recovery`
+  record has it.
+
+A reader refuses with `not_sheet` (neither form), `damaged`, `check` (a mistyped character),
+`key` (not a P-256 private key), `cert` (the admin CA cannot be read or is no CA), `mismatch`
+(the admin CA is not the key's) or `group`.
+
 The apps make the key and `cbb` claims with it in later changes; this section has the record
 and its rules.
 

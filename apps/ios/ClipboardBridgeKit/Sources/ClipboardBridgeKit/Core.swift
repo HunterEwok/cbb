@@ -125,6 +125,55 @@ public enum Core {
         return try run("seal_public", Args(secret: secret), as: Answer.self).key
     }
 
+    /// A recovery sheet (docs/protocol.md, section 10, "The recovery
+    /// key"): the QR code's text, the key in groups of four, and the key
+    /// hash the `recovery` record names.
+    public struct RecoverySheet: Decodable, Equatable, Sendable {
+        public var qr: String
+        public var text: String
+        public var admin: Data
+    }
+
+    /// The recovery sheet for key (its 32 bytes), its admin CA and the
+    /// group's tag.
+    public static func recoverySheet(key: Data, cert: Data, group: String) throws -> RecoverySheet {
+        struct Args: Encodable { var key: Data, cert: Data, group: String }
+        return try run("recovery_sheet", Args(key: key, cert: cert, group: group), as: RecoverySheet.self)
+    }
+
+    /// A recovery key read from a sheet: cert and group only from its QR
+    /// code.
+    public struct RecoveredKey: Decodable, Equatable, Sendable {
+        /// The private key's 32 bytes.
+        public var key: Data
+        public var pkcs8: Data
+        /// The public key, uncompressed.
+        public var `public`: Data
+        /// Its key hash, as the `recovery` record names it.
+        public var admin: Data
+        public var cert: Data?
+        public var group: String?
+    }
+
+    /// What read_recovery_sheet says of a text: the key, or why it is not
+    /// one, with a reason (not_sheet, damaged, check, key, cert, mismatch,
+    /// group) and a sentence for the user.
+    public enum SheetReading: Equatable, Sendable {
+        case key(RecoveredKey)
+        case refused(reason: String, message: String)
+    }
+
+    /// Reads what the user scanned or typed from a recovery sheet.
+    public static func readRecoverySheet(_ text: String) throws -> SheetReading {
+        struct Args: Encodable { var text: String }
+        struct Refused: Decodable { var reason: String, message: String }
+        struct Answer: Decodable { var sheet: RecoveredKey?, refused: Refused? }
+        let a = try run("read_recovery_sheet", Args(text: text), as: Answer.self)
+        if let s = a.sheet { return .key(s) }
+        guard let r = a.refused else { throw Mismatch(reason: "the answer to read_recovery_sheet has neither sheet nor refused") }
+        return .refused(reason: r.reason, message: r.message)
+    }
+
     /// checkBody, with a refusal in words for the log: the core's message
     /// and its details.
     static func bodyRefusal(_ kind: String, _ body: Data) -> String? {
