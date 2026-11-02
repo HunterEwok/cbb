@@ -99,7 +99,8 @@ func TestSignVerify(t *testing.T) {
 		{Type: authority.TypeCheckpoint, Group: tag, Seq: 1, Heads: []authority.Head{{Key: authority.Hash{2}, Seq: 4, ID: authority.Hash{7}}, {Key: authority.Hash{1}, Seq: 1, ID: authority.Hash{8}}}},
 		bigCheckpoint(),
 		{Type: authority.TypeHubs, Group: tag, Seq: 1, Hubs: []string{strings.Repeat("b", 32), strings.Repeat("a", 32)}},
-		{Type: authority.TypeRecovery, Group: tag, Seq: 1, Admin: &authority.Hash{6}},
+		{Type: authority.TypeRecovery, Group: tag, Seq: 1, Admin: ptr(authority.KeyHashOf(f.adminCA)), Cert: f.adminCA.Raw},
+		{Type: authority.TypeHandover, Group: tag, Seq: 1, Admin: &authority.Hash{6}},
 	}
 	for _, b := range bodies {
 		for _, admin := range []bool{false, true} {
@@ -226,22 +227,26 @@ func TestSignRefuses(t *testing.T) {
 			b.Admin, b.Powers = b.Key, []string{"everything"}
 			return b
 		}(),
-		"a delay over 7 days":        {Type: authority.TypeSettings, Group: tag, Seq: 1, TakeoverDelayMS: ptr(int64(authority.MaxDelay + 1))},
-		"a negative delay":           {Type: authority.TypeSettings, Group: tag, Seq: 1, TakeoverDelayMS: ptr(int64(-1))},
-		"an unknown key level":       {Type: authority.TypeSettings, Group: tag, Seq: 1, KeyLevel: "tpm"},
-		"revoke without seen":        {Type: authority.TypeRevoke, Group: tag, Seq: 1, Keys: []authority.Hash{{1}}},
-		"a claim without root":       {Type: authority.TypeClaim, Group: tag, Seq: 1, Seen: []authority.Seen{{Key: authority.Hash{1}}}},
-		"seen twice":                 {Type: authority.TypeRevoke, Group: tag, Seq: 1, Keys: []authority.Hash{{1}}, Seen: []authority.Seen{{Key: authority.Hash{1}}, {Key: authority.Hash{1}, Seq: 2}}},
-		"keys twice":                 {Type: authority.TypeRevoke, Group: tag, Seq: 1, Keys: []authority.Hash{{1}, {1}}, Seen: []authority.Seen{{Key: authority.Hash{1}}}},
-		"an unknown type":            {Type: "root", Group: tag, Seq: 1},
-		"a checkpoint without heads": {Type: authority.TypeCheckpoint, Group: tag, Seq: 1, Keep: []authority.Hash{{1}}},
-		"a head with seq 0":          {Type: authority.TypeCheckpoint, Group: tag, Seq: 1, Heads: []authority.Head{{Key: authority.Hash{1}, ID: authority.Hash{2}}}},
-		"heads twice":                {Type: authority.TypeCheckpoint, Group: tag, Seq: 1, Heads: []authority.Head{{Key: authority.Hash{1}, Seq: 1}, {Key: authority.Hash{1}, Seq: 2}}},
-		"hubs empty":                 {Type: authority.TypeHubs, Group: tag, Seq: 1},
-		"hubs twice":                 {Type: authority.TypeHubs, Group: tag, Seq: 1, Hubs: []string{strings.Repeat("a", 32), strings.Repeat("a", 32)}},
-		"a hub not a device ID":      {Type: authority.TypeHubs, Group: tag, Seq: 1, Hubs: []string{strings.Repeat("A", 32)}},
-		"a recovery without admin":   {Type: authority.TypeRecovery, Group: tag, Seq: 1},
-		"a recovery with a key":      {Type: authority.TypeRecovery, Group: tag, Seq: 1, Admin: &authority.Hash{6}, Key: &authority.Hash{7}},
+		"a delay over 7 days":            {Type: authority.TypeSettings, Group: tag, Seq: 1, TakeoverDelayMS: ptr(int64(authority.MaxDelay + 1))},
+		"a negative delay":               {Type: authority.TypeSettings, Group: tag, Seq: 1, TakeoverDelayMS: ptr(int64(-1))},
+		"an unknown key level":           {Type: authority.TypeSettings, Group: tag, Seq: 1, KeyLevel: "tpm"},
+		"revoke without seen":            {Type: authority.TypeRevoke, Group: tag, Seq: 1, Keys: []authority.Hash{{1}}},
+		"a claim without root":           {Type: authority.TypeClaim, Group: tag, Seq: 1, Seen: []authority.Seen{{Key: authority.Hash{1}}}},
+		"seen twice":                     {Type: authority.TypeRevoke, Group: tag, Seq: 1, Keys: []authority.Hash{{1}}, Seen: []authority.Seen{{Key: authority.Hash{1}}, {Key: authority.Hash{1}, Seq: 2}}},
+		"keys twice":                     {Type: authority.TypeRevoke, Group: tag, Seq: 1, Keys: []authority.Hash{{1}, {1}}, Seen: []authority.Seen{{Key: authority.Hash{1}}}},
+		"an unknown type":                {Type: "root", Group: tag, Seq: 1},
+		"a checkpoint without heads":     {Type: authority.TypeCheckpoint, Group: tag, Seq: 1, Keep: []authority.Hash{{1}}},
+		"a head with seq 0":              {Type: authority.TypeCheckpoint, Group: tag, Seq: 1, Heads: []authority.Head{{Key: authority.Hash{1}, ID: authority.Hash{2}}}},
+		"heads twice":                    {Type: authority.TypeCheckpoint, Group: tag, Seq: 1, Heads: []authority.Head{{Key: authority.Hash{1}, Seq: 1}, {Key: authority.Hash{1}, Seq: 2}}},
+		"hubs empty":                     {Type: authority.TypeHubs, Group: tag, Seq: 1},
+		"hubs twice":                     {Type: authority.TypeHubs, Group: tag, Seq: 1, Hubs: []string{strings.Repeat("a", 32), strings.Repeat("a", 32)}},
+		"a hub not a device ID":          {Type: authority.TypeHubs, Group: tag, Seq: 1, Hubs: []string{strings.Repeat("A", 32)}},
+		"a recovery without admin":       {Type: authority.TypeRecovery, Group: tag, Seq: 1},
+		"a recovery with a key":          {Type: authority.TypeRecovery, Group: tag, Seq: 1, Admin: &authority.Hash{6}, Key: &authority.Hash{7}},
+		"a recovery without cert":        {Type: authority.TypeRecovery, Group: tag, Seq: 1, Admin: &authority.Hash{6}},
+		"a recovery cert of another key": {Type: authority.TypeRecovery, Group: tag, Seq: 1, Admin: &authority.Hash{6}, Cert: f.adminCA.Raw},
+		"a handover without admin":       {Type: authority.TypeHandover, Group: tag, Seq: 1},
+		"a handover with seen":           {Type: authority.TypeHandover, Group: tag, Seq: 1, Admin: &authority.Hash{6}, Seen: []authority.Seen{{Key: authority.Hash{2}, Seq: 3}}},
 		"17 hubs": func() authority.Body {
 			b := authority.Body{Type: authority.TypeHubs, Group: tag, Seq: 1}
 			for i := range authority.MaxHubs + 1 {

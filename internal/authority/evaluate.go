@@ -498,6 +498,17 @@ func (e *evaluation) issuerOf(c *x509.Certificate) (Hash, bool) {
 	return Hash{}, false
 }
 
+// certifiedBy reports whether der is an admin CA that the root signer
+// signed: a recovery record's cert counts only from the root that names it.
+func (e *evaluation) certifiedBy(der []byte, signer Hash) bool {
+	c, err := x509.ParseCertificate(der)
+	if err != nil {
+		return false
+	}
+	issuer, ok := e.issuerOf(c)
+	return ok && issuer == signer
+}
+
 // checkRoot checks a claim's new root: self-signed, a CA with path
 // length 1 and a P-256 key.
 func checkRoot(c *x509.Certificate) error {
@@ -685,7 +696,7 @@ func (ep *epoch) findAdmins() {
 	ep.recovery = nil
 	for signer := range ep.onPath {
 		for _, r := range ep.e.bySig[signer] {
-			if r.Body.Type == TypeRecovery && ep.rootRecord(r) && (ep.recovery == nil || ep.newer(r, ep.recovery)) {
+			if r.Body.Type == TypeRecovery && ep.rootRecord(r) && ep.e.certifiedBy(r.Body.Cert, r.Body.Signer) && (ep.recovery == nil || ep.newer(r, ep.recovery)) {
 				ep.recovery = r
 			}
 		}
@@ -1017,6 +1028,17 @@ func (ep *epoch) settings() *rec {
 	return settings
 }
 
+// handover returns the current root's newest handover record that counts.
+func (ep *epoch) handover() *rec {
+	var h *rec
+	for _, r := range ep.e.bySig[ep.cur] {
+		if r.Body.Type == TypeHandover && ep.rootRecord(r) && (h == nil || r.Body.Seq > h.Body.Seq) {
+			h = r
+		}
+	}
+	return h
+}
+
 // decideClaims looks at the claims under the current root and returns the
 // next root and the current root's cut when one takes effect.
 func (ep *epoch) decideClaims(now int64, firstSeen map[Hash]int64, unknown bool) (*Hash, int64) {
@@ -1136,6 +1158,11 @@ func (ep *epoch) decideClaims(now int64, firstSeen map[Hash]int64, unknown bool)
 		ep.conflicts = append(ep.conflicts, conflict)
 		ep.stopFull = true
 		return nil, 0
+	}
+	if h := ep.handover(); h != nil && *h.Body.Admin == c.Body.Signer && seenOf(&c.Body, ep.cur) >= h.Body.Seq {
+		// The root handed the group to this admin: its claim, made after
+		// it held the handover, takes effect without the delay.
+		delay = 0
 	}
 	seen, ok := firstSeen[c.ID]
 	if !ok || seen > now {

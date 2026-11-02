@@ -58,6 +58,7 @@ pub const TYPE_SETTINGS: &str = "settings";
 pub const TYPE_CHECKPOINT: &str = "checkpoint";
 pub const TYPE_HUBS: &str = "hubs";
 pub const TYPE_RECOVERY: &str = "recovery";
+pub const TYPE_HANDOVER: &str = "handover";
 /// How many devices a hubs record names.
 pub const MAX_HUBS: usize = 16;
 
@@ -219,6 +220,9 @@ pub struct Body {
     pub records: Vec<Hash>,
     #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     pub root: Vec<u8>,
+    /// The recovery key's admin CA (DER), in a recovery record.
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    pub cert: Vec<u8>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub takeover_delay_ms: Option<i64>,
@@ -263,7 +267,8 @@ fn allowed(kind: &str) -> Option<&'static [&'static str]> {
         TYPE_SETTINGS => &["takeover_delay_ms", "key_level"],
         TYPE_CHECKPOINT => &["heads", "keep"],
         TYPE_HUBS => &["hubs"],
-        TYPE_RECOVERY => &["admin"],
+        TYPE_RECOVERY => &["admin", "cert"],
+        TYPE_HANDOVER => &["admin"],
         _ => return None,
     })
 }
@@ -294,6 +299,7 @@ impl Body {
         add(!self.seen.is_empty(), "seen");
         add(!self.records.is_empty(), "records");
         add(!self.root.is_empty(), "root");
+        add(!self.cert.is_empty(), "cert");
         add(self.takeover_delay_ms.is_some(), "takeover_delay_ms");
         add(!self.key_level.is_empty(), "key_level");
         add(!self.heads.is_empty(), "heads");
@@ -413,8 +419,17 @@ impl Body {
                 sorted_hashes(&self.keep, "keep")
             }
             TYPE_HUBS => check_hubs(&self.hubs),
-            TYPE_RECOVERY if self.admin.is_none() => Err(Error::msg("a recovery record needs admin")),
-            TYPE_RECOVERY => Ok(()),
+            TYPE_RECOVERY => {
+                let (Some(admin), false) = (self.admin, self.cert.is_empty()) else {
+                    return Err(Error::msg("a recovery record needs admin and cert"));
+                };
+                match Cert::parse(&self.cert) {
+                    Ok(ca) if key_hash_of(&ca) == admin => Ok(()),
+                    _ => Err(Error::msg("a recovery record's cert is not the admin CA of its admin key")),
+                }
+            }
+            TYPE_HANDOVER if self.admin.is_none() => Err(Error::msg("a handover record needs admin")),
+            TYPE_HANDOVER => Ok(()),
             _ => match self.takeover_delay_ms {
                 Some(d) if !(0..=MAX_DELAY).contains(&d) => {
                     Err(Error::msg(format!("a takeover delay of {d} ms is not from 0 to {MAX_DELAY}")))
@@ -1496,6 +1511,7 @@ impl<'a> Epoch<'a> {
             for &i in self.of(signer) {
                 if self.r(i).b().kind == TYPE_RECOVERY
                     && self.root_record(i)
+                    && Cert::parse(&self.r(i).b().cert).is_ok_and(|c| self.e.issuer_of(&c) == Some(*signer))
                     && self.recovery.is_none_or(|old| self.newer(i, old))
                 {
                     self.recovery = Some(i);
@@ -1847,6 +1863,20 @@ impl<'a> Epoch<'a> {
         settings
     }
 
+    /// The current root's newest handover record that counts.
+    fn handover(&self) -> Option<usize> {
+        let mut h: Option<usize> = None;
+        for &i in self.of(&self.cur) {
+            if self.r(i).b().kind == TYPE_HANDOVER
+                && self.root_record(i)
+                && h.is_none_or(|o| self.r(i).b().seq > self.r(o).b().seq)
+            {
+                h = Some(i);
+            }
+        }
+        h
+    }
+
     /// Looks at the claims under the current root and returns the next
     /// root and the current root's cut when one takes effect.
     fn decide_claims(&mut self, now: i64, first_seen: &BTreeMap<Hash, i64>, unknown: bool) -> Option<(Hash, i64)> {
@@ -1957,6 +1987,14 @@ impl<'a> Epoch<'a> {
         }
         let r = self.r(c);
         let mut cl = self.claim(c, "pending");
+        if let Some(h) = self.handover()
+            && self.r(h).b().admin == Some(r.b().signer)
+            && r.b().seen_of(&self.cur) >= self.r(h).b().seq
+        {
+            // The root handed the group to this admin: its claim, made after
+            // it held the handover, takes effect without the delay.
+            delay = 0;
+        }
         let seen = first_seen.get(&r.s.id).copied().filter(|&s| s <= now).unwrap_or(now);
         let waits = unknown && delay > 0;
         // Saturating: a caller's times are any i64.

@@ -71,7 +71,9 @@ Every rule of version 2 is in [protocol.md](protocol.md), section 10:
   the same with the root's checkpoint; and the hubs table: an admin's, an admin's without
   `hub`, a later admin's, the root's, and one naming a removed device; and the recovery key:
   its claim waiting the delay, taking effect and cancelled, a delay the root set, its other
-  records, a removed key, a key replaced, and a `recovery` record an admin signed. (The 1 MiB limit has a Go test only: its set would be
+  records, a removed key, a key replaced, a `recovery` record an admin signed, and one whose `cert`
+  another root issued; and `handover`: a claim at once, one made before it and another admin's
+  waiting, the root cancelling it, a newer one replacing it. (The 1 MiB limit has a Go test only: its set would be
   over a megabyte of vectors.)
 - `testdata/interop/strict-generated.json` and `strict-files.json`, written from the tables of
   protocol.md; their records are of version 1 and are all refused, and the record bodies of
