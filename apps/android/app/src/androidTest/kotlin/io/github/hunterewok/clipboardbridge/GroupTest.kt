@@ -259,10 +259,14 @@ class GroupTest {
             setClip(text)
             InstrumentationRegistry.getInstrumentation().runOnMainSync { model.message = null }
             // What the widget's and the tile's PendingIntent start.
+            assertEquals("the phone's clipboard before the send screen", text, clip())
             context.startActivity(SendActivity.intent(context))
-            until(30, "the send screen says what it did") { model.message != null }
-            assertEquals("the send screen says ${model.message}", R.string.sent, model.message?.text)
-            Bench.arrives(Bench.PC, text)
+            try {
+                Bench.arrives(Bench.PC, text)
+            } catch (e: Throwable) {
+                throw AssertionError("${e.message}; the send screen says ${model.message}; the phone's clipboard has ${clip()}", e)
+            }
+            until(10, "the send screen says it sent; it says ${model.message}") { model.message?.text == R.string.sent }
         } finally {
             runBlocking { model.setMode(self, "shared") }
         }

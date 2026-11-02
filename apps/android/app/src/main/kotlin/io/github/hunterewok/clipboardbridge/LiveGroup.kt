@@ -175,6 +175,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Whether the app is in front: the phone is the hub only then, unless the user lets it run in the background. */
     @Volatile private var foreground = false
+    private var started = 0 // under lock: the app's started activities
 
     /**
      * This phone's sync mode (docs/design.md, "Sync modes"), in the file
@@ -268,9 +269,16 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Whether the app is in front now, so the hub's status says it waits for it. */
     val inForeground: Boolean get() = foreground
 
-    /** Tells the group the app came to the front or went to the background; the hub follows. */
+    /**
+     * Tells the group an activity of the app came to the front (on) or
+     * stopped; the hub follows. It counts them: a finished activity may
+     * stop after the next one started, and the app is in front while one is.
+     */
     fun setForeground(on: Boolean) {
-        foreground = on
+        foreground = synchronized(lock) {
+            started = maxOf(0, started + if (on) 1 else -1)
+            started > 0
+        }
         refreshHub()
     }
 

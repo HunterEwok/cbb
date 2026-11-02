@@ -954,6 +954,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - Android: the phone's first group on a new install now gets its key for sealed messages;
   the secret was saved before its folder existed, so the commands for the phone came in the
   open.
+- Android: the phone stays the hub while its app is open when one of the app's screens stops
+  after the next one started, as a finished screen may: the app counted as in the background
+  and the hub stopped.
 - Android: a camera that does not start on the add-device screen (none at the back, or held
   by another app) no longer ends the app; it says so, and the QR code's text still works.
 - The phones show where the hub can move while it has no forwarder yet, and ask for the
