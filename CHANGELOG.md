@@ -7,6 +7,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
+  with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
+  set the text of the field open on it at once, through the Companion protocol of Apple's own
+  remote (`internal/tvremote/appletv`), with no key presses. The TV must allow access to
+  everyone on the same network. Tested against a fake Apple TV; not yet on a real one.
 - A computer or a lite member updated from 0.5 leaves its old group at its first start, since
   0.6 does not read records of version 1: the group's files go into `before-0.6` in the state
   directory, the settings stay, and `cbb status` says that the group is set up again. Until now

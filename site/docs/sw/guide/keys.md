@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 4ab1fad5ad34 -->
+<!-- source: a0dbcdb0bd42 -->
 # Funguo na uthibitisho
 
 Kila kifaa katika kikundi kina funguo: kimoja huthibitisha kwa vingine kifaa ni nani, na funguo za mzizi na wasimamizi huongeza na kuondoa vifaa. Mahali kifaa kinapoweka funguo zake huamua mwizi anapata nini pamoja na kifaa. Ukurasa huu unasema kila aina ya kifaa huziweka wapi, kikundi kinawezaje kukagua, na kiwango gani cha ukali cha kuchagua. Kanuni kamili ziko katika [itifaki](../protocol.md), sehemu ya 17.
@@ -8,8 +8,8 @@ Kila kifaa katika kikundi kina funguo: kimoja huthibitisha kwa vingine kifaa ni 
 
 | Wapi | Vifaa | Mwizi anapata nini |
 |---|---|---|
-| **Kwenye faili** | Mac na Windows PC, kompyuta za Linux bila TPM, mwanachama mwepesi | nakala ya faili, inayofanya kazi popote hadi msimamizi aondoe kifaa |
-| **Kwenye maunzi** | iPhone (Secure Enclave), simu za Android (Keystore: StrongBox au TEE), kompyuta za Linux zenye TPM | hakuna cha kunakili: ufunguo husaini kwenye kifaa hicho tu, na kwenye simu funguo za mzizi na wasimamizi husaini tu baada ya uso wako, alama ya kidole au nambari ya siri |
+| **Kwenye faili** | Mac, na Windows PC na kompyuta za Linux bila TPM, mwanachama mwepesi | nakala ya faili, inayofanya kazi popote hadi msimamizi aondoe kifaa |
+| **Kwenye maunzi** | iPhone (Secure Enclave), simu za Android (Keystore: StrongBox au TEE), kompyuta za Linux na Windows PC zenye TPM | hakuna cha kunakili: ufunguo husaini kwenye kifaa hicho tu, na kwenye simu funguo za mzizi na wasimamizi husaini tu baada ya uso wako, alama ya kidole au nambari ya siri |
 | **Maunzi yaliyothibitishwa** | simu ya Android ambayo mzizi wa kikundi ulikagua ufunguo wake | sawa na maunzi, na kikundi kinajua ni kweli, si tu kwamba kifaa kinasema hivyo |
 
 Orodha ya vifaa katika programu na `cbb status` (safu ya KEYS) huonyesha kila kifaa kina kipi.
@@ -44,5 +44,5 @@ Kiondoe kwenye kikundi haraka iwezekanavyo: tazama [kifaa kikipotea au kuibwa](l
 Viwango vilivyo hapo juu ni muundo; toleo hili linajenga sehemu yake:
 
 - Simu za Android huthibitisha funguo zao, na mzizi hukagua uthibitisho na orodha ya Google. Nakala kwenye `cbb.tools` itaanza funguo za kusaini za mradi zitakapokuwepo.
-- Viwango bado si mpangilio. Vikundi hufanya kazi kama katika kiwango cha 2, na kompyuta huwa msimamizi tu kwa onyo la kiwango cha 3, isipokuwa ni kompyuta ya Linux yenye TPM.
-- Kompyuta za Linux zenye TPM huweka ndani yake funguo za mwanachama na msimamizi, tangu zinapojiunga na kikundi; kompyuta iliyojiunga mapema huendelea na faili yake hadi ijiunge tena. Ufunguo wa mzizi wa kikundi kwenye kompyuta, Mac (Secure Enclave), Windows PC (TPM) na App Attest bado havijajengwa: hadi hapo funguo zao ziko kwenye faili.
+- Kiwango ni mpangilio: Settings, Admin keys, kwenye simu ya mzizi, au `cbb keys` kwenye kompyuta ya mzizi. Kikundi kilichoundwa kwenye simu huanza katika kiwango cha 2; kuifanya msimamizi humo kompyuta yenye funguo kwenye faili, baada ya onyo, huhamisha kikundi hadi kiwango cha 3. Kikundi kilichoundwa kwenye kompyuta ambayo ufunguo wake wa mzizi uko kwenye faili huanza katika kiwango cha 3, kwa kuwa mzizi wake wenyewe haufikii kiwango cha 2. Kiwango cha 1 bado hakiulizi huduma zilizo nje ya nyumba yako, na simu ambayo ufunguo wake wenyewe haujathibitishwa haiwezi kukichagua.
+- Kompyuta za Linux na Windows PC zenye TPM 2.0 huweka ndani yake funguo za mwanachama na msimamizi, tangu zinapojiunga na kikundi; kompyuta iliyojiunga mapema huendelea na faili yake hadi ijiunge tena. Kwenye Windows hili bado halijajaribiwa kwenye PC halisi. Ufunguo wa mzizi wa kikundi kwenye kompyuta, Mac (Secure Enclave) na App Attest bado havijajengwa: hadi hapo funguo zao ziko kwenye faili.

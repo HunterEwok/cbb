@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: eefa7c24bd75 -->
+<!-- source: 681cf75cd3a9 -->
 # Si se pierde o roban un dispositivo
 
 Para quien ha perdido un teléfono, un ordenador u otro dispositivo del grupo. Quítalo del grupo en cuanto puedas; los demás dispositivos siguen en el grupo y continúan sincronizando.
@@ -50,6 +50,6 @@ Un teléfono administrador ofrece lo mismo en la página del dispositivo, y un r
 Depende de dónde guardaba el dispositivo sus claves ([claves y atestación](keys.md)):
 
 - **Claves en hardware** (teléfonos, ordenadores Linux con TPM): nada que copiar. Las claves firman solo en ese dispositivo, y las claves de raíz y de administrador de un teléfono firman solo tras tu cara, tu huella o tu código.
-- **Claves en un archivo** (Mac y PC con Windows, ordenadores Linux sin TPM, el miembro ligero): quien copie el archivo puede actuar como ese dispositivo hasta que lo quites. Cifra el disco (FileVault, BitLocker, LUKS) para que un dispositivo robado no revele nada.
+- **Claves en un archivo** (Mac, PC con Windows y ordenadores Linux sin TPM, el miembro ligero): quien copie el archivo puede actuar como ese dispositivo hasta que lo quites. Cifra el disco (FileVault, BitLocker, LUKS) para que un dispositivo robado no revele nada.
 
 El historial del portapapeles no se guarda en los dispositivos, y un secreto desaparece 60 segundos después de copiarlo.

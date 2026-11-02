@@ -18,11 +18,12 @@ import (
 	"github.com/HunterEwok/clipboardbridge/internal/pair"
 	"github.com/HunterEwok/clipboardbridge/internal/tvremote"
 	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv"
+	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv"
 	"github.com/HunterEwok/clipboardbridge/internal/tvremote/roku"
 )
 
 // The TVs' own remotes (docs/roadmap.md, item 25, way 2; internal/tvremote):
-// the service pairs with an Android TV as its remote, or takes a Roku the
+// the service pairs with an Android TV or an Apple TV as its remote, or takes a Roku the
 // user allowed, types on it what cbb remote type gives it, and, when the
 // user sends them there, the remote pastes of the group's admins. A TV is
 // reached only on the home network.
@@ -30,13 +31,15 @@ import (
 // targetTV is a TV's remote as a paste target, which no watcher offers.
 const targetTV = "tv"
 
-// tvPairWait is how long a pairing waits for the code the TV shows.
+// tvPairWait is how long a pairing waits for the code or PIN the TV shows.
 const tvPairWait = 2 * time.Minute
 
-// tvState is the TV pairing in progress, one at a time.
+// tvState is the TV pairing in progress, one at a time: with an Android
+// TV (pairing) or an Apple TV (apple).
 type tvState struct {
 	mu      sync.Mutex
 	pairing *androidtv.Pairing
+	apple   *appletv.Pairing
 	host    string
 	name    string // the name the user gave, or ""
 	timer   *time.Timer
@@ -47,6 +50,8 @@ func tvKind(t string) string {
 	switch t {
 	case tvremote.AndroidTV:
 		return "Android TV"
+	case tvremote.AppleTV:
+		return "Apple TV"
 	case tvremote.Roku:
 		return "Roku"
 	}
@@ -56,10 +61,17 @@ func tvKind(t string) string {
 // tvError is a TV's failure: the TV and its protocol for the user, with
 // the cause as the detail.
 func tvError(t tvremote.TV, what string, err error) error {
-	if errors.Is(err, androidtv.ErrNoField) || errors.Is(err, roku.ErrOff) || errors.Is(err, tvremote.ErrOutside) {
+	if tvIsState(err) || errors.Is(err, tvremote.ErrOutside) || errors.Is(err, appletv.ErrRefused) || errors.Is(err, appletv.ErrBusy) {
 		return fmt.Errorf("%s (%s): %w", t.Name, tvKind(t.Kind), err)
 	}
 	return &pair.CauseError{Msg: fmt.Sprintf("%s %s (%s)", what, t.Name, tvKind(t.Kind)), Err: err}
+}
+
+// tvIsState is a failure that is the TV's state, not a fault: no text
+// field open, ECP off, or a TV that forgot this remote.
+func tvIsState(err error) bool {
+	return errors.Is(err, androidtv.ErrNoField) || errors.Is(err, roku.ErrOff) ||
+		errors.Is(err, appletv.ErrNoField) || errors.Is(err, appletv.ErrNotPaired)
 }
 
 // remote carries out cbb remote: Name "" (the status), "add" (Address
@@ -115,8 +127,8 @@ func (s *Service) remote(ctx context.Context, m *control.Message) error {
 	return nil
 }
 
-// addTV adds a Roku at once, and starts pairing with an Android TV, which
-// then shows the code that cbb remote code takes.
+// addTV adds a Roku at once, and starts pairing with an Android TV or an
+// Apple TV, which then shows the code or PIN that cbb remote code takes.
 func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Message) error {
 	host, err := tvremote.CheckHost(ctx, m.Address)
 	if err != nil {
@@ -146,9 +158,20 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 		}
 		s.logf("cbb: added the Roku %s at %s", name, host)
 		return nil
+	case tvremote.AppleTV:
+		s.endTVPairing()
+		p, err := appletv.Pair(ctx, host, "Clipboard Bridge "+s.cfg.Name)
+		if err != nil {
+			return tvError(tvremote.TV{Name: host, Kind: kind}, "pairing with", err)
+		}
+		s.tv.mu.Lock()
+		defer s.tv.mu.Unlock()
+		s.tv.apple, s.tv.host, s.tv.name = p, host, m.NewName
+		s.tv.timer = time.AfterFunc(tvPairWait, s.endTVPairing)
+		return nil
 	case tvremote.AndroidTV:
 	default:
-		return fmt.Errorf("the TV's kind is %s or %s, not %q", tvremote.AndroidTV, tvremote.Roku, kind)
+		return fmt.Errorf("the TV's kind is %s, %s or %s, not %q", tvremote.AndroidTV, tvremote.AppleTV, tvremote.Roku, kind)
 	}
 	if st.Client == nil {
 		c, err := androidtv.NewClient("Clipboard Bridge " + s.cfg.Name)
@@ -175,8 +198,11 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 // tvCode finishes the pairing with the code the TV shows.
 func (s *Service) tvCode(st *tvremote.State, code string) error {
 	s.tv.mu.Lock()
-	p, host, name := s.tv.pairing, s.tv.host, s.tv.name
+	p, apple, host, name := s.tv.pairing, s.tv.apple, s.tv.host, s.tv.name
 	s.tv.mu.Unlock()
+	if apple != nil {
+		return s.appleCode(st, apple, host, name, code)
+	}
 	if p == nil {
 		return errors.New("no TV is pairing: start with cbb remote add")
 	}
@@ -206,15 +232,44 @@ func (s *Service) tvCode(st *tvremote.State, code string) error {
 	return nil
 }
 
+// appleCode finishes the pairing with an Apple TV with the PIN it shows.
+func (s *Service) appleCode(st *tvremote.State, p *appletv.Pairing, host, name, pin string) error {
+	cr, err := p.Finish(pin)
+	s.endTVPairing()
+	if name == "" {
+		name = host
+	}
+	t := tvremote.TV{Name: name, Kind: tvremote.AppleTV, Host: host, Apple: &cr}
+	if errors.Is(err, appletv.ErrCode) {
+		return fmt.Errorf("%w; start again with cbb remote add -appletv", err)
+	}
+	if err != nil {
+		return tvError(t, "pairing with", err)
+	}
+	if err := st.Put(t); err != nil {
+		return err
+	}
+	if err := tvremote.Save(s.cfg.StateDir, *st); err != nil {
+		return fmt.Errorf("saving the TVs: %w", err)
+	}
+	s.logf("cbb: paired with the Apple TV %s at %s", name, host)
+	return nil
+}
+
 // endTVPairing ends the pairing in progress, if any.
 func (s *Service) endTVPairing() {
 	s.tv.mu.Lock()
 	defer s.tv.mu.Unlock()
 	if s.tv.pairing != nil {
 		s.tv.pairing.Close()
+	}
+	if s.tv.apple != nil {
+		s.tv.apple.Close()
+	}
+	if s.tv.timer != nil {
 		s.tv.timer.Stop()
 	}
-	s.tv.pairing, s.tv.host, s.tv.name, s.tv.timer = nil, "", "", nil
+	s.tv.pairing, s.tv.apple, s.tv.host, s.tv.name, s.tv.timer = nil, nil, "", "", nil
 }
 
 // tvStatus describes the TVs for cbb status.
@@ -228,8 +283,11 @@ func (s *Service) tvStatus() []control.TV {
 		out = append(out, control.TV{Name: t.Name, Kind: t.Kind, Host: t.Host, Pastes: t.Pastes})
 	}
 	s.tv.mu.Lock()
-	if s.tv.pairing != nil {
+	switch {
+	case s.tv.pairing != nil:
 		out = append(out, control.TV{Name: s.tv.name, Kind: tvremote.AndroidTV, Host: s.tv.host, Pairing: true})
+	case s.tv.apple != nil:
+		out = append(out, control.TV{Name: s.tv.name, Kind: tvremote.AppleTV, Host: s.tv.host, Pairing: true})
 	}
 	s.tv.mu.Unlock()
 	return out
@@ -252,7 +310,8 @@ func (s *Service) tvPastes() bool {
 }
 
 // tvPaste types a remote paste on the TV the user sends pastes to; ok is
-// false when there is none. A line break presses Enter there, so a text
+// false when there is none. A line break presses Enter there (on an Apple
+// TV it ends a field of one line), so a text
 // with one is refused unless the user allowed Enter. An Android TV takes
 // the text at once; a Roku takes it key by key, so its answer is done once
 // typing starts, and typing stops when still says the paste may no longer
@@ -308,9 +367,10 @@ func (s *Service) tvPaste(body group.CommandBody, text string, enter bool, still
 }
 
 // tvRefused is the answer to a paste the TV did not take: refused when it
-// is the TV's state (no text field, ECP off), failed otherwise.
+// is the TV's state (no text field, ECP off, a TV that forgot this remote),
+// failed otherwise.
 func (s *Service) tvRefused(res node.Result, t tvremote.TV, err error) node.Result {
-	if !errors.Is(err, androidtv.ErrNoField) && !errors.Is(err, roku.ErrOff) {
+	if !tvIsState(err) {
 		res.Status = node.ResultFailed
 	}
 	res.Reason = tvError(t, "typing on", err).Error()

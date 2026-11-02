@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 7358caef15ed -->
+<!-- source: 2bdb30278c1f -->
 # Sin la app
 
 Un grupo no necesita la app del teléfono. Un ordenador puede sostener el grupo, y un iPhone sin la app se une con un atajo. Este es también el camino mientras la app del iPhone espera a TestFlight.

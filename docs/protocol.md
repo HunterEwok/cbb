@@ -1176,7 +1176,7 @@ Header fields (all omitted when empty):
 | `status` | object | for `status` |
 | `devices` | array | reserved |
 | `part` | object | `copy-media`'s `part` messages and `paste-media`'s answers: `{type?, path?, dir?, size?}`, a part of images or files without its hash; `release-file` and `release-get`: the archive's `size` |
-| `value` | string | `config`: the setting's new value; `remote add`: the TV's kind, `androidtv` (the default) or `roku`; `remote pastes`: `on` or `off` |
+| `value` | string | `config`: the setting's new value; `remote add`: the TV's kind, `androidtv` (the default), `appletv` or `roku`; `remote pastes`: `on` or `off` |
 | `detail` | string | with `error`: the underlying error, which the client shows with error details on (`CBB_DEBUG=1`) |
 | `new_token` | bool | `pair-phone`: revoke every shortcut's token first |
 | `forwarder`, `forwarder_key` | strings | `away hub`: the forwarder's address and its key, 44 characters of base64 |

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3a3178c99395 -->
+<!-- source: 5a87f78df225 -->
 # 应用
 
 Clipboard Bridge 有适用于手机、手表和桌面的应用。手机应用保管群组；桌面应用是进入电脑上已在运行的服务的一扇窗口。
@@ -8,11 +8,11 @@ Clipboard Bridge 有适用于手机、手表和桌面的应用。手机应用保
 |---|---|---|
 | Android | 每个[版本](https://github.com/HunterEwok/clipboardbridge/releases)中的 `clipboardbridge-X.Y.Z.apk` | 已在 CI 中构建并测试，尚未在真机上测试 |
 | 不含 Google 服务的 Android | `clipboardbridge-fdroid-X.Y.Z.apk`，通过审核后还会上架 F-Droid：与上面是同一款应用，只是没有 Wear OS 手表功能 | 已在 CI 中构建并测试 |
-| iPhone 和 iPad | TestFlight（开放后） | 已在 CI 中构建并测试，尚未在真机上测试 |
+| iPhone 和 iPad | TestFlight（开放后） | 已在 CI 中构建并测试；用开发者自己的团队构建后可在 iPhone 上运行 |
 | Wear OS | `clipboardbridge-wear-X.Y.Z.apk`，在应用上架 Google Play 之前，需要在电脑上通过手表的无线调试使用 `adb install` 安装到手表上 | 已构建 |
-| Apple Watch | 随 iPhone 应用一起提供 | 已构建 |
+| Apple Watch | 随 iPhone 应用一起提供 | 已构建；可与 iPhone 应用一起在 Apple Watch 上运行 |
 | Mac 应用 | 暂时还不能下载：目前需要从 `apps/macos` 自行构建 | 已构建 |
-| Linux 和 Windows 的托盘应用 | 暂时还不能下载：目前需要从 `apps/desktop` 自行构建 | 已构建 |
+| Linux 和 Windows 的托盘应用 | 包含在每个版本的 Windows 和 Linux 压缩包中，随服务一起安装 | 已构建；已在 Windows 11 虚拟机中运行 |
 
 ## 手机
 

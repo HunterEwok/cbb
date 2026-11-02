@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 97be486697d2 -->
+<!-- source: b61def346d84 -->
 # لوحات المفاتيح والتلفزيونات
 
 لمن يريد كتابة كلمة مرور طويلة أو رابط أو بحث في تلفزيون أو جهاز لوحي أو جهاز ألعاب أو حاسوب ليس عليه شيء من Clipboard Bridge. يكتب أحد أجهزة مجموعتك النص هناك بوصفه لوحة مفاتيح أو جهاز التحكم عن بُعد للتلفزيون، عند نقرتك أو حين يرسل مشرف لصقًا عن بُعد.
@@ -65,6 +65,13 @@ sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a s
 sudo cbb remote code 123456              # within two minutes
 ```
 
+يقترن Apple TV بالطريقة نفسها، برمز PIN من أربعة أرقام يعرضه. على Apple TV، اضبط أولًا الإعدادات، ثم AirPlay وHomeKit، ثم السماح بالوصول على "الجميع على الشبكة نفسها": فمع "فقط الأشخاص الذين يشاركون هذا المنزل" يرفض كل اقتران.
+
+```sh
+sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
+sudo cbb remote code 1234                # within two minutes
+```
+
 ليس في Roku اقتران ولا تشفير: يعبر النص شبكتك المنزلية بصيغة HTTP عادية، لذلك لا يُضاف إلا حين تقول ذلك بـ `-consent`. على Roku اضبط أولًا الإعدادات، النظام، إعدادات النظام المتقدمة، التحكم بواسطة تطبيقات الجوال على مفعّل أو متساهل.
 
 ```sh
@@ -78,7 +85,7 @@ echo 'the film' | sudo cbb remote type
 sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that TV
 ```
 
-يسرد `cbb remote` التلفزيونات، ويختار `-tv NAME` واحدًا حين يكون هناك عدة، وينسى `sudo cbb remote remove NAME` واحدًا. وجهاز Android TV الذي أُعيد ضبطه يجب أن يقترن من جديد.
+يسرد `cbb remote` التلفزيونات، ويختار `-tv NAME` واحدًا حين يكون هناك عدة، وينسى `sudo cbb remote remove NAME` واحدًا. وجهاز Android TV أو Apple TV الذي أُعيد ضبطه، أو نسي هذا الحاسوب، يجب أن يقترن من جديد.
 
 ## الأمان
 

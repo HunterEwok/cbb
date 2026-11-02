@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 4ab1fad5ad34 -->
+<!-- source: a0dbcdb0bd42 -->
 # Claves y atestación
 
 Cada dispositivo de un grupo tiene claves: una demuestra a los demás quién es, y las claves de la raíz y de los administradores añaden y quitan dispositivos. El lugar donde un dispositivo guarda sus claves decide lo que se lleva un ladrón con él. Esta página dice dónde guarda las suyas cada tipo de dispositivo, cómo puede comprobarlo el grupo y qué nivel de rigor elegir. Las reglas exactas están en el [protocolo](../protocol.md), sección 17.
@@ -8,8 +8,8 @@ Cada dispositivo de un grupo tiene claves: una demuestra a los demás quién es,
 
 | Dónde | Dispositivos | Qué se lleva un ladrón |
 |---|---|---|
-| **En un archivo** | Mac y PC con Windows, ordenadores Linux sin TPM, el miembro ligero | una copia del archivo, que funciona en cualquier sitio hasta que un administrador quita el dispositivo |
-| **En hardware** | iPhone (Secure Enclave), teléfonos Android (Keystore: StrongBox o el TEE), ordenadores Linux con TPM | nada que copiar: la clave firma solo en ese dispositivo, y en un teléfono las claves de la raíz y de los administradores solo tras tu cara, tu huella o tu código |
+| **En un archivo** | Mac, PC con Windows y ordenadores Linux sin TPM, el miembro ligero | una copia del archivo, que funciona en cualquier sitio hasta que un administrador quita el dispositivo |
+| **En hardware** | iPhone (Secure Enclave), teléfonos Android (Keystore: StrongBox o el TEE), ordenadores Linux y PC con Windows con TPM | nada que copiar: la clave firma solo en ese dispositivo, y en un teléfono las claves de la raíz y de los administradores solo tras tu cara, tu huella o tu código |
 | **Hardware demostrado** | un teléfono Android cuya clave comprobó la raíz del grupo | lo mismo que el hardware, y el grupo sabe que es verdad, no solo que el dispositivo lo dice |
 
 La lista de dispositivos de las apps y `cbb status` (la columna KEYS) muestran cuál tiene cada dispositivo.
@@ -44,5 +44,5 @@ Quítalo del grupo en cuanto puedas: consulta [si se pierde o roban un dispositi
 Los niveles anteriores son el diseño; esta versión construye una parte:
 
 - Los teléfonos Android demuestran sus claves, y la raíz comprueba la prueba y la lista de Google. La copia de `cbb.tools` empezará cuando existan las claves de firma del proyecto.
-- Los niveles todavía no son un ajuste. Los grupos funcionan como en el nivel 2, y un ordenador llega a administrador solo con la advertencia del nivel 3, salvo que sea un ordenador Linux con TPM.
-- Los ordenadores Linux con TPM guardan en él sus claves de miembro y de administrador desde el momento en que se unen a un grupo; un ordenador que se unió antes conserva su archivo hasta que vuelva a unirse. La clave raíz del grupo en un ordenador, los Mac (el Secure Enclave), los PC con Windows (el TPM) y App Attest todavía no están construidos: hasta entonces sus claves están en un archivo.
+- El nivel es un ajuste: Ajustes, Claves de administrador, en el teléfono raíz, o `cbb keys` en un ordenador raíz. Un grupo creado en un teléfono empieza en el nivel 2; hacer administrador allí a un ordenador con las claves en un archivo, tras la advertencia, pasa el grupo al nivel 3. Un grupo creado en un ordenador cuya clave raíz está en un archivo empieza en el nivel 3, ya que su raíz no cumple ella misma el nivel 2. El nivel 1 todavía no consulta los servicios ajenos a tu casa, y un teléfono cuya propia clave no está demostrada no puede elegirlo.
+- Los ordenadores Linux y los PC con Windows con TPM 2.0 guardan en él sus claves de miembro y de administrador desde el momento en que se unen a un grupo; un ordenador que se unió antes conserva su archivo hasta que vuelva a unirse. En Windows aún no se ha probado en un PC real. La clave raíz del grupo en un ordenador, los Mac (el Secure Enclave) y App Attest todavía no están construidos: hasta entonces sus claves están en un archivo.

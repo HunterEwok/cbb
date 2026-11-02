@@ -73,6 +73,7 @@ var testFakes = []string{
 	"internal/testnet",
 	"internal/tpmkey/tpmtest",
 	"internal/tvremote/androidtv/atvtest",
+	"internal/tvremote/appletv/atvtest",
 	"internal/vless/vlesstest",
 }
 

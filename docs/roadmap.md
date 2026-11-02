@@ -469,7 +469,7 @@ One pull request each, smaller ones together:
 1. The TV variant of the Android app, with the accessibility target of item 18, step 4.
 2. Remotes in Go: Android TV Remote v2 and the Apple TV Companion protocol first, then
    Samsung and LG, Roku last; `cbb remote add` pairs a TV, and the apps add theirs (Android
-   TV and Roku done in 0.6, untried on real TVs; for now the user sends a computer's remote
+   TV, Apple TV and Roku done in 0.6, untried on real TVs; for now the user sends a computer's remote
    pastes to one of its TVs with `cbb remote pastes`, as with `cbb keyboard on -pastes`,
    and addressing a TV by name with `cbb paste -on` comes with the device list's targets).
 3. The Bluetooth keyboard on Android and Linux.
@@ -481,7 +481,8 @@ One pull request each, smaller ones together:
 The TV variant is part of the one APK of the phone app. For Apple TV the spike with pyatv is
 done (2026-11-01, Apple TV 4K of the second generation, tvOS 27.2): the Companion protocol
 pairs with a PIN shown on the TV and then sets the whole text of the focused field at once,
-with no key presses, so the Companion protocol in Go comes next. The Bluetooth keyboard of a
+with no key presses; the Companion protocol in Go (`cbb remote add -appletv`) followed in
+0.6. The Bluetooth keyboard of a
 Linux computer typed on the same Apple TV too (a Steam Deck, 2026-11-01), with two fixes to
 make: the TV lists the computer twice under one name (its classic Bluetooth and the
 keyboard over Bluetooth LE, the one with a battery), so the keyboard needs a name of its own;
