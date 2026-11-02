@@ -257,7 +257,7 @@ impl<W: Write> Link<W> {
         let Some(u) = self.udp.as_mut() else { return };
         u.peer = Some(from);
         if u.state == UdpState::Up {
-            self.esp.send(UDP_ID, &data);
+            self.esp.send_datagram(UDP_ID, &data);
             return;
         }
         if u.queue.len() == UDP_QUEUE {
@@ -279,7 +279,7 @@ impl<W: Write> Link<W> {
             Event::Connected(UDP_ID) if u.state == UdpState::Dialing => {
                 u.state = UdpState::Up;
                 for d in std::mem::take(&mut u.queue) {
-                    self.esp.send(UDP_ID, &d);
+                    self.esp.send_datagram(UDP_ID, &d);
                 }
             }
             Event::Data(UDP_ID, d) if u.state == UdpState::Up => {

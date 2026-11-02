@@ -12,8 +12,13 @@ use std::collections::VecDeque;
 
 /// The ESP's connections are numbered 0 to 4.
 pub const LINKS: u8 = 5;
-/// The most bytes one AT+CIPSEND takes.
-const SEND_MAX: usize = 2048;
+/// The most bytes of a stream in one AT+CIPSEND. The connections take
+/// turns a block each, and at the 19200 baud of `.cbb net` a block takes a
+/// quarter of a second, so one connection's burst never holds back
+/// another's few bytes for long: the members' pings come through in time.
+const SEND_MAX: usize = 512;
+/// The most bytes one AT+CIPSEND takes (a datagram goes whole).
+const DATAGRAM_MAX: usize = 2048;
 
 /// What happened on the ESP.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +83,10 @@ pub struct Esp {
     events: Vec<Event>,
     ready: bool,
     serve: Option<u16>,
+    /// The blocks waiting to be sent, by connection; one AT+CIPSEND each.
+    sends: [VecDeque<Vec<u8>>; LINKS as usize],
+    /// The connection whose block goes next, if it has one.
+    turn: u8,
 }
 
 impl Default for Esp {
@@ -99,6 +108,8 @@ impl Esp {
             events: Vec::new(),
             ready: false,
             serve: None,
+            sends: Default::default(),
+            turn: 0,
         };
         e.start();
         e
@@ -106,6 +117,7 @@ impl Esp {
 
     fn start(&mut self) {
         self.queue.clear();
+        self.sends.iter_mut().for_each(VecDeque::clear);
         self.current = None;
         self.wait = Wait::None;
         self.ready = false;
@@ -146,13 +158,29 @@ impl Esp {
         self.next();
     }
 
-    /// Sends bytes on a connection, in blocks the ESP takes; one Sent
-    /// follows each block.
+    /// Sends bytes of a stream on a connection, in blocks of at most
+    /// SEND_MAX, the last one filled up first; one Sent follows each block.
     pub fn send(&mut self, id: u8, data: &[u8]) {
         assert!(id < LINKS);
-        for chunk in data.chunks(SEND_MAX) {
-            self.queue.push_back(Cmd::Send { id, data: chunk.to_vec() });
+        let q = &mut self.sends[id as usize];
+        let mut data = data;
+        if let Some(last) = q.back_mut() {
+            let n = (SEND_MAX.saturating_sub(last.len())).min(data.len());
+            last.extend_from_slice(&data[..n]);
+            data = &data[n..];
         }
+        q.extend(data.chunks(SEND_MAX).map(<[u8]>::to_vec));
+        self.next();
+    }
+
+    /// Sends a datagram on a connection, whole, in one block (one that is
+    /// too long for the ESP is dropped, as UDP may); one Sent follows.
+    pub fn send_datagram(&mut self, id: u8, data: &[u8]) {
+        assert!(id < LINKS);
+        if data.is_empty() || data.len() > DATAGRAM_MAX {
+            return;
+        }
+        self.sends[id as usize].push_back(data.to_vec());
         self.next();
     }
 
@@ -255,7 +283,11 @@ impl Esp {
         if let Some((id, what)) = link_line(line) {
             match what {
                 "CONNECT" => self.events.push(Event::Connected(id)),
-                "CLOSED" => self.events.push(Event::Closed(id)),
+                "CLOSED" => {
+                    // What waited for it cannot go out any more.
+                    self.sends[id as usize].clear();
+                    self.events.push(Event::Closed(id));
+                }
                 // CONNECT FAIL: the ERROR after it ends the dial.
                 _ => {}
             }
@@ -297,6 +329,7 @@ impl Esp {
             Some(Cmd::Send { id, .. }) => {
                 // The bytes were lost: the connection cannot go on.
                 self.queue.retain(|c| cmd_id(c) != Some(id));
+                self.sends[id as usize].clear();
                 self.queue.push_front(Cmd::Close(id));
             }
             // Already closed (ERROR to a close): no Closed came, so say it.
@@ -308,11 +341,20 @@ impl Esp {
         self.next();
     }
 
+    /// The next command: the setup, dials and closes first, except a close
+    /// whose connection still has blocks to send; else the next block, the
+    /// connections taking turns.
     fn next(&mut self) {
         if self.wait != Wait::None {
             return;
         }
-        let Some(cmd) = self.queue.pop_front() else {
+        let first = match self.queue.front() {
+            Some(Cmd::Close(id)) => self.sends[*id as usize].is_empty(),
+            Some(_) => true,
+            None => false,
+        };
+        let cmd = if first { self.queue.pop_front() } else { self.block().or_else(|| self.queue.pop_front()) };
+        let Some(cmd) = cmd else {
             return;
         };
         let (line, wait) = match &cmd {
@@ -329,6 +371,23 @@ impl Esp {
         self.out.extend_from_slice(b"\r\n");
         self.current = Some(cmd);
         self.wait = wait;
+    }
+}
+
+impl Esp {
+    /// The next connection's block, after the one whose turn it was.
+    fn block(&mut self) -> Option<Cmd> {
+        if !self.ready {
+            return None;
+        }
+        for i in 0..LINKS {
+            let id = (self.turn + i) % LINKS;
+            if let Some(data) = self.sends[id as usize].pop_front() {
+                self.turn = (id + 1) % LINKS;
+                return Some(Cmd::Send { id, data });
+            }
+        }
+        None
     }
 }
 
@@ -475,5 +534,68 @@ mod tests {
         assert_eq!(e.take_output().len(), SEND_MAX);
         e.input(b"\r\nSEND OK\r\n");
         assert_eq!(e.take_output(), b"AT+CIPSEND=0,1\r\n");
+    }
+
+    /// Sends the block in flight: its prompt, then SEND OK.
+    fn sent(e: &mut Esp) -> (String, usize) {
+        let cmd = String::from_utf8_lossy(&e.take_output()).to_string();
+        e.input(b"OK\r\n>");
+        let n = e.take_output().len();
+        e.input(b"\r\nSEND OK\r\n");
+        (cmd, n)
+    }
+
+    #[test]
+    fn connections_take_turns() {
+        let mut e = ready();
+        e.send(0, &vec![1u8; 3 * SEND_MAX]);
+        e.send(2, b"ping");
+        assert_eq!(sent(&mut e), (format!("AT+CIPSEND=0,{SEND_MAX}\r\n"), SEND_MAX));
+        // The ping goes before the rest of the burst.
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=2,4\r\n".to_string(), 4));
+        assert_eq!(sent(&mut e).0, format!("AT+CIPSEND=0,{SEND_MAX}\r\n"));
+        assert_eq!(sent(&mut e).0, format!("AT+CIPSEND=0,{SEND_MAX}\r\n"));
+        assert!(e.take_output().is_empty());
+    }
+
+    #[test]
+    fn small_writes_share_a_block() {
+        let mut e = ready();
+        e.send(1, b"a");
+        // The first goes out at once; the next two wait together.
+        e.send(1, b"bc");
+        e.send(1, b"de");
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=1,1\r\n".to_string(), 1));
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=1,4\r\n".to_string(), 4));
+    }
+
+    #[test]
+    fn datagrams_stay_whole() {
+        let mut e = ready();
+        e.send_datagram(4, &[9u8; 1400]);
+        e.send_datagram(4, &[8u8; 3]);
+        e.send_datagram(4, &vec![7u8; DATAGRAM_MAX + 1]);
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=4,1400\r\n".to_string(), 1400));
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=4,3\r\n".to_string(), 3));
+        assert!(e.take_output().is_empty());
+    }
+
+    #[test]
+    fn close_waits_for_the_data() {
+        let mut e = ready();
+        e.send(0, &vec![1u8; SEND_MAX + 1]);
+        e.close(0);
+        assert_eq!(sent(&mut e).1, SEND_MAX);
+        assert_eq!(sent(&mut e).1, 1);
+        assert_eq!(e.take_output(), b"AT+CIPCLOSE=0\r\n");
+    }
+
+    #[test]
+    fn closed_drops_the_waiting_blocks() {
+        let mut e = ready();
+        e.send(0, &vec![1u8; 2 * SEND_MAX]);
+        e.input(b"0,CLOSED\r\n");
+        assert_eq!(sent(&mut e).1, SEND_MAX); // the one in flight
+        assert!(e.take_output().is_empty());
     }
 }

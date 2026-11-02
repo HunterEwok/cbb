@@ -1063,6 +1063,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - `.pibridge` (0.4.3) refuses to start while `CBB.DRV` runs the network: the driver took the
   ESP's bytes before the bridge saw them, and an update through the bridge stopped at its first
   block.
+- `cbb next link` lets the ESP's connections take turns, a block of at most 512 bytes each,
+  instead of sending in the order the bytes came: a burst to the phone held back the lite
+  member's pings to the computer it dials for so long that the computer closed the connection.
+  A datagram of `-udp` goes in one block, whole.
 
 - On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
   network, instead of doing nothing.
