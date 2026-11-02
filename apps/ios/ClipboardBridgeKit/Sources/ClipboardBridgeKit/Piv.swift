@@ -32,6 +32,10 @@ public enum Piv {
         case blocked
         /// The card's management key is not the default one, which making a key needs.
         case managementKey
+        /// The card's management key is 3DES, as a YubiKey before firmware
+        /// 5.7 has from the factory, or the card does not say: the kits use
+        /// AES only.
+        case oldFirmware
         /// Every retired slot holds a key or a certificate.
         case noFreeSlot
         /// No retired slot holds a recovery key's certificate.
@@ -175,10 +179,11 @@ public enum Piv {
 
     /// Authenticates with the default management key, which making a key
     /// and storing its certificate need; the algorithm is the one the
-    /// card's metadata names, 3DES without it.
+    /// card's metadata names, AES only: a card with a 3DES key, or without
+    /// metadata (firmware before 5.3), is refused as .oldFirmware.
     public static func authenticate(_ card: SmartCard, key: Data = defaultManagementKey) throws {
         let (meta, msw) = try command(card, 0xf7, 0x00, managementSlot)
-        var alg: UInt8 = 0x03
+        var alg: UInt8 = 0
         if msw == 0x9000 {
             var t = TLV(meta)
             while !t.done {
@@ -187,13 +192,13 @@ public enum Piv {
                 if tag == 0x01, v.count == 1 { alg = v[v.startIndex] }
             }
         }
-        let block: Int
+        let block = 16
         let keyLength: Int
         switch alg {
-        case 0x03: (block, keyLength) = (8, 24)
-        case 0x0a: (block, keyLength) = (16, 16)
-        case 0x0b: (block, keyLength) = (16, 24)
-        case 0x0c: (block, keyLength) = (16, 32)
+        case 0x0a: keyLength = 16
+        case 0x0b: keyLength = 24
+        case 0x0c: keyLength = 32
+        case 0x03, 0: throw fail(.oldFirmware, "the YubiKey's management key is 3DES, as before firmware 5.7")
         default: throw fail(.managementKey, "the YubiKey's management key has an unknown algorithm")
         }
         guard key.count == keyLength else { throw fail(.managementKey, "the YubiKey's management key is not the default one") }
@@ -211,7 +216,7 @@ public enum Piv {
         guard witness.count == block else { throw fail(.card, "the card's witness has the wrong size") }
         var challenge = Data(count: block)
         for i in challenge.indices { challenge[i] = UInt8.random(in: 0...255) }
-        let decrypted = try crypt(alg, key, witness, encrypt: false)
+        let decrypted = try crypt(key, witness, encrypt: false)
         let (r, sw2) = try command(card, 0x87, alg, managementSlot, tlv(0x7c, tlv(0x80, decrypted) + tlv(0x81, challenge)))
         if sw2 == 0x6982 || sw2 == 0x6a80 { throw fail(.managementKey, "the YubiKey's management key is not the default one") }
         guard sw2 == 0x9000 else { throw cardFail("authenticating", sw2) }
@@ -223,15 +228,15 @@ public enum Piv {
         } catch {
             throw fail(.card, "the card's answer does not parse")
         }
-        guard answer == (try crypt(alg, key, challenge, encrypt: true)) else { throw fail(.card, "the card did not prove the management key") }
+        guard answer == (try crypt(key, challenge, encrypt: true)) else { throw fail(.card, "the card did not prove the management key") }
     }
 
-    /// One block with the management key, 3DES or AES: CBC with a zero IV,
-    /// which on one block is the block cipher itself.
-    static func crypt(_ alg: UInt8, _ key: Data, _ block: Data, encrypt: Bool) throws -> Data {
-        guard block.count == (alg == 0x03 ? 8 : 16) else { throw fail(.card, "the YubiKey's challenge is not one block") }
+    /// One block with the management key, AES: CBC with a zero IV, which
+    /// on one block is the block cipher itself.
+    static func crypt(_ key: Data, _ block: Data, encrypt: Bool) throws -> Data {
+        guard block.count == 16 else { throw fail(.card, "the YubiKey's challenge is not one block") }
         #if canImport(CommonCrypto)
-        let algorithm = alg == 0x03 ? CCAlgorithm(kCCAlgorithm3DES) : CCAlgorithm(kCCAlgorithmAES)
+        let algorithm = CCAlgorithm(kCCAlgorithmAES)
         var out = Data(count: block.count)
         var moved = 0
         let status = out.withUnsafeMutableBytes { o in
@@ -245,8 +250,6 @@ public enum Piv {
         guard status == CCCryptorStatus(kCCSuccess), moved == block.count else { throw fail(.card, "the management key's cipher failed") }
         return out
         #else
-        // 3DES has no implementation here.
-        guard alg != 0x03 else { throw fail(.managementKey, "3DES is not available on this platform") }
         let k = SymmetricKey(data: key)
         let iv = try AES._CBC.IV(ivBytes: [UInt8](repeating: 0, count: 16))
         if encrypt {
