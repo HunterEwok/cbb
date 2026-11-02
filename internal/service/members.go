@@ -117,7 +117,7 @@ func (s *Service) serveMember(ctx context.Context, raw net.Conn, release func())
 	release()
 	released = true
 	if err := s.nd.Serve(ctx, tc); err != nil {
-		s.logf("cbb: connection from %s: %v", raw.RemoteAddr(), err)
+		s.logEnd(err, "cbb: connection from %s: %v", raw.RemoteAddr(), err)
 	}
 }
 

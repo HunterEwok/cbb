@@ -264,20 +264,30 @@ private fun PasteOn(model: AppModel, d: LiveGroup.Device, dismiss: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
                 Text(stringResource(R.string.paste_on_body, d.name))
-                OutlinedTextField(value = text, onValueChange = { text = it }, minLines = 3, maxLines = 10, label = { Text(stringResource(R.string.paste_text)) })
-                TextButton(onClick = { clipText(context)?.let { text = it } }) { Text(stringResource(R.string.paste_from_clipboard), color = palette.accent) }
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it }, minLines = 3, maxLines = 10,
+                    label = { Text(stringResource(R.string.paste_text)) },
+                    supportingText = { Text(stringResource(R.string.paste_empty_clipboard)) },
+                )
+                // Why the device did not take it, right under the text.
+                model.message?.takeIf { !sending }?.let { NoteText(it) }
                 Switch(stringResource(R.string.paste_type), typing) { typing = it }
                 Switch(stringResource(R.string.paste_enter), enter) { enter = it }
                 Switch(stringResource(R.string.paste_secret), secret) { secret = it }
                 Text(stringResource(R.string.paste_note), style = MaterialTheme.typography.bodySmall)
-                model.message?.takeIf { !sending }?.let { NoteText(it, dim = true) }
             }
         },
         confirmButton = {
-            TextButton(enabled = text.isNotEmpty() && !sending, onClick = {
+            TextButton(enabled = !sending, onClick = {
+                // An empty field sends what the phone's clipboard holds.
+                val out = text.ifEmpty { clipText(context).orEmpty() }
+                if (out.isEmpty()) {
+                    model.message = AppModel.Note(R.string.paste_clipboard_empty, error = true)
+                    return@TextButton
+                }
                 sending = true
                 scope.launch {
-                    val done = model.paste(d.id, text, if (typing) "type" else "paste", enter, secret)
+                    val done = model.paste(d.id, out, if (typing) "type" else "paste", enter, secret)
                     sending = false
                     if (done) dismiss()
                 }

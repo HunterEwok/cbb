@@ -7,6 +7,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- A single-colour glyph for the Mac's menu bar and the tray on Windows and Linux: the app icon's
+  clipboard and key, in three states (no group, in a group, another device online). `tools/icon`
+  makes the Mac's template images, the symbolic SVGs for Linux and white and black ICOs for
+  Windows from the drawings in `apps/design/icon/tray`.
 - The phones seal their commands too: a paste, a mode, an action or a hub command to a device
   whose record has a key for sealed messages carries its orders sealed to that key, through
   the core's new `seal_command` (docs/core-api.md). A computer or a lite member sends its key
@@ -32,7 +36,19 @@ All notable changes to clipboardbridge are documented in this file. The format f
   last backup (`signed.json` in the state directory keeps its log).
 - Before a record its user asks for, a computer waits up to 10 seconds for another member's
   records, so that one brought back from a backup does not sign a number it signed already.
-
+- The phone's Send or receive says where a text went or came from and that it is ready to
+  paste ("Ready to paste: “…” from Mac.lan", "Sent to Mac.lan"), with a tap in the hand while
+  the app is in front; the Shortcuts action (Back Tap) shows its progress while it connects,
+  and with Live Activities the Dynamic Island says so.
+- `apps/ios/device.sh` installs the iPhone app and its watch app on your own phone and watch,
+  signed by a free Personal Team (an Apple ID in Xcode, no developer account), with a bundle
+  identifier of its own; CONTRIBUTING.md, "The iPhone app on your own phone".
+- The Mac app and the tray app list the device they run on too, first and marked as this
+  Mac or this computer, as the phones do, and count it in "N of M online".
+- The Apple Watch and Wear OS apps list their phone too, first and marked as the watch's
+  phone, as the phone's own list has it.
+- The Apple Watch app and the Mac app have the app's icon (`tools/icon` draws them too); before,
+  watchOS and macOS showed an empty one.
 - The key-level setting's format: the root's `settings` record may carry `key_level`
   (`proven`, `hardware` or `files`; docs/protocol.md, section 10), and the group's state carries it, in
   Go and the Rust core alike. The apps' setting and its checks come later.
@@ -698,6 +714,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Changed
 
+- `cbb global` no longer repeats that the device keeps its keys in files each time it
+  shows the status; `cbb global on` says it once, when the user agrees.
+- Remote paste on the phones: with the text left empty, Paste sends what the phone's
+  clipboard holds, and the button that put the clipboard in the field is gone.
 - On a Mac the service and the agent write their own logs, as on Windows:
   `/Library/Logs/clipboardbridge/service.log` and `~/Library/Logs/clipboardbridge/agent.log`,
   each line after the time, each moved to `.1` at 1 MiB, so a log no longer grows without
@@ -929,6 +949,41 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Fixed
 
+- The phones show where the hub can move while it has no forwarder yet, and ask for the
+  forwarder first, instead of hiding the choice.
+- A remote paste to a Mac answers in time when the Mac's clipboard holds what Universal
+  Clipboard brought from another Apple device: the app no longer reads it to put it back,
+  which fetched it from that device first, and it no longer naps while it pastes.
+- `cbb global` says "for 1 device", not "1 devices".
+- The iPhone app shows why a computer refused a remote paste under the text, where the
+  keyboard no longer hides it.
+- The Mac app shows "Allowed" for remote paste once Accessibility allows it, without
+  a restart, and "Allow…" opens System Settings again after the leave was taken back.
+- On Windows the service names the user of the agent, so it gives it remote pastes and quick
+  actions: the service's own account could not look up another user's process, and every
+  agent was a user the system does not name.
+- The iPhone app shows the group's notifications (a device joined, was removed, and the
+  others) while it is open too: iOS dropped them there.
+- `cbb keyboard` on a computer in no group said it cannot be a Bluetooth keyboard, though
+  the keyboard ran: the status left the keyboard out without a group. `cbb keyboard on
+  -layout us` works in the usage's order too, with the flags after the verb.
+- The tray app's buttons draw their icons in the middle: they were text symbols, which
+  Windows takes from fallback fonts that set them off centre.
+- A computer takes member connections to its IPv6 link-local address: it closed them at once,
+  as from a network it had not met its group on, so a phone that reached it that way (as
+  iOS often does) never connected. The log now says when it closes a connection for that.
+- The Mac and Windows installers no longer tell a device already in a group to join one
+  after an update.
+- A watcher the service refuses (a paste target or the quick actions offered by a user the
+  system does not name) is logged once in 10 minutes instead of at each try, every 2 seconds;
+  on Windows the line says what the system did not tell.
+- A computer's log no longer fills with a line each time a phone's system ends the app's
+  connection in the background (a reset or a close by the peer); with `CBB_DEBUG=1` the log
+  still has them, and a failed handshake is logged as before.
+- The phone app finds the computers again when iOS stopped its browsing: on the first launch,
+  where it browses before the user allows the local network, and in the background. A browser
+  that waits or fails starts again (after 1 s, doubling to 30 s), and the app browses again
+  when it comes back to the front without a computer connected.
 - The tray app keeps the last of quick changes in its settings: two changes close together
   could leave the earlier one in `desktop.json`.
 - The tray app no longer hangs when the service does not answer, and opened while the

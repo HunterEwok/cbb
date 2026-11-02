@@ -221,6 +221,16 @@
         }
       }
     },
+    "This watch's iPhone" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone этих часов"
+          }
+        }
+      }
+    },
     "Through your hub.": {
       "localizations": {
         "ru": {

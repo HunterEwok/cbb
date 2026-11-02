@@ -41,6 +41,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.hunterewok.clipboardbridge.mac
         PRODUCT_NAME: CBB
+        # Drawn by tools/icon.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The app talks to the service's control socket and runs cbb, which the
         # App Sandbox does not allow; the Developer ID app (roadmap item 22)
         # carries the service itself.

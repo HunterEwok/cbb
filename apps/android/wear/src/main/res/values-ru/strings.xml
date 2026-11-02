@@ -12,6 +12,7 @@
     <string name="devices">Устройства</string>
     <string name="latest">Последнее</string>
     <string name="online">в сети</string>
+    <string name="watch_phone">Телефон этих часов</string>
     <string name="offline">не в сети</string>
     <string name="stale">По последним данным с телефона.</string>
     <string name="no_phone">Телефон не подключён. Поднесите его ближе и попробуйте снова.</string>

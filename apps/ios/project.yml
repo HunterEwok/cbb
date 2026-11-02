@@ -22,6 +22,10 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_EMIT_LOC_STRINGS: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    # The app's bundle identifier; the extensions' and the watch's start with it.
+    # device.sh sets another one for a build signed by a free Personal Team, so
+    # that it never takes the identifiers the developer account will register.
+    CBB_BUNDLE_ID: io.github.hunterewok.clipboardbridge
 targets:
   ClipboardBridge:
     type: application
@@ -72,7 +76,7 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.hunterewok.clipboardbridge
+        PRODUCT_BUNDLE_IDENTIFIER: $(CBB_BUNDLE_ID)
         # Drawn by tools/icon.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -111,7 +115,7 @@ targets:
               NSExtensionActivationSupportsFileWithMaxCount: 10
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.hunterewok.clipboardbridge.share
+        PRODUCT_BUNDLE_IDENTIFIER: $(CBB_BUNDLE_ID).share
         TARGETED_DEVICE_FAMILY: "1,2"
       configs:
         Release:
@@ -137,7 +141,7 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.hunterewok.clipboardbridge.widgets
+        PRODUCT_BUNDLE_IDENTIFIER: $(CBB_BUNDLE_ID).widgets
         TARGETED_DEVICE_FAMILY: "1,2"
   Watch:
     type: application
@@ -155,10 +159,12 @@ targets:
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ru]
         WKApplication: true
-        WKCompanionAppBundleIdentifier: io.github.hunterewok.clipboardbridge
+        WKCompanionAppBundleIdentifier: $(CBB_BUNDLE_ID)
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.hunterewok.clipboardbridge.watchkitapp
+        PRODUCT_BUNDLE_IDENTIFIER: $(CBB_BUNDLE_ID).watchkitapp
+        # Drawn by tools/icon.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_EMIT_LOC_STRINGS: YES
   ClipboardBridgeTests:
     type: bundle.unit-test

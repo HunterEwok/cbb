@@ -365,4 +365,9 @@ if [ "$port" != 8764 ]; then
 	echo "incoming connections, allow TCP $port from the home network. The iPhone shortcut works only"
 	echo "with 8764; the Clipboard Bridge app takes any port."
 fi
-echo "Clipboard Bridge is running on TCP port $port. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new."
+# An update of a device in a group keeps its group: no need to join.
+if [ -f "/Library/Application Support/clipboardbridge/state/identity.json" ]; then
+	echo "Clipboard Bridge is running on TCP port $port, in its group."
+else
+	echo "Clipboard Bridge is running on TCP port $port. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new."
+fi

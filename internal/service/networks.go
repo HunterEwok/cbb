@@ -258,13 +258,15 @@ func (n *networks) Publish(name string, prefixes []netip.Prefix) bool {
 	return n.knownLocked(index, prefixes)
 }
 
-// find returns the interface that has the address a.
+// find returns the interface that has the address a. A link-local address
+// of a connection names its interface as its zone, which the interface's
+// own addresses have not.
 func (n *networks) find(a netip.Addr) (netInterface, bool) {
 	ifs, err := n.interfaces()
 	if err != nil {
 		return netInterface{}, false
 	}
-	a = a.Unmap()
+	a = a.WithZone("").Unmap()
 	for _, f := range ifs {
 		if slices.ContainsFunc(f.prefixes, func(p netip.Prefix) bool { return p.Addr() == a }) {
 			return f, true

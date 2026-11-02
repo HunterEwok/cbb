@@ -390,12 +390,12 @@ class AppModel(private val app: Context) {
                     h.isOn, status,
                     error?.let { Note(R.string.hub_failed, if (settings.showsErrorDetails) it else null, error = true) },
                     h.forwarder, h.background, group.onHomeNetwork, h.clients.size,
-                    computers = if (h.isOn && h.forwarder != null) {
+                    computers = if (h.isOn) {
                         group.computers.filter { it.online && it.role == "full" && (it.admin || it.canMakeAdmin) }.map { it.id to it.name }
                     } else {
                         emptyList()
                     },
-                    suggested = group.suggestedHub?.takeIf { h.forwarder != null && !settings.keepsPhoneHub }?.let { it.id to it.name },
+                    suggested = group.suggestedHub?.takeIf { h.isOn && !settings.keepsPhoneHub }?.let { it.id to it.name },
                 )
             }
         }

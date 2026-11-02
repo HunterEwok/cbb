@@ -13,6 +13,7 @@
     <string name="devices">Devices</string>
     <string name="latest">Latest</string>
     <string name="online">online</string>
+    <string name="watch_phone">This watch\'s phone</string>
     <string name="offline">offline</string>
     <string name="stale">As the phone last said.</string>
     <string name="no_phone">The phone is not connected. Bring it closer, then try again.</string>

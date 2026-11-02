@@ -160,16 +160,19 @@ Next steps, roughly in order:
    phones (sync away from home works between computers, on both phones and on the lite
    member: docs/protocol.md section 11), the lite member on the ESP32 (see docs/roadmap.md).
 
-Windows (the service, the agent, the installers) passes CI on windows-latest but is not yet
-tested on a real PC.
+Windows (the service, the agent, the installers) passes CI on windows-latest and runs in a
+Windows 11 virtual machine (Arm), where the tray app and the agent's clipboard work; not yet
+tested on a real PC, nor remote paste and the quick actions there from a phone.
 
 Not yet run on a real Android phone or emulator: the Keystore keys and BiometricPrompt,
 `ACCESS_LOCAL_NETWORK` on Android 17, the accessibility overlay getting the focus, the copy
 events of each maker's apps, the foreground service across reboots and battery savers.
 
-Not yet verified on a real iPhone: Secure Enclave key creation with user presence, the
-Face ID prompt and reuse of its context, the keychain identity lookup for TLS, listening
-for a joining phone (`TLSListener`), the admin CA in the TLS chain, making a computer an admin and the takeover (a new
-Secure Enclave root key signed right after the admin key), and a run of the background app refresh
-(the simulator has no BGTaskScheduler). Test these on
-a device before relying on them.
+Verified on a real iPhone, Apple Watch and Mac (apps/ios/device.sh, a free Personal Team):
+Secure Enclave key creation with user presence, the Face ID prompt, the keychain identity
+for TLS, the admin CA in the TLS chain, making a computer an admin, sync both ways, the
+watch's list, remote paste to the Mac at home and away from home (through a Mac hub and
+the `cbb.tools` forwarder). Not yet: listening for a joining phone
+(`TLSListener`), the takeover (a new Secure Enclave root key signed right after the admin
+key) and a run of the background app refresh (the simulator has no BGTaskScheduler); test
+these on a device before relying on them.

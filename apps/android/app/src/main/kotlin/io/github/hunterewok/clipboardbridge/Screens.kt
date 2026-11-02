@@ -873,15 +873,17 @@ private fun MoveHub(model: AppModel, hub: AppModel.Hub) {
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
     var asking by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val ready = hub.forwarder != null
     Text(stringResource(R.string.hub_move_title), fontWeight = FontWeight.SemiBold)
+    if (!ready) Text(stringResource(R.string.hub_move_needs_forwarder), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
     hub.suggested?.let { s ->
         Text(stringResource(R.string.hub_suggest, s.second), style = MaterialTheme.typography.bodyMedium)
-        AccentButton(stringResource(R.string.hub_suggest_yes), onClick = { asking = s })
+        AccentButton(stringResource(R.string.hub_suggest_yes), enabled = ready, onClick = { asking = s })
         QuietButton(stringResource(R.string.hub_suggest_keep), onClick = { scope.launch { model.keepPhoneHub() } })
     }
     Text(stringResource(R.string.hub_move_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
     for (c in hub.computers.filter { it != hub.suggested }) {
-        QuietButton(stringResource(R.string.hub_move_to, c.second), onClick = { asking = c })
+        QuietButton(stringResource(R.string.hub_move_to, c.second), enabled = ready, onClick = { asking = c })
     }
     asking?.let { c ->
         AlertDialog(

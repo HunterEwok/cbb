@@ -65,6 +65,11 @@ func TestKeyboardCommand(t *testing.T) {
 			})},
 		{name: "off", args: []string{"keyboard", "off"}, answer: control.Header{Status: &control.Status{Keyboard: &control.Keyboard{}}},
 			check: sent(control.OpKeyboard, func(m *control.Message) bool { return m.Name == "off" && m.Keyboard == nil }), stdout: "The Bluetooth keyboard is off"},
+		{name: "on before its flags", args: []string{"keyboard", "on", "-layout", "us"}, answer: on,
+			check: sent(control.OpKeyboard, func(m *control.Message) bool {
+				return m.Name == "on" && m.Keyboard != nil && *m.Keyboard == control.Keyboard{Layout: "us"}
+			})},
+		{name: "type a text like a flag", args: []string{"keyboard", "type", "-rate"}, check: sent(control.OpKeyboard, func(m *control.Message) bool { return string(m.Payload) == "-rate" }), stdout: "Typed."},
 		{name: "pair", args: []string{"keyboard", "pair"}, answer: on, check: sent(control.OpKeyboard, func(m *control.Message) bool { return m.Name == "pair" })},
 		{name: "type", args: []string{"keyboard", "type", "hi"}, check: sent(control.OpKeyboard, func(m *control.Message) bool { return string(m.Payload) == "hi" }), stdout: "Typed."},
 		{name: "type from stdin", args: []string{"keyboard", "type"}, stdin: "typed\n", check: sent(control.OpKeyboard, func(m *control.Message) bool { return string(m.Payload) == "typed" })},

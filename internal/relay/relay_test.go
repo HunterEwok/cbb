@@ -209,7 +209,10 @@ func receive(t *testing.T, ch chan string, what string) string {
 	select {
 	case v := <-ch:
 		return v
-	case <-time.After(20 * time.Second):
+	// A registration, a WireGuard handshake and a connection through the
+	// tunnel take far longer under -race on a loaded runner than they do
+	// anywhere else; the wait only says when to give up.
+	case <-time.After(time.Minute):
 		t.Fatalf("timed out waiting for %s", what)
 		return ""
 	}

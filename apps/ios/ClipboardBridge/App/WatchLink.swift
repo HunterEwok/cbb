@@ -99,7 +99,11 @@ final class WatchLink: NSObject {
             case .collection(let c, let ds): ds.map { ($0, c.name) }
             }
         }
-        s.devices = arranged.map { d, c in
+        // The phone itself first, as the phone's own list has it.
+        let me = model.devices.first(where: \.isSelf).map {
+            WatchState.Device(id: $0.id, name: $0.name, symbol: $0.kind.symbol, online: true, can: [], phone: true)
+        }
+        s.devices = (me.map { [$0] } ?? []) + arranged.map { d, c in
             WatchState.Device(id: d.id, name: d.name, symbol: d.kind.symbol, online: d.online,
                               can: model.group.watchActions(for: d.id), actions: d.actions, collection: c)
         }

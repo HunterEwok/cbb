@@ -51,6 +51,15 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(said, String(localized: "Sent to the computers.", bundle: .app))
     }
 
+    func testSaidNamesWhereAndWhat() {
+        XCTAssertEqual(AppModel.said(.sent(to: ["Mac.lan"])), String(localized: "Sent to \("Mac.lan").", bundle: .app))
+        XCTAssertEqual(AppModel.said(.fetched(from: "Mac.lan", preview: "hello")),
+                       String(localized: "Ready to paste: “\("hello")” from \("Mac.lan").", bundle: .app))
+        XCTAssertEqual(AppModel.said(.fetched(from: nil, preview: nil)), String(localized: "Ready to paste.", bundle: .app))
+        XCTAssertEqual(LiveGroup.preview("  first line  \nsecond"), "first line")
+        XCTAssertEqual(LiveGroup.preview(String(repeating: "a", count: 40), max: 30), String(repeating: "a", count: 30) + "…")
+    }
+
     func testSyncFromShortcutWithoutAGroupDoesNotWait() async {
         let m = AppModel(group: PendingGroup(), defaults: freshDefaults())
         let started = ContinuousClock.now
@@ -107,7 +116,7 @@ final class AppModelTests: XCTestCase {
             hasGroup = true
             computers = [.init(id: "a", name: "pi", online: true)]
         }
-        func sync() async throws -> AppModel.SyncResult { .sent }
+        func sync() async throws -> AppModel.SyncResult { .sent(to: []) }
         var refreshed = 0
         func refresh() async { refreshed += 1 }
         var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true)] }

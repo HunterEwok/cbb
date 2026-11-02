@@ -55,6 +55,10 @@ final class MacModel: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
             Task { await self?.refresh() }
         }
+        // Back from System Settings: show the leave to press keys at once.
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.pasteAllowed = Injector.allowed }
+        }
     }
 
     func refresh() async {

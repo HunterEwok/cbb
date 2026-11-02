@@ -74,7 +74,12 @@ struct WatchHome: View {
     private func row(_ d: WatchState.Device) -> some View {
         HStack {
             Image(systemName: d.symbol).foregroundStyle(palette.accent).frame(width: 24).accessibilityHidden(true)
-            Text(verbatim: d.name).lineLimit(1)
+            VStack(alignment: .leading) {
+                Text(verbatim: d.name).lineLimit(1)
+                if d.phone == true {
+                    Text("This watch's iPhone").font(.caption2).foregroundStyle(palette.textDim)
+                }
+            }
             Spacer()
             Circle().fill(d.online ? palette.accent : palette.textDim.opacity(0.4)).frame(width: 8, height: 8)
         }
