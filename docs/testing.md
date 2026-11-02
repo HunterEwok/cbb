@@ -136,8 +136,9 @@ go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/au
 ## Not tested yet
 
 What has not run on real devices is listed in the [README](../README.md#status): the
-phones' hardware keys, Face ID and the fingerprint, Android 17's local network permission,
-the background app refresh and the Windows service on a real PC among them. Do not rely on
+Android phones' hardware keys and the fingerprint, Android 17's local network permission,
+the iPhone's background app refresh and takeover, and the Windows service on a real PC
+among them. Do not rely on
 these before the bench has run them.
 
 ## Red tests

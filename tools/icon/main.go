@@ -7,10 +7,15 @@
 // not the drawing. The clipboard's board sits in the middle, as far from the
 // top edge as from the bottom one; the clip above it reaches into the top
 // margin. For the iPhone it writes opaque 1024 by 1024 PNGs, the
-// light one for the system's light mode and the dark one for dark mode. For
+// light one for the system's light mode and the dark one for dark mode; for
+// the watch an opaque one with a smaller board, which the watch's round mask
+// leaves whole. For the Mac, whose system draws no mask, it writes the
+// rounded square of macOS's icon grid (824 of 1024 pixels, a corner of 185)
+// on a transparent canvas, at every size the Mac's icon set takes. For
 // Android it writes the foreground of the adaptive icon, the light clipboard
 // on a transparent 432 by 432 canvas inside the launcher's safe zone; the
 // fill is the icon's background colour in res/values/ic_launcher.xml.
+// The single-colour glyph of the menu bar and the tray is in tray.go.
 //
 //	go run ./tools/icon          rewrite the icons
 //	go run ./tools/icon -check   fail if they are out of date
@@ -25,27 +30,41 @@ import (
 	"image/png"
 	"math"
 	"os"
+	"path/filepath"
 )
 
 const (
 	appIcon     = "apps/ios/ClipboardBridge/Resources/Assets.xcassets/AppIcon.appiconset/"
+	watchIcon   = "apps/ios/Watch/Assets.xcassets/AppIcon.appiconset/"
+	macIcon     = "apps/macos/ClipboardBridgeMac/Resources/Assets.xcassets/AppIcon.appiconset/"
 	androidIcon = "apps/android/shared/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
 )
 
-var icons = []struct {
+// The light theme's background, the icon's fill.
+var paper = color.RGBA{0xF5, 0xF0, 0xE4, 0xFF}
+
+type iconSpec struct {
 	drawing, out string
 	fill         color.RGBA
 	// size is the image's width and height in pixels; height the
 	// board's height, of the image, without the clip.
 	size   int
 	height float64
-}{
-	{"apps/design/icon/light.png", appIcon + "AppIcon.png", color.RGBA{0xF5, 0xF0, 0xE4, 0xFF}, 1024, 0.78},
+	// mac sets the drawing in macOS's rounded square and writes it at
+	// each of the Mac's sizes, out naming the 1024 pixel one.
+	mac bool
+}
+
+var icons = []iconSpec{
+	{"apps/design/icon/light.png", appIcon + "AppIcon.png", paper, 1024, 0.78, false},
 	// The terminal theme's background (apps/design/tokens.json).
-	{"apps/design/icon/dark.png", appIcon + "AppIcon-Dark.png", color.RGBA{0x0A, 0x0F, 0x0C, 0xFF}, 1024, 0.78},
+	{"apps/design/icon/dark.png", appIcon + "AppIcon-Dark.png", color.RGBA{0x0A, 0x0F, 0x0C, 0xFF}, 1024, 0.78, false},
+	// The watch's circle cuts the corners: a board of 0.6 keeps its own.
+	{"apps/design/icon/light.png", watchIcon + "AppIcon.png", paper, 1024, 0.6, false},
+	{"apps/design/icon/light.png", macIcon + "AppIcon-512@2x.png", paper, 1024, 0.78, true},
 	// 108 dp with the inner 66 dp always shown, at 4 pixels a dp: a
 	// transparent fill, as the launcher draws the background below.
-	{"apps/design/icon/light.png", androidIcon, color.RGBA{}, 432, 0.5},
+	{"apps/design/icon/light.png", androidIcon, color.RGBA{}, 432, 0.5, false},
 }
 
 // opaqueBounds is the smallest rectangle holding every pixel of img that is
@@ -117,7 +136,7 @@ func sample(img image.Image, src image.Rectangle, x, y float64) [4]float64 {
 
 // compose draws the clipboard on fill, premultiplied; a transparent fill
 // keeps the drawing's own transparency.
-func compose(drawing image.Image, fill color.RGBA, size int, height float64) []byte {
+func compose(drawing image.Image, fill color.RGBA, size int, height float64) *image.RGBA {
 	src := opaqueBounds(drawing)
 	boardTop, boardBottom := board(drawing, src)
 	n := float64(size)
@@ -143,6 +162,10 @@ func compose(drawing image.Image, fill color.RGBA, size int, height float64) []b
 			img.SetRGBA(px, py, color.RGBA{mix(c[0], fill.R), mix(c[1], fill.G), mix(c[2], fill.B), alpha})
 		}
 	}
+	return img
+}
+
+func encode(img image.Image) []byte {
 	var buf bytes.Buffer
 	// An opaque image is written without an alpha channel, as the App
 	// Store requires.
@@ -150,6 +173,86 @@ func compose(drawing image.Image, fill color.RGBA, size int, height float64) []b
 		panic(err)
 	}
 	return buf.Bytes()
+}
+
+// macSquare is macOS's icon: img, opaque and 824 pixels square, cut to a
+// rounded square with corners of 185 pixels, in the middle of a transparent
+// 1024 pixel canvas.
+func macSquare(img *image.RGBA) *image.RGBA {
+	const canvas, side, radius = 1024, 824, 185.0
+	off := (canvas - side) / 2
+	out := image.NewRGBA(image.Rect(0, 0, canvas, canvas))
+	for y := 0; y < side; y++ {
+		for x := 0; x < side; x++ {
+			// Coverage of the pixel by the rounded square, from the distance
+			// of its centre to the nearest corner's circle.
+			cx := math.Max(0, math.Abs(float64(x)+0.5-side/2)-(side/2-radius))
+			cy := math.Max(0, math.Abs(float64(y)+0.5-side/2)-(side/2-radius))
+			cover := math.Min(1, math.Max(0, radius+0.5-math.Hypot(cx, cy)))
+			c := img.RGBAAt(x, y)
+			k := func(v uint8) uint8 { return uint8(math.Round(float64(v) * cover)) }
+			out.SetRGBA(x+off, y+off, color.RGBA{k(c.R), k(c.G), k(c.B), k(c.A)})
+		}
+	}
+	return out
+}
+
+// shrink is img, premultiplied and square, scaled down to size pixels by
+// averaging the source pixels under each target pixel.
+func shrink(img *image.RGBA, size int) *image.RGBA {
+	n := img.Bounds().Dx()
+	out := image.NewRGBA(image.Rect(0, 0, size, size))
+	f := float64(n) / float64(size)
+	for py := 0; py < size; py++ {
+		for px := 0; px < size; px++ {
+			var sum [4]float64
+			var w float64
+			for y := int(float64(py) * f); y < int(math.Ceil(float64(py+1)*f)) && y < n; y++ {
+				wy := math.Min(float64(y+1), float64(py+1)*f) - math.Max(float64(y), float64(py)*f)
+				for x := int(float64(px) * f); x < int(math.Ceil(float64(px+1)*f)) && x < n; x++ {
+					wx := math.Min(float64(x+1), float64(px+1)*f) - math.Max(float64(x), float64(px)*f)
+					c := img.RGBAAt(x, y)
+					sum[0] += wx * wy * float64(c.R)
+					sum[1] += wx * wy * float64(c.G)
+					sum[2] += wx * wy * float64(c.B)
+					sum[3] += wx * wy * float64(c.A)
+					w += wx * wy
+				}
+			}
+			v := func(i int) uint8 { return uint8(math.Round(sum[i] / w)) }
+			out.SetRGBA(px, py, color.RGBA{v(0), v(1), v(2), v(3)})
+		}
+	}
+	return out
+}
+
+// macSizes are the Mac icon set's images: points and scale.
+var macSizes = []struct{ points, scale int }{
+	{16, 1}, {16, 2}, {32, 1}, {32, 2}, {128, 1}, {128, 2}, {256, 1}, {256, 2}, {512, 1}, {512, 2},
+}
+
+func macName(points, scale int) string {
+	if scale == 1 {
+		return fmt.Sprintf("AppIcon-%d.png", points)
+	}
+	return fmt.Sprintf("AppIcon-%d@%dx.png", points, scale)
+}
+
+// outputs is what icon writes: each file and its bytes.
+func outputs(icon iconSpec, drawing image.Image) map[string][]byte {
+	if !icon.mac {
+		return map[string][]byte{icon.out: encode(compose(drawing, icon.fill, icon.size, icon.height))}
+	}
+	full := macSquare(compose(drawing, icon.fill, 824, icon.height))
+	files := map[string][]byte{}
+	for _, s := range macSizes {
+		img := full
+		if px := s.points * s.scale; px != 1024 {
+			img = shrink(full, px)
+		}
+		files[macIcon+macName(s.points, s.scale)] = encode(img)
+	}
+	return files
 }
 
 func main() {
@@ -167,16 +270,32 @@ func main() {
 			fmt.Fprintf(os.Stderr, "icon: %s: %v\n", icon.drawing, err)
 			os.Exit(1)
 		}
-		out := compose(drawing, icon.fill, icon.size, icon.height)
-		if *check {
-			cur, err := os.ReadFile(icon.out)
+		write(outputs(icon, drawing), *check)
+	}
+	tray, err := trayOutputs()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "icon:", err)
+		os.Exit(1)
+	}
+	write(tray, *check)
+}
+
+// write writes each file, or with check fails if one differs.
+func write(files map[string][]byte, check bool) {
+	for name, out := range files {
+		if check {
+			cur, err := os.ReadFile(name)
 			if err != nil || !bytes.Equal(cur, out) {
-				fmt.Fprintf(os.Stderr, "icon: %s is out of date; run go run ./tools/icon\n", icon.out)
+				fmt.Fprintf(os.Stderr, "icon: %s is out of date; run go run ./tools/icon\n", name)
 				os.Exit(1)
 			}
 			continue
 		}
-		if err := os.WriteFile(icon.out, out, 0o644); err != nil {
+		if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+			fmt.Fprintln(os.Stderr, "icon:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(name, out, 0o644); err != nil {
 			fmt.Fprintln(os.Stderr, "icon:", err)
 			os.Exit(1)
 		}

@@ -49,6 +49,10 @@ final class PasteTarget {
             var done = Control.Header(op: "injected")
             done.seq = seq
             let text = String(decoding: payload, as: UTF8.self)
+            // A menu bar app in the background naps, which stretches its
+            // waits; the paste is the user's own action and must answer soon.
+            let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiated, reason: "remote paste")
+            defer { ProcessInfo.processInfo.endActivity(activity) }
             if let failure = Injector.inject(text, method: m.method ?? "paste", enter: m.enter == true, secret: m.kind == "secret") {
                 done.error = failure.reason
                 done.refused = failure.refused ? true : nil
@@ -80,12 +84,24 @@ enum Injector {
     /// pasteboard is not a copy for the group.
     static let transient = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
     static let concealed = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+    /// The type Universal Clipboard marks another Apple device's items with.
+    static let remoteClipboard = NSPasteboard.PasteboardType("com.apple.is-remote-clipboard")
 
-    /// Whether macOS lets the app press keys (Accessibility).
-    static var allowed: Bool { CGPreflightPostEventAccess() }
+    /// Whether macOS lets the app press keys (Accessibility). The answer of
+    /// CGPreflightPostEventAccess can stay what it was when the app started,
+    /// so a leave given in System Settings while the app runs shows through
+    /// AXIsProcessTrusted, which reads the setting each time.
+    static var allowed: Bool { AXIsProcessTrusted() || CGPreflightPostEventAccess() }
 
-    /// Asks macOS for leave to press keys; it opens System Settings.
-    static func askLeave() { _ = CGRequestPostEventAccess() }
+    /// Asks macOS for leave to press keys. macOS asks only once; after that,
+    /// and when the user took the leave back by hand, the app opens the
+    /// Accessibility pane of System Settings itself.
+    static func askLeave() {
+        if CGRequestPostEventAccess() { return }
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
 
     /// Why keys cannot go to the focus now, or nil.
     static func blocked() -> Failure? {
@@ -183,7 +199,11 @@ enum Injector {
     private static func paste(_ text: String, secret: Bool, press: () -> Failure?) -> Failure? {
         let pb = NSPasteboard.general
         let (saved, ours) = onMain { () -> ([[(NSPasteboard.PasteboardType, Data)]], Int) in
-            let saved = (pb.pasteboardItems ?? []).map { item in
+            // What Universal Clipboard put here from another Apple device
+            // comes from that device when it is read, which can take
+            // seconds; the paste would miss its answer, so it is not kept.
+            let remote = pb.types?.contains(remoteClipboard) == true
+            let saved = remote ? [] : (pb.pasteboardItems ?? []).map { item in
                 item.types.compactMap { t in item.data(forType: t).map { (t, $0) } }
             }
             pb.clearContents()

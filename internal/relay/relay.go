@@ -115,6 +115,9 @@ type Relay struct {
 	requests *budget.Count
 	byAddr   map[netip.Addr]*member
 	calls    map[string]*call // by ticket
+	// setupWait is how long a registration may take to be set up:
+	// setupTimeout, longer in tests that hold setups open.
+	setupWait time.Duration
 	// requestWait is how long a connection in a tunnel may take to send
 	// its request line: requestTimeout, longer in tests.
 	requestWait time.Duration
@@ -226,7 +229,7 @@ func Listen(cfg Config) (*Relay, error) {
 		groups: map[string]map[string]*member{}, byAddr: map[netip.Addr]*member{}, calls: map[string]*call{},
 		records: map[string]*recordSet{}, tagLocks: map[string]*tagLock{}, allow: newAllowance(), now: time.Now,
 		periods: map[string]*period{}, setups: budget.NewCount(setupCaps), requests: budget.NewCount(requestCaps),
-		held: budget.NewCount(budget.Caps{}), recordBytes: budget.NewCount(budget.Caps{}), requestWait: requestTimeout}
+		held: budget.NewCount(budget.Caps{}), recordBytes: budget.NewCount(budget.Caps{}), requestWait: requestTimeout, setupWait: setupTimeout}
 	if cfg.Open {
 		r.limits = cfg.Limits.withDefaults()
 		r.held = budget.NewCount(r.limits.registrationCaps())

@@ -285,6 +285,40 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     cbb.tools runs it), or with REALITY, for forwarders without a web server. Every client
     speaks each of them; on the lite member VLESS comes first, then AmneziaWG and the blind
     relay ([below](#vless-behind-a-web-server)).
+- **47.** **After TestFlight.** Back Tap on the iPhone in two taps: iOS lets no app make a
+    shortcut or set Back Tap, so the app carries a signed shortcut file (`shortcuts sign
+    --mode anyone` on a Mac) that runs its Sync clipboard action. A button "Add the
+    double-tap shortcut", in Settings and after the first computer connects, opens it and iOS
+    asks to add it; a card then gives the steps to Settings, Accessibility, Touch, Back Tap,
+    Double Tap. The file names the release bundle identifier, so it waits for TestFlight; a
+    copy for a Personal Team build tests it before.
+- **48.** **Planned for 0.7.** The full name wherever a user reads it without typing it:
+    the apps on the phones, the watches and the computers say "Clipboard Bridge" in their
+    names, titles, menus, notifications, Shortcuts and Siri actions and the Mac's
+    application bundle (today the iPhone's home screen, its Shortcuts actions and Siri
+    phrases and `/Applications/CBB.app` say "CBB"). What a user types stays short: the
+    command `cbb`, its subcommands and the paths. Icon labels show the full name too, even where the
+    system shortens it: the iPhone's home screen, Android's launcher, the Windows Start menu
+    and taskbar, the Linux desktop's menus and tray.
+- **49.** **Planned for 0.7.** One set of languages across the project: every app (the
+    phones, the watches, the Mac app, the tray app) speaks the languages of the website
+    (Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and offers a choice
+    in Settings, System or one of them, remembered. Today only the phones offer System,
+    English or Russian; the Mac app follows the system's language and the tray app the
+    system's interface language on Windows and `LANGUAGE`/`LANG` on Linux. The command line
+    (`cbb`, the lite member) picks the language from the locale, and English where the
+    project has no translation for it. One list of the languages serves the site, the apps and
+    the command line; Arabic and Hebrew lay the screens out right to left; a native speaker
+    reads the new translations before a release.
+- **50.** **Planned for 0.7.** A LuCI page on OpenWrt, `luci-app-clipboardbridge`, in the
+    project's own apk feed: the group's devices and their state, adding a device with its
+    QR code, sync away from home and the hub, the network zones; the same sections in the
+    same order as the apps, in LuCI's own look. A JavaScript view with a small rpcd backend
+    that asks the service over its control socket, with an ACL that allows only that. Later,
+    after 1.0, when the protocol keeps backward compatibility: the official OpenWrt feeds,
+    a package for `openwrt/packages` built from source with OpenWrt's Go or Rust package
+    rules (likely the lite member, since the full `cbb` is too large for routers with 16 MB
+    of flash) and the page for `openwrt/luci`, with a maintainer for each.
 
 ## Devices that are hard to type into
 
@@ -427,9 +461,24 @@ One pull request each, smaller ones together:
 5. The iPad build of the iPhone app (done in 0.6: CI tests it on an iPad simulator too,
    and a keyboard's shortcuts work).
 
-The TV variant is part of the one APK of the phone app. For Apple TV a spike with pyatv on a
-real Apple TV with tvOS 26 comes before the Companion protocol in Go; if text input does not
-work there, Apple TV is reached through the Bluetooth keyboards only. A keyboard types with
+The TV variant is part of the one APK of the phone app. For Apple TV the spike with pyatv is
+done (2026-11-01, Apple TV 4K of the second generation, tvOS 27.2): the Companion protocol
+pairs with a PIN shown on the TV and then sets the whole text of the focused field at once,
+with no key presses, so the Companion protocol in Go comes next. The Bluetooth keyboard of a
+Linux computer typed on the same Apple TV too (a Steam Deck, 2026-11-01), with two fixes to
+make: the TV lists the computer twice under one name (its classic Bluetooth and the
+keyboard over Bluetooth LE, the one with a battery), so the keyboard needs a name of its own;
+and forgetting either entry on the TV forgets both, while the computer keeps its key and
+then fails every connection ("PIN or Key Missing"), so the keyboard drops a bond its host
+lost and becomes visible again. It typed in the TV's own layout: with Russian on the TV and
+`-layout us` on the computer, "clipboardbridge ble 123" came out in Cyrillic, the
+Russian letters on those keys, since a keyboard sends keys, not letters. For now the keyboard types as it is,
+and the apps get a "switch the layout" action for the keyboard's device, with the quick
+actions (restart and the others): the keyboard presses the device's shortcut
+(Control-Space on Apple's). The Apple TV accepts a new
+remote only while Settings, AirPlay and HomeKit, Allow Access is "Everyone on the Same
+Network" (or "Everyone"); with "Only People Sharing This Home" it refuses every pairing, so
+the app's steps and the user guide say to switch it before pairing. A keyboard types with
 whatever layout the user sets for the target. In keyboard mode the Nano ESP32 swaps its
 USB-JTAG console for a CDC console with a "reboot to flash" command, and a reset of its
 settings also erases its Bluetooth pairings.

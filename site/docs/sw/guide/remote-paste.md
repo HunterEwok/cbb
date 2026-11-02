@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3198a08e18fd -->
+<!-- source: 503bd28272de -->
 # Kubandika kwa mbali
 
 Kwa yeyote anayetaka kuweka maandishi kwenye programu ya kifaa kingine: nenosiri kwenye fomu ya kuingia ya televisheni, amri kwenye terminal ya seva, anwani kwenye kompyuta iliyo upande wa pili wa chumba. Msimamizi wa kikundi hutuma maandishi, nayo hutua mahali ambapo mwelekeo wa kifaa hicho upo, yakibandikwa au kuandikwa herufi kwa herufi.
@@ -36,7 +36,7 @@ cbb paste -on DEVICE -enter -secret < pass.txt  # presses Enter after it; kept a
 
 `DEVICE` ni jina la kifaa au kitambulisho chake kutoka `cbb status`. Amri husema maandishi yanapofika, au kwa nini kifaa kiliyakataa.
 
-Kwenye simu ya msimamizi, fungua ukurasa wa kifaa na uchague "Paste on it…": andika maandishi au yachukue kutoka kwenye ubao wa kunakili, chagua kubandika au kuandika, na uthibitishe kwa Face ID au alama ya kidole.
+Kwenye simu ya msimamizi, fungua ukurasa wa kifaa na uchague "Paste on it…": andika maandishi, au acha sehemu tupu ili kutuma kilicho kwenye ubao wa kunakili, chagua kubandika au kuandika, na uthibitishe kwa Face ID au alama ya kidole. iPhone huuliza kila mara kama programu inaweza kusoma ubao wa kunakili, hadi kwenye Mipangilio, Programu, CBB, "Bandika kutoka Programu Nyingine" uweke Ruhusu.
 
 Kuandika hufanya kazi katika mpangilio wowote wa kibodi kwenye X11, vikusanyaji vya Wayland vyenye kibodi pepe, Windows na Mac. Kwenye GNOME na KDE kupitia kisanduku cha mazungumzo, kubandika hufanya kazi lakini kuandika hakufanyi, kwa kuwa vitufe vingefuata mpangilio wa mtumiaji.
 

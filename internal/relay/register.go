@@ -256,7 +256,7 @@ func (r *Relay) serveRegistration(raw net.Conn, from netip.Addr) {
 // certificate, then the proof that it holds its WireGuard key, bound to
 // this TLS session, as with the forwarder.
 func (r *Relay) register(raw net.Conn, from netip.Addr) (*member, error) {
-	raw.SetDeadline(time.Now().Add(setupTimeout))
+	raw.SetDeadline(time.Now().Add(r.setupWait))
 	tc := tls.Server(raw, r.tlsCfg)
 	if err := tc.Handshake(); err != nil {
 		return nil, err

@@ -81,7 +81,7 @@ func TestRequestsBoundBySourceAndGroup(t *testing.T) {
 // address may have read, and still reads the requests of devices from
 // elsewhere.
 func TestRegisteredStrangersLeaveRequestSlots(t *testing.T) {
-	r, l, link := startPosing(t)
+	r, l, link := startPosing(t, setupTimeout)
 	// The idle connections stay until all are open, however slowly they
 	// open (the race detector makes the tunnels slow).
 	r.mu.Lock()

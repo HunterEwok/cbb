@@ -64,6 +64,9 @@ public actor MemberDialer {
     let maxWait: TimeInterval
     private var found: Set<String> = []
     private var tasks: [String: Task<Void, Never>] = [:]
+    /// The latest task of each member, so that one hurry replaced ends
+    /// without removing the new one.
+    private var turns: [String: Int] = [:]
     private var direct: Set<String> = []
     private var stopped = false
 
@@ -91,9 +94,26 @@ public actor MemberDialer {
         guard !stopped else { return }
         found = Set(members.filter { $0.group == group }.map(\.device))
         for d in found.sorted() where tasks[d] == nil && tasks.count < Self.maxDialed {
-            let m = FoundMember(device: d, group: group)
-            tasks[d] = Task { await self.keep(m) }
+            begin(d)
         }
+    }
+
+    /// Dials at once every found member not connected now, instead of after
+    /// its wait: as when the app comes back to the front, or the Shortcuts
+    /// action wakes it, and iOS dropped the connections meanwhile.
+    public func hurry() {
+        guard !stopped else { return }
+        for d in found.sorted() where !direct.contains(d) {
+            tasks[d]?.cancel()
+            begin(d)
+        }
+    }
+
+    private func begin(_ d: String) {
+        let turn = (turns[d] ?? 0) + 1
+        turns[d] = turn
+        let m = FoundMember(device: d, group: group)
+        tasks[d] = Task { await self.keep(m, turn: turn) }
     }
 
     /// Stops dialing; the node's connections stay until closed.
@@ -105,13 +125,22 @@ public actor MemberDialer {
 
     private func stillWanted(_ d: String) -> Bool { !stopped && found.contains(d) }
 
-    private func done(_ d: String) { tasks[d] = nil }
+    private func done(_ d: String, turn: Int) {
+        guard turns[d] == turn else { return }
+        tasks[d] = nil
+    }
 
-    private func keep(_ m: FoundMember) async {
+    private func keep(_ m: FoundMember, turn: Int) async {
         var wait = firstWait
         while stillWanted(m.device), !Task.isCancelled {
             let started = ProcessInfo.processInfo.systemUptime
             if let t = try? await dial(m) {
+                // A hurry replaced this task while it dialed: the new one
+                // keeps the member.
+                if Task.isCancelled || turns[m.device] != turn {
+                    t.close()
+                    break
+                }
                 direct.insert(m.device)
                 try? await node.serve(t, peer: m.device)
                 direct.remove(m.device)
@@ -121,6 +150,6 @@ public actor MemberDialer {
             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
             wait = min(wait * 2, maxWait)
         }
-        done(m.device)
+        done(m.device, turn: turn)
     }
 }

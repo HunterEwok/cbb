@@ -73,8 +73,9 @@ func (l *posing) dialAs(t *testing.T, a netip.Addr) net.Conn {
 	return c
 }
 
-// startPosing runs an open relay behind a posing listener.
-func startPosing(t *testing.T) (*Relay, *posing, Link) {
+// startPosing runs an open relay behind a posing listener, whose
+// registrations may take setupWait to be set up.
+func startPosing(t *testing.T, setupWait time.Duration) (*Relay, *posing, Link) {
 	t.Helper()
 	keys, err := NewKeys()
 	if err != nil {
@@ -86,6 +87,7 @@ func startPosing(t *testing.T) (*Relay, *posing, Link) {
 	}
 	l := &posing{Listener: r.tcp, as: map[uint16]netip.Addr{}, accepted: make(chan struct{}, 1), other: netip.MustParseAddr("198.51.100.20")}
 	r.tcp = l
+	r.setupWait = setupWait
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -107,10 +109,10 @@ func (r *Relay) settingNow() int {
 
 // Connections that never finish their setup hold only their address's and
 // network's share of the setups, and devices from elsewhere still register
-// and reach each other. The connections are opened well within setupTimeout,
-// which frees the first ones' setups.
+// and reach each other. The setups never time out here, so that on a slow
+// machine the first ones are still held when the last are counted.
 func TestSetupsBoundByAddress(t *testing.T) {
-	r, l, link := startPosing(t)
+	r, l, link := startPosing(t, time.Hour)
 	one := netip.MustParseAddr("203.0.113.7")
 	for range maxSetupsAddress + 10 {
 		l.dialAs(t, one)

@@ -164,3 +164,13 @@ final class Notifier {
         }
     }
 }
+
+/// Lets the group's notifications show while the app is in front too: iOS
+/// drops them there unless its delegate says how to present them.
+final class ForegroundNotifications: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
+    static let shared = ForegroundNotifications()
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+}

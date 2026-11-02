@@ -268,7 +268,7 @@ func (s *Service) serveGuest(ctx context.Context, raw net.Conn, from netip.Addr,
 			return
 		}
 		if err := nd.Serve(ctx, tc); err != nil && ctx.Err() == nil {
-			s.logf("cbb: connection from %s through its guest tunnel: %v", peer, err)
+			s.logEnd(err, "cbb: connection from %s through its guest tunnel: %v", peer, err)
 		}
 		// The device reaches the hub with its own key from now on.
 		s.tunMu.Lock()

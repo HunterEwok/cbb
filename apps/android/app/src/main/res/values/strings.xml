@@ -254,6 +254,7 @@
     <string name="hub_move_title">Move the hub to a computer</string>
     <string name="hub_move_body">A computer that is always on keeps sync away from home working while this app is closed. The devices that reach this phone from afar move with it.</string>
     <string name="hub_move_to">Make %1$s the hub</string>
+    <string name="hub_move_needs_forwarder">Save a forwarder above first: away from home, the devices reach the new hub through it.</string>
     <string name="hub_suggest">%1$s is always on. Make it the hub, so that sync away from home works while this app is closed?</string>
     <string name="hub_suggest_yes">Make it the hub</string>
     <string name="hub_suggest_keep">Keep this phone</string>
@@ -282,7 +283,8 @@
     <string name="paste_on_title">Paste on %1$s</string>
     <string name="paste_on_body">It goes where %1$s\'s keyboard focus is, once its user turned remote paste on there.</string>
     <string name="paste_text">Text</string>
-    <string name="paste_from_clipboard">From the clipboard</string>
+    <string name="paste_empty_clipboard">Left empty, the phone\'s clipboard goes.</string>
+    <string name="paste_clipboard_empty">The clipboard holds no text.</string>
     <string name="paste_type">Type it key by key</string>
     <string name="paste_enter">Press Enter after it</string>
     <string name="paste_secret">A secret</string>

@@ -63,14 +63,14 @@ final class StartUITests: XCTestCase {
             let b = app.segmentedControls.buttons[theme]
             XCTAssertTrue(b.waitForExistence(timeout: 5), "no theme \(theme)")
             b.tap()
-            XCTAssertTrue(b.isSelected, "\(theme) is not chosen after a tap")
+            XCTAssertTrue(selected(b), "\(theme) is not chosen after a tap")
         }
         app.segmentedControls.buttons["Dark"].tap()
         for colour in Self.colours {
             let b = app.buttons[colour]
             XCTAssertTrue(b.waitForExistence(timeout: 5), "no colour \(colour)")
             b.tap()
-            XCTAssertTrue(b.isSelected, "\(colour) is not chosen after a tap")
+            XCTAssertTrue(selected(b), "\(colour) is not chosen after a tap")
             for other in Self.colours where other != colour {
                 XCTAssertFalse(app.buttons[other].isSelected, "\(other) is still chosen with \(colour)")
             }
@@ -165,6 +165,15 @@ final class StartUITests: XCTestCase {
         XCTAssertTrue(settings.waitForExistence(timeout: 30))
         settings.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+    }
+
+    /// Whether e shows as selected within a few seconds: a tap reaches the
+    /// app's state and then the accessibility tree a moment later, more so
+    /// on a loaded simulator, so reading isSelected at once can see the
+    /// state before the tap.
+    private func selected(_ e: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        let done = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: e)
+        return XCTWaiter().wait(for: [done], timeout: timeout) == .completed
     }
 
     private func scrollTo(_ e: XCUIElement, in app: XCUIApplication) {

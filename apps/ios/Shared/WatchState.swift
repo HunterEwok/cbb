@@ -20,6 +20,9 @@ struct WatchState: Codable, Equatable {
         /// The name of the phone's collection it is in; nil in none, and
         /// from a phone before 0.6.
         var collection: String?
+        /// The watch's own phone, which the phone lists first as every app
+        /// lists the device it runs on; nil for the others.
+        var phone: Bool?
     }
 
     /// The devices as the watch lists them: those in no collection, then

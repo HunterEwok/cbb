@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3198a08e18fd -->
+<!-- source: 503bd28272de -->
 # Pegado remoto
 
 Para quien quiere poner un texto en una app de otro dispositivo: una contraseña en el formulario de inicio de sesión de un televisor, un comando en la terminal de un servidor, una dirección en un ordenador al otro lado de la habitación. Un administrador del grupo envía el texto, y aterriza donde esté el foco de ese dispositivo, pegado o escrito tecla a tecla.
@@ -36,7 +36,7 @@ cbb paste -on DEVICE -enter -secret < pass.txt  # presses Enter after it; kept a
 
 `DEVICE` es el nombre del dispositivo o su ID de `cbb status`. El comando dice cuándo ha llegado el texto, o por qué lo rechazó el dispositivo.
 
-En un teléfono administrador, abre la página del dispositivo y elige «Paste on it…»: escribe el texto o tómalo del portapapeles, elige pegar o escribir, y confirma con Face ID o la huella.
+En un teléfono administrador, abre la página del dispositivo y elige «Paste on it…»: escribe el texto, o deja el campo vacío para enviar lo que hay en el portapapeles, elige pegar o escribir, y confirma con Face ID o la huella. Un iPhone pregunta cada vez si la app puede leer el portapapeles, hasta que en Ajustes, Apps, CBB, «Pegar desde otras apps» está en Permitir.
 
 Escribir funciona con cualquier distribución de teclado en X11, en los compositores de Wayland con teclado virtual, en Windows y en el Mac. En GNOME y KDE a través del cuadro de diálogo, el pegado funciona pero escribir no, ya que las teclas seguirían la distribución del usuario.
 

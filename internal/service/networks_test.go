@@ -92,3 +92,18 @@ func TestKnownNetworksAtUpdate(t *testing.T) {
 		t.Errorf("the list was not saved: %v", err)
 	}
 }
+
+// A connection to a link-local address carries the interface as its zone,
+// which the interface's own address has not: it is the same address.
+func TestKnownNetworksLinkLocal(t *testing.T) {
+	home := netInterface{index: 4, name: "en0", prefixes: []netip.Prefix{
+		netip.MustParsePrefix("192.168.0.175/24"), netip.MustParsePrefix("fe80::1400:9600:8ed5:7ad4/64")}}
+	ifc, gw := home, "aa:bb:cc:dd:ee:ff"
+	n := fakeNetworks(t, t.TempDir(), false, &ifc, &gw)
+	if !n.Learn(netip.MustParseAddr("192.168.0.175")) {
+		t.Fatal("the network was not learned")
+	}
+	if a := netip.MustParseAddr("fe80::1400:9600:8ed5:7ad4%en0"); !n.Knows(a) {
+		t.Errorf("Knows(%v) = false on the network learned", a)
+	}
+}

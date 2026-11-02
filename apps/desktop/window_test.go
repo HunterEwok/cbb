@@ -189,9 +189,10 @@ var $css = (name) => getComputedStyle(document.documentElement).getPropertyValue
 func (w *window) themes(t *testing.T) {
 	w.t = t
 	d := w.open("en")
-	w.wait(`$all("#devices .tile").length === 13`)
+	// The 13 devices and this computer, first.
+	w.wait(`$all("#devices .tile").length === 14 && $q("#devices .tile").dataset.id === "self"`)
 	var icons int
-	w.eval(`new Set($all("#devices .tile svg").map((s) => s.innerHTML)).size`, &icons)
+	w.eval(`new Set($all('#devices .tile:not([data-id="self"]) svg').map((s) => s.innerHTML)).size`, &icons)
 	if icons != 12 {
 		t.Errorf("the 13 devices of 12 kinds show %d different icons", icons)
 	}
@@ -237,11 +238,11 @@ func (w *window) themes(t *testing.T) {
 	w.waitSettings(d, func(s Settings) bool { return s.Appearance == "system" && s.Color == "terminal" })
 
 	w.eval(`$click('[data-layout="list"]')`, nil)
-	w.wait(`$all("#devices .list .row").length === 13`)
+	w.wait(`$all("#devices .list .row").length === 14`)
 	w.eval(`$click('[data-layout="orbit"]')`, nil)
 	w.wait(`$q("#devices").classList.contains("fixed") && $all("#devices [data-id]").length === 13`)
 	w.eval(`$click('[data-layout="tiles"]')`, nil)
-	w.wait(`$all("#devices .tiles .tile").length === 13`)
+	w.wait(`$all("#devices .tiles .tile").length === 14`)
 	w.waitSettings(d, func(s Settings) bool { return s.Layout == "tiles" })
 }
 
@@ -265,7 +266,7 @@ func (w *window) waitSettings(d *Desk, ok func(Settings) bool) {
 func (w *window) collections(t *testing.T) {
 	w.t = t
 	d := w.open("en")
-	w.wait(`$all("#devices .tile").length === 13`)
+	w.wait(`$all("#devices .tile").length === 14`)
 	w.eval(`$click("#arrange")`, nil)
 	w.wait(`$all(".cell.arranging").length === 13`)
 
@@ -318,7 +319,7 @@ func (w *window) collections(t *testing.T) {
 	w.eval(fmt.Sprintf(`$click('[data-menu="c:%s"]')`, id), nil)
 	w.wait(`$q("#tile-menu").open`)
 	w.eval(`$clickText("#tile-menu-items button", "Ungroup")`, nil)
-	w.wait(`!$q("[data-open]") && $all("#devices .tile").length === 13`)
+	w.wait(`!$q("[data-open]") && $all("#devices .tile").length === 14`)
 	var group []string
 	for _, dev := range w.svc.devices {
 		if !dev.Self {
@@ -346,7 +347,7 @@ func (w *window) collections(t *testing.T) {
 	w.eval(`$click('[data-filter="online"]')`, nil)
 	w.wait(fmt.Sprintf(`$all("#devices .tile").length === %d`, w.svc.online()))
 	w.eval(`$click('[data-filter="online"]')`, nil)
-	w.wait(`$all("#devices .tile").length === 13`)
+	w.wait(`$all("#devices .tile").length === 14`)
 }
 
 func indexOf(s []string, v string) int {
@@ -375,7 +376,7 @@ func (w *window) russian(t *testing.T) {
 		t.Errorf("the send button says %q, not %q", send, want)
 	}
 	w.eval(`$h()`, &head)
-	if want := fmt.Sprintf(strings.ReplaceAll(d.T("%d of %d online"), "%d", "%v"), w.svc.online(), 13); head != want {
+	if want := fmt.Sprintf(strings.ReplaceAll(d.T("%d of %d online"), "%d", "%v"), w.svc.online(), 14); head != want {
 		t.Errorf("the headline says %q, not %q", head, want)
 	}
 }
@@ -411,7 +412,7 @@ func (w *window) errors(t *testing.T) {
 		t.Errorf("the window says something went wrong: %q", body)
 	}
 	w.svc.start()
-	w.wait(`$h() === "` + fmt.Sprintf("%d of %d online", w.svc.online(), 13) + `"`)
+	w.wait(`$h() === "` + fmt.Sprintf("%d of %d online", w.svc.online(), 14) + `"`)
 }
 
 // admin (A5, the window's side): an admin's rename asks for the name and
@@ -439,7 +440,7 @@ func (w *window) admin(t *testing.T) {
 		return r
 	}
 	w.open("en")
-	w.wait(`$all("#devices .tile").length === 13`)
+	w.wait(`$all("#devices .tile").length === 14`)
 	w.eval(`$click('.tile[data-id="tv"]')`, nil)
 	w.wait(`!$q("#detail").hidden && $q('[data-action="rename"]')`)
 
@@ -535,11 +536,11 @@ func newFakeService(t *testing.T) *fakeService {
 	return s
 }
 
-// online counts the devices other than this one that are online.
+// online counts the devices online, this one with them.
 func (s *fakeService) online() int {
 	n := 0
 	for _, d := range s.devices {
-		if d.Online && !d.Self {
+		if d.Online || d.Self {
 			n++
 		}
 	}

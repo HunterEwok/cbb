@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct ClipboardBridgeApp: App {
@@ -9,6 +10,7 @@ struct ClipboardBridgeApp: App {
 
     init() {
         Appearance.migrate()
+        UNUserNotificationCenter.current().delegate = ForegroundNotifications.shared
         // Early, for a watch that asks while the app is not running.
         WatchLink.shared.start()
     }
