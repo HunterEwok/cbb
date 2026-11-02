@@ -124,8 +124,12 @@ func TestSwiftRestoresWithRecoveryKey(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	b64 := base64.StdEncoding.EncodeToString
+	raw, err := key.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
 	cmd := exec.CommandContext(ctx, tool, "restore-tls", "127.0.0.1", strconv.Itoa(ln.Addr().(*net.TCPAddr).Port),
-		b64(key.D.FillBytes(make([]byte, 32))), b64(ca.Raw), group.Tag(admin.GroupCA.Cert))
+		b64(raw), b64(ca.Raw), group.Tag(admin.GroupCA.Cert))
 	var out, errOut strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	if err := cmd.Run(); err != nil {

@@ -7,13 +7,15 @@ import VisionKit
 /// With restore, it reads the recovery sheet's QR code instead, on a phone
 /// without a group, and the key may be pasted by hand.
 struct AddDeviceView: View {
-    var restore = false
+    let restore: Bool
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var typed = ""
     /// The device being admitted; leaving the sheet cancels it.
     @State private var adding: Task<Void, Never>?
+
+    init(restore: Bool = false) { self.restore = restore }
 
     var body: some View {
         NavigationStack {
