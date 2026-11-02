@@ -89,6 +89,8 @@ pub struct Esp {
     turn: u8,
     /// Counts the ESP's answers, so a wait is timed from the last one.
     answers: u64,
+    /// The dial in flight found its slot still open.
+    already: bool,
 }
 
 impl Default for Esp {
@@ -113,14 +115,27 @@ impl Esp {
             sends: Default::default(),
             turn: 0,
             answers: 0,
+            already: false,
         };
         e.start();
         e
     }
 
     fn start(&mut self) {
-        self.queue.clear();
-        self.sends.iter_mut().for_each(VecDeque::clear);
+        // What was still to do is lost: a dial waiting for its turn fails,
+        // and so does a connection whose bytes did not all go out, as its
+        // stream would go on with a gap.
+        for cmd in std::mem::take(&mut self.queue) {
+            if let Cmd::Dial { id, .. } = cmd {
+                self.events.push(Event::Failed(id, "the ESP started again".into()));
+            }
+        }
+        for (id, q) in self.sends.iter_mut().enumerate() {
+            if !q.is_empty() {
+                q.clear();
+                self.events.push(Event::Failed(id as u8, "the ESP started again".into()));
+            }
+        }
         self.current = None;
         self.wait = Wait::None;
         self.ready = false;
@@ -212,6 +227,11 @@ impl Esp {
         }
         self.buf.clear();
         self.start();
+    }
+
+    /// Whether a dial waits for the ESP's answer.
+    pub fn dialing(&self) -> bool {
+        matches!(self.current, Some(Cmd::Dial { .. }))
     }
 
     /// Whether a command waits for the ESP's answer.
@@ -311,7 +331,10 @@ impl Esp {
                 }
                 self.start();
             }
-            "OK" | "ALREADY CONNECTED" | "no change" if self.wait == Wait::Answer => self.done(),
+            // A dial of a slot the ESP still holds from before; its OK or
+            // ERROR follows.
+            "ALREADY CONNECTED" if self.wait == Wait::Answer => self.already = true,
+            "OK" | "no change" if self.wait == Wait::Answer => self.done(),
             "OK" if self.wait == Wait::Prompt => {} // AT+CIPSEND's OK before its prompt
             "SEND OK" if self.wait == Wait::SendOk => {
                 if let Some(Cmd::Send { id, .. }) = self.current {
@@ -324,7 +347,30 @@ impl Esp {
         }
     }
 
+    /// A dial that found its slot still open (a restart of the link or of
+    /// the setup): UDP goes on in it, while a TCP stream from before cannot
+    /// carry a new one, so it closes and the dial fails, to be tried again.
+    fn already_open(&mut self) -> bool {
+        if !std::mem::take(&mut self.already) {
+            return false;
+        }
+        let Some(Cmd::Dial { id, line }) = self.current.take() else { return false };
+        self.answers += 1;
+        if line.contains("\"UDP\"") {
+            self.events.push(Event::Connected(id));
+        } else {
+            self.events.push(Event::Failed(id, "the ESP's connection was still open".into()));
+            self.queue.push_front(Cmd::Close(id));
+        }
+        self.wait = Wait::None;
+        self.next();
+        true
+    }
+
     fn done(&mut self) {
+        if self.already_open() {
+            return;
+        }
         self.answers += 1;
         if matches!(self.current, Some(Cmd::Mux)) {
             self.ready = true;
@@ -336,6 +382,9 @@ impl Esp {
     }
 
     fn failed(&mut self, why: &str) {
+        if self.already_open() {
+            return;
+        }
         self.answers += 1;
         match self.current.take() {
             // Connections are open (`link is builded`), so several were
@@ -391,6 +440,7 @@ impl Esp {
         self.out.extend_from_slice(b"\r\n");
         self.current = Some(cmd);
         self.wait = wait;
+        self.already = false;
     }
 }
 
@@ -636,5 +686,36 @@ mod tests {
         e.send(0, b"x");
         sent(&mut e);
         assert_eq!(e.answers(), before + 2); // the prompt and SEND OK
+    }
+
+    #[test]
+    fn a_slot_still_open() {
+        let mut e = ready();
+        e.dial_udp(4, "hub.example", 51820, 8770);
+        talk(&mut e, "AT+CIPSTART=4,\"UDP\",\"hub.example\",51820,8770,0\r\n", b"ALREADY CONNECTED\r\n\r\nERROR\r\n");
+        assert_eq!(e.take_events(), vec![Event::Connected(4)]);
+        assert!(!e.busy());
+        e.dial_tcp(3, "10.0.0.1", 8764);
+        talk(&mut e, "AT+CIPSTART=3,\"TCP\",\"10.0.0.1\",8764\r\n", b"ALREADY CONNECTED\r\n\r\nERROR\r\n");
+        assert_eq!(e.take_events(), vec![Event::Failed(3, "the ESP's connection was still open".into())]);
+        assert_eq!(e.take_output(), b"AT+CIPCLOSE=3\r\n");
+    }
+
+    #[test]
+    fn a_restart_fails_what_waited() {
+        let mut e = ready();
+        e.dial_tcp(3, "10.0.0.1", 8764);
+        e.dial_udp(4, "hub.example", 51820, 8770);
+        e.send(0, b"lost");
+        e.timeout();
+        assert_eq!(
+            e.take_events(),
+            vec![
+                Event::Failed(3, "the ESP did not answer".into()),
+                Event::Failed(4, "the ESP started again".into()),
+                Event::Failed(0, "the ESP started again".into()),
+            ]
+        );
+        assert!(!e.dialing());
     }
 }

@@ -33,6 +33,13 @@ pub const READY: &[u8] = b"CBBLINK\r\n";
 pub const PORT: u16 = 8769;
 /// How long the ESP may take to answer a command.
 const ESP_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long it may take to answer a dial: it tries a host that does not
+/// answer for several seconds before it gives up.
+const DIAL_TIMEOUT: Duration = Duration::from_secs(30);
+/// The waits after a failed dial of -to before the next, doubling: while
+/// the ESP dials it does nothing else, so a peer it cannot reach (away from
+/// home) would hold back the tunnel's datagrams.
+const DIAL_BACKOFF: (Duration, Duration) = (Duration::from_secs(5), Duration::from_secs(60));
 /// How far the Pi's clock may be off before the Next's sets it.
 const CLOCK_SLACK: i64 = 2;
 /// The ESP's connection that carries the datagrams of `-udp`: the last, as
@@ -121,6 +128,9 @@ pub struct Link<W: Write> {
     conns: Vec<Option<Conn>>,
     gens: u64,
     busy_since: Option<Instant>,
+    /// No dial of -to before this, after a failed one, and the last wait.
+    dial_after: Option<Instant>,
+    dial_wait: Duration,
     /// The ESP's answers when busy_since was set.
     answers: u64,
     keys: VecDeque<u8>,
@@ -151,6 +161,8 @@ impl<W: Write> Link<W> {
             conns: (0..esp::LINKS).map(|_| None).collect(),
             gens: 0,
             busy_since: None,
+            dial_after: None,
+            dial_wait: Duration::ZERO,
             answers: 0,
             keys: VecDeque::new(),
             keys_sent: None,
@@ -179,7 +191,7 @@ impl<W: Write> Link<W> {
         match m {
             Msg::Uart(b) => self.uart(&b),
             Msg::UartClosed => self.quit = true,
-            Msg::Accepted(s) => self.accepted(s),
+            Msg::Accepted(s) => self.accepted(s, now),
             Msg::Datagram(from, data) => self.datagram(from, data),
             Msg::Local(id, use_, data) => {
                 if let Some(c) = self.conn(id, use_) {
@@ -239,7 +251,12 @@ impl<W: Write> Link<W> {
 
     /// The member dialled the local port. Dialled connections take the
     /// ESP's slots from the top, since the ESP gives its own from 0.
-    fn accepted(&mut self, stream: TcpStream) {
+    fn accepted(&mut self, stream: TcpStream, now: Instant) {
+        if self.dial_after.is_some_and(|t| now < t) {
+            // The member tries again later; the ESP stays free meanwhile.
+            stream.shutdown(Shutdown::Both).ok();
+            return;
+        }
         let top = if self.udp.is_some() { UDP_ID as usize } else { self.conns.len() };
         let free = self.conns[..top].iter().rposition(Option::is_none);
         let (Some(id), true) = (free, self.esp.ready()) else {
@@ -332,7 +349,8 @@ impl<W: Write> Link<W> {
         }
         if self.esp.busy() {
             let since = *self.busy_since.get_or_insert(now);
-            if now.duration_since(since) > ESP_TIMEOUT {
+            let limit = if self.esp.dialing() { DIAL_TIMEOUT } else { ESP_TIMEOUT };
+            if now.duration_since(since) > limit {
                 (self.log)("the ESP did not answer; starting it again");
                 self.esp.timeout();
                 self.busy_since = None;
@@ -349,6 +367,7 @@ impl<W: Write> Link<W> {
                 Event::Connected(id) if self.conns[id as usize].is_none() => self.inbound(id),
                 Event::Connected(id) => {
                     if let Some(c) = self.conns[id as usize].as_mut() {
+                        self.dial_wait = Duration::ZERO;
                         c.up = true;
                         let pending = std::mem::take(&mut c.pending);
                         if !pending.is_empty() {
@@ -367,7 +386,19 @@ impl<W: Write> Link<W> {
                     }
                 }
                 Event::Failed(id, why) => {
-                    (self.log)(&format!("cannot reach {}:{}: {why}", self.target.0, self.target.1));
+                    if self.conns[id as usize].as_ref().is_some_and(|c| !c.up) {
+                        // A dial of -to.
+                        self.dial_wait = (self.dial_wait * 2).clamp(DIAL_BACKOFF.0, DIAL_BACKOFF.1);
+                        self.dial_after = Some(now + self.dial_wait);
+                        (self.log)(&format!(
+                            "cannot reach {}:{}: {why}; trying again in {}s",
+                            self.target.0,
+                            self.target.1,
+                            self.dial_wait.as_secs()
+                        ));
+                    } else {
+                        (self.log)(&format!("the ESP's connection {id} broke off: {why}"));
+                    }
                     self.drop_conn(id);
                 }
                 Event::Closed(id) => self.drop_conn(id),
@@ -928,6 +959,35 @@ mod tests {
         }
         assert!(t.duration_since(now) > ESP_TIMEOUT);
         assert!(link.esp.ready());
+    }
+
+    #[test]
+    fn a_peer_out_of_reach_is_dialled_less_often() {
+        let (mut link, mut next, now) = new_link();
+        let mut at = 0;
+        link.handle(Msg::Uart(encode(frame::HELLO, b"")), now);
+        for cmd in ["AT\r\n", "ATE0\r\n", "AT+CIPMUX=1\r\n"] {
+            let (esp, ack) = sent(&link, &mut next, &mut at);
+            assert_eq!(esp, cmd);
+            link.handle(Msg::Uart(ack), now);
+            link.handle(from_esp(b"\r\nOK\r\n"), now);
+        }
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let dial = |link: &mut Link<Vec<u8>>, t| {
+            let _member = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+            link.handle(Msg::Accepted(l.accept().unwrap().0), t);
+        };
+        dial(&mut link, now);
+        let (esp, ack) = sent(&link, &mut next, &mut at);
+        assert!(esp.starts_with("AT+CIPSTART=4,\"TCP\""), "{esp}");
+        link.handle(Msg::Uart(ack), now);
+        link.handle(from_esp(b"4,CONNECT FAIL\r\n\r\nERROR\r\n"), now);
+        // Right after, the member's next try is turned away at once.
+        dial(&mut link, now + Duration::from_secs(1));
+        assert_eq!(sent(&link, &mut next, &mut at).0, "");
+        // After the wait it dials again.
+        dial(&mut link, now + DIAL_BACKOFF.0 + Duration::from_secs(1));
+        assert!(sent(&link, &mut next, &mut at).0.starts_with("AT+CIPSTART=4,"));
     }
 
     #[test]

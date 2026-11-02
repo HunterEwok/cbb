@@ -1071,6 +1071,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
   busy traffic, took more than 10 seconds of it for a silent ESP and set it up again, and after
   that took the ESP's refusal of `AT+CIPMUX=1` while connections were open as not ready, so it
   dialed nothing more.
+- `cbb next link` waits longer between dials of a `-to` it cannot reach (5 s, doubling to a
+  minute), and gives a dial 30 seconds: away from home each dial of the home address held the
+  ESP for seconds, and the tunnel's datagrams waited behind it. A restart of the ESP's setup now
+  fails what waited for it, the tunnel's dial included, instead of leaving it waiting for good,
+  and a dial of a slot the ESP still holds goes on for UDP and starts again for TCP.
 
 - On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
   network, instead of doing nothing.
