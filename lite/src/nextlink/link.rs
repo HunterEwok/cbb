@@ -299,7 +299,9 @@ impl<W: Write> Link<W> {
         if !self.hello {
             return;
         }
-        let ahead = self.sent.wrapping_sub(self.acked) as usize;
+        // An ack past what was sent counts a byte that was not a frame's
+        // (a stray LF the driver took): nothing is waiting then.
+        let ahead = (self.sent.wrapping_sub(self.acked) as i16).max(0) as usize;
         let room = frame::WINDOW.saturating_sub(ahead).min(self.wire.len());
         if room == 0 {
             return;
@@ -667,6 +669,17 @@ mod tests {
         assert_eq!(link.output().len(), frame::WINDOW);
         link.handle(Msg::Uart(encode(frame::ACK, &100u16.to_le_bytes())), now);
         assert_eq!(link.output().len(), frame::WINDOW + 100);
+    }
+
+    /// An ack that counts a stray byte besides the frames, before the
+    /// hello, leaves the window open.
+    #[test]
+    fn ack_past_what_was_sent() {
+        let (mut link, _, now) = new_link();
+        let mut wire = encode(frame::ACK, &1u16.to_le_bytes());
+        wire.extend(encode(frame::HELLO, b"cbb.drv 0.1"));
+        link.handle(Msg::Uart(wire), now);
+        assert!(!link.output().is_empty(), "the link waits for nothing");
     }
 
     /// Keys go 50 a second, whatever the driver's window allows.

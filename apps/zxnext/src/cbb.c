@@ -373,7 +373,13 @@ static int net_start(int argc, char **argv)
             link_quit(); // it may run without having said so
             return fail("cbb next link did not start on the Pi", err == LINK_BREAK ? "stopped" : "no CBBLINK");
         }
-        if (strstr(line, "CBBLINK")) break;
+        if (strstr(line, "CBBLINK")) {
+            // The line's LF: the driver would count it, and the link,
+            // which counts only its frames, would wait for the Next.
+            uint8_t lf;
+            link_recv(&lf, 1);
+            break;
+        }
         if (i > 0 && (strncmp(line, "cbb:", 4) == 0 || strncmp(line, "usage", 5) == 0)) {
             link_prompt();
             return fail("cbb next link failed on the Pi", line);
