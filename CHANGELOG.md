@@ -67,7 +67,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   NextPi's shell with the settings kept in `/cbb/NET.CFG` and turn `CBB.DRV` on once the link
   says it runs, stop both, and show how they stand (`-d`: the last dropped frame and the last
   bytes from the Pi; `cbb next link -trace` logs the ESP's lines). Run on a real Next: the
-  Pi dials a computer and takes connections through the ESP.
+  Pi dials a computer and takes connections through the ESP. `.cbb net join` joins the
+  group through the ESP: the QR code names the ESP's address, and the network runs under it.
 - A `handover` record: the group's root hands the group to an admin, whose claim then takes
   effect at once instead of after the delay, for moving the root to a new phone or from a
   computer to a phone. A `recovery` record carries the recovery key's admin CA (`cert`), so a
