@@ -174,13 +174,20 @@ import (
 	"unsafe"
 )
 
-// ref is a loaded key; the runtime releases it when its Key goes.
+// ref is a loaded key; the runtime releases it when its Key goes, unless
+// release has already.
 type ref struct{ h *handle }
 
-type handle struct{ key C.SecKeyRef }
+type handle struct {
+	key     C.SecKeyRef
+	cleanup runtime.Cleanup
+}
 
+// release frees the key now and stops the cleanup, which would free it a
+// second time.
 func (r ref) release() {
 	if r.h != nil && r.h.key != 0 {
+		r.h.cleanup.Stop()
 		C.cbbRelease(C.CFTypeRef(r.h.key))
 		r.h.key = 0
 	}
@@ -188,7 +195,7 @@ func (r ref) release() {
 
 func newRef(key C.SecKeyRef) ref {
 	h := &handle{key: key}
-	runtime.AddCleanup(h, func(k C.SecKeyRef) { C.cbbRelease(C.CFTypeRef(k)) }, key)
+	h.cleanup = runtime.AddCleanup(h, func(k C.SecKeyRef) { C.cbbRelease(C.CFTypeRef(k)) }, key)
 	return ref{h: h}
 }
 
