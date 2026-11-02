@@ -55,7 +55,7 @@ pub fn may_take(uid: Option<u32>, target: &str, at_screen: impl Fn(u32, &str) ->
     match uid {
         None => Verdict::Refused,
         Some(u) if privileged(u) => Verdict::Allowed,
-        Some(_) if target == crate::service::CONSOLE => Verdict::Refused,
+        Some(_) if target == crate::service::CONSOLE || target == crate::service::NEXT => Verdict::Refused,
         Some(u) => at_screen(u, target),
     }
 }

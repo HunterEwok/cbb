@@ -30,13 +30,13 @@ impl From<Error> for Fail {
     }
 }
 
-fn refuse<T>(why: impl Into<String>) -> std::result::Result<T, Fail> {
+pub(crate) fn refuse<T>(why: impl Into<String>) -> std::result::Result<T, Fail> {
     Err(Fail::Refused(why.into()))
 }
 
 /// A paste target.
 pub trait Target {
-    /// Its name in the watch request: tmux or console.
+    /// Its name in the watch request: tmux, console or next.
     fn name(&self) -> &'static str;
     /// Puts text where the focus is: pasted or typed, with Enter after it;
     /// no_lock_check lets it paste where nothing tells whether the session
@@ -58,7 +58,7 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
 
 /// Keeps a watch on the service for target, connecting again whenever the
 /// service goes away.
-fn serve(socket: &Path, target: &dyn Target, log: &dyn Fn(&str)) -> ! {
+pub(crate) fn serve(socket: &Path, target: &dyn Target, log: &dyn Fn(&str)) -> ! {
     let mut backoff = MIN_BACKOFF;
     loop {
         let start = std::time::Instant::now();
