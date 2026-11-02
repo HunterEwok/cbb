@@ -964,6 +964,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   once: each try came from a new UDP port, so a few seconds of it used up the forwarder's
   16 client addresses for the group, and every member of the group was shut out there for
   minutes. The phone's hub logs why a connection through its tunnel ended at once.
+- Android: the phone's hub starts its tunnel again when its member listener comes back on
+  another port; the tunnel went on joining its connections to the old port, where nothing
+  listened, so a computer away from home never got through.
 - The phones show where the hub can move while it has no forwarder yet, and ask for the
   forwarder first, instead of hiding the choice.
 - A remote paste to a Mac answers in time when the Mac's clipboard holds what Universal

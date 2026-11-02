@@ -416,7 +416,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val loop = synchronized(lock) { tunnelListener } ?: runCatching {
             MemberListener(n, member.privateKey, g.memberChain, trusted, onError = onError,
                 onEnded = { id -> Log.i(TAG, "a member connection to the hub through its tunnel ended: $id") })
-        }.onFailure { Log.w(TAG, "the hub cannot listen", it) }.getOrNull()?.also { l -> synchronized(lock) { tunnelListener = l } } ?: return
+        }.onFailure { Log.w(TAG, "the hub cannot listen", it) }.getOrNull()?.also { l ->
+            synchronized(lock) { tunnelListener = l }
+            Log.i(TAG, "the hub's member listener takes connections through the tunnel on port ${l.port}")
+        } ?: return
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         h.start(HubOnPhone.Group(loop.port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords))
         if (!h.isHome(currentNetwork())) {
@@ -448,9 +451,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     private fun stopHub() {
         stopHome()
-        val l = synchronized(lock) { tunnelListener.also { tunnelListener = null } }
+        val (l, h) = synchronized(lock) { tunnelListener.also { tunnelListener = null } to hub }
+        if (l != null) Log.i(TAG, "the hub's member listener on port ${l.port} stops${if (h == null) ", with no hub to stop" else ""}")
         l?.stop()
-        synchronized(lock) { hub }?.stop()
+        h?.stop()
     }
 
     /** Forgets the hub's clients the records removed and hands its forwarder the new authority records. */
