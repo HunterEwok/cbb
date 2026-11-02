@@ -129,6 +129,9 @@ var scenarios = []struct {
 	{"recovery key removed", TestRecoveryRemoved},
 	{"recovery key replaced", TestRecoveryReplaced},
 	{"recovery by an admin", TestRecoveryByAdmin},
+	{"recovery cert from another root", TestRecoveryCertFromAnotherRoot},
+	{"handover", TestHandover},
+	{"handover replaced", TestHandoverReplaced},
 }
 
 // TestV2Vectors writes (with -update) and checks

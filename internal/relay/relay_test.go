@@ -529,6 +529,6 @@ func TestRemovedAdmin(t *testing.T) {
 	jf := join(t, link, fresh)
 	waitFor(t, "a device the removed admin listed later to be refused", func() bool {
 		r := jf.last()
-		return !r.Connected && r.Err != nil && strings.Contains(r.Err.Error(), "no device record that counts")
+		return !r.Connected && r.Err != nil && strings.Contains(r.Err.Error(), "the admin that certified the device was removed")
 	})
 }
