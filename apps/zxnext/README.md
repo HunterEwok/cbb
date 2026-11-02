@@ -107,7 +107,7 @@ the work:
 The frames are those of `cbb next link` (lite/README.md, "The network through the Next's
 ESP8266"). The driver starts off, so that nothing reaches NextPi's shell before the link
 runs; its API turns it on: `DRIVER 124,2,1` (1 the counters: the ESP's overflows, dropped
-frames, bytes taken; 2 on or off; 3 whether it is on, in A and DE; 4 the bytes sent to and read from the ESP; 5 the last
+frames, bytes taken; 2 on or off, and turning it on starts the counts again, as the link counts its bytes from 0; 3 whether it is on, in A and DE; 4 the bytes sent to and read from the ESP; 5 the last
 dropped frame; 6 the last 64 bytes from the Pi, which `.cbb -d net` shows). Its id, 124, is not
 assigned by NextZXOS's maintainers yet.
 
