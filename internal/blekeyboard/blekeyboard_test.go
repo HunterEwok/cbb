@@ -24,7 +24,7 @@ func TestKeyboard(t *testing.T) {
 	if bluetest.Report != root+"/hid/report" {
 		t.Fatalf("bluetest's report is %s", bluetest.Report)
 	}
-	k, err := Open(f.Connect(t), "deck", t.Logf)
+	k, err := Open(f.Connect(t), "deck", "", t.Logf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestKeyboard(t *testing.T) {
 func TestPoweredOff(t *testing.T) {
 	f := bluetest.Start(t)
 	f.SetPowered(false)
-	if _, err := Open(f.Connect(t), "deck", t.Logf); !errors.Is(err, ErrOff) {
+	if _, err := Open(f.Connect(t), "deck", "", t.Logf); !errors.Is(err, ErrOff) {
 		t.Fatalf("an adapter that is off: %v", err)
 	}
 }
@@ -120,5 +120,42 @@ func TestSettings(t *testing.T) {
 	}
 	if s, _ := Load(dir); s != (Settings{On: true, Layout: keyboard.RU, Rate: MaxRate, Pastes: true}) {
 		t.Fatalf("saved: %+v", s)
+	}
+}
+
+// A host that forgot the keyboard loses its old bond here once its
+// connection fails authentication; no other device does.
+func TestForgetsStaleBond(t *testing.T) {
+	f := bluetest.Start(t)
+	dir := t.TempDir()
+	k, err := Open(f.Connect(t), "deck", dir, t.Logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv, headphones := dbus.ObjectPath("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_01"), dbus.ObjectPath("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_02")
+	read := f.Keyboard(root+"/hid/report").Call(charIface+".ReadValue", 0, map[string]dbus.Variant{"device": dbus.MakeVariant(tv)})
+	if read.Err != nil {
+		t.Fatal(read.Err)
+	}
+	if err := f.Disconnect(headphones, reasonAuth); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Disconnect(tv, "org.bluez.Reason.Remote"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Disconnect(tv, reasonAuth); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for len(f.Removed()) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := f.Removed(); len(got) != 1 || got[0] != tv {
+		t.Fatalf("removed %v, want only %s", got, tv)
+	}
+	k.Close()
+	// The hosts are kept: none left once the TV's bond went.
+	if hosts := loadHosts(dir); len(hosts) != 0 {
+		t.Errorf("hosts kept: %v", hosts)
 	}
 }

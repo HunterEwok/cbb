@@ -59,15 +59,19 @@ func (s *Service) keyboardBus() (*dbus.Conn, error) {
 	return dbus.ConnectSystemBus()
 }
 
-// keyboardName is what a host shows for the keyboard: this device's name,
-// short enough for an advertisement.
+// keyboardName is what a host shows for the keyboard before it pairs:
+// "Clipboard Bridge" and this device's name, short enough for an
+// advertisement. After pairing a host shows the GAP name, the computer's
+// Bluetooth name.
 func (s *Service) keyboardName() string {
-	name := s.cfg.Name
-	for len(name) > 20 {
+	// "Clipboard Bridge", as everything a user sees but does not type, and
+	// the computer's name, within the 29 bytes a scan response leaves for it.
+	name := "Clipboard Bridge " + s.cfg.Name
+	for len(name) > 29 {
 		_, n := utf8.DecodeLastRuneInString(name)
 		name = name[:len(name)-n]
 	}
-	return strings.TrimSpace("CBB " + name)
+	return strings.TrimSpace(name)
 }
 
 // applyKeyboard opens the keyboard when it is on in the settings and closes
@@ -90,7 +94,7 @@ func (s *Service) applyKeyboard() error {
 	conn, err := s.keyboardBus()
 	if err == nil {
 		var k *blekeyboard.Keyboard
-		if k, err = blekeyboard.Open(conn, s.keyboardName(), s.logf); err == nil {
+		if k, err = blekeyboard.Open(conn, s.keyboardName(), s.cfg.StateDir, s.logf); err == nil {
 			s.kbd.k, s.kbd.conn, s.kbd.err = k, conn, nil
 			s.logf("cbb: this computer is a Bluetooth keyboard")
 			return nil
