@@ -715,7 +715,7 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 		if m.Port < 0 || m.Port > 65535 {
 			return false, nil, nil, fmt.Errorf("a bad port %d", m.Port)
 		}
-		fw, eps, err := hubAddrs(m.Forwarder, m.ForwarderKey, m.Addrs)
+		fw, eps, err := hubAddrs(m.Forwarder, m.ForwarderKey, m.Addrs, s.projectPins())
 		if err != nil {
 			return false, nil, nil, err
 		}

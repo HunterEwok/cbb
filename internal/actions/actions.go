@@ -25,7 +25,9 @@ import (
 )
 
 // The presets: lock the screen, sleep, reboot, shut down, cancel a reboot
-// or shutdown that is pending, restart the service.
+// or shutdown that is pending, restart the service, and switch the layout
+// the computer's Bluetooth keyboard types in to the next one, after the
+// device it types on switched its own.
 const (
 	Lock     = "lock"
 	Sleep    = "sleep"
@@ -33,10 +35,11 @@ const (
 	Shutdown = "shutdown"
 	Cancel   = "cancel-shutdown"
 	Restart  = "restart"
+	Layout   = "keyboard-layout"
 )
 
 // Presets lists the presets in the order the apps show them.
-var Presets = []string{Lock, Sleep, Reboot, Shutdown, Cancel, Restart}
+var Presets = []string{Lock, Sleep, Reboot, Shutdown, Cancel, Restart, Layout}
 
 // IsPreset reports whether name is a preset.
 func IsPreset(name string) bool { return slices.Contains(Presets, name) }

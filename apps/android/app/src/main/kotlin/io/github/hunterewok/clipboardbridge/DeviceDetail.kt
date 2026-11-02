@@ -309,6 +309,7 @@ private fun actionTitle(name: String): String = when (name) {
     "shutdown" -> stringResource(R.string.action_shutdown)
     "cancel-shutdown" -> stringResource(R.string.action_cancel)
     "restart" -> stringResource(R.string.action_restart)
+    "keyboard-layout" -> stringResource(R.string.action_keyboard_layout)
     else -> name
 }
 

@@ -7,7 +7,8 @@
 #   powershell -ExecutionPolicy Bypass -File packaging\windows\install.ps1 [-Port N] [-HomeCgnat on|off] [-AutoUpdate on|off] [-Express | -NoFirewall]
 #
 # It installs cbb.exe and the windowless cbbw.exe to Program Files and adds
-# them to PATH, makes the clipboardbridge local group and adds the signed-in
+# them to PATH, with the tray app cbb-desktop.exe when the archive has it
+# (started with every sign-in and now, in the Start menu as Clipboard Bridge), makes the clipboardbridge local group and adds the signed-in
 # user to it, creates the clipboardbridge service, which runs as the virtual
 # account NT SERVICE\clipboardbridge with only the privilege it needs,
 # keeps its data in ProgramData\clipboardbridge where only the service and
@@ -57,6 +58,8 @@ $programDir = Join-Path $env:ProgramFiles $name
 $dataDir = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) $name
 $serviceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$name"
 $runKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'
+$trayRun = "$name tray"
+$shortcut = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Clipboard Bridge.lnk'
 $uninstallKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$name"
 $details = $Details -or $env:CBB_ERROR_DETAILS -eq '1'
 $step = 'starting'
@@ -122,6 +125,11 @@ $binW = Join-Path (Split-Path $Bin) 'cbbw.exe'
 if (-not (Test-Path $binW)) {
 	throw "cbbw.exe is missing beside $Bin"
 }
+# The tray app; an archive without it installs the service and the agent.
+$binTray = Join-Path (Split-Path $Bin) 'cbb-desktop.exe'
+if (-not (Test-Path $binTray)) {
+	$binTray = ''
+}
 $version = (exe $Bin @('version')).Trim()
 if ($version -notmatch 'windows/') {
 	throw "$Bin is not built for Windows: $version"
@@ -151,7 +159,7 @@ if ($service -and $service.Status -ne 'Stopped') {
 $parent = 0
 [void][int]::TryParse("$env:CBB_UPDATE_PARENT", [ref]$parent)
 $stopRunning = {
-	$running = @(Get-Process -Name cbbw, cbb -ErrorAction SilentlyContinue | Where-Object {
+	$running = @(Get-Process -Name cbbw, cbb, cbb-desktop -ErrorAction SilentlyContinue | Where-Object {
 		$_.Id -ne $parent -and $_.Path -and $_.Path.StartsWith("$programDir\", [StringComparison]::OrdinalIgnoreCase)
 	})
 	$running | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -168,7 +176,7 @@ for ($try = 1; ; $try++) {
 		Get-ChildItem -Path $programDir -Filter 'cbb*.exe.*.old' -ErrorAction SilentlyContinue |
 			Remove-Item -Force -ErrorAction SilentlyContinue
 		if ($parent) {
-			foreach ($f in @('cbb.exe', 'cbbw.exe')) {
+			foreach ($f in @('cbb.exe', 'cbbw.exe', 'cbb-desktop.exe')) {
 				$prog = Join-Path $programDir $f
 				if (Test-Path $prog) {
 					Move-Item $prog "$prog.$([DateTime]::UtcNow.Ticks).old"
@@ -177,6 +185,9 @@ for ($try = 1; ; $try++) {
 		}
 		Copy-Item -Force $Bin (Join-Path $programDir 'cbb.exe')
 		Copy-Item -Force $binW (Join-Path $programDir 'cbbw.exe')
+		if ($binTray) {
+			Copy-Item -Force $binTray (Join-Path $programDir 'cbb-desktop.exe')
+		}
 		break
 	} catch {
 		if ($try -ge 10 -or $_.Exception -isnot [System.IO.IOException]) {
@@ -188,6 +199,7 @@ for ($try = 1; ; $try++) {
 Copy-Item -Force (Join-Path $PSScriptRoot 'uninstall.ps1') (Join-Path $programDir 'uninstall.ps1')
 $cbb = Join-Path $programDir 'cbb.exe'
 $cbbw = Join-Path $programDir 'cbbw.exe'
+$tray = Join-Path $programDir 'cbb-desktop.exe'
 
 $step = 'adding clipboardbridge to PATH'
 $path = [Environment]::GetEnvironmentVariable('Path', 'Machine')
@@ -416,25 +428,49 @@ Start-Service -Name $name
 $step = 'starting the agent with every sign-in'
 New-ItemProperty -Path $runKey -Name $name -PropertyType String -Value "`"$cbbw`" agent" -Force | Out-Null
 
-# The agent must run as the user, not as administrator: a task that runs
-# once in the user's session starts it now.
-# Without a signed-in user, or if the task fails, the next sign-in starts it.
-$step = "starting the agent for $user"
-$task = 'clipboardbridge agent start'
-try {
-	$action = New-ScheduledTaskAction -Execute $cbbw -Argument 'agent'
-	$taskPrincipal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
-	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
-	Register-ScheduledTask -TaskName $task -Action $action -Principal $taskPrincipal -Settings $settings -Force | Out-Null
-	Start-ScheduledTask -TaskName $task
-	Start-Sleep -Seconds 1
-} catch {
-	Write-Host "The agent did not start now ($($_.Exception.Message)); it starts when $user signs in again."
-	if ($details) {
-		$_ | Format-List * -Force | Out-String | Write-Host
+# The agent and the tray app must run as the user, not as administrator: a
+# task that runs once in the user's session starts each now (one task per
+# program, as a task runs its actions one after another and the agent does
+# not return). Without a signed-in user, or if the task fails, the next
+# sign-in starts them.
+function startAsUser {
+	param([string]$what, [string]$program, [string]$arguments)
+	$script:step = "starting $what for $user"
+	$task = "clipboardbridge $what start"
+	try {
+		if ($arguments) {
+			$action = New-ScheduledTaskAction -Execute $program -Argument $arguments
+		} else {
+			$action = New-ScheduledTaskAction -Execute $program
+		}
+		$taskPrincipal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+		$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
+		Register-ScheduledTask -TaskName $task -Action $action -Principal $taskPrincipal -Settings $settings -Force | Out-Null
+		Start-ScheduledTask -TaskName $task
+		Start-Sleep -Seconds 1
+	} catch {
+		Write-Host "The $what did not start now ($($_.Exception.Message)); it starts when $user signs in again."
+		if ($details) {
+			$_ | Format-List * -Force | Out-String | Write-Host
+		}
+	} finally {
+		Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
 	}
-} finally {
-	Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
+}
+startAsUser -what 'agent' -program $cbbw -arguments 'agent'
+
+if ($binTray) {
+	$step = 'starting the tray app with every sign-in'
+	New-ItemProperty -Path $runKey -Name $trayRun -PropertyType String -Value "`"$tray`"" -Force | Out-Null
+	$step = 'adding Clipboard Bridge to the Start menu'
+	$shell = New-Object -ComObject WScript.Shell
+	$link = $shell.CreateShortcut($shortcut)
+	$link.TargetPath = $tray
+	$link.WorkingDirectory = $programDir
+	$link.Description = 'One clipboard for the devices of your home'
+	$link.Save()
+	# Its window stays hidden until the tray item or the Start menu opens it.
+	startAsUser -what 'tray app' -program $tray -arguments ''
 }
 
 $step = 'registering the uninstaller'

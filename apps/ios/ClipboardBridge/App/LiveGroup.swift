@@ -1122,23 +1122,55 @@ final class LiveGroup: GroupController {
         if on {
             if await away?.isOn == true { try await away?.turnOff() }
             try hub.turnOn(home: network)
+            // Reached from afar through the project's forwarder, unless the
+            // user saved their own.
+            if hub.forwarder == nil, let fw = await Self.projectForwarder() { try hub.setForwarder(fw) }
         } else {
             try hub.turnOff()
         }
         await restartSync()
     }
 
-    /// Sets the hub's forwarder, or none for a hub at home only.
+    /// Sets the hub's forwarder: the user's own, or the project's when both
+    /// are empty (none when its name cannot be looked up now).
     func setForwarder(address: String, pin: String) async throws {
         guard let hub else { return }
         let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)
         if a.isEmpty && p.isEmpty {
-            try hub.setForwarder(nil)
+            try hub.setForwarder(await Self.projectForwarder())
         } else {
             guard let ep = HubState.endpoint(a) else { throw HubOnPhone.Failure.badForwarder }
             try hub.setForwarder(.init(endpoint: ep, pin: p))
         }
         refreshHub()
+    }
+
+    /// The project's forwarder at the address its name has now, IPv4 first,
+    /// as cbbtun takes it; nil when the name cannot be looked up.
+    nonisolated static func projectForwarder() async -> HubState.Forwarder? {
+        let hostPort = HubState.Forwarder.projectHost
+        return await Task.detached { () -> HubState.Forwarder? in
+            guard let colon = hostPort.lastIndex(of: ":") else { return nil }
+            let host = String(hostPort[..<colon]), port = String(hostPort[hostPort.index(after: colon)...])
+            var hints = addrinfo()
+            hints.ai_socktype = SOCK_STREAM
+            var list: UnsafeMutablePointer<addrinfo>?
+            guard getaddrinfo(host, port, &hints, &list) == 0, let first = list else { return nil }
+            defer { freeaddrinfo(first) }
+            var v4: String?, v6: String?
+            var next: UnsafeMutablePointer<addrinfo>? = first
+            while let ai = next {
+                var name = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(ai.pointee.ai_addr, ai.pointee.ai_addrlen, &name, socklen_t(name.count), nil, 0, NI_NUMERICHOST) == 0 {
+                    let ip = String(cString: name)
+                    if ai.pointee.ai_family == AF_INET, v4 == nil { v4 = "\(ip):\(port)" }
+                    if ai.pointee.ai_family == AF_INET6, v6 == nil { v6 = "[\(ip.split(separator: "%")[0])]:\(port)" }
+                }
+                next = ai.pointee.ai_next
+            }
+            guard let ep = v4 ?? v6 else { return nil }
+            return HubState.Forwarder(endpoint: ep, pin: HubState.Forwarder.projectPin)
+        }.value
     }
 
     /// Remembers the network the phone is on as a home network, where the

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 04610b7181a2 -->
+<!-- source: 97be486697d2 -->
 # מקלדות וטלוויזיות
 
 למי שרוצה להקליד סיסמה ארוכה, קישור או חיפוש בטלוויזיה, בטאבלט, בקונסולה או במחשב שאין בהם שום דבר של Clipboard Bridge. מכשיר אחד בקבוצה שלך מקליד שם את הטקסט כמקלדת או כשלט של הטלוויזיה, כשאתה מקיש או כשמנהל שולח הדבקה מרחוק.
@@ -36,7 +36,7 @@
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "CBB <this computer's name>" on the device, in its Bluetooth settings
+# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```

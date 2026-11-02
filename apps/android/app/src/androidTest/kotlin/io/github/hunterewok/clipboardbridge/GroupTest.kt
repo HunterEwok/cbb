@@ -380,8 +380,16 @@ class GroupTest {
         val hubNow = { runBlocking { model.refresh() }; model.hub ?: throw AssertionError("the phone cannot be the hub") }
         val (fwd, key) = Bench.forwarder()
         runBlocking { model.setHub(true) }
-        assertEquals("the hub without a forwarder: ${model.hubNote}", HubOnPhone.Status.HOME_ONLY, hubNow().status)
         try {
+            // Turned on, the hub takes the project's forwarder, or none, for
+            // home only, when the emulator cannot look its name up.
+            hubNow().let {
+                if (it.forwarder == null) {
+                    assertEquals("the hub without a forwarder: ${model.hubNote}", HubOnPhone.Status.HOME_ONLY, it.status)
+                } else {
+                    assertTrue("the hub's first forwarder is not the project's: ${it.forwarder}", it.forwarder?.isProject == true)
+                }
+            }
             runBlocking { model.setForwarder(fwd, java.util.Base64.getEncoder().encodeToString(ByteArray(32))) }
             until(60, "a wrong key refused with the reason; the app says ${model.hub}") {
                 hubNow().let { it.status == HubOnPhone.Status.FAILED && it.error != null }

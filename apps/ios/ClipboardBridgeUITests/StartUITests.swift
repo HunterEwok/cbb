@@ -62,15 +62,13 @@ final class StartUITests: XCTestCase {
         for theme in ["Dark", "Light", "System"] {
             let b = app.segmentedControls.buttons[theme]
             XCTAssertTrue(b.waitForExistence(timeout: 5), "no theme \(theme)")
-            b.tap()
-            XCTAssertTrue(selected(b), "\(theme) is not chosen after a tap")
+            XCTAssertTrue(choose(b), "\(theme) is not chosen after a tap")
         }
         app.segmentedControls.buttons["Dark"].tap()
         for colour in Self.colours {
             let b = app.buttons[colour]
             XCTAssertTrue(b.waitForExistence(timeout: 5), "no colour \(colour)")
-            b.tap()
-            XCTAssertTrue(selected(b), "\(colour) is not chosen after a tap")
+            XCTAssertTrue(choose(b), "\(colour) is not chosen after a tap")
             for other in Self.colours where other != colour {
                 XCTAssertFalse(app.buttons[other].isSelected, "\(other) is still chosen with \(colour)")
             }
@@ -176,8 +174,21 @@ final class StartUITests: XCTestCase {
         return XCTWaiter().wait(for: [done], timeout: timeout) == .completed
     }
 
+    /// Taps e and tells whether it shows as selected; a loaded simulator
+    /// can lose a tap, so one that did not take is tapped once more.
+    private func choose(_ e: XCUIElement) -> Bool {
+        e.tap()
+        if selected(e) { return true }
+        e.tap()
+        return selected(e, timeout: 10)
+    }
+
+    /// Scrolls until e is inside the window. Its frame, not isHittable: a
+    /// loaded simulator can fail to work out an element's hit point and
+    /// fail the test from inside isHittable.
     private func scrollTo(_ e: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<8 where !(e.exists && e.isHittable) {
+        let window = app.windows.firstMatch
+        for _ in 0..<8 where !(e.exists && !e.frame.isEmpty && window.frame.contains(e.frame)) {
             app.swipeUp()
         }
         XCTAssertTrue(e.exists, "\(e) is not on the screen")

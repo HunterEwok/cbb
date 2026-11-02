@@ -7,7 +7,8 @@
 #   powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" [-Purge]
 #
 # It stops and deletes the service, stops the agents, and removes the
-# files in Program Files, the PATH entry, the sign-in entry, the uninstaller
+# files in Program Files, the PATH entry, the sign-in entries, the Start menu
+# shortcut of the tray app, the uninstaller
 # entry, the update task with cbb update's folder and the firewall rules that
 # install.ps1 added, and only those. The
 # device's keys and group membership, in ProgramData\clipboardbridge, stay
@@ -62,8 +63,8 @@ if (Get-Service -Name $name -ErrorAction SilentlyContinue) {
 	& sc.exe delete $name | Out-Null
 }
 
-$step = 'stopping the agents'
-Get-Process -Name cbbw, cbb -ErrorAction SilentlyContinue | Where-Object {
+$step = 'stopping the agents and the tray app'
+Get-Process -Name cbbw, cbb, cbb-desktop -ErrorAction SilentlyContinue | Where-Object {
 	$_.Path -and $_.Path.StartsWith("$programDir\", [StringComparison]::OrdinalIgnoreCase)
 } | Stop-Process -Force
 Start-Sleep -Milliseconds 500
@@ -77,8 +78,11 @@ Remove-Item -Recurse -Force (Join-Path $env:ProgramFiles 'clipboardbridge-update
 $step = 'removing the firewall rules'
 Get-NetFirewallRule -Group $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 
-$step = 'removing the sign-in and uninstaller entries'
-Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name $name -ErrorAction SilentlyContinue
+$step = 'removing the sign-in entries, the Start menu shortcut and the uninstaller entry'
+foreach ($run in @($name, "$name tray")) {
+	Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name $run -ErrorAction SilentlyContinue
+}
+Remove-Item -Force (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Clipboard Bridge.lnk') -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$name" -ErrorAction SilentlyContinue
 
 $step = 'removing clipboardbridge from PATH'

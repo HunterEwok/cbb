@@ -144,6 +144,8 @@
     <string name="hub_forwarder_address">Address, such as 198.51.100.9:8764</string>
     <string name="hub_forwarder_key">Key, 44 characters</string>
     <string name="hub_forwarder_save">Save the forwarder</string>
+    <string name="hub_forwarder_project">Reached from afar through the project\'s forwarder at cbb.tools. To use your own, enter its address and key.</string>
+    <string name="hub_forwarder_back">To go back to the project\'s forwarder, empty both fields and save.</string>
     <string name="hub_bad_forwarder">Give the forwarder\'s address with its port and its key, as cbb forward prints them, or leave both empty.</string>
     <string name="hub_background">Keep the hub running in the background (uses the battery)</string>
     <string name="hub_home_note">This phone is the hub: sync works while the app is open.</string>
@@ -303,6 +305,7 @@
     <string name="action_shutdown">Shut down</string>
     <string name="action_cancel">Cancel the reboot or shutdown</string>
     <string name="action_restart">Restart Clipboard Bridge</string>
+    <string name="action_keyboard_layout">Switch the keyboard\'s layout</string>
     <string name="action_confirm_title">%1$s %2$s?</string>
     <string name="action_confirm_body">It happens a minute from now; until then, Cancel the reboot or shutdown stops it.</string>
     <string name="action_done">Done.</string>

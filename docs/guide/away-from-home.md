@@ -84,12 +84,14 @@ by an outgoing connection, so nothing at home has to be opened. The forwarder on
 encrypted packets and holds no keys.
 
 ```sh
-sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>
+sudo cbb global hub
 ```
 
-The address and the key come from the forwarder. You can [run your own](../admin/self-hosting.md#a-forwarder)
-on any small server. The project's forwarder at `cbb.tools` is not open to everyone yet;
-its address and key will be here when it is.
+Without addresses of its own, the hub goes through the project's forwarder at `cbb.tools`:
+cbb knows its address and key, and a phone that is the hub uses it too. `-forwarder default`
+adds it to a hub that has its own addresses as well. For [your own forwarder](../admin/self-hosting.md#a-forwarder), on any small server, give its
+address and key instead: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`; on a
+phone, under **This phone as the hub**.
 
 The hub may have its own address and a forwarder at once: devices try the hub first and the
 forwarder last.

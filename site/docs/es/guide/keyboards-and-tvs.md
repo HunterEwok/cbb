@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 04610b7181a2 -->
+<!-- source: 97be486697d2 -->
 # Teclados y televisores
 
 Para quien quiere escribir una contraseña larga, un enlace o una búsqueda en un televisor, una tableta, una consola o un ordenador que no tiene nada de Clipboard Bridge. Un dispositivo de tu grupo escribe allí el texto como teclado o como mando a distancia del televisor, cuando tú lo pulsas o cuando un administrador envía un pegado remoto.
@@ -36,7 +36,7 @@ Para que los pegados remotos de un administrador se escriban allí en lugar de e
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "CBB <this computer's name>" on the device, in its Bluetooth settings
+# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```

@@ -297,6 +297,7 @@ struct DeviceDetailView: View {
         case "shutdown": String(localized: "Shut down", bundle: .app)
         case "cancel-shutdown": String(localized: "Cancel the reboot or shutdown", bundle: .app)
         case "restart": String(localized: "Restart Clipboard Bridge", bundle: .app)
+        case "keyboard-layout": String(localized: "Switch the keyboard's layout", bundle: .app)
         default: name
         }
     }
