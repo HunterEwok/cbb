@@ -172,7 +172,6 @@ fn main() {
             let rest = &args[1..];
             let res = match cmd {
                 "pair" => join(&g, rest, false),
-                "join" => Err(Error::msg("cbb join is cbb pair now, as on a full member")),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "run" => cmd_run(&g, rest),
                 "copy" => cmd_copy(&g, rest),
