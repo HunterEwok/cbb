@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 75a4b281a1c4 -->
+<!-- source: ba8bb2b8b763 -->
 # 安装
 
 Clipboard Bridge 在每台电脑上作为一个小型后台服务运行，它的命令是 `cbb`。下面每种方式安装的都是同一个程序，选你喜欢的即可。
@@ -167,4 +167,4 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 
 在 Windows 上：设置，应用，“Clipboard Bridge”，卸载。
 
-这会移除程序、服务以及安装程序添加的防火墙规则。设备的密钥会保留，所以再次安装可让它回到原来的群组。要连密钥一起删除，请加上 `--purge`（Windows 上是 `-Purge`，命令为 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`），然后在另一台设备上把这台设备从群组中移除（`sudo cbb revoke NAME`，或在手机上操作）。
+这会移除程序、服务以及安装程序添加的防火墙规则。设备的密钥会保留，所以再次安装可让它回到原来的群组。要连密钥一起删除，请加上 `--purge`（Windows 上是 `-Purge`，命令为 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`），然后在另一台设备上把这台设备从群组中移除（`sudo cbb remove NAME`，或在手机上操作）。

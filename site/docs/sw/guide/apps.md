@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5a87f78df225 -->
+<!-- source: 65f0a956514b -->
 # Programu
 
 Clipboard Bridge ina programu za simu, saa na kompyuta za mezani. Programu za simu hushikilia kikundi; programu za kompyuta ni dirisha la kuangalia huduma ambayo tayari inaendeshwa kwenye kompyuta.
@@ -20,7 +20,7 @@ Clipboard Bridge ina programu za simu, saa na kompyuta za mezani. Programu za si
 
 1. [Sakinisha](install.md) Clipboard Bridge kwenye kompyuta na uendeshe `sudo cbb pair` hapo. Huonyesha msimbo wa QR.
 2. Fungua programu na ugonge **Connect a new device**, kisha changanua msimbo. Programu huunda ufunguo wa kikundi ndani ya chipu ya usalama ya simu (Secure Enclave kwenye iPhone, Keystore kwenye Android), huongeza kompyuta na kufungua Mwanzo.
-3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u clipboardbridge cbb join` kwenye kifaa hicho huonyesha msimbo wake).
+3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u clipboardbridge cbb pair` kwenye kifaa hicho huonyesha msimbo wake).
 
 Kamera isipoweza kutumika: kwenye iPhone, andika tarakimu sita ambazo kompyuta inaonyesha; kwenye Android, bandika maandishi ya msimbo wa QR, ambayo `cbb pair` pia huyachapisha.
 
@@ -36,7 +36,7 @@ Kamera isipoweza kutumika: kwenye iPhone, andika tarakimu sita ambazo kompyuta i
 Gusa kifaa kuona aina yake, mfumo, toleo na jukumu. Kwenye simu ya msimamizi unaweza pia:
 
 - **Kukipa jina jipya** au **Kukiondoa**; kuondoa huuliza mara moja, kisha uso wako, alama ya kidole au nambari ya siri.
-- **Make it an admin**, kwa kompyuta: kisha inaweza kuongeza na kuondoa vifaa kwa `sudo cbb pair` na `sudo cbb revoke`. Ufunguo wake ni faili kwenye kompyuta, isipokuwa ni kompyuta ya Linux yenye TPM, na programu inakuonya kuhusu hilo kwanza; kwa hiyo chagua kompyuta unayoiamini, ikiwezekana inayowaka kila wakati na ambayo pia ni [kitovu](away-from-home.md).
+- **Make it an admin**, kwa kompyuta: kisha inaweza kuongeza na kuondoa vifaa kwa `sudo cbb pair` na `sudo cbb remove`. Ufunguo wake ni faili kwenye kompyuta, isipokuwa ni kompyuta ya Linux yenye TPM, na programu inakuonya kuhusu hilo kwanza; kwa hiyo chagua kompyuta unayoiamini, ikiwezekana inayowaka kila wakati na ambayo pia ni [kitovu](away-from-home.md).
 
 ### Simu ya pili, na simu iliyopotea
 

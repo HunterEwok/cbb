@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 75a4b281a1c4 -->
+<!-- source: ba8bb2b8b763 -->
 # التثبيت
 
 يعمل Clipboard Bridge كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.
@@ -167,4 +167,4 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 
 على Windows: الإعدادات، التطبيقات، «Clipboard Bridge»، إلغاء التثبيت.
 
-يزيل هذا البرنامج والخدمة وقواعد جدار الحماية التي أضافها المثبّت. وتبقى مفاتيح الجهاز، فيعيده التثبيت من جديد إلى مجموعته. ولحذفها أيضًا أضف `--purge` (`-Purge` على Windows، مع `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`)، ثم أزل الجهاز من المجموعة من جهاز آخر (`sudo cbb revoke NAME`، أو على الهاتف).
+يزيل هذا البرنامج والخدمة وقواعد جدار الحماية التي أضافها المثبّت. وتبقى مفاتيح الجهاز، فيعيده التثبيت من جديد إلى مجموعته. ولحذفها أيضًا أضف `--purge` (`-Purge` على Windows، مع `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`)، ثم أزل الجهاز من المجموعة من جهاز آخر (`sudo cbb remove NAME`، أو على الهاتف).

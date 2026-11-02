@@ -215,7 +215,7 @@ func formGroup(ctx context.Context, r *Report, suite string, devices []*Device) 
 				return err
 			}
 			joined = true
-			// cbb join on the lite member returns a moment before its
+			// cbb pair on the lite member returns a moment before its
 			// service has taken the group.
 			return eventually(ctx, 10*time.Second, func() error { return shareClipboard(ctx, d) })
 		}) == nil {
@@ -354,7 +354,7 @@ const liteDropIn = "/etc/systemd/system/clipboardbridge.service.d/cbbbench.conf"
 func litePeer(ctx context.Context, d *Device, addr string) error {
 	cmd := "sudo -n rm -f " + liteDropIn + " && sudo -n rmdir --ignore-fail-on-non-empty " + path.Dir(liteDropIn)
 	if addr != "" {
-		conf := "[Service]\nExecStart=\nExecStart=/usr/local/bin/cbb run -peer " + addr + "\n"
+		conf := "[Service]\nExecStart=\nExecStart=/usr/local/bin/cbb service -peer " + addr + "\n"
 		cmd = "sudo -n mkdir -p " + path.Dir(liteDropIn) + " && printf '" + conf + "' | sudo -n tee " + liteDropIn + " >/dev/null"
 	}
 	_, err := Run(ctx, d, cmd+" && sudo -n systemctl daemon-reload && sudo -n systemctl restart clipboardbridge", "")
@@ -374,8 +374,8 @@ func deviceOf(ctx context.Context, d *Device) (string, error) {
 }
 
 // pairOne admits a device into the hub's group: cbb pair on the hub, and
-// cbb pair -code (cbb join -code on the lite member) with its code on the
-// device. It returns the code it used.
+// cbb pair -code with its code on the device (as the service's user on the
+// lite member). It returns the code it used.
 func pairOne(ctx context.Context, hub, d *Device) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -415,7 +415,7 @@ func pairOne(ctx context.Context, hub, d *Device) (string, error) {
 	if d.OS == "linux-lite" {
 		// The lite member joins as its service's user, which alone may
 		// write its keys (lite/README.md); the bench user has sudo.
-		join = "sudo -n -u clipboardbridge " + cbbCmd(d) + " join -code"
+		join = "sudo -n -u clipboardbridge " + cbbCmd(d) + " pair -code"
 	}
 	if d.OS == "linux-lite" || addr != "" {
 		if addr == "" {

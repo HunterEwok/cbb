@@ -253,7 +253,7 @@ func lapse(ctx context.Context, r *Report, f *Fleet, g *benchGroup, timeout time
 		if err != nil {
 			return err
 		}
-		if _, err := Run(ctx, g.hub, "cbb revoke "+id, ""); err != nil {
+		if _, err := Run(ctx, g.hub, "cbb remove "+id, ""); err != nil {
 			return err
 		}
 		if _, err := Run(ctx, m, "rm -rf /var/lib/clipboardbridge/*", ""); err != nil {

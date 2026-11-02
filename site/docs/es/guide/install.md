@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 75a4b281a1c4 -->
+<!-- source: ba8bb2b8b763 -->
 # Instalación
 
 Clipboard Bridge se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
@@ -167,4 +167,4 @@ En SteamOS es `sudo sh /opt/clipboardbridge/share/uninstall.sh`. Con Homebrew, e
 
 En Windows: Configuración, Aplicaciones, «Clipboard Bridge», Desinstalar.
 
-Esto quita el programa, el servicio y las reglas de cortafuegos que añadió el instalador. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb revoke NAME`, o en el teléfono).
+Esto quita el programa, el servicio y las reglas de cortafuegos que añadió el instalador. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb remove NAME`, o en el teléfono).

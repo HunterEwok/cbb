@@ -434,7 +434,7 @@ func relayAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) 
 		return globalShows(ctx, m3, "; connected to the relay", 2*time.Minute)
 	})
 	r.Do("fleet/W37-removed", func() error {
-		if _, err := Run(ctx, home, "cbb revoke "+m3.Name, ""); err != nil {
+		if _, err := Run(ctx, home, "cbb remove "+m3.Name, ""); err != nil {
 			return err
 		}
 		if err := listsAs(ctx, []*Device{m2}, m3.Name, "", true, timeout); err != nil {

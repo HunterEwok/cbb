@@ -228,7 +228,7 @@ func files(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 
 // usageCommands are the commands of cbb's usage, each of which prints its
 // usage for -h without doing anything.
-var usageCommands = []string{"copy", "paste", "paste-receive", "action", "status", "revoke", "rename", "admin",
+var usageCommands = []string{"copy", "paste", "paste-receive", "action", "status", "remove", "rename", "admin",
 	"takeover", "upgrade", "freeze", "unfreeze", "global", "forward", "relay", "new", "mode", "config", "pair",
 	"invite", "update", "version", "holder", "network", "service", "agent", "paste-helper", "install"}
 
@@ -443,7 +443,7 @@ func removedAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 		if err != nil {
 			return err
 		}
-		if _, err := Run(ctx, a.hub, "cbb revoke "+c2.Name, ""); err != nil {
+		if _, err := Run(ctx, a.hub, "cbb remove "+c2.Name, ""); err != nil {
 			return err
 		}
 		return eventually(ctx, 10*time.Second, func() error {

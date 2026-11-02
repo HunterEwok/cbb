@@ -46,12 +46,12 @@ Commands:
   action -on DEVICE NAME  On an admin: run the quick action NAME on another device;
                           action off -on DEVICE or -all turns them off elsewhere.
   status                  Show this device, its group and the group's devices.
-  revoke <name or ID>     Remove a device from the group.
+  remove <name or ID>     Remove a device from the group.
   rename <name or ID> <new name>
                           Give a device of the group another name (on an admin).
   admin <name or ID>      Make a computer an admin of the group (on the group's root).
   takeover <name or ID>   Claim the group from its lost root computer (on an admin); it waits.
-  takeover-delay <duration>
+  takeover -delay <duration>
                           Set how long such a claim waits, 0s to 168h (on the root; 72h by default).
   keys [proven|hardware|files]
                           Show or set which keys may be the group's root, an admin or a hub
@@ -60,8 +60,6 @@ Commands:
                           YubiKey, when every phone with the group is lost; it waits as a
                           takeover does.
   handover <name or ID>   Let an admin take the group over at once, as a new phone (on the root).
-  hubs <name or ID>...    Set the group's main hubs for sync over the internet, in the order
-                          they serve, before the others (on the root, or an admin that may be a hub).
   freeze <name or ID>     Stop an admin computer, as a stolen one, until the root decides.
   unfreeze <name or ID>   Make a frozen admin computer an admin again (on the group's root).
   resolve                 Void both histories of a key that signed two (on the group's root).
@@ -69,6 +67,9 @@ Commands:
   global hub address:port Make this device the group's hub for sync over the internet.
   global relay address:port
                           Meet the group's other devices over the internet at a relay.
+  global hubs <name or ID>...
+                          Set the group's main hubs, in the order they serve, before the
+                          others (on the root, or an admin that may be a hub).
   forward                 Run a forwarder for hubs that clients cannot reach directly.
   relay -group TAG        Run a blind relay for groups without a hub.
   new                     Create a group with this computer as its root.
@@ -149,24 +150,20 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdStatus(rest, stdout, stderr)
 	case "global":
 		return cmdGlobal(rest, stdin, stdout, stderr)
-	case "revoke":
-		return cmdRevoke(rest, stdout, stderr)
+	case "remove":
+		return cmdRemove(rest, stdout, stderr)
 	case "rename":
 		return cmdRename(rest, stdout, stderr)
 	case "install":
 		return cmdInstall(rest, stdout, stderr)
 	case "takeover":
 		return cmdTakeover(rest, stdout, stderr)
-	case "takeover-delay":
-		return cmdTakeoverDelay(rest, stdout, stderr)
 	case "keys":
 		return cmdKeys(rest, stdout, stderr)
 	case "recovery":
 		return cmdRecovery(rest, stdin, stdout, stderr)
 	case "handover":
 		return cmdHandover(rest, stdout, stderr)
-	case "hubs":
-		return cmdHubs(rest, stdout, stderr)
 	case "freeze", "unfreeze":
 		return cmdFreeze(rest, cmd == "freeze", stdout, stderr)
 	case "resolve":

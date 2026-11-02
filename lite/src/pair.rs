@@ -160,7 +160,7 @@ pub fn listen(
     let addrs = addrs.unwrap_or_else(|| qr_addresses(port));
     if addrs.is_empty() {
         return Err(Error::msg(
-            "this device has no address on the home network; connect it to the network, or use join -code",
+            "this device has no address on the home network; connect it to the network, or use pair -code",
         ));
     }
     shown(&join_qr(code, &addrs, &joiner.fingerprint()));

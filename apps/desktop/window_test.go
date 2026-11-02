@@ -479,7 +479,7 @@ func (w *window) admin(t *testing.T) {
 	w.wait(`$q("#confirm").open`)
 	w.eval(`$click("#confirm-ok")`, nil)
 	w.wait(`$q("#message").textContent === "no device named tv in the group"`)
-	if r := ran(); !reflect.DeepEqual(r, [][]string{{"revoke", "tv"}}) {
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"remove", "tv"}}) {
 		t.Errorf("remove ran %q", r)
 	}
 

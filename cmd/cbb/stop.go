@@ -26,7 +26,7 @@ func stopLines(st *control.Status) []string {
 		who := names(c.Devices)
 		switch c.Kind {
 		case "admins":
-			out = append(out, fmt.Sprintf("Admins removed or froze each other without seeing it (%s): the root decides by removing one of them (cbb revoke NAME on a root computer, or on the root phone).", who))
+			out = append(out, fmt.Sprintf("Admins removed or froze each other without seeing it (%s): the root decides by removing one of them (cbb remove NAME on a root computer, or on the root phone).", who))
 		case "claims":
 			out = append(out, fmt.Sprintf("Two claims to take the group over (%s): the root cancels one or both by removing its admin.", who))
 		case "two_histories":
