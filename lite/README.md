@@ -298,6 +298,8 @@ cbb run -peer 127.0.0.1:8769
   the Pi's clock, which NextPi only saves across a power cut, from it in UTC.
 - `-log`: standard error is the UART too, so the link writes its log to a file or
   nowhere.
+- `-trace`: the log also shows every byte to and from the ESP, to find where a setup
+  stops.
 
 On the UART, the driver and the link exchange frames: the byte 0x7E, a type, a length (0
 to 255), that many bytes and the sum of the type, the length and the bytes modulo 256; a

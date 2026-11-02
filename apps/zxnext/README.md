@@ -20,7 +20,7 @@ tools. Test them on the machine before relying on them.
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
 .cbb join             join the group: scan the code on the screen with the phone app
-.cbb net on -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00
+.cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
                       the Pi's network through the ESP, in the background
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
@@ -115,10 +115,11 @@ each start (`.install /cbb/CBB.DRV`), join the ESP to the Wi-Fi network as NextZ
 tools do, and run:
 
 ```
-.cbb net on -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00
+.cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
 ```
 
-It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
+NextBASIC ends a statement at a colon, so each setting with one goes in quotes; the quotes
+do not reach the Pi. It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
 keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
 member at home, `-serve` the ESP's port for the phones and the lite member's own,
 `-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's

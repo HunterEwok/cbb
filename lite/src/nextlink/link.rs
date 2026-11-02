@@ -24,7 +24,7 @@ use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
 pub const USAGE: &str =
-    "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file]";
+    "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file] [-trace]";
 
 /// The local port the member dials for the peer.
 pub const PORT: u16 = 8769;
@@ -85,6 +85,8 @@ pub struct Link<W: Write> {
     /// The time the Next's clock gave, in seconds since 1970, to set.
     pub clock: Option<i64>,
     pub quit: bool,
+    /// Logs the bytes to and from the ESP (`-trace`).
+    pub trace: bool,
     log: Box<dyn FnMut(&str) + Send>,
 }
 
@@ -108,6 +110,7 @@ impl<W: Write> Link<W> {
             keys: VecDeque::new(),
             keys_sent: None,
             clock: None,
+            trace: false,
             quit: false,
             log,
         }
@@ -167,7 +170,12 @@ impl<W: Write> Link<W> {
                     self.hello = true;
                 }
                 frame::ACK if f.data.len() == 2 => self.acked = u16::from_le_bytes([f.data[0], f.data[1]]),
-                frame::FROM_ESP => self.esp.input(&f.data),
+                frame::FROM_ESP => {
+                    if self.trace {
+                        (self.log)(&format!("esp< {}", f.data.escape_ascii()));
+                    }
+                    self.esp.input(&f.data)
+                }
                 frame::TIME => match msdos_time(&f.data) {
                     Some(local) => self.clock = Some(local - self.zone),
                     None => (self.log)("the Next's clock gave no valid time"),
@@ -261,6 +269,9 @@ impl<W: Write> Link<W> {
         }
         let bytes = self.esp.take_output();
         if !bytes.is_empty() {
+            if self.trace {
+                (self.log)(&format!("esp> {}", bytes.escape_ascii()));
+            }
             self.wire.extend(frame::encode(frame::TO_ESP, &bytes));
         }
         let due = self.keys_sent.is_none_or(|t| now.duration_since(t) >= Duration::from_secs(1));
@@ -398,8 +409,14 @@ impl crate::pastehelper::Target for NextKeys {
 /// the UART closes; it takes remote pastes through the service at socket.
 pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
+    let mut trace = false;
     let mut i = 0;
     while i < args.len() {
+        if crate::flag(&args[i]) == Some("trace") {
+            trace = true;
+            i += 1;
+            continue;
+        }
         let value = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(USAGE));
         match crate::flag(&args[i]) {
             Some("to") => target = Some(host_port(&value()?)?),
@@ -474,6 +491,7 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
         });
     }
     let mut link = Link::new(std::io::stdout(), target, zone_s, log);
+    link.trace = trace;
     if let Some((a, b)) = serve {
         link.serve(a, b);
     }

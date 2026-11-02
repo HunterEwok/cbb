@@ -140,7 +140,7 @@ impl Driver {
     }
 
     fn on(&mut self) {
-        self.call(0xE000, 0x0200, 0x0100);
+        self.call(0xE000, 0x0200, 0x0001); // DRIVER 124,2,1: DE = 1
     }
 
     /// The frames the Pi got since the last call.
@@ -238,6 +238,9 @@ fn hello_clock_and_the_esp_both_ways() {
         "date then time, little-endian"
     );
     assert_eq!(d.next.select, 0x40, "the UART it found is selected again");
+    d.call(0xE000, 0x0400, 0);
+    let r = d.cpu.registers();
+    assert_eq!((r.get16(Reg16::BC), r.get16(Reg16::DE)), (4, 7), "bytes to and from the ESP");
     // Nothing new: no frames.
     d.interrupt();
     assert!(d.pi_frames().is_empty());

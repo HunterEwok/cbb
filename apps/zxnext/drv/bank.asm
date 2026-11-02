@@ -52,9 +52,10 @@ ESP_BUF         equ     $F500   ; the ESP's bytes on their way to the Pi
 
 ; ---------------------------------------------------------------------------
 ; The API: B = 1 the counters (BC = the ESP's overflows, DE = dropped
-; frames, HL = bytes taken from the Pi); B = 2 on (D = 1) or off (D = 0);
+; frames, HL = bytes taken from the Pi); B = 2 on (E = 1) or off (E = 0);
 ; B = 3 the state (A and DE = 1 when on; NextZXOS's M_DRVAPI gives a
-; program only BC, DE and HL). Carry set for an unknown call.
+; program only BC, DE and HL); B = 4 the bytes sent to the ESP (BC) and
+; read from it (DE). Carry set for an unknown call.
 api:
         ld      a,b
         cp      1
@@ -67,7 +68,7 @@ api:
 api2:
         cp      2
         jr      nz,api3
-        ld      a,d
+        ld      a,e
         ld      (enabled),a
         and     a
         jr      z,api_ok
@@ -83,10 +84,17 @@ api_ok:
         ret
 api3:
         cp      3
-        jr      nz,api_bad
+        jr      nz,api4
         ld      a,(enabled)
         ld      e,a
         ld      d,0
+        and     a
+        ret
+api4:
+        cp      4
+        jr      nz,api_bad
+        ld      bc,(esp_sent)
+        ld      de,(esp_got)
         and     a
         ret
 api_bad:
@@ -338,6 +346,9 @@ te_loop:
         ld      h,a
         ld      a,(hl)
         out     (c),a
+        ld      hl,(esp_sent)
+        inc     hl
+        ld      (esp_sent),hl
         pop     hl
         inc     hl
         ld      a,h
@@ -374,6 +385,11 @@ fe_noover:
         ld      (hl),a
         inc     hl
         inc     e
+        push    hl
+        ld      hl,(esp_got)
+        inc     hl
+        ld      (esp_got),hl
+        pop     hl
         jr      fe_loop
 fe_send:
         ld      a,e
@@ -527,6 +543,8 @@ taken:          defw    0       ; bytes read from the Pi
 acked:          defw    0
 esp_over:       defw    0
 dropped:        defw    0
+esp_sent:       defw    0       ; bytes sent to the ESP
+esp_got:        defw    0       ; bytes read from the ESP
 hello_left:     defb    1
 time_left:      defw    1
 code_end:

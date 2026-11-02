@@ -41,8 +41,8 @@ static void usage(void)
            ".cbb join          join the group:\n"
            "                   scan the code with\n"
            "                   the phone app\n"
-           ".cbb net on [-to HOST:PORT]\n"
-           "   [-serve ESP:PORT] [-zone +HH:MM]\n"
+           ".cbb net on [-to \"HOST:PORT\"]\n"
+           " [-serve \"ESP:PORT\"] [-zone \"+HH:MM\"]\n"
            "                   the Pi's network\n"
            "                   through the ESP,\n"
            "                   in the background\n"
@@ -74,6 +74,7 @@ static int link_fail(uint8_t err)
 #define DRV_COUNTERS 1
 #define DRV_SWITCH 2
 #define DRV_STATE 3
+#define DRV_ESP 4
 
 static struct esx_drvapi drv;
 
@@ -341,10 +342,10 @@ static int net_start(int argc, char **argv)
             strcpy(net_args + n, argv[i]);
             n += strlen(argv[i]);
         }
-        if (!strstr(net_args, "-to ")) return fail("the computer to dial is missing: -to HOST:PORT", 0);
+        if (!strstr(net_args, "-to ")) return fail("the computer to dial is missing: -to \"HOST:PORT\"", 0);
         if (net_save()) return 1;
     } else if (net_load()) {
-        return fail("no settings yet: .cbb net on -to HOST:PORT", NET_CFG);
+        return fail("no settings yet: .cbb net on -to \"HOST:PORT\"", NET_CFG);
     }
     if (link_shell()) {
         return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
@@ -384,6 +385,10 @@ static int net_show(void)
         printf("Taken from the Pi: %u bytes\n", drv.hl);
         printf("Frames dropped: %u\n", drv.de);
         printf("ESP overflows: %u\n", drv.bc);
+    }
+    if (driver(DRV_ESP, 0) == 0) {
+        printf("To the ESP: %u bytes\n", drv.bc);
+        printf("From the ESP: %u bytes\n", drv.de);
     }
     return 0;
 }
