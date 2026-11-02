@@ -3773,6 +3773,306 @@
           }
         }
       }
+    },
+    "Put the recovery key on a YubiKey": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать ключ восстановления на YubiKey"
+          }
+        }
+      }
+    },
+    "Hold the YubiKey to the top of the phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложите YubiKey к верхней части телефона."
+          }
+        }
+      }
+    },
+    "The recovery key is on the YubiKey.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления записан на YubiKey."
+          }
+        }
+      }
+    },
+    "Hold the YubiKey with the recovery key to the top of the phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложите YubiKey с ключом восстановления к верхней части телефона."
+          }
+        }
+      }
+    },
+    "Looking for the group's computers…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ищем компьютеры группы…"
+          }
+        }
+      }
+    },
+    "Hold the YubiKey again to sign the claim.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложите YubiKey ещё раз, чтобы подписать заявку."
+          }
+        }
+      }
+    },
+    "The claim is signed.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заявка подписана."
+          }
+        }
+      }
+    },
+    "This is not a YubiKey. Hold the YubiKey to the phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не YubiKey. Приложите YubiKey к телефону."
+          }
+        }
+      }
+    },
+    "The YubiKey left too soon.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey убрали слишком рано."
+          }
+        }
+      }
+    },
+    "Stopped. The app says why.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановлено. Причина — в приложении."
+          }
+        }
+      }
+    },
+    "The recovery key is on the YubiKey. Keep it away from your phones; a sheet printed before no longer works.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления записан на YubiKey. Храните его вдали от телефонов; лист, напечатанный раньше, больше не действует."
+          }
+        }
+      }
+    },
+    "This phone is in a group already. A recovery key restores a group on a phone without one.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон уже в группе. Ключ восстановления восстанавливает группу на телефоне без группы."
+          }
+        }
+      }
+    },
+    "This is not a YubiKey with PIV, or PIV is turned off on it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не YubiKey с PIV, или PIV на нём выключен."
+          }
+        }
+      }
+    },
+    "Wrong PIN. Tries left before the YubiKey blocks it: %lld.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неверный PIN. Попыток до блокировки YubiKey: %lld."
+          }
+        }
+      }
+    },
+    "The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN YubiKey заблокирован. Разблокируйте его PUK-кодом в Yubico Authenticator и попробуйте снова."
+          }
+        }
+      }
+    },
+    "This YubiKey's management key is not the factory one, so the app cannot put a key on it. Use the printed sheet instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У этого YubiKey не заводской ключ управления, поэтому приложение не может записать на него ключ. Используйте напечатанный лист."
+          }
+        }
+      }
+    },
+    "This YubiKey is older than firmware 5.7, which the app needs to put a key on it. Use the printed sheet instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прошивка этого YubiKey старше 5.7, а приложению нужна 5.7 или новее, чтобы записать на него ключ. Используйте напечатанный лист."
+          }
+        }
+      }
+    },
+    "This YubiKey has no free slot for the key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом YubiKey нет свободного слота для ключа."
+          }
+        }
+      }
+    },
+    "This YubiKey holds no recovery key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом YubiKey нет ключа восстановления."
+          }
+        }
+      }
+    },
+    "The YubiKey did not answer as expected. Hold it still to the phone and try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey ответил не так, как ожидалось. Держите его неподвижно у телефона и попробуйте снова."
+          }
+        }
+      }
+    },
+    "This iPhone cannot read a YubiKey over NFC.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот iPhone не может прочитать YubiKey по NFC."
+          }
+        }
+      }
+    },
+    "No YubiKey was held to the phone. Try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey не приложили к телефону. Попробуйте снова."
+          }
+        }
+      }
+    },
+    "Put the recovery key on a YubiKey?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать ключ восстановления на YubiKey?"
+          }
+        }
+      }
+    },
+    "Hold the YubiKey": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложить YubiKey"
+          }
+        }
+      }
+    },
+    "The YubiKey makes the key in a free slot, and it never leaves the YubiKey. Type the YubiKey's PIN, then hold the YubiKey to the top of the phone. It replaces the recovery key the group has.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey создаёт ключ в свободном слоте, и ключ никогда его не покидает. Введите PIN YubiKey, затем приложите YubiKey к верхней части телефона. Он заменит ключ восстановления, который есть у группы."
+          }
+        }
+      }
+    },
+    "Put it on a YubiKey": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать на YubiKey"
+          }
+        }
+      }
+    },
+    "YubiKey PIN": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN YubiKey"
+          }
+        }
+      }
+    },
+    "Use a YubiKey instead": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Использовать YubiKey"
+          }
+        }
+      }
+    },
+    "Restore with a YubiKey": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Восстановить с YubiKey"
+          }
+        }
+      }
+    },
+    "Type the YubiKey's PIN, then hold the YubiKey to the top of the phone: once for this phone's certificate and, once a computer of the group answered, again for the claim. Keep this phone on the network of a computer of the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите PIN YubiKey, затем приложите YubiKey к верхней части телефона: один раз для сертификата этого телефона и, когда ответит компьютер группы, ещё раз для заявки. Держите телефон в сети компьютера группы."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

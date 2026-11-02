@@ -836,6 +836,20 @@ the app on real devices.
   BiometricPrompt, signs a claim with the recovery key and sends it, and forgets the key. Home
   then shows the claim's time left, and once it takes effect the app finishes as after a lost
   root: it signs its own device record and gets a member certificate from the new root.
+- The recovery key on a YubiKey, over NFC (docs/protocol.md, section 10, "On a hardware
+  key"; the kits' `Piv`). The root phone's Settings, "Recovery key", has "Put it on a
+  YubiKey": after the PIN, the YubiKey held to the phone makes a P-256 key in its first free
+  retired PIV slot, with the PIN and a touch before each signature, and the root's admin CA
+  for it goes into the slot. Only the factory management key with AES works there, as a
+  YubiKey has from firmware 5.7; an older YubiKey, or one with its own key, takes a sheet
+  instead. The restore screen has "Use a YubiKey instead": the YubiKey held
+  once issues the phone's member certificate from each slot whose certificate is an admin
+  CA, the phone finds the group's computers (any group, since the YubiKey carries no tag) and
+  takes the one whose records name that key, and the YubiKey held again signs the claim. On
+  Android the reader is the activity's NFC reader mode (`YubiKeyNfc`); on the iPhone it is
+  Core NFC's sheet (`App/YubiKeyNfc.swift`), which needs the NFC entitlement of the Apple
+  developer account: a build signed ad hoc cannot read the YubiKey, and `device.sh` with
+  `CBB_NFC=1` asks the team's profile for it.
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

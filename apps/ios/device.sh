@@ -12,7 +12,9 @@
 #
 # The environment can set CBB_TEAM (the team's 10-character ID; by default the
 # Personal Team of the Apple ID signed in to Xcode), CBB_DEVICE (the phone's
-# identifier, when more than one is connected) and CBB_BUNDLE_ID.
+# identifier, when more than one is connected) and CBB_BUNDLE_ID. CBB_NFC=1
+# signs the app with NFC (Nfc.entitlements), for the recovery key on a
+# YubiKey, where the team's profile may carry it.
 #
 # A free team may have three apps on a phone at a time, an extension counting
 # as one, and the app group and shared keychain need the developer account, so
@@ -100,6 +102,9 @@ derived=${CBB_DERIVED:-/tmp/cbb-device.noindex}
 set -- -project ClipboardBridge.xcodeproj -configuration Debug -derivedDataPath "$derived" \
 	-allowProvisioningUpdates -allowProvisioningDeviceRegistration \
 	DEVELOPMENT_TEAM="$team" CODE_SIGN_STYLE=Automatic CBB_BUNDLE_ID="$bundle"
+if [ "${CBB_NFC:-0}" = 1 ]; then
+	set -- "$@" CBB_DEBUG_ENTITLEMENTS=ClipboardBridge/Nfc.entitlements
+fi
 
 # A free team's profile lists the devices it runs on, and only a build for a
 # device adds it: a build of the watch app for the watch puts the watch in

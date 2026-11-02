@@ -234,6 +234,39 @@ final class LiveGroup: GroupController {
         return made.sheet
     }
 
+    /// Puts the group's recovery key on a YubiKey held to the phone (Core
+    /// NFC): after Face ID, the card checks pin, makes a key in its first
+    /// free retired PIV slot, the root issues it an admin CA, which goes
+    /// into the slot, and signs the recovery record (docs/protocol.md,
+    /// section 10, "On a hardware key"). The key never leaves the YubiKey.
+    /// It returns the slot.
+    func makeRecoveryOnCard(pin: String) async throws -> UInt8 {
+        guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
+        let root = try await caSigner(reason: String(localized: "Put the recovery key on a YubiKey", bundle: .app))
+        guard let before = state else { throw PhoneGroup.Failure.notRoot }
+        let (slot, record) = try await YubiKeyNfc.withCard(
+            prompt: String(localized: "Hold the YubiKey to the top of the phone.", bundle: .app),
+            done: String(localized: "The recovery key is on the YubiKey.", bundle: .app)
+        ) { (card: SmartCard) throws -> (UInt8, Member.Record) in
+            var g = before
+            try Piv.select(card)
+            try Piv.verify(card, pin: pin)
+            try Piv.authenticate(card)
+            let slot = try Piv.freeSlot(card)
+            let (ca, record) = try g.makeRecoveryOnCard(publicKey: try Piv.generate(card, slot: slot), rootSigner: root, now: Date())
+            try Piv.putCertificate(card, slot: slot, cert: ca)
+            return (slot, record)
+        }
+        // Into the group as it is now, which sync may have changed while the phone waited for the card.
+        guard var g = state else { throw PhoneGroup.Failure.notRoot }
+        guard g.add([record]).count == 1 else { throw PhoneGroup.Failure.notRoot }
+        try g.save(to: file)
+        state = g
+        groupChanged()
+        await node?.sendRecords([record])
+        return slot
+    }
+
     /// Removes the group's recovery key: a revocation of it, signed with the
     /// root key after Face ID and sent to every member.
     func removeRecovery() async throws {
@@ -665,11 +698,93 @@ final class LiveGroup: GroupController {
         throw last
     }
 
-    /// The endpoints of the computers of the group with tag that Bonjour
-    /// finds within browseFor seconds.
-    private func findComputers(tag: String) async throws -> [NWEndpoint] {
+    /// Restores the group on this new phone with the recovery key on a
+    /// YubiKey (docs/protocol.md, section 10, "On a hardware key"): the
+    /// card, held once, issues this phone's member certificate from each
+    /// slot whose certificate is an admin CA; the phone finds the computers
+    /// by Bonjour, takes and checks the records from one, makes a new root
+    /// key, and the card, held again, signs the claim. A YubiKey carries no
+    /// group tag, so the records say which group it is.
+    func restoreWithCard(pin: String) async throws {
+        guard state == nil else { return }
+        guard !LocalAddresses.current().isEmpty else { throw Failure.noNetwork }
+        let member = try memberSigner()
+        let memberKey = member.publicKeyDER
+        // One Restore for each key the card holds.
+        let restores = try await YubiKeyNfc.withCard(
+            prompt: String(localized: "Hold the YubiKey with the recovery key to the top of the phone.", bundle: .app),
+            done: String(localized: "Looking for the group's computers…", bundle: .app)
+        ) { (card: SmartCard) throws -> [(restore: Restore, slot: UInt8)] in
+            try Piv.select(card)
+            let keys = try Piv.recoveryKeys(card)
+            guard !keys.isEmpty else { throw Piv.Failure(kind: .noKey, message: "this YubiKey holds no recovery key") }
+            return try keys.map { (k: (slot: UInt8, cert: Data)) throws -> (restore: Restore, slot: UInt8) in
+                let signer = Piv.Signer(card: card, slot: k.slot, publicKeyDER: try CertificateInfo(der: k.cert).publicKey, pin: pin)
+                return (restore: try Restore(card: signer, adminCA: k.cert, memberKey: memberKey, now: Date()), slot: k.slot)
+            }
+        }
+        let computers = try await findComputers(tag: nil)
+        let name = PhoneGroup.validName(UIDevice.current.name)
+        func dial(_ endpoint: NWEndpoint, _ r: Restore) async throws -> TLSTransport {
+            // The handshake takes any certificate; Restore.group checks the computer's against the records.
+            let t = TLSTransport(endpoint: endpoint, alpn: Member.alpn, identity: try identity(certificate: r.memberCert, member),
+                                 chain: [r.adminCA]) { !$0.isEmpty }
+            try await t.start()
+            return t
+        }
+        var last: Error = Failure.noGroupComputer
+        for endpoint in computers {
+            for (r, slot) in restores {
+                var g: PhoneGroup
+                do {
+                    g = try r.group(try await Restore.exchange(try await dial(endpoint, r), name: name, os: "ios", now: Date()), now: Date())
+                } catch {
+                    // Another group's computer, a key of another group, or one that does not answer: the next may fit.
+                    last = error
+                    continue
+                }
+                KeychainIdentity.removeKey(label: Self.caLabel)
+                let se = Self.secureEnclave
+                _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
+                let root = try await signer(label: Self.caLabel, reason: String(localized: "Restore the group with its recovery key", bundle: .app))
+                let newRoot = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
+                let adminKey = try CertificateInfo(der: r.adminCA).publicKey
+                let found = g
+                let (claim, claimed) = try await YubiKeyNfc.withCard(
+                    prompt: String(localized: "Hold the YubiKey again to sign the claim.", bundle: .app),
+                    done: String(localized: "The claim is signed.", bundle: .app)
+                ) { (card: SmartCard) throws -> (Member.Record, PhoneGroup) in
+                    var g = found
+                    try Piv.select(card)
+                    let claim = try r.claim(&g, newRoot: newRoot, now: Date(),
+                                            with: Piv.Signer(card: card, slot: slot, publicKeyDER: adminKey, pin: pin))
+                    return (claim, g)
+                }
+                g = claimed
+                try g.save(to: file)
+                try modeBox.newDevice()
+                forgetCredentials()
+                state = g
+                // Sync sends the claim too, as the records differ; this way it is out at once.
+                do {
+                    _ = try await Restore.exchange(try await dial(endpoint, r), name: name, os: "ios", now: Date(), send: [claim])
+                } catch {
+                    keysLog.notice("sending the claim; sync sends it later: \(String(describing: error), privacy: .public)")
+                }
+                try startSync()
+                return
+            }
+        }
+        throw last
+    }
+
+    /// The endpoints of the computers of the group with tag, or of any
+    /// group without one, that Bonjour finds within browseFor seconds.
+    private func findComputers(tag: String?) async throws -> [NWEndpoint] {
         let members = OSAllocatedUnfairLock<Set<String>>(initialState: [])
-        let b = BonjourBrowser { found in members.withLock { $0 = Set(found.filter { $0.group == tag }.map(\.device)) } }
+        let b = BonjourBrowser { found in
+            members.withLock { $0 = Set(found.filter { $0.group != nil && (tag == nil || $0.group == tag) }.map(\.device)) }
+        }
         b.start()
         defer { b.stop() }
         let deadline = Date().addingTimeInterval(Self.browseFor)
