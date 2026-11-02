@@ -18,6 +18,7 @@ import (
 	"math/big"
 	"os"
 	"sync"
+	"testing"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpm2/transport"
@@ -51,9 +52,15 @@ type TPM struct {
 }
 
 // Open opens the TPM: Device, or the simulator that CBB_TPM_SIMULATOR names.
+// In a test binary it opens only the simulator, so that the tests' keys
+// never go into the machine's own TPM, which a Windows runner or a
+// developer's computer may let them use.
 func Open() (*TPM, error) {
 	if addr := os.Getenv(simEnv); addr != "" {
 		return openSimulator(addr)
+	}
+	if testing.Testing() {
+		return nil, ErrNoTPM
 	}
 	t, err := openDevice()
 	if err != nil {
