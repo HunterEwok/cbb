@@ -44,6 +44,12 @@ object Piv {
         /** The card's management key is not the default one, which making a key needs. */
         MANAGEMENT_KEY,
 
+        /**
+         * The card's management key is 3DES, as a YubiKey before firmware 5.7
+         * has from the factory, or the card does not say: the kits use AES only.
+         */
+        OLD_FIRMWARE,
+
         /** Every retired slot holds a key or a certificate. */
         NO_FREE_SLOT,
 
@@ -183,13 +189,14 @@ object Piv {
     /**
      * Authenticates with the default management key, which making a key and
      * storing its certificate need; the algorithm is the one the card's
-     * metadata names, 3DES without it.
+     * metadata names, AES only: a card with a 3DES key, or without metadata
+     * (firmware before 5.3), is refused as [Kind.OLD_FIRMWARE].
      */
     fun authenticate(card: SmartCard, key: ByteArray = DEFAULT_MANAGEMENT_KEY) {
         val (meta, msw) = command(card, 0xf7, 0x00, MANAGEMENT_SLOT)
         val alg = if (msw == 0x9000) {
             val t = TLV(meta)
-            var a = 0x03
+            var a = 0
             while (!t.done) {
                 val tag = t.peek
                 val v = t.value(tag)
@@ -197,14 +204,17 @@ object Piv {
             }
             a
         } else {
-            0x03
+            0
         }
-        val (cipher, block) = when (alg) {
-            0x03 -> "DESede" to 8
-            0x0a, 0x0b, 0x0c -> "AES" to 16
+        val keyLen = when (alg) {
+            0x0a -> 16
+            0x0b -> 24
+            0x0c -> 32
+            0x03, 0 -> fail(Kind.OLD_FIRMWARE, "the YubiKey's management key is 3DES, as before firmware 5.7")
             else -> fail(Kind.MANAGEMENT_KEY, "the YubiKey's management key has an unknown algorithm")
         }
-        val keyLen = when (alg) { 0x0a -> 16; 0x0c -> 32; else -> 24 }
+        val cipher = "AES"
+        val block = 16
         if (key.size != keyLen) fail(Kind.MANAGEMENT_KEY, "the YubiKey's management key is not the default one")
         val spec = SecretKeySpec(key, cipher)
         // One block, as the card's challenge and witness are: CBC with a zero IV is the block cipher itself.

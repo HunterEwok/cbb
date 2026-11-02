@@ -20,11 +20,12 @@ import kotlin.test.assertTrue
 
 /**
  * Plays a YubiKey's PIV application, as Go's internal/piv/pivtest does:
- * the commands the kit sends, with the default management key (3DES, or
- * AES-192 as firmware 5.7 has it), answers in parts of 100 bytes and
- * command chaining.
+ * the commands the kit sends, with the default management key (AES-192 as
+ * firmware 5.7 has it; alg 0x03 names 3DES, as before, which the kit
+ * refuses before it gets so far), answers in parts of 100 bytes and command
+ * chaining.
  */
-class FakePivCard(val aes: Boolean = false, val metadata: Boolean = true) : SmartCard {
+class FakePivCard(val alg: Int = 0x0b, val metadata: Boolean = true) : SmartCard {
     class Slot(val key: KeyPair?, var cert: ByteArray?, val pinPolicy: Int = 0, val touchPolicy: Int = 0)
 
     val slots = mutableMapOf<Int, Slot>()
@@ -52,11 +53,10 @@ class FakePivCard(val aes: Boolean = false, val metadata: Boolean = true) : Smar
         return if (pending.isEmpty()) sw(part, 0x9000) else sw(part, 0x6100 or minOf(pending.size, 0xff))
     }
 
-    private val cipher get() = if (aes) "AES" else "DESede"
-    private val block get() = if (aes) 16 else 8
+    private val block = 16
 
     private fun crypt(mode: Int, b: ByteArray) =
-        Cipher.getInstance("$cipher/CBC/NoPadding").run { init(mode, SecretKeySpec(managementKey, cipher), IvParameterSpec(ByteArray(block))); doFinal(b) }
+        Cipher.getInstance("AES/CBC/NoPadding").run { init(mode, SecretKeySpec(managementKey, "AES"), IvParameterSpec(ByteArray(block))); doFinal(b) }
 
     override fun transmit(apdu: ByteArray): ByteArray {
         val cla = apdu[0].toInt() and 0xff
@@ -98,7 +98,7 @@ class FakePivCard(val aes: Boolean = false, val metadata: Boolean = true) : Smar
             }
             0xf7 -> {
                 if (!metadata) return sw(ByteArray(0), 0x6d00)
-                if (p2 == 0x9b) return sw(Piv.tlv(0x01, byteArrayOf(if (aes) 0x0b else 0x03)), 0x9000)
+                if (p2 == 0x9b) return sw(Piv.tlv(0x01, byteArrayOf(alg.toByte())), 0x9000)
                 if (slots[p2]?.key == null) sw(ByteArray(0), 0x6a82) else sw(Piv.tlv(0x01, byteArrayOf(0x11)), 0x9000)
             }
             0x20 -> {
@@ -161,8 +161,8 @@ class PivTest {
 
     @Test
     fun putsTheRecoveryKeyOnTheCardAndRestoresWithIt() {
-        for (aes in listOf(false, true)) {
-            val card = FakePivCard(aes = aes)
+        run {
+            val card = FakePivCard()
             // Slot 82 holds something else, as a release root.
             card.slots[0x82] = FakePivCard.Slot(SoftwareSigner.generate(), null)
             val rootKey = SoftwareSigner()
@@ -216,6 +216,13 @@ class PivTest {
         val old = FakePivCard(metadata = false)
         Piv.select(old)
         assertEquals(Piv.FIRST_SLOT, Piv.freeSlot(old))
+        // The kit uses AES only: a 3DES management key, or a card that does not say, is refused.
+        Piv.verify(old, "123456")
+        assertEquals(Piv.Kind.OLD_FIRMWARE, assertFailsWith<Piv.Failure> { Piv.authenticate(old) }.kind)
+        val des = FakePivCard(alg = 0x03)
+        Piv.select(des)
+        Piv.verify(des, "123456")
+        assertEquals(Piv.Kind.OLD_FIRMWARE, assertFailsWith<Piv.Failure> { Piv.authenticate(des) }.kind)
 
         assertEquals(Piv.Kind.NO_PIV, assertFailsWith<Piv.Failure> { Piv.select { byteArrayOf(0x6a, 0x82.toByte()) } }.kind)
     }

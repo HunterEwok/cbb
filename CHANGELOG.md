@@ -26,9 +26,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and Swift): the card makes the key in the first free retired PIV slot with the PIN and a
   touch before each signature, the root's admin CA for it goes into the slot, and a new phone
   finds it there and has the card sign its member certificate and its claim
-  (`Restore.onCard`). Both apps do it over NFC: Settings, "Recovery key", "Put it on a
-  YubiKey", and "Use a YubiKey instead" on the restore screen; on the iPhone through Core NFC,
-  which waits for the Apple developer account's entitlement.
+  (`Restore.onCard`). Making the key needs a YubiKey with firmware 5.7 or later, whose factory
+  management key is AES; an older one keeps the sheet. Both apps do it over NFC: Settings,
+  "Recovery key", "Put it on a YubiKey", and "Use a YubiKey instead" on the restore screen; on
+  the iPhone through Core NFC, which waits for the Apple developer account's entitlement.
 - `cbb recovery -yubikey`: the recovery key on a YubiKey claims the group from a computer. The
   YubiKey signs the claim after its PIN; the key stays on it, in a retired PIV slot whose
   certificate is the key's admin CA (docs/protocol.md, section 10). PC/SC without cgo on

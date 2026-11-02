@@ -8,8 +8,9 @@ import XCTest
 
 /// Plays a YubiKey's PIV application, as the Kotlin kit's FakePivCard and
 /// Go's pivtest do: the commands the kit sends, with the default
-/// management key (AES-192 as firmware 5.7 has it, or 3DES where the
-/// platform has it), answers in parts of 100 bytes and command chaining.
+/// management key (AES-192 as firmware 5.7 has it; alg 0x03 names 3DES, as
+/// before, which the kit refuses before it gets so far), answers in parts
+/// of 100 bytes and command chaining.
 final class FakePivCard: SmartCard {
     struct Slot {
         var key: P256.Signing.PrivateKey?
@@ -100,16 +101,16 @@ final class FakePivCard: SmartCard {
         case 0x87:
             var v = Piv.TLV(try t.value(0x7c))
             if p2 == 0x9b {
-                let block = alg == 0x03 ? 8 : 16
+                let block = 16
                 let first = try v.value(0x80)
                 if first.isEmpty {
                     witness = Data((0..<block).map { _ in UInt8.random(in: 0...255) })
-                    return send(Piv.tlv(0x7c, Piv.tlv(0x80, try Piv.crypt(alg, managementKey, witness, encrypt: true))))
+                    return send(Piv.tlv(0x7c, Piv.tlv(0x80, try Piv.crypt(managementKey, witness, encrypt: true))))
                 }
                 guard first == witness else { return sw(0x6982) }
                 let challenge = try v.value(0x81)
                 authenticated = true
-                return send(Piv.tlv(0x7c, Piv.tlv(0x82, try Piv.crypt(alg, managementKey, challenge, encrypt: true))))
+                return send(Piv.tlv(0x7c, Piv.tlv(0x82, try Piv.crypt(managementKey, challenge, encrypt: true))))
             }
             guard let s = slots[p2], let key = s.key else { return sw(0x6a86) }
             guard verified else { return sw(0x6982) }
@@ -139,17 +140,9 @@ struct PrehashedDigest: Digest {
 final class PivTests: XCTestCase {
     let t0 = Date().addingTimeInterval(-100 * 3600)
 
-    var algs: [UInt8] {
-        #if canImport(CommonCrypto)
-        return [0x03, 0x0b]
-        #else
-        return [0x0b]
-        #endif
-    }
-
     func testPutsTheRecoveryKeyOnTheCard() throws {
-        for alg in algs {
-            let card = FakePivCard(alg: alg)
+        do {
+            let card = FakePivCard()
             card.slots[0x82] = FakePivCard.Slot(key: P256.Signing.PrivateKey())
             let rootKey = SoftwareSigner()
             var root = try PhoneGroup.create(caSigner: rootKey, memberKey: SoftwareSigner().publicKeyDER, name: "Lost", now: t0)
@@ -203,6 +196,13 @@ final class PivTests: XCTestCase {
         let old = FakePivCard(metadata: false)
         try Piv.select(old)
         XCTAssertEqual(try Piv.freeSlot(old), Piv.firstSlot, "a card without metadata counts a slot without a certificate as free")
+        // The kit uses AES only: a 3DES management key, or a card that does not say, is refused.
+        try Piv.verify(old, pin: "123456")
+        XCTAssertThrowsError(try Piv.authenticate(old)) { XCTAssertEqual(($0 as? Piv.Failure)?.kind, .oldFirmware) }
+        let des = FakePivCard(alg: 0x03)
+        try Piv.select(des)
+        try Piv.verify(des, pin: "123456")
+        XCTAssertThrowsError(try Piv.authenticate(des)) { XCTAssertEqual(($0 as? Piv.Failure)?.kind, .oldFirmware) }
     }
 
     func testSignerChecksTheKey() throws {

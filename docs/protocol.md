@@ -1897,7 +1897,10 @@ for a touch where it can, before each signature. The slot's certificate object h
 admin CA, uncompressed, so that the card alone leads to the key: a computer or a new phone
 reads the retired slots' certificates and takes the one whose key hash the state names in
 `recovery`, then signs with that slot's key (GENERAL AUTHENTICATE over a SHA-256 digest).
-Nothing else on the card is changed, since it may be in use for other things.
+Nothing else on the card is changed, since it may be in use for other things. Making the key
+needs the card's management key: the phones use the factory one with AES only (a YubiKey
+from firmware 5.7), and refuse a card whose management key is 3DES or that does not say;
+signing needs only the PIN.
 
 A newer `recovery` record replaces the older one: the key the older one named is no admin
 any more, and its claims do not count. A `revoke` of the key removes it (a root's own key, or
