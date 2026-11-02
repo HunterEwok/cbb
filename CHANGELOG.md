@@ -756,6 +756,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Changed
 
+- Dependencies: der 0.8.3 for the lite member and the firmware, goldmark 1.8.6 (the website),
+  coder/websocket 1.8.15 (the tray app), the Android Gradle plugin 9.5.0 and Robolectric 4.17.
+  godbus stays at 5.1.0, as 5.2 panics on a message with an array of file descriptors, and
+  trouble-host at 0.7, as 0.8 needs a bt-hci that esp-radio does not implement yet; Dependabot
+  skips only those versions and proposes the next ones.
 - The Mac app lives in the menu bar only, as the tray app does on Windows and Linux: no Dock
   icon, no window at launch (the menu opens it), and it starts at login unless Settings turns
   that off. The menu bar and the tray show a single-colour glyph in three states, drawn
