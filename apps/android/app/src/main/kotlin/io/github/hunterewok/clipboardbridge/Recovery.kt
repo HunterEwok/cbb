@@ -81,6 +81,8 @@ internal fun RecoverySection(model: AppModel) {
     var asking by remember { mutableStateOf<Int?>(null) }
     // The sheet just made, while it shows; nothing keeps it after.
     var sheet by remember { mutableStateOf<Pair<Core.RecoverySheet, Instant>?>(null) }
+    var askingPin by remember { mutableStateOf(false) }
+    var onCard by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun make() {
         busy = true
         scope.launch {
@@ -94,12 +96,14 @@ internal fun RecoverySection(model: AppModel) {
             if (made != null) {
                 Text(stringResource(R.string.recovery_made, longDate(made)), fontWeight = FontWeight.SemiBold)
                 QuietButton(stringResource(R.string.recovery_make_new), onClick = { asking = R.string.recovery_replace_title }, enabled = !busy)
+                QuietButton(stringResource(R.string.yubikey_put), onClick = { askingPin = true }, enabled = !busy)
                 TextButton(onClick = { asking = R.string.recovery_remove_title }, enabled = !busy) {
                     Text(stringResource(R.string.recovery_remove), color = palette.danger)
                 }
             } else {
                 Text(stringResource(R.string.recovery_none), color = palette.textDim)
                 AccentButton(stringResource(R.string.recovery_make), onClick = ::make, enabled = !busy)
+                QuietButton(stringResource(R.string.yubikey_put), onClick = { askingPin = true }, enabled = !busy)
             }
             model.recoveryNote?.let { NoteText(it) }
             Text(stringResource(R.string.recovery_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
@@ -128,6 +132,24 @@ internal fun RecoverySection(model: AppModel) {
         )
     }
     sheet?.let { (s, at) -> RecoverySheetDialog(s, at) { sheet = null } }
+    if (askingPin) {
+        YubiKeyPinDialog(
+            stringResource(R.string.yubikey_put_title),
+            stringResource(R.string.yubikey_put_body),
+            dismiss = { askingPin = false },
+        ) { pin ->
+            busy = true
+            onCard = scope.launch {
+                try {
+                    model.makeRecoveryOnCard(pin)
+                } finally {
+                    busy = false
+                    onCard = null
+                }
+            }
+        }
+    }
+    YubiKeyPrompt(model) { onCard?.cancel() }
 }
 
 /**

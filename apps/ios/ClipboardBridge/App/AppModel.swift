@@ -34,6 +34,10 @@ protocol GroupController: AnyObject {
     /// Makes the group's recovery key, replacing the one before it, and
     /// returns its sheet, which the app shows once; only the root phone does.
     func makeRecovery() async throws -> Core.RecoverySheet
+    /// Puts a new recovery key on a YubiKey held to the phone, checked
+    /// with pin, replacing the one before it; returns its slot. Only the
+    /// root phone does.
+    func makeRecoveryOnCard(pin: String) async throws -> UInt8
     /// Removes the group's recovery key; only the root phone does.
     func removeRecovery() async throws
     /// Unfreezes an admin computer that another admin froze.
@@ -80,6 +84,9 @@ protocol GroupController: AnyObject {
     /// Restores the group on this new phone with the recovery key from the
     /// sheet's QR code; returns once the claim is sent.
     func restore(sheet: Core.RecoveredKey) async throws
+    /// The same with the recovery key on a YubiKey, held to the phone
+    /// twice: for this phone's certificate, then for the claim.
+    func restoreWithCard(pin: String) async throws
     /// Sends what this phone holds, or fetches the computers' recent copy.
     func sync() async throws -> AppModel.SyncResult
     /// Updates which computers are online.
@@ -119,6 +126,7 @@ extension GroupController {
     var alerts: [GroupAlert] { [] }
     var recoveryMade: Date? { nil }
     func makeRecovery() async throws -> Core.RecoverySheet { throw PhoneGroup.Failure.notRoot }
+    func makeRecoveryOnCard(pin: String) async throws -> UInt8 { throw PhoneGroup.Failure.notRoot }
     func removeRecovery() async throws { throw PhoneGroup.Failure.notRoot }
     func resolve(_ ids: [Data]) async throws {}
     var handedOver: Bool { false }
@@ -129,6 +137,7 @@ extension GroupController {
     func deliverFromWatch(_ signed: WatchState.Signed) async throws { throw PhoneGroup.Failure.notAWatch }
     func joinComputer(code: String) async throws { throw PendingGroup.Failure.notReady }
     func restore(sheet: Core.RecoveredKey) async throws { throw PendingGroup.Failure.notReady }
+    func restoreWithCard(pin: String) async throws { throw PendingGroup.Failure.notReady }
     func rename(_ id: String, to name: String) async throws {}
     func setMode(_ id: String, to mode: String) async throws {}
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
@@ -477,6 +486,31 @@ final class AppModel: ObservableObject {
             case let .key(sheet):
                 try await group.restore(sheet: sheet)
             }
+            computers = group.computers
+            devices = group.devices
+            isAdmin = group.isAdmin
+            phase = .home
+            message = String(localized: "The claim is sent. This phone becomes the group's root when the waiting time ends; Home shows the time left.", bundle: .app)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
+    /// Restores the group with the recovery key on a YubiKey, as restore
+    /// does with the sheet.
+    func restoreWithCard(pin: String) async -> Bool {
+        guard phase == .start else {
+            message = String(localized: "This phone is in a group already. A recovery key restores a group on a phone without one.", bundle: .app)
+            return false
+        }
+        busy = true
+        defer { busy = false }
+        do {
+            try await group.restoreWithCard(pin: pin)
             computers = group.computers
             devices = group.devices
             isAdmin = group.isAdmin
@@ -941,6 +975,21 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Puts a new recovery key on a YubiKey; true once it is there.
+    func makeRecoveryOnCard(pin: String) async -> Bool {
+        defer { recoveryMade = group.recoveryMade }
+        do {
+            _ = try await group.makeRecoveryOnCard(pin: pin)
+            message = String(localized: "The recovery key is on the YubiKey. Keep it away from your phones; a sheet printed before no longer works.", bundle: .app)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
     /// Removes the group's recovery key.
     func removeRecovery() async {
         do {
@@ -1132,6 +1181,26 @@ final class AppModel: ObservableObject {
             case .otherGroup: return String(localized: "The computers found on this network are of another group than the sheet.", bundle: .app)
             case .notTheKey: return String(localized: "This is not the group's recovery key now: the root phone removed it or made a new one.", bundle: .app)
             case .notAMember: return String(localized: "The computer's answer does not fit the group's records.", bundle: .app)
+            }
+        }
+        if let f = error as? Piv.Failure {
+            switch f.kind {
+            case .noPIV: return String(localized: "This is not a YubiKey with PIV, or PIV is turned off on it.", bundle: .app)
+            case .wrongPIN: return String(localized: "Wrong PIN. Tries left before the YubiKey blocks it: \(f.left).", bundle: .app)
+            case .blocked: return String(localized: "The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.", bundle: .app)
+            case .managementKey:
+                return String(localized: "This YubiKey's management key is not the factory one, so the app cannot put a key on it. Use the printed sheet instead.", bundle: .app)
+            case .oldFirmware:
+                return String(localized: "This YubiKey is older than firmware 5.7, which the app needs to put a key on it. Use the printed sheet instead.", bundle: .app)
+            case .noFreeSlot: return String(localized: "This YubiKey has no free slot for the key.", bundle: .app)
+            case .noKey: return String(localized: "This YubiKey holds no recovery key.", bundle: .app)
+            case .card: return String(localized: "The YubiKey did not answer as expected. Hold it still to the phone and try again.", bundle: .app)
+            }
+        }
+        if let f = error as? YubiKeyNfc.Failure {
+            switch f {
+            case .unavailable: return String(localized: "This iPhone cannot read a YubiKey over NFC.", bundle: .app)
+            case .noCard: return String(localized: "No YubiKey was held to the phone. Try again.", bundle: .app)
             }
         }
         if let r = error as? LiveGroup.CommandRefused {

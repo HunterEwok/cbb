@@ -96,6 +96,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEAM` | `apps/ios/device.sh` | The Apple team that signs the iPhone app for your own phone, its 10-character ID; without it the script takes the Personal Team of the Apple ID signed in to Xcode. |
 | `CBB_DEVICE` | `apps/ios/device.sh` | The iPhone to install on, its identifier, when more than one is connected. |
 | `CBB_BUNDLE_ID` | `apps/ios/device.sh` | The app's bundle identifier for that build, `dev.<team>.clipboardbridge` by default, so that it never takes the release one. |
+| `CBB_NFC` | `apps/ios/device.sh` | `1` signs that build with NFC (`Nfc.entitlements`), for the recovery key on a YubiKey, where the team's profile may carry it. |
 | `CBB_DERIVED` | `apps/ios/device.sh` | Where the build goes, `/tmp/cbb-device.noindex` by default: a folder the Mac empties at a restart, and Spotlight skips it, so the built apps never show up in a search. |
 | `CBB_LOCK_CHILD`, `CBB_MDNS_CHILD` | Go tests | Set by a test for the child process it starts; never set them yourself. |
 | `CBB_RELEASE_SIGN_DIR` | `tools/release-sign` | Another directory for the release signing tool's files than `tools/release-sign`. |
