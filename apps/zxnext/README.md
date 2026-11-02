@@ -20,9 +20,9 @@ tools. Test them on the machine before relying on them.
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
 .cbb join             join the group: scan the code on the screen with the phone app
+                      (through the ESP once .cbb net has its settings)
 .cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
                       the Pi's network through the ESP, in the background
-.cbb net join         join the group through the ESP: scan the code with the phone app
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb -d paste         the same, with the cause under each error (debug mode)
@@ -129,7 +129,7 @@ ESP8266"). The lite member (`cbb run -peer 127.0.0.1:8769`) has to run on the Pi
 While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
 `join` ask for `.cbb net off` first.
 
-On a Pi without a radio, `.cbb net join` joins the group through the ESP. It asks the ESP
+On a Pi without a radio, once `.cbb net` has its settings, `.cbb join` joins the group through the ESP. It asks the ESP
 for its address (`AT+CIFSR`), starts `cbb next join` on the Pi in the background with that
 address and the ports of `-serve` (so the settings need `-serve`), draws the QR code, and
 starts the network under it, so the phone that scans the code reaches the Pi through the

@@ -40,14 +40,14 @@ static void usage(void)
            ".cbb text -s WORDS such as a password\n"
            ".cbb join          join the group:\n"
            "                   scan the code with\n"
-           "                   the phone app\n"
+           "                   the phone app (with\n"
+           "                   net settings: via\n"
+           "                   the ESP)\n"
            ".cbb net on [-to \"HOST:PORT\"]\n"
            " [-serve \"ESP:PORT\"] [-zone \"+HH:MM\"]\n"
            "                   the Pi's network\n"
            "                   through the ESP,\n"
            "                   in the background\n"
-           ".cbb net join      join the group\n"
-           "                   through the ESP\n"
            ".cbb net off       stop it\n"
            ".cbb net           how it stands\n"
            ".cbb -d ...        show error details\n");
@@ -421,7 +421,8 @@ static uint8_t esp_address(char *ip, uint8_t max)
     return found && plain(ip);
 }
 
-// Joins the group through the ESP: cbb next join waits on the Pi for the
+// Joins the group through the ESP (.cbb join when /cbb/NET.CFG holds the
+// network's settings): cbb next join waits on the Pi for the
 // phone, at the ESP's address and the port -serve leads to, while the
 // network runs under the QR code the phone scans.
 static int net_join(void)
@@ -512,7 +513,6 @@ static int net(int argc, char **argv)
     if (argc == 0) return net_show();
     if (strcmp(argv[0], "on") == 0) return net_start(argc - 1, argv + 1);
     if (strcmp(argv[0], "off") == 0 && argc == 1) return net_stop();
-    if (strcmp(argv[0], "join") == 0 && argc == 1) return net_join();
     usage();
     return 1;
 }
@@ -538,7 +538,8 @@ static int run(int argc, char **argv)
     if (strcmp(argv[i], "paste") == 0 && argc - i <= 2) return paste(argc - i == 2 ? argv[i + 1] : 0);
     if (strcmp(argv[i], "copy") == 0 && argc - i == 2) return copy_file(argv[i + 1]);
     if (strcmp(argv[i], "text") == 0 && argc - i >= 2) return copy_words(argc - i - 1, argv + i + 1);
-    if (strcmp(argv[i], "join") == 0 && argc - i == 1) return join();
+    // With the network's settings, the Pi has no network but the ESP's.
+    if (strcmp(argv[i], "join") == 0 && argc - i == 1) return net_load() ? join() : net_join();
     if (strcmp(argv[i], "net") == 0) return net(argc - i - 1, argv + i + 1);
     usage();
     return 1;
