@@ -7,6 +7,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- A `handover` record: the group's root hands the group to an admin, whose claim then takes
+  effect at once instead of after the delay, for moving the root to a new phone or from a
+  computer to a phone. A `recovery` record carries the recovery key's admin CA (`cert`), so a
+  computer of the group claims with the key alone; a device holding the recovery key gets a
+  connection that carries records only, to bring its claim (docs/protocol.md, section 10).
 - A single-colour glyph for the Mac's menu bar and the tray on Windows and Linux: the app icon's
   clipboard and key, in three states (no group, in a group, another device online). `tools/icon`
   makes the Mac's template images, the symbolic SVGs for Linux and white and black ICOs for

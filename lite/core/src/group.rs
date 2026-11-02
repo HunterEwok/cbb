@@ -456,6 +456,12 @@ impl Records {
             return Some(Refusal::Refused(why));
         }
         if !chain.first().is_some_and(|c| self.listed(&c.key_hash())) {
+            // A device no record names gets records only, unless the admin
+            // that certified it was removed: so the holder of a removed
+            // recovery key gets nothing.
+            if self.issuer_admin(chain).is_some_and(|a| self.revoked(&a)) {
+                return Some(Refusal::Refused("the admin that certified the device was removed from the group"));
+            }
             return Some(Refusal::NotListed);
         }
         if chain.first().and_then(|c| certs::device_of(c).ok()).is_some_and(|d| self.stopped(d.as_str())) {
@@ -479,6 +485,16 @@ impl Records {
     pub fn no_secrets_to(&self, dev: &str) -> bool {
         let st = self.state();
         st.stop != authority::STOP_NONE || st.no_secrets_to.iter().chain(&st.nothing_to).any(|d| d == dev)
+    }
+
+    /// The key hash of the admin CA in chain that signed its leaf; None
+    /// when a root on the path signed it or none did.
+    fn issuer_admin(&self, chain: &[Cert]) -> Option<KeyHash> {
+        let first = chain.first()?;
+        if signed_by_any(first, &self.path()) {
+            return None;
+        }
+        chain.iter().skip(1).find(|c| from(first, c)).map(|c| c.key_hash())
     }
 
     /// refused without the rule that a device record names the key.
