@@ -16,6 +16,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/HunterEwok/clipboardbridge/internal/frame"
@@ -29,6 +30,9 @@ import (
 type Link struct {
 	Endpoint netip.AddrPort
 	Pin      string
+	// Also are other pins the forwarder's key may have: the project's
+	// forwarder while its key changes.
+	Also []string
 }
 
 // Pin returns the pin of a forwarder's certificate: the fingerprint of its
@@ -141,7 +145,7 @@ func Register(ctx context.Context, cfg HubConfig) {
 // check it, and VerifyConnection checks its key against the pin instead. (The
 // name, like the pairing's clientTLSVerifiedByFingerprint, tells CodeQL that
 // InsecureSkipVerify is checked here.)
-func TLSVerifiedByPin(cert tls.Certificate, protocol, pin, what string) *tls.Config {
+func TLSVerifiedByPin(cert tls.Certificate, protocol, what string, pins ...string) *tls.Config {
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{cert},
@@ -150,7 +154,7 @@ func TLSVerifiedByPin(cert tls.Certificate, protocol, pin, what string) *tls.Con
 		// hello carries no server name either.
 		InsecureSkipVerify: true,
 		VerifyConnection: func(cs tls.ConnectionState) error {
-			if len(cs.PeerCertificates) == 0 || Pin(cs.PeerCertificates[0]) != pin {
+			if len(cs.PeerCertificates) == 0 || !slices.Contains(pins, Pin(cs.PeerCertificates[0])) {
 				return fmt.Errorf("the %s's key is not the one given for it", what)
 			}
 			if cs.NegotiatedProtocol != protocol {
@@ -183,7 +187,7 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 	} else {
 		cert = cfg.Cert()
 	}
-	tc := tls.Client(raw, TLSVerifiedByPin(cert, Protocol, cfg.Link.Pin, "forwarder"))
+	tc := tls.Client(raw, TLSVerifiedByPin(cert, Protocol, "forwarder", append([]string{cfg.Link.Pin}, cfg.Link.Also...)...))
 	if err := tc.HandshakeContext(ctx); err != nil {
 		return fmt.Errorf("registering with the forwarder: %w", err)
 	}

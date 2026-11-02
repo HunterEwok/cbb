@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import ClipboardBridgeKit
 import SwiftUI
 import UIKit
 
@@ -66,6 +67,9 @@ struct SettingsView: View {
             }
             if model.devices.contains(where: { $0.isSelf && $0.isRoot }), WatchLink.shared.watchApp {
                 watchSection
+            }
+            if model.isRoot {
+                RecoverySection()
             }
             NotificationSettings()
             Section {
@@ -212,6 +216,11 @@ struct SettingsView: View {
                 if !hub.home {
                     Button { Task { await model.addHomeNetwork() } } label: { Text("This is my home network") }
                 }
+                Text(hub.forwarder?.isProject == true
+                     ? "Reached from afar through the project's forwarder at cbb.tools. To use your own, enter its address and key."
+                     : "To go back to the project's forwarder, empty both fields and save.")
+                    .font(.footnote)
+                    .foregroundStyle(palette.textDim)
                 TextField(text: $forwarderAddress) { Text("Forwarder address, such as 198.51.100.9:8764") }
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -229,7 +238,7 @@ struct SettingsView: View {
                 } label: {
                     Text("Save the forwarder")
                 }
-                .disabled(switching || (forwarderAddress == (hub.forwarder?.endpoint ?? "") && forwarderKey == (hub.forwarder?.pin ?? "")))
+                .disabled(switching || (forwarderAddress == ownForwarder(hub)?.endpoint ?? "" && forwarderKey == ownForwarder(hub)?.pin ?? ""))
             }
             if let note = model.hubNote {
                 Text(verbatim: note).font(.caption).foregroundStyle(palette.danger)
@@ -241,9 +250,15 @@ struct SettingsView: View {
         }
         .listRowBackground(palette.surface)
         .onAppear {
-            forwarderAddress = hub.forwarder?.endpoint ?? ""
-            forwarderKey = hub.forwarder?.pin ?? ""
+            forwarderAddress = ownForwarder(hub)?.endpoint ?? ""
+            forwarderKey = ownForwarder(hub)?.pin ?? ""
         }
+    }
+
+    /// The user's own forwarder, which the fields show; the project's
+    /// leaves them empty.
+    private func ownForwarder(_ hub: AppModel.Hub) -> HubState.Forwarder? {
+        hub.forwarder?.isProject == true ? nil : hub.forwarder
     }
 
     private func hubStatus(_ hub: AppModel.Hub) -> Text {

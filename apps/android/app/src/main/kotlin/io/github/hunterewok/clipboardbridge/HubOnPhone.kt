@@ -33,7 +33,19 @@ data class HubState(
     val clients: List<PhoneHub.Client> = emptyList(),
 ) {
     /** The forwarder: its endpoint, "ip:port", and the pin of its key: SHA-256 of its key in standard base64. */
-    data class Forwarder(val endpoint: String, val pin: String)
+    data class Forwarder(val endpoint: String, val pin: String) {
+        /** Whether this is the project's forwarder. */
+        val isProject get() = pin == PROJECT_PIN
+
+        companion object {
+            /** The project's forwarder, which the hub uses unless the user gives their own: its name with the port, looked up when it is set, and the pin of its key, as cbb has them (internal/forward/project.go). */
+            const val PROJECT_HOST = "cbb.tools:8764"
+            const val PROJECT_PIN = "efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="
+
+            /** The project's forwarder at the address its name has now, IPv4 first; null when it cannot be looked up. On an IO thread. */
+            fun project(): Forwarder? = HubState.resolve(PROJECT_HOST)?.let { Forwarder(it, PROJECT_PIN) }
+        }
+    }
 
     fun encode(): ByteArray = JsonObject(mapOfValues(
         "key" to bytes(key),
@@ -181,6 +193,7 @@ class HubOnPhone(
     private var state: HubState? = runCatching { load() }.onFailure { log("cannot read the hub's state", it) }.getOrNull()
     private var hub: PhoneHub? = state?.let(::phoneHub)
     private var tunnel: HubTunnel? = null
+    private var tunnelPort = 0 // the member listener's port the tunnel joins its connections to
 
     val isOn: Boolean get() = synchronized(lock) { state?.on == true }
     val forwarder: HubState.Forwarder? get() = synchronized(lock) { state?.forwarder }
@@ -322,6 +335,12 @@ class HubOnPhone(
 
     /** Starts the tunnel and the registration when the hub is on and has a forwarder; nothing when it runs already. */
     fun start(g: Group) {
+        // A tunnel that joins its connections to another member listener's
+        // port, one that stopped, starts again with this one.
+        if (synchronized(lock) { tunnel != null && tunnelPort != g.memberPort }) {
+            log("the hub's member listener moved to port ${g.memberPort}; the tunnel starts again", null)
+            stop()
+        }
         val (s, h) = synchronized(lock) {
             if (tunnel != null) return
             val s = state?.takeIf { it.on } ?: return
@@ -341,6 +360,7 @@ class HubOnPhone(
             (tunnel == null && state?.on == true).also {
                 if (it) {
                     tunnel = t
+                    tunnelPort = g.memberPort
                     failure = null
                 }
             }

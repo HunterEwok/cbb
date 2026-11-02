@@ -25,6 +25,9 @@ android {
         // too; a build by hand from a branch may pass its own: -PversionName=1.2.3-dev.
         versionCode = (findProperty("versionCode") as String? ?: release.getProperty("versionCode")).toInt()
         versionName = findProperty("versionName") as String? ?: release.getProperty("versionName")
+        // The instrumented tests on an emulator in a group with the bench's fleet
+        // (src/androidTest, tools/bench's phone suite).
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // The two builds of one source (docs/apps.md, "F-Droid"): full for the GitHub releases and
@@ -202,4 +205,13 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.16")
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("androidx.test.ext:junit:1.3.0")
+
+    // The instrumented tests on an emulator (src/androidTest): the screens with Compose's
+    // test rule, the system's own screens (notifications, the share sheet) with UI Automator.
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:rules:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }

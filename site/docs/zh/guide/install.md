@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: bfd0846e196a -->
+<!-- source: 75a4b281a1c4 -->
 # 安装
 
 Clipboard Bridge 在每台电脑上作为一个小型后台服务运行，它的命令是 `cbb`。下面每种方式安装的都是同一个程序，选你喜欢的即可。
@@ -13,6 +13,8 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 ```
 
 然后注销再登录一次，这样你的用户无需 `sudo` 就能使用 `cbb`。没有桌面的机器可以用 `--console` 在 tmux 内实现复制和粘贴（`... | sudo sh -s -- --console`）。
+
+在装有 GTK 4 和 WebKitGTK 6.0 的桌面上（x86-64 和 ARM64），它还会安装托盘应用，该应用随会话启动，并出现在应用程序菜单中。缺少它们时，它会列出需要添加的软件包；添加后再运行一次即可装上托盘应用。
 
 在 GNOME 和 KDE 上，管理员第一次远程粘贴要按下按键之前，会先在电脑上弹出一次对话框询问。要跳过这个对话框，请加上 `--uinput`（`... | sudo sh -s -- --uinput`）：之后由一个小型辅助程序为正在使用屏幕的人按下粘贴键（Shift+Insert 和 Enter），在登录界面或锁屏时绝不会按。
 
@@ -61,6 +63,8 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 ```
 
 它让当前在屏幕前登录的用户可以使用 `cbb`（在新终端中），并为该用户启动剪贴板代理。会改变群组的命令要在以管理员身份打开的终端中运行，对应 Linux 和 macOS 中使用 `sudo` 的地方。
+
+它还会安装托盘应用，该应用在登录时启动，并以 Clipboard Bridge 之名出现在“开始”菜单中。
 
 使用 winget（待软件包进入 winget 的软件库之后）：
 

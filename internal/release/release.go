@@ -47,6 +47,9 @@ const (
 	UseRelease = "release"
 	UseStatus  = "status"
 	UseChannel = "channel"
+	// UseForwarder is the key of a forwarder the project runs, named by
+	// its address: no signer, but the pin hubs accept from it.
+	UseForwarder = "forwarder"
 )
 
 const (
@@ -568,6 +571,17 @@ func (k Keys) spkis(use string) [][]byte {
 			u = UseRelease
 		}
 		if u == use {
+			out = append(out, key.Key)
+		}
+	}
+	return out
+}
+
+// Forwarders returns the keys certified as the forwarder at name.
+func (k Keys) Forwarders(name string) [][]byte {
+	var out [][]byte
+	for _, key := range k.Keys {
+		if key.Use == UseForwarder && key.Name == name {
 			out = append(out, key.Key)
 		}
 	}

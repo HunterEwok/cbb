@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 04610b7181a2 -->
+<!-- source: 97be486697d2 -->
 # Клавиатуры и телевизоры
 
 Для тех, кому нужно набрать длинный пароль, ссылку или поисковый запрос на телевизоре,
@@ -57,7 +57,7 @@ Nano ESP32. macOS, Windows и iPhone не позволяют ни одному �
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "CBB <this computer's name>" on the device, in its Bluetooth settings
+# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```

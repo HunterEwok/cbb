@@ -33,8 +33,10 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { goos: linux, goarch: amd64, name: amd64, runner: ubuntu-latest, cgo: "0", ext: tar.gz }
-          - { goos: linux, goarch: arm64, name: arm64, runner: ubuntu-latest, cgo: "0", ext: tar.gz }
+          # The tray app needs cgo with GTK 4 and WebKitGTK, so it is built on a
+          # runner of its own architecture, for amd64 and arm64.
+          - { goos: linux, goarch: amd64, name: amd64, runner: ubuntu-latest, cgo: "0", ext: tar.gz, tray: true }
+          - { goos: linux, goarch: arm64, name: arm64, runner: ubuntu-24.04-arm, cgo: "0", ext: tar.gz, tray: true }
           - { goos: linux, goarch: arm, goarm: "7", name: armv7, runner: ubuntu-latest, cgo: "0", ext: tar.gz }
           - { goos: linux, goarch: arm, goarm: "6", name: armv6, runner: ubuntu-latest, cgo: "0", ext: tar.gz }
           # OpenWrt routers without an FPU take softfloat.
@@ -48,7 +50,7 @@ jobs:
           - { goos: windows, goarch: amd64, name: amd64, runner: ubuntu-latest, cgo: "0", ext: zip }
           - { goos: windows, goarch: arm64, name: arm64, runner: ubuntu-latest, cgo: "0", ext: zip }
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     # The Windows certificate's secrets live in the environment release, which
     # only release tags and main may use (docs/maintaining.md, "Release secrets").
     environment: release
@@ -74,9 +76,21 @@ jobs:
             # cbbw.exe is the same program without a console window, for the agent.
             go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
             go build -trimpath -ldflags "$ldflags -H=windowsgui" -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
+            # The tray app, a module of its own; on Windows it needs no cgo.
+            (cd apps/desktop && go build -trimpath -ldflags "-s -w -H=windowsgui" -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           else
             go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
+      - name: the tray app for Linux
+        if: matrix.tray
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-retries >/dev/null
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
+          cd apps/desktop
+          go build -trimpath -ldflags "-s -w" -o "$RUNNER_TEMP/cbb-desktop" .
       - name: sign the Windows programs (Authenticode), with a certificate in the secrets
         # A code signing certificate as a base64 PKCS#12 file and its password
         # (docs/maintaining.md, "Signing for Windows"); without them the
@@ -87,14 +101,14 @@ jobs:
           CERT_PASSWORD: ${{ secrets.CBB_WINDOWS_CERT_PASSWORD }}
         run: |
           if [ -z "$CERT_BASE64" ]; then
-            echo "::warning::no CBB_WINDOWS_CERT_BASE64 in the secrets; cbb.exe and cbbw.exe are not signed"
+            echo "::warning::no CBB_WINDOWS_CERT_BASE64 in the secrets; the Windows programs are not signed"
             exit 0
           fi
           sudo apt-get install -y -qq osslsigncode >/dev/null
           cert="$RUNNER_TEMP/cert.pfx" pass="$RUNNER_TEMP/cert.pass"
           (umask 077 && printf '%s' "$CERT_BASE64" | base64 -d >"$cert" && printf '%s' "$CERT_PASSWORD" >"$pass")
           trap 'rm -f "$cert" "$pass"' EXIT
-          for f in cbb.exe cbbw.exe; do
+          for f in cbb.exe cbbw.exe cbb-desktop.exe; do
             osslsigncode sign -pkcs12 "$cert" -readpass "$pass" -h sha256 \
               -n clipboardbridge -i https://github.com/HunterEwok/clipboardbridge \
               -ts http://timestamp.digicert.com \

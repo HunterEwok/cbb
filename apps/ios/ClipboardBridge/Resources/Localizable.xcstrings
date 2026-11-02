@@ -1,6 +1,256 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "The recovery key is removed. A sheet printed for it no longer works.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления удалён. Напечатанный для него лист больше не действует."
+          }
+        }
+      }
+    },
+    "Make a recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать ключ восстановления"
+          }
+        }
+      }
+    },
+    "Remove the recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить ключ восстановления"
+          }
+        }
+      }
+    },
+    "Made on %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделан %@."
+          }
+        }
+      }
+    },
+    "Make a new recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать новый ключ восстановления"
+          }
+        }
+      }
+    },
+    "None yet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока нет."
+          }
+        }
+      }
+    },
+    "Recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления"
+          }
+        }
+      }
+    },
+    "A sheet to print and keep away from your phones. If every phone with this group is lost, a computer of the group or a new phone takes the group back with it, after the group's wait.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лист, который печатают и хранят отдельно от телефонов. Если потеряны все телефоны этой группы, с ним компьютер группы или новый телефон вернёт группу после времени ожидания группы."
+          }
+        }
+      }
+    },
+    "Make a new recovery key?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать новый ключ восстановления?"
+          }
+        }
+      }
+    },
+    "Make a new one": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать новый"
+          }
+        }
+      }
+    },
+    "The sheet printed for the old key stops working.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лист, напечатанный для старого ключа, перестанет действовать."
+          }
+        }
+      }
+    },
+    "Remove the recovery key?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить ключ восстановления?"
+          }
+        }
+      }
+    },
+    "The sheet printed for it stops working. Without a recovery key, losing every phone with this group loses the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напечатанный для него лист перестанет действовать. Без ключа восстановления потеря всех телефонов этой группы означает потерю группы."
+          }
+        }
+      }
+    },
+    "Print this sheet or save it as a PDF now. It shows only this once.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напечатайте этот лист или сохраните его в PDF сейчас. Он показывается только один раз."
+          }
+        }
+      }
+    },
+    "Print": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напечатать"
+          }
+        }
+      }
+    },
+    "Save as PDF": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить в PDF"
+          }
+        }
+      }
+    },
+    "Did you keep the sheet?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы сохранили лист?"
+          }
+        }
+      }
+    },
+    "I kept it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранил"
+          }
+        }
+      }
+    },
+    "Back": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Назад"
+          }
+        }
+      }
+    },
+    "This phone forgets the key now. To get a sheet again, make a new recovery key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сейчас телефон забудет ключ. Чтобы получить лист снова, сделайте новый ключ восстановления."
+          }
+        }
+      }
+    },
+    "Could not make the PDF.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось сделать PDF."
+          }
+        }
+      }
+    },
+    "Clipboard Bridge recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления Clipboard Bridge"
+          }
+        }
+      }
+    },
+    "QR code of the recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-код ключа восстановления"
+          }
+        }
+      }
+    },
+    "Keep this sheet somewhere safe, away from your phones. Anyone who has it can take your group over, after the group's wait, unless the root phone cancels it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого он есть, может забрать вашу группу после времени ожидания группы, если корневой телефон это не отменит."
+          }
+        }
+      }
+    },
+    "To take the group back: on a new phone, choose Restore with a recovery key and scan the code; or on a computer of the group, run cbb recovery and type the key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чтобы вернуть группу: на новом телефоне выберите «Восстановить ключом восстановления» и отсканируйте код; или на компьютере группы запустите cbb recovery и введите ключ."
+          }
+        }
+      }
+    },
     "Sent to %@.": {
       "localizations": {
         "ru": {
@@ -2774,6 +3024,26 @@
         }
       }
     },
+    "Reached from afar through the project's forwarder at cbb.tools. To use your own, enter its address and key." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Издалека хаб доступен через форвардер проекта на cbb.tools. Чтобы использовать свой, введите его адрес и ключ."
+          }
+        }
+      }
+    },
+    "To go back to the project's forwarder, empty both fields and save." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы вернуться к форвардеру проекта, очистите оба поля и сохраните."
+          }
+        }
+      }
+    },
     "Keep this phone" : {
       "localizations" : {
         "ru" : {
@@ -3150,6 +3420,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Перезапустить Clipboard Bridge"
+          }
+        }
+      }
+    },
+    "Switch the keyboard's layout": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить раскладку клавиатуры"
           }
         }
       }

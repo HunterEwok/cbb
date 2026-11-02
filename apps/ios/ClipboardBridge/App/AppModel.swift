@@ -29,6 +29,13 @@ protocol GroupController: AnyObject {
     func remove(_ id: String) async throws
     /// Makes a computer an admin; only the root phone does.
     func makeAdmin(_ id: String) async throws
+    /// When the group's recovery key was made; nil without one.
+    var recoveryMade: Date? { get }
+    /// Makes the group's recovery key, replacing the one before it, and
+    /// returns its sheet, which the app shows once; only the root phone does.
+    func makeRecovery() async throws -> Core.RecoverySheet
+    /// Removes the group's recovery key; only the root phone does.
+    func removeRecovery() async throws
     /// Unfreezes an admin computer that another admin froze.
     func unfreeze(_ id: String) async throws
     /// Whether this phone holds the group's root.
@@ -76,7 +83,7 @@ protocol GroupController: AnyObject {
     func hubStatus() async -> AppModel.Hub?
     /// Makes this phone the group's hub, or stops it being the hub.
     func setPhoneHub(_ on: Bool) async throws
-    /// Sets the hub's forwarder; both empty for a hub at home only.
+    /// Sets the hub's forwarder; both empty for the project's.
     func setForwarder(address: String, pin: String) async throws
     /// Remembers the network the phone is on as a home network of the hub.
     func addHomeNetwork() async throws
@@ -100,6 +107,9 @@ extension GroupController {
     func unfreeze(_ id: String) async throws {}
     var isRoot: Bool { false }
     var alerts: [GroupAlert] { [] }
+    var recoveryMade: Date? { nil }
+    func makeRecovery() async throws -> Core.RecoverySheet { throw PhoneGroup.Failure.notRoot }
+    func removeRecovery() async throws { throw PhoneGroup.Failure.notRoot }
     func resolve(_ ids: [Data]) async throws {}
     func addWatch(_ request: WatchState.KeyRequest) async throws -> WatchState.Admission { throw PhoneGroup.Failure.notRoot }
     func watchActions(for id: String) -> [String] { [] }
@@ -202,6 +212,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var isAdmin = true
     /// Whether this phone holds the group's root, which ends conflicts.
     @Published private(set) var isRoot = false
+    /// When the group's recovery key was made; nil without one.
+    @Published private(set) var recoveryMade: Date?
     /// What the group's records stop and what ends it.
     @Published private(set) var alerts: [GroupAlert] = []
     /// The one-time note on the Start screen that this phone is ready.
@@ -486,6 +498,7 @@ final class AppModel: ObservableObject {
         devices = group.devices
         isRoot = group.isRoot
         alerts = group.alerts
+        recoveryMade = group.recoveryMade
         await refreshAway()
         await refreshHub()
         await refreshRelay()
@@ -575,7 +588,7 @@ final class AppModel: ObservableObject {
         await refreshHub()
     }
 
-    /// Sets the hub's forwarder; both empty for a hub at home only.
+    /// Sets the hub's forwarder; both empty for the project's.
     func setForwarder(address: String, pin: String) async {
         await hubChange {
             let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)
@@ -810,6 +823,29 @@ final class AppModel: ObservableObject {
             message = Self.describe(error)
         }
         devices = group.devices
+    }
+
+    /// Makes the group's recovery key and returns its sheet to show once;
+    /// nil, with the message set, when it failed.
+    func makeRecovery() async -> Core.RecoverySheet? {
+        defer { recoveryMade = group.recoveryMade }
+        do {
+            return try await group.makeRecovery()
+        } catch {
+            message = Self.describe(error)
+            return nil
+        }
+    }
+
+    /// Removes the group's recovery key.
+    func removeRecovery() async {
+        do {
+            try await group.removeRecovery()
+            message = String(localized: "The recovery key is removed. A sheet printed for it no longer works.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        recoveryMade = group.recoveryMade
     }
 
     /// Makes a computer an admin.

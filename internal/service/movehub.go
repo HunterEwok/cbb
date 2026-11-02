@@ -55,17 +55,24 @@ func (s *Service) listed(dev group.DeviceID) bool {
 
 // hubAddrs checks a hub's forwarder and addresses, as cbb global hub and a
 // hub command give them.
-func hubAddrs(fwd, fwdKey string, addrs []string) (*tunnel.ForwarderLink, []netip.AddrPort, error) {
+func hubAddrs(fwd, fwdKey string, addrs []string, projectPins []string) (*tunnel.ForwarderLink, []netip.AddrPort, error) {
 	var fw *tunnel.ForwarderLink
 	if fwd != "" {
 		ep, err := netip.ParseAddrPort(fwd)
 		if err != nil || ep.Port() == 0 {
 			return nil, nil, fmt.Errorf("%q is not the forwarder's address with a port, such as 203.0.113.9:8764", fwd)
 		}
-		if err := forward.CheckPin(fwdKey); err != nil {
+		if fwdKey == forward.ProjectKey {
+			// The project's forwarder, at the address the command line
+			// resolved: its pin is the first one this device accepts.
+			fw = &tunnel.ForwarderLink{Endpoint: netip.AddrPortFrom(ep.Addr().Unmap(), ep.Port()), Pin: projectPins[0], Project: true}
+		} else if err := forward.CheckPin(fwdKey); err != nil {
 			return nil, nil, err
+		} else {
+			// A pin of the project's forwarder, as a hub command from a
+			// phone or another hub carries it, follows its key from then on.
+			fw = &tunnel.ForwarderLink{Endpoint: netip.AddrPortFrom(ep.Addr().Unmap(), ep.Port()), Pin: fwdKey, Project: slices.Contains(projectPins, fwdKey)}
 		}
-		fw = &tunnel.ForwarderLink{Endpoint: netip.AddrPortFrom(ep.Addr().Unmap(), ep.Port()), Pin: fwdKey}
 	} else if fwdKey != "" {
 		return nil, nil, errors.New("a forwarder's key without its address")
 	}
@@ -108,7 +115,7 @@ func (s *Service) takeHub(body group.CommandBody) node.Result {
 	if o.Forwarder != nil {
 		fwd, fwdKey = o.Forwarder.Endpoint, o.Forwarder.Key
 	}
-	fw, eps, err := hubAddrs(fwd, fwdKey, o.Endpoints)
+	fw, eps, err := hubAddrs(fwd, fwdKey, o.Endpoints, s.projectPins())
 	if err != nil {
 		return refuse(node.ResultRefused, err.Error())
 	}
@@ -199,6 +206,10 @@ func (s *Service) moveHub(ctx context.Context, target, fwd, fwdKey string, addrs
 		return errors.New("this device is not the group's hub; cbb global hub makes it the hub")
 	}
 	switch {
+	case fwd != "" && fwdKey == forward.ProjectKey:
+		// The command carries a pin, which the new hub knows as the
+		// project's forwarder's.
+		order.Forwarder = &group.HubForwarder{Endpoint: fwd, Key: s.projectPins()[0]}
 	case fwd != "":
 		order.Forwarder = &group.HubForwarder{Endpoint: fwd, Key: fwdKey}
 	case fwdKey != "":
