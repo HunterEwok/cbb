@@ -235,6 +235,11 @@ impl RawTerminal {
             if libc::tcsetattr(0, libc::TCSANOW, &raw) != 0 {
                 return RawTerminal(None);
             }
+            if binary {
+                // A stray XOFF that came while IXON was on stopped the
+                // output, and turning IXON off does not start it again.
+                libc::tcflow(0, libc::TCOON);
+            }
             RawTerminal(Some(old))
         }
     }

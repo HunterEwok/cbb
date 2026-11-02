@@ -355,8 +355,20 @@ static int net_start(int argc, char **argv)
     link_send_str(CBB_LITE " next link ");
     link_send_str(net_args);
     link_send_str(" -log /ram/link.log\n");
-    // The link waits for the driver's hello, and the driver reads past the
-    // shell's echo to the first frame.
+    // The driver may only start once the link has made the UART raw: the
+    // shell would echo its frames, and a byte of them taken as XOFF stops
+    // the Pi's output. The link says CBBLINK then; anything else is the
+    // shell's echo or the link's error.
+    for (i = 0;; i++) {
+        uint8_t err = link_line(line, sizeof line, 15);
+        if (err) return fail("cbb next link did not start on the Pi", err == LINK_BREAK ? "stopped" : "no CBBLINK");
+        if (strstr(line, "CBBLINK")) break;
+        if (i > 0 && (strncmp(line, "cbb", 3) == 0 || strncmp(line, "usage", 5) == 0)) {
+            link_prompt();
+            return fail("cbb next link failed on the Pi", line);
+        }
+        if (i == 8) return fail("cbb next link did not start on the Pi", line);
+    }
     if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
     printf("The Pi's network runs through\nthe ESP in the background.\n");
     return 0;

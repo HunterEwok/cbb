@@ -26,6 +26,10 @@ use crate::error::{Context, Error, Result};
 pub const USAGE: &str =
     "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file] [-trace]";
 
+/// The line the link writes once the UART is raw, which `.cbb net on`
+/// waits for before it turns the driver on.
+pub const READY: &[u8] = b"CBBLINK\r\n";
+
 /// The local port the member dials for the peer.
 pub const PORT: u16 = 8769;
 /// How long the ESP may take to answer a command.
@@ -448,6 +452,14 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     });
     let listener = TcpListener::bind(("127.0.0.1", port)).context(format!("cannot listen on 127.0.0.1:{port}"))?;
     let _raw = crate::next::RawTerminal::new(1, true);
+    // Tells .cbb net on that the link runs and the UART is raw, so it may
+    // turn the driver on: before that the shell's echo and its flow control
+    // would take the driver's frames.
+    {
+        let mut out = std::io::stdout();
+        out.write_all(READY).ok();
+        out.flush().ok();
+    }
     let (tx, rx) = mpsc::channel::<Msg>();
     {
         let tx = tx.clone();

@@ -78,6 +78,11 @@ fn bytes_through_the_esp_and_back() {
         .unwrap();
     let mut to_link = child.stdin.take().unwrap();
     let mut from_link = BufReader::new(child.stdout.take().unwrap());
+    // The link's line once the UART is raw; .cbb turns the driver on only
+    // then, so the driver never counts it.
+    let mut ready = [0u8; 9];
+    from_link.read_exact(&mut ready).unwrap();
+    assert_eq!(&ready, b"CBBLINK\r\n");
     to_link.write_all(&frame(b'H', b"test driver")).unwrap();
 
     // The fake ESP: AT lines in, answers out; its connection 0 is a real
