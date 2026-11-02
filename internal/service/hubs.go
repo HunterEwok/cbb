@@ -40,6 +40,9 @@ var (
 	// standbyGrace is how long a hub that lost the hub above it keeps
 	// trying the hubs above before it serves again.
 	standbyGrace = time.Minute
+	// briefLink is how long a connection through the tunnel to a hub must
+	// last for the next try to come at once.
+	briefLink = 10 * time.Second
 )
 
 // hubOrder returns the group's order of hubs.
@@ -134,6 +137,7 @@ func (s *Service) reachHubs(ctx context.Context, run *tunRun, standby bool) {
 			continue
 		}
 		reached := false
+		tried := uptime.Now()
 		for _, h := range hubs {
 			if s.tryHub(ctx, run, nd, h, h.Device != hubs[0].Device) {
 				reached = true
@@ -144,8 +148,15 @@ func (s *Service) reachHubs(ctx context.Context, run *tunRun, standby bool) {
 			}
 		}
 		if reached {
-			backoff, lost = minBackoff, uptime.Now()
-			continue
+			lost = uptime.Now()
+			if lost-tried >= briefLink {
+				backoff = minBackoff
+				continue
+			}
+			// The hub ended the connection at once: each try starts a
+			// tunnel from a new UDP port, and a forwarder takes only so
+			// many of a group's client addresses, so the next try waits as
+			// after one that got no answer.
 		}
 		s.setUsing(run, "", false)
 		if standby && (uptime.Now()-lost >= standbyGrace || len(hubs) == 0) {

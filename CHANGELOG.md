@@ -12,6 +12,22 @@ All notable changes to clipboardbridge are documented in this file. The format f
   makes and reads (`recovery_sheet`, `read_recovery_sheet`; docs/protocol.md, section 10). The
   phones' kits make the group's recovery key with its admin CA and `recovery` record, and remove
   it; the apps' button follows.
+- The quick action `keyboard-layout` switches the layout a Linux computer's Bluetooth keyboard
+  types in to the next one (`us`, `ru`), for when the device it types on switched its own; the
+  apps show it as "Switch the keyboard's layout" once the computer's user turns it on.
+- A Linux computer's Bluetooth keyboard advertises itself as "Clipboard Bridge" and the
+  computer's name, and when a device it typed on forgot it (BlueZ 5.82 or later tells why the
+  link dropped), it forgets that device's old pairing too, so the two can pair again.
+- The project's forwarder at `cbb.tools:8764` is built in: `cbb global hub` without
+  addresses, or with `-forwarder default` (also for `cbb global move`), goes through it, and a
+  phone that is the hub uses it unless the user saves their own; nobody types its address or
+  key. `keys.json` may list its keys (`use` `forwarder`, `release-sign -forwarder`), whose pins
+  then take the built-in one's place, so a new key reaches the hubs without a release and
+  both are accepted while it changes.
+- The tray app comes with the release: the Windows installer puts it in Program Files, starts
+  it at every sign-in and adds Clipboard Bridge to the Start menu; on Linux (x86-64 and
+  ARM64) the installer adds it with an autostart entry and a menu entry when the desktop has
+  GTK 4 and WebKitGTK 6.0, and names the packages otherwise. The uninstallers remove it.
 - `.pibridge`, a test tool for the ZX Spectrum Next (`apps/zxnext`): it opens NextPi's shell
   to a computer on the home network through the Next's ESP8266, so a test can drive the Pi
   without typing on the Next, even on a Pi Zero without a radio. It carries the shell in the
@@ -745,6 +761,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Changed
 
+- The Mac app lives in the menu bar only, as the tray app does on Windows and Linux: no Dock
+  icon, no window at launch (the menu opens it), and it starts at login unless Settings turns
+  that off. The menu bar and the tray show a single-colour glyph in three states, drawn
+  white or black to suit the menu bar, the taskbar or the panel.
 - `cbb global` no longer repeats that the device keeps its keys in files each time it
   shows the status; `cbb global on` says it once, when the user agrees.
 - Remote paste on the phones: with the text left empty, Paste sends what the phone's
@@ -980,6 +1000,26 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Fixed
 
+- Android: making the phone's first group on a new install no longer fails while saving the
+  phone's sync mode, whose folder did not exist yet.
+- Android: the phone's first group on a new install now gets its key for sealed messages;
+  the secret was saved before its folder existed, so the commands for the phone came in the
+  open.
+- Android: the phone stays the hub while its app is open when one of the app's screens stops
+  after the next one started, as a finished screen may: the app counted as in the background
+  and the hub stopped.
+- Android: a camera that does not start on the add-device screen (none at the back, or held
+  by another app) no longer ends the app; it says so, and the QR code's text still works.
+- A member away from home whose hub ends the connection through the tunnel at once waits
+  before it tries again, as after a try that got no answer, instead of trying again at
+  once: each try came from a new UDP port, so a few seconds of it used up the forwarder's
+  16 client addresses for the group, and every member of the group was shut out there for
+  minutes. The phone's hub logs why a connection through its tunnel ended at once.
+- Android: a computer away from home now gets through the phone's hub, and a computer with
+  the phone's invitation reaches its pairing window: the kit's member listener and invitation
+  window listened on Android's loopback address, ::1, while the tunnel joins each connection
+  to 127.0.0.1, so every one was refused. The hub also starts its tunnel again when its
+  member listener comes back on another port.
 - The lite member's hint when its service cannot be reached names `cbb run` where there is no
   systemd (NextPi on the ZX Spectrum Next), not `systemctl`.
 - The phones show where the hub can move while it has no forwarder yet, and ask for the
@@ -1415,6 +1455,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Added
 
+- The bench's `phone` suite: the Android app on an emulator in a group with members of the
+  fleet, driven by instrumented tests (`apps/android/app/src/androidTest`) through a helper
+  that runs cbb on the members: the phone makes its own group, admits computers, syncs both
+  ways, pastes on a computer, runs a quick action, notifies of the group's events, sends from
+  the tile and the widget, shares files, takes a computer's secret, syncs through a
+  computer hub's tunnel and is the hub itself at a forwarder. CI's new `Android app on an emulator` job runs it.
 - An open blind relay: `cbb relay -open` serves every group that registers, as the project's
   relay at `cbb.tools` will, within limits that keep groups nobody vouches for from filling
   it: 4096 groups, 16 registrations from one address and 64 from one network, and 1 MiB a

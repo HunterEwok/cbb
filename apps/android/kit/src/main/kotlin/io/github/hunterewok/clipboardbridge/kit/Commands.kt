@@ -194,7 +194,7 @@ object Commands {
     const val MAX_HELLO_ACTIONS = 64
 
     /** The presets every computer knows, in the order the apps show them. */
-    val PRESETS = listOf("lock", "sleep", "reboot", "shutdown", "cancel-shutdown", "restart")
+    val PRESETS = listOf("lock", "sleep", "reboot", "shutdown", "cancel-shutdown", "restart", "keyboard-layout")
 
     /** Whether name is a quick action's name: 1 to 32 of a-z, 0-9 and -, starting with a letter. */
     fun validActionName(name: String): Boolean =

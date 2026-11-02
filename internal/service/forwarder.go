@@ -13,6 +13,7 @@ import (
 	"github.com/HunterEwok/clipboardbridge/internal/control"
 	"github.com/HunterEwok/clipboardbridge/internal/forward"
 	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/clipboardbridge/internal/release"
 	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
 )
 
@@ -27,8 +28,15 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 		return
 	}
 	s.tunFwd = &control.Forwarder{Endpoint: fw.Endpoint.String()}
+	link := forward.Link{Endpoint: fw.Endpoint, Pin: fw.Pin}
+	if fw.Project {
+		// The pins keys.json gives now, which a new key of the project's
+		// forwarder reaches the hub by.
+		pins := s.projectPins()
+		link.Pin, link.Also = pins[0], pins[1:]
+	}
 	cfg := forward.HubConfig{
-		Link:        forward.Link{Endpoint: fw.Endpoint, Pin: fw.Pin},
+		Link:        link,
 		Key:         st.ServingKey(),
 		Obfuscation: st.Obfuscation,
 		VLESSID:     fw.VLESSID,
@@ -73,6 +81,19 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 		defer s.wg.Done()
 		forward.Register(ctx, cfg)
 	}()
+}
+
+// projectPins returns the pins this device accepts from the project's
+// forwarder: those of the keys.json of the newest release the group passed
+// around, when it names any, else the built-in ones.
+func (s *Service) projectPins() []string {
+	var listed [][]byte
+	if h := s.heldRelease(); h != nil {
+		if k, err := release.VerifyKeys(h.set.Keys, s.releaseRoots(), s.cfg.now(), release.Seen{}); err == nil {
+			listed = k.Forwarders(forward.ProjectHost)
+		}
+	}
+	return forward.ProjectPins(listed)
 }
 
 // forwarderProblem is a short message for status of why the hub is not

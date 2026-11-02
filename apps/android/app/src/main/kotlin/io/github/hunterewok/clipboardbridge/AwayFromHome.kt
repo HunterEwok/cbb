@@ -173,6 +173,8 @@ class SealedFile(private val file: File, private val alias: String) {
         val c = Cipher.getInstance(CIPHER)
         c.init(Cipher.ENCRYPT_MODE, key())
         val tmp = File(file.path + ".tmp")
+        // The phone's first secret may come before its group's folder exists.
+        file.parentFile?.mkdirs()
         tmp.writeBytes(c.iv + c.doFinal(data))
         if (!tmp.renameTo(file)) throw IOException("cannot replace $file")
     }

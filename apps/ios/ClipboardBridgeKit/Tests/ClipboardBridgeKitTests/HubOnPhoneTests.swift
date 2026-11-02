@@ -70,6 +70,9 @@ final class HubOnPhoneTests: XCTestCase {
 
     func testForwarderInput() {
         XCTAssertTrue(HubState.validPin(pin))
+        XCTAssertTrue(HubState.validPin(HubState.Forwarder.projectPin))
+        XCTAssertTrue(HubState.Forwarder(endpoint: "198.51.100.20:8764", pin: HubState.Forwarder.projectPin).isProject)
+        XCTAssertFalse(HubState.Forwarder(endpoint: "198.51.100.20:8764", pin: pin).isProject)
         XCTAssertTrue(HubState.validPin(String(repeating: "a+/9", count: 10) + "abc="))
         XCTAssertFalse(HubState.validPin("sha256:" + String(repeating: "A", count: 43) + "="))
         XCTAssertFalse(HubState.validPin(String(repeating: "A", count: 43)))

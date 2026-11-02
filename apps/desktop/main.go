@@ -58,7 +58,7 @@ func main() {
 	desk.window = window
 
 	tray := app.SystemTray.New()
-	tray.SetIcon(icon)
+	setTrayIcon(tray, "tray")
 	tray.SetTooltip("Clipboard Bridge")
 	if runtime.GOOS == "linux" {
 		// Wails names the StatusNotifierItem (its title and tooltip) after

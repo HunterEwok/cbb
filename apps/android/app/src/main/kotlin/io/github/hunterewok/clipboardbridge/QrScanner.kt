@@ -3,6 +3,7 @@
 
 package io.github.hunterewok.clipboardbridge
 
+import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -63,29 +64,37 @@ class QrAnalyzer(private val onCode: (String) -> Unit) : ImageAnalysis.Analyzer 
 /**
  * The camera's picture with QR codes looked for in it; onCode gets the text
  * of each one found, on a background thread, until the composable leaves.
- * The app must hold the CAMERA permission first.
+ * The app must hold the CAMERA permission first. A camera that does not
+ * start (none at the back, or another app holds it) goes to onError, on the
+ * main thread, instead of ending the app.
  */
 @Composable
-fun QrScanner(onCode: (String) -> Unit, modifier: Modifier = Modifier) {
+fun QrScanner(onCode: (String) -> Unit, modifier: Modifier = Modifier, onError: (Exception) -> Unit = {}) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val callback = rememberUpdatedState(onCode)
+    val failed = rememberUpdatedState(onError)
     val view = remember { PreviewView(context) }
     DisposableEffect(owner) {
         val executor = Executors.newSingleThreadExecutor()
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
-            val provider = future.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
-            val analysis = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-                .also { it.setAnalyzer(executor, QrAnalyzer { text -> callback.value(text) }) }
-            provider.unbindAll()
-            provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            try {
+                val provider = future.get()
+                val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
+                val analysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                    .also { it.setAnalyzer(executor, QrAnalyzer { text -> callback.value(text) }) }
+                provider.unbindAll()
+                provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            } catch (e: Exception) {
+                Log.e("clipboardbridge", "the camera did not start", e)
+                failed.value(e)
+            }
         }, ContextCompat.getMainExecutor(context))
         onDispose {
-            if (future.isDone) future.get().unbindAll()
+            if (future.isDone) runCatching { future.get().unbindAll() }
             executor.shutdown()
         }
     }

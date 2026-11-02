@@ -359,6 +359,8 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
     }
     // The device being admitted: one at a time; leaving the page cancels it.
     var adding by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    // Why the camera did not start, if it did not.
+    var cameraError by remember { mutableStateOf<Exception?>(null) }
     val add = { text: String ->
         if (adding == null) {
             adding = scope.launch {
@@ -372,12 +374,16 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
     }
     BackHandler { close() }
     Page(stringResource(R.string.add_device), close) {
-        if (hasCamera && allowed) {
+        if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> scope.launch { if (!model.busy) add(text) } },
                 modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
+                onError = { cameraError = it },
             )
             Text(stringResource(R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        } else if (cameraError != null) {
+            // The camera did not start: the text of the QR code still works.
+            NoteText(model.describe(cameraError!!, R.string.camera_failed, log = false))
         } else {
             Text(
                 stringResource(if (hasCamera) R.string.camera_denied else R.string.paste_hint),
@@ -825,9 +831,16 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     color = palette.textDim,
                 )
                 if (!hub.home) QuietButton(stringResource(R.string.hub_add_home), onClick = { if (!busy) act { model.addHomeNetwork() } })
-                var address by rememberSaveable(hub.forwarder) { mutableStateOf(hub.forwarder?.endpoint ?: "") }
-                var pin by rememberSaveable(hub.forwarder) { mutableStateOf(hub.forwarder?.pin ?: "") }
+                // The fields show the user's own forwarder; the project's leaves them empty.
+                val own = hub.forwarder?.takeUnless { it.isProject }
+                var address by rememberSaveable(hub.forwarder) { mutableStateOf(own?.endpoint ?: "") }
+                var pin by rememberSaveable(hub.forwarder) { mutableStateOf(own?.pin ?: "") }
                 Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
+                Text(
+                    stringResource(if (hub.forwarder?.isProject == true) R.string.hub_forwarder_project else R.string.hub_forwarder_back),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.textDim,
+                )
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
@@ -845,7 +858,7 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                val changed = address != (hub.forwarder?.endpoint ?: "") || pin != (hub.forwarder?.pin ?: "")
+                val changed = address != (own?.endpoint ?: "") || pin != (own?.pin ?: "")
                 AccentButton(stringResource(R.string.hub_forwarder_save), enabled = changed && !busy, onClick = { act { model.setForwarder(address, pin) } })
                 Row(
                     Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = !busy) { act { model.setHubInBackground(!hub.background) } },

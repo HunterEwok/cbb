@@ -4,13 +4,13 @@
 // Command release-sign makes and signs the files that describe a release
 // (docs/protocol.md, section 16), on the maintainer's Mac:
 //
-//	release-sign publish -version 0.6.0 [-min-from 0.5.0] [-docker none] [-channel NAME=KEY.pem] [-no-publish]
+//	release-sign publish -version 0.6.0 [-min-from 0.5.0] [-docker none] [-channel NAME=KEY.pem] [-forwarder ADDRESS=KEY.pem] [-no-publish]
 //	release-sign renew [-new-keys]
 //	release-sign extend -key file:channel-key.pem -out DIR      (on cbb.tools)
 //	release-sign take [-new URL] BRANCH-DIR                     (the channel workflow)
 //	release-sign due BRANCH-DIR                                 (the channel workflow)
 //	release-sign manifest -version 0.6.0 -channel stable [-min-from 0.5.0] [-docker IMAGE@sha256:...] DIR >release.body
-//	release-sign keys -seq 2 [-days 90] [-status NAME=status-key.pem] NAME=release-key.pem... >keys.body
+//	release-sign keys -seq 2 [-days 90] [-status NAME=status-key.pem] [-forwarder ADDRESS=key.pem] NAME=release-key.pem... >keys.body
 //	release-sign channel -seq 7 [-days 30] release.json >stable.body
 //	release-sign sign -key SIGNER BODY >FILE.json
 //	release-sign public -key SIGNER >key.pem
@@ -234,6 +234,11 @@ func keys(args []string) error {
 		status = append(status, v)
 		return nil
 	})
+	var forwarders []string
+	fs.Func("forwarder", "ADDRESS=KEY.pem of the project's forwarder, whose pin hubs accept (repeatable)", func(v string) error {
+		forwarders = append(forwarders, v)
+		return nil
+	})
 	fs.Parse(args)
 	k := release.Keys{V: 1, Type: release.TypeKeys, Seq: *seq, TimeMS: now().UnixMilli()}
 	k.ExpiresMS = k.TimeMS + int64(*days)*24*time.Hour.Milliseconds()
@@ -256,6 +261,11 @@ func keys(args []string) error {
 	}
 	for _, arg := range status {
 		if err := add(arg, release.UseStatus); err != nil {
+			return err
+		}
+	}
+	for _, arg := range forwarders {
+		if err := add(arg, release.UseForwarder); err != nil {
 			return err
 		}
 	}

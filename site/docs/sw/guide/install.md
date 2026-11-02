@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: bfd0846e196a -->
+<!-- source: 75a4b281a1c4 -->
 # Kusakinisha
 
 Clipboard Bridge huendeshwa kama huduma ndogo ya chinichini kwenye kila kompyuta. Amri yake ni `cbb`. Kila njia iliyo hapa chini husakinisha programu ile ile; chagua unayopenda.
@@ -13,6 +13,8 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 ```
 
 Kisha toka na uingie tena mara moja, ili mtumiaji wako aweze kutumia `cbb` bila `sudo`. Mashine isiyo na eneo-kazi hupata kunakili na kubandika ndani ya tmux kwa `--console` (`... | sudo sh -s -- --console`).
+
+Kwenye eneo-kazi lenye GTK 4 na WebKitGTK 6.0 (x86-64 na ARM64) pia husakinisha programu ya trei, inayoanza pamoja na kipindi chako na iko kwenye menyu ya programu. Bila hivyo hutaja vifurushi vya kuongeza; kisha iendeshe tena ili kupata programu ya trei.
 
 Kubandika kwa mbali kwenye GNOME na KDE huuliza mara moja, kwenye kisanduku cha mazungumzo kwenye kompyuta, kabla ya kubandika kwa kwanza kwa msimamizi kuweza kubonyeza vitufe. Ili kuruka kisanduku hicho, ongeza `--uinput` (`... | sudo sh -s -- --uinput`): msaidizi mdogo kisha hubonyeza vitufe vya kubandika (Shift+Insert na Enter) kwa niaba ya anayetumia skrini, kamwe si kwenye skrini ya kuingia au ya kufunga.
 
@@ -61,6 +63,8 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 ```
 
 Humruhusu mtumiaji aliyeingia kwenye skrini kutumia `cbb` (kwenye terminal mpya) na kumwanzishia wakala wa ubao wa kunakili. Amri zinazobadilisha kikundi huendeshwa kwenye terminal iliyofunguliwa kama msimamizi, mahali ambapo Linux na macOS hutumia `sudo`.
+
+Pia husakinisha programu ya trei, inayoanza unapoingia na iko kwenye menyu ya Anza kama Clipboard Bridge.
 
 Kwa winget, pindi kifurushi kitakapokuwa kwenye hazina ya winget:
 

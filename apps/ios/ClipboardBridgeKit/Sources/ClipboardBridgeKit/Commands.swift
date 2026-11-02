@@ -73,7 +73,7 @@ public enum Commands {
     public static let maxHelloActions = 64
 
     /// The presets every computer knows, in the order the apps show them.
-    public static let presets = ["lock", "sleep", "reboot", "shutdown", "cancel-shutdown", "restart"]
+    public static let presets = ["lock", "sleep", "reboot", "shutdown", "cancel-shutdown", "restart", "keyboard-layout"]
 
     /// Whether name is a quick action's name: 1 to 32 of a-z, 0-9 and -,
     /// starting with a letter.

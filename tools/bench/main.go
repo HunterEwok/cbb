@@ -50,7 +50,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	stopForwarder := fs.Bool("stop-forwarder", false, "away: also stop and start the forwarder (F7), which other groups may use")
 	buildDir := fs.String("build", "", "reset: the directory with the release archives (and SHA256SUMS) to install")
 	quick := fs.Bool("quick", false, "reset: keep each device's install and only remove its state")
-	cbb := fs.String("cbb", "", "fleet, all: a static Linux cbb of the build under test for this computer's CPU, which the fleet's containers run")
+	cbb := fs.String("cbb", "", "fleet, phone, all: a static Linux cbb of the build under test for this computer's CPU, which the fleet's containers run")
 	fs.StringVar(&fleetLite, "cbb-lite", "", "fleet, all: the lite member's cbb for Linux (cargo build --release in lite/), for the fleet's cases with a lite member")
 	cbbTime := fs.String("cbb-time", "", "time, all: the same cbb built with -tags benchtime, whose long times run 100000 times faster")
 	fleetSize := fs.Int("fleet-size", 16, "fleet: the members of the many-members case (E3)")
@@ -59,12 +59,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.DurationVar(&fuzzFor, "fuzz-for", fuzzFor, "fleet: how long the fuzzing case (S20) sends each kind of frame; a release's full run takes 1h")
 	fs.BoolVar(&disruptive, "disruptive", false, "desktop: also lock, put to sleep and restart the computers (Q3, I18, H7, H8); only on the owner's word")
 	fs.DurationVar(&soakFor, "soak-for", 0, "fleet: how long the soak (E10) runs, 24h for a release; 0 leaves it out")
+	android := fs.String("android", "apps/android", "phone: the Android project, whose instrumented tests run on the emulator adb sees")
 	coverDir := fs.String("coverdir", "", "fleet, time, all: with a cbb built with -cover, the directory where every container writes its coverage (docs/testbench.md, \"Code coverage\")")
 	if fs.Parse(args) != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: bench [flags] check|reset|smoke|full|faults|desktop|away|relay|fleet|time|all|coverage")
+		fmt.Fprintln(stderr, "usage: bench [flags] check|reset|smoke|full|faults|desktop|away|relay|fleet|time|phone|all|coverage")
 		return 2
 	}
 	if *coverDir != "" {
@@ -83,6 +84,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 			scenarios = map[string]bool{}
 		}
 		scenarios[n] = true
+	}
+	if fs.Arg(0) == "phone" {
+		// The emulator and the fleet run on this computer alone.
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		r := NewReport("phone", stdout, debugMode())
+		Phone(ctx, r, *cbb, *android, *timeout)
+		return finish(r, *reportDir, stderr)
 	}
 	if fs.Arg(0) == "fleet" || fs.Arg(0) == "time" {
 		// The fleet runs on this computer alone and needs no inventory.

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/netip"
 	"slices"
@@ -32,6 +33,10 @@ import (
 // admitted, for the device's first member connection, as on a computer's
 // hub (internal/service/invite.go).
 const guestGrace = 2 * time.Minute
+
+// shortConn is how long a connection through the hub's tunnel must last
+// for its end to go unlogged.
+const shortConn = 10 * time.Second
 
 // Signer signs with the phone's member key, which never leaves the Secure
 // Enclave or the Keystore and signs without the user: the kit's key behind
@@ -101,7 +106,8 @@ func StartHub(private []byte, device string, memberPort int, obfuscation, client
 	if err != nil {
 		return nil, err
 	}
-	h, err := tunnel.StartHub(tunnel.HubConfig{PrivateKey: priv, Addr: addr, Peers: peers, Obfuscation: obf})
+	// WireGuard's errors go to the app's log (GoLog on Android).
+	h, err := tunnel.StartHub(tunnel.HubConfig{PrivateKey: priv, Addr: addr, Peers: peers, Obfuscation: obf, Logf: log.Printf})
 	if err != nil {
 		return nil, err
 	}
@@ -457,6 +463,7 @@ func (h *Hub) Close() error {
 	h.cancel()
 	h.hub.Listener().Close()
 	h.mu.Lock()
+	log.Printf("cbbtun: the hub stops and closes %d sockets of connections through it", len(h.conns))
 	for c := range h.conns {
 		c.Close()
 	}
@@ -482,6 +489,7 @@ func (h *Hub) serve() {
 		from, _ := netip.ParseAddrPort(c.RemoteAddr().String())
 		port := h.target(from.Addr().Unmap())
 		if port == 0 {
+			log.Printf("cbbtun: the hub: closed a connection from %v, a guest it does not know", from.Addr())
 			h.untrack(c)
 			continue
 		}
@@ -492,6 +500,9 @@ func (h *Hub) serve() {
 			d := net.Dialer{Timeout: dialTimeout}
 			m, err := d.DialContext(h.ctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 			if err != nil {
+				if h.ctx.Err() == nil {
+					log.Printf("cbbtun: the hub: a connection from %v cannot reach the app on port %d: %v", from.Addr(), port, err)
+				}
 				return
 			}
 			if !h.track(m) {
@@ -499,7 +510,13 @@ func (h *Hub) serve() {
 				return
 			}
 			defer h.untrack(m)
+			start := time.Now()
 			splice(c, m)
+			// A connection that ends at once tells why a client keeps
+			// connecting again; a long one ended as connections do.
+			if d := time.Since(start); d < shortConn && h.ctx.Err() == nil {
+				log.Printf("cbbtun: the hub: the connection from %v to port %d ended after %v", from.Addr(), port, d.Round(time.Millisecond))
+			}
 		}()
 	}
 }

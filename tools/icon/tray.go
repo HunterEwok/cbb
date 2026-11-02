@@ -47,7 +47,9 @@ var (
 		{"tray-online", "TrayOnline"},
 	}
 	traySizes = []int{16, 20, 24, 32, 48}
-	trayPath  = regexp.MustCompile(` d="([^"]*)"`)
+	// linuxTraySize is the PNG the tray app hands a Linux panel.
+	linuxTraySize = 48
+	trayPath      = regexp.MustCompile(` d="([^"]*)"`)
 	// Adwaita's foreground, the colour symbolic icons are drawn in.
 	symbolicFill = "#2e3436"
 )
@@ -82,6 +84,12 @@ func trayOutputs() (map[string][]byte, error) {
 				return nil, err
 			}
 			out[desktopTray+s.drawing+"-"+c.name+".ico"] = ico
+			// Linux's StatusNotifierItem takes one PNG and scales it.
+			var b bytes.Buffer
+			if err := png.Encode(&b, rasterize(shape, linuxTraySize, c.col)); err != nil {
+				return nil, err
+			}
+			out[desktopTray+s.drawing+"-"+c.name+".png"] = b.Bytes()
 		}
 	}
 	return out, nil

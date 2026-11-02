@@ -311,6 +311,8 @@ jobs:
             # cbbw.exe is the same program without a console window, for the agent.
             go build -trimpath -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
             go build -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
+            # The tray app goes in the archive too, as at a release.
+            (cd apps/desktop && go build -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           else
             go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
@@ -321,11 +323,12 @@ jobs:
           if [ "$GOOS" = windows ]; then
             sh packaging/archive.sh "$RUNNER_TEMP/cbb.exe" "$GOOS" "$name" "$RUNNER_TEMP/dist"
             unzip -Z1 "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.zip" >"$RUNNER_TEMP/list"
-            for f in cbb.exe cbbw.exe packaging/windows/install.ps1 packaging/windows/uninstall.ps1; do
+            for f in cbb.exe cbbw.exe cbb-desktop.exe packaging/windows/install.ps1 packaging/windows/uninstall.ps1; do
               grep -qx "clipboardbridge/$f" "$RUNNER_TEMP/list"
             done
             file "$RUNNER_TEMP/cbb.exe" | grep -q '(console)'
             file "$RUNNER_TEMP/cbbw.exe" | grep -q '(GUI)'
+            file "$RUNNER_TEMP/cbb-desktop.exe" | grep -q '(GUI)'
           else
             sh packaging/archive.sh "$RUNNER_TEMP/cbb" "$GOOS" "$name" "$RUNNER_TEMP/dist"
             tar -tzf "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.tar.gz" | grep -qx "clipboardbridge/cbb"
@@ -1046,6 +1049,11 @@ jobs:
           if ((Get-Item -LiteralPath $data -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'the data folder is still the junction' }
           if (-not (Get-ChildItem $env:ProgramData -Filter 'clipboardbridge.untrusted-*' -Force)) { throw 'install.ps1 did not move the junction aside' }
           $cbb = "$env:ProgramFiles\clipboardbridge\cbb.exe"
+          # The tray app, with its sign-in entry and Start menu shortcut.
+          if (-not (Test-Path "$env:ProgramFiles\clipboardbridge\cbb-desktop.exe")) { throw 'no tray app' }
+          $trayRun = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'clipboardbridge tray').'clipboardbridge tray'
+          if ($trayRun -notmatch 'cbb-desktop\.exe"$') { throw "the tray app's sign-in entry: $trayRun" }
+          if (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Clipboard Bridge.lnk")) { throw 'no Start menu shortcut' }
           $status = & $cbb status | Out-String
           if ($status -notmatch 'Not in a group') { throw "cbb status: $status" }
           $before = (Get-Item $cbb).LastWriteTimeUtc
@@ -1241,6 +1249,8 @@ jobs:
             if (Test-Path $p) { throw "uninstall.ps1 left $p" }
           }
           if (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name clipboardbridge -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the sign-in entry' }
+          if (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'clipboardbridge tray' -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the tray app''s sign-in entry' }
+          if (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Clipboard Bridge.lnk") { throw 'uninstall.ps1 left the Start menu shortcut' }
           if ([Environment]::GetEnvironmentVariable('Path', 'Machine') -match 'clipboardbridge') { throw 'uninstall.ps1 left the PATH entry' }
           net.exe localgroup clipboardbridge 2>&1 | Out-Null
           if ($LASTEXITCODE -eq 0) { throw 'uninstall.ps1 -Purge left the group' }
@@ -1558,6 +1568,19 @@ jobs:
           else
             go build -o cbb-desktop .
           fi
+      - name: the Linux archive carries the tray app, as at a release
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+          cp apps/desktop/cbb-desktop "$RUNNER_TEMP/cbb-desktop"
+          sh packaging/archive.sh "$RUNNER_TEMP/cbb" linux amd64 "$RUNNER_TEMP/dist"
+          tar -tzf "$RUNNER_TEMP/dist/clipboardbridge-linux-amd64.tar.gz" >"$RUNNER_TEMP/list"
+          for f in cbb cbb-desktop packaging/linux/clipboardbridge.png packaging/linux/clipboardbridge.desktop packaging/linux/clipboardbridge-tray.desktop; do
+            grep -qx "clipboardbridge/$f" "$RUNNER_TEMP/list"
+          done
+          # This runner has GTK 4 and WebKitGTK, which install.sh looks for.
+          ! ldd "$RUNNER_TEMP/cbb-desktop" | grep 'not found'
 
   android:
     name: Android app
@@ -1618,6 +1641,85 @@ jobs:
             echo "The F-Droid build must not carry these."
             exit 1
           fi
+
+  androidemu:
+    name: Android app on an emulator
+    needs: changes
+    if: needs.changes.outputs.android == 'true' || needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the NDK the tunnel and the core are built with
+        working-directory: apps/android
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
+      - name: the Rust the core is built with, and cargo-ndk
+        working-directory: apps/android
+        run: |
+          rustup toolchain install "$(sed -n 's/^cbb.rust=//p' gradle.properties)" --profile minimal \
+            --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          cargo install --locked cargo-ndk@4.1.2
+      - name: the fleet's cbb
+        run: CGO_ENABLED=0 go build -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+      - name: an emulator, with KVM
+        # The runner has KVM for its user once udev lets it.
+        timeout-minutes: 15
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sdk="$ANDROID_HOME/cmdline-tools/latest/bin"
+          image="system-images;android-35;google_apis;x86_64"
+          "$sdk/sdkmanager" --install emulator platform-tools "$image" >/dev/null </dev/null
+          # avdmanager and the emulator look for AVDs in different places
+          # by default; one folder for both.
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$sdk/avdmanager" create avd -n bench -k "$image" -d pixel_6 -p "$ANDROID_AVD_HOME/bench.avd"
+          [ -f "$ANDROID_AVD_HOME/bench.ini" ] || { ls -la "$ANDROID_AVD_HOME" ~/.android ~/.android/avd 2>&1; exit 1; }
+          ls -l /dev/kvm
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+          "$ANDROID_HOME/emulator/emulator" -avd bench -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
+            -accel on -gpu swiftshader_indirect -camera-back emulated -camera-front none >"$RUNNER_TEMP/emulator.log" 2>&1 &
+          adb="$ANDROID_HOME/platform-tools/adb"
+          # An emulator that does not start says why in its log.
+          timeout 300 "$adb" wait-for-device || { tail -100 "$RUNNER_TEMP/emulator.log"; exit 1; }
+          for _ in $(seq 120); do
+            [ "$("$adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
+            sleep 5
+          done
+          "$adb" shell getprop sys.boot_completed | grep -q 1 || { tail -50 "$RUNNER_TEMP/emulator.log"; exit 1; }
+          for s in window_animation_scale transition_animation_scale animator_duration_scale; do
+            "$adb" shell settings put global "$s" 0
+          done
+      - name: the phone suite
+        run: go run ./tools/bench -cbb "$RUNNER_TEMP/cbb" -android apps/android -report "$RUNNER_TEMP/phone" phone
+      - name: the emulator's log
+        if: failure() || cancelled()
+        timeout-minutes: 2
+        run: |
+          tail -100 "$RUNNER_TEMP/emulator.log" || true
+          # What the instrumented tests reported, and why a run ended early.
+          results=apps/android/app/build/outputs/androidTest-results
+          find "$results" -type f 2>/dev/null | head -50
+          find "$results" -name '*.xml' -exec cat {} + 2>/dev/null | head -400
+          # logcat waits for a device that never came up; the timeout ends that.
+          timeout 30 "$ANDROID_HOME/platform-tools/adb" logcat -d -s TestRunner:* AndroidRuntime:* clipboardbridge:* GoLog:* System.err:* || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: phone-report
+          path: |
+            ${{ runner.temp }}/phone
+            apps/android/app/build/reports/androidTests
+            apps/android/app/build/outputs/androidTest-results
+          retention-days: 7
 
   fdroid:
     name: F-Droid build reproduces
@@ -2284,7 +2386,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

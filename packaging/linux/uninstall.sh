@@ -95,6 +95,7 @@ if [ -e /opt/clipboardbridge/bin/cbb ]; then
 fi
 if command -v pkill >/dev/null 2>&1; then
 	pkill -x -f "$cbb agent" >/dev/null 2>&1 || true
+	pkill -x cbb-desktop >/dev/null 2>&1 || true
 fi
 if [ -f "$share/firewall.sh" ]; then
 	sh "$share/firewall.sh" close
@@ -106,7 +107,8 @@ rmdir /etc/systemd/system/clipboardbridge.service.d 2>/dev/null || true
 rm -f /etc/systemd/system/clipboardbridge.service /etc/systemd/system/clipboardbridge-console.service \
 	/etc/systemd/system/clipboardbridge-uinput.service /etc/modules-load.d/clipboardbridge-uinput.conf \
 	/etc/systemd/system/clipboardbridge-update.service /etc/systemd/system/clipboardbridge-update.timer \
-	/etc/xdg/autostart/clipboardbridge-desktop.desktop \
+	/etc/xdg/autostart/clipboardbridge-desktop.desktop /etc/xdg/autostart/clipboardbridge-tray.desktop \
+	/usr/local/share/applications/clipboardbridge.desktop /usr/local/bin/cbb-desktop \
 	/etc/systemd/user/clipboardbridge-agent.service \
 	/etc/profile.d/clipboardbridge-console.sh /usr/lib/sysusers.d/clipboardbridge.conf /usr/local/bin/cbb \
 	/etc/profile.d/clipboardbridge-path.sh /etc/sysusers.d/clipboardbridge.conf /etc/atomic-update.conf.d/clipboardbridge.conf
@@ -125,7 +127,7 @@ if [ -f "$share/created" ]; then
 	while read -r p; do
 		case $p in
 		/etc/tmux.conf) [ ! -f "$p" ] || grep -q '[^[:space:]]' "$p" || rm -f "$p" ;;
-		/etc/*) rmdir "$p" 2>/dev/null || true ;;
+		/etc/* | /usr/local/share/applications) rmdir "$p" 2>/dev/null || true ;;
 		esac
 	done <"$share/created"
 fi
