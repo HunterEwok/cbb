@@ -915,6 +915,12 @@ func TestJoinWaitsForASecondWindow(t *testing.T) {
 	a := startService(t, &h, "alpha")
 	d := startService(t, &h, "delta")
 	b := startService(t, &h, "beta")
+	// delta's group exists before the join starts: creating it can take
+	// longer than the joiner browses (keys on a slow runner), and only its
+	// window should come a moment later.
+	if _, err := d.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatalf("new on delta: %v", err)
+	}
 	ca, _ := openWindow(t, a)
 	defer ca.Close()
 	waitFor(t, "alpha's window published", func() bool { return slices.Contains(h.txtOf(a.status(t).Device), "p=1") })

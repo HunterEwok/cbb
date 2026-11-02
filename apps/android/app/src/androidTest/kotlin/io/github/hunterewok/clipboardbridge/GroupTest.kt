@@ -440,6 +440,7 @@ class GroupTest {
 
             // "This is my home network".
             runBlocking { model.addHomeNetwork() }
+            assertEquals("adding the home network says", null, model.hubNote)
             assertTrue("the hub does not count this network as home: ${model.hub}", hubNow().home)
         } finally {
             runCatching { Bench.run(Bench.PC, CUT_HOME.replace(" -A ", " -D ")) }

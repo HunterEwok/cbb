@@ -6,11 +6,14 @@ package io.github.hunterewok.clipboardbridge.kit
 import java.time.Instant
 
 /**
- * The joining side of pairing, which a phone plays to join a phone group:
- * it listens and shows its QR code, and an admin phone dials it and
- * confirms the code first (docs/protocol.md, section 6, "The joiner
- * listens"). A wrong code never spends it, so the joiner may take another
- * attempt.
+ * The joining side of pairing, which a phone plays to join a group. To
+ * join a phone group it listens and shows its QR code, and an admin phone
+ * dials it and confirms the code first (docs/protocol.md, section 6, "The
+ * joiner listens"): a wrong code never spends it, so the joiner may take
+ * another attempt. To join a computer's group it dials the window that
+ * `cbb pair` opened on the group's root and confirms the code first ("A
+ * phone joins a computer's group"): once it sent its confirmation the code
+ * is spent, whatever happens next.
  */
 object PairingJoiner {
     /** What a successful exchange gives: this phone's device ID and the welcome, checked. */
@@ -21,8 +24,13 @@ object PairingJoiner {
         val member: Pairing.MemberAD,
     )
 
-    /** Why joining failed: the other phone's answer (or a wrong code it showed), a bad welcome, or a broken exchange. */
-    class Failure(message: String, val code: Pairing.ErrorCode? = null) : Exception(message)
+    /**
+     * Why joining failed: the other device's answer (or a wrong code it
+     * showed), a bad welcome, or a broken exchange. spent reports that this
+     * phone had sent its confirmation, so the code may not be tried again,
+     * at this address or another.
+     */
+    class Failure(message: String, val code: Pairing.ErrorCode? = null, val spent: Boolean = false) : Exception(message)
 
     /**
      * Runs the exchange over a connection the admitting phone dialed and
@@ -41,6 +49,45 @@ object PairingJoiner {
         sessionID: ByteArray,
         now: Instant,
         store: (Joined) -> Unit,
+    ): Joined = exchange(t, code, info, memberCert, joinerCert, sessionID, now, memberFirst = true, store)
+
+    /**
+     * Runs the exchange over a connection this phone dialed to a computer's
+     * pairing window, whose TLS handshake is done: joinerCert is this
+     * phone's self-signed certificate, which it showed in the handshake,
+     * memberCert the computer's leaf, and sessionID the TLS exporter's
+     * output. This phone confirms the code first, so a Failure after that
+     * is spent. info carries this phone's name, its OS and its admin key,
+     * for which the group's root sends an admin CA. store saves the checked
+     * result; the computer hears whether that worked.
+     */
+    fun join(
+        t: FrameTransport,
+        code: String,
+        info: Pairing.Info,
+        memberCert: ByteArray,
+        joinerCert: ByteArray,
+        sessionID: ByteArray,
+        now: Instant,
+        store: (Joined) -> Unit,
+    ): Joined = exchange(t, code, info, memberCert, joinerCert, sessionID, now, memberFirst = false, store)
+
+    /**
+     * The frames of the exchange (section 6, "Frames"). With memberFirst
+     * the member sends its confirmation with its key, before this phone
+     * sends its own; otherwise this phone confirms first and the member's
+     * confirmation comes with the welcome.
+     */
+    private fun exchange(
+        t: FrameTransport,
+        code: String,
+        info: Pairing.Info,
+        memberCert: ByteArray,
+        joinerCert: ByteArray,
+        sessionID: ByteArray,
+        now: Instant,
+        memberFirst: Boolean,
+        store: (Joined) -> Unit,
     ): Joined {
         val device = CertificateInfo(joinerCert).commonName
         if (device == null || !GroupCertificates.isDeviceID(device)) throw Failure("this phone's certificate names no device ID")
@@ -51,30 +98,40 @@ object PairingJoiner {
         reply.error?.let { throw Failure("refused: $it", Pairing.ErrorCode.of(it)) }
         val yb = reply.msg
         val adb = reply.ad
-        val tb = reply.tag
         val member = adb?.let { Pairing.MemberAD.decode(it) }
-        if (yb == null || adb == null || tb == null || member == null) throw Failure("bad second frame")
+        if (yb == null || adb == null || member == null || memberFirst && reply.tag == null) throw Failure("bad second frame")
         st.finish(yb, adb)
-        if (runCatching { st.verify(tb) }.isFailure) {
+        if (memberFirst && runCatching { st.verify(reply.tag!!) }.isFailure) {
             runCatching { t.writeFrame(Pairing.Frame(error = Pairing.ErrorCode.WRONG_CODE.wire)) }
             throw Failure("wrong code", Pairing.ErrorCode.WRONG_CODE)
         }
-        t.writeFrame(Pairing.Frame(tag = st.confirmationTag))
-        val final = t.readFrame()
-        final.error?.let { throw Failure("refused: $it", Pairing.ErrorCode.of(it)) }
-        val welcome = final.welcome ?: throw Failure("no welcome")
-        val joined = Joined(device, welcome, member)
+        // From here on a member that did not confirm first can check a guess of the code.
+        val spent = !memberFirst
         try {
-            check(joined, info, memberCert, joinerCert, now)
-            store(joined)
+            t.writeFrame(Pairing.Frame(tag = st.confirmationTag))
+            val final = t.readFrame()
+            final.error?.let { throw Failure("refused: $it", Pairing.ErrorCode.of(it), spent) }
+            if (!memberFirst && (final.tag == null || runCatching { st.verify(final.tag) }.isFailure)) {
+                throw Failure("the computer did not prove that it knows the code", spent = spent)
+            }
+            val welcome = final.welcome ?: throw Failure("no welcome", spent = spent)
+            val joined = Joined(device, welcome, member)
+            try {
+                check(joined, info, memberCert, joinerCert, now)
+                store(joined)
+            } catch (e: Exception) {
+                runCatching { t.writeFrame(Pairing.Frame(error = Pairing.ErrorCode.REFUSED.wire)) }
+                throw e
+            }
+            // Stored; the other device admitted this one when it sent the
+            // welcome, whether or not it hears this.
+            runCatching { t.writeFrame(Pairing.Frame(ok = true)) }
+            return joined
+        } catch (e: Failure) {
+            throw if (spent && !e.spent) Failure(e.message ?: "joining failed", e.code, spent = true) else e
         } catch (e: Exception) {
-            runCatching { t.writeFrame(Pairing.Frame(error = Pairing.ErrorCode.REFUSED.wire)) }
-            throw e
+            throw if (spent) Failure(e.message ?: e.toString(), spent = true).apply { initCause(e) } else e
         }
-        // Stored; the other phone admitted this one when it sent the
-        // welcome, whether or not it hears this.
-        runCatching { t.writeFrame(Pairing.Frame(ok = true)) }
-        return joined
     }
 
     /**

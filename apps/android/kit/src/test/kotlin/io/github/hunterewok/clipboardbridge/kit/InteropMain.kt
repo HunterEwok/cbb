@@ -3,13 +3,20 @@
 // The Kotlin twin of clipboardbridge-interop (apps/ios/ClipboardBridgeKit): it
 // plays the Android phone against the Go code in tests, with the same
 // commands, so Go's TestSwiftMemberAdmitsGoJoiner, TestSwiftMemberAdmitsGoJoinerTLS,
-// TestSwiftHubAdmitsInvitedGoJoiner and TestSwiftMemberTLS run it too. Gradle's
+// TestSwiftHubAdmitsInvitedGoJoiner, TestSwiftJoinsComputerRoot and TestSwiftMemberTLS
+// run it too. Gradle's
 // interopScript task writes a script that starts it.
 //
 //   admit HOST PORT CODE                 pairing over plain TCP, certificates exchanged in place of TLS
 //   admit-tls HOST PORT CODE FINGERPRINT pairing over TLS
 //
 // print the group CA in base64 on success.
+//
+//   join-tls HOST PORT CODE
+//
+// joins a computer's group through the pairing window that `cbb pair`
+// opened at HOST:PORT, as a phone with an admin key, and prints the group
+// CA and then the admin CA the root issued, each in base64 on a line.
 //
 //   invite-window SECRET yes|no
 //
@@ -78,6 +85,25 @@ private fun admit(host: String, port: Int, code: String, fingerprint: String?) {
     }
     if (!admitted.confirmed || group.computers.map { it.device } != listOf(admitted.device)) fail("the joiner did not confirm")
     println(Base64.getEncoder().encodeToString(group.groupCA))
+}
+
+private fun joinTLS(host: String, port: Int, code: String) {
+    val member = SoftwareSigner()
+    val admin = SoftwareSigner()
+    val cert = GroupCertificates.selfSigned(SyncEngine.newID(), member)
+    // The window's certificate is checked by the code's exchange, not here.
+    val tls = TLSTransport.dial(host, port, Pairing.ALPN, member.keyPair.private, listOf(cert)) { it.isNotEmpty() }
+    val joined = try {
+        val leaf = tls.peerCertificate ?: fail("no peer certificate")
+        val sid = tls.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
+        val info = Pairing.Info("android", "android", admin.publicKeyDER)
+        PairingJoiner.join(tls, code, info, leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it) }
+    } finally {
+        tls.close()
+    }
+    val adminCA = joined.welcome.adminCA ?: fail("the welcome carries no admin CA")
+    println(Base64.getEncoder().encodeToString(joined.welcome.groupCA))
+    println(Base64.getEncoder().encodeToString(adminCA))
 }
 
 private fun memberTLS(host: String, port: Int, peer: String) {
@@ -160,9 +186,10 @@ fun main(args: Array<String>) {
             args.size == 4 && args[0] == "member-tls" && port != null -> memberTLS(args[1], port, args[3])
             args.size == 4 && args[0] == "admit" && port != null -> admit(args[1], port, args[3], null)
             args.size == 5 && args[0] == "admit-tls" && port != null -> admit(args[1], port, args[3], args[4])
+            args.size == 4 && args[0] == "join-tls" && port != null -> joinTLS(args[1], port, args[3])
             args.size == 3 && args[0] == "invite-window" -> inviteWindow(Base64.getDecoder().decode(args[1]), args[2] == "yes")
             else -> {
-                System.err.println("usage: clipboardbridge-interop admit HOST PORT CODE | admit-tls HOST PORT CODE FINGERPRINT | invite-window SECRET yes|no | member-tls HOST PORT PEER")
+                System.err.println("usage: clipboardbridge-interop admit HOST PORT CODE | admit-tls HOST PORT CODE FINGERPRINT | join-tls HOST PORT CODE | invite-window SECRET yes|no | member-tls HOST PORT PEER")
                 exitProcess(2)
             }
         }

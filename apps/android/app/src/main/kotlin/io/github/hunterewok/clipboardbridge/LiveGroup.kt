@@ -323,10 +323,16 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /** Remembers the network the phone is on as a home network, where the hub takes members and publishes itself. */
-    fun addHomeNetwork() {
-        val n = currentNetwork() ?: return
+    /**
+     * Remembers the network the phone is on as a home network of the hub;
+     * false when the phone is on no Wi-Fi or Ethernet network with an
+     * address now, so there is none to remember.
+     */
+    fun addHomeNetwork(): Boolean {
+        val n = currentNetwork() ?: return false
         phoneHub?.addHome(n)
         refreshHub()
+        return true
     }
 
     /** Whether the phone is on one of the hub's home networks now. */

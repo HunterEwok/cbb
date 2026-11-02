@@ -838,7 +838,7 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 | PRS (password) | the six ASCII digits of the code, or a remote invitation's secret (its raw bytes) |
 | CI (channel identifier) | `"clipboardbridge pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
 | sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-clipboardbridge-pair-v2`, empty context |
-| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER); a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits `ios` and `android` joiners as phones and records a lite member with role `lite`; a computer admits only `linux`, `windows`, `macos` and lite members |
+| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER); a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits `ios` and `android` joiners as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, and, only on the group's root, `ios` and `android` joiners as phones ("A phone joins a computer's group" below) |
 | ADb (member) | JSON `{"device":"<member device ID>","group":"<group tag>"}` |
 | Ya, Yb | 32-byte X25519 u-coordinates |
 | Tags Ta, Tb | HMAC-SHA-512, 64 bytes |
@@ -896,7 +896,7 @@ peer cannot put words in front of the user.
 | `roots` | array of bytes, DER | only in a group that claims handed to new roots (section 10, "Handing the group over"): those roots in order, the current one last |
 | `records` | array of record envelopes (section 10) | the group's records (section 10), so the new device takes its peers at once; always with `roots`, which they must lead to; otherwise left out when they do not fit in the frame, and the new device gets them over connections that carry records only |
 | `claim_times` | array of `{record, ms}` | with `records` that hold a claim: when the admitting member first held each claim, in Unix milliseconds; the joiner takes a time that is earlier than its own and not in the future, so a claim that took effect there takes effect on the joiner too (section 10, "Handing the group over") |
-| `admin_ca` | bytes, DER | only to a phone (`ios` or `android`) that sent `admin_key`, from the root phone: the joiner's admin CA for that key (section 10) |
+| `admin_ca` | bytes, DER | only to a phone (`ios` or `android`) that sent `admin_key`, from the root phone or the root computer: the joiner's admin CA for that key (section 10) |
 
 The joiner MUST check: the tag of `group_ca` equals ADb `group`; `issuer`, when present, is an
 admin CA under `group_ca` or one of `roots` (section 10); the member's TLS certificate is
@@ -926,6 +926,19 @@ Without an address the joiner browses up to 10 s for a member with `p=1`, refuse
 than one announces a window, and tries that member's addresses in order, at most three,
 stopping after the first attempt whose code was spent. A whole join is bounded by 2 minutes
 plus the browse time.
+
+### A phone joins a computer's group
+
+A phone joins a group that a computer created through the group's root, as a computer joins
+(the joiner dials, above): `cbb pair` on the root opens a window, and the phone finds it by mDNS
+(`p=1`) and takes the six-digit code the user types. Its ADa says `ios` or `android` and carries
+`admin_key`; the root's Welcome then carries `admin_ca` for that key, and the root signs the
+phone's `device` record with role `phone` that names the admin key in `admin` with the powers of
+an admin, `takeover` among them. An admin computer that is not the root refuses a phone after the
+key confirmation, with `{"error": "refused"}`. A phone that offers no admin key, as a TV, joins
+as a member. This is how a new phone takes over a computer's group, as after `cbb recovery`:
+it joins, the root names its admin key in a `handover` record (`cbb handover`, section 10,
+"Handing the group over"), and its claim takes effect at once.
 
 ### The joiner listens (for the phone)
 
