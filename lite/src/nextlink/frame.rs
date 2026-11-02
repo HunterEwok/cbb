@@ -31,7 +31,6 @@ pub const ACK: u8 = b'A';
 /// (driver to Pi).
 pub const QUIT: u8 = b'Q';
 /// Characters to type, in the Spectrum character set (Pi to driver).
-#[allow(dead_code)] // the driver's keys, its next step
 pub const KEYS: u8 = b'K';
 
 /// How many bytes on the wire the Pi sends before the driver's ACK: less

@@ -309,6 +309,11 @@ sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters t
 `Q` to stop. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
 frames, with up to five connections (`AT+CIPMUX=1`) and the data in `+IPD` blocks.
 
+The link is also a remote paste target, `next`: once `cbb paste-receive on` is set, an
+admin's paste goes to the driver in `K` frames, 50 characters a second, and the driver types
+them into whatever program runs on the Next. As with the text console, the link has to run
+as root and a line break needs `-enter`.
+
 ## Errors
 
 Every error has a short message. `-debug` (before the command), `CBB_DEBUG=1`, or a debug

@@ -19,7 +19,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   driver on the Next, drives the ESP's stock AT firmware inside them, and leads the lite
   member's connections through the ESP to a member at home, and the ESP's own connections
   (a phone that syncs or admits it) to the lite member; the TLS stays on the Pi. The Next's
-  clock sets the Pi's.
+  clock sets the Pi's. The link is a remote paste target too (`next`): an admin's paste is
+  typed on the Next, 50 characters a second.
 - `CBB.DRV`, a NextZXOS driver for the ZX Spectrum Next (`apps/zxnext/drv`): on every
   frame's interrupt it passes bytes between the ESP8266 and the Pi in `cbb next link`'s
   frames and types the characters the Pi sends, while any program runs; a host test runs

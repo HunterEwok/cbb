@@ -8,11 +8,14 @@
 //! connection to it becomes a connection of the ESP to the peer, and the
 //! member protocol with its TLS runs over it as over any socket, so the ESP
 //! and the Z80 see only ciphertext. The Next's clock, which the driver sends
-//! at the start, sets the Pi's, which has none of its own.
+//! at the start, sets the Pi's, which has none of its own. It is the
+//! service's paste target `next` too: a remote paste goes to the driver in
+//! key frames, which it types into the program in front.
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
+use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -29,6 +32,9 @@ pub const PORT: u16 = 8769;
 const ESP_TIMEOUT: Duration = Duration::from_secs(10);
 /// How far the Pi's clock may be off before the Next's sets it.
 const CLOCK_SLACK: i64 = 2;
+/// The characters sent to type each second: the driver types one a frame,
+/// 50 a second, and its ring holds 255, so it never fills.
+const KEYS_PER_SECOND: usize = 50;
 
 /// One connection of the member, carried by one of the ESP's.
 struct Conn {
@@ -48,6 +54,9 @@ pub enum Msg {
     Accepted(TcpStream),
     Local(u8, u64, Vec<u8>),
     LocalClosed(u8, u64),
+    /// Characters to type, in the Spectrum character set.
+    Keys(Vec<u8>),
+    Log(String),
 }
 
 /// The link without its threads: bytes and connections in, frames out.
@@ -71,6 +80,8 @@ pub struct Link<W: Write> {
     conns: Vec<Option<Conn>>,
     gens: u64,
     busy_since: Option<Instant>,
+    keys: VecDeque<u8>,
+    keys_sent: Option<Instant>,
     /// The time the Next's clock gave, in seconds since 1970, to set.
     pub clock: Option<i64>,
     pub quit: bool,
@@ -94,6 +105,8 @@ impl<W: Write> Link<W> {
             conns: (0..esp::LINKS).map(|_| None).collect(),
             gens: 0,
             busy_since: None,
+            keys: VecDeque::new(),
+            keys_sent: None,
             clock: None,
             quit: false,
             log,
@@ -129,6 +142,8 @@ impl<W: Write> Link<W> {
                     self.esp.close(id);
                 }
             }
+            Msg::Keys(k) => self.keys.extend(k),
+            Msg::Log(s) => (self.log)(&s),
         }
         self.after(now);
     }
@@ -248,6 +263,13 @@ impl<W: Write> Link<W> {
         if !bytes.is_empty() {
             self.wire.extend(frame::encode(frame::TO_ESP, &bytes));
         }
+        let due = self.keys_sent.is_none_or(|t| now.duration_since(t) >= Duration::from_secs(1));
+        if self.hello && due && !self.keys.is_empty() {
+            let n = self.keys.len().min(KEYS_PER_SECOND);
+            let k: Vec<u8> = self.keys.drain(..n).collect();
+            self.wire.extend(frame::encode(frame::KEYS, &k));
+            self.keys_sent = Some(now);
+        }
         self.flush();
     }
 
@@ -345,9 +367,36 @@ fn set_clock(secs: i64, log: &mut dyn FnMut(&str)) {
     }
 }
 
+/// The paste target `next`: a remote paste becomes characters to type.
+struct NextKeys(mpsc::Sender<Msg>);
+
+impl crate::pastehelper::Target for NextKeys {
+    fn name(&self) -> &'static str {
+        crate::service::NEXT
+    }
+
+    fn inject(
+        &self,
+        text: &str,
+        _method: &str,
+        enter: bool,
+        _no_lock_check: bool,
+    ) -> std::result::Result<(), crate::pastehelper::Fail> {
+        // The Next only types: a paste and a typed text are the same here.
+        let mut k = crate::next::to_spectrum(text);
+        if enter {
+            k.push(b'\r');
+        }
+        if k.is_empty() {
+            return crate::pastehelper::refuse("the text is empty");
+        }
+        self.0.send(Msg::Keys(k)).map_err(|_| crate::pastehelper::Fail::Failed(Error::msg("the link stopped")))
+    }
+}
+
 /// Runs the link on standard input and output until the driver quits or
-/// the UART closes.
-pub fn run(args: &[String]) -> Result<()> {
+/// the UART closes; it takes remote pastes through the service at socket.
+pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
     let mut i = 0;
     while i < args.len() {
@@ -413,6 +462,15 @@ pub fn run(args: &[String]) -> Result<()> {
                     return;
                 }
             }
+        });
+    }
+    {
+        let (tx, socket) = (tx.clone(), socket.to_path_buf());
+        std::thread::spawn(move || {
+            let keys = NextKeys(tx.clone());
+            crate::pastehelper::serve(&socket, &keys, &|s: &str| {
+                tx.send(Msg::Log(s.to_string())).ok();
+            })
         });
     }
     let mut link = Link::new(std::io::stdout(), target, zone_s, log);
@@ -579,6 +637,33 @@ mod tests {
         assert_eq!(link.output().len(), frame::WINDOW);
         link.handle(Msg::Uart(encode(frame::ACK, &100u16.to_le_bytes())), now);
         assert_eq!(link.output().len(), frame::WINDOW + 100);
+    }
+
+    /// Keys go 50 a second, whatever the driver's window allows.
+    #[test]
+    fn keys_paced() {
+        let (mut link, mut next, now) = new_link();
+        link.handle(Msg::Uart(encode(frame::HELLO, b"")), now);
+        let mut at = 0;
+        sent(&link, &mut next, &mut at); // AT
+        link.handle(Msg::Keys(vec![b'x'; 120]), now);
+        let keys = |link: &Link<Vec<u8>>, at: &mut usize| {
+            let wire = link.output()[*at..].to_vec();
+            *at = link.output().len();
+            Decoder::new()
+                .push(&wire)
+                .into_iter()
+                .filter(|f| f.kind == frame::KEYS)
+                .map(|f| f.data.len())
+                .sum::<usize>()
+        };
+        assert_eq!(keys(&link, &mut at), 50);
+        link.tick(now + Duration::from_millis(500));
+        assert_eq!(keys(&link, &mut at), 0);
+        link.tick(now + Duration::from_secs(1));
+        assert_eq!(keys(&link, &mut at), 50);
+        link.tick(now + Duration::from_secs(2));
+        assert_eq!(keys(&link, &mut at), 20);
     }
 
     #[test]
