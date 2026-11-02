@@ -12,6 +12,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   makes and reads (`recovery_sheet`, `read_recovery_sheet`; docs/protocol.md, section 10). The
   phones' kits make the group's recovery key with its admin CA and `recovery` record, and remove
   it; the apps' button follows.
+- The iPhone app makes the recovery key: Settings, "Recovery key" on the root phone, after Face
+  ID. Its sheet shows once, to print or save as a PDF, and the phone forgets the key when it
+  closes; a new key replaces the old one, and the key can be removed.
 - `.pibridge`, a test tool for the ZX Spectrum Next (`apps/zxnext`): it opens NextPi's shell
   to a computer on the home network through the Next's ESP8266, so a test can drive the Pi
   without typing on the Next, even on a Pi Zero without a radio. It carries the shell in the
