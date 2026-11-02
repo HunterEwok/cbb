@@ -32,6 +32,10 @@ public struct Restore: Sendable {
         public let kind: Kind
         public let message: String
         public var description: String { message }
+
+        public init(kind: Kind, message: String) {
+            (self.kind, self.message) = (kind, message)
+        }
     }
 
     public static let needsQRMessage = "scan the QR code of the recovery sheet: on a new phone the typed key is not enough"
