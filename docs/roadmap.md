@@ -421,6 +421,19 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       audits and testing on real devices.
     - The repository's description and topics on GitHub, so that a search for "clipboard
       sync" finds it.
+    - The website, from a read of its sources and translations (2026-11-02): the first
+      screen says what it does with a verb ("Copy on one device, paste on another", the
+      text the social image already uses) and shows why to trust it (open source, no
+      account, no telemetry) above the fold, and the iPhone in the list of platforms says
+      the app waits for TestFlight; no "trademarks" (the names belong to their owners), no
+      "the one that does all of it", no "simpler" for the recommended computer, no "any
+      desktop" while GNOME on Wayland is untested, no "runs on a Raspberry Pi Zero" before
+      it is run on one, the privacy page's keys on Linux with a TPM; the translations'
+      errors the read found (Chinese "全程" reads as end to end; Swahili "haimripoti" says
+      the opposite, and "huru"/"huria" are swapped; Hebrew's gender and prepositions before
+      links; Hindi's "जोड़ी" for pairing and mixed terms), links placed so that no
+      sentence wraps a whole page title, `dir="ltr"` on code, no letter spacing on Arabic
+      and Hebrew headings, and a native speaker's read of each language before the launch.
 - **54.** **Planned for 0.6, before the launch.** Support for the project: a
     `.github/FUNDING.yml` and a `funding.json` (the format FLOSS/fund reads), once the
     author's GitHub Sponsors and Liberapay accounts exist, and a short "Support" section in
