@@ -935,6 +935,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and credentials) give way to the `v2-*.json` vectors of the same cases.
 
 ### Fixed
+- The lite member's hint when its service cannot be reached names `cbb run` where there is no
+  systemd (NextPi on the ZX Spectrum Next), not `systemctl`.
 
 - The tray app keeps the last of quick changes in its settings: two changes close together
   could leave the earlier one in `desktop.json`.
