@@ -24,7 +24,11 @@ use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
 pub const USAGE: &str =
-    "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file]";
+    "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file] [-trace]";
+
+/// The line the link writes once the UART is raw, which `.cbb net on`
+/// waits for before it turns the driver on.
+pub const READY: &[u8] = b"CBBLINK\r\n";
 
 /// The local port the member dials for the peer.
 pub const PORT: u16 = 8769;
@@ -85,6 +89,8 @@ pub struct Link<W: Write> {
     /// The time the Next's clock gave, in seconds since 1970, to set.
     pub clock: Option<i64>,
     pub quit: bool,
+    /// Logs the bytes to and from the ESP (`-trace`).
+    pub trace: bool,
     log: Box<dyn FnMut(&str) + Send>,
 }
 
@@ -108,6 +114,7 @@ impl<W: Write> Link<W> {
             keys: VecDeque::new(),
             keys_sent: None,
             clock: None,
+            trace: false,
             quit: false,
             log,
         }
@@ -167,7 +174,12 @@ impl<W: Write> Link<W> {
                     self.hello = true;
                 }
                 frame::ACK if f.data.len() == 2 => self.acked = u16::from_le_bytes([f.data[0], f.data[1]]),
-                frame::FROM_ESP => self.esp.input(&f.data),
+                frame::FROM_ESP => {
+                    if self.trace {
+                        (self.log)(&format!("esp< {}", f.data.escape_ascii()));
+                    }
+                    self.esp.input(&f.data)
+                }
                 frame::TIME => match msdos_time(&f.data) {
                     Some(local) => self.clock = Some(local - self.zone),
                     None => (self.log)("the Next's clock gave no valid time"),
@@ -261,6 +273,9 @@ impl<W: Write> Link<W> {
         }
         let bytes = self.esp.take_output();
         if !bytes.is_empty() {
+            if self.trace {
+                (self.log)(&format!("esp> {}", bytes.escape_ascii()));
+            }
             self.wire.extend(frame::encode(frame::TO_ESP, &bytes));
         }
         let due = self.keys_sent.is_none_or(|t| now.duration_since(t) >= Duration::from_secs(1));
@@ -284,7 +299,9 @@ impl<W: Write> Link<W> {
         if !self.hello {
             return;
         }
-        let ahead = self.sent.wrapping_sub(self.acked) as usize;
+        // An ack past what was sent counts a byte that was not a frame's
+        // (a stray LF the driver took): nothing is waiting then.
+        let ahead = (self.sent.wrapping_sub(self.acked) as i16).max(0) as usize;
         let room = frame::WINDOW.saturating_sub(ahead).min(self.wire.len());
         if room == 0 {
             return;
@@ -398,8 +415,14 @@ impl crate::pastehelper::Target for NextKeys {
 /// the UART closes; it takes remote pastes through the service at socket.
 pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
+    let mut trace = false;
     let mut i = 0;
     while i < args.len() {
+        if crate::flag(&args[i]) == Some("trace") {
+            trace = true;
+            i += 1;
+            continue;
+        }
         let value = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(USAGE));
         match crate::flag(&args[i]) {
             Some("to") => target = Some(host_port(&value()?)?),
@@ -431,6 +454,14 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     });
     let listener = TcpListener::bind(("127.0.0.1", port)).context(format!("cannot listen on 127.0.0.1:{port}"))?;
     let _raw = crate::next::RawTerminal::new(1, true);
+    // Tells .cbb net on that the link runs and the UART is raw, so it may
+    // turn the driver on: before that the shell's echo and its flow control
+    // would take the driver's frames.
+    {
+        let mut out = std::io::stdout();
+        out.write_all(READY).ok();
+        out.flush().ok();
+    }
     let (tx, rx) = mpsc::channel::<Msg>();
     {
         let tx = tx.clone();
@@ -474,6 +505,7 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
         });
     }
     let mut link = Link::new(std::io::stdout(), target, zone_s, log);
+    link.trace = trace;
     if let Some((a, b)) = serve {
         link.serve(a, b);
     }
@@ -637,6 +669,17 @@ mod tests {
         assert_eq!(link.output().len(), frame::WINDOW);
         link.handle(Msg::Uart(encode(frame::ACK, &100u16.to_le_bytes())), now);
         assert_eq!(link.output().len(), frame::WINDOW + 100);
+    }
+
+    /// An ack that counts a stray byte besides the frames, before the
+    /// hello, leaves the window open.
+    #[test]
+    fn ack_past_what_was_sent() {
+        let (mut link, _, now) = new_link();
+        let mut wire = encode(frame::ACK, &1u16.to_le_bytes());
+        wire.extend(encode(frame::HELLO, b"cbb.drv 0.1"));
+        link.handle(Msg::Uart(wire), now);
+        assert!(!link.output().is_empty(), "the link waits for nothing");
     }
 
     /// Keys go 50 a second, whatever the driver's window allows.

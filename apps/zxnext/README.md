@@ -20,7 +20,7 @@ tools. Test them on the machine before relying on them.
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
 .cbb join             join the group: scan the code on the screen with the phone app
-.cbb net on -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00
+.cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
                       the Pi's network through the ESP, in the background
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
@@ -107,7 +107,8 @@ the work:
 The frames are those of `cbb next link` (lite/README.md, "The network through the Next's
 ESP8266"). The driver starts off, so that nothing reaches NextPi's shell before the link
 runs; its API turns it on: `DRIVER 124,2,1` (1 the counters: the ESP's overflows, dropped
-frames, bytes taken; 2 on or off; 3 whether it is on, in A and DE). Its id, 124, is not
+frames, bytes taken; 2 on or off, and turning it on starts the counts again, as the link counts its bytes from 0; 3 whether it is on, in A and DE; 4 the bytes sent to and read from the ESP; 5 the last
+dropped frame; 6 the last 64 bytes from the Pi, which `.cbb -d net` shows). Its id, 124, is not
 assigned by NextZXOS's maintainers yet.
 
 To use it, copy `CBB` to `C:/DOT` and `CBB.DRV` to `/cbb`, install the driver once after
@@ -115,10 +116,11 @@ each start (`.install /cbb/CBB.DRV`), join the ESP to the Wi-Fi network as NextZ
 tools do, and run:
 
 ```
-.cbb net on -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00
+.cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
 ```
 
-It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
+NextBASIC ends a statement at a colon, so each setting with one goes in quotes; the quotes
+do not reach the Pi. It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
 keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
 member at home, `-serve` the ESP's port for the phones and the lite member's own,
 `-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's

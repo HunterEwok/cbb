@@ -538,6 +538,11 @@ static int run(int argc, char **argv)
     esp_command("ATE0", "OK", 2);
     if (debug) esp_command("AT+GMR", "OK", 2);
     esp_command("AT+CIPMODE=0", "OK", 2);
+    // .cbb net leaves the ESP serving with several connections; one
+    // connection needs that undone first (failures here are fine).
+    esp_command("AT+CIPSERVER=0", "OK", 2);
+    esp_command("AT+CIPCLOSE=5", "OK", 5);
+    esp_command("AT+CIPMUX=0", "OK", 2);
     esp_command("AT+CIPCLOSE", "OK", 5); // an old connection, if any
     esp_quiet(50); // old firmware (AT 1.2) can answer late
     sprintf(cmd, "AT+CIPSTART=\"TCP\",\"%s\",%u", host, port);
