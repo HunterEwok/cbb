@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
@@ -279,6 +280,79 @@ func TestSwiftHubAdmitsInvitedGoJoiner(t *testing.T) {
 			}
 			if caDER, err := base64.StdEncoding.DecodeString(ca); err != nil || string(caDER) != string(id.GroupCA.Cert.Raw) {
 				t.Errorf("the joiner holds another group CA than the phone made")
+			}
+		})
+	}
+}
+
+// TestSwiftJoinsComputerRoot runs the phones' joining side against a
+// computer's pairing window (docs/protocol.md, section 6, "A phone joins a
+// computer's group"): the tool dials the window as a phone with an admin
+// key, confirms the code first and checks the Welcome. The group's root
+// admits it with an admin CA for that key; a wrong code fails on both
+// sides; an admin computer refuses a phone.
+func TestSwiftJoinsComputerRoot(t *testing.T) {
+	tool := os.Getenv("CBB_SWIFT_INTEROP_TLS")
+	if tool == "" {
+		t.Skip("CBB_SWIFT_INTEROP_TLS names no clipboardbridge-interop binary")
+	}
+	for _, tc := range []struct {
+		name  string
+		admin bool // the window is an admin computer's, not the root's
+		wrong bool // the tool takes a wrong code
+		want  error
+	}{
+		{"the root admits it", false, false, nil},
+		{"a wrong code", false, true, ErrWrongCode},
+		{"an admin computer", true, false, ErrPhoneNeedsRoot},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			if tc.admin {
+				admin, _ := computerAdmin(t)
+				f = fixtureFor(t, admin)
+			}
+			code := f.code
+			if tc.wrong {
+				code = f.wrongCode()
+			}
+			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer ln.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, tool, "join-tls", "127.0.0.1", strconv.Itoa(ln.Addr().(*net.TCPAddr).Port), code)
+			var out, errOut strings.Builder
+			cmd.Stdout, cmd.Stderr = &out, &errOut
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			conn := acceptTool(t, ln, cmd, &errOut)
+			conn.SetDeadline(time.Now().Add(20 * time.Second))
+			served := f.window.Serve(ctx, tls.Server(conn, ServerTLS(f.admin)))
+			conn.Close()
+			toolErr := cmd.Wait()
+			if tc.want != nil {
+				if !errors.Is(served, tc.want) || toolErr == nil {
+					t.Fatalf("Serve %v, want %v; tool %v", served, tc.want, toolErr)
+				}
+				return
+			}
+			if served != nil || toolErr != nil {
+				t.Fatalf("Serve %v; tool %v: %s", served, toolErr, errOut.String())
+			}
+			lines := strings.Fields(out.String())
+			res, err := f.window.Result()
+			if err != nil || len(lines) != 2 || !res.Info.Phone() || res.AdminCA == nil {
+				t.Fatalf("Result %+v, %v; the tool printed %q", res, err, out.String())
+			}
+			if ca, err := base64.StdEncoding.DecodeString(lines[0]); err != nil || string(ca) != string(f.admin.Root().Raw) {
+				t.Error("the phone holds another group CA than the computer's")
+			}
+			if ca, err := base64.StdEncoding.DecodeString(lines[1]); err != nil || string(ca) != string(res.AdminCA.Raw) {
+				t.Error("the phone holds another admin CA than the root issued")
 			}
 		})
 	}
