@@ -75,6 +75,8 @@ static int link_fail(uint8_t err)
 #define DRV_SWITCH 2
 #define DRV_STATE 3
 #define DRV_ESP 4
+#define DRV_DROP 5
+#define DRV_CAP 6
 
 static struct esx_drvapi drv;
 
@@ -373,6 +375,30 @@ static int net_stop(void)
     return 0;
 }
 
+// In debug mode: the last dropped frame and the last 64 bytes from the Pi,
+// oldest first, in hex.
+static uint8_t cap[66];
+
+static void net_debug(void)
+{
+    uint8_t i, start;
+    if (driver(DRV_DROP, 0)) return;
+    printf("Last dropped: type %02x length %u\n sum %02x, ended by %02x\n", drv.bc & 0xFF, drv.bc >> 8,
+           drv.de & 0xFF, drv.de >> 8);
+    start = (uint8_t)(drv.hl + 1) & 63;
+    for (i = 0; i < 64; i += 6) {
+        if (driver(DRV_CAP, i)) return;
+        cap[i] = drv.bc & 0xFF;
+        cap[i + 1] = drv.bc >> 8;
+        cap[i + 2] = drv.de & 0xFF;
+        cap[i + 3] = drv.de >> 8;
+        cap[i + 4] = drv.hl & 0xFF;
+        cap[i + 5] = drv.hl >> 8;
+    }
+    printf("Last 64 bytes from the Pi:\n");
+    for (i = 0; i < 64; i++) printf(i % 8 == 7 ? "%02x\n" : "%02x ", cap[(start + i) & 63]);
+}
+
 static int net_show(void)
 {
     if (driver(DRV_STATE, 0)) {
@@ -390,6 +416,7 @@ static int net_show(void)
         printf("To the ESP: %u bytes\n", drv.bc);
         printf("From the ESP: %u bytes\n", drv.de);
     }
+    if (debug) net_debug();
     return 0;
 }
 

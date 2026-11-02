@@ -285,6 +285,18 @@ fn wrong_sum() {
     assert_eq!(d.next.esp.tx, b"kept");
     d.call(0xE000, 0x0100, 0);
     assert_eq!(d.cpu.registers().get16(Reg16::DE), 1, "dropped frames");
+    // The dropped frame: type e, length 4, the sum so far and the bad sum.
+    d.call(0xE000, 0x0500, 0);
+    let r = d.cpu.registers();
+    let good = frame(b'e', b"lost");
+    let sum = *good.last().unwrap();
+    assert_eq!(r.get16(Reg16::BC), 0x0400 | b'e' as u16);
+    assert_eq!(r.get16(Reg16::DE), ((sum ^ 1) as u16) << 8 | sum as u16);
+    assert_eq!(r.get16(Reg16::HL), 16, "the bytes taken");
+    // The first six bytes from the Pi, kept from index 1.
+    d.call(0xE000, 0x0600, 1);
+    let r = d.cpu.registers();
+    assert_eq!(r.get16(Reg16::BC), u16::from_le_bytes([0x7E, b'e']));
 }
 
 /// Keys: one a frame, each once the program took the last (FLAGS bit 5).
@@ -342,4 +354,22 @@ fn quit_turns_it_off() {
     d.on();
     d.call(0xE000, 0x0300, 0);
     assert_eq!(d.cpu.registers().get16(Reg16::DE), 1, "the state in DE for M_DRVAPI");
+}
+
+/// The Pi's bytes come a few at a time, between interrupts, after the
+/// shell's echo of the driver's own hello.
+#[test]
+fn bytes_one_at_a_time() {
+    let mut d = Driver::new();
+    d.on();
+    let mut wire = b"cbb next link\r\n~H^K".to_vec();
+    for _ in 0..3 {
+        wire.extend(frame(b'e', b"AT\r\n"));
+    }
+    for b in wire {
+        d.next.pi.rx.push_back(b);
+        d.interrupt();
+    }
+    d.interrupt();
+    assert_eq!(d.next.esp.tx, b"AT\r\nAT\r\nAT\r\n");
 }

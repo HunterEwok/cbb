@@ -46,6 +46,7 @@ TIME_TICKS      equ     3000    ; the clock every minute
 ESP_RING        equ     $F000   ; 1 KB: bytes for the ESP
 KEY_RING        equ     $F400   ; 256 bytes: characters to type
 ESP_BUF         equ     $F500   ; the ESP's bytes on their way to the Pi
+CAP             equ     $F600   ; the last 64 bytes from the Pi, for .cbb net -d
 
         jp      api             ; $E000
         jp      im              ; $E003
@@ -55,7 +56,10 @@ ESP_BUF         equ     $F500   ; the ESP's bytes on their way to the Pi
 ; frames, HL = bytes taken from the Pi); B = 2 on (E = 1) or off (E = 0);
 ; B = 3 the state (A and DE = 1 when on; NextZXOS's M_DRVAPI gives a
 ; program only BC, DE and HL); B = 4 the bytes sent to the ESP (BC) and
-; read from it (DE). Carry set for an unknown call.
+; read from it (DE); B = 5 the last dropped frame (C its type, B its
+; length, E the sum so far, D the byte that ended it; HL the bytes taken);
+; B = 6 six of the last 64 bytes from the Pi (from E, in C, B, E, D, L, H;
+; byte n of the Pi is at n mod 64). Carry set for an unknown call.
 api:
         ld      a,b
         cp      1
@@ -92,9 +96,38 @@ api3:
         ret
 api4:
         cp      4
-        jr      nz,api_bad
+        jr      nz,api5
         ld      bc,(esp_sent)
         ld      de,(esp_got)
+        and     a
+        ret
+api5:
+        cp      5
+        jr      nz,api6
+        ld      bc,(drop_info)
+        ld      de,(drop_info+2)
+        ld      hl,(taken)
+        and     a
+        ret
+api6:
+        cp      6
+        jr      nz,api_bad
+        ld      a,e             ; six bytes of CAP from E (0..58)
+        and     63
+        ld      l,a
+        ld      h,CAP >> 8
+        ld      c,(hl)
+        inc     l
+        ld      b,(hl)
+        inc     l
+        ld      e,(hl)
+        inc     l
+        ld      d,(hl)
+        inc     l
+        ld      a,(hl)
+        inc     l
+        ld      h,(hl)
+        ld      l,a
         and     a
         ret
 api_bad:
@@ -149,6 +182,14 @@ fp_read:
         ld      hl,(taken)
         inc     hl
         ld      (taken),hl
+        ; CAP + (taken & 63) = A
+        ld      e,a
+        ld      a,l
+        and     63
+        ld      l,a
+        ld      h,CAP >> 8
+        ld      (hl),e
+        ld      a,e
         call    decode
         jr      fp_loop
 
@@ -201,6 +242,15 @@ dec_begin:
         ld      (desc),a
         ret
 dec_drop:
+        ; What the dropped frame had: its type, length, sum and last byte.
+        ld      a,(dkind)
+        ld      (drop_info),a
+        ld      a,(dlen)
+        ld      (drop_info+1),a
+        ld      a,(dsum)
+        ld      (drop_info+2),a
+        ld      a,e
+        ld      (drop_info+3),a
         ld      hl,(dropped)
         inc     hl
         ld      (dropped),hl
@@ -545,6 +595,7 @@ esp_over:       defw    0
 dropped:        defw    0
 esp_sent:       defw    0       ; bytes sent to the ESP
 esp_got:        defw    0       ; bytes read from the ESP
+drop_info:      defs    4, 0    ; the last dropped frame, for call 5
 hello_left:     defb    1
 time_left:      defw    1
 code_end:
