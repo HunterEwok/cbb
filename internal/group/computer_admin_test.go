@@ -221,8 +221,13 @@ func TestTakenOver(t *testing.T) {
 	other, _ := NewRootCA(t0)
 	// The claim's new root waits in the identity, across a save, until
 	// the claim takes effect.
-	if _, err := m.WithClaim(next); err == nil {
-		t.Error("a member that is no admin holds a claim")
+	if _, err := root.WithClaim(next); err == nil {
+		t.Error("the root holds a claim")
+	}
+	// A member that is no admin claims only with the recovery key, which
+	// signs its claim; the identity keeps the new root alike.
+	if _, err := m.WithClaim(next); err != nil {
+		t.Errorf("a member with the recovery key cannot hold its claim: %v", err)
 	}
 	if _, err := admin.WithClaim(&CA{Cert: next.Cert}); err == nil {
 		t.Error("held a claim without its root key")

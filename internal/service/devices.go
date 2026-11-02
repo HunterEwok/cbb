@@ -5,6 +5,7 @@ package service
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
@@ -317,12 +318,18 @@ func (s *Service) signRecord(id *group.Identity, body group.RecordBody) (group.R
 	if len(chain) > 0 {
 		adminCA = chain[0]
 	}
+	return s.signAs(ca.Key, adminCA, body)
+}
+
+// signAs signs body, its time set, with key under adminCA (nil for the
+// root's own key), puts the record in the set and keeps the set.
+func (s *Service) signAs(key crypto.Signer, adminCA *x509.Certificate, body group.RecordBody) (group.Record, error) {
 	s.recMu.Lock()
 	defer s.recMu.Unlock()
 	if s.records == nil {
 		return group.Record{}, s.errNoGroup()
 	}
-	r, err := s.records.Sign(body, ca.Key, adminCA)
+	r, err := s.records.Sign(body, key, adminCA)
 	if err != nil {
 		return group.Record{}, err
 	}

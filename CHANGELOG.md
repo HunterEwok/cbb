@@ -11,11 +11,15 @@ All notable changes to clipboardbridge are documented in this file. The format f
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). The
   phones' side follows.
+- `cbb recovery`: when every phone with the group is lost, any computer of the group claims it
+  with the recovery key typed from the sheet (or its QR code's text) and becomes the root after
+  the group's wait, unless the root phone cancels the claim. `cbb handover NAME`, on the root,
+  lets an admin, as a new phone, take the group over at once.
 - The recovery sheet's format in the Rust core: a QR code with the recovery key, its admin CA
   and the group's tag, and the key as text in groups of four with a check group, which the core
   makes and reads (`recovery_sheet`, `read_recovery_sheet`; docs/protocol.md, section 10). The
   phones' kits make the group's recovery key with its admin CA and `recovery` record, and remove
-  it; the apps' button follows.
+  it.
 - The Android app makes the group's recovery key on the root phone (Settings, "Recovery key"):
   it shows the sheet once, out of screenshots, prints it or saves it as a PDF through Android's
   printing, and makes a new key or removes it.
