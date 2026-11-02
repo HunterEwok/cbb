@@ -17,7 +17,7 @@ use cbb_core::clip;
 use crate::error::{Context, Error, Result};
 use crate::{Global, control, request};
 
-const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | join [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-zone +hh:mm] [-log file]";
+const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | join [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file] [-trace]";
 
 /// How long copy waits for the next byte from the Next.
 const READ_TIMEOUT_DECISECONDS: u8 = 100;
@@ -234,6 +234,11 @@ impl RawTerminal {
             }
             if libc::tcsetattr(0, libc::TCSANOW, &raw) != 0 {
                 return RawTerminal(None);
+            }
+            if binary {
+                // A stray XOFF that came while IXON was on stopped the
+                // output, and turning IXON off does not start it again.
+                libc::tcflow(0, libc::TCOON);
             }
             RawTerminal(Some(old))
         }

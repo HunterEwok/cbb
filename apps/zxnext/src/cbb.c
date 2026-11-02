@@ -41,8 +41,8 @@ static void usage(void)
            ".cbb join          join the group:\n"
            "                   scan the code with\n"
            "                   the phone app\n"
-           ".cbb net on [-to HOST:PORT]\n"
-           "   [-serve ESP:PORT] [-zone +HH:MM]\n"
+           ".cbb net on [-to \"HOST:PORT\"]\n"
+           " [-serve \"ESP:PORT\"] [-zone \"+HH:MM\"]\n"
            "                   the Pi's network\n"
            "                   through the ESP,\n"
            "                   in the background\n"
@@ -74,6 +74,9 @@ static int link_fail(uint8_t err)
 #define DRV_COUNTERS 1
 #define DRV_SWITCH 2
 #define DRV_STATE 3
+#define DRV_ESP 4
+#define DRV_DROP 5
+#define DRV_CAP 6
 
 static struct esx_drvapi drv;
 
@@ -325,6 +328,14 @@ static uint8_t plain(const char *s)
     return 1;
 }
 
+// Sends cbb next link the quit frame: the start byte, Q, no data, the sum.
+static void link_quit(void)
+{
+    static const uint8_t quit[] = {0x7E, 'Q', 0, 'Q'};
+    uint8_t i;
+    for (i = 0; i < sizeof quit; i++) link_send(quit[i]);
+}
+
 static int net_start(int argc, char **argv)
 {
     int i;
@@ -341,10 +352,10 @@ static int net_start(int argc, char **argv)
             strcpy(net_args + n, argv[i]);
             n += strlen(argv[i]);
         }
-        if (!strstr(net_args, "-to ")) return fail("the computer to dial is missing: -to HOST:PORT", 0);
+        if (!strstr(net_args, "-to ")) return fail("the computer to dial is missing: -to \"HOST:PORT\"", 0);
         if (net_save()) return 1;
     } else if (net_load()) {
-        return fail("no settings yet: .cbb net on -to HOST:PORT", NET_CFG);
+        return fail("no settings yet: .cbb net on -to \"HOST:PORT\"", NET_CFG);
     }
     if (link_shell()) {
         return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
@@ -352,8 +363,32 @@ static int net_start(int argc, char **argv)
     link_send_str(CBB_LITE " next link ");
     link_send_str(net_args);
     link_send_str(" -log /ram/link.log\n");
-    // The link waits for the driver's hello, and the driver reads past the
-    // shell's echo to the first frame.
+    // The driver may only start once the link has made the UART raw: the
+    // shell would echo its frames, and a byte of them taken as XOFF stops
+    // the Pi's output. The link says CBBLINK then; anything else is the
+    // shell's echo or the link's error.
+    for (i = 0;; i++) {
+        uint8_t err = link_line(line, sizeof line, 15);
+        if (err) {
+            link_quit(); // it may run without having said so
+            return fail("cbb next link did not start on the Pi", err == LINK_BREAK ? "stopped" : "no CBBLINK");
+        }
+        if (strstr(line, "CBBLINK")) {
+            // The line's LF: the driver would count it, and the link,
+            // which counts only its frames, would wait for the Next.
+            uint8_t lf;
+            link_recv(&lf, 1);
+            break;
+        }
+        if (i > 0 && (strncmp(line, "cbb:", 4) == 0 || strncmp(line, "usage", 5) == 0)) {
+            link_prompt();
+            return fail("cbb next link failed on the Pi", line);
+        }
+        if (i == 8) {
+            link_quit();
+            return fail("cbb next link did not start on the Pi", line);
+        }
+    }
     if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
     printf("The Pi's network runs through\nthe ESP in the background.\n");
     return 0;
@@ -361,15 +396,36 @@ static int net_start(int argc, char **argv)
 
 static int net_stop(void)
 {
-    // The quit frame: the start byte, Q, no data, the sum.
-    static const uint8_t quit[] = {0x7E, 'Q', 0, 'Q'};
-    uint8_t i;
     if (!net_on()) return fail("the network does not run", 0);
     driver(DRV_SWITCH, 0);
-    for (i = 0; i < sizeof quit; i++) link_send(quit[i]);
+    link_quit();
     if (link_shell()) return fail("the network stopped, but the Pi does not answer", "no SUP> prompt");
     printf("The network stopped.\n");
     return 0;
+}
+
+// In debug mode: the last dropped frame and the last 64 bytes from the Pi,
+// oldest first, in hex.
+static uint8_t cap[66];
+
+static void net_debug(void)
+{
+    uint8_t i, start;
+    if (driver(DRV_DROP, 0)) return;
+    printf("Last dropped: type %02x length %u\n sum %02x, ended by %02x\n", drv.bc & 0xFF, drv.bc >> 8,
+           drv.de & 0xFF, drv.de >> 8);
+    start = (uint8_t)(drv.hl + 1) & 63;
+    for (i = 0; i < 64; i += 6) {
+        if (driver(DRV_CAP, i)) return;
+        cap[i] = drv.bc & 0xFF;
+        cap[i + 1] = drv.bc >> 8;
+        cap[i + 2] = drv.de & 0xFF;
+        cap[i + 3] = drv.de >> 8;
+        cap[i + 4] = drv.hl & 0xFF;
+        cap[i + 5] = drv.hl >> 8;
+    }
+    printf("Last 64 bytes from the Pi:\n");
+    for (i = 0; i < 64; i++) printf(i % 8 == 7 ? "%02x\n" : "%02x ", cap[(start + i) & 63]);
 }
 
 static int net_show(void)
@@ -385,6 +441,11 @@ static int net_show(void)
         printf("Frames dropped: %u\n", drv.de);
         printf("ESP overflows: %u\n", drv.bc);
     }
+    if (driver(DRV_ESP, 0) == 0) {
+        printf("To the ESP: %u bytes\n", drv.bc);
+        printf("From the ESP: %u bytes\n", drv.de);
+    }
+    if (debug) net_debug();
     return 0;
 }
 
