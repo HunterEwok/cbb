@@ -54,7 +54,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     "Device keys in hardware" below.
 - **14.** **The ZX Spectrum Next** through its own Raspberry Pi: `cbb next` on the lite member and
     the `.cbb` dot command (`apps/zxnext`) are written, not yet run on a real Next; the
-    NextPi set-up and the path through the ESP8266 are next. The Accelerated Next carries a
+    NextPi set-up and the path through the ESP8266 are next (see "The Next's network in the
+    background" below). The Accelerated Next carries a
     Raspberry Pi Zero on its accelerator header, wired to the FPGA's second UART, with
     NextPi (a read-only DietPi) and a root shell (`SUP>`) on that UART. The lite member runs
     on this Pi as an ordinary lite member, installed on the NextPi card itself (its user
@@ -319,6 +320,19 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     a package for `openwrt/packages` built from source with OpenWrt's Go or Rust package
     rules (likely the lite member, since the full `cbb` is too large for routers with 16 MB
     of flash) and the page for `openwrt/luci`, with a maintainer for each.
+- **51.** **Planned for 0.7, research.** Arduino boards whose Wi-Fi module is an ESP32, as
+    devices of their own: the Uno R4 WiFi (an RA4M1 with an ESP32-S3 module), and the Nano 33
+    IoT, MKR WiFi 1010 and Nano RP2040 Connect (u-blox NINA-W10x, a classic ESP32). Our
+    firmware on the module makes it the lite member (`lite/core`, TLS 1.3, joining by the
+    phone's QR code), and the board's main chip only types the texts as a USB keyboard and
+    shows them, over the UART or SPI already between the two, in frames like `cbb next`'s:
+    the split of the ZX Spectrum Next, where the Pi is the member and the Z80 only types.
+    Everything runs on the board's own hardware, so it is no gateway. The cost: Arduino's
+    own Wi-Fi firmware is gone while ours is on (its updater puts it back). To find out:
+    whether each module takes new firmware without an external programmer (the Uno R4
+    WiFi's through Arduino's own tool, NINA through the SerialNINAPassthrough sketch), and
+    whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `lite/core` with TLS 1.3, which
+    builds today for the C6 and the S3 only. The Uno R4 WiFi first.
 
 ## Devices that are hard to type into
 
@@ -683,6 +697,86 @@ and forwarder; then the guide for blocked networks (with its translations), the 
 and the bench's cases for a network that blocks WireGuard (P20, S9, F7), run from a real
 network that blocks VPNs; then AmneziaWG and the relay on the lite member.
 
+## The Next's network in the background
+
+Item 14 on a Pi Zero without a radio. The owner's choice (November 2026): the Pi stays in
+the group while any program runs on the Next, and a text from the group is typed into
+whatever program has the keyboard, without leaving it. Running a dot command to sync, or a
+terminal of our own, was turned down: nobody leaves a program to paste. What the bench
+showed first: `.pibridge` (apps/zxnext) carried 12.5 KB of the Pi's shell through the ESP8266
+without a lost byte once the Z80 ran at 28 MHz, while at 3.5 MHz a polling loop lost bytes
+after about 1 KB.
+
+**What NextZXOS gives.** An installable driver (`.install`) is 512 bytes of code, may take
+8K banks of memory, and is called on every frame's interrupt, 50 times a second, while
+NextBASIC and most programs run; four may be installed. The keyboard driver can be replaced
+by one of 512 bytes, and the API document names a buffer of several keys as a use. Each of
+the two UARTs has a 512-byte receive buffer and a 64-byte send buffer; port 0x133B says when
+the receive buffer overflowed, and port 0x163B turns on hardware flow control, which on the
+Pi's side uses GPIO 16 and 17 (the ESP honours it only on an issue 4 board). NextZXOS's own
+`uart.drv` and `espat.drv` are interrupt-driven drivers of this kind.
+
+**The pieces.**
+
+- *The driver on the Next* is a dumb pipe and a key feeder. On each interrupt it moves the
+  ESP's received bytes into a frame towards the Pi, the Pi's frames for the ESP into the
+  ESP's send buffer, and the Pi's paste frames into a key buffer in its own bank. It restores
+  the UART selection it found, so the program in front is not disturbed. It knows nothing of
+  AT commands, TCP or TLS.
+- *Keys.* One character a frame goes into the ROM's `LAST_K` with the new-key flag, as the
+  ROM's keyboard routine does: 50 characters a second, so a text of 1 KB types in 20
+  seconds. Programs that read the keyboard through the system take it: NextBASIC, the
+  editors, most applications; games that read the ports themselves do not.
+- *The lite member on the Pi* runs `cbb run` as a service from the user partition
+  (`/NextPi`) and drives the ESP through the pipe: AT commands, then passthrough to one
+  member or the hub, the member protocol with TLS 1.3 on the Pi, so the ESP sees only
+  ciphertext. The stock firmware (AT 1.2) holds one passthrough connection, which is enough
+  for a lite member that dials one peer. A new `cbb next link` holds the Pi's UART for the
+  frames.
+- *Frames on the Pi's UART.* A start byte, a type (bytes from the ESP, bytes for the ESP,
+  a paste, a status), a length and the bytes; the start byte doubled inside a frame. The
+  UART is a trace inside the case, so it carries no encryption of its own; the texts in
+  paste frames are already the user's, as on every other member's screen.
+
+**Time.** The Pi Zero has no clock of its own (NextPi keeps a saved time, which is wrong
+after every power-up), and TLS checks certificates against the time. The Next has a
+battery-backed DS1307 that NextZXOS reads (`.date`, `.time`), so the driver or `.cbb` reads
+it at the start and sends it to the Pi in a frame of its own, and the lite member sets the
+system clock. The DS1307 keeps local time without a zone, so the lite member takes the zone
+from its own setting; the group's time is the fallback when the Next's battery has run down.
+
+**What NextPi gives** (read on the bench, NextPi 1.91D): the user partition `/NextPi` is
+writable and on the shell's `PATH` (`/NextPi/nextpi`), and NextPi's start script runs
+`/NextPi/nextpi/autoexec.sh` when it exists, so the lite member is installed and started
+without touching the read-only root. The shell on the UART is a systemd service that
+restarts bash at once; GPIO 16 and 17 are plain inputs, so there is no RTS and CTS, and
+flow control towards the Next is XON and XOFF.
+
+**Speeds.** At 115200 baud the 512-byte buffer holds about two frames' worth of bytes, so
+one missed interrupt (a long SD card access runs with interrupts off) loses data. The ESP
+runs at 19200 baud instead (`AT+UART_CUR`), about 2 KB a second, which a text and a TLS
+handshake need, with more than 0.2 s of margin; a lost byte breaks the TLS session, and the
+Pi dials again. Towards the Pi, the driver stops the Pi with XOFF (NextPi's terminal has
+`ixon`).
+
+**Open questions, for the bench.**
+
+1. The shell. NextPi's shell (`SUP>`) holds the Pi's UART, and `.cbb` and Terminex use it.
+   `cbb next link` runs under that shell and gives it back on exit; whether it should
+   instead keep the shell inside, on a pseudo-terminal of its own, and hand its bytes
+   through unframed while Terminex is open, decides how a text is pasted into the Pi's
+   shell. Terminex reads the Pi's UART itself, so the driver must leave that UART alone
+   while it runs; how the driver tells (the UART selection it finds, or a key) is to be
+   tried.
+2. Copying from the Next: a key in the driver that sends the current BASIC line or a marked
+   part of the screen, or `.cbb copy` through the driver's API.
+3. Whether the driver and the replacement keyboard driver should be one, and how much of the
+   key buffer fits in 512 bytes.
+
+Steps: the frames and `cbb next link` on the Pi, tested on Linux against a program that
+plays the driver; the driver in assembly, built with z88dk, tried with `.pibridge`'s
+counters on the bench; then the keys; then the shell and copying.
+
 ## Future research (not planned)
 
 Questions to study before anything is planned for them.
@@ -703,8 +797,9 @@ Questions to study before anything is planned for them.
   a simpler encrypted protocol nor in the clear. Such a device joins through hardware of
   its own (the Next's Pi, an ESP32 on the board) or not at all. Arduino boards whose
   Wi-Fi chip runs its own TLS (Uno R4 WiFi, Nano 33 IoT, MKR WiFi 1010) cannot be lite
-  members, because that TLS gives no access to the exporter the member protocol needs,
-  so they are not supported; boards without a network are not either.
+  members with their stock firmware, because that TLS gives no access to the exporter the
+  member protocol needs; with our firmware on that chip they may be (item 51). Boards
+  without a network are not supported.
 
 ### Research: the iPhone hub in a Network Extension
 

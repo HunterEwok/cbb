@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# cbb.drv's host test: its bank (drv/bank.asm, built by make) runs in a Z80
+# emulator against the Next's two UARTs played here (README.md, "Build").
+[package]
+name = "cbb-drvtest"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+publish = false
+
+[dependencies]
+iz80 = "=0.5.1"
+
+[workspace]

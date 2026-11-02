@@ -17,7 +17,7 @@ use cbb_core::clip;
 use crate::error::{Context, Error, Result};
 use crate::{Global, control, request};
 
-const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | join [-name name] [-port port] [-addr host[:port]]...";
+const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | join [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-zone +hh:mm] [-log file]";
 
 /// How long copy waits for the next byte from the Next.
 const READ_TIMEOUT_DECISECONDS: u8 = 100;
@@ -29,6 +29,16 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
         Some("paste") => paste(g, &args[1..]),
         Some("copy") => copy(g, &args[1..]),
         Some("join") => crate::join(g, &args[1..], true),
+        // The link answers in frames, not in a status line.
+        Some("link") => {
+            return match crate::nextlink::link::run(&g.socket, &args[1..]) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprintln!("cbb: {}", e.for_user());
+                    1
+                }
+            };
+        }
         _ => Err(Error::msg(USAGE)),
     };
     let mut out = std::io::stdout();
@@ -87,7 +97,7 @@ fn copy(g: &Global, args: &[String]) -> Result<()> {
     // Fail before the Next sends the text, not after.
     request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
     let data = {
-        let _raw = RawTerminal::new();
+        let _raw = RawTerminal::new(READ_TIMEOUT_DECISECONDS, false);
         let mut out = std::io::stdout();
         out.write_all(b"CBBGO\r").and_then(|_| out.flush()).context("cannot answer the Next")?;
         let mut data = vec![0; len];
@@ -198,12 +208,14 @@ pub fn crc32(data: &[u8]) -> u32 {
 
 /// Puts standard input, when it is a terminal (the UART), into raw mode for
 /// as long as it lives: no echo, no line editing, no CR to LF, and a read
-/// that gives up after 10 s without a byte. It restores the old mode when
+/// that gives up after the timeout without a byte. It restores the old mode when
 /// dropped.
-struct RawTerminal(Option<libc::termios>);
+pub(crate) struct RawTerminal(Option<libc::termios>);
 
 impl RawTerminal {
-    fn new() -> RawTerminal {
+    /// timeout in tenths of a second; binary also turns off the output's
+    /// processing (LF to CR LF), for frames.
+    pub(crate) fn new(timeout: u8, binary: bool) -> RawTerminal {
         // SAFETY: tcgetattr and tcsetattr only read and write the termios
         // struct passed to them.
         unsafe {
@@ -216,7 +228,10 @@ impl RawTerminal {
                 !(libc::IGNBRK | libc::BRKINT | libc::ICRNL | libc::INLCR | libc::IGNCR | libc::ISTRIP | libc::IXON);
             raw.c_lflag &= !(libc::ECHO | libc::ECHONL | libc::ICANON | libc::ISIG | libc::IEXTEN);
             raw.c_cc[libc::VMIN] = 0;
-            raw.c_cc[libc::VTIME] = READ_TIMEOUT_DECISECONDS;
+            raw.c_cc[libc::VTIME] = timeout;
+            if binary {
+                raw.c_oflag &= !libc::OPOST;
+            }
             if libc::tcsetattr(0, libc::TCSANOW, &raw) != 0 {
                 return RawTerminal(None);
             }
