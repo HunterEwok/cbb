@@ -3174,6 +3174,16 @@
         }
       }
     },
+    "Switch the keyboard's layout": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить раскладку клавиатуры"
+          }
+        }
+      }
+    },
     "Done.": {
       "localizations": {
         "ru": {

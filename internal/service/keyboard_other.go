@@ -8,6 +8,7 @@ package service
 import (
 	"context"
 
+	"github.com/HunterEwok/clipboardbridge/internal/actions"
 	"github.com/HunterEwok/clipboardbridge/internal/control"
 	"github.com/HunterEwok/clipboardbridge/internal/group"
 	"github.com/HunterEwok/clipboardbridge/internal/node"
@@ -32,6 +33,8 @@ func (s *Service) closeKeyboard() {}
 func (s *Service) keyboard(context.Context, *control.Message) error { return errKeyboardOS }
 
 func (s *Service) keyboardStatus() *control.Keyboard { return s.kbd.status() }
+
+func (s *Service) nextKeyboardLayout() error { return &actions.Refusal{Reason: errKeyboardOS.Error()} }
 
 func (s *Service) keyboardPastes() bool { return false }
 

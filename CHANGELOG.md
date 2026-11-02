@@ -7,6 +7,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- The quick action `keyboard-layout` switches the layout a Linux computer's Bluetooth keyboard
+  types in to the next one (`us`, `ru`), for when the device it types on switched its own; the
+  apps show it as "Switch the keyboard's layout" once the computer's user turns it on.
 - The project's forwarder at `cbb.tools:8764` is built in: `cbb global hub` without
   addresses, or with `-forwarder default` (also for `cbb global move`), goes through it, and a
   phone that is the hub uses it unless the user saves their own; nobody types its address or

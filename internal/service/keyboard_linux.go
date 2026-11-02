@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
+	"github.com/HunterEwok/clipboardbridge/internal/actions"
 	"github.com/HunterEwok/clipboardbridge/internal/blekeyboard"
 	"github.com/HunterEwok/clipboardbridge/internal/control"
 	"github.com/HunterEwok/clipboardbridge/internal/group"
@@ -192,6 +194,29 @@ func (s *Service) keyboard(ctx context.Context, m *control.Message) error {
 	if m.Name == "on" && err != nil {
 		return fmt.Errorf("the keyboard is on, but it does not run yet: %w", err)
 	}
+	return nil
+}
+
+// nextKeyboardLayout switches the keyboard to the next layout, at an
+// admin's quick action, for a device whose own layout the user just
+// switched: the keys mean other letters there now.
+func (s *Service) nextKeyboardLayout() error {
+	if s.cfg.KeyboardBus == nil && s.cfg.OS != group.OSLinux {
+		return &actions.Refusal{Reason: errKeyboardOS.Error()}
+	}
+	set, err := blekeyboard.Load(s.cfg.StateDir)
+	if err != nil {
+		return err
+	}
+	if !set.On {
+		return &actions.Refusal{Reason: "the Bluetooth keyboard is off here: sudo cbb keyboard on"}
+	}
+	i := slices.Index(keyboard.Layouts, set.Layout)
+	set.Layout = keyboard.Layouts[(i+1)%len(keyboard.Layouts)]
+	if err := blekeyboard.Save(s.cfg.StateDir, set); err != nil {
+		return fmt.Errorf("saving the keyboard settings: %w", err)
+	}
+	s.logf("cbb: the Bluetooth keyboard types in the layout %s now", set.Layout)
 	return nil
 }
 

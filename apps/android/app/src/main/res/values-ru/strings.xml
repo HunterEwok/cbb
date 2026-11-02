@@ -301,6 +301,7 @@
     <string name="action_shutdown">Выключить</string>
     <string name="action_cancel">Отменить перезагрузку или выключение</string>
     <string name="action_restart">Перезапустить Clipboard Bridge</string>
+    <string name="action_keyboard_layout">Сменить раскладку клавиатуры</string>
     <string name="action_confirm_title">%1$s: %2$s?</string>
     <string name="action_confirm_body">Это произойдёт через минуту; до тех пор её остановит «Отменить перезагрузку или выключение».</string>
     <string name="action_done">Готово.</string>

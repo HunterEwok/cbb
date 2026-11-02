@@ -2884,7 +2884,8 @@ An `action` command carries only the action's name: what it does is defined on t
 which knows the presets `lock` (lock the screen), `sleep`, `reboot` and `shutdown` (both a
 minute after the command, so that `cancel-shutdown` can stop them), `cancel-shutdown` and
 `restart` (the service ends and its service manager starts it again, after the result is
-sent), and the actions its user added there, each a program with fixed arguments that the
+sent), `keyboard-layout` (the computer's Bluetooth keyboard types in the next of its layouts,
+`us` then `ru`; refused where it is off or there is none), and the actions its user added there, each a program with fixed arguments that the
 agent of the user signed in runs; nothing in the command reaches its arguments, and only
 the exit status comes back. The receiver MUST refuse it unless its user turned that action
 on there, and then:
@@ -3460,7 +3461,7 @@ frames (section 4, "Content"); `records`, `admin`, `phone_ca` (section 10); `tun
 | Record `type` | `device`, `revoke`, `root`, `freeze`, `thaw` | 10 |
 | Command `type` | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off` | 15 |
 | Command result `status` | `done`, `refused`, `failed` | 15 |
-| Quick action presets | `lock`, `sleep`, `reboot`, `shutdown`, `cancel-shutdown`, `restart` | 15 |
+| Quick action presets | `lock`, `sleep`, `reboot`, `shutdown`, `cancel-shutdown`, `restart`, `keyboard-layout` | 15 |
 | Signer kinds of an action | `root`, `phone`, `computer`, `watch` | 15 |
 | Pairing errors | `wrong-code`, `closed`, `busy`, `expired`, `too-many`, `refused`, `declined`, `taken` | 6 |
 | iPhone `direction` | `to_iphone`, `from_iphone`, `none`, `unpaired`, `error` | 7 |

@@ -104,7 +104,9 @@ func (s *Service) runAction(body group.CommandBody, a actions.Action) node.Resul
 	ctx, cancel := context.WithTimeout(context.Background(), actionWait)
 	defer cancel()
 	var err error
-	if len(a.Command) > 0 {
+	if body.Action == actions.Layout {
+		err = s.nextKeyboardLayout()
+	} else if len(a.Command) > 0 {
 		err = sessionRunner{s}.run(ctx, body.Action, a.Command)
 	} else {
 		err = s.cfg.runner.Run(ctx, body.Action)
