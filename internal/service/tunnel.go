@@ -663,6 +663,13 @@ func (s *Service) away(ctx context.Context, m *control.Message) error {
 	if m.Name == "hub" && !id.IsAdmin() {
 		return errors.New("only the group's root or an admin can be its hub, since the members take the hub's offer from them only; make this device an admin first (cbb admin on the root)")
 	}
+	if m.Name == "hub" {
+		// An admin with a key in a file had the user's consent when it was
+		// made one; the level may have risen since.
+		if err := levelAllows(s.keyLevel(), s.keyStore(id), "this device", "", true); err != nil {
+			return err
+		}
+	}
 	reconnect, key, psk, err := s.awayLocked(m, group.Tag(id.GroupCA.Cert))
 	if err != nil {
 		return err

@@ -255,6 +255,60 @@ func TestAdminOfFileKeys(t *testing.T) {
 	}
 }
 
+// A group whose root keeps its key in a file starts at the key level
+// files; only its root sets the level, never above its own key, and a new
+// takeover delay keeps the level.
+func TestKeyLevelSetting(t *testing.T) {
+	var h hub
+	pi := startService(t, &h, "pi")
+	deck := startService(t, &h, "deck")
+	pairWith(t, pi, deck)
+	waitFor(t, "deck is connected to the root", func() bool { return len(pi.status(t).Peers) == 1 })
+	if l := pi.status(t).KeyLevel; l != LevelFiles {
+		t.Fatalf("the level of a group with a root key in a file: %q", l)
+	}
+	waitFor(t, "deck has the level", func() bool { return deck.status(t).KeyLevel == LevelFiles })
+	if _, err := deck.do(t, control.Header{Op: control.OpKeyLevel, Value: LevelFiles}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+		t.Errorf("the level set on a member: %v", err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: "any"}, ""); err == nil || !strings.Contains(err.Error(), "proven, hardware or files") {
+		t.Errorf("an unknown level: %v", err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: LevelHardware}, ""); err == nil || !strings.Contains(err.Error(), "the group's root, keeps its keys in a file") {
+		t.Errorf("a level above the root's own key: %v", err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpDelay, Value: "24h"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if l := pi.status(t).KeyLevel; l != LevelFiles {
+		t.Errorf("the level after a new takeover delay: %q", l)
+	}
+}
+
+// levelAllows lets in what each level allows, and a key in a file only with
+// the user's consent.
+func TestLevelAllows(t *testing.T) {
+	for _, c := range []struct {
+		level, store string
+		consent      bool
+		want         string
+	}{
+		{LevelFiles, group.StoreRootless, true, "without root"},
+		{LevelProven, group.StoreHardware, true, "attestation does not prove"},
+		{LevelProven, group.StoreProven, false, ""},
+		{LevelHardware, group.StoreHardware, false, ""},
+		{LevelHardware, group.StoreFile, true, "cbb keys files"},
+		{LevelFiles, group.StoreFile, false, "allow it anyway, HINT"},
+		{LevelFiles, group.StoreFile, true, ""},
+		{LevelFiles, group.StoreHardware, false, ""},
+	} {
+		err := levelAllows(c.level, c.store, "desk", "HINT", c.consent)
+		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
+			t.Errorf("%s, %s, consent %v: %v", c.level, c.store, c.consent, err)
+		}
+	}
+}
+
 // The root renames any device with a newer device record, which every
 // member takes; the device keeps its role and whether it is an admin. An
 // admin renames the devices that are no admin, phone or watch, and not the

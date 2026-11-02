@@ -441,6 +441,16 @@
     <string name="remove_device">Remove %1$s</string>
     <string name="reason_make_recovery">Make a recovery key</string>
     <string name="reason_remove_recovery">Remove the recovery key</string>
+    <string name="reason_key_level">Change which keys may be admins</string>
+    <string name="key_level_title">Admin keys</string>
+    <string name="key_level_proven">Proven hardware only</string>
+    <string name="key_level_hardware">Keys in hardware</string>
+    <string name="key_level_files">Keys in files too</string>
+    <string name="key_level_body">Which devices may be the group\'s admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.</string>
+    <string name="key_level_saved">Saved. Every device of the group follows it.</string>
+    <string name="key_level_own_key">This phone\'s own key is not proven, so the group cannot ask for proven keys yet.</string>
+    <string name="error_below_key_level">The group\'s admin keys setting does not let this device\'s keys be an admin. Change it in Settings, Admin keys.</string>
+    <string name="make_admin_files_body">The group then lets keys in files be admins and hubs (Settings, Admin keys).</string>
     <string name="recovery_title">Recovery key</string>
     <string name="recovery_made">Made on %1$s.</string>
     <string name="recovery_none">None yet.</string>

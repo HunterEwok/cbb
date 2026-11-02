@@ -51,6 +51,8 @@ public enum Records {
         public var cert: Data?
         // settings
         public var takeover_delay_ms: Int64?
+        /// Which keys may be the group's root, an admin or a hub: one of Records.keyLevels.
+        public var key_level: String?
         // hubs
         public var hubs: [String]?
 
@@ -89,12 +91,13 @@ public enum Records {
             try put(root, .root)
             try put(cert, .cert)
             if let t = takeover_delay_ms { try c.encode(t, forKey: .takeover_delay_ms) }
+            try put(key_level, .key_level)
             try put(hubs, .hubs)
         }
 
         private enum Key: String, CodingKey {
             case v, alg, type, signer, time_ms, device, name, role, os, key, admin, powers, commands, store, kind, proof, holds_root, seal
-            case keys, records, root, cert, takeover_delay_ms, hubs
+            case keys, records, root, cert, takeover_delay_ms, key_level, hubs
         }
     }
 
@@ -129,6 +132,23 @@ public enum Records {
     /// A rootless install's keys: in a file every program of its user may
     /// read, so the device is never the root, an admin or a hub (D-79).
     public static let rootless = "rootless"
+    /// The group's key levels (docs/guide/keys.md, "The three levels"):
+    /// which keys may be its root, an admin or a hub. The levels proven and
+    /// hardware share their names with the stores they let in; files lets
+    /// in keys in files too, each after a warning.
+    public static let levelFiles = "files"
+    public static let keyLevels = [proven, hardware, levelFiles]
+
+    /// Whether the key level lets a device whose keys are in store be the
+    /// group's root, an admin or a hub; a key in a file needs consent too.
+    public static func levelAllows(_ level: String, store: String, consent: Bool) -> Bool {
+        switch store {
+        case rootless: return false
+        case proven: return true
+        case file: return level == levelFiles && consent
+        default: return level != proven
+        }
+    }
 
     /// Where a device's keys live, as a hello's key_store or a record's
     /// store says (docs/protocol.md, section 17): file, hardware, proven or
@@ -282,6 +302,8 @@ public struct RecordSet: Codable, Equatable, Sendable {
         public var newer: [Data]?
         /// The key hash of the group's recovery key, while one counts.
         public var recovery: Data?
+        /// The key level of the current root's newest settings; nil means hardware.
+        public var key_level: String?
     }
 
     /// A conflict of the state: kind is admins, claims or two_histories.
@@ -429,6 +451,8 @@ public struct RecordSet: Codable, Equatable, Sendable {
     public var revoked: Set<Data> { Set(view.state.revoked ?? []) }
     /// The key hash of the group's recovery key, while one counts.
     public var recovery: Data? { view.state.recovery }
+    /// The group's key level (Records.keyLevels): hardware when the root set none.
+    public var keyLevel: String { view.state.key_level.flatMap { $0.isEmpty ? nil : $0 } ?? Records.hardware }
     /// The records a new member gets in the Welcome, to check the
     /// Welcome's roots, and a hub shows its forwarder: all of them, since
     /// every member evaluates the whole set.

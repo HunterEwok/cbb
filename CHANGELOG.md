@@ -19,6 +19,15 @@ All notable changes to clipboardbridge are documented in this file. The format f
   the phones' Rust core, the iPhone kit's Swift packages and the Android apps' Maven modules,
   made by `tools/sbom`; the Docker image carries its own as an attestation in the registry
   (docs/maintaining.md, "Releases").
+- The group's key level is a setting: `cbb keys proven|hardware|files` on a root computer
+  sets which devices may be the group's root, an admin or a hub, and `cbb keys` and `cbb
+  status` show it. `cbb admin`, `cbb hubs` and a hub's own tunnel check it; a group whose
+  root key is in a file starts at `files`, and its root cannot set a level its own key does
+  not pass (docs/guide/keys.md, "The three levels").
+- The phone apps set the group's key level too: Settings, Admin keys, on the root phone.
+  "Make it an admin" checks it, and making a computer whose keys are in a file an admin,
+  after the warning, moves the group to keys in files too. A phone that takes the group
+  over keeps the old root's takeover delay and key level.
 - A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both
@@ -1056,6 +1065,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and credentials) give way to the `v2-*.json` vectors of the same cases.
 
 ### Fixed
+- A new root after a takeover signs the old root's settings again, so the group keeps its
+  takeover delay and key level instead of falling back to the defaults.
 
 - On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
   network, instead of doing nothing.

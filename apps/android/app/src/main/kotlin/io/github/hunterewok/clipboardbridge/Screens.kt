@@ -520,6 +520,7 @@ internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
         if (model.phase == AppModel.Phase.HOME) model.blindRelay?.let { BlindRelaySection(model, it) }
         if (WatchLink.available && model.phase == AppModel.Phase.HOME && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
         if (model.phase == AppModel.Phase.HOME && model.isRoot) RecoverySection(model)
+        if (model.phase == AppModel.Phase.HOME) model.keyLevel?.let { KeyLevelSection(model, it) }
         if (model.phase == AppModel.Phase.HOME) Notifications(model.notifier)
         UpdateSection(model)
         Section(stringResource(R.string.about)) {

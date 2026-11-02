@@ -234,6 +234,22 @@ final class LiveGroup: GroupController {
         return made.sheet
     }
 
+    var keyLevel: String? { state?.isRoot == true ? state?.keyLevel : nil }
+
+    /// Sets the group's key level (docs/guide/keys.md, "The three levels"):
+    /// a settings record, signed with the root key after Face ID and sent
+    /// to every member, which keeps the takeover delay.
+    func setKeyLevel(_ level: String) async throws {
+        guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
+        let root = try await caSigner(reason: String(localized: "Change which keys may be admins", bundle: .app))
+        guard var g = state else { throw PhoneGroup.Failure.notRoot }
+        let r = try g.setKeyLevel(level, rootSigner: root, now: Date())
+        try g.save(to: file)
+        state = g
+        groupChanged()
+        await node?.sendRecords([r])
+    }
+
     /// Removes the group's recovery key: a revocation of it, signed with the
     /// root key after Face ID and sent to every member.
     func removeRecovery() async throws {
@@ -913,11 +929,18 @@ final class LiveGroup: GroupController {
         guard Records.store(store, role: "full") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
         let root = try await caSigner(reason: String(localized: "Make a computer an admin", bundle: .app))
         guard var g = state else { return }
+        var rs: [Member.Record] = []
+        // The user's consent to a key in a file, after the dialog's
+        // warning, lets the group take keys in files too.
+        if Records.store(store, role: "full") == Records.file, allowFileKey, g.keyLevel != Records.levelFiles {
+            rs.append(try g.setKeyLevel(Records.levelFiles, rootSigner: root, now: Date()))
+        }
         let (ca, r) = try g.makeAdmin(device: id, adminKey: key, rootSigner: root, now: Date(), keyStore: store, allowFileKey: allowFileKey)
+        rs.append(r)
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        await node?.sendRecords(rs)
         await node?.send(adminCA: ca, to: id)
     }
 

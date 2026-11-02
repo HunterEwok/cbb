@@ -71,6 +71,9 @@ struct SettingsView: View {
             if model.isRoot {
                 RecoverySection()
             }
+            if let level = model.keyLevel {
+                keyLevelSection(level)
+            }
             NotificationSettings()
             Section {
                 LabeledContent {
@@ -112,6 +115,25 @@ struct SettingsView: View {
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+    }
+
+    /// Which keys may be the group's admins and hubs, on the root phone
+    /// (docs/guide/keys.md, "The three levels").
+    private func keyLevelSection(_ level: String) -> some View {
+        Section {
+            Picker(selection: Binding(get: { level }, set: { new in Task { await model.setKeyLevel(new) } })) {
+                Text("Proven hardware only").tag(Records.proven)
+                Text("Keys in hardware").tag(Records.hardware)
+                Text("Keys in files too").tag(Records.levelFiles)
+            } label: {
+                Text("Admin keys")
+            }
+        } header: {
+            Text("Admin keys")
+        } footer: {
+            Text("Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.")
+        }
+        .listRowBackground(palette.surface)
     }
 
     /// Moving the hub to a computer (docs/design.md, "Moving the hub to a

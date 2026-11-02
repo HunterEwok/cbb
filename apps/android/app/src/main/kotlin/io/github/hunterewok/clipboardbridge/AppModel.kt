@@ -128,6 +128,14 @@ class AppModel(private val app: Context) {
     var awayNote by mutableStateOf<Note?>(null)
         private set
 
+    /** The group's key level, on the root phone; null elsewhere. */
+    var keyLevel by mutableStateOf<String?>(null)
+        private set
+
+    /** What the last change to the key level said. */
+    var keyLevelNote by mutableStateOf<Note?>(null)
+        private set
+
     /** When the group's recovery key was made, on the root phone while the group has one. */
     var recoveryMade by mutableStateOf<java.time.Instant?>(null)
         private set
@@ -452,6 +460,7 @@ class AppModel(private val app: Context) {
         alerts = a
         handedOver = withContext(Dispatchers.IO) { group.handedOver }
         recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
+        keyLevel = withContext(Dispatchers.IO) { group.keyLevel }
         notifier.observe(d)
         away = group.awayFromHome?.let { a ->
             // The last failure only while it is still trying; once connected or at home it is old news.
@@ -848,6 +857,21 @@ class AppModel(private val app: Context) {
         update()
     }
 
+    /** Sets which keys may be the group's admins and hubs. */
+    suspend fun setKeyLevel(level: String) {
+        keyLevelNote = try {
+            group.setKeyLevel(level)
+            Note(R.string.key_level_saved)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: PhoneGroup.BelowKeyLevel) {
+            Note(R.string.key_level_own_key)
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
     /** Makes a computer an admin, after the dialog that warns when its keys sit in a file. */
     suspend fun makeAdmin(id: String) {
         message = try {
@@ -1005,6 +1029,7 @@ class AppModel(private val app: Context) {
                 if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_wrong_code else R.string.error_refused
             is PhoneGroup.Failure -> R.string.error_generic
             is PhoneGroup.FileKey -> R.string.error_file_key
+            is PhoneGroup.BelowKeyLevel -> R.string.error_below_key_level
             is PhoneGroup.Rootless -> R.string.error_rootless
             is PairingJoiner.Failure -> R.string.error_join
             is Keys.NoScreenLock -> R.string.error_no_screen_lock
