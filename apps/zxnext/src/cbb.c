@@ -16,7 +16,7 @@
 #include "frame.h"
 #include "link.h"
 
-#define VERSION "0.2.0"
+#define VERSION "0.3.0"
 // The lite member on the Pi; the NextPi set-up puts it on the shell's PATH.
 #define CBB_LITE "cbb"
 // The longest text pasted or copied.
@@ -40,7 +40,9 @@ static void usage(void)
            ".cbb text -s WORDS such as a password\n"
            ".cbb join          join the group:\n"
            "                   scan the code with\n"
-           "                   the phone app\n"
+           "                   the phone app (with\n"
+           "                   net settings: via\n"
+           "                   the ESP)\n"
            ".cbb net on [-to \"HOST:PORT\"]\n"
            " [-serve \"ESP:PORT\"] [-zone \"+HH:MM\"]\n"
            "                   the Pi's network\n"
@@ -336,6 +338,9 @@ static void link_quit(void)
     for (i = 0; i < sizeof quit; i++) link_send(quit[i]);
 }
 
+// net join starts the network under its QR code, without a word.
+static uint8_t quiet;
+
 static int net_start(int argc, char **argv)
 {
     int i;
@@ -390,7 +395,61 @@ static int net_start(int argc, char **argv)
         }
     }
     if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
-    printf("The Pi's network runs through\nthe ESP in the background.\n");
+    if (!quiet) printf("The Pi's network runs through\nthe ESP in the background.\n");
+    return 0;
+}
+
+// The ESP's address on the Wi-Fi network, from AT+CIFSR, into ip.
+static uint8_t esp_address(char *ip, uint8_t max)
+{
+    static const char want[] = "+CIFSR:STAIP,\"";
+    uint8_t i, found = 0;
+    link_open_esp(115200UL);
+    while (link_line(line, sizeof line, 1) == LINK_OK) {
+    }
+    link_send_str("AT+CIFSR\r\n");
+    while (link_line(line, sizeof line, 3) == LINK_OK) {
+        if (strncmp(line, want, sizeof want - 1) == 0) {
+            const char *a = line + sizeof want - 1;
+            for (i = 0; i + 1 < max && a[i] && a[i] != '"'; i++) ip[i] = a[i];
+            ip[i] = 0;
+            found = i > 0;
+        }
+        if (strcmp(line, "OK") == 0 || strcmp(line, "ERROR") == 0) break;
+    }
+    link_use(LINK_PI);
+    return found && plain(ip);
+}
+
+// Joins the group through the ESP (.cbb join when /cbb/NET.CFG holds the
+// network's settings): cbb next join waits on the Pi for the
+// phone, at the ESP's address and the port -serve leads to, while the
+// network runs under the QR code the phone scans.
+static int net_join(void)
+{
+    char ip[40], cmd[160], *serve, *colon = 0, *end;
+    uint32_t len, crc;
+    if (net_on()) return fail("the network runs; stop it first with .cbb net off", 0);
+    if (net_load()) return fail("no settings yet: .cbb net on -to \"HOST:PORT\" -serve \"8764:8764\"", NET_CFG);
+    serve = strstr(net_args, "-serve ");
+    if (serve) colon = strchr(serve + 7, ':');
+    if (!colon) return fail("the settings need -serve \"8764:8764\", where the phone reaches the Pi", net_args);
+    if (!esp_address(ip, sizeof ip)) return fail("the ESP gave no address; is it on the Wi-Fi network?", line);
+    // -addr the ESP's address and port, -port where -serve leads.
+    *colon = 0;
+    end = strchr(colon + 1, ' ');
+    if (end) *end = 0;
+    sprintf(cmd, CBB_LITE " next join -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null &\n", ip, serve + 7,
+            colon + 1);
+    if (link_shell()) return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
+    link_send_str(cmd);
+    link_prompt();
+    link_send_str("until grep -q 'CBBQ\\|CBBERR' /ram/cbbjoin; do sleep 1; done; sleep 1; cat /ram/cbbjoin\n");
+    if (expect(LINE_QR, &len, &crc, ANSWER_SECONDS) != LINE_QR) return 1;
+    if (qr((uint8_t)len)) return 1;
+    link_prompt();
+    quiet = 1;
+    if (net_start(0, 0)) return 1;
     return 0;
 }
 
@@ -479,7 +538,8 @@ static int run(int argc, char **argv)
     if (strcmp(argv[i], "paste") == 0 && argc - i <= 2) return paste(argc - i == 2 ? argv[i + 1] : 0);
     if (strcmp(argv[i], "copy") == 0 && argc - i == 2) return copy_file(argv[i + 1]);
     if (strcmp(argv[i], "text") == 0 && argc - i >= 2) return copy_words(argc - i - 1, argv + i + 1);
-    if (strcmp(argv[i], "join") == 0 && argc - i == 1) return join();
+    // With the network's settings, the Pi has no network but the ESP's.
+    if (strcmp(argv[i], "join") == 0 && argc - i == 1) return net_load() ? join() : net_join();
     if (strcmp(argv[i], "net") == 0) return net(argc - i - 1, argv + i + 1);
     usage();
     return 1;

@@ -294,6 +294,11 @@ cbb run -peer 127.0.0.1:8769
 - `-serve esp-port:local-port`: the ESP takes connections on its own port and leads each
   to the local one, where the lite member listens: phones that sync with it, and the phone
   that admits it (`cbb next join -addr <the ESP's address>:<esp-port>`).
+- `-udp local-port:host:port`: a local UDP port that leads, through one UDP connection
+  of the ESP, to host:port: the hub, or a forwarder that leads to it. With
+  `cbb run -tunnel-via 127.0.0.1:local-port`, the tunnel of sync away from home sends its
+  packets there instead of to the hub's own addresses, so the Pi syncs away from home
+  through the ESP too; WireGuard's keys stay on the Pi.
 - `-zone`: the Next's clock (the DS1307) keeps local time without a zone; the link sets
   the Pi's clock, which NextPi only saves across a power cut, from it in UTC.
 - `-log`: standard error is the UART too, so the link writes its log to a file or
