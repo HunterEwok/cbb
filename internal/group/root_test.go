@@ -298,9 +298,10 @@ func TestUpgradeRecords(t *testing.T) {
 	checkV1Refused(t)
 }
 
-// TestOldGroup checks that an identity of a group made before 0.4, whose
-// group CA certifies no admin CAs, is refused with ErrOldGroup.
-func TestOldGroup(t *testing.T) {
+// TestUpgraded checks that an identity of a group made before 0.4, whose
+// group CA certifies no admin CAs, is refused with ErrOldGroup: such a
+// group is no longer upgraded in place.
+func TestUpgraded(t *testing.T) {
 	id := newGroup(t)
 	ca, err := NewGroupCA(t0)
 	if err != nil {
