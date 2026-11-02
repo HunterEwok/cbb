@@ -305,23 +305,28 @@ jobs:
       - name: go vet
         if: matrix.vet
         run: go vet ./...
-      - name: go build
+      - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
         run: |
+          sh lite/wasm/build.sh
+          sh lite/packaging/notices.sh wasm32-unknown-unknown clipboardbridge-wasm >"$RUNNER_TEMP/core-notices"
+      - name: go build, with the core as at a release
+        run: |
+          core="-overlay $GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json -tags cbbwasm"
           if [ "$GOOS" = windows ]; then
             # cbbw.exe is the same program without a console window, for the agent.
-            go build -trimpath -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
-            go build -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
+            go build $core -trimpath -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
+            go build $core -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
             # The tray app goes in the archive too, as at a release.
             (cd apps/desktop && go build -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           else
-            go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+            go build $core -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
       - name: the release archive
         run: |
           name=$GOARCH
           if [ -n "$GOARM" ]; then name=armv$GOARM; fi
           if [ "$GOOS" = windows ]; then
-            sh packaging/archive.sh "$RUNNER_TEMP/cbb.exe" "$GOOS" "$name" "$RUNNER_TEMP/dist"
+            CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$RUNNER_TEMP/cbb.exe" "$GOOS" "$name" "$RUNNER_TEMP/dist"
             unzip -Z1 "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.zip" >"$RUNNER_TEMP/list"
             for f in cbb.exe cbbw.exe cbb-desktop.exe packaging/windows/install.ps1 packaging/windows/uninstall.ps1; do
               grep -qx "clipboardbridge/$f" "$RUNNER_TEMP/list"
@@ -330,8 +335,10 @@ jobs:
             file "$RUNNER_TEMP/cbbw.exe" | grep -q '(GUI)'
             file "$RUNNER_TEMP/cbb-desktop.exe" | grep -q '(GUI)'
           else
-            sh packaging/archive.sh "$RUNNER_TEMP/cbb" "$GOOS" "$name" "$RUNNER_TEMP/dist"
+            CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$RUNNER_TEMP/cbb" "$GOOS" "$name" "$RUNNER_TEMP/dist"
             tar -tzf "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.tar.gz" | grep -qx "clipboardbridge/cbb"
+            # The notices name the core's crates too.
+            tar -xzOf "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.tar.gz" clipboardbridge/THIRD_PARTY_NOTICES | grep -q '^chacha20poly1305 '
           fi
       - name: keep the Windows archive for the installer test
         if: matrix.goos == 'windows' && matrix.goarch == 'amd64'

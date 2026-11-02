@@ -40,12 +40,20 @@ var (
 	instance api.Module
 )
 
+// memoryPages is the most memory the core may have, in pages of 64 KiB:
+// 64 MiB, many times what a set of records at its limits needs
+// (lite/core/tests/memory.rs).
+const memoryPages = 1024
+
 // load compiles the module once, with the host's randomness as its one
 // import.
 func load() error {
 	once.Do(func() {
 		ctx := context.Background()
-		runtime = wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+		// The core's memory is capped (memoryPages of 64 KiB), so that no
+		// input makes it grow to the 4 GiB a module may have; a call past
+		// the cap traps, and the next call starts afresh.
+		runtime = wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithMemoryLimitPages(memoryPages))
 		_, err := runtime.NewHostModuleBuilder("env").
 			NewFunctionBuilder().
 			WithFunc(func(_ context.Context, m api.Module, buf, n uint32) int32 {

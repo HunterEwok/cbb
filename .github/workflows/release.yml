@@ -70,18 +70,28 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # a release builds from scratch
+      - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
+        run: |
+          CBB_SOURCE="$GITHUB_SHA" sh lite/wasm/build.sh
+          sh lite/packaging/notices.sh wasm32-unknown-unknown clipboardbridge-wasm >"$RUNNER_TEMP/core-notices"
       - name: build
         run: |
           ldflags="-s -w -X github.com/HunterEwok/clipboardbridge/internal/version.Version=$GITHUB_REF_NAME"
+          # Every release build runs the Rust core under wazero, never Go's
+          # own rules, which only the tests use.
+          core="-overlay $GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json -tags cbbwasm"
           if [ "$GOOS" = windows ]; then
             # cbbw.exe is the same program without a console window, for the agent.
-            go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
-            go build -trimpath -ldflags "$ldflags -H=windowsgui" -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
+            go build $core -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
+            go build $core -trimpath -ldflags "$ldflags -H=windowsgui" -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
             # The tray app, a module of its own; on Windows it needs no cgo.
             (cd apps/desktop && go build -trimpath -ldflags "-s -w -H=windowsgui" -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           else
-            go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+            go build $core -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
+          for f in "$RUNNER_TEMP"/cbb "$RUNNER_TEMP"/cbb.exe "$RUNNER_TEMP"/cbbw.exe; do
+            [ ! -f "$f" ] || go version -m "$f" | grep -q -- '-tags=cbbwasm'
+          done
       - name: the tray app for Linux
         if: matrix.tray
         env:
@@ -123,7 +133,7 @@ jobs:
         run: |
           bin=$RUNNER_TEMP/cbb
           if [ "$GOOS" = windows ]; then bin=$bin.exe; fi
-          sh packaging/archive.sh "$bin" "$GOOS" "${{ matrix.name }}" "$RUNNER_TEMP/dist"
+          CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$bin" "$GOOS" "${{ matrix.name }}" "$RUNNER_TEMP/dist"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ARCHIVE }}

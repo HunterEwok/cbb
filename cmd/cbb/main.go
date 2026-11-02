@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/HunterEwok/clipboardbridge/internal/core"
 	"github.com/HunterEwok/clipboardbridge/internal/version"
 )
 
@@ -126,6 +127,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 		fmt.Fprintln(stdout, version.String())
+		// The group's rules: the Rust core in a release build.
+		fmt.Fprintln(stdout, "rules: "+core.Rules())
 		if w := noPasteboard(); w != "" {
 			fmt.Fprintln(stdout, w)
 		}

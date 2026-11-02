@@ -16,6 +16,9 @@
 # archive carries cbb-desktop the same way), and the archive is clipboardbridge-windows-<NAME>.zip, which
 # Windows opens without other tools. The release workflow and CI both use
 # it, so a wrong path fails on every pull request, not only at a release.
+# With CORE_NOTICES naming a file, the notices of the Rust core's crates
+# (lite/packaging/notices.sh wasm32-unknown-unknown clipboardbridge-wasm)
+# follow those of the Go modules, for a binary built with the core.
 set -eu
 
 if [ $# -ne 4 ]; then
@@ -63,6 +66,10 @@ notices() {
 		printf 'internal/third_party/%s (copied; see its README.md)\n' "$(basename "$copied")"
 		license_files "$copied"
 	done
+	if [ -n "${CORE_NOTICES:-}" ]; then
+		printf '\n================================================================\n'
+		cat "$CORE_NOTICES"
+	fi
 }
 
 license_files() {

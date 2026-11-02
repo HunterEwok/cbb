@@ -826,6 +826,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Changed
 
+- Every release build of `cbb`, and CI's builds of each platform, run the group's rules in
+  the Rust core (WebAssembly under wazero, on every system and architecture), as the phones
+  and the lite member do; until now they ran Go's own rules, which only the tests use now.
+  `cbb version` names the rules it runs, and the archives' notices list the core's crates.
 - Dependencies: der 0.8.3 for the lite member and the firmware, goldmark 1.8.6 (the website),
   coder/websocket 1.8.15 (the tray app), the Android Gradle plugin 9.5.0 and Robolectric 4.17.
   godbus stays at 5.1.0, as 5.2 panics on a message with an array of file descriptors, and
