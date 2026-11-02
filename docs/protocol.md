@@ -1890,6 +1890,15 @@ with the admin CA as its chain, waits the root's delay as any recovery claim; th
 fetching the records over the same kind of connection until the claim takes effect, is
 cancelled or becomes void.
 
+**On a hardware key.** A recovery key on a YubiKey, or another card with the PIV application
+(NIST SP 800-73-4), is a P-256 key the card made in a free retired key slot (82 to 95, the
+first with neither key nor certificate), which never leaves it; the card asks for its PIN, and
+for a touch where it can, before each signature. The slot's certificate object holds the key's
+admin CA, uncompressed, so that the card alone leads to the key: a computer or a new phone
+reads the retired slots' certificates and takes the one whose key hash the state names in
+`recovery`, then signs with that slot's key (GENERAL AUTHENTICATE over a SHA-256 digest).
+Nothing else on the card is changed, since it may be in use for other things.
+
 A newer `recovery` record replaces the older one: the key the older one named is no admin
 any more, and its claims do not count. A `revoke` of the key removes it (a root's own key, or
 an admin with `remove-admins`, as for any admin key). The state names the key in `recovery`

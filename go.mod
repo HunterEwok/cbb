@@ -15,6 +15,7 @@ tool (
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/amnezia-vpn/amneziawg-go v0.2.20-0.20260724121833-457d920a1a7d
+	github.com/gballet/go-libpcsclite v0.0.0-20250918194357-1ec6f2e601c6
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/google/go-tpm v0.9.8
 	github.com/jezek/xgb v1.3.1
@@ -25,6 +26,7 @@ require (
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.61.0
 	golang.org/x/sys v0.49.0
+	golang.org/x/term v0.47.0
 	google.golang.org/protobuf v1.36.12
 	gvisor.dev/gvisor v0.0.0-20260122175437-89a5d21be8f0
 	rsc.io/qr v0.2.0

@@ -22,6 +22,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   the root once the group's wait ends, unless the root phone cancels the claim. A computer now
   sends the group's first root in its hello to a device no record names (`group_ca`,
   docs/protocol.md, section 10), and both kits restore with `Restore`.
+- `cbb recovery -yubikey`: the recovery key on a YubiKey claims the group from a computer. The
+  YubiKey signs the claim after its PIN; the key stays on it, in a retired PIV slot whose
+  certificate is the key's admin CA (docs/protocol.md, section 10). PC/SC without cgo on
+  Linux and FreeBSD (`pcscd`), WinSCard on Windows, the PCSC framework on a Mac.
 - `cbb recovery`: when every phone with the group is lost, any computer of the group claims it
   with the recovery key typed from the sheet (or its QR code's text) and becomes the root after
   the group's wait, unless the root phone cancels the claim. `cbb handover NAME`, on the root,

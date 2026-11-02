@@ -7,12 +7,16 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/HunterEwok/clipboardbridge/internal/control"
 	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/clipboardbridge/internal/piv"
+	"github.com/HunterEwok/clipboardbridge/internal/piv/pivtest"
 )
 
 // addRecovery gives the group of the stopped root its recovery key, as a
@@ -160,5 +164,84 @@ func TestRecovery(t *testing.T) {
 	waitFor(t, "a is the root at once", func() bool {
 		id, err := group.Load(a.dir)
 		return err == nil && id.IsRoot() && len(id.Roots) == 2
+	})
+}
+
+// TestRecoveryWithCard checks cbb recovery -yubikey: the recovery key on a
+// YubiKey signs the claim, after its PIN, from the slot whose certificate
+// is the key's admin CA.
+func TestRecoveryWithCard(t *testing.T) {
+	var h hub
+	var plugged atomic.Pointer[pivtest.Card]
+	open := func(c *Config) {
+		c.openCard = func(match func(*x509.Certificate) bool) (*piv.Key, error) {
+			card := plugged.Load()
+			if card == nil {
+				return nil, piv.ErrNoCard
+			}
+			card.Connect()
+			for slot := byte(piv.FirstSlot); slot <= piv.LastSlot; slot++ {
+				if s, ok := card.Slot(slot); ok && s.Cert != nil && match(s.Cert) {
+					if err := piv.Select(card); err != nil {
+						return nil, err
+					}
+					return &piv.Key{Card: card, Slot: slot, Cert: s.Cert}, nil
+				}
+			}
+			return nil, piv.ErrNoKey
+		}
+	}
+	pi := startService(t, &h, "pi")
+	b := startWith(t, &h, "b", group.OSLinux, open)
+	pairWith(t, pi, b)
+	noClaimWait(t, pi, b)
+	recoveryCard := control.Header{Op: control.OpRecovery, Name: control.RecoveryCard, Kind: control.KindSecret}
+	if _, err := b.do(t, recoveryCard, "123456"); err == nil || !strings.Contains(err.Error(), "no recovery key") {
+		t.Errorf("recovery in a group without a recovery key: %v", err)
+	}
+	pi.stop()
+	sheet := addRecovery(t, pi)
+	pi = restartService(t, &h, pi)
+	waitFor(t, "b holds the recovery key's record", func() bool {
+		id, err := group.Load(b.dir)
+		if err != nil {
+			return false
+		}
+		recs, err := group.LoadRecords(b.dir, id.GroupCA.Cert)
+		return err == nil && recs.State().Recovery != nil
+	})
+	pi.stop()
+	if _, err := b.do(t, recoveryCard, "123456"); err == nil || !strings.Contains(err.Error(), "no YubiKey") {
+		t.Errorf("no card: %v", err)
+	}
+	cert, err := x509.ParseCertificate(sheet.Cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := pivtest.New(0x82, other, nil)
+	plugged.Store(card)
+	if _, err := b.do(t, recoveryCard, "123456"); err == nil || !strings.Contains(err.Error(), "no recovery key of the group") {
+		t.Errorf("a card without the key: %v", err)
+	}
+	card.SetSlot(0x83, pivtest.Slot{Key: sheet.Key, Cert: cert})
+	if _, err := b.do(t, recoveryCard, "000000"); err == nil || !strings.Contains(err.Error(), "wrong PIN") {
+		t.Errorf("a wrong PIN: %v", err)
+	}
+	if card.Signed() != 0 {
+		t.Error("the card signed without its PIN")
+	}
+	if _, err := b.do(t, recoveryCard, "123456"); err != nil {
+		t.Fatalf("recovery: %v", err)
+	}
+	if card.Signed() != 1 || !card.Closed() {
+		t.Errorf("the card signed %d times, closed %v", card.Signed(), card.Closed())
+	}
+	waitFor(t, "b is the root", func() bool {
+		id, err := group.Load(b.dir)
+		return err == nil && id.IsRoot() && len(id.Roots) == 1 && id.Claim == nil
 	})
 }
