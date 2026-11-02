@@ -327,7 +327,7 @@ struct DeviceDetailView: View {
 private struct PageTitle: ViewModifier {
     let title: String?
 
-    @ViewBuilder func body(content: Content) -> some View {
+    @ViewBuilder func body(content: Self.Content) -> some View {
         if let title {
             content.navigationTitle(Text(verbatim: title)).navigationBarTitleDisplayMode(.inline)
         } else {
