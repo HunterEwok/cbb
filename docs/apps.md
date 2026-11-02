@@ -820,6 +820,12 @@ the app on real devices.
   first (`PairingJoiner.join`) and checks the Welcome, whose admin CA the root issued for the
   admin key it offered. An admin computer that is not the root refuses a phone, and the app
   says to run `cbb pair` on the computer that created the group.
+- When the root hands the group to this phone (`cbb handover` on the root computer, a
+  `handover` record naming this phone's admin key, which `group_view` reports as `handed_to`),
+  Home shows "The group is yours to take". Its button makes a new root key (the Secure Enclave
+  or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
+  (`takeHandedOver`), which takes effect at once, and finishes the takeover as after a lost
+  root; the computer is not removed.
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

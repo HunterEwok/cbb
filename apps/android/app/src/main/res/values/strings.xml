@@ -72,6 +72,7 @@
     <string name="reason_make_admin">Make a computer an admin</string>
     <string name="reason_unfreeze">Unfreeze an admin computer</string>
     <string name="reason_take_over">Take the group over from the lost phone</string>
+    <string name="reason_take_handed">Take the group the computer handed to this phone</string>
     <string name="reason_renew">Renew this phone\'s certificate</string>
     <string name="error_not_confirmed">The computer joined but did not confirm it. Check cbb status on it.</string>
     <string name="error_no_network">Connect this phone to your home Wi-Fi, then try again.</string>
@@ -421,6 +422,10 @@
     <string name="alert_root_decides">The group\'s root decides.</string>
     <string name="void_both_histories">Void both histories</string>
     <string name="cancel_claim">Cancel the claim</string>
+    <string name="handed_title">The group is yours to take</string>
+    <string name="handed_body">The computer that held the group handed it to this phone. Take it to make this phone the group\'s root; the computer stays in the group.</string>
+    <string name="handed_take">Take the group</string>
+    <string name="handed_taken">This phone is the group\'s root now. The other devices hear of it as soon as they connect.</string>
     <string name="remove_device">Remove %1$s</string>
     <string name="reason_make_recovery">Make a recovery key</string>
     <string name="reason_remove_recovery">Remove the recovery key</string>

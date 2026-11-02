@@ -100,6 +100,10 @@ class AppModel(private val app: Context) {
     var isRoot by mutableStateOf(false)
         private set
 
+    /** Whether the group's root handed the group to this phone, which may take it now. */
+    var handedOver by mutableStateOf(false)
+        private set
+
     /** What the group's records stop and what ends it. */
     var alerts by mutableStateOf<List<GroupAlert>>(emptyList())
         private set
@@ -410,6 +414,7 @@ class AppModel(private val app: Context) {
         val (root, a) = withContext(Dispatchers.IO) { group.isRoot to group.alerts }
         isRoot = root
         alerts = a
+        handedOver = withContext(Dispatchers.IO) { group.handedOver }
         recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
         notifier.observe(d)
         away = group.awayFromHome?.let { a ->
@@ -702,6 +707,19 @@ class AppModel(private val app: Context) {
                 GroupAlert.Kind.CLAIMS, GroupAlert.Kind.CLAIM_PENDING, GroupAlert.Kind.CLAIM_STOPPED -> Note(R.string.claim_cancelled)
                 else -> Note(R.string.histories_voided)
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
+    /** Takes the group the root handed to this phone (cbb handover), after the fingerprint or the screen lock. */
+    suspend fun takeHandedGroup() {
+        message = try {
+            group.takeHandedGroup()
+            Note(R.string.handed_taken)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

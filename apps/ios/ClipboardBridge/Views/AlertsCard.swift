@@ -12,6 +12,9 @@ struct AlertsCard: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        if model.handedOver {
+            HandedCard()
+        }
         if !model.alerts.isEmpty {
             VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
                 ForEach(model.alerts) { alert in
@@ -98,5 +101,36 @@ struct AlertsCard: View {
         case .newer:
             return String(localized: "The group holds \(alert.count) records of a later version: update the app to read them.", bundle: .app)
         }
+    }
+}
+
+/// The root handed the group to this phone (cbb handover): the button that
+/// takes it, after Face ID.
+struct HandedCard: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
+            Text("The group is yours to take")
+                .font(.headline)
+                .foregroundStyle(palette.text)
+            Text("The computer that held the group handed it to this phone. Take it to make this phone the group's root; the computer stays in the group.")
+                .font(.subheadline)
+                .foregroundStyle(palette.textDim)
+            Button("Take the group") {
+                busy = true
+                Task {
+                    await model.takeHandedGroup()
+                    busy = false
+                }
+            }
+            .buttonStyle(AccentButtonStyle())
+            .disabled(busy)
+        }
+        .padding(Tokens.spacingMedium)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
     }
 }

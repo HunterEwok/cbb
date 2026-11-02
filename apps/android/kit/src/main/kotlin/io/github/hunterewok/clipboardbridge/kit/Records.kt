@@ -387,6 +387,8 @@ class RecordSet {
         val path: List<ByteArray> = emptyList(),
         val rootMember: Pair<String, ByteArray>? = null,
         val hubOrder: List<String> = emptyList(),
+        /** The admin key hash the current root handed the group to (docs/protocol.md, section 10, "Handing the group over"). */
+        val handedTo: ByteArray? = null,
         val digest: String? = null,
         val claimTimes: List<ClaimTime> = emptyList(),
         val known: List<String> = emptyList(),
@@ -402,6 +404,7 @@ class RecordSet {
                     d to k
                 },
                 hubOrder = o.strings("hub_order"),
+                handedTo = o.optBytes("handed_to"),
                 digest = o.optString("digest"),
                 claimTimes = ClaimTime.list(o.optArray("claim_times")),
                 known = o.strings("known"),
@@ -488,6 +491,9 @@ class RecordSet {
 
     /** The devices that may be hubs, in the order members try them. */
     val hubOrder: List<String> get() = view.hubOrder
+
+    /** The admin key hash the current root handed the group to, whose claim takes effect at once; null without a handover. */
+    val handedTo: ByteArray? get() = view.handedTo
 
     /** Whether the records let the device be the group's hub. */
     fun mayHost(device: String): Boolean = device in view.hubOrder

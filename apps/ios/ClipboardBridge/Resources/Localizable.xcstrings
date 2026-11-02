@@ -1,6 +1,56 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Take the group the computer handed to this phone": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Взять группу, которую компьютер передал этому телефону"
+          }
+        }
+      }
+    },
+    "The group is yours to take": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группу можно забрать"
+          }
+        }
+      }
+    },
+    "The computer that held the group handed it to this phone. Take it to make this phone the group's root; the computer stays in the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютер, который держал группу, передал её этому телефону. Возьмите её, чтобы этот телефон стал корнем группы; компьютер останется в группе."
+          }
+        }
+      }
+    },
+    "Take the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Взять группу"
+          }
+        }
+      }
+    },
+    "This phone is the group's root now. The other devices hear of it as soon as they connect.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Теперь этот телефон — корень группы. Остальные устройства узнают об этом, как только подключатся."
+          }
+        }
+      }
+    },
     "My group was made on a computer": {
       "localizations": {
         "ru": {

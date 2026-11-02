@@ -12,6 +12,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both
   phones' kits dial that window and check the root's Welcome (`PairingJoiner.join`), and both
   apps' Start screen has "My group was made on a computer", where the user types that code.
+- When the group's root hands the group to a phone (`cbb handover`), the phone's Home shows "The
+  group is yours to take": one tap and Face ID or the screen lock make it the root at once, and
+  the computer stays in the group. The core's `group_view` names that admin key
+  (`handed_to`, docs/core-api.md).
 - `cbb recovery`: when every phone with the group is lost, any computer of the group claims it
   with the recovery key typed from the sheet (or its QR code's text) and becomes the root after
   the group's wait, unless the root phone cancels the claim. `cbb handover NAME`, on the root,

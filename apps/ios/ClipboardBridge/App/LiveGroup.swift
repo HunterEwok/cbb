@@ -193,6 +193,7 @@ final class LiveGroup: GroupController {
     /// one when it adds a computer.
     var isAdmin: Bool { state?.isAdmin ?? true }
     var isRoot: Bool { state?.isRoot ?? false }
+    var handedOver: Bool { state?.handedToMe ?? false }
     var alerts: [GroupAlert] { state?.records.alerts ?? [] }
 
     /// When the counting recovery record was signed, from its body; kept
@@ -863,6 +864,28 @@ final class LiveGroup: GroupController {
         state = g
         groupChanged()
         await node?.sendRecords([r])
+    }
+
+    /// Takes the group the root handed to this phone (`cbb handover`,
+    /// docs/protocol.md, section 10, "Handing the group over"): makes a new
+    /// root key and claims the group with this phone's admin key; the claim
+    /// takes effect at once, so this phone becomes the root right after.
+    /// The computer that was the root stays in the group.
+    func takeHandedGroup() async throws {
+        let reason = String(localized: "Take the group the computer handed to this phone", bundle: .app)
+        let admin = try await signer(label: Self.adminLabel, reason: reason)
+        KeychainIdentity.removeKey(label: Self.caLabel)
+        let se = Self.secureEnclave
+        _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
+        let root = try await signer(label: Self.caLabel, reason: reason)
+        guard var g = state else { return }
+        let newRoot = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
+        let r = try g.takeHandedOver(adminSigner: admin, newRoot: newRoot, now: Date())
+        try g.save(to: file)
+        state = g
+        groupChanged()
+        await node?.sendRecords([r])
+        await finishTakeOverIfDue()
     }
 
     /// Makes this phone the group's root once its claim took effect: it

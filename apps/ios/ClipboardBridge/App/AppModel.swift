@@ -45,6 +45,11 @@ protocol GroupController: AnyObject {
     /// Voids the records ids as the group's root, after Face ID: ends a
     /// conflict or cancels a claim.
     func resolve(_ ids: [Data]) async throws
+    /// Whether the group's root handed the group to this phone (cbb
+    /// handover), which has not taken it yet.
+    var handedOver: Bool { get }
+    /// Takes the group the root handed to this phone.
+    func takeHandedGroup() async throws
     /// Makes the key the paired watch made an admin key with the role
     /// watch; only the root phone does. Returns what the watch keeps.
     func addWatch(_ request: WatchState.KeyRequest) async throws -> WatchState.Admission
@@ -113,6 +118,8 @@ extension GroupController {
     func makeRecovery() async throws -> Core.RecoverySheet { throw PhoneGroup.Failure.notRoot }
     func removeRecovery() async throws { throw PhoneGroup.Failure.notRoot }
     func resolve(_ ids: [Data]) async throws {}
+    var handedOver: Bool { false }
+    func takeHandedGroup() async throws {}
     func addWatch(_ request: WatchState.KeyRequest) async throws -> WatchState.Admission { throw PhoneGroup.Failure.notRoot }
     func watchActions(for id: String) -> [String] { [] }
     func watchBody(_ ask: WatchState.Ask) throws -> Data { throw PhoneGroup.Failure.notAWatch }
@@ -219,6 +226,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var recoveryMade: Date?
     /// What the group's records stop and what ends it.
     @Published private(set) var alerts: [GroupAlert] = []
+    /// Whether the group's root handed the group to this phone, which may
+    /// take it now.
+    @Published private(set) var handedOver = false
     /// The one-time note on the Start screen that this phone is ready.
     @Published private(set) var welcome = false
 
@@ -541,6 +551,7 @@ final class AppModel: ObservableObject {
         devices = group.devices
         isRoot = group.isRoot
         alerts = group.alerts
+        handedOver = group.handedOver
         recoveryMade = group.recoveryMade
         await refreshAway()
         await refreshHub()
@@ -784,6 +795,18 @@ final class AppModel: ObservableObject {
         }
         devices = group.devices
         alerts = group.alerts
+    }
+
+    /// Takes the group the root handed to this phone (cbb handover), after
+    /// Face ID.
+    func takeHandedGroup() async {
+        do {
+            try await group.takeHandedGroup()
+            message = String(localized: "This phone is the group's root now. The other devices hear of it as soon as they connect.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        await refresh()
     }
 
     /// Unfreezes an admin computer that another admin froze.

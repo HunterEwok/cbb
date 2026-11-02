@@ -212,6 +212,35 @@ class PhoneGroup internal constructor(
     fun takeOver(lost: String, adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
         if (adminCA == null || isRoot) throw Failure("this phone is no admin")
         if (lost != records.rootDevice || lost == device) throw Failure("that phone does not hold the root")
+        return makeClaim(lost, adminSigner, newRoot, now)
+    }
+
+    /**
+     * Whether the group's root handed the group to this phone's admin key
+     * (`cbb handover`, docs/protocol.md, section 10, "Handing the group
+     * over"), and this phone has not claimed it yet.
+     */
+    val handedToMe: Boolean
+        get() {
+            val ca = adminCA ?: return false
+            if (isRoot || claim != null) return false
+            val to = records.handedTo ?: return false
+            return runCatching { Records.keyHashOfCert(ca) }.getOrNull()?.contentEquals(to) == true
+        }
+
+    /**
+     * Takes the group the root handed to this phone: a claim, as in
+     * [takeOver], that takes effect at once because the root signed a
+     * handover for this phone's admin key; [finishTakeOver] then makes this
+     * phone the root. The old root's device stays in the group. It returns
+     * the record to send.
+     */
+    fun takeHandedOver(adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
+        if (!handedToMe) throw Failure("the group was not handed to this phone")
+        return makeClaim(null, adminSigner, newRoot, now)
+    }
+
+    private fun makeClaim(lost: String?, adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
         if (claim != null) throw Failure(CLAIM_WAITING)
         val me = devices.firstOrNull { it.id == device }
         if (me == null || !me.may("takeover")) throw Failure(NO_TAKEOVER)

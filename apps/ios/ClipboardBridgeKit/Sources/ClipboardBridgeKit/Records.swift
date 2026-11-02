@@ -306,6 +306,9 @@ public struct RecordSet: Codable, Equatable, Sendable {
         public struct RootMember: Decodable, Equatable, Sendable { public var device: String, key: Data }
         public var root_member: RootMember?
         public var hub_order: [String] = []
+        /// The admin key hash the current root handed the group to
+        /// (docs/protocol.md, section 10, "Handing the group over").
+        public var handed_to: Data?
         public var digest: String?
         public var claim_times: [ClaimTime]?
         public var known: [String] = []
@@ -407,6 +410,9 @@ public struct RecordSet: Codable, Equatable, Sendable {
     func rootMember() -> (device: String, key: Data)? { view.root_member.map { ($0.device, $0.key) } }
     /// The devices that may be hubs, in the order members try them.
     public var hubOrder: [String] { view.hub_order }
+    /// The admin key hash the current root handed the group to, whose
+    /// claim takes effect at once; nil without a handover.
+    public var handedTo: Data? { view.handed_to }
     /// Whether the records let the device be the group's hub.
     public func mayHost(_ device: String) -> Bool { view.hub_order.contains(device) }
     /// The digest a hello carries; nil for an empty set.

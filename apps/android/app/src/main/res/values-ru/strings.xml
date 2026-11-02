@@ -70,6 +70,7 @@
     <string name="reason_make_admin">Сделать компьютер админом</string>
     <string name="reason_unfreeze">Разморозить компьютер-админа</string>
     <string name="reason_take_over">Забрать группу у потерянного телефона</string>
+    <string name="reason_take_handed">Взять группу, которую компьютер передал этому телефону</string>
     <string name="reason_renew">Продлить сертификат этого телефона</string>
     <string name="error_not_confirmed">Компьютер присоединился, но не подтвердил это. Проверьте cbb status на нём.</string>
     <string name="error_no_network">Подключите телефон к домашнему Wi-Fi и попробуйте снова.</string>
@@ -418,6 +419,10 @@
     <string name="alert_root_decides">Решает корень группы.</string>
     <string name="void_both_histories">Отменить обе истории</string>
     <string name="cancel_claim">Отменить заявку</string>
+    <string name="handed_title">Группу можно забрать</string>
+    <string name="handed_body">Компьютер, который держал группу, передал её этому телефону. Возьмите её, чтобы этот телефон стал корнем группы; компьютер останется в группе.</string>
+    <string name="handed_take">Взять группу</string>
+    <string name="handed_taken">Теперь этот телефон — корень группы. Остальные устройства узнают об этом, как только подключатся.</string>
     <string name="remove_device">Удалить %1$s</string>
     <string name="reason_make_recovery">Сделать ключ восстановления</string>
     <string name="reason_remove_recovery">Удалить ключ восстановления</string>

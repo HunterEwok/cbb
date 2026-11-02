@@ -232,6 +232,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Whether this phone holds the group's root, which ends conflicts. */
     val isRoot: Boolean get() = synchronized(lock) { state?.isRoot ?: false }
 
+    /** Whether the group's root handed the group to this phone (cbb handover), which has not taken it yet. */
+    val handedOver: Boolean get() = synchronized(lock) { state?.handedToMe == true }
+
     /** What the group's records stop and what ends it (GroupAlert). */
     val alerts: List<GroupAlert> get() = synchronized(lock) { state?.records?.alerts.orEmpty() }
 
@@ -1314,6 +1317,27 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             r
         } ?: return
         published(listOf(r))
+    }
+
+    /**
+     * Takes the group the root handed to this phone (`cbb handover`,
+     * docs/protocol.md, section 10, "Handing the group over"): makes a new
+     * root key and claims the group with this phone's admin key; the claim
+     * takes effect at once, so this phone becomes the root right after. The
+     * computer that was the root stays in the group.
+     */
+    suspend fun takeHandedGroup() {
+        val admin = signer(Keys.ADMIN, R.string.reason_take_handed)
+        val r = withContext(Dispatchers.IO) {
+            val g = copyOfState() ?: return@withContext null
+            val root = Keys.create(context, Keys.ROOT, g.tag)
+            val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
+            val r = g.takeHandedOver(admin, newRoot, Instant.now())
+            adopt(g)
+            r
+        } ?: return
+        published(listOf(r))
+        finishTakeOverIfDue()
     }
 
     /**

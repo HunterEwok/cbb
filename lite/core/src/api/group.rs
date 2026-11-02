@@ -203,8 +203,9 @@ fn add(a: AddArgs) -> Result<Vec<u8>, Refusal> {
 
 /// `group_view`: what the set says, for the apps' lists and the member's
 /// decisions: the state, the devices list, the roots on the path, the
-/// device that holds the root, the hubs in their order, the digest a
-/// hello carries and when the set first held each claim.
+/// device that holds the root, the hubs in their order, the admin key the
+/// root handed the group to, the digest a hello carries and when the set
+/// first held each claim.
 fn view(a: &SetArgs) -> Result<Vec<u8>, Refusal> {
     let s = a.open()?;
     let st = s.state();
@@ -223,6 +224,9 @@ fn view(a: &SetArgs) -> Result<Vec<u8>, Refusal> {
         m.insert("root_member".into(), Value::Object(r));
     }
     m.insert("hub_order".into(), Value::from(s.hub_order()));
+    if let Some(k) = s.handed_to() {
+        m.insert("handed_to".into(), b64_value(&k));
+    }
     let digest = s.digest();
     if !digest.is_empty() {
         m.insert("digest".into(), Value::from(digest));

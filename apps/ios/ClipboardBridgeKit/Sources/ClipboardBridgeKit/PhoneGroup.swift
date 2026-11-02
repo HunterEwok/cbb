@@ -165,6 +165,8 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         case noTakeover
         /// This admin's claim to take the group over waits already.
         case claimWaiting
+        /// The root did not hand the group to this phone.
+        case notHandedOver
         /// The delay before a claim takes effect is outside 0 to 7 days.
         case invalidDelay
         /// A watch's request names a device ID or system that is not a new watch's,
@@ -243,6 +245,28 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     public mutating func takeOver(from lost: String, adminSigner: CertificateSigner, newRoot: Data, now: Date) throws -> Member.Record {
         guard adminCA != nil, !isRoot else { throw Failure.notAdmin }
         guard lost == records.rootDevice, lost != device else { throw Failure.notRoot }
+        return try makeClaim(lost: lost, adminSigner: adminSigner, newRoot: newRoot, now: now)
+    }
+
+    /// Whether the group's root handed the group to this phone's admin key
+    /// (`cbb handover`, docs/protocol.md, section 10, "Handing the group
+    /// over"), and this phone has not claimed it yet.
+    public var handedToMe: Bool {
+        guard let adminCA, !isRoot, claim == nil, let to = records.handedTo else { return false }
+        return (try? Records.keyHash(cert: adminCA)) == to
+    }
+
+    /// Takes the group the root handed to this phone: a claim, as in
+    /// takeOver, that takes effect at once because the root signed a
+    /// handover for this phone's admin key; finishTakeOver then makes this
+    /// phone the root. The old root's device stays in the group. It returns
+    /// the record to send.
+    public mutating func takeHandedOver(adminSigner: CertificateSigner, newRoot: Data, now: Date) throws -> Member.Record {
+        guard handedToMe else { throw Failure.notHandedOver }
+        return try makeClaim(lost: nil, adminSigner: adminSigner, newRoot: newRoot, now: now)
+    }
+
+    private mutating func makeClaim(lost: String?, adminSigner: CertificateSigner, newRoot: Data, now: Date) throws -> Member.Record {
         guard claim == nil else { throw Failure.claimWaiting }
         guard let me = devices.first(where: { $0.id == device }), me.may("takeover") else { throw Failure.noTakeover }
         var b = Records.Body(type: "claim", signer: Self.signer(adminSigner), timeMS: Records.ms(now))

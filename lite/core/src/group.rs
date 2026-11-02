@@ -366,6 +366,24 @@ impl Records {
         self.path().split_off(1)
     }
 
+    /// The admin key the current root handed the group to
+    /// (docs/protocol.md, section 10, "Handing the group over"): the admin
+    /// of the current root's newest `handover` record that the state does
+    /// not ignore, while that key is neither revoked nor frozen. The device
+    /// with that admin key may claim the group at once.
+    pub fn handed_to(&self) -> Option<KeyHash> {
+        let st = self.state();
+        let cur = *st.roots.last()?;
+        let (_, b) = self
+            .bodies()
+            .filter(|(id, b)| {
+                b.kind == authority::TYPE_HANDOVER && b.signer == cur && !st.ignored.iter().any(|i| i.record == *id)
+            })
+            .max_by_key(|(_, b)| b.seq)?;
+        let a = b.admin?.0;
+        (!self.revoked(&a) && !self.frozen(&a)).then_some(a)
+    }
+
     /// Whether a revocation that counts names the key k.
     pub fn revoked(&self, k: &KeyHash) -> bool {
         self.state().revoked.contains(&Hash(*k))
@@ -987,6 +1005,43 @@ mod tests {
         }
         s.add_all(records);
         s
+    }
+
+    /// The vectors' handovers name the admin key the root handed the group
+    /// to while it waits for its claim; once that claim took effect the
+    /// new root has handed nothing, and a set without a handover names none.
+    #[test]
+    fn handed_to() {
+        let mut named = 0;
+        for c in cases() {
+            let name = c["name"].as_str().unwrap();
+            let rs: Vec<Record> = serde_json::from_value(c["records"].clone()).unwrap();
+            let s = set_of(&c, &rs);
+            let handovers: Vec<Body> = rs
+                .iter()
+                .filter_map(|r| Body::parse(&r.body).ok())
+                .filter(|b| b.kind == authority::TYPE_HANDOVER)
+                .collect();
+            let got = s.handed_to();
+            if handovers.is_empty() {
+                assert_eq!(got, None, "{name}");
+                continue;
+            }
+            let st = s.state();
+            if let Some(k) = got {
+                // Only the current root's handover names a key, and only one of them.
+                let cur = *st.roots.last().unwrap();
+                assert!(handovers.iter().any(|b| b.signer == cur && b.admin == Some(Hash(k))), "{name}");
+                named += 1;
+            }
+            if st.claims.iter().any(|c| c.state == "effective") && st.roots.len() > 1 {
+                let cur = *st.roots.last().unwrap();
+                if handovers.iter().all(|b| b.signer != cur) {
+                    assert_eq!(got, None, "{name}: the new root handed nothing");
+                }
+            }
+        }
+        assert!(named >= 1, "no vector names the admin a handover names");
     }
 
     /// The set says what the evaluation says of the vectors' records it
