@@ -258,7 +258,36 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       app that is not an accessibility tool only with a declaration in the console, a video
       and a prominent disclosure in the app before the user turns the service on; the Data
       safety form; the reason for the `connectedDevice` foreground service; the current
-      target API level. The GitHub and F-Droid builds are not affected.
+      target API level. The GitHub and F-Droid builds are not affected. Found in the
+      study of Play's rules (2026-11-02):
+        - The disclosure is its own screen, reached from Home (a card "Send my copies by
+          themselves, optional") and not only from Settings; it says what the service reads
+          and what it does not, with "Agree" and "Not now" (Back counts as "Not now"); only
+          "Agree" opens Android's accessibility settings, and the switch in Settings shows
+          the service's real state. Play turned down another app in 2026 for a disclosure
+          reached only through Settings.
+        - Remote paste through the same service is its own point in the disclosure, the
+          listing, the declaration and the video; a change in what the service does needs
+          a new declaration.
+        - The service asks for no more than it uses: whether `canRetrieveWindowContent` and
+          events from every app are needed for noticing a copy, or only for remote paste's
+          focused field (to be tried on a real phone).
+        - Android 17's Advanced Protection takes the accessibility service away from every
+          app that is not an accessibility tool: the app notices it (and an OEM that turned
+          the service off after a reboot), switches to sending with one tap and says why.
+        - The listing names the tunnel for sync away from home (Android's VpnService) and
+          the accessibility service; targeting API 37 adds a declaration for
+          `ACCESS_LOCAL_NETWORK`.
+        - IzzyOnDroid reviews an accessibility service by hand and has a policy on code
+          written with AI: a short paragraph that explains both is ready before applying.
+    - App Store, from the study of Apple's rules (2026-11-02): the review notes say how the
+      reviewer sees sync work (a video and a group with its QR code) and that the tunnel
+      for sync away from home runs inside the app, not as a VPN (rule 5.4 is for VPN
+      services); a privacy policy linked in the metadata and in the app; the store text
+      promises no automatic sending on the iPhone (iOS allows no background reading of the
+      clipboard: Share, the Action button, Back Tap, a widget, Control Center); an external
+      TestFlight group needs a beta description, a feedback address and the first build's
+      beta review.
 - **44.** More tools that check the code (all free and run only in CI, none ships in the
     product). Mutation testing of the records' code is done in 0.6 with the rules core
     (item 42); the rest is planned for 0.7, after the core settles:
@@ -296,14 +325,27 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     asks to add it; a card then gives the steps to Settings, Accessibility, Touch, Back Tap,
     Double Tap. The file names the release bundle identifier, so it waits for TestFlight; a
     copy for a Personal Team build tests it before.
-- **48.** **Planned for 0.7.** The full name wherever a user reads it without typing it:
-    the apps on the phones, the watches and the computers say "Clipboard Bridge" in their
-    names, titles, menus, notifications, Shortcuts and Siri actions and the Mac's
-    application bundle (today the iPhone's home screen, its Shortcuts actions and Siri
-    phrases and `/Applications/CBB.app` say "CBB"). What a user types stays short: the
-    command `cbb`, its subcommands and the paths. Icon labels show the full name too, even where the
-    system shortens it: the iPhone's home screen, Android's launcher, the Windows Start menu
-    and taskbar, the Linux desktop's menus and tray.
+- **48.** **Planned for 0.6, before the launch.** A new name: **Copy Beyond Borders**,
+    short **CBB**. At least four other projects are called "Clipboard Bridge", two of them
+    older than this one and one in Google Play, so the old name cannot be found or told
+    apart. "Copy Beyond Borders" has no trademark or project of that name (searched
+    2026-11-02); the borders are the ones between a user's devices, never a way around a
+    network's blocks, and every text that explains the name says so. Where it goes:
+    - "CBB" under the icons (the iPhone's home screen, Android's launcher, the Windows Start
+      menu and taskbar, the Linux desktop's menus and tray, the Mac's `CBB.app`), in short
+      titles, Shortcuts and Siri; "Copy Beyond Borders" in full in the apps' About and first
+      screens, the website, the README, the docs and the release notes.
+    - The app stores: "Copy Beyond Borders" with a subtitle that says what it does
+      ("Clipboard sync between devices"). Not "CBB" alone: the App Store has an app called
+      "CBB", and the EU has a registered word mark "CBB" for software (class 9), so the full
+      name leads in every store; the App Store's review notes explain that CBB is the
+      short form of the project's own name.
+    - What stays: the command `cbb`, its subcommands, the paths, the service and package
+      names, the bundle and application identifiers and the repository's address (so
+      installs, updates and links keep working), and the site `cbb.tools`.
+    - The README and the site say once "formerly Clipboard Bridge", and BRAND.md takes the
+      new name with the same rules (no exclusive claim to "CBB", which others use).
+    - The translations of the apps and the site in the project's languages (item 49).
 - **49.** **Planned for 0.7.** One set of languages across the project: every app (the
     phones, the watches, the Mac app, the tray app) speaks the languages of the website
     (Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and offers a choice
@@ -336,6 +378,75 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     WiFi's through Arduino's own tool, NINA through the SerialNINAPassthrough sketch), and
     whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `lite/core` with TLS 1.3, which
     builds today for the C6 and the S3 only. The Uno R4 WiFi first.
+- **52.** **Planned for 0.7.** A clipboard history in the phone apps, where the system keeps
+    none (the iPhone has none, even in iOS 27; Android only on some phones). The computers
+    keep using the system's history (Klipper, Win+V, Spotlight), where received copies
+    already land. The history:
+    - stays on the device; it is never synced between the group's devices;
+    - is off by default, one switch turns it on;
+    - keeps entries for a time the user picks (1 hour, 1 day, 7 days), with a "Clear" button;
+    - is encrypted with the device's key (Secure Enclave, Android Keystore);
+    - never holds copies marked as secret (password managers' marks);
+    - can be searched, and an entry is sent again with one tap.
+    docs/apps.md's principle "no history" changes to say this. Why: users of the other
+    clipboard tools ask for a history more than for almost anything else, and phones lack
+    one.
+- **53.** **Planned for 0.6, before the launch.** What a sceptical reader checks first,
+    found by reading the project as one would (2026-11-02):
+    - Android's automatic sending skips a copy that carries
+      `android.content.extra.IS_SENSITIVE`, as the computers skip the password managers'
+      marks; today only received secrets get the flag. Until then the README's "Items that
+      password managers mark as secret are not synced automatically" holds on computers
+      only.
+    - No "end to end" for the clipboard: every device of the group, the hub included,
+      reads what is copied and passes it on, over mutual TLS 1.3; no server can read it.
+      The guides (privacy, how it works) and the README say exactly that; only sealed
+      commands (item 41) are encrypted to their receiver.
+    - The site's privacy page: the forwarder sees the addresses, the timing and the sizes
+      of encrypted packets, not "no". The guide's "not which group or device" holds from
+      0.6, with the short server credentials (item 32).
+    - The guides that describe what is built but not yet run on real devices (device keys,
+      sync away from home) link the README's status table; "each use asks for your face"
+      is said of the root's and the admins' keys only; the guide without the app says that
+      the shortcut keeps its token in iCloud Drive; "All traffic uses TLS" links the list of
+      what is not encrypted (mDNS, the profile page, Roku); winget is named once the package
+      is in winget's repository; docs/security-audit.md says it is a plan.
+    - One screen of the trust model in the README: who holds which key, who can read the
+      copies, who can admit a device, what the hub and the forwarder see, and a picture of
+      the keys. The pairing code is the only secret: show it only to people who may join.
+    - The README for a newcomer: the step `sudo cbb mode shared` (computers sync both ways
+      only in shared mode), one line on what is tested today, a short security section with
+      links, how it differs from the closest tools (facts with sources, weak points too),
+      screenshots, an install that checks SHA256SUMS before running, a glossary (group,
+      root, admin, hub, lite member, relay), ports, Docker and uninstalling, the other
+      projects of the old name, and how the project is built: with heavy use of AI coding
+      tools (Claude Code), the author directing the work, deciding, running the security
+      audits and testing on real devices.
+    - The repository's description and topics on GitHub, so that a search for "clipboard
+      sync" finds it.
+    - The website, from a read of its sources and translations (2026-11-02): the first
+      screen says what it does with a verb ("Copy on one device, paste on another", the
+      text the social image already uses) and shows why to trust it (open source, no
+      account, no telemetry) above the fold, and the iPhone in the list of platforms says
+      the app waits for TestFlight; no "trademarks" (the names belong to their owners), no
+      "the one that does all of it", no "simpler" for the recommended computer, no "any
+      desktop" while GNOME on Wayland is untested, no "runs on a Raspberry Pi Zero" before
+      it is run on one, the privacy page's keys on Linux with a TPM; the translations'
+      errors the read found (Chinese "全程" reads as end to end; Swahili "haimripoti" says
+      the opposite, and "huru"/"huria" are swapped; Hebrew's gender and prepositions before
+      links; Hindi's "जोड़ी" for pairing and mixed terms), links placed so that no
+      sentence wraps a whole page title, `dir="ltr"` on code, no letter spacing on Arabic
+      and Hebrew headings, and a native speaker's read of each language before the launch.
+- **54.** **Planned for 0.6, before the launch.** Support for the project: a
+    `.github/FUNDING.yml` and a `funding.json` (the format FLOSS/fund reads), once the
+    author's GitHub Sponsors and Liberapay accounts exist, and a short "Support" section in
+    the README: what the money pays for (the Apple developer account, the forwarder,
+    devices to test on), that a donation buys no priority, and the commercial license for
+    companies. No paid features, no "license key" in the apps and no paid tier on the
+    forwarder: the app store builds may later be the same free code at a small price. Grants
+    after the launch: the GitHub Secure Open Source Fund, then FLOSS/fund once the project
+    has users; NLnet's calls since 20 October 2026 do not fund code written with generative
+    AI.
 
 ## Devices that are hard to type into
 
@@ -731,7 +842,7 @@ Pi's side uses GPIO 16 and 17 (the ESP honours it only on an issue 4 board). Nex
   ROM's keyboard routine does: 50 characters a second, so a text of 1 KB types in 20
   seconds. Programs that read the keyboard through the system take it: NextBASIC, the
   editors, most applications; games that read the ports themselves do not.
-- *The lite member on the Pi* runs `cbb run` as a service from the user partition
+- *The lite member on the Pi* runs `cbb service` as a service from the user partition
   (`/NextPi`) and drives the ESP through the pipe: AT commands, then passthrough to one
   member or the hub, the member protocol with TLS 1.3 on the Pi, so the ESP sees only
   ciphertext. The stock firmware (AT 1.2) holds one passthrough connection, which is enough

@@ -827,6 +827,16 @@ All notable changes to clipboardbridge are documented in this file. The format f
   `clipboardbridge.sh`.
 
 ### Changed
+- The lite member joins a group with `cbb pair`, as a full member in no group does, instead of
+  `cbb join` (`cbb pair -code` for the code of a full member, `cbb next pair` for the ZX
+  Spectrum Next); `cbb join` is gone. The Next's dot command is `.cbb pair` (0.4.0) and the
+  ESP32 board's console command `pair`, so joining is `pair` everywhere.
+- One name for each command on every member, with no old names kept: the lite member runs
+  its service with `cbb service`, as a full member does (its systemd unit and the OpenWrt
+  init script too; `cbb run` is gone); `cbb remove NAME` removes a device, the word the
+  apps use (`cbb revoke` is gone; the tray app and the Mac app call it); the group's main
+  hubs are set with `cbb global hubs`, next to `cbb global hub` (`cbb hubs` is gone); and
+  a takeover's wait with `cbb takeover -delay DURATION` (`cbb takeover-delay` is gone).
 
 - Every release build of `cbb`, and CI's builds of each platform, run the group's rules in
   the Rust core (WebAssembly under wazero, on every system and architecture), as the phones

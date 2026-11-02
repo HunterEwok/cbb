@@ -20,7 +20,7 @@ Clipboard Bridge 有适用于手机、手表和桌面的应用。手机应用保
 
 1. 在电脑上[安装](install.md) Clipboard Bridge，并在那里运行 `sudo cbb pair`。它会显示一个二维码。
 2. 打开应用，点按 **Connect a new device**，然后扫描该二维码。应用会在手机的安全芯片中（iPhone 上是 Secure Enclave，Android 上是 Keystore）生成群组的密钥，添加这台电脑，并打开主页。
-3. 之后每添加一台电脑，都在主页点 **+**。轻量成员的加入方式相同（在它上面运行 `sudo -u clipboardbridge cbb join` 会显示它的二维码）。
+3. 之后每添加一台电脑，都在主页点 **+**。轻量成员的加入方式相同（在它上面运行 `sudo -u clipboardbridge cbb pair` 会显示它的二维码）。
 
 摄像头无法使用时：在 iPhone 上，输入电脑显示的六位数字；在 Android 上，粘贴二维码的文本，`cbb pair` 也会打印这段文本。
 
@@ -36,7 +36,7 @@ Clipboard Bridge 有适用于手机、手表和桌面的应用。手机应用保
 点按一台设备可以查看它的类型、系统、版本和角色。在管理员手机上，你还可以：
 
 - **重命名**或**移除**它；移除时会先确认一次，然后要求验证你的面容、指纹或密码。
-- 对电脑执行 **Make it an admin**：之后它可以用 `sudo cbb pair` 和 `sudo cbb revoke` 添加和移除设备。它的密钥是电脑上的一个文件（带 TPM 的 Linux 电脑除外），应用会先就此提醒你；所以请选择你信任的电脑，最好是始终开机、同时也是[中枢](away-from-home.md)的那台。
+- 对电脑执行 **Make it an admin**：之后它可以用 `sudo cbb pair` 和 `sudo cbb remove` 添加和移除设备。它的密钥是电脑上的一个文件（带 TPM 的 Linux 电脑除外），应用会先就此提醒你；所以请选择你信任的电脑，最好是始终开机、同时也是[中枢](away-from-home.md)的那台。
 
 ### 第二部手机，以及丢失的手机
 

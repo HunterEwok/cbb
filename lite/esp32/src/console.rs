@@ -172,7 +172,7 @@ impl Console {
                 println!("  status        what the board knows and how its network is doing");
                 println!("  wifi          set the Wi-Fi network to join (asks for its name and password)");
                 println!("  wifi forget   leave the Wi-Fi network and forget it");
-                println!("  join [NAME]   join a group: shows a code to scan with the phone (name: Nano ESP32)");
+                println!("  pair [NAME]   join a group: shows a code to scan with the phone (name: Nano ESP32)");
                 println!("  leave         forget the group (remove the board in the app too)");
                 println!("  debug on|off  show the details of errors, or not (debug build: on by default)");
                 println!("  selftest      run the TLS 1.3 self-test");
@@ -207,7 +207,7 @@ impl Console {
                     match s.identity() {
                         Some(Ok(id)) => println!("  group: {} as {}", id.tag(), id.id),
                         Some(Err(e)) => println!("  group: {}", e.for_user()),
-                        None => println!("  group: none, type join"),
+                        None => println!("  group: none, type pair"),
                     }
                 }
                 println!("  network: {}", board.network());
@@ -242,14 +242,14 @@ impl Console {
                 }
                 println!("Error details are {mode}.");
             }
-            (Some("join"), ..) => {
+            (Some("pair"), ..) => {
                 if let Ok(s) = store
                     && let Some(Ok(id)) = s.identity()
                 {
                     println!("The board is in the group {} already; type leave first to join another.", id.tag());
                     return;
                 }
-                let name = line["join".len()..].trim();
+                let name = line["pair".len()..].trim();
                 match board.join(if name.is_empty() { "Nano ESP32" } else { name }) {
                     Ok(text) => {
                         println!("In the Clipboard Bridge app, tap \"Connect a new device\" and paste this:");

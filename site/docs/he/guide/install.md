@@ -167,4 +167,4 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 
 ב-Windows: הגדרות, אפליקציות, "Clipboard Bridge", הסרת התקנה.
 
-פעולה זו מסירה את התוכנה, את השירות ואת כללי חומת האש שתוכנית ההתקנה הוסיפה. מפתחות המכשיר נשארים, ולכן התקנה מחדש מחזירה אותו לקבוצה שלו. כדי למחוק גם אותם, הוסיפו `--purge` (‏`-Purge` ב-Windows, עם `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`), ואז הסירו את המכשיר מהקבוצה ממכשיר אחר (‏`sudo cbb revoke NAME`, או בטלפון).
+פעולה זו מסירה את התוכנה, את השירות ואת כללי חומת האש שתוכנית ההתקנה הוסיפה. מפתחות המכשיר נשארים, ולכן התקנה מחדש מחזירה אותו לקבוצה שלו. כדי למחוק גם אותם, הוסיפו `--purge` (‏`-Purge` ב-Windows, עם `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`), ואז הסירו את המכשיר מהקבוצה ממכשיר אחר (‏`sudo cbb remove NAME`, או בטלפון).

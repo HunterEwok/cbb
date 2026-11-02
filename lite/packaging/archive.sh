@@ -13,7 +13,7 @@
 # install.sh, install-rootless.sh, uninstall.sh and firewall.sh, the tmux
 # configuration, the console helper's unit, the lite member's own systemd
 # units (the system's and a rootless install's) and OpenWrt's
-# installer (its init script runs cbb run for the lite member), so that
+# installer (its init script runs cbb service for the lite member too), so that
 # get.sh --lite and a manual install work as for a full member. The release
 # workflow and CI both use it.
 set -eu

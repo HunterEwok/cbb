@@ -10,7 +10,7 @@ On a phone that is an admin, tap the lost device on **Home**, then **Remove**. O
 admin computer:
 
 ```sh
-sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
+sudo cbb remove NAME     # NAME, or the device ID, as cbb status shows it
 ```
 
 Every device of the group learns of it and stops talking to the lost one. Only the root, or
@@ -26,7 +26,7 @@ sudo cbb freeze NAME
 ```
 
 A frozen admin cannot freeze the root or an admin phone. If it freezes back, both stay
-frozen until the root decides (`cbb unfreeze` or `cbb revoke` on the root, or
+frozen until the root decides (`cbb unfreeze` or `cbb remove` on the root, or
 **Unfreeze** and **Remove** on the root phone).
 
 ## 3. If it was the root: take the group over

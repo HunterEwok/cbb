@@ -47,7 +47,7 @@
   "Graphite": "Графит",
   "In a group of the phone, scan the QR code it shows with the phone app. In a group of computers, run this on this computer or another admin, as the administrator, and type the code it shows on the new computer:": "В группе телефона отсканируйте показанный QR-код приложением на телефоне. В группе компьютеров выполните это на этом или другом админском компьютере от имени администратора и введите показанный код на новом компьютере:",
   "In the group": "В группе",
-  "It can then add and remove devices with cbb pair and cbb revoke. Its key is a file on the computer, so do this only for a computer you keep safe.": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb revoke. Его ключ хранится в файле на компьютере, поэтому делайте так только для компьютера, который надёжно защищён.",
+  "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключ хранится в файле на компьютере, поэтому делайте так только для компьютера, который надёжно защищён.",
   "It is an admin now.": "Теперь это админ.",
   "It will no longer sync with your devices. To add it again, pair it again.": "Оно перестанет синхронизироваться с вашими устройствами. Чтобы вернуть его, добавьте его заново.",
   "Laptop": "Ноутбук",

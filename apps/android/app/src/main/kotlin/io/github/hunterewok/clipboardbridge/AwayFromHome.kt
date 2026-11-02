@@ -275,6 +275,17 @@ class AwayFromHome(
     private var thread: Thread? = null
     private var stopped = false
 
+    // Counts the changes the loop waits for, under lock: the loop notes the
+    // count as it reads the state and waits only while it is the same, so a
+    // change made between the read and the wait is not missed.
+    private var changes = 0L
+    private var seen = 0L
+
+    private fun changedLocked() {
+        changes++
+        lock.notifyAll()
+    }
+
     @Volatile var status: Status = Status.OFF
         private set
 
@@ -307,7 +318,7 @@ class AwayFromHome(
         save(s)
         synchronized(lock) {
             state = s
-            lock.notifyAll()
+            changedLocked()
         }
     }
 
@@ -317,7 +328,7 @@ class AwayFromHome(
         synchronized(lock) {
             state = null
             closeTunnelLocked()
-            lock.notifyAll()
+            changedLocked()
         }
     }
 
@@ -346,7 +357,7 @@ class AwayFromHome(
             if (u == null || u == hub || rank(o, hub) < rank(o, u) || forgot && u == from) {
                 // The hub in use changed, or one above it came: try again.
                 closeTunnelLocked()
-                lock.notifyAll()
+                changedLocked()
             }
             n
         }
@@ -367,7 +378,7 @@ class AwayFromHome(
         val t = synchronized(lock) {
             stopped = true
             closeTunnelLocked()
-            lock.notifyAll()
+            changedLocked()
             thread.also { thread = null }
         }
         t?.interrupt()
@@ -386,6 +397,7 @@ class AwayFromHome(
             while (true) {
                 val s = synchronized(lock) {
                     if (stopped) return
+                    seen = changes
                     state
                 }
                 if (s == null) {
@@ -529,9 +541,12 @@ class AwayFromHome(
         return minOf(wait * 2, if (isPhone(hub)) phoneWaitMS else maxWaitMS)
     }
 
-    /** Waits ms, or until something changes; 0 waits for a change only. */
+    /**
+     * Waits ms, or until something changes after the loop last read the
+     * state; 0 waits for a change only.
+     */
     private fun idle(ms: Long) = synchronized(lock) {
-        if (!stopped) lock.wait(ms)
+        if (!stopped && changes == seen) lock.wait(ms)
     }
 
     companion object {

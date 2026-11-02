@@ -1734,22 +1734,22 @@
         }
       }
     },
-    "It can then add and remove devices with cbb pair and cbb revoke. Its keys are in its hardware, which never lets them out.": {
+    "It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb revoke. Его ключи хранятся в его железе и никогда его не покидают."
+            "value": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключи хранятся в его железе и никогда его не покидают."
           }
         }
       }
     },
-    "It can then add and remove devices with cbb pair and cbb revoke. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.": {
+    "It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb revoke. Его ключи лежат в файле на компьютере: кто скопирует этот файл, сможет действовать как админ, пока другой админ его не удалит. Делайте так только для компьютера, который надёжно защищён."
+            "value": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключи лежат в файле на компьютере: кто скопирует этот файл, сможет действовать как админ, пока другой админ его не удалит. Делайте так только для компьютера, который надёжно защищён."
           }
         }
       }
@@ -1774,12 +1774,12 @@
         }
       }
     },
-    "It is an admin now: it adds and removes devices with cbb pair and cbb revoke.": {
+    "It is an admin now: it adds and removes devices with cbb pair and cbb remove.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Теперь это админ: он добавляет и удаляет устройства командами cbb pair и cbb revoke."
+            "value": "Теперь это админ: он добавляет и удаляет устройства командами cbb pair и cbb remove."
           }
         }
       }

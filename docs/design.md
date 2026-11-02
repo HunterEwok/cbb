@@ -187,7 +187,7 @@ and lifetimes. The installer enables what the device needs.
   one that connects, if it is still the member's own text.
 - Command line: `cbb copy` (standard input to the group), `cbb paste` (the
   member's own clipboard text to standard output), `cbb new`, `cbb pair`,
-  `revoke`, `status` (which lists the group's devices too). `cbb new` creates a group; `cbb pair` joins one on a device in no group and admits a device on the root or an admin.
+  `remove`, `status` (which lists the group's devices too). `cbb new` creates a group; `cbb pair` joins one on a device in no group and admits a device on the root or an admin.
   `cbb pair` finds the member with an open pairing window by its TXT record, or uses
   the address that `pair` prints, for networks where multicast does not pass. It talks to
   one member only, tries that member's addresses (IPv4 first, link-local last) until one
@@ -481,7 +481,7 @@ sync away from home, the admins, and remote paste.
   joins with `cbb pair` on the root or an admin, which shows a six-digit code to type on the
   new computer. The shortcut's token gives only `/sync`: a copied or stolen token can sync
   the clipboard until it is revoked, but cannot add a device. `cbb pair -phone -new-token`
-  revokes every shortcut's token and pairs the iPhone again; `cbb revoke` removes one. With
+  revokes every shortcut's token and pairs the iPhone again; `cbb remove` removes one. With
   the phone app, the phone admits computers by their QR code (section 6 of the protocol,
   "The joiner listens").
 - **Creating the group**: `cbb new`, or the first `cbb pair` or `cbb pair -phone`, on a
@@ -562,7 +562,7 @@ sync away from home, the admins, and remote paste.
   the old. No list of tokens is stored: each is derived from the iPhone CA key, so the root
   and every admin check any token (docs/protocol.md, section 7).
 - **Devices and revocation**: `cbb status` lists the members and iPhones;
-  `cbb revoke <name>` removes one. Revocations are signed records that only grow and
+  `cbb remove <name>` removes one. Revocations are signed records that only grow and
   spread to every member, which then refuse the revoked keys. Removing an admin that held
   the iPhone CA key also replaces the iPhone CA and revokes every token, so iPhones that use
   the shortcut delete the old profile and pair again. The records and the list are
@@ -1093,7 +1093,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 | Phones only, or phones and Android TVs or other Android devices | a phone with its app open is the hub; the others sync while they run (Android in its foreground service, an iPhone with its app open) | |
 | A phone and lite members | syncs at home, where lite members listen; from afar, the phone with its app open is the hub | |
 | The whole group away together (a trip, a hotel Wi-Fi that isolates its clients, mobile data) | the phone hub, through the forwarder | |
-| A computer is the hub but is off, broken or offline | another hub of the group serves: the root and every admin with a hub set up, phones first (docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb hubs` signs it, the apps later) |
+| A computer is the hub but is off, broken or offline | another hub of the group serves: the root and every admin with a hub set up, phones first (docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb global hubs` signs it, the apps later) |
 | The hub's home has no public address and the project's forwarder is not reached | nothing syncs away from home, unless the group has a forwarder or relay of the user's own (`cbb forward`, `cbb relay`) | |
 | A network blocks WireGuard | AmneziaWG, then VLESS; AmneziaWG for the phone hub as for any hub | VLESS for the phone hub's own registration is to be checked |
 | The root phone that is the hub is lost | an admin phone takes over and is the hub; devices far away are invited again | |
@@ -1138,7 +1138,7 @@ All built in 0.5, but for what each step names as still to do.
    member), the clients keeping every hub's offer with a preshared key of their own, the
    hubs sharing their clients and passing each other's offers on, and a computer's hub
    yielding to a higher one and serving again when it goes; `TestSeveralHubs` switches both
-   ways; the signed table of main hubs the user orders (`hubs` records, `cbb hubs`). Still
+   ways; the signed table of main hubs the user orders (`hubs` records, `cbb global hubs`). Still
    to do: the phone hub yielding to a hub above it, setting the table from the apps, and a
    bench run with two computers as hubs.
 
@@ -1633,7 +1633,7 @@ Every app and the command line show it:
   an admin mark, whether it is online now and when this phone last saw it; on an admin phone
   each row has "Remove".
 - The command line on every computer: `cbb status` prints the same list;
-  `cbb revoke <name or ID>` removes a device; it runs where the computer is the root or an
+  `cbb remove <name or ID>` removes a device; it runs where the computer is the root or an
   admin, and elsewhere says so.
 - The Mac app and the tray app on Linux and Windows show the same list from the same
   records.
@@ -1665,7 +1665,7 @@ a user who would rather admit and remove devices from a terminal. Every computer
 group keeps an admin key next to its identity and offers its public key in the member
 protocol; "Make it an admin" on the root phone certifies it as an admin CA and sends that to
 the computer. From then on the computer admits computers with `cbb pair`, removes
-devices with `cbb revoke` and renews certificates, as an admin phone does; it makes no
+devices with `cbb remove` and renews certificates, as an admin phone does; it makes no
 admins and never removes the root phone. Its key is a file, so a thief with the computer can
 act as an admin until another admin removes it; that is the price of the convenience, and
 why it is a choice, not the default.
@@ -1675,7 +1675,7 @@ device but the root is removed by a record ("Full members, admins and the operat
 below).
 
 **Built in this order:** the Go side first, since it needs no phone: the records, their
-exchange in the member protocol, refusing revoked keys, the devices list and `cbb revoke`,
+exchange in the member protocol, refusing revoked keys, the devices list and `cbb remove`,
 and members that verify certificates through an admin CA. Then the apps: the root and admin
 CAs, the Devices screen, making an admin, and the root record.
 
@@ -1796,7 +1796,7 @@ admin a thief gets most easily: with the laptop, or with a copy of the file. The
 the admin phones keep theirs in the Secure Enclave or the Keystore, behind Face ID or the
 fingerprint. So the question is what an admin computer may do to another admin.
 
-**The rule.** The root and the admin phones remove any admin (`cbb revoke` on the root, Remove
+**The rule.** The root and the admin phones remove any admin (`cbb remove` on the root, Remove
 in the apps). An admin computer removes ordinary devices only; it never removes the root or
 another admin, and hands the group over only from a lost root computer (below). Instead, **any admin freezes another admin
 computer** (`cbb freeze <name>`): from then on the frozen admin is no admin, nothing it signs
@@ -1882,7 +1882,7 @@ input, and the sender is told so.
 - **A stolen admin is cut off quickly.** Any other admin, a computer included, freezes it
   with one action (`cbb freeze`, "Who may remove an admin" above): from then on nothing it
   signs counts on any member, pastes included. The root or an admin phone then removes it
-  (`cbb revoke`, Devices in the apps), which revokes its member and admin keys together.
+  (`cbb remove`, Devices in the apps), which revokes its member and admin keys together.
   Any admin can also turn remote paste off on every member at once (`cbb paste-receive off
   --all`).
 
@@ -2297,7 +2297,7 @@ One pull request each, smaller ones together:
 4. Done. A signed apk feed for `cbb.tools`, built by the release job once the feed's key is
    in the secrets ([maintaining.md](maintaining.md#the-openwrt-feed)); CI installs from a
    feed signed with a test key.
-5. The lite member on OpenWrt. Done: the procd script runs `cbb run` for it, `get.sh
+5. The lite member on OpenWrt. Done: the procd script runs `cbb service` for it, `get.sh
    --lite` installs it on aarch64, armv7, x86-64, mips and mipsle, and it takes
    `CBB_INTERFACES`. On mips and mipsle it is built with nightly Rust (`-Zbuild-std`,
    `lite/packaging/mips.sh`) and without the tunnel in 0.6, since GotaTun needs 64-bit
@@ -2501,7 +2501,7 @@ defence, is in [threat-model.md](threat-model.md). In short:
 | Someone guesses or intercepts the pairing code of a computer   | CPace inside TLS: one online guess per attempt, at most three per pairing window, no offline attack; the joining device spends the code on one attempt, and never takes it from the command line |
 | Someone attacks the pairing of an iPhone                       | the same attempt limits; the profile comes over a separate plain-HTTP port, so no certificate warning is ever accepted for the pairing page; the user compares the iPhone CA fingerprint with the one in the terminal (never with the plain-HTTP page) before trusting it; the code and the token travel only over a connection that the trusted CA authenticates, so a relay sees neither |
 | A device impersonates a member (for example, a host that answers `clipboardbridge.local` on another network) | mutual TLS with the group CA; members dial discovered addresses and check the peer's certificate; the iPhone accepts only a certificate from the iPhone CA, so an impostor gets neither the token nor the text |
-| A device is lost or stolen                                     | `cbb revoke` or "Remove" in the apps: a revocation record that every member and the hub obey at once; any admin freezes a stolen admin computer; an admin takes over from a lost root without pairing anything again; when an admin that held the iPhone CA goes, the iPhone CA and its tokens are replaced ([if a device is lost](guide/lost-device.md)) |
+| A device is lost or stolen                                     | `cbb remove` or "Remove" in the apps: a revocation record that every member and the hub obey at once; any admin freezes a stolen admin computer; an admin takes over from a lost root without pairing anything again; when an admin that held the iPhone CA goes, the iPhone CA and its tokens are replaced ([if a device is lost](guide/lost-device.md)) |
 | A member is compromised                                        | it can read the group clipboard, by design. It cannot read the iPhone's other HTTPS traffic: the iPhone CA is restricted by name constraints to `clipboardbridge.local` and names below it, and excludes IP addresses and other name forms. The Mac never changes its system trust |
 | A bug in the network code                                      | memory-safe language; the service runs as an unprivileged user in a systemd sandbox (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateDevices`, no capabilities, restricted address families and system calls) |
 | A local user abuses the console helper                         | the helper listens on nothing; the control socket admits only root and the `clipboardbridge` group; single-line injection by default with control characters removed |

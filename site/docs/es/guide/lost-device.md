@@ -9,7 +9,7 @@ Para quien ha perdido un teléfono, un ordenador u otro dispositivo del grupo. Q
 En un teléfono que sea administrador, pulsa el dispositivo perdido en **Inicio** y luego **Remove**. En un ordenador administrador:
 
 ```sh
-sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
+sudo cbb remove NAME     # NAME, or the device ID, as cbb status shows it
 ```
 
 Todos los dispositivos del grupo se enteran y dejan de hablar con el perdido. Solo la raíz, o un teléfono administrador, quita a un administrador.
@@ -22,7 +22,7 @@ Las claves de un ordenador administrador pueden firmar. Si puede estar en manos 
 sudo cbb freeze NAME
 ```
 
-Un administrador congelado no puede congelar a la raíz ni a un teléfono administrador. Si lo congela a su vez, ambos siguen congelados hasta que la raíz decida (`cbb unfreeze` o `cbb revoke` en la raíz, o **Unfreeze** y **Remove** en el teléfono raíz).
+Un administrador congelado no puede congelar a la raíz ni a un teléfono administrador. Si lo congela a su vez, ambos siguen congelados hasta que la raíz decida (`cbb unfreeze` o `cbb remove` en la raíz, o **Unfreeze** y **Remove** en el teléfono raíz).
 
 ## 3. Si era la raíz: asume el grupo
 

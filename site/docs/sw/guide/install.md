@@ -167,4 +167,4 @@ Kwenye SteamOS ni `sudo sh /opt/clipboardbridge/share/uninstall.sh`. Kwa Homebre
 
 Kwenye Windows: Mipangilio, Programu, "Clipboard Bridge", Ondoa.
 
-Hii huondoa programu, huduma na kanuni za ngome ya moto zilizoongezwa na kisakinishi. Funguo za kifaa hubaki, kwa hiyo kusakinisha tena hukirudisha kwenye kikundi chake. Ili kuzifuta pia, ongeza `--purge` (`-Purge` kwenye Windows, kwa `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`), kisha ondoa kifaa kutoka kwenye kikundi kupitia kifaa kingine (`sudo cbb revoke NAME`, au kwenye simu).
+Hii huondoa programu, huduma na kanuni za ngome ya moto zilizoongezwa na kisakinishi. Funguo za kifaa hubaki, kwa hiyo kusakinisha tena hukirudisha kwenye kikundi chake. Ili kuzifuta pia, ongeza `--purge` (`-Purge` kwenye Windows, kwa `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`), kisha ondoa kifaa kutoka kwenye kikundi kupitia kifaa kingine (`sudo cbb remove NAME`, au kwenye simu).

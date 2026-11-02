@@ -20,7 +20,7 @@ Clipboard Bridge tiene apps para teléfonos, relojes y escritorios. Las apps de 
 
 1. [Instala](install.md) Clipboard Bridge en un ordenador y ejecuta allí `sudo cbb pair`. Muestra un código QR.
 2. Abre la app, pulsa **Connect a new device** y escanea el código. La app crea la clave del grupo en el chip de seguridad del teléfono (el Secure Enclave en un iPhone, el Keystore en Android), añade el ordenador y abre Inicio.
-3. Añade cada ordenador adicional con **+** en Inicio. Un miembro ligero se une de la misma manera (`sudo -u clipboardbridge cbb join` en él muestra su código).
+3. Añade cada ordenador adicional con **+** en Inicio. Un miembro ligero se une de la misma manera (`sudo -u clipboardbridge cbb pair` en él muestra su código).
 
 Cuando no se puede usar la cámara: en un iPhone, escribe los seis dígitos que muestra el ordenador; en Android, pega el texto del código QR, que `cbb pair` también imprime.
 
@@ -36,7 +36,7 @@ Cuando no se puede usar la cámara: en un iPhone, escribe los seis dígitos que 
 Pulsa un dispositivo para ver su tipo, sistema, versión y rol. En un teléfono administrador también puedes:
 
 - **Renombrarlo** o **eliminarlo**; eliminar pide confirmación una vez y después tu cara, tu huella o tu código.
-- **Make it an admin**, en el caso de un ordenador: entonces puede añadir y quitar dispositivos con `sudo cbb pair` y `sudo cbb revoke`. Su clave es un archivo del ordenador, salvo que sea un ordenador Linux con TPM, y la app te avisa primero; así que elige un ordenador de confianza, a ser posible uno que esté siempre encendido y que además sea el [hub](away-from-home.md).
+- **Make it an admin**, en el caso de un ordenador: entonces puede añadir y quitar dispositivos con `sudo cbb pair` y `sudo cbb remove`. Su clave es un archivo del ordenador, salvo que sea un ordenador Linux con TPM, y la app te avisa primero; así que elige un ordenador de confianza, a ser posible uno que esté siempre encendido y que además sea el [hub](away-from-home.md).
 
 ### Un segundo teléfono y un teléfono perdido
 

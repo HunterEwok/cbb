@@ -1027,7 +1027,7 @@ final class AppModel: ObservableObject {
     func makeAdmin(_ id: String) async {
         do {
             try await group.makeAdmin(id)
-            message = String(localized: "It is an admin now: it adds and removes devices with cbb pair and cbb revoke.", bundle: .app)
+            message = String(localized: "It is an admin now: it adds and removes devices with cbb pair and cbb remove.", bundle: .app)
         } catch {
             message = Self.describe(error)
         }

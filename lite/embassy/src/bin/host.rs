@@ -4,7 +4,7 @@
 //! esp32-on-linux: the ESP32 firmware's network code on Linux, so it can be
 //! tested without the board. embassy-net runs over a TAP interface with a
 //! fixed address instead of the chip's Wi-Fi and DHCP, and the device joins
-//! a group by the phone as the board's `join` does:
+//! a group by the phone as the board's `pair` does:
 //!
 //! ```text
 //! esp32-on-linux [-debug] [-tap tap0] [-addr 192.168.69.2/24] [-name NAME] -identity FILE

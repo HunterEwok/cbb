@@ -34,7 +34,7 @@ the group. To keep that from happening:
 
   - encrypt the disk (LUKS, BitLocker, FileVault);
   - keep the service's state directory out of unencrypted backups;
-  - remove the device at once (cbb revoke, or Remove on the phone) when it is lost
+  - remove the device at once (cbb remove, or Remove on the phone) when it is lost
     or someone else may have had root on it.
 
 `
@@ -72,6 +72,8 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       cbb global relay address:port -key KEY [-yes]\n" +
 		"                                      meet the group's other devices at a blind relay, for a group\n" +
 		"                                      without a hub\n" +
+		"       cbb global hubs DEVICE...      on the root, or an admin that may be a hub: the group's main\n" +
+		"                                      hubs, in the order they serve, before the others\n" +
 		"       cbb global allow               let this computer's service reach the group's servers as they\n" +
 		"                                      are now, after the hub's addresses changed"
 	if len(args) == 0 {
@@ -137,6 +139,8 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 				return 1
 			}
 		}
+	case "hubs":
+		return cmdHubs(args[1:], stdout, stderr)
 	case "allow":
 		if len(args) != 1 {
 			fmt.Fprintln(stderr, usage)

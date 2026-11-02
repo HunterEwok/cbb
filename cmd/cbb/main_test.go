@@ -24,7 +24,7 @@ func TestRun(t *testing.T) {
 		{name: "help", args: []string{"help"}, code: 0, stdout: "Usage: clipboardbridge"},
 		{name: "help flag", args: []string{"-h"}, code: 0, stdout: "Usage: clipboardbridge"},
 		{name: "unknown command", args: []string{"frobnicate"}, code: 2, stderr: `unknown command "frobnicate"`},
-		{name: "revoke -h", args: []string{"revoke", "-h"}, code: 2, stderr: "usage: cbb revoke"},
+		{name: "remove -h", args: []string{"remove", "-h"}, code: 2, stderr: "usage: cbb remove"},
 		{name: "takeover -h", args: []string{"takeover", "-help"}, code: 2, stderr: "usage: cbb takeover"},
 		{name: "freeze -h", args: []string{"freeze", "--help"}, code: 2, stderr: "usage: cbb freeze"},
 		{name: "unfreeze -h", args: []string{"unfreeze", "-h"}, code: 2, stderr: "usage: cbb unfreeze"},

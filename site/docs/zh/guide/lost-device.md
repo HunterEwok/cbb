@@ -9,7 +9,7 @@
 在作为管理员的手机上，在**主页**点按丢失的设备，再点 **Remove**。在管理员电脑上：
 
 ```sh
-sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
+sudo cbb remove NAME     # NAME, or the device ID, as cbb status shows it
 ```
 
 群组中的每台设备都会得知此事，并停止与丢失的设备通信。只有根或管理员手机才能移除管理员。
@@ -22,7 +22,7 @@ sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
 sudo cbb freeze NAME
 ```
 
-被冻结的管理员无法冻结根或管理员手机。如果它反过来冻结对方，则双方都保持冻结，直到根做出决定（在根上运行 `cbb unfreeze` 或 `cbb revoke`，或在根手机上点 **Unfreeze** 和 **Remove**）。
+被冻结的管理员无法冻结根或管理员手机。如果它反过来冻结对方，则双方都保持冻结，直到根做出决定（在根上运行 `cbb unfreeze` 或 `cbb remove`，或在根手机上点 **Unfreeze** 和 **Remove**）。
 
 ## 3. 如果它是根：接管群组
 
