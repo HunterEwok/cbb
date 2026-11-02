@@ -25,7 +25,7 @@ private let imageLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge",
 /// keeps a connection to each, and syncs with them.
 @MainActor
 final class LiveGroup: GroupController {
-    enum Failure: Error { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin }
+    enum Failure: Error { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer }
 
     /// The clipboard holds something the app could not read as text: the
     /// paste was not allowed, or it is not text. The button leaves it as it
@@ -51,6 +51,10 @@ final class LiveGroup: GroupController {
     /// a computer that stops answering mid-pairing fails then.
     static let pairingDeadline: Duration = .seconds(30)
     static let joinAttempts = 3
+    /// How long joinComputer browses for a pairing window, and then for a
+    /// second one.
+    static let browseFor: TimeInterval = 10
+    static let pairingSettle: TimeInterval = 2
     /// How long one Face ID check covers the root key's signatures for the
     /// actions that follow it.
     static let authorizedFor: TimeInterval = 300
@@ -189,6 +193,7 @@ final class LiveGroup: GroupController {
     /// one when it adds a computer.
     var isAdmin: Bool { state?.isAdmin ?? true }
     var isRoot: Bool { state?.isRoot ?? false }
+    var handedOver: Bool { state?.handedToMe ?? false }
     var alerts: [GroupAlert] { state?.records.alerts ?? [] }
 
     /// When the counting recovery record was signed, from its body; kept
@@ -554,6 +559,150 @@ final class LiveGroup: GroupController {
         try startSync()
     }
 
+    /// Joins a computer's group (docs/protocol.md, section 6, "A phone joins
+    /// a computer's group"): finds the pairing window that `cbb pair` opened
+    /// on the group's root by Bonjour (`p=1`), dials it and takes code, which
+    /// the user typed from the computer's screen. Browsing waits up to 10 s
+    /// for a window, then 2 s more for a second one, as the computers'
+    /// joiner does: two windows at once and it refuses, rather than try the
+    /// code on the wrong one. The root makes this phone an admin with the
+    /// admin key it offers.
+    func joinComputer(code: String) async throws {
+        guard state == nil else { return }
+        guard !LocalAddresses.current().isEmpty else { throw Failure.noNetwork }
+        let window = try await findWindow()
+        let member = try memberSigner()
+        let se = Self.secureEnclave
+        let admin = try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
+            ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
+        let cert = try GroupCertificates.selfSigned(device: SyncEngine.newID(), signer: member)
+        let id = try identity(certificate: cert, member)
+        let info = Pairing.Info(name: PhoneGroup.validName(UIDevice.current.name), os: "ios", adminKey: admin.publicKeyDER,
+                                seal: Self.sealKey())
+        // The window's certificate is checked by the code's exchange, not here.
+        let t = TLSTransport(endpoint: window, alpn: Pairing.alpn, identity: id) { _ in true }
+        let file = file
+        let joined: PairingJoiner.Joined
+        do {
+            joined = try await withTaskCancellationHandler {
+                try await t.start()
+                defer { t.close() }
+                guard let leaf = t.peerCertificate, let sid = t.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else {
+                    throw Failure.unreachable
+                }
+                return try await PairingJoiner.join(over: t, code: code, info: info, memberCert: leaf, joinerCert: cert,
+                                                    sessionID: sid, now: Date()) { try PhoneGroup.joined($0).save(to: file) }
+            } onCancel: {
+                t.close()
+            }
+        } catch let e as PairingJoiner.Spent {
+            // An admin computer that is not the root refuses a phone.
+            if case .refused(.refused)? = e.underlying as? PairingJoiner.Failure { throw Failure.needsRoot }
+            throw e
+        }
+        try modeBox.newDevice()
+        forgetCredentials()
+        state = PhoneGroup.joined(joined)
+        try startSync()
+    }
+
+    /// Restores the group on this new phone with its recovery key, read
+    /// from the QR code of the sheet (docs/protocol.md, section 10, "The
+    /// recovery key"): finds the group's computers by Bonjour (the sheet's
+    /// tag), takes and checks the records from one on a connection that
+    /// carries records only, makes a new root key in the Secure Enclave and
+    /// claims the group with the recovery key, and sends the claim. The
+    /// phone is then a member of the group whose claim waits the group's
+    /// delay, unless the root phone cancels it; finishTakeOverIfDue then
+    /// makes it the root. The recovery key is not kept.
+    func restore(sheet: Core.RecoveredKey) async throws {
+        guard state == nil else { return }
+        guard let tag = sheet.group else { throw Restore.Failure(kind: .needsQR, message: Restore.needsQRMessage) }
+        guard !LocalAddresses.current().isEmpty else { throw Failure.noNetwork }
+        let computers = try await findComputers(tag: tag)
+        let member = try memberSigner()
+        let r = try Restore(key: sheet, memberKey: member.publicKeyDER, now: Date())
+        let id = try identity(certificate: r.memberCert, member)
+        let name = PhoneGroup.validName(UIDevice.current.name)
+        func dial(_ endpoint: NWEndpoint) async throws -> TLSTransport {
+            // The handshake takes any certificate; Restore.group checks the computer's against the records.
+            let t = TLSTransport(endpoint: endpoint, alpn: Member.alpn, identity: id, chain: [r.adminCA]) { !$0.isEmpty }
+            try await t.start()
+            return t
+        }
+        var last: Error = Failure.noGroupComputer
+        for endpoint in computers {
+            var g: PhoneGroup
+            do {
+                g = try r.group(try await Restore.exchange(try await dial(endpoint), name: name, os: "ios", now: Date()), now: Date())
+            } catch let e as Restore.Failure where e.kind == .notTheKey {
+                throw e
+            } catch {
+                // Another group's computer, or one that does not answer: the next may.
+                last = error
+                continue
+            }
+            // A root key left from a group this phone made before goes.
+            KeychainIdentity.removeKey(label: Self.caLabel)
+            let se = Self.secureEnclave
+            _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
+            let root = try await signer(label: Self.caLabel, reason: String(localized: "Restore the group with its recovery key", bundle: .app))
+            let newRoot = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
+            let claim = try r.claim(&g, newRoot: newRoot, now: Date())
+            try g.save(to: file)
+            try modeBox.newDevice()
+            forgetCredentials()
+            state = g
+            // Sync sends the claim too, as the records differ; this way it is out at once.
+            do {
+                _ = try await Restore.exchange(try await dial(endpoint), name: name, os: "ios", now: Date(), send: [claim])
+            } catch {
+                keysLog.notice("sending the claim; sync sends it later: \(String(describing: error), privacy: .public)")
+            }
+            try startSync()
+            return
+        }
+        throw last
+    }
+
+    /// The endpoints of the computers of the group with tag that Bonjour
+    /// finds within browseFor seconds.
+    private func findComputers(tag: String) async throws -> [NWEndpoint] {
+        let members = OSAllocatedUnfairLock<Set<String>>(initialState: [])
+        let b = BonjourBrowser { found in members.withLock { $0 = Set(found.filter { $0.group == tag }.map(\.device)) } }
+        b.start()
+        defer { b.stop() }
+        let deadline = Date().addingTimeInterval(Self.browseFor)
+        while members.withLock({ $0.isEmpty }) {
+            guard Date() < deadline else { throw Failure.noGroupComputer }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        // The others that answer a moment later.
+        try await Task.sleep(for: .seconds(Self.pairingSettle))
+        let found = members.withLock { $0 }.compactMap(b.endpoint(of:))
+        guard !found.isEmpty else { throw Failure.noGroupComputer }
+        return found
+    }
+
+    /// The endpoint of the one computer announcing a pairing window; see
+    /// joinComputer.
+    private func findWindow() async throws -> NWEndpoint {
+        let windows = OSAllocatedUnfairLock<Set<String>>(initialState: [])
+        let b = BonjourBrowser { found in windows.withLock { $0 = Set(found.filter(\.pairing).map(\.device)) } }
+        b.start()
+        defer { b.stop() }
+        let deadline = Date().addingTimeInterval(Self.browseFor)
+        while windows.withLock({ $0.isEmpty }) {
+            guard Date() < deadline else { throw Failure.noWindow }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try await Task.sleep(for: .seconds(Self.pairingSettle))
+        let found = windows.withLock { $0 }
+        guard found.count == 1 else { throw found.isEmpty ? Failure.noWindow : Failure.twoWindows }
+        guard let endpoint = found.first.flatMap(b.endpoint(of:)) else { throw Failure.noWindow }
+        return endpoint
+    }
+
     // MARK: Removing
 
     /// Removes a device from the group: a revocation signed with this
@@ -795,6 +944,28 @@ final class LiveGroup: GroupController {
         await node?.sendRecords([r])
     }
 
+    /// Takes the group the root handed to this phone (`cbb handover`,
+    /// docs/protocol.md, section 10, "Handing the group over"): makes a new
+    /// root key and claims the group with this phone's admin key; the claim
+    /// takes effect at once, so this phone becomes the root right after.
+    /// The computer that was the root stays in the group.
+    func takeHandedGroup() async throws {
+        let reason = String(localized: "Take the group the computer handed to this phone", bundle: .app)
+        let admin = try await signer(label: Self.adminLabel, reason: reason)
+        KeychainIdentity.removeKey(label: Self.caLabel)
+        let se = Self.secureEnclave
+        _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
+        let root = try await signer(label: Self.caLabel, reason: reason)
+        guard var g = state else { return }
+        let newRoot = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
+        let r = try g.takeHandedOver(adminSigner: admin, newRoot: newRoot, now: Date())
+        try g.save(to: file)
+        state = g
+        groupChanged()
+        await node?.sendRecords([r])
+        await finishTakeOverIfDue()
+    }
+
     /// Makes this phone the group's root once its claim took effect: it
     /// signs, with the new root key, what a new root starts with, and
     /// becomes the hub when the lost phone was (docs/design.md, "Losing the
@@ -814,7 +985,7 @@ final class LiveGroup: GroupController {
         do {
             let root = try await signer(label: Self.caLabel, reason: String(localized: "Take the group over from the lost phone", bundle: .app))
             guard var g = state else { return }
-            let rs = try g.finishTakeOver(rootSigner: root, now: Date())
+            let rs = try g.finishTakeOver(rootSigner: root, now: Date(), name: PhoneGroup.validName(UIDevice.current.name), seal: Self.sealKey())
             try g.save(to: file)
             state = g
             groupChanged()

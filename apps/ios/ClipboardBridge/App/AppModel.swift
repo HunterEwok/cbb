@@ -45,6 +45,11 @@ protocol GroupController: AnyObject {
     /// Voids the records ids as the group's root, after Face ID: ends a
     /// conflict or cancels a claim.
     func resolve(_ ids: [Data]) async throws
+    /// Whether the group's root handed the group to this phone (cbb
+    /// handover), which has not taken it yet.
+    var handedOver: Bool { get }
+    /// Takes the group the root handed to this phone.
+    func takeHandedGroup() async throws
     /// Makes the key the paired watch made an admin key with the role
     /// watch; only the root phone does. Returns what the watch keeps.
     func addWatch(_ request: WatchState.KeyRequest) async throws -> WatchState.Admission
@@ -70,6 +75,11 @@ protocol GroupController: AnyObject {
     /// Joins another phone's group: listens, hands show the QR code for the
     /// other phone to scan, and returns once this phone is in the group.
     func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
+    /// Joins a computer's group with the code cbb pair shows on its root.
+    func joinComputer(code: String) async throws
+    /// Restores the group on this new phone with the recovery key from the
+    /// sheet's QR code; returns once the claim is sent.
+    func restore(sheet: Core.RecoveredKey) async throws
     /// Sends what this phone holds, or fetches the computers' recent copy.
     func sync() async throws -> AppModel.SyncResult
     /// Updates which computers are online.
@@ -111,10 +121,14 @@ extension GroupController {
     func makeRecovery() async throws -> Core.RecoverySheet { throw PhoneGroup.Failure.notRoot }
     func removeRecovery() async throws { throw PhoneGroup.Failure.notRoot }
     func resolve(_ ids: [Data]) async throws {}
+    var handedOver: Bool { false }
+    func takeHandedGroup() async throws {}
     func addWatch(_ request: WatchState.KeyRequest) async throws -> WatchState.Admission { throw PhoneGroup.Failure.notRoot }
     func watchActions(for id: String) -> [String] { [] }
     func watchBody(_ ask: WatchState.Ask) throws -> Data { throw PhoneGroup.Failure.notAWatch }
     func deliverFromWatch(_ signed: WatchState.Signed) async throws { throw PhoneGroup.Failure.notAWatch }
+    func joinComputer(code: String) async throws { throw PendingGroup.Failure.notReady }
+    func restore(sheet: Core.RecoveredKey) async throws { throw PendingGroup.Failure.notReady }
     func rename(_ id: String, to name: String) async throws {}
     func setMode(_ id: String, to mode: String) async throws {}
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
@@ -143,7 +157,7 @@ final class AppModel: ObservableObject {
     /// too.
     static let shared = AppModel(group: LiveGroup(), notifies: true)
 
-    enum Phase: Equatable { case start, joining, home }
+    enum Phase: Equatable { case start, joining, joiningComputer, home }
 
     /// A device of the group: a computer, or this phone.
     struct Computer: Identifiable, Equatable {
@@ -216,6 +230,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var recoveryMade: Date?
     /// What the group's records stop and what ends it.
     @Published private(set) var alerts: [GroupAlert] = []
+    /// Whether the group's root handed the group to this phone, which may
+    /// take it now.
+    @Published private(set) var handedOver = false
     /// The one-time note on the Start screen that this phone is ready.
     @Published private(set) var welcome = false
 
@@ -400,6 +417,80 @@ final class AppModel: ObservableObject {
         joinCode = nil
     }
 
+    /// Opens the screen that joins a computer's group with the code cbb
+    /// pair shows.
+    func startJoiningComputer() {
+        dismissWelcome()
+        message = nil
+        phase = .joiningComputer
+    }
+
+    /// Joins a computer's group with the code the user typed from cbb pair
+    /// on the group's root, then goes Home. A wrong code may be typed again:
+    /// the computer's window takes three attempts.
+    func joinComputer(code: String) async {
+        busy = true
+        message = nil
+        defer { busy = false }
+        do {
+            try await group.joinComputer(code: code)
+            computers = group.computers
+            devices = group.devices
+            isAdmin = group.isAdmin
+            phase = .home
+        } catch is CancellationError {
+        } catch {
+            message = Self.describe(error, summary: Self.joinSummary(error))
+        }
+    }
+
+    /// What joining a computer's group says about a failure of the
+    /// exchange; nil for the others, which say what they always do.
+    private static func joinSummary(_ error: Error) -> String? {
+        let f = (error as? PairingJoiner.Spent)?.underlying as? PairingJoiner.Failure ?? error as? PairingJoiner.Failure
+        if case .refused(.wrongCode)? = f {
+            return String(localized: "The code did not match. Check the code on the computer's screen and type it again.", bundle: .app)
+        }
+        if f != nil || error is PairingJoiner.Spent {
+            return String(localized: "The computer's group could not be joined. Run cbb pair on it again.", bundle: .app)
+        }
+        return nil
+    }
+
+    /// Restores the group with the recovery key from the sheet's QR code,
+    /// on a phone without a group: the claim goes out, the app goes Home,
+    /// and Home shows the time left until this phone becomes the root.
+    func restore(_ text: String) async -> Bool {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard phase == .start else {
+            message = String(localized: "This phone is in a group already. A recovery sheet restores a group on a phone without one.", bundle: .app)
+            return false
+        }
+        busy = true
+        defer { busy = false }
+        do {
+            switch try Core.readRecoverySheet(text) {
+            case let .refused(_, why):
+                let summary = String(localized: "This is not the QR code of a recovery sheet.", bundle: .app)
+                message = Self.showsErrorDetails ? summary + "\n\n" + why : summary
+                return false
+            case let .key(sheet):
+                try await group.restore(sheet: sheet)
+            }
+            computers = group.computers
+            devices = group.devices
+            isAdmin = group.isAdmin
+            phase = .home
+            message = String(localized: "The claim is sent. This phone becomes the group's root when the waiting time ends; Home shows the time left.", bundle: .app)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
     /// Leaves the join screen without joining.
     func cancelJoin() {
         joinCode = nil
@@ -498,6 +589,7 @@ final class AppModel: ObservableObject {
         devices = group.devices
         isRoot = group.isRoot
         alerts = group.alerts
+        handedOver = group.handedOver
         recoveryMade = group.recoveryMade
         await refreshAway()
         await refreshHub()
@@ -741,6 +833,18 @@ final class AppModel: ObservableObject {
         }
         devices = group.devices
         alerts = group.alerts
+    }
+
+    /// Takes the group the root handed to this phone (cbb handover), after
+    /// Face ID.
+    func takeHandedGroup() async {
+        do {
+            try await group.takeHandedGroup()
+            message = String(localized: "This phone is the group's root now. The other devices hear of it as soon as they connect.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        await refresh()
     }
 
     /// Unfreezes an admin computer that another admin froze.
@@ -1010,7 +1114,24 @@ final class AppModel: ObservableObject {
             case .timedOut: return String(localized: "No phone scanned the code in five minutes. Try again.", bundle: .app)
             case .tooManyWrongCodes: return String(localized: "Too many wrong codes. Try again with a new code.", bundle: .app)
             case .notAdmin: return String(localized: "Only an admin phone can do this.", bundle: .app)
+            case .noWindow:
+                return String(localized: "No computer is waiting for a phone. Run cbb pair on the computer that created the group, then try again.", bundle: .app)
+            case .twoWindows:
+                return String(localized: "Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.", bundle: .app)
+            case .needsRoot:
+                return String(localized: "This computer cannot add a phone. Run cbb pair on the computer that created the group.", bundle: .app)
+            case .noGroupComputer:
+                return String(localized: "No computer of the group was found on this network. Turn one on and keep this phone on its network, then try again.", bundle: .app)
             default: break
+            }
+        }
+        if let f = error as? Restore.Failure {
+            switch f.kind {
+            case .needsQR:
+                return String(localized: "Scan the QR code of the recovery sheet: on a new phone the typed key is not enough. A computer of the group takes the typed key with cbb recovery.", bundle: .app)
+            case .otherGroup: return String(localized: "The computers found on this network are of another group than the sheet.", bundle: .app)
+            case .notTheKey: return String(localized: "This is not the group's recovery key now: the root phone removed it or made a new one.", bundle: .app)
+            case .notAMember: return String(localized: "The computer's answer does not fit the group's records.", bundle: .app)
             }
         }
         if let r = error as? LiveGroup.CommandRefused {

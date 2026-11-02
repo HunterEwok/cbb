@@ -22,6 +22,7 @@ import io.github.hunterewok.clipboardbridge.kit.PairingJoiner
 import io.github.hunterewok.clipboardbridge.kit.PairingMember
 import io.github.hunterewok.clipboardbridge.kit.Pairing
 import io.github.hunterewok.clipboardbridge.kit.PhoneGroup
+import io.github.hunterewok.clipboardbridge.kit.Restore
 import io.github.hunterewok.clipboardbridge.kit.TLSTransport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -37,7 +38,7 @@ import java.time.Instant
  * state is Compose state, changed on the main thread.
  */
 class AppModel(private val app: Context) {
-    enum class Phase { START, JOINING, HOME }
+    enum class Phase { START, JOINING, JOINING_COMPUTER, HOME }
 
     /** One line about the last action, in plain words, and the error underneath when details are on. */
     data class Note(@StringRes val text: Int, val detail: String? = null, val error: Boolean = false)
@@ -98,6 +99,10 @@ class AppModel(private val app: Context) {
 
     /** Whether this phone holds the group's root, which ends conflicts. */
     var isRoot by mutableStateOf(false)
+        private set
+
+    /** Whether the group's root handed the group to this phone, which may take it now. */
+    var handedOver by mutableStateOf(false)
         private set
 
     /** What the group's records stop and what ends it. */
@@ -226,6 +231,7 @@ class AppModel(private val app: Context) {
 
     /** Admits a scanned or pasted device; on success the app goes Home. */
     suspend fun scanned(text: String): Boolean {
+        if (text.trim().startsWith(RECOVERY_QR)) return restore(text.trim())
         val jc = read(text)
         if (jc == null) {
             message = Note(R.string.not_a_code, error = true)
@@ -236,6 +242,40 @@ class AppModel(private val app: Context) {
             group.admit(jc)
             phase = Phase.HOME
             message = null
+            return true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+            return false
+        } finally {
+            busy = false
+            update()
+        }
+    }
+
+    /**
+     * Restores the group with the recovery key from the sheet's QR code, on
+     * a phone without a group: the claim goes out, the app goes Home, and
+     * Home shows the time left until this phone becomes the root.
+     */
+    suspend fun restore(text: String): Boolean {
+        if (phase != Phase.START) {
+            message = Note(R.string.error_restore_has_group, error = true)
+            return false
+        }
+        busy = true
+        try {
+            val sheet = when (val r = withContext(Dispatchers.IO) { Core.readRecoverySheet(text) }) {
+                is Core.SheetReading.Key -> r.key
+                is Core.SheetReading.Refused -> {
+                    message = Note(R.string.error_sheet, if (settings.showsErrorDetails) r.message else null, error = true)
+                    return false
+                }
+            }
+            group.restore(sheet)
+            phase = Phase.HOME
+            message = Note(R.string.restore_started)
             return true
         } catch (e: CancellationException) {
             throw e
@@ -288,6 +328,36 @@ class AppModel(private val app: Context) {
             message = describe(e)
         } finally {
             joinCode = null
+        }
+    }
+
+    /** Opens the screen that joins a computer's group with the code cbb pair shows. */
+    fun startJoiningComputer() {
+        dismissWelcome()
+        message = null
+        phase = Phase.JOINING_COMPUTER
+    }
+
+    /**
+     * Joins a computer's group with the code the user typed from cbb pair on
+     * the group's root, then goes Home. A wrong code may be typed again: the
+     * computer's window takes three attempts.
+     */
+    suspend fun joinComputer(code: String) {
+        busy = true
+        message = null
+        try {
+            group.joinComputer(code)
+            update()
+            phase = Phase.HOME
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: PairingJoiner.Failure) {
+            message = describe(e, if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_join_wrong_code else R.string.error_join_computer)
+        } catch (e: Exception) {
+            message = describe(e)
+        } finally {
+            busy = false
         }
     }
 
@@ -380,6 +450,7 @@ class AppModel(private val app: Context) {
         val (root, a) = withContext(Dispatchers.IO) { group.isRoot to group.alerts }
         isRoot = root
         alerts = a
+        handedOver = withContext(Dispatchers.IO) { group.handedOver }
         recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
         notifier.observe(d)
         away = group.awayFromHome?.let { a ->
@@ -680,6 +751,19 @@ class AppModel(private val app: Context) {
         update()
     }
 
+    /** Takes the group the root handed to this phone (cbb handover), after the fingerprint or the screen lock. */
+    suspend fun takeHandedGroup() {
+        message = try {
+            group.takeHandedGroup()
+            Note(R.string.handed_taken)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
     /** Unfreezes an admin computer that another admin froze. */
     suspend fun unfreeze(id: String) {
         message = try {
@@ -883,6 +967,9 @@ class AppModel(private val app: Context) {
         /** How long the user may take to confirm a device that used an invitation (docs/protocol.md, section 12). */
         const val CONFIRM_MS = 5 * 60_000L
 
+        /** How the QR code of a recovery sheet starts (docs/protocol.md, section 10, "The recovery key"). */
+        const val RECOVERY_QR = "clipboardbridge://recover?"
+
         /** Reads what the camera saw, or what the user pasted: the text of the QR code of cbb pair or of another phone. */
         fun read(text: String): JoinCode? {
             val jc = JoinCode.parse(text) ?: return null
@@ -899,6 +986,16 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.NOT_ADMIN -> R.string.error_not_admin
                 LiveGroup.Failure.Kind.NO_COMPUTERS -> R.string.no_computers
                 LiveGroup.Failure.Kind.NO_SCREEN, LiveGroup.Failure.Kind.UNREACHABLE -> R.string.error_unreachable
+                LiveGroup.Failure.Kind.NO_WINDOW -> R.string.error_no_window
+                LiveGroup.Failure.Kind.TWO_WINDOWS -> R.string.error_two_windows
+                LiveGroup.Failure.Kind.NEEDS_ROOT -> R.string.error_needs_root
+                LiveGroup.Failure.Kind.NO_GROUP_COMPUTER -> R.string.error_no_group_computer
+            }
+            is Restore.Failure -> when (e.kind) {
+                Restore.Kind.NEEDS_QR -> R.string.error_restore_needs_qr
+                Restore.Kind.OTHER_GROUP -> R.string.error_restore_other_group
+                Restore.Kind.NOT_THE_KEY -> R.string.error_restore_not_the_key
+                Restore.Kind.NOT_A_MEMBER -> R.string.error_restore_not_a_member
             }
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large

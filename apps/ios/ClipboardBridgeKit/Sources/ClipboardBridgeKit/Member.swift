@@ -223,13 +223,19 @@ public enum Member {
         /// Whether the sender serves the content of media events (section
         /// 4, "Content").
         public var media: Bool
+        /// The group's first root, DER, which a computer sends on a
+        /// records-only connection with a device no record names yet, as a
+        /// new phone restoring the group with the recovery key (section 10,
+        /// "The recovery key").
+        public var groupCA: Data?
 
         public init(wallMS: Int64, current: Event? = nil, records: String? = nil, name: String? = nil, os: String? = nil,
                     adminKey: Data? = nil, tunnelKey: Data? = nil, tunnelPSK: Data? = nil, device: DeviceInfo? = nil, mode: String? = nil,
-                    keyStore: String? = nil, actions: [String] = [], media: Bool = false) {
+                    keyStore: String? = nil, actions: [String] = [], media: Bool = false, groupCA: Data? = nil) {
             (self.wallMS, self.current, self.records, self.name, self.os, self.adminKey, self.tunnelKey) =
                 (wallMS, current, records, name, os, adminKey, tunnelKey)
             (self.tunnelPSK, self.device, self.mode, self.keyStore, self.actions, self.media) = (tunnelPSK, device, mode, keyStore, actions, media)
+            self.groupCA = groupCA
         }
     }
 
@@ -702,7 +708,8 @@ public enum Member {
                                       mode: h.mode.flatMap { modes.contains($0) ? $0 : nil },
                                       keyStore: h.key_store.flatMap { $0 == Records.file || $0 == Records.hardware || $0 == Records.rootless ? $0 : nil },
                                       actions: Array((h.actions?.value ?? []).filter(Commands.validActionName).prefix(Commands.maxHelloActions)),
-                                      media: (h.features?.value ?? []).prefix(Member.maxFeatures).contains(Member.featureMedia)))
+                                      media: (h.features?.value ?? []).prefix(Member.maxFeatures).contains(Member.featureMedia),
+                                      groupCA: h.group_ca))
         case "event": return .event(w.event?.value)
         case "ping": return .ping
         case "bye": return .bye
@@ -742,6 +749,7 @@ public enum Member {
         var key_store: String?
         var actions: Lenient<[String]>?
         var features: Lenient<[String]>?
+        var group_ca: Data?
     }
 
     struct WireIn: Decodable {
@@ -767,7 +775,7 @@ public enum Member {
         init(_ m: Message) { self.m = m }
 
         enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get }
-        enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features }
+        enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features, group_ca }
 
         func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -789,6 +797,7 @@ public enum Member {
                 try hc.encodeIfPresent(h.keyStore, forKey: .key_store)
                 if !h.actions.isEmpty { try hc.encode(h.actions, forKey: .actions) }
                 if h.media { try hc.encode([Member.featureMedia], forKey: .features) }
+                try hc.encodeIfPresent(h.groupCA, forKey: .group_ca)
             case let .event(e):
                 try c.encode("event", forKey: .t)
                 try c.encodeIfPresent(e, forKey: .event)

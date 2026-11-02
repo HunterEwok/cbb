@@ -77,6 +77,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -103,6 +104,7 @@ fun Root(model: AppModel) {
                 when (model.phase) {
                     AppModel.Phase.START -> StartScreen(model)
                     AppModel.Phase.JOINING -> JoinScreen(model)
+                    AppModel.Phase.JOINING_COMPUTER -> JoinComputerScreen(model)
                     AppModel.Phase.HOME -> HomeScreen(model)
                 }
             }
@@ -135,10 +137,14 @@ private fun LocalNetworkPermission(model: AppModel) {
 private fun StartScreen(model: AppModel) {
     val palette = LocalPalette.current
     var adding by rememberSaveable { mutableStateOf(false) }
+    var restoring by rememberSaveable { mutableStateOf(false) }
     var settings by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { model.prepare() }
-    if (adding) {
-        AddDeviceScreen(model) { adding = false }
+    if (adding || restoring) {
+        AddDeviceScreen(model, restore = restoring) {
+            adding = false
+            restoring = false
+        }
         return
     }
     if (settings) {
@@ -189,6 +195,11 @@ private fun StartScreen(model: AppModel) {
             )
         }
         QuietButton(stringResource(R.string.join_other), onClick = { model.startJoining() })
+        QuietButton(stringResource(R.string.join_computer), onClick = { model.startJoiningComputer() })
+        QuietButton(stringResource(R.string.restore), onClick = {
+            model.dismissWelcome()
+            restoring = true
+        })
         model.message?.let { NoteText(it) }
     }
 }
@@ -272,6 +283,62 @@ private fun JoinScreen(model: AppModel) {
     }
 }
 
+/**
+ * Joining a computer's group: the six-digit code that cbb pair shows on
+ * the group's root, typed here; the phone finds the computer by itself.
+ */
+@Composable
+private fun JoinComputerScreen(model: AppModel) {
+    val palette = LocalPalette.current
+    val scope = rememberCoroutineScope()
+    var code by rememberSaveable { mutableStateOf("") }
+    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val leave = {
+        job?.cancel()
+        model.cancelJoin()
+    }
+    BackHandler { leave() }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Tokens.spacingLarge),
+    ) {
+        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
+        Text(
+            stringResource(R.string.join_computer_title),
+            style = MaterialTheme.typography.headlineMedium,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = palette.accent,
+            textAlign = TextAlign.Center,
+        )
+        Text(stringResource(R.string.join_computer_hint), textAlign = TextAlign.Center, color = palette.textDim)
+        OutlinedTextField(
+            value = code,
+            onValueChange = { v -> code = v.filter(Char::isDigit).take(6) },
+            singleLine = true,
+            enabled = !model.busy,
+            label = { Text(stringResource(R.string.join_computer_code)) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            textStyle = MaterialTheme.typography.headlineSmall.copy(fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center),
+            modifier = Modifier.widthIn(max = 240.dp),
+        )
+        if (model.busy) {
+            CircularProgressIndicator(color = palette.accent)
+            Text(stringResource(R.string.join_computer_searching), color = palette.textDim)
+        } else {
+            AccentButton(
+                stringResource(R.string.join_computer_go),
+                enabled = code.length == 6,
+                onClick = { job = scope.launch { model.joinComputer(code) } },
+            )
+        }
+        model.message?.let { NoteText(it) }
+        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
+        QuietButton(stringResource(R.string.cancel), onClick = leave)
+    }
+}
+
 /** A QR code drawn module by module, black on the white behind it. */
 @Composable
 internal fun QrCode(text: String, modifier: Modifier) {
@@ -338,9 +405,13 @@ internal fun Confirm(title: String, body: String, action: String, dismiss: () ->
 
 // Adding
 
-/** The camera with a frame; the text of the QR code by hand when there is no camera or it is not allowed. */
+/**
+ * The camera with a frame; the text of the QR code by hand when there is no
+ * camera or it is not allowed. With restore, it scans the recovery sheet's
+ * QR code instead, on a phone without a group.
+ */
 @Composable
-internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
+internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -365,7 +436,7 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
         if (adding == null) {
             adding = scope.launch {
                 try {
-                    if (model.scanned(text)) close()
+                    if (if (restore) model.restore(text.trim()) else model.scanned(text)) close()
                 } finally {
                     adding = null
                 }
@@ -373,14 +444,14 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
         }
     }
     BackHandler { close() }
-    Page(stringResource(R.string.add_device), close) {
+    Page(stringResource(if (restore) R.string.restore_title else R.string.add_device), close) {
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> scope.launch { if (!model.busy) add(text) } },
                 modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
                 onError = { cameraError = it },
             )
-            Text(stringResource(R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(stringResource(if (restore) R.string.restore_hint else R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         } else if (cameraError != null) {
             // The camera did not start: the text of the QR code still works.
             NoteText(model.describe(cameraError!!, R.string.camera_failed, log = false))
@@ -400,7 +471,7 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),
         )
-        AccentButton(stringResource(R.string.add), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
+        AccentButton(stringResource(if (restore) R.string.restore_go else R.string.add), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
         if (model.busy) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)

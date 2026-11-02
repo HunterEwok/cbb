@@ -60,7 +60,7 @@ lands in the source tree.
 | `recovery_sheet` | `key` (the recovery key's 32 bytes, base64), `cert` (its admin CA, DER, base64), `group` (the group's tag) | `{"qr", "text", "admin"}`: the sheet's QR code and text ([protocol.md](protocol.md), section 10, "The recovery key") and the key hash the `recovery` record names. An admin CA that is not the key's is refused with `cert` |
 | `read_recovery_sheet` | `text`: what the user scanned or typed | `{"sheet"}` with `key` (32 bytes), `pkcs8`, `public` (uncompressed), `admin` (its key hash), all base64, and from the QR code `cert` and `group`; or `{"refused": {"reason", "message"}}` as `read_invite`, with the reasons of protocol.md's "The recovery sheet" |
 | `group_add` | the set's arguments (see "The record set"), `records` | `{"file", "fresh", "errors"}`: the new file, the records it did not hold before, and why it left others out (optional) |
-| `group_view` | the set's arguments | `{"state", "devices", "path", "root_member", "hub_order", "digest", "claim_times", "records"}`: see "The record set" |
+| `group_view` | the set's arguments | `{"state", "devices", "path", "root_member", "hub_order", "handed_to", "digest", "claim_times", "records"}`: see "The record set" |
 | `group_refused` | the set's arguments, `chain` (a chain `check_member` took, leaf first) | `{"verdict", "why", "claimant"}`: `ok`, `not_listed` (the set does not name the device yet), `taken_over` (the root's own device that a claim took the group over from, whose connection carries records only; `claimant` is `{device, admin}`), `stopped` (the state stops the exchange with the device, docs/protocol.md section 10, "Stopping the exchange"; its connection carries records only) or `refused`, with the reason for the log |
 | `group_taken_over` | the set's arguments, `chain` (the member's own) | `{"claimant"}`: `{device, admin}` of the admin that took the group over from this root by a claim that took effect; `{}` when none did |
 | `group_refused_admin_ca` | the set's arguments, `ca` (base64 DER) | `{"verdict", "why"}` for an admin CA, as for `group_refused` |
@@ -139,6 +139,7 @@ most the records records-v2.md allows. `group_view` answers:
 | `path` | the roots' certificates on the path, the group CA first, base64 DER |
 | `root_member` | `{device, key}`: the device that holds the root key, when the set names one |
 | `hub_order` | the devices that may be hubs, in the order members try them |
+| `handed_to` | the admin key hash (base64) of the current root's newest `handover` record that the state does not ignore, while that key is neither revoked nor frozen; left out without one. The phone with that admin key offers to take the group, and its claim takes effect at once (docs/protocol.md, section 10, "Handing the group over") |
 | `digest` | the set's digest, which a hello carries; left out for an empty set |
 | `claim_times` | `[{record, ms}]`: when the set first held each claim, which a Welcome passes on |
 | `known` | every device ID a device record names, counted or not: IDs a new device must not take |

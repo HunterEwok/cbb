@@ -50,7 +50,7 @@ const (
 	OpAdmin       = "admin"          // client → service: on the root, make the device Name names an admin
 	OpTakeover    = "takeover"       // client → service: on an admin, take the group over from the lost root Name names
 	OpDelay       = "takeover-delay" // client → service: on the root, set how long a claim waits to Value, a duration
-	OpRecovery    = "recovery"       // client → service: claim the group with its recovery key, the payload the sheet's text or QR code
+	OpRecovery    = "recovery"       // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
 	OpHandover    = "handover"       // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
 	OpInvite      = "invite"         // client → service: make a remote invitation on the hub; answers and a question follow
@@ -83,6 +83,9 @@ const (
 	OpKeys        = "keys"           // uinput helper (root) → service: may it press Name ("paste" or "enter") for the user Value, under the grant Keys of an inject
 	OpRemote      = "remote"         // client → service: Name "add" (Address, Value the kind, NewName, Consent), "code" (Code), "cancel", "remove", "pastes" (Value on or off), "type" (the payload), for the TV Device, or "" (status): this device as a TV's remote
 )
+
+// RecoveryCard is OpRecovery's Name when the recovery key is on a YubiKey.
+const RecoveryCard = "yubikey"
 
 // Kinds and the ways a text came, as Header.Kind and Header.Via carry them.
 const (

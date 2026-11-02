@@ -4,13 +4,18 @@ import SwiftUI
 import VisionKit
 
 /// The camera with a frame; the six digits by hand when there is no camera.
+/// With restore, it reads the recovery sheet's QR code instead, on a phone
+/// without a group, and the key may be pasted by hand.
 struct AddDeviceView: View {
+    let restore: Bool
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var typed = ""
     /// The device being admitted; leaving the sheet cancels it.
     @State private var adding: Task<Void, Never>?
+
+    init(restore: Bool = false) { self.restore = restore }
 
     var body: some View {
         NavigationStack {
@@ -19,18 +24,28 @@ struct AddDeviceView: View {
                     QRScanner { text in add(text) }
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous))
                     .frame(maxHeight: 360)
-                    Text("Point the camera at the QR code of cbb pair, or at the one your other phone shows.")
-                        .multilineTextAlignment(.center)
+                    if restore {
+                        Text("Point the camera at the QR code on the recovery sheet. Keep this phone on the network of a computer of the group. This phone becomes the group's root when the group's waiting time ends, unless the old phone cancels it.")
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text("Point the camera at the QR code of cbb pair, or at the one your other phone shows.")
+                            .multilineTextAlignment(.center)
+                    }
                 } else {
-                    Text("Paste the text of the QR code of cbb pair.")
-                        .multilineTextAlignment(.center)
+                    if restore {
+                        Text("Paste the text of the recovery sheet's QR code.")
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text("Paste the text of the QR code of cbb pair.")
+                            .multilineTextAlignment(.center)
+                    }
                     TextField(String(localized: "QR code text", bundle: .app), text: $typed, axis: .vertical)
                         .font(.system(.body, design: .monospaced))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding(Tokens.spacingMedium)
                         .glassCard()
-                    Button("Add") { add(typed) }
+                    Button(restore ? String(localized: "Restore", bundle: .app) : String(localized: "Add", bundle: .app)) { add(typed) }
                     .buttonStyle(AccentButtonStyle())
                     .disabled(typed.isEmpty || model.busy)
                 }
@@ -43,7 +58,7 @@ struct AddDeviceView: View {
             }
             .padding(Tokens.spacingLarge)
             .background(AppBackground())
-            .navigationTitle(Text("Add a device"))
+            .navigationTitle(restore ? Text("Restore the group") : Text("Add a device"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -58,7 +73,7 @@ struct AddDeviceView: View {
     private func add(_ text: String) {
         guard adding == nil else { return }
         adding = Task {
-            if await model.scanned(text) { dismiss() }
+            if await (restore ? model.restore(text) : model.scanned(text)) { dismiss() }
             adding = nil
         }
     }

@@ -376,6 +376,7 @@ private fun Summary(model: AppModel) {
  */
 @Composable
 private fun Alerts(model: AppModel) {
+    Handed(model)
     if (model.alerts.isEmpty()) return
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
@@ -410,6 +411,29 @@ private fun Alerts(model: AppModel) {
                 else -> {}
             }
         }
+    }
+}
+
+/** The root handed the group to this phone (cbb handover): the button that takes it. */
+@Composable
+private fun Handed(model: AppModel) {
+    if (!model.handedOver) return
+    val palette = LocalPalette.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+        Text(stringResource(R.string.handed_title), style = MaterialTheme.typography.titleMedium, color = palette.text)
+        Text(stringResource(R.string.handed_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+        AccentButton(stringResource(R.string.handed_take), enabled = !busy, onClick = {
+            busy = true
+            scope.launch {
+                try {
+                    model.takeHandedGroup()
+                } finally {
+                    busy = false
+                }
+            }
+        })
     }
 }
 

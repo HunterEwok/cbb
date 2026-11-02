@@ -55,6 +55,17 @@ func (r recordStore) Add(from group.DeviceID, rs []group.Record) []group.Record 
 
 func (r recordStore) Settle(fresh []group.Record) { r.s.settleRecords(fresh) }
 
+// GroupCA is the group's first root, which a records-only connection
+// with a device no record names yet sends it (node.Node's hello).
+func (r recordStore) GroupCA() *x509.Certificate {
+	r.s.recMu.Lock()
+	defer r.s.recMu.Unlock()
+	if r.s.records == nil {
+		return nil
+	}
+	return r.s.records.GroupCA()
+}
+
 // loadRecords reads the records of the group of id; a file that cannot be
 // read leaves the set empty, since the peers give the records again.
 func (s *Service) loadRecords(id *group.Identity) *group.Records {

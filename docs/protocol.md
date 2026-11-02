@@ -545,6 +545,7 @@ depends on a version number.
 | `release_seq` | integer or absent | the `seq` of the channel file of the newest signed release the sender holds (section 16, "In the group"); absent when it holds none |
 | `release_keys_seq` | integer or absent | with `release_seq`: the `seq` of that release's `keys.json`; absent when it holds none |
 | `features` | array of strings or absent | what the sender supports beyond the protocol of its ALPN version, each name once: `media` from a member that serves the content of media events ("Content", below), so others may send it `get` (the lite member serves none). A receiver reads the first 32 names and ignores those it does not know, so a later release adds a feature without a new ALPN version |
+| `group_ca` | string or absent | from a full member on a connection that carries records only with a device no `device` record names ("Records only" in the exchange): the group's first root, DER in base64, so that a new phone restoring the group with the recovery key builds the group's path from the records (section 10, "The recovery key"). Every other hello leaves it out |
 | `seal` | string or absent | the sender's public key for sealed messages, 1216 bytes in base64 (an X-Wing key, `internal/seal`), which the group's root puts in the sender's device record (`seal`, section 10) so that commands for it can be sealed (section 15); a key of another size is ignored; absent from the phones for now |
 
 ### Device
@@ -1875,6 +1876,31 @@ after every phone was lost, issues itself a member certificate under the recover
 CA. Its device has no `device` record, so its connections carry records only ("Certificates"):
 it fetches the records, signs its claim with what it holds as `seen`, and leaves it there. Once
 the claim takes effect, its new root certifies the device as a member.
+
+Such a phone holds no root of the group before it connects: the recovery sheet's QR code carries
+the group's tag and the key's admin CA only. It dials a full member that browsing finds with that
+tag, presenting its member certificate and the admin CA as the chain, and takes the server's
+certificate unchecked during the handshake. The member's hello carries `group_ca` (section 4,
+"Hello"), and the phone MUST check, before it signs anything: the tag of `group_ca` is the
+sheet's; the records the member sent lead from `group_ca` to a path whose current root issued
+the admin CA (an admin CA under it); the state names the key in `recovery`; and the member's TLS
+certificate verifies to a root on that path and names a device the records list. A phone that
+finds any of these false closes the connection and tries another member. The claim it signs,
+with the admin CA as its chain, waits the root's delay as any recovery claim; the phone keeps
+fetching the records over the same kind of connection until the claim takes effect, is
+cancelled or becomes void.
+
+**On a hardware key.** A recovery key on a YubiKey, or another card with the PIV application
+(NIST SP 800-73-4), is a P-256 key the card made in a free retired key slot (82 to 95, the
+first with neither key nor certificate), which never leaves it; the card asks for its PIN, and
+for a touch where it can, before each signature. The slot's certificate object holds the key's
+admin CA, uncompressed, so that the card alone leads to the key: a computer or a new phone
+reads the retired slots' certificates and takes the one whose key hash the state names in
+`recovery`, then signs with that slot's key (GENERAL AUTHENTICATE over a SHA-256 digest).
+Nothing else on the card is changed, since it may be in use for other things. Making the key
+needs the card's management key: the phones use the factory one with AES only (a YubiKey
+from firmware 5.7), and refuse a card whose management key is 3DES or that does not say;
+signing needs only the PIN.
 
 A newer `recovery` record replaces the older one: the key the older one named is no admin
 any more, and its claims do not count. A `revoke` of the key removes it (a root's own key, or

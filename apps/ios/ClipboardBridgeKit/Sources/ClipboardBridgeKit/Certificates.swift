@@ -13,7 +13,7 @@ public protocol CertificateSigner {
 }
 
 /// A software P-256 key as a CertificateSigner.
-public struct SoftwareSigner: CertificateSigner {
+public struct SoftwareSigner: CertificateSigner, Sendable {
     public let key: P256.Signing.PrivateKey
     public init(_ key: P256.Signing.PrivateKey = .init()) { self.key = key }
     public var publicKeyDER: Data { key.publicKey.derRepresentation }
@@ -368,6 +368,7 @@ struct ParsedCertificate {
 /// What ClipboardBridgeKit reads from a certificate: its subject, validity and
 /// public key. It is a minimal DER reader, not a verifier.
 public struct CertificateInfo {
+    public let rawIssuer: [UInt8]
     public let rawSubject: [UInt8]
     public let notBefore: Date
     public let notAfter: Date
@@ -380,13 +381,16 @@ public struct CertificateInfo {
         if tbs.peek == 0xa0 { _ = try tbs.readAny() } // version
         _ = try tbs.read(0x02) // serial
         _ = try tbs.read(0x30) // algorithm
-        _ = try tbs.readAny() // issuer
+        rawIssuer = try tbs.readAny(raw: true).bytes
         var validity = try tbs.read(0x30)
         notBefore = try validity.readTime()
         notAfter = try validity.readTime()
         rawSubject = try tbs.readAny(raw: true).bytes
         publicKey = Data(try tbs.readAny(raw: true).bytes)
     }
+
+    /// Whether the certificate names itself as its issuer, as a root does.
+    public var selfIssued: Bool { rawIssuer == rawSubject }
 
     /// The subject's common name, or nil without one.
     public var commonName: String? {

@@ -55,6 +55,13 @@ private val P256_SPKI_PREFIX = byteArrayOf(
     0x06, 0x08, 0x2a, 0x86.toByte(), 0x48, 0xce.toByte(), 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00, 0x04,
 )
 
+/** The SubjectPublicKeyInfo of a P-256 public key given as an uncompressed point (0x04, X, Y); null for anything else. */
+internal fun p256SPKI(point: ByteArray): ByteArray? {
+    if (point.size != 65 || point[0] != 0x04.toByte()) return null
+    val spki = P256_SPKI_PREFIX + point.copyOfRange(1, 65)
+    return spki.takeIf { p256PublicKey(it) != null }
+}
+
 /** The P-256 public key of a SubjectPublicKeyInfo, or null for anything else. */
 internal fun p256PublicKey(spki: ByteArray): PublicKey? {
     if (spki.size != 91 || !spki.copyOf(P256_SPKI_PREFIX.size).contentEquals(P256_SPKI_PREFIX)) return null
@@ -496,6 +503,7 @@ internal class ParsedCertificate(der: ByteArray) {
  * key. It is a minimal DER reader, not a verifier.
  */
 class CertificateInfo(der: ByteArray) {
+    val rawIssuer: ByteArray
     val rawSubject: ByteArray
     val notBefore: Instant
     val notAfter: Instant
@@ -509,13 +517,16 @@ class CertificateInfo(der: ByteArray) {
         if (tbs.peek == 0xa0) tbs.readAny() // version
         tbs.read(0x02) // serial
         tbs.read(0x30) // algorithm
-        tbs.readAny() // issuer
+        rawIssuer = tbs.readAny(raw = true).bytes
         val validity = tbs.read(0x30)
         notBefore = validity.readTime()
         notAfter = validity.readTime()
         rawSubject = tbs.readAny(raw = true).bytes
         publicKey = tbs.readAny(raw = true).bytes
     }
+
+    /** Whether the certificate names itself as its issuer, as a root does. */
+    val selfIssued: Boolean get() = rawIssuer.contentEquals(rawSubject)
 
     /** The subject's common name, or null without one. */
     val commonName: String?

@@ -10,8 +10,28 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both
-  phones' kits dial that window and check the root's Welcome (`PairingJoiner.join`); the apps'
-  screen follows.
+  phones' kits dial that window and check the root's Welcome (`PairingJoiner.join`), and both
+  apps' Start screen has "My group was made on a computer", where the user types that code.
+- When the group's root hands the group to a phone (`cbb handover`), the phone's Home shows "The
+  group is yours to take": one tap and Face ID or the screen lock make it the root at once, and
+  the computer stays in the group. The core's `group_view` names that admin key
+  (`handed_to`, docs/core-api.md).
+- A new phone restores the group with the recovery sheet: both apps' Start screen has "I have
+  the group's recovery sheet", which scans its QR code, takes the group's records from a
+  computer of the group, checks them and claims the group with the recovery key; the phone is
+  the root once the group's wait ends, unless the root phone cancels the claim. A computer now
+  sends the group's first root in its hello to a device no record names (`group_ca`,
+  docs/protocol.md, section 10), and both kits restore with `Restore`.
+- The phone kits put the group's recovery key on a YubiKey and restore with it (`Piv`, Kotlin
+  and Swift): the card makes the key in the first free retired PIV slot with the PIN and a
+  touch before each signature, the root's admin CA for it goes into the slot, and a new phone
+  finds it there and has the card sign its member certificate and its claim
+  (`Restore.onCard`). Making the key needs a YubiKey with firmware 5.7 or later, whose factory
+  management key is AES; an older one keeps the sheet. The apps' screens for it follow.
+- `cbb recovery -yubikey`: the recovery key on a YubiKey claims the group from a computer. The
+  YubiKey signs the claim after its PIN; the key stays on it, in a retired PIV slot whose
+  certificate is the key's admin CA (docs/protocol.md, section 10). PC/SC without cgo on
+  Linux and FreeBSD (`pcscd`), WinSCard on Windows, the PCSC framework on a Mac.
 - `cbb recovery`: when every phone with the group is lost, any computer of the group claims it
   with the recovery key typed from the sheet (or its QR code's text) and becomes the root after
   the group's wait, unless the root phone cancels the claim. `cbb handover NAME`, on the root,
