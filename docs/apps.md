@@ -280,7 +280,7 @@ phone's answer on `/cbb/done`; the key signs only while the watch is unlocked.
 
 ## The Mac app
 
-The Mac app (`apps/macos`, SwiftUI, macOS 14) is a window and a menu bar item over the
+The Mac app (`apps/macos`, SwiftUI, macOS 14) is a menu bar item and a window over the
 service that the installer or Homebrew put on the Mac; the service and its pasteboard agent
 keep syncing without it. It speaks the service's control socket (`Control`, the protocol of
 `internal/control`: a JSON header line, then the payload), as a member of the
@@ -293,7 +293,12 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   bottom. "+" gives the commands that add a device.
 - **Alerts**: the phones' card (Home, above) under the group's line, from `cbb status`;
   on the root its buttons run `cbb revoke` or `cbb resolve` as the administrator.
-- **The menu bar item**: how many devices are online, send, fetch, the window, Settings.
+- **The menu bar item**: how many devices are online, send, fetch, the window, Settings. Like
+  the tray app it lives there only: no Dock icon (`LSUIElement`) and no window at launch;
+  "Open Clipboard Bridge" opens it. Its glyph is a template image from `tools/icon` in three
+  states (no group or a problem, a group, another device online), which macOS draws white or
+  black for the menu bar. The app makes itself a login item on its first run
+  (`SMAppService`); Settings, "Open at login", turns that off.
 - **Settings**: the colour and the appearance of the phones (`Theme.swift` and `Tokens.swift`
   of the iPhone app, shared), this Mac's sync mode (`cbb mode`), whether the app may press keys for remote paste, and error details (on in debug builds, off in release ones, and
   the `ShowErrorDetails` default either way).
@@ -328,7 +333,10 @@ service and its clipboard agent keep syncing without it.
   computer, a device's details beside them, and "Send the clipboard" and "Fetch".
 - **Alerts**: the Mac app's card above the devices, with the same buttons on the root.
 - **The tray item**: how many devices are online, send, fetch, the window, Quit. Closing the
-  window keeps the tray item; starting the app again opens the window.
+  window keeps the tray item; starting the app again opens the window. Its glyph is the Mac's
+  in the same three states, single-colour: on Windows a black and a white ICO, which the
+  system switches with the taskbar's theme; on Linux a white PNG, black when the desktop
+  portal says the user prefers a light look (`color-scheme`), read once at start.
 - **Settings**: the ten colours (`frontend/tokens.js`, which `go run ./tools/tokens` writes
   with the Swift and Kotlin tokens), the appearance, this computer's sync mode (`cbb mode`),
   and error details (as cbb: on in a
@@ -807,7 +815,7 @@ the app on real devices.
   drawings; `go run ./tools/icon` sets each on a fill of its colour as the iPhone app's icon
   for light and dark mode, and the Android app takes the same drawings; `icon/tray/` holds the single-colour glyph of
   the Mac's menu bar and the tray in three states, which the tool copies into the Mac app's asset catalog as template
-  images and turns into the tray's symbolic SVGs for Linux and white and black ICOs for Windows in `apps/desktop/trayicon`); `go run ./tools/tokens` turns `tokens.json` into
+  images and turns into the tray's symbolic SVGs and white and black PNGs for Linux and white and black ICOs for Windows in `apps/desktop/trayicon`); `go run ./tools/tokens` turns `tokens.json` into
   `apps/ios/ClipboardBridge/Theme/Tokens.swift` and the Android apps' `Tokens.kt` and fails when a palette misses the
   WCAG AA contrast, and CI checks that the generated files are up to date; `apps/l10n/` — the shared glossary of terms, so
   both apps use the same words.

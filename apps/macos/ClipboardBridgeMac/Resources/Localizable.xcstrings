@@ -971,6 +971,26 @@
         }
       }
     },
+    "Open at login": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывать при входе в систему"
+          }
+        }
+      }
+    },
+    "Clipboard Bridge lives in the menu bar; its window opens from there.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clipboard Bridge живёт в строке меню; его окно открывается оттуда."
+          }
+        }
+      }
+    },
     "Show error details": {
       "localizations": {
         "ru": {

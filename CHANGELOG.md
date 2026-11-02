@@ -714,6 +714,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Changed
 
+- The Mac app lives in the menu bar only, as the tray app does on Windows and Linux: no Dock
+  icon, no window at launch (the menu opens it), and it starts at login unless Settings turns
+  that off. The menu bar and the tray show a single-colour glyph in three states, drawn
+  white or black to suit the menu bar, the taskbar or the panel.
 - `cbb global` no longer repeats that the device keeps its keys in files each time it
   shows the status; `cbb global on` says it once, when the user agrees.
 - Remote paste on the phones: with the text left empty, Paste sends what the phone's

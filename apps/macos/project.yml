@@ -33,6 +33,9 @@ targets:
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ru]
         LSApplicationCategoryType: public.app-category.utilities
+        # Lives in the menu bar only, as the tray app on Windows and Linux:
+        # no Dock icon; the window opens from the menu.
+        LSUIElement: true
         # The type of a dragged tile, which stays in the app (Views/Arrange.swift).
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: io.github.hunterewok.clipboardbridge.mac.tile
