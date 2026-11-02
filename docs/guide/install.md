@@ -265,5 +265,5 @@ This removes the program, the service and the firewall rules the installer added
 device's keys stay, so installing again brings it back into its group. To delete them too,
 add `--purge` (`-Purge` on Windows, with
 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`),
-then remove the device from the group on another one (`sudo cbb revoke NAME`, or on the
+then remove the device from the group on another one (`sudo cbb remove NAME`, or on the
 phone).

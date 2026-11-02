@@ -153,7 +153,7 @@ cron on OpenWrt), as the installer asks once (`--auto-update on|off`).
 
 Without mDNS on the network, name the full members in a drop-in
 (`sudo systemctl edit clipboardbridge`): `ExecStart=` and then
-`ExecStart=/usr/local/bin/cbb run -peer 192.168.0.10:8764 -peer ...`. `run -no-listen`
+`ExecStart=/usr/local/bin/cbb service -peer 192.168.0.10:8764 -peer ...`. `service -no-listen`
 turns the member port off (the device then only dials the computers).
 
 ### Without sudo (rootless)
@@ -189,7 +189,7 @@ su -s /bin/sh clipboardbridge -c 'cbb pair -name router'
 ```
 
 It installs OpenWrt's procd service, the same as a full member's
-([installing](../docs/guide/install.md#openwrt)), which runs `cbb run` as the user
+([installing](../docs/guide/install.md#openwrt)), which runs `cbb service` as the user
 `clipboardbridge`. The keys live in `/etc/clipboardbridge/state`, the control socket is
 `/var/run/clipboardbridge/control.sock`. The member port, mDNS and the QR code's addresses
 use only the devices of the `lan` zone, which the service gets as `CBB_INTERFACES`; the same
@@ -284,7 +284,7 @@ runs at NextPi's shell on the Pi's UART until the driver stops it:
 
 ```
 cbb next link -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00 -log /ram/link.log
-cbb run -peer 127.0.0.1:8769
+cbb service -peer 127.0.0.1:8769
 ```
 
 - `-to host:port`: the member to dial, a computer at home; each connection the lite
@@ -296,7 +296,7 @@ cbb run -peer 127.0.0.1:8769
   that admits it (`cbb next pair -addr <the ESP's address>:<esp-port>`).
 - `-udp local-port:host:port`: a local UDP port that leads, through one UDP connection
   of the ESP, to host:port: the hub, or a forwarder that leads to it. With
-  `cbb run -tunnel-via 127.0.0.1:local-port`, the tunnel of sync away from home sends its
+  `cbb service -tunnel-via 127.0.0.1:local-port`, the tunnel of sync away from home sends its
   packets there instead of to the hub's own addresses, so the Pi syncs away from home
   through the ESP too; WireGuard's keys stay on the Pi.
 - `-zone`: the Next's clock (the DS1307) keeps local time without a zone; the link sets

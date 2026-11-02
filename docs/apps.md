@@ -96,7 +96,7 @@ they look, so both apps are built to the same plan.
    "Make it an admin" when the computer offers an admin key (docs/protocol.md, section 10,
    "A computer as admin"): it asks once, warns that the key is a file on the computer, needs
    Face ID, and the computer then adds and removes devices with `cbb pair` and
-   `cbb revoke`. If the removed phone held the root, this phone
+   `cbb remove`. If the removed phone held the root, this phone
    takes it over in the same step. A connected computer's page shows its sync mode and, on an admin phone,
    offers "Sync mode": the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
@@ -292,7 +292,7 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   with its device ID and when it was last seen), and "Send the clipboard" and "Fetch" at the
   bottom. "+" gives the commands that add a device.
 - **Alerts**: the phones' card (Home, above) under the group's line, from `cbb status`;
-  on the root its buttons run `cbb revoke` or `cbb resolve` as the administrator.
+  on the root its buttons run `cbb remove` or `cbb resolve` as the administrator.
 - **The menu bar item**: how many devices are online, send, fetch, the window, Settings. Like
   the tray app it lives there only: no Dock icon (`LSUIElement`) and no window at launch;
   "Open Clipboard Bridge" opens it. Its glyph is a template image from `tools/icon` in three

@@ -167,4 +167,4 @@ SteamOS पर यह `sudo sh /opt/clipboardbridge/share/uninstall.sh` है�
 
 Windows पर: सेटिंग्स, ऐप्स, "Clipboard Bridge", अनइंस्टॉल।
 
-इससे प्रोग्राम, सेवा और इंस्टॉलर के जोड़े फ़ायरवॉल नियम हट जाते हैं। डिवाइस की कुंजियाँ रहती हैं, इसलिए दोबारा इंस्टॉल करने पर वह अपने समूह में लौट आता है। उन्हें भी मिटाने के लिए `--purge` जोड़ें (Windows पर `-Purge`, `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge` के साथ), फिर किसी दूसरे डिवाइस से इस डिवाइस को समूह से हटाएँ (`sudo cbb revoke NAME`, या फ़ोन पर)।
+इससे प्रोग्राम, सेवा और इंस्टॉलर के जोड़े फ़ायरवॉल नियम हट जाते हैं। डिवाइस की कुंजियाँ रहती हैं, इसलिए दोबारा इंस्टॉल करने पर वह अपने समूह में लौट आता है। उन्हें भी मिटाने के लिए `--purge` जोड़ें (Windows पर `-Purge`, `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge` के साथ), फिर किसी दूसरे डिवाइस से इस डिवाइस को समूह से हटाएँ (`sudo cbb remove NAME`, या फ़ोन पर)।

@@ -39,9 +39,9 @@
     <string name="admin">admin</string>
     <string name="make_admin">Make it an admin</string>
     <string name="make_admin_title">Make %1$s an admin?</string>
-    <string name="make_admin_body">It can then add and remove devices with cbb pair and cbb revoke. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.</string>
-    <string name="make_admin_hardware_body">It can then add and remove devices with cbb pair and cbb revoke. Its keys are in its hardware, which never lets them out.</string>
-    <string name="made_admin">It is an admin now: it adds and removes devices with cbb pair and cbb revoke.</string>
+    <string name="make_admin_body">It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.</string>
+    <string name="make_admin_hardware_body">It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.</string>
+    <string name="made_admin">It is an admin now: it adds and removes devices with cbb pair and cbb remove.</string>
     <string name="frozen">frozen</string>
     <string name="unfreeze">Unfreeze</string>
     <string name="unfreeze_title">Unfreeze %1$s?</string>

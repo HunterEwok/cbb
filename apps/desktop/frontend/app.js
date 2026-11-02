@@ -654,7 +654,7 @@ async function deviceAction(action) {
       if (await ask(t("Remove %s?", d.name), t("It will no longer sync with your devices. To add it again, pair it again."), t("Remove"))) await act("Remove", d.id);
       break;
     case "admin":
-      if (await ask(t("Make %s an admin?", d.name), t("It can then add and remove devices with cbb pair and cbb revoke. Its key is a file on the computer, so do this only for a computer you keep safe."), t("Make it an admin"))) await act("MakeAdmin", d.id);
+      if (await ask(t("Make %s an admin?", d.name), t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe."), t("Make it an admin"))) await act("MakeAdmin", d.id);
       break;
     case "freeze":
       if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);

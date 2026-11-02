@@ -127,7 +127,7 @@ line here with every new function, and a case for it in the catalogue.
 | G.44 | `cbb unfreeze` | G22 |
 | G.45 | A mutual freeze | G22, G33 |
 | G.46 | Phones' "Unfreeze" | G22, A1 |
-| G.47 | `cbb revoke` by name and by device ID | G23 |
+| G.47 | `cbb remove` by name and by device ID | G23 |
 | G.48 | Removing an admin keeps the devices it admitted | G23 |
 | G.49 | Removing a phone (both keys) | G23 |
 | G.50 | Connections of a removed device closed at once | G23 |

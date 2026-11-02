@@ -55,8 +55,8 @@ Commands:
                        (-addr: where the phone reaches this device, when the
                        code would name the wrong addresses).
   pair -code host:port Join with the code from cbb pair on a full member.
-  run [-name name] [-port port] [-peer host:port]... [-no-mdns] [-no-listen]
-      [-tunnel-via host:port]
+  service [-name name] [-port port] [-peer host:port]... [-no-mdns]
+          [-no-listen] [-tunnel-via host:port]
                        Run the service (started by systemd or procd): it
                        dials the computers, and phones and other lite
                        members dial it on the member port (8764, CBB_PORT).
@@ -108,7 +108,7 @@ Commands:
   help                 Print this help.
 
 This is the lite member: the commands of a full member, such as invite or
-revoke, are not here, and pair only joins a group. The state directory is
+remove, are not here, and pair only joins a group. The state directory is
 /var/lib/clipboardbridge (CBB_STATE), the control socket /run/clipboardbridge/control.sock
 (CBB_SOCKET); on OpenWrt /etc/clipboardbridge/state and
 /var/run/clipboardbridge/control.sock; installed without root (install.sh
@@ -119,8 +119,7 @@ port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the
 
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] =
-    &["revoke", "admin", "takeover", "new", "invite", "holder", "forward", "relay", "service", "agent"];
+const FULL_ONLY: &[&str] = &["remove", "admin", "takeover", "new", "invite", "holder", "forward", "relay", "agent"];
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -172,9 +171,8 @@ fn main() {
             let rest = &args[1..];
             let res = match cmd {
                 "pair" => join(&g, rest, false),
-                "join" => Err(Error::msg("cbb join is cbb pair now, as on a full member")),
                 "next" => std::process::exit(next::run(&g, rest)),
-                "run" => cmd_run(&g, rest),
+                "service" => cmd_service(&g, rest),
                 "copy" => cmd_copy(&g, rest),
                 "paste" => cmd_paste(&g, rest),
                 "status" => cmd_status(&g, rest),
@@ -411,7 +409,7 @@ fn qr(text: &str) -> String {
     out
 }
 
-fn cmd_run(g: &Global, args: &[String]) -> Result<()> {
+fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
     let mut cfg = service::Config {
         state_dir: g.state.clone(),
         socket: g.socket.clone(),
@@ -461,7 +459,7 @@ fn connect(g: &Global) -> Result<UnixStream> {
 }
 
 /// The hint when the service cannot be reached: systemd's command where
-/// systemd runs, else `cbb run` itself (NextPi on the ZX Spectrum Next, say,
+/// systemd runs, else `cbb service` itself (NextPi on the ZX Spectrum Next, say,
 /// has no systemd).
 fn not_running() -> String {
     hint(std::path::Path::new("/run/systemd/system").is_dir(), rootless::systemctl())
@@ -471,7 +469,7 @@ fn hint(systemd: bool, systemctl: &str) -> String {
     if systemd {
         format!("is it running ({systemctl} status clipboardbridge)?")
     } else {
-        "is it running (start it with cbb run)?".to_string()
+        "is it running (start it with cbb service)?".to_string()
     }
 }
 
@@ -871,7 +869,7 @@ the group. To keep that from happening:
 
   - encrypt the disk or memory card where you can (LUKS);
   - keep the service's state directory out of unencrypted backups;
-  - remove the device at once (Remove on the phone, or cbb revoke on a full
+  - remove the device at once (Remove on the phone, or cbb remove on a full
     member) when it is lost or someone else may have had root on it.
 
 ";
@@ -1224,11 +1222,11 @@ fn core_version() -> String {
 mod tests {
     use super::{core_version, hint, terminal_text};
 
-    /// Without systemd (NextPi), the hint names cbb run, not systemctl.
+    /// Without systemd (NextPi), the hint names cbb service, not systemctl.
     #[test]
     fn hint_without_systemd() {
         assert_eq!(hint(true, "systemctl --user"), "is it running (systemctl --user status clipboardbridge)?");
-        assert_eq!(hint(false, "systemctl"), "is it running (start it with cbb run)?");
+        assert_eq!(hint(false, "systemctl"), "is it running (start it with cbb service)?");
     }
 
     /// cbb version names the core's version and the ABI of its entry

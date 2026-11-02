@@ -36,7 +36,7 @@ Cuando no se puede usar la cámara: en un iPhone, escribe los seis dígitos que 
 Pulsa un dispositivo para ver su tipo, sistema, versión y rol. En un teléfono administrador también puedes:
 
 - **Renombrarlo** o **eliminarlo**; eliminar pide confirmación una vez y después tu cara, tu huella o tu código.
-- **Make it an admin**, en el caso de un ordenador: entonces puede añadir y quitar dispositivos con `sudo cbb pair` y `sudo cbb revoke`. Su clave es un archivo del ordenador, salvo que sea un ordenador Linux con TPM, y la app te avisa primero; así que elige un ordenador de confianza, a ser posible uno que esté siempre encendido y que además sea el [hub](away-from-home.md).
+- **Make it an admin**, en el caso de un ordenador: entonces puede añadir y quitar dispositivos con `sudo cbb pair` y `sudo cbb remove`. Su clave es un archivo del ordenador, salvo que sea un ordenador Linux con TPM, y la app te avisa primero; así que elige un ordenador de confianza, a ser posible uno que esté siempre encendido y que además sea el [hub](away-from-home.md).
 
 ### Un segundo teléfono y un teléfono perdido
 

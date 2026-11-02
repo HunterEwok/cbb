@@ -12,7 +12,7 @@ import (
 )
 
 // liteOptions (H5): the lite member's options (cbb pair -name, which
-// names the device in the group, every join runs): cbb run -port moves the
+// names the device in the group, every join runs): cbb service -port moves the
 // member port, -no-listen opens none,
 // -no-mdns publishes nothing on UDP 5353 and -peer dials a computer at its
 // address, so that the lite member syncs with mDNS off; cbb pair -addr puts
@@ -78,14 +78,14 @@ func liteOptions(ctx context.Context, r *Report, f *Fleet, g *benchGroup, hub, l
 }
 
 // liteRestart restarts the lite member's service in a fleet container with
-// the options opts of cbb run and waits until it answers.
+// the options opts of cbb service and waits until it answers.
 func liteRestart(ctx context.Context, lite *Device, opts string) error {
-	if _, err := Run(ctx, lite, "echo '"+opts+"' >/tmp/cbb-run-opts && pkill -f '^cbb run' ; true", ""); err != nil {
+	if _, err := Run(ctx, lite, "echo '"+opts+"' >/tmp/cbb-run-opts && pkill -f '^cbb service' ; true", ""); err != nil {
 		return err
 	}
 	return eventually(ctx, 20*time.Second, func() error {
-		out, err := Run(ctx, lite, "pgrep -af '^cbb run'; cbb status", "")
-		if err == nil && !strings.Contains(out, strings.TrimSpace("cbb run "+opts)) {
+		out, err := Run(ctx, lite, "pgrep -af '^cbb service'; cbb status", "")
+		if err == nil && !strings.Contains(out, strings.TrimSpace("cbb service "+opts)) {
 			err = fmt.Errorf("the lite member runs %q, not with %s", firstLine(out), opts)
 		}
 		return err

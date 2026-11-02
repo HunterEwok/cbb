@@ -85,7 +85,7 @@ func startLite(t *testing.T, bin, dir string, args ...string) *testService {
 func startLiteEnv(t *testing.T, bin, dir string, env []string, args ...string) *testService {
 	t.Helper()
 	s := &testService{name: "lite", dir: dir, socket: filepath.Join(dir, "c.sock")}
-	cmd := exec.Command(bin, append([]string{"-state", dir, "-socket", s.socket, "-debug", "run"}, args...)...)
+	cmd := exec.Command(bin, append([]string{"-state", dir, "-socket", s.socket, "-debug", "service"}, args...)...)
 	if env != nil {
 		cmd.Env = append(os.Environ(), env...)
 	}

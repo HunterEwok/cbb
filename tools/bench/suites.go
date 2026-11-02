@@ -354,7 +354,7 @@ const liteDropIn = "/etc/systemd/system/clipboardbridge.service.d/cbbbench.conf"
 func litePeer(ctx context.Context, d *Device, addr string) error {
 	cmd := "sudo -n rm -f " + liteDropIn + " && sudo -n rmdir --ignore-fail-on-non-empty " + path.Dir(liteDropIn)
 	if addr != "" {
-		conf := "[Service]\nExecStart=\nExecStart=/usr/local/bin/cbb run -peer " + addr + "\n"
+		conf := "[Service]\nExecStart=\nExecStart=/usr/local/bin/cbb service -peer " + addr + "\n"
 		cmd = "sudo -n mkdir -p " + path.Dir(liteDropIn) + " && printf '" + conf + "' | sudo -n tee " + liteDropIn + " >/dev/null"
 	}
 	_, err := Run(ctx, d, cmd+" && sudo -n systemctl daemon-reload && sudo -n systemctl restart clipboardbridge", "")

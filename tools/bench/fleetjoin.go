@@ -45,7 +45,7 @@ func killedJoiner(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 	// state, as before the first attempt.
 	reset := func() error {
 		if id, err := deviceOf(ctx, joiner); err == nil && id != "" {
-			Run(ctx, hub, "cbb revoke "+id, "yes\n")
+			Run(ctx, hub, "cbb remove "+id, "yes\n")
 		}
 		if _, err := Run(ctx, joiner, "rm -rf /var/lib/clipboardbridge/*", ""); err != nil {
 			return err

@@ -158,7 +158,7 @@ the same text is on every device at the end.
 - Upgrade: every device on 0.3.x, then updated one by one to the 0.4 candidate; mixed
   versions keep syncing during the upgrade; state and keys survive. Then `cbb upgrade` on
   `desktop` with `win` off: `desktop` is the root, the others delete the old keys, `cbb status`
-  marks `win` until it is back, `cbb revoke win` is refused until then, and nobody pairs
+  marks `win` until it is back, `cbb remove win` is refused until then, and nobody pairs
   again except the shortcut iPhones.
 - Uninstall: no service, no firewall rule, no leftover files (except keys without
   `--purge`).
@@ -181,7 +181,7 @@ Every other way Clipboard Bridge works, so no path ships untested:
 | P10 | A phone group (layout B in the emulator): QR join of a computer and of `lite`, "Make it an admin" for the Mac, renewal | as on a real phone, within the emulator's limits (section 3) |
 | P11 | Sync away from home: `cbb invite` from the hub, `cbb pair -invite`, `cbb global on/off`, a hub with only IPv6 or behind CGNAT | joins and syncs; `cbb global` explains what is missing |
 | P12 | A blind relay for a group without a hub: `cbb relay -open` beside the forwarder, `cbb global relay` on two members | members meet through it; it sees only TLS between members |
-| P13 | `cbb status` (with the devices list), `cbb revoke` by name and by ID, `cbb version` on every platform | the output matches the state |
+| P13 | `cbb status` (with the devices list), `cbb remove` by name and by ID, `cbb version` on every platform | the output matches the state |
 | P14 | Downgrade from the 0.4 candidate to 0.3.x on each platform | the older version starts on the newer state or refuses with a clear message; no keys are lost |
 | P15 | macOS: the Local Network permission refused and granted, Gatekeeper on the downloaded binary, the application firewall, Universal Clipboard from an iPhone or iPad signed in to the same Apple account | each state is explained by `cbb status`; Universal Clipboard text syncs once, without an echo; the report records whether the item arrived before a paste on the Mac and which types it carried |
 | P16 | Windows: locked screen, sign-out and sign-in, SmartScreen on the installer, `get.ps1` installing the arm64 build on ARM | the service keeps syncing; the agent comes back after sign-in; the right architecture |
@@ -278,7 +278,7 @@ signed in on each device's desktop, so the bench reaches the real clipboard: `wl
 session cannot reach the desktop clipboard, so `tools/bench/setup-windows.ps1` turns on the
 OpenSSH server and registers scheduled tasks that run in the signed-in session: two move
 text between a file and the clipboard, the third runs a script the bench leaves there. Headless devices, the lite member too, use `cbb copy`
-and `cbb paste`. Commands that change the group (`cbb new`, `pair`, `mode`, `revoke`, `global`
+and `cbb paste`. Commands that change the group (`cbb new`, `pair`, `mode`, `remove`, `global`
 and the others on the admin socket) run as root, so the bench calls them with `sudo -n`: on
 Linux the bench user needs `sudo` without a password, and on the Mac a sudoers rule for
 `/usr/local/bin/cbb` (below). A device whose `sudo -n` asks for a password has its steps

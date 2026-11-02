@@ -297,8 +297,8 @@ func roles(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		return nil
 	})
 	fails(ctx, r, p+"G21-admin-makes-no-admin", admin, errorCase{cmd: "cbb admin -allow-file-key " + m1.Name, want: []string{"only the group's root"}})
-	fails(ctx, r, p+"G21-admin-keeps-root", admin, errorCase{cmd: "cbb revoke " + root.Name, want: []string{"holds the group's root", "takeover"}})
-	fails(ctx, r, p+"G21-member-removes-none", m1, errorCase{cmd: "cbb revoke " + m2.Name, want: []string{"admin"}})
+	fails(ctx, r, p+"G21-admin-keeps-root", admin, errorCase{cmd: "cbb remove " + root.Name, want: []string{"holds the group's root", "takeover"}})
+	fails(ctx, r, p+"G21-member-removes-none", m1, errorCase{cmd: "cbb remove " + m2.Name, want: []string{"admin"}})
 	fails(ctx, r, p+"M5-member-sets-no-mode", m1, errorCase{cmd: "cbb mode -on " + m2.Name + " receive", want: []string{"only an admin"}})
 	r.Do(p+"M5-mode-on", func() error {
 		if err := succeeds(ctx, root, "cbb mode -on "+m2.Name+" receive", "", "receive"); err != nil {
@@ -322,7 +322,7 @@ func roles(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if err != nil {
 			return err
 		}
-		if _, err := Run(ctx, admin, "cbb revoke "+id, ""); err != nil {
+		if _, err := Run(ctx, admin, "cbb remove "+id, ""); err != nil {
 			return err
 		}
 		return listsAs(ctx, []*Device{root, m1, m2}, m3.Name, "", true, timeout)
@@ -347,7 +347,7 @@ func roles(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		}
 		return listsAs(ctx, []*Device{root, m1}, admin.Name, "frozen", false, timeout)
 	})
-	fails(ctx, r, p+"G22-frozen-admits-none", admin, errorCase{cmd: "cbb revoke " + m1.Name, want: []string{"admin", "frozen"}})
+	fails(ctx, r, p+"G22-frozen-admits-none", admin, errorCase{cmd: "cbb remove " + m1.Name, want: []string{"admin", "frozen"}})
 	r.Do(p+"G22-unfreeze", func() error {
 		if err := succeeds(ctx, root, "cbb unfreeze "+admin.Name, "", "Unfroze"); err != nil {
 			return err
@@ -442,7 +442,7 @@ func rejoin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if old, err = deviceOf(ctx, d); err != nil {
 			return err
 		}
-		_, err = Run(ctx, root, "cbb revoke "+old, "")
+		_, err = Run(ctx, root, "cbb remove "+old, "")
 		return err
 	})
 	r.Do(p+"reset", func() error {
@@ -771,7 +771,7 @@ func manyMembers(ctx context.Context, r *Report, f *Fleet, size int, timeout tim
 	half := g.members[size/2:]
 	r.Do(p+"remove-half", func() error {
 		for _, d := range half {
-			if _, err := Run(ctx, g.hub, "cbb revoke "+d.Name, ""); err != nil {
+			if _, err := Run(ctx, g.hub, "cbb remove "+d.Name, ""); err != nil {
 				return err
 			}
 		}

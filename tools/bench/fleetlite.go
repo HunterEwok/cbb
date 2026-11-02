@@ -29,7 +29,7 @@ func (f *Fleet) AddLite(ctx context.Context) (*Device, error) {
 	if err != nil {
 		return nil, fmt.Errorf("-cbb-lite: %w", err)
 	}
-	d, err := f.containerOf(ctx, abs, f.net, nil, nil, "mkdir -p /run/clipboardbridge /var/lib/clipboardbridge; while :; do cbb run $(cat /tmp/cbb-run-opts 2>/dev/null); sleep 1; done")
+	d, err := f.containerOf(ctx, abs, f.net, nil, nil, "mkdir -p /run/clipboardbridge /var/lib/clipboardbridge; while :; do cbb service $(cat /tmp/cbb-run-opts 2>/dev/null); sleep 1; done")
 	if err != nil {
 		return nil, err
 	}

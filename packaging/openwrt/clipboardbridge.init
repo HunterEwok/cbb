@@ -3,7 +3,7 @@
 # Copyright (C) 2026 HunterEwok
 
 # The Clipboard Bridge service on OpenWrt (/etc/init.d/clipboardbridge).
-# procd runs cbb service (cbb run for the lite member) as the user
+# procd runs cbb service, the full or the lite member, as the user
 # clipboardbridge, with no capabilities
 # and no_new_privs, and starts it again when it stops. The settings are in
 # /etc/config/clipboardbridge; the keys in /etc/clipboardbridge/state,
@@ -121,7 +121,7 @@ start_service() {
 
 	procd_open_instance
 	if "$PROG" version 2>/dev/null | grep -q "lite member"; then
-		procd_set_param command "$PROG" run
+		procd_set_param command "$PROG" service
 		procd_set_param env CBB_PORT="$port" CBB_INTERFACES="$devices" \
 			CBB_STATE="$STATEDIR" CBB_SOCKET="$RUNDIR/control.sock"
 	else

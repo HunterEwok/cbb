@@ -727,7 +727,7 @@ Pi's side uses GPIO 16 and 17 (the ESP honours it only on an issue 4 board). Nex
   ROM's keyboard routine does: 50 characters a second, so a text of 1 KB types in 20
   seconds. Programs that read the keyboard through the system take it: NextBASIC, the
   editors, most applications; games that read the ports themselves do not.
-- *The lite member on the Pi* runs `cbb run` as a service from the user partition
+- *The lite member on the Pi* runs `cbb service` as a service from the user partition
   (`/NextPi`) and drives the ESP through the pipe: AT commands, then passthrough to one
   member or the hub, the member protocol with TLS 1.3 on the Pi, so the ESP sees only
   ciphertext. The stock firmware (AT 1.2) holds one passthrough connection, which is enough

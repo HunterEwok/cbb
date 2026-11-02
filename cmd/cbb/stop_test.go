@@ -27,7 +27,7 @@ func TestStopLines(t *testing.T) {
 		}}
 	got := strings.Join(stopLines(st), "\n")
 	for _, want := range []string{
-		"exchange records only", "Laptop, Desk", "cbb revoke NAME", "Pi signed two histories", "cbb resolve",
+		"exchange records only", "Laptop, Desk", "cbb remove NAME", "Pi signed two histories", "cbb resolve",
 		"takes effect in 2 days", "once this device knows how long", "Old claims the group, and another admin removed it",
 		"2 records of a later version",
 	} {
