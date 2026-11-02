@@ -108,8 +108,8 @@ Commands:
   help                 Print this help.
 
 This is the lite member: the commands of a full member, such as invite or
-revoke, are not here. The state directory is /var/lib/clipboardbridge
-(CBB_STATE), the control socket /run/clipboardbridge/control.sock
+revoke, are not here, and pair only joins a group. The state directory is
+/var/lib/clipboardbridge (CBB_STATE), the control socket /run/clipboardbridge/control.sock
 (CBB_SOCKET); on OpenWrt /etc/clipboardbridge/state and
 /var/run/clipboardbridge/control.sock; installed without root (install.sh
 --rootless, CBB_ROOTLESS=1), ~/.local/state/clipboardbridge and
@@ -272,7 +272,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     }
     if identity::Identity::load(&g.state)?.is_some() {
         return Err(Error::msg(format!(
-            "this device is already in a group; to join another, stop the service and remove {}",
+            "this device is already in a group, and a lite member admits no devices (use the phone app or \
+             a full member); to join another group, stop the service and remove {}",
             g.state.join(identity::FILE_NAME).display()
         )));
     }

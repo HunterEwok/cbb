@@ -374,8 +374,8 @@ func deviceOf(ctx context.Context, d *Device) (string, error) {
 }
 
 // pairOne admits a device into the hub's group: cbb pair on the hub, and
-// cbb pair -code (cbb pair -code on the lite member) with its code on the
-// device. It returns the code it used.
+// cbb pair -code with its code on the device (as the service's user on the
+// lite member). It returns the code it used.
 func pairOne(ctx context.Context, hub, d *Device) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()

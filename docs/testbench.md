@@ -34,7 +34,7 @@ In scope for 0.4:
 | Area | What is tested |
 |---|---|
 | Install, update, remove | `get.sh`/`install.sh`/`uninstall.sh` on Linux and macOS (and Homebrew on macOS), `get.ps1`/`install.ps1`/`uninstall.ps1` on Windows, `get.sh --lite` for the lite member, which moves an old `cbb-lite` install to `cbb`; update from 0.3.x; firewall rules added and removed; `--purge` |
-| Group and pairing | `cbb pair` / `cbb pair -code` (with and without an address), `cbb pair -code` on the lite member, joining by QR from the Android app, wrong code, expired code, revoke, renewal, admin computers |
+| Group and pairing | `cbb pair` / `cbb pair -code` (with and without an address, and on the lite member), joining by QR from the Android app, wrong code, expired code, revoke, renewal, admin computers |
 | Sync on the home network | every sender to every receiver, every content class (section 6), ordering and conflicts, `copy -secret` and its 60 s expiry, the holder of `clipboardbridge.local` and its handover |
 | Between subnets | the main LAN and a second subnet (the lite member's): mDNS does not cross, so `-peer` / addresses and, later, the tunnel |
 | Sync away from home | `cbb global hub`, `cbb global on/off`, `cbb invite` / `cbb pair -invite`, a device on another network (mobile data), reconnect, roaming |
