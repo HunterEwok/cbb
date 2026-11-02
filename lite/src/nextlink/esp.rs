@@ -49,6 +49,10 @@ enum Cmd {
         data: Vec<u8>,
     },
     Close(u8),
+    /// AT+CIPSERVER and AT+CIPSTO: take connections, and never close them
+    /// for being idle.
+    Serve(u16),
+    NoIdleTimeout,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +77,7 @@ pub struct Esp {
     out: Vec<u8>,
     events: Vec<Event>,
     ready: bool,
+    serve: Option<u16>,
 }
 
 impl Default for Esp {
@@ -93,6 +98,7 @@ impl Esp {
             out: Vec::new(),
             events: Vec::new(),
             ready: false,
+            serve: None,
         };
         e.start();
         e
@@ -104,6 +110,17 @@ impl Esp {
         self.wait = Wait::None;
         self.ready = false;
         self.queue.extend([Cmd::Hello, Cmd::EchoOff, Cmd::Mux]);
+        if let Some(port) = self.serve {
+            self.queue.extend([Cmd::Serve(port), Cmd::NoIdleTimeout]);
+        }
+        self.next();
+    }
+
+    /// Takes connections on port, now and after every restart of the ESP;
+    /// each comes as a Connected of a connection not dialled.
+    pub fn serve(&mut self, port: u16) {
+        self.serve = Some(port);
+        self.queue.extend([Cmd::Serve(port), Cmd::NoIdleTimeout]);
         self.next();
     }
 
@@ -305,6 +322,8 @@ impl Esp {
             Cmd::Dial { line, .. } => (line.clone(), Wait::Answer),
             Cmd::Send { id, data } => (format!("AT+CIPSEND={id},{}", data.len()), Wait::Prompt),
             Cmd::Close(id) => (format!("AT+CIPCLOSE={id}"), Wait::Answer),
+            Cmd::Serve(port) => (format!("AT+CIPSERVER=1,{port}"), Wait::Answer),
+            Cmd::NoIdleTimeout => ("AT+CIPSTO=0".to_string(), Wait::Answer),
         };
         self.out.extend_from_slice(line.as_bytes());
         self.out.extend_from_slice(b"\r\n");
@@ -428,6 +447,23 @@ mod tests {
         let mut e = ready();
         e.dial_tcp(0, "a\",\"UDP\r\nAT+RST", 1);
         assert_eq!(e.take_output(), b"AT+CIPSTART=0,\"TCP\",\"aUDPAT+RST\",1\r\n");
+    }
+
+    /// The server is set up after the restart too.
+    #[test]
+    fn serve() {
+        let mut e = ready();
+        e.serve(8763);
+        talk(&mut e, "AT+CIPSERVER=1,8763\r\n", b"\r\nOK\r\n");
+        talk(&mut e, "AT+CIPSTO=0\r\n", b"\r\nOK\r\n");
+        e.input(b"0,CONNECT\r\n");
+        assert_eq!(e.take_events(), vec![Event::Connected(0)]);
+        e.input(b"\r\nready\r\n");
+        e.take_events();
+        talk(&mut e, "AT\r\n", b"OK\r\n");
+        talk(&mut e, "ATE0\r\n", b"OK\r\n");
+        talk(&mut e, "AT+CIPMUX=1\r\n", b"OK\r\n");
+        assert_eq!(e.take_output(), b"AT+CIPSERVER=1,8763\r\n");
     }
 
     #[test]

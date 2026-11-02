@@ -14,6 +14,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
   passes bytes through rings in both directions, so the Pi's long output arrives whole. It
   remembers the computer's address, and the computer can replace a file in its folder while
   it runs, checked by CRC-32, so a test needs no card taken out.
+- `cbb next link` on the lite member: a network through the ZX Spectrum Next's ESP8266 for a
+  Pi without a radio. It runs at NextPi's shell on the Pi's UART, exchanges frames with a
+  driver on the Next, drives the ESP's stock AT firmware inside them, and leads the lite
+  member's connections through the ESP to a member at home, and the ESP's own connections
+  (a phone that syncs or admits it) to the lite member; the TLS stays on the Pi. The Next's
+  clock sets the Pi's.
 - A single-colour glyph for the Mac's menu bar and the tray on Windows and Linux: the app icon's
   clipboard and key, in three states (no group, in a group, another device online). `tools/icon`
   makes the Mac's template images, the symbolic SVGs for Linux and white and black ICOs for

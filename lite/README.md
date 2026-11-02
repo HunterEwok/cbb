@@ -275,6 +275,39 @@ do. These commands answer in frames a Z80 reads without a parser:
 | `cbb next copy [-secret] <len> <crc32>` | `CBBGO` once the service answers; the Next then sends exactly len bytes, which the lite member reads with the terminal in raw mode (no echo, no CR to LF; it gives up after 10 s without a byte), checks the CRC-32 and sends to the group, as a secret with `-secret` (as `cbb copy -secret`); then the status line. |
 | `cbb next join [-name name] [-port port] [-addr host[:port]]...` | `CBBQ <size>`, then size rows of the QR code for the phone app, each of (size + 3) / 4 hex digits with the leftmost module in the high bit of the first digit and a set bit dark; the Next draws it, the phone scans it, and after the pairing the status line (up to 5 minutes). A join payload makes a code of about 41 modules, which fits the 192 lines of the screen at 4 pixels per module. |
 
+### The network through the Next's ESP8266
+
+On a Pi without a radio (the Pi Zero of the Accelerated Next), `cbb next link` gives the
+lite member a network through the Next's ESP8266, with a driver on the Next that passes
+bytes between the two UARTs (docs/roadmap.md, "The Next's network in the background"). It
+runs at NextPi's shell on the Pi's UART until the driver stops it:
+
+```
+cbb next link -to 192.168.0.10:8763 -serve 8763:8763 -zone +01:00 -log /ram/link.log
+cbb run -peer 127.0.0.1:8769
+```
+
+- `-to host:port`: the member to dial, a computer at home; each connection the lite
+  member makes to the link's local port (`-port`, 8769 by default) becomes a connection of
+  the ESP to it. The member protocol and its TLS run on the Pi, so the ESP and the Z80
+  see only ciphertext.
+- `-serve esp-port:local-port`: the ESP takes connections on its own port and leads each
+  to the local one, where the lite member listens: phones that sync with it, and the phone
+  that admits it (`cbb next join -addr <the ESP's address>:<esp-port>`).
+- `-zone`: the Next's clock (the DS1307) keeps local time without a zone; the link sets
+  the Pi's clock, which NextPi only saves across a power cut, from it in UTC.
+- `-log`: standard error is the UART too, so the link writes its log to a file or
+  nowhere.
+
+On the UART, the driver and the link exchange frames: the byte 0x7E, a type, a length (0
+to 255), that many bytes and the sum of the type, the length and the bytes modulo 256; a
+0x7E inside a frame is sent twice. The types: `H` the driver's hello (nothing goes to it
+before), `E` bytes from the ESP, `e` bytes for the ESP, `T` the clock's seven registers,
+`A` how many bytes on the wire the driver has taken (16 bits, little-endian; the link
+sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters to type and
+`Q` to stop. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
+frames, with up to five connections (`AT+CIPMUX=1`) and the data in `+IPD` blocks.
+
 ## Errors
 
 Every error has a short message. `-debug` (before the command), `CBB_DEBUG=1`, or a debug

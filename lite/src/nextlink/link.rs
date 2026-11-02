@@ -20,7 +20,8 @@ use super::esp::{self, Esp, Event};
 use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
-pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-zone +hh:mm] [-log file]";
+pub const USAGE: &str =
+    "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file]";
 
 /// The local port the member dials for the peer.
 pub const PORT: u16 = 8769;
@@ -55,6 +56,10 @@ pub struct Link<W: Write> {
     dec: Decoder,
     esp: Esp,
     target: (String, u16),
+    /// The local port the ESP's own connections lead to.
+    serve_to: Option<u16>,
+    /// New connections the threads must read from: slot, use and stream.
+    pub readers: Vec<(u8, u64, TcpStream)>,
     /// The local time's offset from UTC, in seconds.
     zone: i64,
     /// The driver said hello: frames may go out.
@@ -79,6 +84,8 @@ impl<W: Write> Link<W> {
             dec: Decoder::new(),
             esp: Esp::new(),
             target,
+            serve_to: None,
+            readers: Vec::new(),
             zone,
             hello: false,
             sent: 0,
@@ -93,14 +100,20 @@ impl<W: Write> Link<W> {
         }
     }
 
-    /// Hands one word of the threads to the link; returns the connection
-    /// to read from when a new one was taken, with its slot and use.
-    pub fn handle(&mut self, m: Msg, now: Instant) -> Option<(u8, u64, TcpStream)> {
-        let mut reader = None;
+    /// Has the ESP take connections on esp_port, each led to local_port,
+    /// where the member listens: phones that sync with it, and the one
+    /// that admits it to the group.
+    pub fn serve(&mut self, esp_port: u16, local_port: u16) {
+        self.serve_to = Some(local_port);
+        self.esp.serve(esp_port);
+    }
+
+    /// Hands one word of the threads to the link.
+    pub fn handle(&mut self, m: Msg, now: Instant) {
         match m {
             Msg::Uart(b) => self.uart(&b),
             Msg::UartClosed => self.quit = true,
-            Msg::Accepted(s) => reader = self.accepted(s),
+            Msg::Accepted(s) => self.accepted(s),
             Msg::Local(id, use_, data) => {
                 if let Some(c) = self.conn(id, use_) {
                     if c.up {
@@ -118,7 +131,6 @@ impl<W: Write> Link<W> {
             }
         }
         self.after(now);
-        reader
     }
 
     /// Checks the ESP's time to answer; called now and then.
@@ -151,20 +163,36 @@ impl<W: Write> Link<W> {
         }
     }
 
-    fn accepted(&mut self, stream: TcpStream) -> Option<(u8, u64, TcpStream)> {
-        let free = self.conns.iter().position(Option::is_none);
+    /// The member dialled the local port. Dialled connections take the
+    /// ESP's slots from the top, since the ESP gives its own from 0.
+    fn accepted(&mut self, stream: TcpStream) {
+        let free = self.conns.iter().rposition(Option::is_none);
         let (Some(id), true) = (free, self.esp.ready()) else {
             (self.log)("no connection of the ESP is free, or the ESP is not ready");
             stream.shutdown(Shutdown::Both).ok();
-            return None;
+            return;
         };
-        let reader = stream.try_clone().ok()?;
+        if self.add(id as u8, stream, false) {
+            let (host, port) = self.target.clone();
+            self.esp.dial_tcp(id as u8, &host, port);
+        }
+    }
+
+    fn add(&mut self, id: u8, stream: TcpStream, up: bool) -> bool {
+        let Ok(reader) = stream.try_clone() else { return false };
         self.gens += 1;
-        let use_ = self.gens;
-        self.conns[id] = Some(Conn { stream, use_, up: false, pending: Vec::new() });
-        let (host, port) = self.target.clone();
-        self.esp.dial_tcp(id as u8, &host, port);
-        Some((id as u8, use_, reader))
+        self.conns[id as usize] = Some(Conn { stream, use_: self.gens, up, pending: Vec::new() });
+        self.readers.push((id, self.gens, reader));
+        true
+    }
+
+    /// A connection the ESP took: it leads to the member's local port.
+    fn inbound(&mut self, id: u8) {
+        let to = self.serve_to.and_then(|p| TcpStream::connect(("127.0.0.1", p)).ok());
+        if !to.is_some_and(|s| self.add(id, s, true)) {
+            (self.log)("the member does not listen for the ESP's connection");
+            self.esp.close(id);
+        }
     }
 
     /// Hands the ESP's events to the connections and sends what is due.
@@ -182,6 +210,7 @@ impl<W: Write> Link<W> {
         for ev in self.esp.take_events() {
             match ev {
                 Event::Ready => (self.log)("the ESP is ready"),
+                Event::Connected(id) if self.conns[id as usize].is_none() => self.inbound(id),
                 Event::Connected(id) => {
                     if let Some(c) = self.conns[id as usize].as_mut() {
                         c.up = true;
@@ -331,7 +360,7 @@ fn set_clock(secs: i64, log: &mut dyn FnMut(&str)) {
 /// Runs the link on standard input and output until the driver quits or
 /// the UART closes.
 pub fn run(args: &[String]) -> Result<()> {
-    let (mut target, mut port, mut zone_s, mut log_path) = (None, PORT, 0i64, None::<String>);
+    let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
     let mut i = 0;
     while i < args.len() {
         let value = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(USAGE));
@@ -340,6 +369,14 @@ pub fn run(args: &[String]) -> Result<()> {
             Some("port") => port = value()?.parse().context("the port is a number")?,
             Some("zone") => zone_s = zone(&value()?)?,
             Some("log") => log_path = Some(value()?),
+            Some("serve") => {
+                let v = value()?;
+                let (a, b) = v.split_once(':').ok_or_else(|| Error::msg(USAGE))?;
+                serve = Some((
+                    a.parse::<u16>().context("the ESP's port is a number")?,
+                    b.parse::<u16>().context("the local port is a number")?,
+                ));
+            }
             _ => return Err(Error::msg(USAGE)),
         }
         i += 2;
@@ -391,20 +428,20 @@ pub fn run(args: &[String]) -> Result<()> {
         });
     }
     let mut link = Link::new(std::io::stdout(), target, zone_s, log);
+    if let Some((a, b)) = serve {
+        link.serve(a, b);
+    }
     while !link.quit {
         let now = Instant::now();
-        let reader = match rx.recv_timeout(Duration::from_millis(200)) {
+        match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(m) => link.handle(m, now),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                link.tick(now);
-                None
-            }
+            Err(mpsc::RecvTimeoutError::Timeout) => link.tick(now),
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
-        };
+        }
         if let Some(secs) = link.clock.take() {
             set_clock(secs, &mut *link.log);
         }
-        if let Some((id, use_, mut s)) = reader {
+        for (id, use_, mut s) in std::mem::take(&mut link.readers) {
             let tx = tx.clone();
             std::thread::spawn(move || {
                 let mut buf = [0u8; 2048];
@@ -488,32 +525,58 @@ mod tests {
         let l = TcpListener::bind("127.0.0.1:0").unwrap();
         let member = TcpStream::connect(l.local_addr().unwrap()).unwrap();
         let (ours, _) = l.accept().unwrap();
-        let (id, use_, _reader) = link.handle(Msg::Accepted(ours), now).expect("taken");
-        assert_eq!(id, 0);
+        link.handle(Msg::Accepted(ours), now);
+        let (id, use_, _reader) = link.readers.pop().expect("taken");
+        assert_eq!(id, 4);
         let (esp, ack) = sent(&link, &mut next, &mut at);
-        assert_eq!(esp, "AT+CIPSTART=0,\"TCP\",\"192.168.0.10\",8763\r\n");
+        assert_eq!(esp, "AT+CIPSTART=4,\"TCP\",\"192.168.0.10\",8763\r\n");
         link.handle(Msg::Uart(ack), now);
         // Bytes before the ESP's connection is up wait for it.
         link.handle(Msg::Local(id, use_, b"hello".to_vec()), now);
-        link.handle(from_esp(b"0,CONNECT\r\n\r\nOK\r\n"), now);
+        link.handle(from_esp(b"4,CONNECT\r\n\r\nOK\r\n"), now);
         let (esp, ack) = sent(&link, &mut next, &mut at);
-        assert_eq!(esp, "AT+CIPSEND=0,5\r\n");
+        assert_eq!(esp, "AT+CIPSEND=4,5\r\n");
         link.handle(Msg::Uart(ack), now);
         link.handle(from_esp(b"\r\nOK\r\n> "), now);
         let (esp, ack) = sent(&link, &mut next, &mut at);
         assert_eq!(esp, "hello");
         link.handle(Msg::Uart(ack), now);
-        link.handle(from_esp(b"\r\nSEND OK\r\n+IPD,0,6:world!"), now);
+        link.handle(from_esp(b"\r\nSEND OK\r\n+IPD,4,6:world!"), now);
         let mut got = [0u8; 6];
         let mut m = member.try_clone().unwrap();
         m.read_exact(&mut got).unwrap();
         assert_eq!(&got, b"world!");
         // The peer closes: so does the member's connection.
-        link.handle(from_esp(b"0,CLOSED\r\n"), now);
+        link.handle(from_esp(b"4,CLOSED\r\n"), now);
         assert_eq!(m.read(&mut got).unwrap(), 0);
         // A late word of that connection changes nothing.
         link.handle(Msg::LocalClosed(id, use_), now);
         assert!(sent(&link, &mut next, &mut at).0.is_empty());
+    }
+
+    /// A connection the ESP took leads to the member's local port.
+    #[test]
+    fn inbound() {
+        let (mut link, mut next, now) = new_link();
+        let mut at = 0;
+        let member = TcpListener::bind("127.0.0.1:0").unwrap();
+        link.serve(8763, member.local_addr().unwrap().port());
+        link.handle(Msg::Uart(encode(frame::HELLO, b"")), now);
+        for cmd in ["AT\r\n", "ATE0\r\n", "AT+CIPMUX=1\r\n", "AT+CIPSERVER=1,8763\r\n", "AT+CIPSTO=0\r\n"] {
+            let (esp, ack) = sent(&link, &mut next, &mut at);
+            assert_eq!(esp, cmd);
+            link.handle(Msg::Uart(ack), now);
+            link.handle(from_esp(b"\r\nOK\r\n"), now);
+        }
+        link.handle(from_esp(b"0,CONNECT\r\n\r\n+IPD,0,5:phone"), now);
+        let (mut s, _) = member.accept().unwrap();
+        let mut got = [0u8; 5];
+        s.read_exact(&mut got).unwrap();
+        assert_eq!(&got, b"phone");
+        let (id, use_, _) = link.readers.pop().unwrap();
+        assert_eq!(id, 0);
+        link.handle(Msg::Local(id, use_, b"lite".to_vec()), now);
+        assert_eq!(sent(&link, &mut next, &mut at).0, "AT+CIPSEND=0,4\r\n");
     }
 
     /// The link sends no more than the window before the driver's ACK.

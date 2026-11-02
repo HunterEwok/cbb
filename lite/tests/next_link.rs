@@ -111,7 +111,7 @@ fn bytes_through_the_esp_and_back() {
             }
             let Some(end) = esp_in.windows(2).position(|w| w == b"\r\n") else { break };
             let line = String::from_utf8(esp_in.drain(..end + 2).take(end).collect()).unwrap();
-            if let Some(rest) = line.strip_prefix("AT+CIPSTART=0,\"TCP\",\"127.0.0.1\",") {
+            if let Some(rest) = line.strip_prefix("AT+CIPSTART=4,\"TCP\",\"127.0.0.1\",") {
                 let p: u16 = rest.parse().unwrap();
                 let s = TcpStream::connect(("127.0.0.1", p)).unwrap();
                 let (mut r, tx) = (s.try_clone().unwrap(), tx.clone());
@@ -122,8 +122,8 @@ fn bytes_through_the_esp_and_back() {
                     }
                 });
                 peer = Some(s);
-                answers.extend_from_slice(b"0,CONNECT\r\n\r\nOK\r\n");
-            } else if let Some(n) = line.strip_prefix("AT+CIPSEND=0,") {
+                answers.extend_from_slice(b"4,CONNECT\r\n\r\nOK\r\n");
+            } else if let Some(n) = line.strip_prefix("AT+CIPSEND=4,") {
                 sending = Some(n.parse().unwrap());
                 answers.extend_from_slice(b"\r\nOK\r\n> ");
             } else {
@@ -144,7 +144,7 @@ fn bytes_through_the_esp_and_back() {
         let sent = answers.windows(7).any(|w| w == b"SEND OK");
         if sent {
             let b = rx.recv_timeout(Duration::from_secs(5)).expect("the echo");
-            let mut ipd = format!("\r\n+IPD,0,{}:", b.len()).into_bytes();
+            let mut ipd = format!("\r\n+IPD,4,{}:", b.len()).into_bytes();
             ipd.extend(b);
             to_link.write_all(&frame(b'E', &ipd)).unwrap();
             let m = member.as_mut().unwrap();
