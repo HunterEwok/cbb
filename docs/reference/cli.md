@@ -85,7 +85,7 @@ see the agent's log in a terminal.
 
 On a small Linux device `cbb` is the lite member, with the same paths and service as a full
 member (`/var/lib/clipboardbridge`, `clipboardbridge.service`) and the commands below; the
-commands of a full member, such as `pair` or `invite`, answer that this is the lite member.
+commands of a full member, such as `invite` or `revoke`, answer that this is the lite member.
 Global flags, before the command: `-state DIR` (default `/var/lib/clipboardbridge`, or
 `CBB_STATE`), `-socket PATH` (default `/run/clipboardbridge/control.sock`, or `CBB_SOCKET`),
 `-debug` (the details of errors). The commands that change its state, such as `pair`, run

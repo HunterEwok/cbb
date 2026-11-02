@@ -782,8 +782,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ### Changed
 - The lite member joins a group with `cbb pair`, as a full member in no group does, instead of
   `cbb join` (`cbb pair -code` for the code of a Linux member, `cbb next pair` for the ZX
-  Spectrum Next); `cbb join` only says the new name. The Next's dot command is `.cbb pair` and
-  the ESP32 board's console command `pair`, so joining is `pair` everywhere.
+  Spectrum Next); `cbb join` only says the new name. The Next's dot command is `.cbb pair`
+  (0.4.0) and the ESP32 board's console command `pair`, so joining is `pair` everywhere.
 - Dependencies: der 0.8.3 for the lite member and the firmware, goldmark 1.8.6 (the website),
   coder/websocket 1.8.15 (the tray app), the Android Gradle plugin 9.5.0 and Robolectric 4.17.
   godbus stays at 5.1.0, as 5.2 panics on a message with an array of file descriptors, and

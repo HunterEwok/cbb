@@ -77,12 +77,12 @@ impl Pairing {
         loop {
             let left = end.saturating_duration_since(Instant::now());
             if left == Duration::from_ticks(0) {
-                return Err(Error::msg("no phone joined the device in time; type join again"));
+                return Err(Error::msg("no phone joined the device in time; type pair again"));
             }
             let mut sock = TcpSocket::new(stack, &mut rx, &mut tx);
             sock.set_timeout(Some(ATTEMPT));
             match with_timeout(left, sock.accept(PORT)).await {
-                Err(_) => return Err(Error::msg("no phone joined the device in time; type join again")),
+                Err(_) => return Err(Error::msg("no phone joined the device in time; type pair again")),
                 Ok(Err(e)) => return Err(Error::with("cannot listen for the phone", Debug(format!("{e:?}")))),
                 Ok(Ok(())) => {}
             }

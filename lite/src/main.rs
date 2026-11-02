@@ -54,7 +54,7 @@ Commands:
                        Join a group: show a QR code for the phone app to scan
                        (-addr: where the phone reaches this device, when the
                        code would name the wrong addresses).
-  pair -code host:port Join with the code from cbb pair on a Linux member.
+  pair -code host:port Join with the code from cbb pair on a full member.
   run [-name name] [-port port] [-peer host:port]... [-no-mdns] [-no-listen]
       [-tunnel-via host:port]
                        Run the service (started by systemd or procd): it
@@ -172,7 +172,7 @@ fn main() {
             let rest = &args[1..];
             let res = match cmd {
                 "pair" => join(&g, rest, false),
-                "join" => Err(Error::msg("cbb join is now cbb pair")),
+                "join" => Err(Error::msg("cbb join is cbb pair now, as on a full member")),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "run" => cmd_run(&g, rest),
                 "copy" => cmd_copy(&g, rest),
