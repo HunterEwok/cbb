@@ -1042,8 +1042,12 @@ jobs:
           # The member port listens once the Mac is in a group.
           for _ in $(seq 20); do sudo /usr/local/bin/cbb status >/dev/null && break; sleep 0.5; done
           sudo /usr/local/bin/cbb new
-          for _ in $(seq 20); do sudo lsof -nP -iTCP:9000 -sTCP:LISTEN && break; sleep 0.5; done
-          sudo lsof -nP -iTCP:9000 -sTCP:LISTEN | grep -q cbb
+          for _ in $(seq 60); do sudo lsof -nP -iTCP:9000 -sTCP:LISTEN && break; sleep 0.5; done
+          if ! sudo lsof -nP -iTCP:9000 -sTCP:LISTEN | grep -q cbb; then
+            echo "the member port does not listen in 30 s; the service's log:" >&2
+            sudo cat /Library/Logs/clipboardbridge/service.log >&2 || true
+            exit 1
+          fi
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall | tee "$RUNNER_TEMP/get.out"
           grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
           echo tampered >>"$rel/clipboardbridge-darwin-arm64.tar.gz"
