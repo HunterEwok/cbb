@@ -69,13 +69,18 @@ final class StartUITests: XCTestCase {
         for colour in Self.colours {
             let b = app.buttons[colour]
             XCTAssertTrue(b.waitForExistence(timeout: 5), "no colour \(colour)")
+            // The last colours sit low in the sheet: on a small or loaded
+            // simulator a tap on one half off the screen lands elsewhere.
+            scrollTo(b, in: app)
             b.tap()
             XCTAssertTrue(selected(b), "\(colour) is not chosen after a tap")
             for other in Self.colours where other != colour {
                 XCTAssertFalse(app.buttons[other].isSelected, "\(other) is still chosen with \(colour)")
             }
         }
+        scrollTo(app.buttons["Ocean"], in: app, down: true)
         app.buttons["Ocean"].tap()
+        XCTAssertTrue(selected(app.buttons["Ocean"]), "Ocean is not chosen after a tap")
         app.terminate()
 
         app = launch()
@@ -176,10 +181,21 @@ final class StartUITests: XCTestCase {
         return XCTWaiter().wait(for: [done], timeout: timeout) == .completed
     }
 
-    private func scrollTo(_ e: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<8 where !(e.exists && e.isHittable) {
-            app.swipeUp()
+    /// Scrolls until e can be tapped: up, or down for one above the screen.
+    private func scrollTo(_ e: XCUIElement, in app: XCUIApplication, down: Bool = false) {
+        for _ in 0..<8 where !onScreen(e, in: app) {
+            if down { app.swipeDown() } else { app.swipeUp() }
         }
-        XCTAssertTrue(e.exists, "\(e) is not on the screen")
+        XCTAssertTrue(onScreen(e, in: app), "\(e) is not on the screen")
+    }
+
+    /// Whether e is on the screen and can be tapped. isHittable fails the
+    /// test rather than answer for an element whose frame is not laid out
+    /// yet (a sheet still sliding in), so the frame is checked first.
+    private func onScreen(_ e: XCUIElement, in app: XCUIApplication) -> Bool {
+        guard e.exists else { return false }
+        let f = e.frame
+        guard !f.isEmpty, !f.isInfinite, app.frame.intersects(f) else { return false }
+        return e.isHittable
     }
 }
