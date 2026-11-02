@@ -38,9 +38,12 @@
 package pair
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -94,7 +97,10 @@ var (
 	ErrTooMany   = errors.New("pair: three failed attempts; the pairing window is closed")
 	ErrRefused   = errors.New("pair: the other device refused the pairing")
 	ErrDeclined  = errors.New("pair: the admin did not confirm the device")
-	ErrTaken     = errors.New("pair: a device with this device ID is in the group already; join with a new ID")
+	// ErrPhoneNeedsRoot is a phone that tried to join through an admin
+	// computer: only the group's root admits a phone.
+	ErrPhoneNeedsRoot = errors.New("pair: a phone joins a computer's group only through the group's root (cbb pair there)")
+	ErrTaken          = errors.New("pair: a device with this device ID is in the group already; join with a new ID")
 )
 
 // spentError is an attempt that failed after the joiner sent its
@@ -190,20 +196,51 @@ type Info struct {
 	// the device record without waiting for a hello; empty from a phone and
 	// from a member that has none.
 	Seal []byte `json:"seal,omitempty"`
+	// AdminKey is a phone's admin key, a SubjectPublicKeyInfo, for the
+	// admin CA the group's root computer issues it in the Welcome; only
+	// from a phone, and absent from one that makes none, as a TV.
+	AdminKey []byte `json:"admin_key,omitempty"`
 }
 
 // RoleLite is the Info role of a lite member.
 const RoleLite = "lite"
 
+// Phone reports whether the joiner is a phone with the app, which joins a
+// computer's group only through its root (docs/protocol.md, section 6, "A
+// phone joins a computer's group").
+func (i Info) Phone() bool { return i.Role == "" && (i.OS == group.OSiOS || i.OS == group.OSAndroid) }
+
+// parseAdminKey reads a phone's admin key, a P-256 SubjectPublicKeyInfo.
+func parseAdminKey(spki []byte) (*ecdsa.PublicKey, error) {
+	k, err := x509.ParsePKIXPublicKey(spki)
+	if err != nil {
+		return nil, err
+	}
+	pub, ok := k.(*ecdsa.PublicKey)
+	if !ok || pub.Curve != elliptic.P256() {
+		return nil, errors.New("not a P-256 key")
+	}
+	return pub, nil
+}
+
 func (i Info) check() error {
 	switch {
 	case i.OS == group.OSLinux || i.OS == group.OSWindows || i.OS == group.OSMacOS:
 	case i.OS == group.OSNone && i.Role == RoleLite:
+	case i.Phone():
 	default:
 		return fmt.Errorf("pair: unknown operating system %q", i.OS)
 	}
 	if i.Role != "" && i.Role != RoleLite {
 		return fmt.Errorf("pair: unknown device role %q", i.Role)
+	}
+	if i.AdminKey != nil {
+		if !i.Phone() {
+			return errors.New("pair: only a phone offers an admin key when it joins")
+		}
+		if _, err := parseAdminKey(i.AdminKey); err != nil {
+			return fmt.Errorf("pair: the phone's admin key: %w", err)
+		}
 	}
 	if i.Seal != nil && seal.CheckPublicKey(i.Seal) != nil {
 		return errors.New("pair: the key for sealed messages is not one")
@@ -241,6 +278,9 @@ type Welcome struct {
 	// Records, which the new device takes (group.Records.TakeClaimTimes);
 	// absent when there is no claim.
 	ClaimTimes []group.ClaimTime `json:"claim_times,omitempty"`
+	// AdminCA is, for a phone that offered an admin key, the admin CA the
+	// root issued for it, DER: the phone joins as an admin.
+	AdminCA []byte `json:"admin_ca,omitempty"`
 }
 
 // frame is every message of the exchange; each uses some of the fields.

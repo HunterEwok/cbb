@@ -426,6 +426,12 @@ func (s *Service) publish(nd *node.Node, rs ...group.Record) {
 
 // recordDevice records a device this member admitted, if it is an admin.
 func (s *Service) recordDevice(dev group.DeviceID, name, role, os string, key group.KeyHash, sealKey []byte) {
+	s.recordDeviceAdmin(dev, name, role, os, key, sealKey, nil)
+}
+
+// recordDeviceAdmin is recordDevice for a device that is an admin with the
+// admin CA adminCA too, as a phone the root admitted; nil for none.
+func (s *Service) recordDeviceAdmin(dev group.DeviceID, name, role, os string, key group.KeyHash, sealKey []byte, adminCA *x509.Certificate) {
 	s.mu.Lock()
 	id, nd := s.id, s.nd
 	s.mu.Unlock()
@@ -442,7 +448,12 @@ func (s *Service) recordDevice(dev group.DeviceID, name, role, os string, key gr
 	if seal.CheckPublicKey(sealKey) != nil {
 		sealKey = nil
 	}
-	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(dev), Name: name, Role: role, OS: os, Key: &key, Seal: sealKey})
+	body := group.RecordBody{Type: group.RecordDevice, Device: string(dev), Name: name, Role: role, OS: os, Key: &key, Seal: sealKey}
+	if adminCA != nil {
+		a := group.KeyHashOf(adminCA)
+		body.Admin = &a
+	}
+	r, err := s.signRecord(id, body)
 	if err != nil {
 		s.logf("cbb: recording %s in the devices list: %v", dev, err)
 		return
@@ -450,13 +461,17 @@ func (s *Service) recordDevice(dev group.DeviceID, name, role, os string, key gr
 	s.publish(nd, r)
 }
 
-// recordAdmitted records a computer that a pairing window admitted.
+// recordAdmitted records a computer, a lite member or a phone that a
+// pairing window admitted.
 func (s *Service) recordAdmitted(res *pair.Result) {
 	role := group.RoleFull
-	if res.Info.Role == pair.RoleLite {
+	switch {
+	case res.Info.Role == pair.RoleLite:
 		role = group.RoleLite
+	case res.Info.Phone():
+		role = group.RolePhone
 	}
-	s.recordDevice(res.Device, res.Info.Name, role, res.Info.OS, group.KeyHashOf(res.Cert), res.Info.Seal)
+	s.recordDeviceAdmin(res.Device, res.Info.Name, role, res.Info.OS, group.KeyHashOf(res.Cert), res.Info.Seal, res.AdminCA)
 }
 
 // recordPhone records an iPhone that paired for the shortcut.
