@@ -12,6 +12,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   makes and reads (`recovery_sheet`, `read_recovery_sheet`; docs/protocol.md, section 10). The
   phones' kits make the group's recovery key with its admin CA and `recovery` record, and remove
   it; the apps' button follows.
+- The Android app makes the group's recovery key on the root phone (Settings, "Recovery key"):
+  it shows the sheet once, out of screenshots, prints it or saves it as a PDF through Android's
+  printing, and makes a new key or removes it.
 - The iPhone app makes the recovery key: Settings, "Recovery key" on the root phone, after Face
   ID. Its sheet shows once, to print or save as a PDF, and the phone forgets the key when it
   closes; a new key replaces the old one, and the key can be removed.

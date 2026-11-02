@@ -274,7 +274,7 @@ private fun JoinScreen(model: AppModel) {
 
 /** A QR code drawn module by module, black on the white behind it. */
 @Composable
-private fun QrCode(text: String, modifier: Modifier) {
+internal fun QrCode(text: String, modifier: Modifier) {
     val matrix = remember(text) {
         QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 0))
     }
@@ -448,6 +448,7 @@ internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
         if (model.phase == AppModel.Phase.HOME) model.away?.let { if (model.hub?.on != true) AwayFromHomeSection(model, it) }
         if (model.phase == AppModel.Phase.HOME) model.blindRelay?.let { BlindRelaySection(model, it) }
         if (WatchLink.available && model.phase == AppModel.Phase.HOME && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
+        if (model.phase == AppModel.Phase.HOME && model.isRoot) RecoverySection(model)
         if (model.phase == AppModel.Phase.HOME) Notifications(model.notifier)
         UpdateSection(model)
         Section(stringResource(R.string.about)) {
