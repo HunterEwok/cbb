@@ -164,6 +164,12 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     std::fs::create_dir_all(&cfg.state_dir).context(format!("cannot create {}", cfg.state_dir.display()))?;
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(log_line);
+    if crate::records::leave_version1_group(&cfg.state_dir)? {
+        log(&format!(
+            "cbb: this device's group was made before 0.6, whose records 0.6 does not read, so it left that group (its files are in {}); set the group up again and join it with the phone's QR code",
+            crate::records::OLD_GROUP_DIR
+        ));
+    }
     let svc = Arc::new(Service {
         node: RwLock::new(None),
         away: RwLock::new(None),

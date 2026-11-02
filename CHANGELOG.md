@@ -7,6 +7,13 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- A computer or a lite member updated from 0.5 leaves its old group at its first start, since
+  0.6 does not read records of version 1: the group's files go into `before-0.6` in the state
+  directory, the settings stay, and `cbb status` says that the group is set up again. Until now
+  the root saw only itself and the others waited for it without a word.
+- CI updates members of the last published release to the build under test, one at a time
+  (`tools/e2e/upgrade.sh`): from 0.6 on the group, its devices and sync must survive; from 0.5,
+  each member leaves the old group and a new one works.
 - Each release carries software bills of materials in CycloneDX 1.6 JSON, listed in
   `SHA256SUMS` and the signed `release.json`: the Go programs' modules, the lite member's crates,
   the phones' Rust core, the iPhone kit's Swift packages and the Android apps' Maven modules,

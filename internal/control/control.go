@@ -233,6 +233,10 @@ type Conflict struct {
 type Status struct {
 	Device string `json:"device"`
 	Group  string `json:"group,omitempty"` // the group tag; empty when in no group
+	// LeftOldGroup says that the device left a group made before 0.6 when
+	// the service started, since 0.6 does not read its records: the group
+	// is set up again.
+	LeftOldGroup bool `json:"left_old_group,omitempty"`
 	// Removed says that the group's records revoke this device: its
 	// members refuse it until it pairs again.
 	Removed bool `json:"removed,omitempty"`

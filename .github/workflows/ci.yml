@@ -519,6 +519,38 @@ jobs:
           sudo chmod 666 /dev/kvm
           sh tools/e2e/openwrt.sh vm "$RUNNER_TEMP/release"
 
+  upgrade:
+    name: upgrade from the last release
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the last published release, checked against its SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/old"
+          cd "$RUNNER_TEMP/old"
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern clipboardbridge-linux-amd64.tar.gz --pattern SHA256SUMS
+          sha256sum -c --ignore-missing SHA256SUMS
+          tar -xzf clipboardbridge-linux-amd64.tar.gz
+          clipboardbridge/cbb version
+      - name: the build under test, as the release after it
+        run: |
+          old=$("$RUNNER_TEMP/old/clipboardbridge/cbb" version | sed -n 's/^clipboardbridge v\([0-9][0-9.]*\).*/\1/p')
+          new="${old%.*}.$((${old##*.} + 1))"
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v$new" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+      - name: members of the release update one at a time and keep syncing (tools/e2e/upgrade.sh)
+        run: sh tools/e2e/upgrade.sh "$RUNNER_TEMP/old/clipboardbridge/cbb" "$RUNNER_TEMP/cbb"
+
   avahi:
     name: mdns with avahi
     needs: changes
@@ -623,7 +655,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/clipboardbridge packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/clipboardbridge.init packaging/openwrt/clipboardbridge.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/clipboardbridge-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/clipboardbridge packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/clipboardbridge.init packaging/openwrt/clipboardbridge.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/clipboardbridge-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
@@ -2411,7 +2443,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

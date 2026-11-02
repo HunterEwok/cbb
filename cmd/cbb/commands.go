@@ -247,6 +247,9 @@ func writeStatus(w io.Writer, st *control.Status, devs []control.Device, now tim
 		fmt.Fprintln(w, np)
 	}
 	if st.Group == "" {
+		if st.LeftOldGroup {
+			fmt.Fprintln(w, "This device left its group, which was made before 0.6: groups are set up again from 0.6 on.")
+		}
 		fmt.Fprintln(w, "Not in a group. Run cbb new here to start one, or cbb pair to join one.")
 		return
 	}

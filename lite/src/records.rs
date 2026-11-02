@@ -10,7 +10,7 @@ pub use cbb_core::command::{Command, valid_name, valid_os};
 pub use cbb_core::group::*;
 
 use crate::certs::Cert;
-use crate::error::{Error, Result, Wrap};
+use crate::error::{Context, Error, Result, Wrap};
 use crate::files;
 
 /// The name of the records file in the state directory.
@@ -41,9 +41,69 @@ impl Stored for Records {
     }
 }
 
+/// Where a group made before 0.6 goes when the device leaves it, in the
+/// state directory.
+pub const OLD_GROUP_DIR: &str = "before-0.6";
+
+/// Moves a group made before 0.6 out of the state directory, so the device
+/// starts in no group: 0.6 reads only records of version 2, with no
+/// migration (docs/records-v2.md), so such a group can no longer work and
+/// is set up again. Its records file is a JSON array; version 2's is an
+/// object. The records go last, so that a start cut short moves the rest at
+/// the next one; the device's settings stay.
+pub fn leave_version1_group(dir: &Path) -> Result<bool> {
+    let data = match std::fs::read(dir.join(FILE_NAME)) {
+        Ok(d) => d,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(Error::with(format!("cannot read {}", dir.join(FILE_NAME).display()), e)),
+    };
+    if data.iter().find(|b| !b.is_ascii_whitespace()) != Some(&b'[') {
+        return Ok(false);
+    }
+    let to = dir.join(OLD_GROUP_DIR);
+    std::fs::create_dir_all(&to).context(format!("cannot create {}", to.display()))?;
+    // tunnel.json: the tunnel module is only in builds with it.
+    for name in [crate::identity::FILE_NAME, crate::sealkey::FILE_NAME, "tunnel.json", FILE_NAME] {
+        match std::fs::rename(dir.join(name), to.join(name)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(Error::with(format!("cannot move {}", dir.join(name).display()), e)),
+        }
+    }
+    Ok(true)
+}
+
 /// An empty set for the group of group_ca on the wall clock.
 pub fn new(group_ca: &Cert) -> Records {
     let mut s = Records::new(group_ca);
     s.set_clock(crate::uptime::wall_ms);
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn leaves_a_group_of_0_5() {
+        let dir = std::env::temp_dir().join(format!("cbb-records-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // No records, or records of version 2: nothing moves.
+        assert!(!leave_version1_group(&dir).unwrap());
+        std::fs::write(dir.join(crate::identity::FILE_NAME), b"{}").unwrap();
+        std::fs::write(dir.join(FILE_NAME), br#"{"v":2,"records":[]}"#).unwrap();
+        assert!(!leave_version1_group(&dir).unwrap());
+        assert!(dir.join(crate::identity::FILE_NAME).exists());
+        // A group of 0.5: its files move, the settings stay.
+        std::fs::write(dir.join(FILE_NAME), b"\n [ ]").unwrap();
+        std::fs::write(dir.join("mode"), b"own").unwrap();
+        assert!(leave_version1_group(&dir).unwrap());
+        for name in [crate::identity::FILE_NAME, FILE_NAME] {
+            assert!(!dir.join(name).exists(), "{name} stayed");
+            assert!(dir.join(OLD_GROUP_DIR).join(name).exists(), "{name} did not move");
+        }
+        assert!(dir.join("mode").exists());
+        assert!(!leave_version1_group(&dir).unwrap());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

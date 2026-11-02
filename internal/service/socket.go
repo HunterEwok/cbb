@@ -448,6 +448,7 @@ func (s *Service) status() *control.Status {
 	st.TVs = s.tvStatus()            // a TV's remote needs no group
 	st.Keyboard = s.keyboardStatus() // nor does the Bluetooth keyboard
 	if s.id == nil {
+		st.LeftOldGroup = s.leftOld
 		return st
 	}
 	st.Device, st.Group = string(s.id.ID), group.Tag(s.id.GroupCA.Cert)
