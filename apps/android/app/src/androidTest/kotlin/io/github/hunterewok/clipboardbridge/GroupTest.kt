@@ -235,9 +235,25 @@ class GroupTest {
         val (code, pairing) = Bench.pairCode(dev)
         compose.onNode(hasSetTextAction()).performTextInput(code)
         compose.onNodeWithText(str(R.string.add)).performClick()
-        val out = pairing.finish(90)
+        val out = try {
+            pairing.finish(90)
+        } catch (e: AssertionError) {
+            throw AssertionError("${e.message}\n${appState()}\n$dev's log:\n${Bench.logs(dev)}")
+        }
         assertTrue("cbb pair on $dev did not join:\n$out", out.contains("Joined the group."))
         until(30, "$dev in the phone's devices") { model.group.devices.any { it.name == dev } }
+    }
+
+    /**
+     * What the app shows and where its threads wait, for a failure's
+     * message: the phase, whether it is busy, its message, and the stacks of
+     * the threads that run the app's code.
+     */
+    private fun appState(): String {
+        val note = model.message?.let { "${str(it.text)} ${it.detail.orEmpty()}" }
+        val stacks = Thread.getAllStackTraces().filter { (_, s) -> s.any { it.className.startsWith("io.github.hunterewok") } }
+            .entries.joinToString("\n") { (t, s) -> "${t.name} (${t.state}):\n" + s.take(25).joinToString("\n") { "  at $it" } }
+        return "the app: phase ${model.phase}, busy ${model.busy}, message $note\n$stacks"
     }
 
     /** The texts of the app's notifications that show now. */
