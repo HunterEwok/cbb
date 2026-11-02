@@ -21,6 +21,10 @@ impl Away {
         Away
     }
 
+    pub fn via(self, _via: Option<std::net::SocketAddr>) -> Away {
+        self
+    }
+
     pub fn key(&self) -> Option<(Vec<u8>, Vec<u8>)> {
         None
     }
