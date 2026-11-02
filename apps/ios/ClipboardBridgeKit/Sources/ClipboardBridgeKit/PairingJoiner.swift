@@ -3,11 +3,14 @@
 import Crypto
 import Foundation
 
-/// The joining side of pairing, which a phone plays to join a phone group:
-/// it listens and shows its QR code, and an admin phone dials it and
-/// confirms the code first (docs/protocol.md, section 6, "The joiner
-/// listens"). A wrong code never spends it, so the joiner may take another
-/// attempt.
+/// The joining side of pairing, which a phone plays to join a group. To
+/// join a phone group it listens and shows its QR code, and an admin phone
+/// dials it and confirms the code first (docs/protocol.md, section 6, "The
+/// joiner listens"): a wrong code never spends it, so the joiner may take
+/// another attempt. To join a computer's group it dials the window that
+/// `cbb pair` opened on the group's root and confirms the code first ("A
+/// phone joins a computer's group"): once it sent its confirmation the code
+/// is spent, whatever happens next.
 public enum PairingJoiner {
     /// What a successful exchange gives: this phone's device ID and the
     /// welcome, checked.
@@ -19,10 +22,17 @@ public enum PairingJoiner {
     }
 
     public enum Failure: Error, Equatable {
-        /// The other phone's answer, or a wrong code it showed.
+        /// The other device's answer, or a wrong code it showed.
         case refused(Pairing.ErrorCode)
         case badWelcome(String)
         case protocolError(String)
+    }
+
+    /// A failure after this phone sent its confirmation to a computer's
+    /// window: the code is spent and may not be tried again, at this
+    /// address or another. underlying is what failed.
+    public struct Spent: Error {
+        public var underlying: any Error
     }
 
     /// Runs the exchange over a connection the admitting phone dialed and
@@ -33,6 +43,31 @@ public enum PairingJoiner {
     /// checked result; the other phone hears whether that worked.
     public static func accept(over t: FrameTransport, code: String, info: Pairing.Info, memberCert: Data, joinerCert: Data,
                               sessionID: [UInt8], now: Date, store: (Joined) throws -> Void) async throws -> Joined {
+        try await exchange(over: t, code: code, info: info, memberCert: memberCert, joinerCert: joinerCert,
+                           sessionID: sessionID, now: now, memberFirst: true, store: store)
+    }
+
+    /// Runs the exchange over a connection this phone dialed to a
+    /// computer's pairing window, whose TLS handshake is done: joinerCert
+    /// is this phone's self-signed certificate, which it showed in the
+    /// handshake, memberCert the computer's leaf, and sessionID the TLS
+    /// exporter's output. This phone confirms the code first, so what fails
+    /// after that comes as Spent. info carries this phone's name, its OS and
+    /// its admin key, for which the group's root sends an admin CA. store
+    /// saves the checked result; the computer hears whether that worked.
+    public static func join(over t: FrameTransport, code: String, info: Pairing.Info, memberCert: Data, joinerCert: Data,
+                            sessionID: [UInt8], now: Date, store: (Joined) throws -> Void) async throws -> Joined {
+        try await exchange(over: t, code: code, info: info, memberCert: memberCert, joinerCert: joinerCert,
+                           sessionID: sessionID, now: now, memberFirst: false, store: store)
+    }
+
+    /// The frames of the exchange (section 6, "Frames"). With memberFirst
+    /// the member sends its confirmation with its key, before this phone
+    /// sends its own; otherwise this phone confirms first and the member's
+    /// confirmation comes with the welcome.
+    private static func exchange(over t: FrameTransport, code: String, info: Pairing.Info, memberCert: Data, joinerCert: Data,
+                                 sessionID: [UInt8], now: Date, memberFirst: Bool,
+                                 store: (Joined) throws -> Void) async throws -> Joined {
         guard let device = try CertificateInfo(der: joinerCert).commonName, GroupCertificates.isDeviceID(device) else {
             throw Failure.protocolError("this phone's certificate names no device ID")
         }
@@ -43,31 +78,42 @@ public enum PairingJoiner {
         try await t.writeFrame(Pairing.Frame(msg: Data(st.message), ad: ada))
         let reply = try await t.readFrame()
         if let code = reply.error { throw Failure.refused(Pairing.ErrorCode(wire: code)) }
-        guard let yb = reply.msg, let adb = reply.ad, let tb = reply.tag,
+        guard let yb = reply.msg, let adb = reply.ad, !memberFirst || reply.tag != nil,
               let member = try? JSONDecoder().decode(Pairing.MemberAD.self, from: adb) else {
             throw Failure.protocolError("bad second frame")
         }
         _ = try st.finish(peerMessage: Array(yb), peerAD: Array(adb))
-        guard (try? st.verify(peerTag: Array(tb))) != nil else {
+        if memberFirst, (try? st.verify(peerTag: Array(reply.tag!))) == nil {
             try? await t.writeFrame(Pairing.Frame(error: Pairing.ErrorCode.wrongCode.rawValue))
             throw Failure.refused(.wrongCode)
         }
-        try await t.writeFrame(Pairing.Frame(tag: Data(st.confirmationTag!)))
-        let final = try await t.readFrame()
-        if let code = final.error { throw Failure.refused(Pairing.ErrorCode(wire: code)) }
-        guard let welcome = final.welcome else { throw Failure.protocolError("no welcome") }
-        let joined = Joined(device: device, welcome: welcome, member: member)
+        // From here on a member that did not confirm first can check a
+        // guess of the code.
         do {
-            try check(joined, info: info, memberCert: memberCert, joinerCert: joinerCert, now: now)
-            try store(joined)
+            try await t.writeFrame(Pairing.Frame(tag: Data(st.confirmationTag!)))
+            let final = try await t.readFrame()
+            if let code = final.error { throw Failure.refused(Pairing.ErrorCode(wire: code)) }
+            if !memberFirst {
+                guard let tb = final.tag, (try? st.verify(peerTag: Array(tb))) != nil else {
+                    throw Failure.protocolError("the computer did not prove that it knows the code")
+                }
+            }
+            guard let welcome = final.welcome else { throw Failure.protocolError("no welcome") }
+            let joined = Joined(device: device, welcome: welcome, member: member)
+            do {
+                try check(joined, info: info, memberCert: memberCert, joinerCert: joinerCert, now: now)
+                try store(joined)
+            } catch {
+                try? await t.writeFrame(Pairing.Frame(error: Pairing.ErrorCode.refused.rawValue))
+                throw error
+            }
+            // Stored; the other device admitted this one when it sent the
+            // welcome, whether or not it hears this.
+            try? await t.writeFrame(Pairing.Frame(ok: true))
+            return joined
         } catch {
-            try? await t.writeFrame(Pairing.Frame(error: Pairing.ErrorCode.refused.rawValue))
-            throw error
+            throw memberFirst ? error : Spent(underlying: error)
         }
-        // Stored; the other phone admitted this one when it sent the
-        // welcome, whether or not it hears this.
-        try? await t.writeFrame(Pairing.Frame(ok: true))
-        return joined
     }
 
     /// Checks a welcome as Go's joiner does (section 6, "Welcome"), for a

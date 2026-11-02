@@ -9,8 +9,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ### Added
 - A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
-  can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). The
-  phones' side follows.
+  can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both
+  phones' kits dial that window and check the root's Welcome (`PairingJoiner.join`); the apps'
+  screen follows.
 - `cbb recovery`: when every phone with the group is lost, any computer of the group claims it
   with the recovery key typed from the sheet (or its QR code's text) and becomes the root after
   the group's wait, unless the root phone cancels the claim. `cbb handover NAME`, on the root,

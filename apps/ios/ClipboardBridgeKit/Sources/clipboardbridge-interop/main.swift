@@ -21,6 +21,13 @@
 // bytes reversed as "phone picture", which Go fetches, waits for "done",
 // and prints "ok".
 //
+//   clipboardbridge-interop join-tls HOST PORT CODE   (macOS)
+//
+// joins a computer's group through the pairing window that `cbb pair`
+// opened at HOST:PORT (internal/pair, TestSwiftJoinsComputerRoot), as a
+// phone with an admin key, and prints the group CA and then the admin CA
+// the root issued, each in base64 on a line.
+//
 //   clipboardbridge-interop invite-window SECRET yes|no   (macOS)
 //
 // opens a remote invitation's pairing window (InvitationWindow) with SECRET
@@ -149,6 +156,27 @@ func memberTLS(host: String, port: UInt16, peer: String) async throws {
     try await serving.value
 }
 
+func joinTLS(host: String, port: UInt16, code: String) async throws {
+    let label = "clipboardbridge-interop-joiner-\(SyncEngine.newID())"
+    let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
+    let cert = try GroupCertificates.selfSigned(device: SyncEngine.newID(), signer: signer)
+    let identity = try KeychainIdentity.identity(certificate: cert, key: signer.key, label: label, storeKey: false)
+    // The window's certificate is checked by the code's exchange, not here.
+    let tls = TLSTransport(host: host, port: port, alpn: Pairing.alpn, identity: identity) { _ in true }
+    try await tls.start()
+    guard let leaf = tls.peerCertificate,
+          let sid = tls.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else {
+        throw TLSTransport.Failure.notReady("no peer certificate or exporter")
+    }
+    let info = Pairing.Info(name: "iPhone", os: "ios", adminKey: SoftwareSigner().publicKeyDER)
+    let joined = try await PairingJoiner.join(over: tls, code: code, info: info, memberCert: leaf, joinerCert: cert,
+                                              sessionID: sid, now: Date()) { _ = PhoneGroup.joined($0) }
+    tls.close()
+    guard let adminCA = joined.welcome.adminCA else { throw TLSTransport.Failure.notReady("the welcome carries no admin CA") }
+    print(joined.welcome.groupCA.base64EncodedString())
+    print(adminCA.base64EncodedString())
+}
+
 /// The group the window's attempts change.
 final class GroupBox: @unchecked Sendable {
     var group: PhoneGroup
@@ -199,6 +227,20 @@ if args.count == 4, args[1] == "invite-window", let secret = Data(base64Encoded:
     }
     #else
     FileHandle.standardError.write("invite-window needs Network.framework\n".data(using: .utf8)!)
+    exit(2)
+    #endif
+}
+if args.count == 5, args[1] == "join-tls", let port = UInt16(args[3]) {
+    #if canImport(Network)
+    do {
+        try await joinTLS(host: args[2], port: port, code: args[4])
+        exit(0)
+    } catch {
+        FileHandle.standardError.write("clipboardbridge-interop: \(error)\n".data(using: .utf8)!)
+        exit(1)
+    }
+    #else
+    FileHandle.standardError.write("join-tls needs Network.framework\n".data(using: .utf8)!)
     exit(2)
     #endif
 }
