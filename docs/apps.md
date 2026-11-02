@@ -28,7 +28,9 @@ they look, so both apps are built to the same plan.
 1. **Start** (no group yet): one sentence, the big button "Connect a new device" with a hint
    below it (on a computer, run `cbb pair` and scan the code it shows; `clipboardbridge
    pair -phone` in the mode without the app), and a second button, "I already use
-   Clipboard Bridge on another phone", which joins that phone's group. The camera opens at once;
+   Clipboard Bridge on another phone", which joins that phone's group, and a third, "My group was
+   made on a computer", where the user types the six-digit code that `cbb pair` shows on the
+   group's root and the phone joins that group as an admin. The camera opens at once;
    after the scan the app creates the group key in the Secure Enclave or StrongBox, admits
    the device and goes to Home. At the first launch the app makes this phone's own key and
    says so once, in a card: "This phone is ready", what the key is for in plain words, and
@@ -811,6 +813,13 @@ the app on real devices.
   admins and removes the lost phone. The kit keeps the records file and asks the Rust core
   what it says (`RecordSet`, docs/core-api.md, "The record set"); the Android kit does the
   same, with its root key in the Keystore behind BiometricPrompt.
+- A phone joins a computer's group from its Start screen ("My group was made on a computer";
+  docs/protocol.md, section 6, "A phone joins a computer's group"): it browses up to 10 s for
+  a computer announcing a pairing window (`p=1`), then 2 s more, and refuses when two
+  announce one; it dials that window with its own self-signed certificate, confirms the code
+  first (`PairingJoiner.join`) and checks the Welcome, whose admin CA the root issued for the
+  admin key it offered. An admin computer that is not the root refuses a phone, and the app
+  says to run `cbb pair` on the computer that created the group.
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

@@ -37,7 +37,7 @@ import java.time.Instant
  * state is Compose state, changed on the main thread.
  */
 class AppModel(private val app: Context) {
-    enum class Phase { START, JOINING, HOME }
+    enum class Phase { START, JOINING, JOINING_COMPUTER, HOME }
 
     /** One line about the last action, in plain words, and the error underneath when details are on. */
     data class Note(@StringRes val text: Int, val detail: String? = null, val error: Boolean = false)
@@ -288,6 +288,36 @@ class AppModel(private val app: Context) {
             message = describe(e)
         } finally {
             joinCode = null
+        }
+    }
+
+    /** Opens the screen that joins a computer's group with the code cbb pair shows. */
+    fun startJoiningComputer() {
+        dismissWelcome()
+        message = null
+        phase = Phase.JOINING_COMPUTER
+    }
+
+    /**
+     * Joins a computer's group with the code the user typed from cbb pair on
+     * the group's root, then goes Home. A wrong code may be typed again: the
+     * computer's window takes three attempts.
+     */
+    suspend fun joinComputer(code: String) {
+        busy = true
+        message = null
+        try {
+            group.joinComputer(code)
+            update()
+            phase = Phase.HOME
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: PairingJoiner.Failure) {
+            message = describe(e, if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_join_wrong_code else R.string.error_join_computer)
+        } catch (e: Exception) {
+            message = describe(e)
+        } finally {
+            busy = false
         }
     }
 
@@ -899,6 +929,9 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.NOT_ADMIN -> R.string.error_not_admin
                 LiveGroup.Failure.Kind.NO_COMPUTERS -> R.string.no_computers
                 LiveGroup.Failure.Kind.NO_SCREEN, LiveGroup.Failure.Kind.UNREACHABLE -> R.string.error_unreachable
+                LiveGroup.Failure.Kind.NO_WINDOW -> R.string.error_no_window
+                LiveGroup.Failure.Kind.TWO_WINDOWS -> R.string.error_two_windows
+                LiveGroup.Failure.Kind.NEEDS_ROOT -> R.string.error_needs_root
             }
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large

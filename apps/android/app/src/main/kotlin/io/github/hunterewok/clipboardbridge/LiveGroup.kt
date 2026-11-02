@@ -65,6 +65,7 @@ import kotlinx.serialization.json.longOrNull
 import java.io.File
 import java.io.IOException
 import java.net.Inet4Address
+import java.net.InetSocketAddress
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.security.MessageDigest
@@ -91,7 +92,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     class CommandRefused(val reason: String) : Exception(reason)
 
     class Failure(val kind: Kind) : Exception(kind.name) {
-        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN }
+        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT }
     }
 
     /** A device of the group, as the screens show it: a computer, or this phone. */
@@ -752,6 +753,68 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             } finally {
                 t.close()
             }
+        }
+    }
+
+    /**
+     * Joins a computer's group (docs/protocol.md, section 6, "A phone joins
+     * a computer's group"): finds the pairing window that `cbb pair` opened
+     * on the group's root by mDNS (`p=1`), dials it and takes code, which
+     * the user typed from the computer's screen. Browsing waits up to 10 s
+     * for a window, then 2 s more for a second one, as the computers'
+     * joiner does: two windows at once and it refuses, rather than try the
+     * code on the wrong one. The root makes this phone an admin with the
+     * admin key it offers; a TV offers none and joins as a member.
+     */
+    suspend fun joinComputer(code: String) {
+        if (hasGroup) return
+        if (withContext(Dispatchers.IO) { LocalAddresses.current() }.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
+        val window = findWindow()
+        val joined = withContext(Dispatchers.IO) {
+            val member = memberSigner()
+            val admin = if (Tv.isTv(context)) null else Keys.load(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN)
+            val cert = GroupCertificates.selfSigned(SyncEngine.newID(), member)
+            val info = Pairing.Info(PhoneGroup.validName(deviceName), "android", admin?.publicKeyDER, seal = sealKey())
+            // The window's certificate is checked by the code's exchange, not here.
+            val t = TLSTransport.dial(window.hostString, window.port, Pairing.ALPN, member.privateKey, listOf(cert)) { it.isNotEmpty() }
+            closingOnCancel({ t.close() }) {
+                try {
+                    val leaf = t.peerCertificate ?: throw PairingJoiner.Failure("the computer sent no certificate")
+                    val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
+                    PairingJoiner.join(t, code, info, leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
+                } catch (e: PairingJoiner.Failure) {
+                    // An admin computer that is not the root refuses a phone.
+                    if (e.code == Pairing.ErrorCode.REFUSED) throw Failure(Failure.Kind.NEEDS_ROOT).apply { initCause(e) }
+                    throw e
+                } finally {
+                    t.close()
+                }
+            }
+        }
+        withContext(Dispatchers.IO) {
+            synchronized(lock) {
+                newDeviceMode()
+                state = PhoneGroup.joined(joined)
+            }
+            startSync()
+        }
+    }
+
+    /** The address of the one computer announcing a pairing window; see joinComputer. */
+    private suspend fun findWindow(): InetSocketAddress {
+        val windows = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        val b = NsdBrowser(context) { members -> windows.set(members.filter { it.pairing }.map { it.device }.toSet()) }
+        try {
+            b.start()
+            withTimeoutOrNull(BROWSE_MS) {
+                while (windows.get().isEmpty()) delay(100)
+            } ?: throw Failure(Failure.Kind.NO_WINDOW)
+            delay(PAIRING_SETTLE_MS)
+            val found = windows.get()
+            if (found.size > 1) throw Failure(Failure.Kind.TWO_WINDOWS)
+            return found.firstNotNullOfOrNull { b.address(it) } ?: throw Failure(Failure.Kind.NO_WINDOW)
+        } finally {
+            b.stop()
         }
     }
 
@@ -1814,6 +1877,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         /** How long the join QR code is good for, and how many wrong codes it takes, as for cbb pair (docs/protocol.md, section 6). */
         const val JOIN_WINDOW_MS = 300_000L
         const val JOIN_ATTEMPTS = 3
+
+        /** How long joinComputer browses for a pairing window, and then for a second one. */
+        const val BROWSE_MS = 10_000L
+        const val PAIRING_SETTLE_MS = 2_000L
 
         /** How long the button waits for a computer to connect before it says none is. */
         const val CONNECT_WAIT_MS = 5_000L

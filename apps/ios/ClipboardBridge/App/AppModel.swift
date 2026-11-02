@@ -70,6 +70,8 @@ protocol GroupController: AnyObject {
     /// Joins another phone's group: listens, hands show the QR code for the
     /// other phone to scan, and returns once this phone is in the group.
     func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
+    /// Joins a computer's group with the code cbb pair shows on its root.
+    func joinComputer(code: String) async throws
     /// Sends what this phone holds, or fetches the computers' recent copy.
     func sync() async throws -> AppModel.SyncResult
     /// Updates which computers are online.
@@ -115,6 +117,7 @@ extension GroupController {
     func watchActions(for id: String) -> [String] { [] }
     func watchBody(_ ask: WatchState.Ask) throws -> Data { throw PhoneGroup.Failure.notAWatch }
     func deliverFromWatch(_ signed: WatchState.Signed) async throws { throw PhoneGroup.Failure.notAWatch }
+    func joinComputer(code: String) async throws { throw PendingGroup.Failure.notReady }
     func rename(_ id: String, to name: String) async throws {}
     func setMode(_ id: String, to mode: String) async throws {}
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
@@ -143,7 +146,7 @@ final class AppModel: ObservableObject {
     /// too.
     static let shared = AppModel(group: LiveGroup(), notifies: true)
 
-    enum Phase: Equatable { case start, joining, home }
+    enum Phase: Equatable { case start, joining, joiningComputer, home }
 
     /// A device of the group: a computer, or this phone.
     struct Computer: Identifiable, Equatable {
@@ -398,6 +401,46 @@ final class AppModel: ObservableObject {
             message = Self.describe(error)
         }
         joinCode = nil
+    }
+
+    /// Opens the screen that joins a computer's group with the code cbb
+    /// pair shows.
+    func startJoiningComputer() {
+        dismissWelcome()
+        message = nil
+        phase = .joiningComputer
+    }
+
+    /// Joins a computer's group with the code the user typed from cbb pair
+    /// on the group's root, then goes Home. A wrong code may be typed again:
+    /// the computer's window takes three attempts.
+    func joinComputer(code: String) async {
+        busy = true
+        message = nil
+        defer { busy = false }
+        do {
+            try await group.joinComputer(code: code)
+            computers = group.computers
+            devices = group.devices
+            isAdmin = group.isAdmin
+            phase = .home
+        } catch is CancellationError {
+        } catch {
+            message = Self.describe(error, summary: Self.joinSummary(error))
+        }
+    }
+
+    /// What joining a computer's group says about a failure of the
+    /// exchange; nil for the others, which say what they always do.
+    private static func joinSummary(_ error: Error) -> String? {
+        let f = (error as? PairingJoiner.Spent)?.underlying as? PairingJoiner.Failure ?? error as? PairingJoiner.Failure
+        if case .refused(.wrongCode)? = f {
+            return String(localized: "The code did not match. Check the code on the computer's screen and type it again.", bundle: .app)
+        }
+        if f != nil || error is PairingJoiner.Spent {
+            return String(localized: "The computer's group could not be joined. Run cbb pair on it again.", bundle: .app)
+        }
+        return nil
     }
 
     /// Leaves the join screen without joining.
@@ -1010,6 +1053,12 @@ final class AppModel: ObservableObject {
             case .timedOut: return String(localized: "No phone scanned the code in five minutes. Try again.", bundle: .app)
             case .tooManyWrongCodes: return String(localized: "Too many wrong codes. Try again with a new code.", bundle: .app)
             case .notAdmin: return String(localized: "Only an admin phone can do this.", bundle: .app)
+            case .noWindow:
+                return String(localized: "No computer is waiting for a phone. Run cbb pair on the computer that created the group, then try again.", bundle: .app)
+            case .twoWindows:
+                return String(localized: "Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.", bundle: .app)
+            case .needsRoot:
+                return String(localized: "This computer cannot add a phone. Run cbb pair on the computer that created the group.", bundle: .app)
             default: break
             }
         }

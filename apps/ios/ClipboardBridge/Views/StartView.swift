@@ -59,6 +59,8 @@ struct StartView: View {
             }
             Button("I already use Clipboard Bridge on another phone") { model.startJoining() }
                 .buttonStyle(GlassButtonStyle())
+            Button("My group was made on a computer") { model.startJoiningComputer() }
+                .buttonStyle(GlassButtonStyle())
         }
         .padding(Tokens.spacingLarge)
         .task { model.prepare() }

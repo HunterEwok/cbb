@@ -1,6 +1,116 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "My group was made on a computer": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Моя группа создана на компьютере"
+          }
+        }
+      }
+    },
+    "Join a computer's group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти в группу компьютера"
+          }
+        }
+      }
+    },
+    "On the computer that created the group, run cbb pair, then type the six-digit code it shows. Keep this phone on the same network.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На компьютере, который создал группу, выполните cbb pair и введите шестизначный код, который он покажет. Телефон должен быть в той же сети."
+          }
+        }
+      }
+    },
+    "Code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код"
+          }
+        }
+      }
+    },
+    "Join": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти"
+          }
+        }
+      }
+    },
+    "Looking for the computer…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ищу компьютер…"
+          }
+        }
+      }
+    },
+    "No computer is waiting for a phone. Run cbb pair on the computer that created the group, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ни один компьютер не ждёт телефон. Выполните cbb pair на компьютере, который создал группу, и попробуйте снова."
+          }
+        }
+      }
+    },
+    "Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сразу два компьютера ждут устройство. Закройте cbb pair на одном из них и попробуйте снова."
+          }
+        }
+      }
+    },
+    "This computer cannot add a phone. Run cbb pair on the computer that created the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот компьютер не может добавить телефон. Выполните cbb pair на компьютере, который создал группу."
+          }
+        }
+      }
+    },
+    "The code did not match. Check the code on the computer's screen and type it again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код не совпал. Проверьте код на экране компьютера и введите его снова."
+          }
+        }
+      }
+    },
+    "The computer's group could not be joined. Run cbb pair on it again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось войти в группу компьютера. Выполните на нём cbb pair ещё раз."
+          }
+        }
+      }
+    },
     "The recovery key is removed. A sheet printed for it no longer works.": {
       "localizations": {
         "ru": {
