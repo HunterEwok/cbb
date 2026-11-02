@@ -465,4 +465,25 @@
     <string name="recovery_qr">QR code of the recovery key</string>
     <string name="recovery_page_keep">Keep this sheet somewhere safe, away from your phones. Anyone who has it can take your group over, after the group\'s wait, unless the root phone cancels it.</string>
     <string name="recovery_page_how">To take the group back: on a new phone, choose Restore with a recovery key and scan the code; or on a computer of the group, run cbb recovery and type the key.</string>
+    <string name="yubikey_put">Put it on a YubiKey</string>
+    <string name="yubikey_put_title">Put the recovery key on a YubiKey</string>
+    <string name="yubikey_put_body">The YubiKey makes the key in a free PIV slot, and the key never leaves it. Nothing else on the YubiKey changes. Restoring then needs the YubiKey, its PIN and a tap. A YubiKey with its own management key is not supported here: use the sheet instead.</string>
+    <string name="yubikey_restore">Use a YubiKey instead</string>
+    <string name="yubikey_restore_title">Restore with a YubiKey</string>
+    <string name="yubikey_restore_body">Keep this phone on the network of a computer of the group. You hold the YubiKey to the phone twice: once to find the group, once to sign the claim. This phone becomes the group\'s root when the group\'s waiting time ends, unless the old phone cancels it.</string>
+    <string name="yubikey_pin">The YubiKey\'s PIN</string>
+    <string name="yubikey_go">Continue</string>
+    <string name="yubikey_hold">Hold the YubiKey to the back of the phone until this message goes.</string>
+    <string name="yubikey_hold_again">Found the group. Hold the YubiKey to the phone again to sign the claim.</string>
+    <string name="yubikey_made">The recovery key is on the YubiKey. Keep it away from this phone; a recovery sheet made before no longer works.</string>
+    <string name="error_yubikey_no_piv">This card is not a YubiKey with PIV.</string>
+    <string name="error_yubikey_wrong_pin">Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</string>
+    <string name="error_yubikey_blocked">The YubiKey\'s PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</string>
+    <string name="error_yubikey_management_key">This YubiKey has its own management key, which the app cannot use. Print a recovery sheet instead.</string>
+    <string name="error_yubikey_full">Every free PIV slot of this YubiKey is in use.</string>
+    <string name="error_yubikey_no_key">This YubiKey holds no recovery key of a group.</string>
+    <string name="error_yubikey">The YubiKey did not answer as expected. Hold it still against the phone and try again.</string>
+    <string name="error_yubikey_none">No YubiKey was held to the phone.</string>
+    <string name="error_nfc_off">NFC is off. Turn it on in the phone\'s settings, then try again.</string>
+    <string name="error_no_nfc">This phone has no NFC, which the YubiKey needs.</string>
 </resources>

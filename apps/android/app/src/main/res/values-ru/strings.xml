@@ -462,4 +462,25 @@
     <string name="recovery_qr">QR-код ключа восстановления</string>
     <string name="recovery_page_keep">Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого он есть, может забрать вашу группу после времени ожидания группы, если корневой телефон это не отменит.</string>
     <string name="recovery_page_how">Чтобы вернуть группу: на новом телефоне выберите «Восстановить ключом восстановления» и отсканируйте код; или на компьютере группы запустите cbb recovery и введите ключ.</string>
+    <string name="yubikey_put">Записать на YubiKey</string>
+    <string name="yubikey_put_title">Записать ключ восстановления на YubiKey</string>
+    <string name="yubikey_put_body">YubiKey создаёт ключ в свободном слоте PIV, и ключ никогда его не покидает. Больше ничего на YubiKey не меняется. Для восстановления понадобятся YubiKey, его PIN и касание. YubiKey со своим ключом управления здесь не поддерживается: вместо него используйте лист.</string>
+    <string name="yubikey_restore">Использовать YubiKey</string>
+    <string name="yubikey_restore_title">Восстановить с YubiKey</string>
+    <string name="yubikey_restore_body">Держите телефон в сети компьютера группы. YubiKey нужно приложить к телефону дважды: чтобы найти группу и чтобы подписать заявку. Телефон станет корнем группы, когда истечёт время ожидания группы, если старый телефон её не отменит.</string>
+    <string name="yubikey_pin">PIN YubiKey</string>
+    <string name="yubikey_go">Продолжить</string>
+    <string name="yubikey_hold">Приложите YubiKey к задней стороне телефона и держите, пока это сообщение не исчезнет.</string>
+    <string name="yubikey_hold_again">Группа найдена. Приложите YubiKey к телефону ещё раз, чтобы подписать заявку.</string>
+    <string name="yubikey_made">Ключ восстановления записан на YubiKey. Храните его вдали от этого телефона; лист, напечатанный раньше, больше не действует.</string>
+    <string name="error_yubikey_no_piv">Эта карта не YubiKey с PIV.</string>
+    <string name="error_yubikey_wrong_pin">Неверный PIN. После трёх неверных попыток YubiKey блокирует PIN.</string>
+    <string name="error_yubikey_blocked">PIN YubiKey заблокирован. Разблокируйте его PUK-кодом в Yubico Authenticator и попробуйте снова.</string>
+    <string name="error_yubikey_management_key">У этого YubiKey свой ключ управления, которым приложение не может воспользоваться. Напечатайте лист восстановления.</string>
+    <string name="error_yubikey_full">Все свободные слоты PIV на этом YubiKey заняты.</string>
+    <string name="error_yubikey_no_key">На этом YubiKey нет ключа восстановления группы.</string>
+    <string name="error_yubikey">YubiKey ответил не так, как ожидалось. Держите его неподвижно у телефона и попробуйте снова.</string>
+    <string name="error_yubikey_none">YubiKey не приложили к телефону.</string>
+    <string name="error_nfc_off">NFC выключен. Включите его в настройках телефона и попробуйте снова.</string>
+    <string name="error_no_nfc">В этом телефоне нет NFC, а он нужен для YubiKey.</string>
 </resources>
