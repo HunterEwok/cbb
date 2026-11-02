@@ -32,9 +32,17 @@ struct ClipboardBridgeMacApp: App {
 }
 
 /// Keeps the window closed at launch, which SwiftUI opens for the first
-/// scene, and makes the app a login item the first time it runs.
+/// scene, and makes the app a login item the first time it runs. The
+/// argument -WindowAtLaunch YES, for the UI tests, keeps the window and a
+/// Dock icon with the menu bar, as an ordinary app, and leaves the login
+/// items alone.
 final class LaunchDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if UserDefaults.standard.bool(forKey: "WindowAtLaunch") {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
         DispatchQueue.main.async {
             for w in NSApp.windows where w.identifier?.rawValue.hasPrefix("main") == true {
                 w.close()
