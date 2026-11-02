@@ -283,7 +283,7 @@ bytes between the two UARTs (docs/roadmap.md, "The Next's network in the backgro
 runs at NextPi's shell on the Pi's UART until the driver stops it:
 
 ```
-cbb next link -to 192.168.0.10:8763 -serve 8763:8763 -zone +01:00 -log /ram/link.log
+cbb next link -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00 -log /ram/link.log
 cbb run -peer 127.0.0.1:8769
 ```
 
