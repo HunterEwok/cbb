@@ -62,9 +62,10 @@ func TestLeaveVersion1Group(t *testing.T) {
 	}
 }
 
-// TestLeaveGroupBefore04 checks that a group made before 0.4, whose group
-// CA certifies no admin CAs, leaves even without a records file.
-func TestLeaveGroupBefore04(t *testing.T) {
+// TestUpgrade checks that a group made before 0.4, whose group CA
+// certifies no admin CAs, is left at start, even without a records file,
+// instead of being upgraded in place.
+func TestUpgrade(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Now()
 	ca, err := group.NewGroupCA(now)
