@@ -137,10 +137,14 @@ private fun LocalNetworkPermission(model: AppModel) {
 private fun StartScreen(model: AppModel) {
     val palette = LocalPalette.current
     var adding by rememberSaveable { mutableStateOf(false) }
+    var restoring by rememberSaveable { mutableStateOf(false) }
     var settings by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { model.prepare() }
-    if (adding) {
-        AddDeviceScreen(model) { adding = false }
+    if (adding || restoring) {
+        AddDeviceScreen(model, restore = restoring) {
+            adding = false
+            restoring = false
+        }
         return
     }
     if (settings) {
@@ -192,6 +196,10 @@ private fun StartScreen(model: AppModel) {
         }
         QuietButton(stringResource(R.string.join_other), onClick = { model.startJoining() })
         QuietButton(stringResource(R.string.join_computer), onClick = { model.startJoiningComputer() })
+        QuietButton(stringResource(R.string.restore), onClick = {
+            model.dismissWelcome()
+            restoring = true
+        })
         model.message?.let { NoteText(it) }
     }
 }
@@ -397,9 +405,13 @@ internal fun Confirm(title: String, body: String, action: String, dismiss: () ->
 
 // Adding
 
-/** The camera with a frame; the text of the QR code by hand when there is no camera or it is not allowed. */
+/**
+ * The camera with a frame; the text of the QR code by hand when there is no
+ * camera or it is not allowed. With restore, it scans the recovery sheet's
+ * QR code instead, on a phone without a group.
+ */
 @Composable
-internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
+internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -424,7 +436,7 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
         if (adding == null) {
             adding = scope.launch {
                 try {
-                    if (model.scanned(text)) close()
+                    if (if (restore) model.restore(text.trim()) else model.scanned(text)) close()
                 } finally {
                     adding = null
                 }
@@ -432,14 +444,14 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
         }
     }
     BackHandler { close() }
-    Page(stringResource(R.string.add_device), close) {
+    Page(stringResource(if (restore) R.string.restore_title else R.string.add_device), close) {
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> scope.launch { if (!model.busy) add(text) } },
                 modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
                 onError = { cameraError = it },
             )
-            Text(stringResource(R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(stringResource(if (restore) R.string.restore_hint else R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         } else if (cameraError != null) {
             // The camera did not start: the text of the QR code still works.
             NoteText(model.describe(cameraError!!, R.string.camera_failed, log = false))
@@ -459,7 +471,7 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),
         )
-        AccentButton(stringResource(R.string.add), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
+        AccentButton(stringResource(if (restore) R.string.restore_go else R.string.add), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
         if (model.busy) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)

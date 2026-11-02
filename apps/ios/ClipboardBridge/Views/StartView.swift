@@ -9,6 +9,7 @@ struct StartView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
     @State private var adding = false
+    @State private var restoring = false
     @State private var settings = false
     @AppStorage(LanguageChoice.key) private var language = LanguageChoice.system
 
@@ -61,10 +62,16 @@ struct StartView: View {
                 .buttonStyle(GlassButtonStyle())
             Button("My group was made on a computer") { model.startJoiningComputer() }
                 .buttonStyle(GlassButtonStyle())
+            Button("I have the group's recovery sheet") {
+                model.dismissWelcome()
+                restoring = true
+            }
+            .buttonStyle(GlassButtonStyle())
         }
         .padding(Tokens.spacingLarge)
         .task { model.prepare() }
         .sheet(isPresented: $adding) { AddDeviceView() }
+        .sheet(isPresented: $restoring) { AddDeviceView(restore: true) }
         .sheet(isPresented: $settings) {
             NavigationStack {
                 SettingsView()

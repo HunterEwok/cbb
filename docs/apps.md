@@ -826,6 +826,16 @@ the app on real devices.
   or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
   (`takeHandedOver`), which takes effect at once, and finishes the takeover as after a lost
   root; the computer is not removed.
+- A new phone restores the group with the recovery key from its Start screen ("I have the
+  group's recovery sheet"; docs/protocol.md, section 10, "The recovery key"). It scans the
+  sheet's QR code (the typed key carries no admin CA, so a new phone needs the QR code; a
+  computer of the group takes the typed key with `cbb recovery`), finds the group's computers
+  by their tag and lets the recovery key issue its member certificate (`Restore`). A computer
+  takes it on a connection that carries records only and sends the group's first root in its
+  hello; the app checks the records and the computer, makes a new root key behind Face ID or
+  BiometricPrompt, signs a claim with the recovery key and sends it, and forgets the key. Home
+  then shows the claim's time left, and once it takes effect the app finishes as after a lost
+  root: it signs its own device record and gets a member certificate from the new root.
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

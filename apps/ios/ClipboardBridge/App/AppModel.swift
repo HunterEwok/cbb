@@ -77,6 +77,9 @@ protocol GroupController: AnyObject {
     func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
     /// Joins a computer's group with the code cbb pair shows on its root.
     func joinComputer(code: String) async throws
+    /// Restores the group on this new phone with the recovery key from the
+    /// sheet's QR code; returns once the claim is sent.
+    func restore(sheet: Core.RecoveredKey) async throws
     /// Sends what this phone holds, or fetches the computers' recent copy.
     func sync() async throws -> AppModel.SyncResult
     /// Updates which computers are online.
@@ -125,6 +128,7 @@ extension GroupController {
     func watchBody(_ ask: WatchState.Ask) throws -> Data { throw PhoneGroup.Failure.notAWatch }
     func deliverFromWatch(_ signed: WatchState.Signed) async throws { throw PhoneGroup.Failure.notAWatch }
     func joinComputer(code: String) async throws { throw PendingGroup.Failure.notReady }
+    func restore(sheet: Core.RecoveredKey) async throws { throw PendingGroup.Failure.notReady }
     func rename(_ id: String, to name: String) async throws {}
     func setMode(_ id: String, to mode: String) async throws {}
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
@@ -451,6 +455,40 @@ final class AppModel: ObservableObject {
             return String(localized: "The computer's group could not be joined. Run cbb pair on it again.", bundle: .app)
         }
         return nil
+    }
+
+    /// Restores the group with the recovery key from the sheet's QR code,
+    /// on a phone without a group: the claim goes out, the app goes Home,
+    /// and Home shows the time left until this phone becomes the root.
+    func restore(_ text: String) async -> Bool {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard phase == .start else {
+            message = String(localized: "This phone is in a group already. A recovery sheet restores a group on a phone without one.", bundle: .app)
+            return false
+        }
+        busy = true
+        defer { busy = false }
+        do {
+            switch try Core.readRecoverySheet(text) {
+            case let .refused(_, why):
+                let summary = String(localized: "This is not the QR code of a recovery sheet.", bundle: .app)
+                message = Self.showsErrorDetails ? summary + "\n\n" + why : summary
+                return false
+            case let .key(sheet):
+                try await group.restore(sheet: sheet)
+            }
+            computers = group.computers
+            devices = group.devices
+            isAdmin = group.isAdmin
+            phase = .home
+            message = String(localized: "The claim is sent. This phone becomes the group's root when the waiting time ends; Home shows the time left.", bundle: .app)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
     }
 
     /// Leaves the join screen without joining.
@@ -1082,7 +1120,18 @@ final class AppModel: ObservableObject {
                 return String(localized: "Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.", bundle: .app)
             case .needsRoot:
                 return String(localized: "This computer cannot add a phone. Run cbb pair on the computer that created the group.", bundle: .app)
+            case .noGroupComputer:
+                return String(localized: "No computer of the group was found on this network. Turn one on and keep this phone on its network, then try again.", bundle: .app)
             default: break
+            }
+        }
+        if let f = error as? Restore.Failure {
+            switch f.kind {
+            case .needsQR:
+                return String(localized: "Scan the QR code of the recovery sheet: on a new phone the typed key is not enough. A computer of the group takes the typed key with cbb recovery.", bundle: .app)
+            case .otherGroup: return String(localized: "The computers found on this network are of another group than the sheet.", bundle: .app)
+            case .notTheKey: return String(localized: "This is not the group's recovery key now: the root phone removed it or made a new one.", bundle: .app)
+            case .notAMember: return String(localized: "The computer's answer does not fit the group's records.", bundle: .app)
             }
         }
         if let r = error as? LiveGroup.CommandRefused {

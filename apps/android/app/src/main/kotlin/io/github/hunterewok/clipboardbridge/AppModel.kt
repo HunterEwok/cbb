@@ -22,6 +22,7 @@ import io.github.hunterewok.clipboardbridge.kit.PairingJoiner
 import io.github.hunterewok.clipboardbridge.kit.PairingMember
 import io.github.hunterewok.clipboardbridge.kit.Pairing
 import io.github.hunterewok.clipboardbridge.kit.PhoneGroup
+import io.github.hunterewok.clipboardbridge.kit.Restore
 import io.github.hunterewok.clipboardbridge.kit.TLSTransport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -230,6 +231,7 @@ class AppModel(private val app: Context) {
 
     /** Admits a scanned or pasted device; on success the app goes Home. */
     suspend fun scanned(text: String): Boolean {
+        if (text.trim().startsWith(RECOVERY_QR)) return restore(text.trim())
         val jc = read(text)
         if (jc == null) {
             message = Note(R.string.not_a_code, error = true)
@@ -240,6 +242,40 @@ class AppModel(private val app: Context) {
             group.admit(jc)
             phase = Phase.HOME
             message = null
+            return true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+            return false
+        } finally {
+            busy = false
+            update()
+        }
+    }
+
+    /**
+     * Restores the group with the recovery key from the sheet's QR code, on
+     * a phone without a group: the claim goes out, the app goes Home, and
+     * Home shows the time left until this phone becomes the root.
+     */
+    suspend fun restore(text: String): Boolean {
+        if (phase != Phase.START) {
+            message = Note(R.string.error_restore_has_group, error = true)
+            return false
+        }
+        busy = true
+        try {
+            val sheet = when (val r = withContext(Dispatchers.IO) { Core.readRecoverySheet(text) }) {
+                is Core.SheetReading.Key -> r.key
+                is Core.SheetReading.Refused -> {
+                    message = Note(R.string.error_sheet, if (settings.showsErrorDetails) r.message else null, error = true)
+                    return false
+                }
+            }
+            group.restore(sheet)
+            phase = Phase.HOME
+            message = Note(R.string.restore_started)
             return true
         } catch (e: CancellationException) {
             throw e
@@ -931,6 +967,9 @@ class AppModel(private val app: Context) {
         /** How long the user may take to confirm a device that used an invitation (docs/protocol.md, section 12). */
         const val CONFIRM_MS = 5 * 60_000L
 
+        /** How the QR code of a recovery sheet starts (docs/protocol.md, section 10, "The recovery key"). */
+        const val RECOVERY_QR = "clipboardbridge://recover?"
+
         /** Reads what the camera saw, or what the user pasted: the text of the QR code of cbb pair or of another phone. */
         fun read(text: String): JoinCode? {
             val jc = JoinCode.parse(text) ?: return null
@@ -950,6 +989,13 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.NO_WINDOW -> R.string.error_no_window
                 LiveGroup.Failure.Kind.TWO_WINDOWS -> R.string.error_two_windows
                 LiveGroup.Failure.Kind.NEEDS_ROOT -> R.string.error_needs_root
+                LiveGroup.Failure.Kind.NO_GROUP_COMPUTER -> R.string.error_no_group_computer
+            }
+            is Restore.Failure -> when (e.kind) {
+                Restore.Kind.NEEDS_QR -> R.string.error_restore_needs_qr
+                Restore.Kind.OTHER_GROUP -> R.string.error_restore_other_group
+                Restore.Kind.NOT_THE_KEY -> R.string.error_restore_not_the_key
+                Restore.Kind.NOT_A_MEMBER -> R.string.error_restore_not_a_member
             }
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large

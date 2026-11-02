@@ -42,6 +42,7 @@ import io.github.hunterewok.clipboardbridge.kit.PhoneGroup
 import io.github.hunterewok.clipboardbridge.kit.PhoneHub
 import io.github.hunterewok.clipboardbridge.kit.RecordStore
 import io.github.hunterewok.clipboardbridge.kit.Records as KitRecords
+import io.github.hunterewok.clipboardbridge.kit.Restore
 import io.github.hunterewok.clipboardbridge.kit.ServerCredentials
 import io.github.hunterewok.clipboardbridge.kit.SyncEngine
 import io.github.hunterewok.clipboardbridge.kit.TLSListener
@@ -92,7 +93,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     class CommandRefused(val reason: String) : Exception(reason)
 
     class Failure(val kind: Kind) : Exception(kind.name) {
-        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT }
+        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT, NO_GROUP_COMPUTER }
     }
 
     /** A device of the group, as the screens show it: a computer, or this phone. */
@@ -803,6 +804,75 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
+    /**
+     * Restores the group on this new phone with its recovery key, read from
+     * the QR code of the sheet (docs/protocol.md, section 10, "The recovery
+     * key"): finds the group's computers by mDNS (the sheet's tag), takes
+     * and checks the records from one on a connection that carries records
+     * only, makes a new root key and claims the group with the recovery key,
+     * and sends the claim. The phone is then a member of the group whose
+     * claim waits the group's delay, unless the root phone cancels it;
+     * [finishTakeOverIfDue] then makes it the root. The recovery key is not
+     * kept.
+     */
+    suspend fun restore(sheet: Core.RecoveredKey) {
+        if (hasGroup) return
+        val tag = sheet.group ?: throw Restore.Failure(Restore.Kind.NEEDS_QR, Restore.NEEDS_QR)
+        if (withContext(Dispatchers.IO) { LocalAddresses.current() }.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
+        val computers = findComputers(tag)
+        withContext(Dispatchers.IO) {
+            val member = memberSigner()
+            val r = Restore(sheet, member.publicKeyDER, Instant.now())
+            var last: Exception = Failure(Failure.Kind.NO_GROUP_COMPUTER)
+            for (addr in computers) {
+                // The handshake takes any certificate; Restore.group checks the computer's against the records.
+                val dial = { TLSTransport.dial(addr.hostString, addr.port, Member.ALPN, member.privateKey, r.chain) { it.isNotEmpty() } }
+                val g = try {
+                    r.group(Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now()), Instant.now())
+                } catch (e: Restore.Failure) {
+                    if (e.kind == Restore.Kind.NOT_THE_KEY) throw e
+                    last = e
+                    continue
+                } catch (e: IOException) {
+                    last = e
+                    continue
+                }
+                // A root key left from a group this phone made before goes.
+                val root = Keys.create(context, Keys.ROOT, g.tag)
+                val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
+                val claim = r.claim(g, newRoot, Instant.now())
+                synchronized(lock) {
+                    newDeviceMode()
+                    g.save(file)
+                    state = g
+                }
+                // Sync sends the claim too, as the records differ; this way it is out at once.
+                runCatching { Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now(), send = listOf(claim)) }
+                    .onFailure { Log.w(TAG, "sending the claim; sync sends it later", it) }
+                startSync()
+                return@withContext
+            }
+            throw last
+        }
+    }
+
+    /** The addresses of the computers of the group with tag that mDNS finds within BROWSE_MS. */
+    private suspend fun findComputers(tag: String): List<InetSocketAddress> {
+        val members = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        val b = NsdBrowser(context) { found -> members.set(found.filter { it.group == tag }.map { it.device }.toSet()) }
+        try {
+            b.start()
+            withTimeoutOrNull(BROWSE_MS) {
+                while (members.get().isEmpty()) delay(100)
+            } ?: throw Failure(Failure.Kind.NO_GROUP_COMPUTER)
+            // The others that answer a moment later.
+            delay(PAIRING_SETTLE_MS)
+            return members.get().mapNotNull { b.address(it) }.ifEmpty { throw Failure(Failure.Kind.NO_GROUP_COMPUTER) }
+        } finally {
+            b.stop()
+        }
+    }
+
     /** The address of the one computer announcing a pairing window; see joinComputer. */
     private suspend fun findWindow(): InetSocketAddress {
         val windows = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
@@ -1361,7 +1431,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         try {
             val root = signer(Keys.ROOT, R.string.reason_take_over)
             val rs = withContext(Dispatchers.IO) {
-                val rs = g.finishTakeOver(root, Instant.now())
+                val rs = g.finishTakeOver(root, Instant.now(), PhoneGroup.validName(deviceName), sealKey())
                 adopt(g)
                 rs
             }
