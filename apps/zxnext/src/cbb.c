@@ -363,7 +363,7 @@ static int net_start(int argc, char **argv)
         uint8_t err = link_line(line, sizeof line, 15);
         if (err) return fail("cbb next link did not start on the Pi", err == LINK_BREAK ? "stopped" : "no CBBLINK");
         if (strstr(line, "CBBLINK")) break;
-        if (i > 0 && (strncmp(line, "cbb", 3) == 0 || strncmp(line, "usage", 5) == 0)) {
+        if (i > 0 && (strncmp(line, "cbb:", 4) == 0 || strncmp(line, "usage", 5) == 0)) {
             link_prompt();
             return fail("cbb next link failed on the Pi", line);
         }
