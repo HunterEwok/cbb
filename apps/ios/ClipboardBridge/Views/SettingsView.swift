@@ -68,6 +68,9 @@ struct SettingsView: View {
             if model.devices.contains(where: { $0.isSelf && $0.isRoot }), WatchLink.shared.watchApp {
                 watchSection
             }
+            if model.isRoot {
+                RecoverySection()
+            }
             NotificationSettings()
             Section {
                 LabeledContent {

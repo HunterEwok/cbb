@@ -47,6 +47,8 @@ public enum Records {
         public var records: [Data]?
         // claim
         public var root: Data?
+        // recovery: the recovery key's admin CA, DER
+        public var cert: Data?
         // settings
         public var takeover_delay_ms: Int64?
         // hubs
@@ -85,13 +87,14 @@ public enum Records {
             try put(once(keys), .keys)
             try put(once(records), .records)
             try put(root, .root)
+            try put(cert, .cert)
             if let t = takeover_delay_ms { try c.encode(t, forKey: .takeover_delay_ms) }
             try put(hubs, .hubs)
         }
 
         private enum Key: String, CodingKey {
             case v, alg, type, signer, time_ms, device, name, role, os, key, admin, powers, commands, store, kind, proof, holds_root, seal
-            case keys, records, root, takeover_delay_ms, hubs
+            case keys, records, root, cert, takeover_delay_ms, hubs
         }
     }
 
@@ -277,6 +280,8 @@ public struct RecordSet: Codable, Equatable, Sendable {
         public var nothing_to: [String]?
         /// The records of a later version the set keeps.
         public var newer: [Data]?
+        /// The key hash of the group's recovery key, while one counts.
+        public var recovery: Data?
     }
 
     /// A conflict of the state: kind is admins, claims or two_histories.
@@ -416,6 +421,8 @@ public struct RecordSet: Codable, Equatable, Sendable {
     public var claims: [Claim] { view.state.claims ?? [] }
     /// The keys the records revoke.
     public var revoked: Set<Data> { Set(view.state.revoked ?? []) }
+    /// The key hash of the group's recovery key, while one counts.
+    public var recovery: Data? { view.state.recovery }
     /// The records a new member gets in the Welcome, to check the
     /// Welcome's roots, and a hub shows its forwarder: all of them, since
     /// every member evaluates the whole set.

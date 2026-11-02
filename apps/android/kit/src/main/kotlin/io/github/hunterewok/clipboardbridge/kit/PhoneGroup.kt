@@ -480,6 +480,42 @@ class PhoneGroup internal constructor(
     }
 
     /**
+     * A new recovery key (docs/protocol.md, section 10, "The recovery key"):
+     * its 32 bytes, the admin CA the root issued it, the `recovery` record to
+     * send and the sheet to print. The app shows the sheet once and then
+     * forgets the key; nothing of it stays here.
+     */
+    class Recovery(val key: ByteArray, val adminCA: ByteArray, val record: Member.Record, val sheet: Core.RecoverySheet)
+
+    /**
+     * Makes the group's recovery key, as the root: a new P-256 key, an admin
+     * CA for it under the current root (its CN names a random ID, since the
+     * key has no device) and the `recovery` record that names it, which
+     * replaces the recovery key before it.
+     */
+    fun makeRecovery(rootSigner: CertificateSigner, now: Instant): Recovery {
+        if (!isRoot) throw Failure("only the root makes the recovery key")
+        val pair = SoftwareSigner.generate()
+        val s = (pair.private as java.security.interfaces.ECPrivateKey).s.toByteArray().takeLast(32)
+        val key = ByteArray(32 - s.size) + s.toByteArray()
+        val ca = GroupCertificates.adminCA(SyncEngine.newID(), pair.public.encoded, currentRoot, rootSigner)
+        val sheet = Core.recoverySheet(key, ca, tag)
+        val b = Records.Body.of("recovery", rootSigner, now)
+        b.admin = sheet.admin
+        b.cert = ca
+        return Recovery(key, ca, sign(b, rootSigner), sheet)
+    }
+
+    /** Removes the group's recovery key, as the root: a revocation of its key. It returns the record to send. */
+    fun removeRecovery(rootSigner: CertificateSigner, now: Instant): Member.Record {
+        if (!isRoot) throw Failure("only the root removes the recovery key")
+        val k = records.recovery ?: throw Failure("the group has no recovery key")
+        val b = Records.Body.of("revoke", rootSigner, now)
+        b.keys = listOf(k)
+        return sign(b, rootSigner)
+    }
+
+    /**
      * Makes a watch an admin (section 10, "Watches"): the root issues an admin
      * CA for the key the watch made in its Keystore or Secure Enclave
      * (adminKey, a SubjectPublicKeyInfo) and signs the watch's device

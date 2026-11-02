@@ -49,14 +49,30 @@ func TestWaylandPaste(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	time.Sleep(300 * time.Millisecond) // the window takes the focus
+	// The test's session is none that logind knows: the paste goes in as
+	// on a device whose user allowed that.
+	ctx := connector.WithoutLockCheck(context.Background(), true)
+	// The window takes the focus when the compositor gets to it, which a
+	// loaded machine may take seconds for: type a line until foot has it,
+	// and check only what comes after.
+	start := 0
+	for i := 0; ; i++ {
+		if i == 20 {
+			t.Fatal("foot never got the keys: its window did not take the focus")
+		}
+		if err := w.Inject(ctx, "focus", "type", true, false); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(250 * time.Millisecond)
+		if got, _ := os.ReadFile(out); strings.HasSuffix(string(got), "focus\n") {
+			start = len(got)
+			break
+		}
+	}
 
 	if err := w.Write("there before", false); err != nil {
 		t.Fatal(err)
 	}
-	// The test's session is none that logind knows: the paste goes in as
-	// on a device whose user allowed that.
-	ctx := connector.WithoutLockCheck(context.Background(), true)
 	if err := w.Inject(ctx, "pasted é αβγ€", "paste", true, false); err != nil {
 		t.Fatal(err)
 	}
@@ -77,10 +93,13 @@ func TestWaylandPaste(t *testing.T) {
 	want := "pasted é αβγ€\ntyped Text: é αβγ€ & ~|\tend " + long.String() + "\na secret\n"
 	var got []byte
 	for range 50 {
-		if got, _ = os.ReadFile(out); string(got) == want {
+		if got, _ = os.ReadFile(out); len(got) >= start && string(got[start:]) == want {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+	if len(got) >= start {
+		got = got[start:]
 	}
 	if string(got) != want {
 		t.Errorf("foot got %q, want %q", got, want)
