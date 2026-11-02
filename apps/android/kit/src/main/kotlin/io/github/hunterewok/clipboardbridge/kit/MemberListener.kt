@@ -24,7 +24,7 @@ class MemberListener(
     chain: List<ByteArray>,
     private val trusted: () -> List<ByteArray>,
     port: Int = 0,
-    address: InetAddress? = InetAddress.getLoopbackAddress(),
+    address: InetAddress? = TLSTransport.LOOPBACK,
     /** Gets why a connection failed, for the log. */
     private val onError: (Exception) -> Unit = {},
     /** For a relay's calls: the device each connection is by its source port, once (RelayOnPhone.caller). */
