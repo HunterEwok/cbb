@@ -41,7 +41,7 @@ type Tokens interface {
 	// PhoneCA returns the iPhone CA, whose key checks the tokens.
 	PhoneCA() *group.CA
 	// PhoneRevoked reports whether the phone with this ID was removed
-	// from the group (cbb revoke).
+	// from the group (cbb remove).
 	PhoneRevoked(phoneID string) bool
 }
 

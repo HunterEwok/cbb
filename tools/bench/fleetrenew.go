@@ -104,7 +104,7 @@ func renewalChecks(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 	r.Do("fleet/K3-renewed-by-removed-admin", func() error {
 		// The admin that renewed the target's certificate is removed: the
 		// target stays in the group.
-		if _, err := Run(ctx, root, "cbb revoke "+admin.Name, "yes\n"); err != nil {
+		if _, err := Run(ctx, root, "cbb remove "+admin.Name, "yes\n"); err != nil {
 			return err
 		}
 		if err := listsAs(ctx, []*Device{root}, admin.Name, "", true, timeout); err != nil {

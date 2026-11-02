@@ -501,12 +501,12 @@
         }
       }
     },
-    "It can then add and remove devices with cbb pair and cbb revoke. Its key is a file on the computer, so do this only for a computer you keep safe.": {
+    "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb revoke. Его ключ хранится в файле на компьютере, поэтому делайте так только для компьютера, который надёжно защищён."
+            "value": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключ хранится в файле на компьютере, поэтому делайте так только для компьютера, который надёжно защищён."
           }
         }
       }

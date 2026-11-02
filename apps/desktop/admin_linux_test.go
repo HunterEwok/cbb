@@ -19,7 +19,7 @@ func TestPkexecArgs(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("pkexecArgs = %q, want %q", got, want)
 	}
-	if got := pkexecArgs("/usr/local/bin/cbb", []string{"revoke", "x"}, false); got[0] != "/usr/local/bin/cbb" {
+	if got := pkexecArgs("/usr/local/bin/cbb", []string{"remove", "x"}, false); got[0] != "/usr/local/bin/cbb" {
 		t.Errorf("without details: %q", got)
 	}
 }
@@ -60,9 +60,9 @@ func TestRunAdminWithoutRootsCbb(t *testing.T) {
 	if p := cbbPath(); p != "" {
 		t.Fatalf("cbbPath = %q, want none", p)
 	}
-	err := runAdmin([]string{"revoke", "ab12"}, false, false)
+	err := runAdmin([]string{"remove", "ab12"}, false, false)
 	var ae *adminError
-	if !errors.As(err, &ae) || !strings.Contains(ae.detail, "sudo cbb revoke ab12") || !strings.Contains(ae.detail, mine) {
+	if !errors.As(err, &ae) || !strings.Contains(ae.detail, "sudo cbb remove ab12") || !strings.Contains(ae.detail, mine) {
 		t.Fatalf("runAdmin = %#v", err)
 	}
 	cbbPlaces = []string{"/nonexistent/cbb", "/bin/sh"}

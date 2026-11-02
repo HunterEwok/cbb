@@ -1417,7 +1417,7 @@ removes it.
 - From then on it acts as an admin phone does, with its admin CA: it opens pairing windows
   (`cbb pair`) and admits computers and lite members, never phones, with a Welcome that
   carries `issuer` and `roots` and no CA keys; it signs the `device` record of each device it
-  admits and `revoke` records (`cbb revoke`) of devices; it renews its own certificate and
+  admits and `revoke` records (`cbb remove`) of devices; it renews its own certificate and
   those of the computers it is connected to. It never removes the root or another admin and
   makes no admins; when the root computer is lost, it claims the group (below, "Handing the
   group over").
@@ -2185,7 +2185,7 @@ so it serves whenever it is there), then computers; within each, the root first,
 device ID. The vectors in `testdata/interop/v2-hubs.json` (Go's `TestGoHubVectors`) give an
 order that Go (`Records.HubOrder`), both kits (`RecordSet.hubOrder`) and the lite member
 (`hub_order`) must all derive. The root, or an admin with `hub`, may sign a table of main
-hubs in the user's order (a `hubs` record, section 10, "The hubs table"; `cbb hubs`):
+hubs in the user's order (a `hubs` record, section 10, "The hubs table"; `cbb global hubs`):
 its hubs come first, in its order, then the others in the derived order (D-65 in
 [design.md](design.md)).
 

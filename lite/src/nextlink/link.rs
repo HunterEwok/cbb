@@ -60,7 +60,7 @@ struct Conn {
 
 /// A local UDP port that leads, through one UDP connection of the ESP, to
 /// a fixed peer: the hub, or the forwarder, for the tunnel of sync away
-/// from home (`cbb run -tunnel-via`).
+/// from home (`cbb service -tunnel-via`).
 pub struct Udp {
     sock: UdpSocket,
     target: (String, u16),

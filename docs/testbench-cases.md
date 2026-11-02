@@ -44,7 +44,7 @@ What `smoke` and `full` do first.
    run (mDNS does not cross subnets) and restarts its service.
 3. On the hub: `cbb new`.
 4. For each other device: on the hub `cbb pair` (shows a six-digit code and waits); on the
-   device `cbb pair -code [HUB:PORT]` (the lite member: `sudo -u clipboardbridge cbb join -code
+   device `cbb pair -code [HUB:PORT]` (the lite member: `sudo -u clipboardbridge cbb pair -code
    HUB:PORT`), the code on standard input. The hub's `cbb pair` ends when the device joins.
 5. On every device, right after it made or joined the group: `cbb mode shared` (the lite
    member: `sudo cbb mode shared`), since a new device keeps its own clipboard (design.md,
@@ -53,7 +53,7 @@ What `smoke` and `full` do first.
 
 ### R3. End a run
 
-1. The hub revokes every other member (`cbb revoke ID`), so nothing copied on them later (the
+1. The hub revokes every other member (`cbb remove ID`), so nothing copied on them later (the
    Mac is also a real computer) reaches the group.
 2. The bench takes back what it changed for the run (the lite member's drop-in, network
    rules, `tc` settings), newest first.
@@ -186,7 +186,7 @@ code is refused (window closed); the second use is refused; each message says wh
 Fail: any of them joins, or the counter does not stop.
 
 **L3. Revoke.** Runs: auto (part of R3); the extra checks manual.
-1. With the group of R2, on the hub `cbb revoke NAME` (by name), then another by device ID.
+1. With the group of R2, on the hub `cbb remove NAME` (by name), then another by device ID.
 2. Copy a marker on the hub.
 3. On the revoked device: `cbb status`; try to sync; try `cbb pair -code` with a fresh code from
    its old keys (no reset).
@@ -206,7 +206,7 @@ Fail: it expires or sync stops.
    -allow-file-key WIN` makes it one, and `cbb status` marks the Windows member as admin.
 2. On the Windows admin `cbb pair` and admit a new device; then revoke it there.
 3. Turn the hub off; the Windows admin still admits a device and serves the shortcut.
-4. Turn the hub on; on it `cbb revoke WIN`.
+4. Turn the hub on; on it `cbb remove WIN`.
 Pass: each step works; after step 4 the iPhone CA is replaced (shortcut iPhones pair again) and
 nothing else re-pairs. Fail: an admin cannot admit, or a non-admin can.
 
@@ -285,7 +285,7 @@ Pass: sync works both ways; one connection per pair (the lower device ID dials).
 or two connections.
 
 **P5. The lite member's options.** Runs: manual (`-peer` is auto in R2).
-1. `cbb run -peer HUB:8764`: it connects without mDNS.
+1. `cbb service -peer HUB:8764`: it connects without mDNS.
 2. `-no-mdns`: it no longer announces itself (`avahi-browse -r _clipboardbridge._tcp` shows
    nothing for it) and still dials its peers.
 3. `-no-listen`: the member port is closed (`ss -ltn`), it dials and syncs.
@@ -357,7 +357,7 @@ match.
 
 **P13. Status, revoke, version.** Runs: partly auto (`check`, R3).
 1. On every platform `cbb version`, `cbb status`.
-2. `cbb revoke` by name and by device ID.
+2. `cbb remove` by name and by device ID.
 Pass: the output matches the real state (systems, roles, root and admin marks, last seen,
 clock); a revoked device's status says it was removed.
 

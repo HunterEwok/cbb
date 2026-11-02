@@ -221,7 +221,7 @@ func (s *Service) afterRevocation() {
 		case errors.Is(err, group.ErrStopped):
 			s.logf("cbb: the group's records stop the exchange until its root decides (cbb status says why); members exchange records only")
 		case errors.Is(err, group.ErrRecordsOnly):
-			s.logf("cbb: %s took the group over from this computer, its root; if this computer is not lost, cbb revoke %s undoes it", s.takenOverBy(id), s.takenOverBy(id))
+			s.logf("cbb: %s took the group over from this computer, its root; if this computer is not lost, cbb remove %s undoes it", s.takenOverBy(id), s.takenOverBy(id))
 		case err != nil && s.frozen(id):
 			s.logf("cbb: another admin froze this computer's admin key; the other members refuse it until the group's root or an admin phone unfreezes it")
 		case err != nil:
@@ -704,7 +704,7 @@ func (s *Service) revoke(target string) (string, error) {
 	case !id.IsAdmin():
 		return "", errNotAdmin
 	case d.Self:
-		return "", errors.New("a device cannot remove itself; run cbb revoke on another member")
+		return "", errors.New("a device cannot remove itself; run cbb remove on another member")
 	case d.ID == string(root) && !undoing && d.Role == group.RolePhone:
 		return "", fmt.Errorf("%s holds the group's root; remove it on another admin phone, which takes the group over", d.Name)
 	case d.ID == string(root) && !undoing:
@@ -816,7 +816,7 @@ func (s *Service) rename(target, name string) (string, error) {
 // another admin computer: from then on nothing the frozen admin signs
 // counts, beyond the records it signed before, and its connections are
 // refused. Only the root unfreezes it here; the root and the admin phones
-// remove it with cbb revoke or Remove.
+// remove it with cbb remove or Remove.
 func (s *Service) freeze(target string, on bool) (string, error) {
 	d, err := s.findDevice(target)
 	if err != nil {
@@ -838,7 +838,7 @@ func (s *Service) freeze(target string, on bool) (string, error) {
 	case d.ID == string(root):
 		return "", fmt.Errorf("%s holds the group's root, which nobody freezes", d.Name)
 	case admin == nil || d.Role == group.RolePhone:
-		return "", fmt.Errorf("%s is no admin computer; only those are frozen, and an ordinary device is removed with cbb revoke", d.Name)
+		return "", fmt.Errorf("%s is no admin computer; only those are frozen, and an ordinary device is removed with cbb remove", d.Name)
 	case on && frozen:
 		return "", fmt.Errorf("%s is frozen already", d.Name)
 	case !on && !frozen:

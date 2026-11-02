@@ -50,13 +50,13 @@ use identity::Stored as _;
 const USAGE: &str = "Usage: cbb [-state dir] [-socket path] [-debug] <command> [arguments]
 
 Commands:
-  join [-name name] [-port port] [-addr host[:port]]...
+  pair [-name name] [-port port] [-addr host[:port]]...
                        Join a group: show a QR code for the phone app to scan
                        (-addr: where the phone reaches this device, when the
                        code would name the wrong addresses).
-  join -code host:port Join with the code from cbb pair on a Linux member.
-  run [-name name] [-port port] [-peer host:port]... [-no-mdns] [-no-listen]
-      [-tunnel-via host:port]
+  pair -code host:port Join with the code from cbb pair on a full member.
+  service [-name name] [-port port] [-peer host:port]... [-no-mdns]
+          [-no-listen] [-tunnel-via host:port]
                        Run the service (started by systemd or procd): it
                        dials the computers, and phones and other lite
                        members dial it on the member port (8764, CBB_PORT).
@@ -93,7 +93,7 @@ Commands:
   paste-helper tmux|console
                        The paste targets: tmux starts the one for tmux, the
                        clipboardbridge-console unit the one for the console.
-  next paste|copy|join The same for the ZX Spectrum Next's .cbb dot command,
+  next paste|copy|pair The same for the ZX Spectrum Next's .cbb dot command,
                        in frames its Z80 reads (lite/README.md).
   update [-check]      Install the newest signed release, with sudo; -check
                        only says whether there is one. The previous version
@@ -107,9 +107,9 @@ Commands:
   version              Print the version and that this is the lite member.
   help                 Print this help.
 
-This is the lite member: the commands of a full member, such as pair or
-invite, are not here. The state directory is /var/lib/clipboardbridge
-(CBB_STATE), the control socket /run/clipboardbridge/control.sock
+This is the lite member: the commands of a full member, such as invite or
+remove, are not here, and pair only joins a group. The state directory is
+/var/lib/clipboardbridge (CBB_STATE), the control socket /run/clipboardbridge/control.sock
 (CBB_SOCKET); on OpenWrt /etc/clipboardbridge/state and
 /var/run/clipboardbridge/control.sock; installed without root (install.sh
 --rootless, CBB_ROOTLESS=1), ~/.local/state/clipboardbridge and
@@ -119,8 +119,7 @@ port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the
 
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] =
-    &["revoke", "admin", "takeover", "new", "pair", "invite", "holder", "forward", "relay", "service", "agent"];
+const FULL_ONLY: &[&str] = &["remove", "admin", "takeover", "new", "invite", "holder", "forward", "relay", "agent"];
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -171,9 +170,9 @@ fn main() {
         Some(cmd) => {
             let rest = &args[1..];
             let res = match cmd {
-                "join" => join(&g, rest, false),
+                "pair" => join(&g, rest, false),
                 "next" => std::process::exit(next::run(&g, rest)),
-                "run" => cmd_run(&g, rest),
+                "service" => cmd_service(&g, rest),
                 "copy" => cmd_copy(&g, rest),
                 "paste" => cmd_paste(&g, rest),
                 "status" => cmd_status(&g, rest),
@@ -271,7 +270,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     }
     if identity::Identity::load(&g.state)?.is_some() {
         return Err(Error::msg(format!(
-            "this device is already in a group; to join another, stop the service and remove {}",
+            "this device is already in a group, and a lite member admits no devices (use the phone app or \
+             a full member); to join another group, stop the service and remove {}",
             g.state.join(identity::FILE_NAME).display()
         )));
     }
@@ -339,7 +339,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 print!("{}", qr(text));
                 println!("\nOr paste this into the app: {text}");
                 println!("\nWaiting up to 5 minutes. Press Ctrl+C to cancel.");
-                println!("Without a phone: run cbb pair on a full member and cbb join -code <its address> here.");
+                println!("Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.");
                 std::io::stdout().flush().ok();
             };
             let log = |s: &str| {
@@ -384,7 +384,7 @@ fn wait_for_group(g: &Global) {
 }
 
 /// Draws text as a QR code with half blocks, black on white whatever the
-/// terminal's colors, as cbb join does.
+/// terminal's colors, as cbb pair does.
 fn qr(text: &str) -> String {
     let Ok(code) = qrcode::QrCode::with_error_correction_level(text, qrcode::EcLevel::M) else {
         return String::new();
@@ -409,7 +409,7 @@ fn qr(text: &str) -> String {
     out
 }
 
-fn cmd_run(g: &Global, args: &[String]) -> Result<()> {
+fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
     let mut cfg = service::Config {
         state_dir: g.state.clone(),
         socket: g.socket.clone(),
@@ -459,7 +459,7 @@ fn connect(g: &Global) -> Result<UnixStream> {
 }
 
 /// The hint when the service cannot be reached: systemd's command where
-/// systemd runs, else `cbb run` itself (NextPi on the ZX Spectrum Next, say,
+/// systemd runs, else `cbb service` itself (NextPi on the ZX Spectrum Next, say,
 /// has no systemd).
 fn not_running() -> String {
     hint(std::path::Path::new("/run/systemd/system").is_dir(), rootless::systemctl())
@@ -469,7 +469,7 @@ fn hint(systemd: bool, systemctl: &str) -> String {
     if systemd {
         format!("is it running ({systemctl} status clipboardbridge)?")
     } else {
-        "is it running (start it with cbb run)?".to_string()
+        "is it running (start it with cbb service)?".to_string()
     }
 }
 
@@ -869,7 +869,7 @@ the group. To keep that from happening:
 
   - encrypt the disk or memory card where you can (LUKS);
   - keep the service's state directory out of unencrypted backups;
-  - remove the device at once (Remove on the phone, or cbb revoke on a full
+  - remove the device at once (Remove on the phone, or cbb remove on a full
     member) when it is lost or someone else may have had root on it.
 
 ";
@@ -1222,11 +1222,11 @@ fn core_version() -> String {
 mod tests {
     use super::{core_version, hint, terminal_text};
 
-    /// Without systemd (NextPi), the hint names cbb run, not systemctl.
+    /// Without systemd (NextPi), the hint names cbb service, not systemctl.
     #[test]
     fn hint_without_systemd() {
         assert_eq!(hint(true, "systemctl --user"), "is it running (systemctl --user status clipboardbridge)?");
-        assert_eq!(hint(false, "systemctl"), "is it running (start it with cbb run)?");
+        assert_eq!(hint(false, "systemctl"), "is it running (start it with cbb service)?");
     }
 
     /// cbb version names the core's version and the ABI of its entry

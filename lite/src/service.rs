@@ -193,7 +193,7 @@ pub fn run(cfg: Config) -> Result<()> {
         std::thread::spawn(move || accept_control(ln, move |conn| svc.serve(conn, admin)));
     }
 
-    // Wait until the device is in a group: cbb join may run meanwhile.
+    // Wait until the device is in a group: cbb pair may run meanwhile.
     let mut said = false;
     let ident = loop {
         if STOP.load(Ordering::SeqCst) {
@@ -205,7 +205,7 @@ pub fn run(cfg: Config) -> Result<()> {
             Some(id) => break id,
             None => {
                 if !said {
-                    log("cbb: this device is in no group yet; run cbb join");
+                    log("cbb: this device is in no group yet; run cbb pair");
                     said = true;
                 }
                 std::thread::sleep(Duration::from_secs(2));
@@ -415,11 +415,11 @@ fn via_name(v: Via) -> &'static str {
 
 impl Service {
     fn node(&self) -> Result<Arc<Node>> {
-        self.node.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb join"))
+        self.node.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb pair"))
     }
 
     fn away(&self) -> Result<Arc<Away>> {
-        self.away.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb join"))
+        self.away.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb pair"))
     }
 
     /// cbb global: shows sync away from home, or turns it on or off. The
@@ -1131,7 +1131,7 @@ impl Service {
             "pair" | "pair-phone" | "revoke" => {
                 Err(Error::msg("a lite member admits and removes no devices; use the phone app or a Linux member"))
             }
-            "join" => Err(Error::msg("run cbb join on this device, with the service stopped or running")),
+            "join" => Err(Error::msg("run cbb pair on this device, with the service stopped or running")),
             op => Err(Error::msg(format!("unknown operation {op:?}"))),
         }
     }

@@ -262,7 +262,7 @@ func writeStatus(w io.Writer, st *control.Status, devs []control.Device, now tim
 	} else if st.Frozen {
 		fmt.Fprintln(w, "Another admin froze this computer's admin key: its members refuse it until the group's root or an admin phone unfreezes it (cbb unfreeze on the root).")
 	} else if st.TakenOverBy != "" {
-		fmt.Fprintf(w, "%[1]s, an admin, took the group over from this computer, its root, while it was away. If this computer is not lost, sudo cbb revoke %[1]s undoes it; otherwise the group is %[1]s's now.\n", st.TakenOverBy)
+		fmt.Fprintf(w, "%[1]s, an admin, took the group over from this computer, its root, while it was away. If this computer is not lost, sudo cbb remove %[1]s undoes it; otherwise the group is %[1]s's now.\n", st.TakenOverBy)
 	} else if c := certLine(st.CertEndsMS, now); c != "" {
 		fmt.Fprintln(w, c)
 	}

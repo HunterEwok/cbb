@@ -31,7 +31,7 @@ func offline(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		return
 	}
 	r.Do(p+"remove", func() error {
-		if _, err := Run(ctx, root, "cbb revoke "+gone.Name, ""); err != nil {
+		if _, err := Run(ctx, root, "cbb remove "+gone.Name, ""); err != nil {
 			return err
 		}
 		return listsAs(ctx, []*Device{root, m}, gone.Name, "", true, timeout)
@@ -101,7 +101,7 @@ func takeoverUndone(ctx context.Context, r *Report, f *Fleet, timeout time.Durat
 		return listsAs(ctx, []*Device{admin, m}, admin.Name, "root", false, timeout)
 	})
 	r.Do(p+"root-removes-it", func() error {
-		_, err := Run(ctx, root, "cbb revoke "+admin.Name, "")
+		_, err := Run(ctx, root, "cbb remove "+admin.Name, "")
 		return err
 	})
 	r.Do(p+"undone", func() error {
@@ -148,7 +148,7 @@ func takeoverUndone(ctx context.Context, r *Report, f *Fleet, timeout time.Durat
 		})
 	})
 	r.Do(p+"undone-after", func() error {
-		if _, err := Run(ctx, root, "cbb revoke "+m.Name, ""); err != nil {
+		if _, err := Run(ctx, root, "cbb remove "+m.Name, ""); err != nil {
 			return err
 		}
 		if err := listsAs(ctx, []*Device{root}, root.Name, "root", false, 3*timeout); err != nil {
@@ -199,7 +199,7 @@ func concurrentAdmins(ctx context.Context, r *Report, f *Fleet, timeout time.Dur
 	}
 	r.Do(p+"two-remove-one", func() error {
 		// One of the two may find the device gone already.
-		at(map[*Device]string{a1: "cbb revoke " + x.Name, a2: "cbb revoke " + x.Name})
+		at(map[*Device]string{a1: "cbb remove " + x.Name, a2: "cbb remove " + x.Name})
 		return listsAs(ctx, []*Device{root, a1, a2, y, z}, x.Name, "", true, timeout)
 	})
 	r.Do(p+"two-rename-one", func() error {
@@ -247,7 +247,7 @@ func concurrentAdmins(ctx context.Context, r *Report, f *Fleet, timeout time.Dur
 			_, err := pairOne(ctx, a1, d)
 			errc <- err
 		}()
-		if _, err := Run(ctx, a2, "cbb revoke "+z.Name, ""); err != nil {
+		if _, err := Run(ctx, a2, "cbb remove "+z.Name, ""); err != nil {
 			return err
 		}
 		if err := <-errc; err != nil {
@@ -367,7 +367,7 @@ func stolenAdmin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 	})
 	r.Do(p+"counts-for-nothing", func() error {
 		// What it signs now is refused: a removal and a mode.
-		Run(ctx, thief, "cbb revoke "+m2.Name, "")
+		Run(ctx, thief, "cbb remove "+m2.Name, "")
 		Run(ctx, thief, "cbb mode -on "+m1.Name+" send", "")
 		time.Sleep(quiet)
 		if err := listsAs(ctx, []*Device{root, m1}, m2.Name, "", false, timeout); err != nil {

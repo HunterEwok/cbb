@@ -4,7 +4,7 @@
 //! Joining a group by the phone: the device shows a QR code with a pairing
 //! code and its address, listens on the member port for the phone that
 //! scanned it, and runs the TLS connection around the exchange of
-//! cbb_core::pair, as the lite member's cbb join does. The phone confirms
+//! cbb_core::pair, as the lite member's cbb pair does. The phone confirms
 //! the code first, so a device that does not know it learns nothing; three
 //! wrong codes end the attempt.
 
@@ -77,12 +77,12 @@ impl Pairing {
         loop {
             let left = end.saturating_duration_since(Instant::now());
             if left == Duration::from_ticks(0) {
-                return Err(Error::msg("no phone joined the device in time; type join again"));
+                return Err(Error::msg("no phone joined the device in time; type pair again"));
             }
             let mut sock = TcpSocket::new(stack, &mut rx, &mut tx);
             sock.set_timeout(Some(ATTEMPT));
             match with_timeout(left, sock.accept(PORT)).await {
-                Err(_) => return Err(Error::msg("no phone joined the device in time; type join again")),
+                Err(_) => return Err(Error::msg("no phone joined the device in time; type pair again")),
                 Ok(Err(e)) => return Err(Error::with("cannot listen for the phone", Debug(format!("{e:?}")))),
                 Ok(Ok(())) => {}
             }

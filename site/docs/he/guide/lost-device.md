@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1bce53da89dc -->
+<!-- source: 9165921fa4f0 -->
 # אם מכשיר אבד או נגנב
 
 למי שטלפון, מחשב או מכשיר אחר של הקבוצה שלו נעלם. הסירו אותו מהקבוצה בהקדם האפשרי; שאר המכשירים נשארים בקבוצה וממשיכים להסתנכרן.
@@ -9,7 +9,7 @@
 בטלפון שהוא מנהל, הקישו על המכשיר שאבד ב**מסך הבית**, ואז על **Remove**. במחשב מנהל:
 
 ```sh
-sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
+sudo cbb remove NAME     # NAME, or the device ID, as cbb status shows it
 ```
 
 כל מכשיר בקבוצה לומד על כך ומפסיק לדבר עם זה שאבד. רק השורש, או טלפון מנהל, מסיר מנהל.
@@ -22,7 +22,7 @@ sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
 sudo cbb freeze NAME
 ```
 
-מנהל קפוא לא יכול להקפיא את השורש או טלפון מנהל. אם הוא מקפיא בחזרה, שניהם נשארים קפואים עד שהשורש מחליט (‏`cbb unfreeze` או `cbb revoke` בשורש, או **Unfreeze** ו-**Remove** בטלפון השורש).
+מנהל קפוא לא יכול להקפיא את השורש או טלפון מנהל. אם הוא מקפיא בחזרה, שניהם נשארים קפואים עד שהשורש מחליט (‏`cbb unfreeze` או `cbb remove` בשורש, או **Unfreeze** ו-**Remove** בטלפון השורש).
 
 ## 3. אם זה היה השורש: השתלטו על הקבוצה
 

@@ -288,7 +288,7 @@ func phoneShortcut(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 		if err := listsAs(ctx, g.members, other.Name, "admin", false, timeout); err != nil {
 			return err
 		}
-		if _, err := Run(ctx, hub, "cbb revoke "+other.Name, ""); err != nil {
+		if _, err := Run(ctx, hub, "cbb remove "+other.Name, ""); err != nil {
 			return err
 		}
 		return eventually(ctx, timeout, func() error {

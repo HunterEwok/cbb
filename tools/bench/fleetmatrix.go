@@ -62,7 +62,7 @@ func joinMatrix(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 				return syncs(ctx, g, witness, d, "to "+d.Name, timeout)
 			})
 			r.Do(name+"removed", func() error {
-				if _, err := Run(ctx, by, "cbb revoke "+d.Name, ""); err != nil {
+				if _, err := Run(ctx, by, "cbb remove "+d.Name, ""); err != nil {
 					return err
 				}
 				return listsAs(ctx, []*Device{root, admin, witness}, d.Name, "", true, timeout)

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1bce53da89dc -->
+<!-- source: 9165921fa4f0 -->
 # Kifaa kikipotea au kuibwa
 
 Kwa yeyote ambaye simu, kompyuta au kifaa kingine cha kikundi chake kimepotea. Kiondoe kwenye kikundi haraka iwezekanavyo; vifaa vingine hubaki kwenye kikundi na kuendelea kusawazisha.
@@ -9,7 +9,7 @@ Kwa yeyote ambaye simu, kompyuta au kifaa kingine cha kikundi chake kimepotea. K
 Kwenye simu ambayo ni msimamizi, gusa kifaa kilichopotea kwenye **Mwanzo**, kisha **Remove**. Kwenye kompyuta ya msimamizi:
 
 ```sh
-sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
+sudo cbb remove NAME     # NAME, or the device ID, as cbb status shows it
 ```
 
 Kila kifaa cha kikundi hujua hilo na kuacha kuzungumza na kilichopotea. Ni mzizi tu, au simu ya msimamizi, anayeweza kumwondoa msimamizi.
@@ -22,7 +22,7 @@ Funguo za kompyuta ya msimamizi zinaweza kusaini. Ikiwezekana iko mikononi mwa m
 sudo cbb freeze NAME
 ```
 
-Msimamizi aliyegandishwa hawezi kugandisha mzizi wala simu ya msimamizi. Akigandisha kwa kujibu, wote wawili hubaki wamegandishwa hadi mzizi aamue (`cbb unfreeze` au `cbb revoke` kwenye mzizi, au **Unfreeze** na **Remove** kwenye simu ya mzizi).
+Msimamizi aliyegandishwa hawezi kugandisha mzizi wala simu ya msimamizi. Akigandisha kwa kujibu, wote wawili hubaki wamegandishwa hadi mzizi aamue (`cbb unfreeze` au `cbb remove` kwenye mzizi, au **Unfreeze** na **Remove** kwenye simu ya mzizi).
 
 ## 3. Kama kilikuwa mzizi: chukua kikundi
 

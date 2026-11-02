@@ -1957,7 +1957,7 @@ jobs:
             sleep 0.5
           done
           echo "$out" | grep -q 'in no group'
-          out=$(sudo cbb pair 2>&1) || true
+          out=$(sudo cbb invite 2>&1) || true
           echo "$out" | grep -q 'command of a full member'
           # The full member cannot take over the lite member's keys.
           go build -o "$RUNNER_TEMP/cbb-full" ./cmd/cbb

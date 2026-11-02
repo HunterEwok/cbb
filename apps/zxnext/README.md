@@ -19,7 +19,7 @@ tools. Test them on the machine before relying on them.
 .cbb copy notes.txt   send a file (up to 8 KB)
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
-.cbb join             join the group: scan the code on the screen with the phone app
+.cbb pair             join the group: scan the code on the screen with the phone app
                       (through the ESP once .cbb net has its settings)
 .cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
                       the Pi's network through the ESP, in the background
@@ -28,7 +28,7 @@ tools. Test them on the machine before relying on them.
 .cbb -d paste         the same, with the cause under each error (debug mode)
 ```
 
-SPACE stops a command that waits, such as `join` while the phone has not scanned yet.
+SPACE stops a command that waits, such as `pair` while the phone has not scanned yet.
 
 Texts use the Spectrum character set: printable ASCII, the pound sign and the copyright
 sign. The lite member on the Pi converts them; every other character arrives as `?`. Cyrillic
@@ -44,7 +44,7 @@ comes later.
    ESP8266 through `CBB.DRV` (below). Many Accelerated boards carry a Pi Zero without a radio: NextPi's
    shell shows which (`cat /proc/device-tree/model`), and `ls /sys/class/net` lists only
    `lo` on such a Pi.
-4. Start `cbb run` at boot, then run `.cbb join` on the Next.
+4. Start `cbb service` at boot, then run `.cbb pair` on the Next.
 
 The exact NextPi paths and the start script come with the first test on a real Next.
 
@@ -125,16 +125,16 @@ do not reach the Pi. It types `cbb next link` with these settings at NextPi's sh
 keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
 member at home, `-serve` the ESP's port for the phones and the lite member's own,
 `-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's
-ESP8266"). The lite member (`cbb run -peer 127.0.0.1:8769`) has to run on the Pi as well.
+ESP8266"). The lite member (`cbb service -peer 127.0.0.1:8769`) has to run on the Pi as well.
 While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
-`join` ask for `.cbb net off` first.
+`pair` ask for `.cbb net off` first.
 
-On a Pi without a radio, once `.cbb net` has its settings, `.cbb join` joins the group through the ESP. It asks the ESP
-for its address (`AT+CIFSR`), starts `cbb next join` on the Pi in the background with that
+On a Pi without a radio, once `.cbb net` has its settings, `.cbb pair` joins the group through the ESP. It asks the ESP
+for its address (`AT+CIFSR`), starts `cbb next pair` on the Pi in the background with that
 address and the ports of `-serve` (so the settings need `-serve`), draws the QR code, and
 starts the network under it, so the phone that scans the code reaches the Pi through the
-ESP. The phone app says when the Pi has joined; then `cbb run` starts on the Pi with the
-group. With `cbb next link -udp` and `cbb run -tunnel-via`, the Pi syncs away from home
+ESP. The phone app says when the Pi has joined; then `cbb service` starts on the Pi with the
+group. With `cbb next link -udp` and `cbb service -tunnel-via`, the Pi syncs away from home
 through the ESP as well (lite/README.md).
 
 ## Build

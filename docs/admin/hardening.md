@@ -29,7 +29,7 @@ turn sync away from home on.
 ## The devices
 
 - **Only devices you control.** Every device in the group reads every copy that reaches
-  it. Remove a device you give away before it leaves (`sudo cbb revoke NAME`, or Remove in
+  it. Remove a device you give away before it leaves (`sudo cbb remove NAME`, or Remove in
   the app), and a lost one at once ([if a device is lost](../guide/lost-device.md)).
 - **Limit the `clipboardbridge` group.** On Linux, FreeBSD and macOS, members of the
   system group `clipboardbridge` read and set the clipboard through the service; add only
