@@ -51,6 +51,7 @@ const (
 	RecordCheckpoint = authority.TypeCheckpoint
 	RecordHubs       = authority.TypeHubs
 	RecordRecovery   = authority.TypeRecovery
+	RecordHandover   = authority.TypeHandover
 )
 
 // Device roles in device records: the member roles, shortcut for an
@@ -582,6 +583,12 @@ func (s *Records) Refused(chain []*x509.Certificate) error {
 		return err
 	}
 	if !s.listed(KeyHashOf(chain[0])) {
+		// A device no record names gets records only, unless the admin
+		// that certified it was removed: so the holder of a removed
+		// recovery key gets nothing.
+		if a, ok := s.issuerAdmin(chain); ok && s.Revoked(a) {
+			return errors.New("group: the admin that certified the device was removed from the group")
+		}
 		return ErrNotListed
 	}
 	if dev, err := DeviceOf(chain[0]); err == nil && s.Stopped(dev) {
@@ -607,6 +614,20 @@ func (s *Records) Stopped(dev DeviceID) bool {
 func (s *Records) NoSecretsTo(dev DeviceID) bool {
 	st := s.State()
 	return st.Stop != authority.StopNone || slices.Contains(st.NoSecretsTo, string(dev)) || slices.Contains(st.NothingTo, string(dev))
+}
+
+// issuerAdmin returns the key hash of the admin CA in chain that signed
+// its leaf; false when a root on the path signed it or none did.
+func (s *Records) issuerAdmin(chain []*x509.Certificate) (KeyHash, bool) {
+	if signedByAny(chain[0], s.path()) {
+		return KeyHash{}, false
+	}
+	for _, c := range chain[1:] {
+		if chain[0].CheckSignatureFrom(c) == nil {
+			return KeyHashOf(c), true
+		}
+	}
+	return KeyHash{}, false
 }
 
 // refusedChain is Refused without the rule that a device record names the
