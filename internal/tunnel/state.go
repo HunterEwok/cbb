@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
+	"github.com/HunterEwok/clipboardbridge/internal/keyseal"
 	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
 )
 
@@ -109,23 +110,22 @@ type State struct {
 	NextFor string
 	NextAt  time.Time
 
-	// The keys sealed by the TPM, as the state file keeps them.
+	// The keys sealed by the TPM or the Secure Enclave, as the state file
+	// keeps them.
 	sealed, sealedServing, sealedNext sealing
 }
 
-// sealing is a key sealed by the TPM and the key it holds, so that a new
-// key is sealed again.
+// sealing is a key sealed by the hardware and the key it holds, so that a
+// new key is sealed again.
 type sealing struct {
-	blob *tpmkey.Blob
+	blob *keyseal.Blob
 	key  Key
 }
 
-// A Sealer keeps secrets in the device's TPM (docs/protocol.md, section
-// 17): Seal returns nil, nil where secrets stay in files.
-type Sealer interface {
-	Seal(secret []byte) (*tpmkey.Blob, error)
-	Unseal(*tpmkey.Blob) ([]byte, error)
-}
+// A Sealer keeps secrets sealed by the device's TPM or Secure Enclave
+// (docs/protocol.md, section 17): Seal returns nil, nil where secrets stay
+// in files.
+type Sealer = keyseal.Sealer
 
 // KeySealer seals the private key in the state file; nil keeps it in the
 // file. The service sets it.
@@ -226,6 +226,7 @@ type stateFile struct {
 	Version    int              `json:"v"`
 	Key        *Key             `json:"key,omitempty"`
 	KeyTPM     *tpmkey.Blob     `json:"key_tpm,omitempty"`
+	KeySE      json.RawMessage  `json:"key_se,omitempty"`
 	PSK        *Key             `json:"psk,omitempty"`
 	Group      string           `json:"group,omitempty"`
 	ToHub      *hubFile         `json:"to_hub,omitempty"` // read from a state before several hubs
@@ -241,13 +242,15 @@ type stateFile struct {
 	Obfuscation *Obfuscation `json:"obfuscation,omitempty"`
 	// The hub's key for its clients, and the next one (State.Serving and
 	// State.Next).
-	Serving    *Key         `json:"serving,omitempty"`
-	ServingTPM *tpmkey.Blob `json:"serving_tpm,omitempty"`
-	ServingFor string       `json:"serving_for,omitempty"`
-	Next       *Key         `json:"next,omitempty"`
-	NextTPM    *tpmkey.Blob `json:"next_tpm,omitempty"`
-	NextFor    string       `json:"next_for,omitempty"`
-	NextAt     int64        `json:"next_at_ms,omitempty"`
+	Serving    *Key            `json:"serving,omitempty"`
+	ServingTPM *tpmkey.Blob    `json:"serving_tpm,omitempty"`
+	ServingSE  json.RawMessage `json:"serving_se,omitempty"`
+	ServingFor string          `json:"serving_for,omitempty"`
+	Next       *Key            `json:"next,omitempty"`
+	NextTPM    *tpmkey.Blob    `json:"next_tpm,omitempty"`
+	NextSE     json.RawMessage `json:"next_se,omitempty"`
+	NextFor    string          `json:"next_for,omitempty"`
+	NextAt     int64           `json:"next_at_ms,omitempty"`
 }
 
 type forwarderFile struct {
@@ -318,8 +321,9 @@ func LoadState(dir string) (*State, error) {
 		key    *Key
 		sealed *sealing
 		file   *Key
-		blob   *tpmkey.Blob
-	}{{&s.Key, &s.sealed, f.Key, f.KeyTPM}, {&s.Serving, &s.sealedServing, f.Serving, f.ServingTPM}, {&s.Next, &s.sealedNext, f.Next, f.NextTPM}} {
+		blob   *keyseal.Blob
+	}{{&s.Key, &s.sealed, f.Key, sealedOf(f.KeyTPM, f.KeySE)}, {&s.Serving, &s.sealedServing, f.Serving, sealedOf(f.ServingTPM, f.ServingSE)},
+		{&s.Next, &s.sealedNext, f.Next, sealedOf(f.NextTPM, f.NextSE)}} {
 		switch {
 		case k.blob != nil:
 			if *k.key, err = unsealKey(k.blob); err != nil {
@@ -358,8 +362,8 @@ func LoadState(dir string) (*State, error) {
 			return nil, err
 		}
 	}
-	if f.KeyTPM == nil && KeySealer != nil {
-		// Move a key from the file into the TPM, when there is one.
+	if s.sealed.blob == nil && KeySealer != nil {
+		// Seal a key from the file, when the device has the hardware.
 		if err := s.seal(); err != nil {
 			return nil, err
 		}
@@ -377,20 +381,23 @@ func (s *State) Save(dir string) error {
 	if err := s.seal(); err != nil {
 		return err
 	}
-	f := stateFile{Version: 1, KeyTPM: s.sealed.blob, Group: s.Group, IsHub: s.IsHub, Endpoints: s.Endpoints, ListenPort: s.ListenPort, KeysInFile: s.KeysInFile,
+	f := stateFile{Version: 1, Group: s.Group, IsHub: s.IsHub, Endpoints: s.Endpoints, ListenPort: s.ListenPort, KeysInFile: s.KeysInFile,
 		Obfuscation: s.Obfuscation}
+	f.KeyTPM, f.KeySE = splitSealed(s.sealed.blob)
 	if s.sealed.blob == nil {
 		f.Key = &s.Key
 	}
 	if !s.Serving.IsZero() {
-		f.ServingFor, f.ServingTPM = s.ServingFor, s.sealedServing.blob
-		if f.ServingTPM == nil {
+		f.ServingFor = s.ServingFor
+		f.ServingTPM, f.ServingSE = splitSealed(s.sealedServing.blob)
+		if s.sealedServing.blob == nil {
 			f.Serving = &s.Serving
 		}
 	}
 	if !s.Next.IsZero() {
-		f.NextFor, f.NextTPM, f.NextAt = s.NextFor, s.sealedNext.blob, s.NextAt.UnixMilli()
-		if f.NextTPM == nil {
+		f.NextFor, f.NextAt = s.NextFor, s.NextAt.UnixMilli()
+		f.NextTPM, f.NextSE = splitSealed(s.sealedNext.blob)
+		if s.sealedNext.blob == nil {
 			f.Next = &s.Next
 		}
 	}
@@ -416,8 +423,25 @@ func (s *State) Save(dir string) error {
 	return atomicfile.Write(filepath.Join(dir, StateFile), append(data, '\n'), 0o600)
 }
 
+// sealedOf returns the sealed key a state file keeps in a pair of fields, or
+// nil.
+func sealedOf(tpm *tpmkey.Blob, se json.RawMessage) *keyseal.Blob {
+	if tpm == nil && se == nil {
+		return nil
+	}
+	return &keyseal.Blob{TPM: tpm, SE: se}
+}
+
+// splitSealed is sealedOf's inverse.
+func splitSealed(b *keyseal.Blob) (*tpmkey.Blob, json.RawMessage) {
+	if b == nil {
+		return nil, nil
+	}
+	return b.TPM, b.SE
+}
+
 // seal seals the keys with KeySealer once, and again when they changed. A
-// key that was in the file moves to the TPM when the device has one.
+// key that was in the file is sealed when the device has the hardware.
 func (s *State) seal() error {
 	for _, k := range []struct {
 		key Key
@@ -485,9 +509,9 @@ func (s *State) Rotate(period string, now time.Time, ahead time.Duration) (chang
 	return true, switched, nil
 }
 
-func unsealKey(b *tpmkey.Blob) (Key, error) {
+func unsealKey(b *keyseal.Blob) (Key, error) {
 	if KeySealer == nil {
-		return Key{}, errors.New("the key is sealed by a TPM, which this program does not use")
+		return Key{}, errors.New("the key is sealed by hardware that this program does not use")
 	}
 	data, err := KeySealer.Unseal(b)
 	if err != nil {

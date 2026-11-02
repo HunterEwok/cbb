@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 7358caef15ed -->
+<!-- source: 00a76d11e6c5 -->
 # בלי האפליקציה
 
 קבוצה לא צריכה את אפליקציית הטלפון. מחשב יכול להחזיק את הקבוצה, ו-iPhone בלי האפליקציה מצטרף באמצעות קיצור דרך. זו גם הדרך כל עוד אפליקציית ה-iPhone ממתינה ל-TestFlight.
@@ -51,10 +51,10 @@ sudo cbb pair -phone
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, a Windows PC or a Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-מחשב Linux עם TPM שומר שם את מפתח המנהל. Mac, מחשב Windows או מחשב Linux בלי TPM שומרים אותו בקובץ, ולכן `cbb admin` דורש קודם `-allow-file-key`: מי שמעתיק את הקובץ הזה פועל כמנהל עד שמנהל אחר מסיר את המחשב, ולכן הפוך למנהל רק מחשב ששמור אצלך היטב.
+מחשב Linux או Windows עם TPM שומר שם את מפתח המנהל, ו-Mac ב-Secure Enclave שלו. מחשב בלי אף אחד מהם שומר אותו בקובץ, ולכן `cbb admin` דורש קודם `-allow-file-key`: מי שמעתיק את הקובץ הזה פועל כמנהל עד שמנהל אחר מסיר את המחשב, ולכן הפוך למנהל רק מחשב ששמור אצלך היטב.
 
 אם השורש אבד או התקלקל, המנהל משתלט על הקבוצה, וכל שאר המכשירים נשארים:
 
@@ -73,10 +73,6 @@ sudo cbb takeover NAME       # on the admin; NAME is the lost root
 
 הקוד אף פעם לא עובר בגלוי: ההתאמה מתבצעת בתוך SSH או ה-VPN שלך, ובתוך TLS. המחשב החדש מסתנכרן בנתיב הזה עד שהשירות שלו מופעל מחדש; כדי להמשיך לסנכרן אחר כך, הפעל [סנכרון מחוץ לבית](away-from-home.md) בשניהם לפני שאתה סוגר את החיבור.
 
-## קבוצה מלפני 0.4
+## קבוצה מלפני 0.6
 
-לקבוצה שנוצרה לפני 0.4 אין שורש: כל חבר Linux ו-Windows מחזיק את המפתחות שלו. כשכל המכשירים מריצים 0.4 ומעלה, תן לה שורש, באחד מהם; איש לא מתאים מחדש, חוץ ממכשירי iPhone עם קיצור הדרך:
-
-```sh
-sudo cbb upgrade
-```
+גרסה 0.6 קוראת רק רשומות קבוצה בגרסה 2, ואין בה דרך חזרה לקבוצות ישנות. מחשב שעודכן מגרסה קודמת עוזב את הקבוצה הישנה שלו בהפעלה הראשונה: הוא מעביר את קובצי הקבוצה אל `before-0.6` בתיקיית המצב שלו, שומר את ההגדרות, ו-`cbb status` מציין זאת. הקימו את הקבוצה מחדש: `cbb new` במחשב אחד, ואז `cbb pair` בשאר.

@@ -36,6 +36,7 @@ for f in $files; do
 	cmd/* | internal/* | mobile/* | packaging/* | tools/e2e/*) core=true ;;
 	tools/tokens/* | tools/icon/* | apps/design/*) design=true; tools=true ;;
 	tools/site/*) site=true; tools=true ;;
+	tools/sbom/*) core=true; tools=true ;; # the packaging job and the Android job run it
 	tools/*) tools=true ;;
 	# The Rust core's rules, which both phone kits link.
 	lite/core/* | lite/ffi/* | lite/Cargo.toml | lite/Cargo.lock) lite=true; ios=true; android=true ;;

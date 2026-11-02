@@ -1,6 +1,106 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Admin keys": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи админов"
+          }
+        }
+      }
+    },
+    "Proven hardware only": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только доказанное железо"
+          }
+        }
+      }
+    },
+    "Keys in hardware": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи в железе"
+          }
+        }
+      }
+    },
+    "Keys in files too": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи и в файлах"
+          }
+        }
+      }
+    },
+    "Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Какие устройства могут быть админами и хабами группы. Ключи в железе никогда не покидают устройство, а ключ в файле может скопировать любой, кто получит файл. Уже назначенные админы остаются, пока вы их не удалите."
+          }
+        }
+      }
+    },
+    "Change which keys may be admins": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить, какие ключи могут быть у админов"
+          }
+        }
+      }
+    },
+    "Saved. Every device of the group follows it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранено. Все устройства группы следуют этой настройке."
+          }
+        }
+      }
+    },
+    "This phone's own key is not proven, so the group cannot ask for proven keys yet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ этого телефона не доказан, поэтому группа пока не может требовать доказанных ключей."
+          }
+        }
+      }
+    },
+    "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройка группы «Ключи админов» не позволяет ключам этого устройства быть админом. Измените её в Настройках, раздел «Ключи админов»."
+          }
+        }
+      }
+    },
+    "The group then lets keys in files be admins and hubs (Settings, Admin keys).": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда группа разрешит ключи в файлах для админов и хабов (Настройки, «Ключи админов»)."
+          }
+        }
+      }
+    },
     "I have the group's recovery sheet": {
       "localizations": {
         "ru": {

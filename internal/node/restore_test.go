@@ -73,9 +73,24 @@ func TestRecordsOnlyHelloCarriesGroupCA(t *testing.T) {
 	}
 	phone := &group.Identity{ID: dev, Key: phoneKey, Cert: cert, Issuer: ca, GroupCA: group.CA{Cert: admin.GroupCA.Cert}}
 	a, b := socketPair(t)
-	go server.Serve(context.Background(), tls.Server(b, server.ServerTLS()))
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		server.Serve(ctx, tls.Server(b, server.ServerTLS()))
+	}()
 	tc := tls.Client(a, phone.ClientTLS(server.id.ID, group.TLSOptions{}))
-	defer tc.Close()
+	// The member logs through t as it ends the connection: wait for it,
+	// or it logs after the test.
+	defer func() {
+		cancel()
+		tc.Close()
+		select {
+		case <-served:
+		case <-time.After(10 * time.Second):
+			t.Error("the member did not end the connection")
+		}
+	}()
 	m, err := readMessage(tc, 5*time.Second)
 	if err != nil || m.Type != typeHello {
 		t.Fatalf("the first message: %+v, %v", m, err)

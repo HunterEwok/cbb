@@ -316,8 +316,13 @@ impl Body {
         let mut out = Vec::new();
         strict::write_canonical(&mut out, &v);
         // Never bytes to sign that every receiver refuses for their size.
-        if out.len() > MAX_BODY {
-            return Err(Error::msg(format!("a record body of {} bytes is over {MAX_BODY}", out.len())));
+        if out.len() > self.max_body() {
+            return Err(Error::msg(format!(
+                "a {} record body of {} bytes is over {}",
+                self.kind,
+                out.len(),
+                self.max_body()
+            )));
         }
         Ok(out)
     }

@@ -90,7 +90,7 @@ of service, **E**levation of privilege.
 
 - A member reads the group's clipboard by design: anyone who controls a device of the group
   reads every copy that reaches it. Keep the group to devices you control.
-- Keys in a file (Macs, Windows PCs, Linux computers without a TPM, the lite member) can be
+- Keys in a file (Macs, Windows PCs and Linux computers without a TPM, the lite member) can be
   copied by whoever reads the disk; encrypt the disk and remove a lost device at once.
 - A blind relay and the project's forwarder see addresses and times of activity (threat 10).
 - The systems' clipboards are readable by any program of the signed-in user; Clipboard

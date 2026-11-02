@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 97be486697d2 -->
+<!-- source: b61def346d84 -->
 # 键盘与电视
 
 适合想往电视、平板、游戏机，或没有安装 Clipboard Bridge 的电脑里输入长密码、链接或搜索词的人。群组中的一台设备以键盘或电视遥控器的身份把文本输入到那里，由你点一下触发，或在管理员发送远程粘贴时触发。
@@ -65,6 +65,13 @@ sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a s
 sudo cbb remote code 123456              # within two minutes
 ```
 
+Apple TV 的配对方式相同，使用它显示的四位 PIN 码。请先在 Apple TV 上把“设置”、“隔空播放与 HomeKit”、“允许访问”设为“同一网络中的所有人”：若设为“仅共享此家庭的成员”，它会拒绝任何配对。
+
+```sh
+sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
+sudo cbb remote code 1234                # within two minutes
+```
+
 Roku 没有配对也没有加密：文本会以明文 HTTP 在你的家庭网络中传输，所以只有在你用 `-consent` 明确同意时才会添加。请先在 Roku 上把“设置”、“系统”、“高级系统设置”、“移动应用控制”设为“已启用”或“宽松”。
 
 ```sh
@@ -78,7 +85,7 @@ echo 'the film' | sudo cbb remote type
 sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that TV
 ```
 
-`cbb remote` 会列出电视，有多台时用 `-tv NAME` 选择其中一台，`sudo cbb remote remove NAME` 会忘记一台。被重置过的 Android TV 必须重新配对。
+`cbb remote` 会列出电视，有多台时用 `-tv NAME` 选择其中一台，`sudo cbb remote remove NAME` 会忘记一台。被重置过或忘记了这台电脑的 Android TV 或 Apple TV 必须重新配对。
 
 ## 安全
 

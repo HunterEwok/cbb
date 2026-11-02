@@ -64,6 +64,9 @@ object Records {
         // settings
         var takeoverDelayMS: Long? = null
 
+        /** Which keys may be the group's root, an admin or a hub: one of Records.KEY_LEVELS. */
+        var keyLevel: String? = null
+
         // hubs
         var hubs: List<String>? = null
 
@@ -97,6 +100,7 @@ object Records {
                 "root" to b(root),
                 "cert" to b(cert),
                 "takeover_delay_ms" to takeoverDelayMS?.let { Wire.num(it) },
+                "key_level" to s(keyLevel),
                 "hubs" to strs(hubs),
             )
         }
@@ -154,6 +158,23 @@ object Records {
      * read, so the device is never the root, an admin or a hub (D-79).
      */
     const val ROOTLESS = "rootless"
+
+    /**
+     * The group's key levels (docs/guide/keys.md, "The three levels"): which
+     * keys may be its root, an admin or a hub. The levels proven and
+     * hardware share their names with the stores they let in; files lets in
+     * keys in files too, each after a warning.
+     */
+    const val LEVEL_FILES = "files"
+    val KEY_LEVELS = listOf(PROVEN, HARDWARE, LEVEL_FILES)
+
+    /** Whether the key level lets a device whose keys are in store be the group's root, an admin or a hub; a key in a file needs consent too. */
+    fun levelAllows(level: String, store: String, consent: Boolean): Boolean = when (store) {
+        ROOTLESS -> false
+        PROVEN -> true
+        FILE -> level == LEVEL_FILES && consent
+        else -> level != PROVEN
+    }
 
     /**
      * Where a device's keys live, as a hello's key_store or a record's store
@@ -319,11 +340,14 @@ class RecordSet {
         val newer: Int = 0,
         /** The key hash of the group's recovery key, while one counts. */
         val recovery: ByteArray? = null,
+        /** The key level of the current root's newest settings; null means hardware. */
+        val keyLevel: String? = null,
     ) {
         override fun equals(other: Any?): Boolean =
             other is State && rootDevice == other.rootDevice && roots.sameAs(other.roots) && stop == other.stop && claims == other.claims &&
                 revoked.sameAs(other.revoked) && noSecretsTo == other.noSecretsTo && nothingTo == other.nothingTo &&
-                conflicts == other.conflicts && newer == other.newer && recovery.contentEquals(other.recovery)
+                conflicts == other.conflicts && newer == other.newer && recovery.contentEquals(other.recovery) &&
+                keyLevel == other.keyLevel
 
         override fun hashCode(): Int = stop.hashCode()
 
@@ -356,6 +380,7 @@ class RecordSet {
                 },
                 newer = o.optArray("newer")?.size ?: 0,
                 recovery = o.optBytes("recovery"),
+                keyLevel = o.optString("key_level")?.takeIf { it.isNotEmpty() },
             )
         }
     }
@@ -518,6 +543,9 @@ class RecordSet {
 
     /** The key hash of the group's recovery key, while one counts. */
     val recovery: ByteArray? get() = view.state.recovery
+
+    /** The group's key level (Records.KEY_LEVELS): hardware when the root set none. */
+    val keyLevel: String get() = view.state.keyLevel ?: Records.HARDWARE
 
     /** Whether a key hash is revoked. */
     fun isRevoked(keyHash: ByteArray): Boolean = keyHash.toHex() in revoked

@@ -80,8 +80,10 @@ func archives(t *testing.T, dir string) {
 	}
 	zw.Close()
 	write(t, filepath.Join(dir, "clipboardbridge-windows-amd64.zip"), z.Bytes())
+	// A software bill of materials is JSON, and one of the release's files.
+	write(t, filepath.Join(dir, "sbom-go.cdx.json"), []byte(`{"bomFormat":"CycloneDX"}`))
 	var sums strings.Builder
-	for _, name := range []string{"clipboardbridge-linux-amd64.tar.gz", "clipboardbridge-windows-amd64.zip"} {
+	for _, name := range []string{"clipboardbridge-linux-amd64.tar.gz", "clipboardbridge-windows-amd64.zip", "sbom-go.cdx.json"} {
 		sum := sha256.Sum256(must(os.ReadFile(filepath.Join(dir, name))))
 		fmt.Fprintf(&sums, "%x  %s\n", sum, name)
 	}
@@ -103,7 +105,7 @@ func TestFlow(t *testing.T) {
 	if err := json.Unmarshal(must(os.ReadFile(body)), &r); err != nil {
 		t.Fatal(err)
 	}
-	if r.Version != "0.6.0" || len(r.Files) != 3 {
+	if _, ok := r.Asset("sbom-go.cdx.json"); r.Version != "0.6.0" || len(r.Files) != 4 || !ok {
 		t.Fatalf("the manifest is %+v", r)
 	}
 	tgz, _ := r.Asset("clipboardbridge-linux-amd64.tar.gz")

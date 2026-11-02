@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3a3178c99395 -->
+<!-- source: 65f0a956514b -->
 # Las apps
 
 Clipboard Bridge tiene apps para teléfonos, relojes y escritorios. Las apps de teléfono llevan el grupo; las de escritorio son una ventana al servicio que ya se ejecuta en el ordenador.
@@ -8,11 +8,11 @@ Clipboard Bridge tiene apps para teléfonos, relojes y escritorios. Las apps de 
 |---|---|---|
 | Android | `clipboardbridge-X.Y.Z.apk` en cada [versión](https://github.com/HunterEwok/clipboardbridge/releases) | compilada y probada en CI, aún no en un teléfono real |
 | Android sin Google | `clipboardbridge-fdroid-X.Y.Z.apk`, y F-Droid cuando la acepten: la misma app sin el reloj Wear OS | compilada y probada en CI |
-| iPhone y iPad | TestFlight, cuando se abra | compilada y probada en CI, aún no en un teléfono real |
+| iPhone y iPad | TestFlight, cuando se abra | compilada y probada en CI; funciona en un iPhone compilada con el equipo propio de un desarrollador |
 | Wear OS | `clipboardbridge-wear-X.Y.Z.apk`, que se instala en el reloj desde un ordenador con `adb install` por la depuración inalámbrica del reloj, hasta que la app esté en Google Play | compilada |
-| Apple Watch | con la app del iPhone | compilada |
+| Apple Watch | con la app del iPhone | compilada; funciona en un Apple Watch con la app del iPhone |
 | App para Mac | aún no es una descarga: por ahora se compila desde `apps/macos` | compilada |
-| App de bandeja para Linux y Windows | aún no es una descarga: por ahora se compila desde `apps/desktop` | compilada |
+| App de bandeja para Linux y Windows | en los archivos de Windows y Linux de cada versión, instalada con el servicio | compilada; probada en una máquina virtual con Windows 11 |
 
 ## Teléfonos
 

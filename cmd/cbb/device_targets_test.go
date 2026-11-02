@@ -17,17 +17,25 @@ func TestRemoteCommand(t *testing.T) {
 		{Name: "Living room", Kind: "androidtv", Host: "10.0.0.5", Pastes: true},
 		{Name: "Bedroom", Kind: "roku", Host: "10.0.0.6"},
 		{Kind: "androidtv", Host: "10.0.0.7", Pairing: true},
+		{Name: "Lounge", Kind: "appletv", Host: "10.0.0.9"},
+		{Kind: "appletv", Host: "10.0.0.10", Pairing: true},
 	}}}
 	runCommandCases(t, []commandCase{
 		{name: "list", args: []string{"remote"}, answer: tvs,
 			check:  sent(control.OpRemote, func(m *control.Message) bool { return m.Name == "" }),
-			stdout: "Living room (Android TV) at 10.0.0.5: remote pastes go to it.\nBedroom (Roku, plain HTTP) at 10.0.0.6.\nPairing with the TV at 10.0.0.7"},
+			stdout: "Living room (Android TV) at 10.0.0.5: remote pastes go to it.\nBedroom (Roku, plain HTTP) at 10.0.0.6.\nPairing with the TV at 10.0.0.7: it shows a code for cbb remote code.\nLounge (Apple TV) at 10.0.0.9.\nPairing with the TV at 10.0.0.10: it shows a PIN"},
 		{name: "list of none", args: []string{"remote"}, check: sent(control.OpRemote, nil), stdout: "the remote of no TV"},
 		{name: "add an Android TV", args: []string{"remote", "add", "-name", "Den", "10.0.0.8"},
 			check: sent(control.OpRemote, func(m *control.Message) bool {
 				return m.Name == "add" && m.Address == "10.0.0.8" && m.NewName == "Den" && m.Value == "" && !m.Consent
 			}),
 			stdout: "The TV shows a code now"},
+		{name: "add an Apple TV", args: []string{"remote", "add", "-appletv", "10.0.0.9"},
+			check: sent(control.OpRemote, func(m *control.Message) bool {
+				return m.Name == "add" && m.Value == "appletv" && m.Address == "10.0.0.9"
+			}),
+			stdout: "The Apple TV shows a PIN now"},
+		{name: "an Apple TV and a Roku", args: []string{"remote", "add", "-appletv", "-roku", "10.0.0.9"}, code: 2, stderr: "usage: cbb remote"},
 		// Flags may follow the words.
 		{name: "add a Roku", args: []string{"remote", "add", "10.0.0.6", "-roku", "-consent"}, answer: tvs,
 			check:  sent(control.OpRemote, func(m *control.Message) bool { return m.Value == "roku" && m.Consent && m.Address == "10.0.0.6" }),

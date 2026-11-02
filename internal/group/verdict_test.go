@@ -59,12 +59,12 @@ func TestVerdicts(t *testing.T) {
 }
 
 // writeVerdictCorpus writes a corpus of one valid record of version 2, one
-// of version 1, which is refused, a record set and a release file.
+// that the tables refuse, a record set and a release file.
 func writeVerdictCorpus(t *testing.T) string {
 	v := readStrictGenerated(t)
 	var invalid []byte
 	for _, c := range v.Records {
-		if invalid == nil {
+		if invalid == nil && !c.Valid {
 			invalid = c.Full()
 		}
 	}
@@ -103,12 +103,8 @@ func writeVerdictCorpus(t *testing.T) string {
 }
 
 func readStrictGenerated(t *testing.T) genVectors {
-	data, err := os.ReadFile("../../testdata/interop/strict-generated.json")
+	v, err := readGenFiles("../../testdata/interop")
 	if err != nil {
-		t.Fatal(err)
-	}
-	var v genVectors
-	if err := json.Unmarshal(data, &v); err != nil {
 		t.Fatal(err)
 	}
 	return v

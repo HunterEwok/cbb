@@ -68,8 +68,8 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 	if rec := s.deviceRecord(peer.ID); rec != nil && rec.Key == peer.Key && rec.Store == group.StoreProven {
 		store, kind, proof = rec.Store, rec.Kind, rec.Proof
 	}
-	if store == group.StoreFile && !allowFileKey {
-		return "", fmt.Errorf("%s keeps its keys in a file, which a thief with it can copy and then act as an admin until another admin removes it; to make it an admin anyway, run cbb admin -allow-file-key %s", d.Name, target)
+	if err := levelAllows(s.keyLevel(), store, d.Name, "run cbb admin -allow-file-key "+target, allowFileKey); err != nil {
+		return "", err
 	}
 	k, err := x509.ParsePKIXPublicKey(peer.AdminKey)
 	pub, ok := k.(*ecdsa.PublicKey)
@@ -247,7 +247,7 @@ func (s *Service) phoneCAFor(dev group.DeviceID, chain []*x509.Certificate, thei
 	s.mu.Lock()
 	id := s.id
 	s.mu.Unlock()
-	if id == nil || id.Legacy() || !id.ServesPhone() {
+	if id == nil || !id.ServesPhone() {
 		return nil
 	}
 	mine := group.KeyHashOf(id.PhoneCA.Cert)
@@ -291,7 +291,7 @@ func (s *Service) phoneCAReceived(from group.DeviceID, chain []*x509.Certificate
 	s.mu.Lock()
 	id := s.id
 	switch {
-	case id == nil || id.Legacy() || (!id.IsRoot() && id.AdminCA == nil):
+	case id == nil || (!id.IsRoot() && id.AdminCA == nil):
 		s.mu.Unlock()
 		return errors.New("this member is no admin of a group a computer created")
 	case id.ServesPhone():
@@ -341,7 +341,7 @@ func (s *Service) dropRevokedPhoneCA() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	id := s.id
-	if id == nil || id.Legacy() || !id.ServesPhone() || !s.revoked(group.KeyHashOf(id.PhoneCA.Cert)) {
+	if id == nil || !id.ServesPhone() || !s.revoked(group.KeyHashOf(id.PhoneCA.Cert)) {
 		return
 	}
 	if _, _, taken := s.takenOver(id); taken {
@@ -430,8 +430,10 @@ func (s *Service) setTakeoverDelay(value string) error {
 		return errors.New("only the group's root sets how long a claim waits")
 	}
 	ms := d.Milliseconds()
+	// The newest settings record counts whole, so this one keeps the level.
+	_, level := s.currentSettings(group.KeyHashOf(id.Root()))
 	s.awaitRecords(id)
-	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordSettings, TakeoverDelayMS: &ms})
+	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordSettings, TakeoverDelayMS: &ms, KeyLevel: level})
 	if err != nil {
 		return err
 	}
@@ -468,6 +470,11 @@ func (s *Service) setHubs(targets []string) error {
 		}
 		if d.Role != group.RoleFull && d.Role != group.RolePhone {
 			return fmt.Errorf("%s cannot be a hub: only a computer or a phone can", d.Name)
+		}
+		// Naming it in the table is the user's consent to a key in a file,
+		// where the level allows one.
+		if err := levelAllows(s.keyLevel(), d.Store, d.Name, "", true); err != nil {
+			return err
 		}
 		if slices.Contains(ids, d.ID) {
 			return fmt.Errorf("%s is named twice", d.Name)
@@ -635,6 +642,11 @@ func (s *Service) afterTakeover(oldRoot group.KeyHash, oldPhoneCA *group.CA) {
 	if len(revoke.Keys) > 0 {
 		revoke.Keys = uniqueKeys(revoke.Keys)
 		bodies = append(bodies, revoke)
+	}
+	// The state counts only the current root's settings, so the new root
+	// signs the old root's again: the takeover delay and the key level.
+	if delay, level := s.currentSettings(oldRoot); delay != nil || level != "" {
+		bodies = append(bodies, group.RecordBody{Type: group.RecordSettings, TakeoverDelayMS: delay, KeyLevel: level})
 	}
 	var rs []group.Record
 	for _, body := range bodies {

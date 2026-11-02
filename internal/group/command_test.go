@@ -271,23 +271,4 @@ func TestCommandSenders(t *testing.T) {
 	}
 	check(s, "the root naming this device", command(pg.root, tag, selfID, selfID), selfID, false, false)
 
-	// A group made before records v:2, whose CA key every full member
-	// held: v:2 has no such members, so the CA may name only a device
-	// that no record shows.
-	legacy := newLegacyGroup(t)
-	ca := &legacy.GroupCA
-	ls := NewRecords(ca.Cert)
-	full, phone := member(t, ca), member(t, ca)
-	mustAdd(t, ls, deviceRecord(t, ca.Cert, ca, nil, full, "pc", 1))
-	phoneKey := KeyHashOf(phone)
-	pr, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(ca.Cert), TimeMS: 2, Device: string(DeviceID(phone.Subject.CommonName)),
-		Name: "phone", Role: RolePhone, Key: &phoneKey}, ca.Key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mustAdd(t, ls, pr)
-	ltag, to := Tag(ca.Cert), NewDeviceID()
-	check(ls, "a legacy CA naming a full member", command(ca, ltag, DeviceID(full.Subject.CommonName), to), to, false, false)
-	check(ls, "a legacy CA naming a phone", command(ca, ltag, DeviceID(phone.Subject.CommonName), to), to, false, false)
-	check(ls, "a legacy CA naming no device shown", command(ca, ltag, NewDeviceID(), to), to, true, false)
 }

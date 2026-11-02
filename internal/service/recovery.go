@@ -143,8 +143,6 @@ func (s *Service) canRecover() error {
 		return s.errNoGroup()
 	case id.IsRoot():
 		return errors.New("this device is the group's root already")
-	case id.Legacy():
-		return errors.New("this group is from before admin CAs and has no recovery key; upgrade it first (cbb upgrade)")
 	case id.Claim != nil:
 		return errors.New("this device's claim to take the group over is waiting already; cbb status shows the time left")
 	}

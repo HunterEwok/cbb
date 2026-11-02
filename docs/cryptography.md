@@ -20,10 +20,8 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 - TLS 1.3 only (RFC 8446), never an earlier version, on every TCP connection.
 - Randomness from the operating system's generator only (`crypto/rand`, `getrandom`,
   `SecRandomCopyBytes`, `SecureRandom`).
-- Keys never leave the device that made them, with three exceptions the protocol names:
-  the iPhone CA key, which the root passes to the admins (`phone_ca_key`, section 10); the
-  CA keys of a legacy group in the Welcome (section 6); and the one-time WireGuard key a
-  hub makes for a guest and puts in its invitation (section 12). A device's key in
+- Keys never leave the device that made them, with two exceptions the protocol names:
+  the iPhone CA key, which the root passes to the admins (`phone_ca_key`, section 10), and the one-time WireGuard key a hub makes for a guest and puts in its invitation (section 12). A device's key in
   hardware cannot leave it.
 
 ## Primitives

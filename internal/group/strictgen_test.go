@@ -12,13 +12,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/HunterEwok/clipboardbridge/internal/authority"
 )
 
-// The generator of testdata/interop/strict-generated.json: from the tables
+// The generator of testdata/interop/strict-generated-*.json: from the tables
 // of docs/protocol.md ("Signed bodies" in Conventions, the record fields of
 // section 10, the command fields of section 15 and the manifest of section
 // 4), a valid body of every kind and, for each of its fields, the changes a
@@ -27,7 +28,7 @@ import (
 // The verdicts come from the tables, never from what one implementation
 // does; strict.json keeps the vectors written by hand.
 
-// A genVector is one body of strict-generated.json. A body of more than a
+// A genVector is one body of strict-generated-*.json. A body of more than a
 // few kilobytes is written short: pad bytes "a" go in at pad_at.
 type genVector struct {
 	Name  string `json:"name"`
@@ -95,6 +96,13 @@ func (b genBody) set(name, value string) genBody {
 		}
 	}
 	return append(out, genMember{name, value})
+}
+
+// sorted returns b with its members in bytewise order of their names.
+func (b genBody) sorted() genBody {
+	out := append(genBody{}, b...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].name < out[j].name })
+	return out
 }
 
 func (b genBody) del(name string) genBody {
@@ -165,6 +173,20 @@ type genKind struct {
 	max     int        // the longest body; 0: no limit of its own
 	strict  bool
 	whole   bool // the rules of the body as a whole are tested on this kind
+	// canonical bodies are taken only in their canonical form, with no
+	// member their kind does not know (records, section 10): members in
+	// bytewise order of their names, no whitespace, no escape but \", \\
+	// and \u00XX below U+0020.
+	canonical bool
+}
+
+// put returns b's bytes as k writes its bodies: a canonical kind's members
+// in order.
+func (k genKind) put(b genBody) []byte {
+	if k.canonical {
+		b = b.sorted()
+	}
+	return b.bytes()
 }
 
 const (
@@ -271,116 +293,6 @@ const (
 	genOther = `"ffeeddccbbaa99887766554433221100"`
 	genID    = `"0123456789abcdef0123456789abcdef"`
 )
-
-// recordKinds returns the record bodies of section 10.
-func recordKinds() []genKind {
-	hash := genB64(32, 7)
-	common := genBody{{"v", "1"}, {"type", ""}, {"group", genGroup}, {"time_ms", "1700000000000"}, {"by", genOther}}
-	with := func(t string, m ...genMember) genBody {
-		b := common.set("type", `"`+t+`"`)
-		for _, x := range m {
-			b = b.set(x.name, x.value)
-		}
-		return b
-	}
-	// Every record has these; v, type and time_ms are checked here.
-	commonFields := []genField{
-		{"v", jInt, true, []genValue{bad("of 0", "0"), bad("of 2", "2"), bad("of -1", "-1"), bad("that wraps in 32 bits", "4294967297")}},
-		{"type", jString, true, genEnum(nil, "other", "", "Device", "device ")},
-		{"group", jString, true, nil},
-		{"time_ms", jInt, true, []genValue{
-			ok("of 0", "0"), ok("of -1", "-1"), ok("of 2^53", two53),
-			ok("of 2^63-1", "9223372036854775807"), ok("of -2^63", "-9223372036854775808"),
-		}},
-		{"by", jString, false, nil},
-	}
-	// The fields of every type, which have their type in every record.
-	all := map[string]genField{
-		"device":  {"device", jString, false, genDeviceIDValues()},
-		"name":    {"name", jString, false, nil},
-		"role":    {"role", jString, false, nil},
-		"os":      {"os", jString, false, nil},
-		"key":     {"key", jString, false, genHashValues()},
-		"admin":   {"admin", jString, false, genHashValues()},
-		"store":   {"store", jString, false, genEnum([]string{"file", "hardware", "proven", "rootless", "", "other"})},
-		"kind":    {"kind", jString, false, genEnum([]string{"android-tee", "", "other"})},
-		"proof":   {"proof", jString, false, genEnum([]string{"00ff", "", "x"})},
-		"keys":    {"keys", jArray, false, genHashListValues(false)},
-		"keep":    {"keep", jArray, false, genHashListValues(false)},
-		"root":    {"root", jString, false, []genValue{ok("of other bytes", genB64(5, 1)), ok("empty", `""`), bad("with stray bits", `"AB=="`), bad("without padding", `"AQ"`)}},
-		"records": {"records", jArray, false, genHashListValues(false)},
-	}
-	names := []string{"device", "name", "role", "os", "key", "admin", "store", "kind", "proof", "keys", "keep", "root", "records"}
-	// fields returns the common fields, own (the fields of the type, with
-	// their rows), and every other type's field with its type checked.
-	fields := func(own ...genField) []genField { return append(append([]genField{}, commonFields...), own...) }
-	// others returns every other type's field: its values belong to its
-	// own type's rows, its JSON type is checked in every record.
-	others := func(own ...genField) []genField {
-		var f []genField
-	next:
-		for _, n := range names {
-			for _, o := range own {
-				if o.name == n {
-					continue next
-				}
-			}
-			x := all[n]
-			x.values = nil
-			f = append(f, x)
-		}
-		return f
-	}
-	name := []genValue{
-		ok("of 64 bytes", `"`+strings.Repeat("a", 64)+`"`),
-		ok("of 64 bytes in 32 characters", `"`+strings.Repeat("\u00e9", 32)+`"`),
-		ok("of 64 bytes escaped", `"`+strings.Repeat(`\u00e9`, 32)+`"`),
-		ok("of one character", `"a"`),
-		ok("with a no-break space", `"a\u00a0b"`),
-		ok("with a line separator", `"a\u2028b"`),
-		ok("with a surrogate pair", `"a\ud83d\ude00b"`),
-		ok("with a zero-width space", `"a\u200bb"`),
-		bad("empty", `""`),
-		bad("of 65 bytes", `"`+strings.Repeat("a", 65)+`"`),
-		bad("of 65 bytes in 33 characters", `"`+strings.Repeat("\u00e9", 32)+`a"`),
-		bad("with a tab escaped", `"a\tb"`),
-		bad("with a NUL escaped", `"a\u0000b"`),
-		bad("with BEL escaped", `"a\u0007b"`),
-		bad("with DEL", `"a\u007fb"`),
-		bad("with a C1 control character", `"a\u0085b"`),
-		bad("with the last C1 control character", `"a\u009fb"`),
-	}
-	roles := genEnum([]string{"full", "phone", "lite", "shortcut", "watch", "linux", "mac", "iphone"}, "server", "", "Full", "admin")
-	oses := genEnum([]string{"linux", "windows", "macos", "ios", "android", "watchos", "wearos", "none", ""}, "beos", "Linux", "mac", "iphone")
-	dev := all["device"]
-	dev.required = true
-	key := all["key"]
-	key.required = true
-	keys := genField{"keys", jArray, true, genHashListValues(true)}
-	records := genField{"records", jArray, true, genHashListValues(true)}
-	root := genField{"root", jString, true, []genValue{
-		ok("of one byte", genB64(1, 1)), ok("of 1024 bytes", genB64(1024, 1)),
-		bad("empty", `""`), bad("with stray bits", `"AB=="`), bad("without padding", `"AQ"`),
-		bad("with a newline escaped", `"AQ\n=="`), bad("in base64url", `"-_-_"`),
-	}}
-	kind := func(name string, base genBody, own ...genField) genKind {
-		return genKind{section: "records", name: name, base: base, fields: fields(own...), others: others(own...),
-			max: 8 << 10, strict: true, whole: name == "device"}
-	}
-	return []genKind{
-		kind("device", with("device", genMember{"device", genDev}, genMember{"name", `"Laptop"`}, genMember{"role", `"full"`},
-			genMember{"os", `"linux"`}, genMember{"key", hash}),
-			dev, genField{"name", jString, true, name}, genField{"role", jString, true, roles},
-			genField{"os", jString, false, oses}, key, all["admin"], all["store"], all["kind"], all["proof"],
-			genField{"keys", jArray, false, []genValue{ok("with a hash", `[`+hash+`]`)}}, all["root"]),
-		kind("revoke", with("revoke", genMember{"keys", `[` + hash + `]`}, genMember{"keep", `[` + genB64(32, 9) + `]`}),
-			keys, all["keep"]),
-		kind("root", with("root", genMember{"root", genB64(32, 3)}), root),
-		kind("freeze", with("freeze", genMember{"keys", `[` + hash + `]`}, genMember{"records", `[` + genB64(32, 9) + `]`}),
-			keys, all["records"]),
-		kind("thaw", with("thaw", genMember{"records", `[` + hash + `]`}), records),
-	}
-}
 
 // commandKinds returns the command bodies of section 15.
 func commandKinds() []genKind {
@@ -617,17 +529,24 @@ func manifestKinds() []genKind {
 
 // genCommon names the fields every body of a section has.
 var genCommon = map[string]map[string]bool{
-	"records":  {"v": true, "type": true, "group": true, "time_ms": true, "by": true},
+	"records":  {"v": true, "alg": true, "type": true, "group": true, "signer": true, "seq": true, "prev": true, "time_ms": true},
 	"commands": {"v": true, "type": true, "group": true, "by": true, "to": true, "id": true, "time_ms": true, "expires_ms": true},
 }
 
 // genKindVectors returns the vectors of one kind of body.
 func genKindVectors(k genKind) []genVector {
 	var out []genVector
+	// whole is set for the rules of the body as a whole: each body they
+	// take has whitespace or a member no kind knows, which a canonical
+	// kind refuses.
+	whole := false
 	add := func(rule, what string, valid bool, body []byte) {
+		if whole && k.canonical {
+			valid = false
+		}
 		out = append(out, genVector{Name: k.name + ": " + what, Rule: rule, Valid: valid, Body: body})
 	}
-	base := k.base.bytes()
+	base := k.put(k.base)
 	row := func(f string) string {
 		if k.section == "manifests" {
 			return "manifests/" + f
@@ -641,21 +560,21 @@ func genKindVectors(k genKind) []genVector {
 		if f.typ != jString {
 			wrong = jString
 		}
-		add(row(f.name), f.name+" as a "+wrong, false, k.base.set(f.name, genWrongType[wrong]).bytes())
+		add(row(f.name), f.name+" as a "+wrong, false, k.put(k.base.set(f.name, genWrongType[wrong])))
 	}
 	for _, f := range k.fields {
 		cur, present := k.base.get(f.name)
 		if present {
-			add(row(f.name), f.name+" missing", !f.required, k.base.del(f.name).bytes())
+			add(row(f.name), f.name+" missing", !f.required, k.put(k.base.del(f.name)))
 		}
 		for _, t := range []string{jString, jInt, jBool, jArray, jObject} {
 			if t != f.typ {
-				add(row(f.name), f.name+" as a "+t, false, k.base.set(f.name, genWrongType[t]).bytes())
+				add(row(f.name), f.name+" as a "+t, false, k.put(k.base.set(f.name, genWrongType[t])))
 			}
 		}
 		if !k.strict {
 			for _, v := range f.values {
-				add(row(f.name), f.name+" "+v.what, v.valid, k.base.set(f.name, v.value).bytes())
+				add(row(f.name), f.name+" "+v.what, v.valid, k.put(k.base.set(f.name, v.value)))
 			}
 			continue
 		}
@@ -663,7 +582,7 @@ func genKindVectors(k genKind) []genVector {
 			// The form of the fields every body of the section has is
 			// tested on one kind; their rows on every kind.
 			for _, v := range f.values {
-				add(row(f.name), f.name+" "+v.what, v.valid, k.base.set(f.name, v.value).bytes())
+				add(row(f.name), f.name+" "+v.what, v.valid, k.put(k.base.set(f.name, v.value)))
 			}
 			continue
 		}
@@ -671,24 +590,24 @@ func genKindVectors(k genKind) []genVector {
 			// An absent field is written with a value of its type.
 			cur = map[string]string{jString: `""`, jInt: "0", jBool: "false", jArray: "[]", jObject: "{}"}[f.typ]
 		}
-		add(form("null"), f.name+" null", false, k.base.set(f.name, "null").bytes())
+		add(form("null"), f.name+" null", false, k.put(k.base.set(f.name, "null")))
 		add(form("names"), f.name+" written twice", false, append(k.base.set(f.name, cur), genMember{f.name, cur}).bytes())
-		add(form("names"), f.name+" with its name in upper case", false, k.base.set(f.name, cur).rename(f.name, strings.ToUpper(f.name)).bytes())
-		add(form("names"), f.name+" with its name escaped", false, k.base.set(f.name, cur).rename(f.name, `\u00`+fmt.Sprintf("%x", f.name[0])+f.name[1:]).bytes())
+		add(form("names"), f.name+" with its name in upper case", false, k.put(k.base.set(f.name, cur).rename(f.name, strings.ToUpper(f.name))))
+		add(form("names"), f.name+" with its name escaped", false, k.put(k.base.set(f.name, cur).rename(f.name, `\u00`+fmt.Sprintf("%x", f.name[0])+f.name[1:])))
 		switch f.typ {
 		case jInt:
 			for _, v := range genIntForm() {
-				add(form("numbers"), f.name+" "+v.what, false, k.base.set(f.name, v.value).bytes())
+				add(form("numbers"), f.name+" "+v.what, false, k.put(k.base.set(f.name, v.value)))
 			}
 		case jString:
 			if f.required || present {
 				for _, v := range genStringForm() {
-					add(form("strings"), f.name+" "+v.what, false, k.base.set(f.name, v.value).bytes())
+					add(form("strings"), f.name+" "+v.what, false, k.put(k.base.set(f.name, v.value)))
 				}
 			}
 		}
 		for _, v := range f.values {
-			add(row(f.name), f.name+" "+v.what, v.valid, k.base.set(f.name, v.value).bytes())
+			add(row(f.name), f.name+" "+v.what, v.valid, k.put(k.base.set(f.name, v.value)))
 		}
 	}
 	if !k.strict {
@@ -698,7 +617,7 @@ func genKindVectors(k genKind) []genVector {
 		// A body of exactly max bytes, padded in an unknown member, and one
 		// byte more.
 		for _, n := range []int{k.max, k.max + 1} {
-			b := k.base.set("later", `""`).bytes()
+			b := k.put(k.base.set("later", `""`))
 			v := genVector{Name: fmt.Sprintf("%s: a body of %d bytes", k.name, n), Rule: "size/" + k.section,
 				Valid: n == k.max, Body: b, PadAt: len(b) - 2, Pad: n - len(b)}
 			out = append(out, v)
@@ -707,6 +626,7 @@ func genKindVectors(k genKind) []genVector {
 	if !k.whole {
 		return out
 	}
+	whole = true
 	// The rules of the body as a whole, the same for every kind of a
 	// section.
 	add(form("object"), "with spaces and line breaks", true, []byte(" \t\r\n"+strings.ReplaceAll(string(base), `,"`, ", \n\t\"")+"\r\n "))
@@ -718,42 +638,43 @@ func genKindVectors(k genKind) []genVector {
 	add(form("object"), "in an array", false, []byte("["+string(base)+"]"))
 	add(form("object"), "with a trailing comma", false, append(base[:len(base)-1:len(base)-1], []byte(",}")...))
 	add(form("object"), "cut short", false, base[:len(base)-1])
-	add(form("unknown"), "with an unknown member", true, k.base.set("later", `"x"`).bytes())
-	add(form("unknown"), "with an unknown nested object", true, k.base.set("later", `{"a":{"b":[1,-2,true,false,"s",{}]}}`).bytes())
-	add(form("unknown"), "with an unknown member of every type", true, k.base.set("later", `[0,-9223372036854775808,9223372036854775807,"",[],{}]`).bytes())
-	add(form("null"), "with a null in an unknown member", false, k.base.set("later", `[null]`).bytes())
-	add(form("numbers"), "with a negative zero in an unknown member", false, k.base.set("later", `{"a":[-0]}`).bytes())
-	add(form("numbers"), "with a fraction in an unknown member", false, k.base.set("later", `[1.5]`).bytes())
-	add(form("numbers"), "with 2^63 in an unknown member", false, k.base.set("later", `[`+two63+`]`).bytes())
-	add(form("names"), "with a member twice in an unknown member", false, k.base.set("later", `{"a":1,"a":1}`).bytes())
-	add(form("names"), "with an upper case name in an unknown member", false, k.base.set("later", `{"A":1}`).bytes())
-	add(form("names"), "with an empty name", false, k.base.set("later", `{"":1}`).bytes())
-	add(form("names"), "with a name of 64 characters", true, k.base.set(strings.Repeat("a", 64), `1`).bytes())
-	add(form("names"), "with a name of 65 characters", false, k.base.set(strings.Repeat("a", 65), `1`).bytes())
-	add(form("names"), "with a name with a dash", false, k.base.set("la-ter", `1`).bytes())
-	add(form("names"), "with a name with a Kelvin sign", false, k.base.set("\u212aey", `1`).bytes())
-	add(form("depth"), "nested 16 deep", true, k.base.set("later", strings.Repeat("[", 16)+strings.Repeat("]", 16)).bytes())
-	add(form("depth"), "nested 17 deep", false, k.base.set("later", strings.Repeat("[", 17)+strings.Repeat("]", 17)).bytes())
-	add(form("depth"), "nested 17 deep in objects", false, k.base.set("later", strings.Repeat(`{"a":`, 17)+"1"+strings.Repeat("}", 17)).bytes())
+	add(form("unknown"), "with an unknown member", true, k.put(k.base.set("later", `"x"`)))
+	add(form("unknown"), "with an unknown nested object", true, k.put(k.base.set("later", `{"a":{"b":[1,-2,true,false,"s",{}]}}`)))
+	add(form("unknown"), "with an unknown member of every type", true, k.put(k.base.set("later", `[0,-9223372036854775808,9223372036854775807,"",[],{}]`)))
+	add(form("null"), "with a null in an unknown member", false, k.put(k.base.set("later", `[null]`)))
+	add(form("numbers"), "with a negative zero in an unknown member", false, k.put(k.base.set("later", `{"a":[-0]}`)))
+	add(form("numbers"), "with a fraction in an unknown member", false, k.put(k.base.set("later", `[1.5]`)))
+	add(form("numbers"), "with 2^63 in an unknown member", false, k.put(k.base.set("later", `[`+two63+`]`)))
+	add(form("names"), "with a member twice in an unknown member", false, k.put(k.base.set("later", `{"a":1,"a":1}`)))
+	add(form("names"), "with an upper case name in an unknown member", false, k.put(k.base.set("later", `{"A":1}`)))
+	add(form("names"), "with an empty name", false, k.put(k.base.set("later", `{"":1}`)))
+	add(form("names"), "with a name of 64 characters", true, k.put(k.base.set(strings.Repeat("a", 64), `1`)))
+	add(form("names"), "with a name of 65 characters", false, k.put(k.base.set(strings.Repeat("a", 65), `1`)))
+	add(form("names"), "with a name with a dash", false, k.put(k.base.set("la-ter", `1`)))
+	add(form("names"), "with a name with a Kelvin sign", false, k.put(k.base.set("\u212aey", `1`)))
+	add(form("depth"), "nested 16 deep", true, k.put(k.base.set("later", strings.Repeat("[", 16)+strings.Repeat("]", 16))))
+	add(form("depth"), "nested 17 deep", false, k.put(k.base.set("later", strings.Repeat("[", 17)+strings.Repeat("]", 17))))
+	add(form("depth"), "nested 17 deep in objects", false, k.put(k.base.set("later", strings.Repeat(`{"a":`, 17)+"1"+strings.Repeat("}", 17))))
 	for _, s := range genStringForm() {
-		add(form("strings"), "with an unknown member "+s.what, false, k.base.set("later", s.value).bytes())
+		add(form("strings"), "with an unknown member "+s.what, false, k.put(k.base.set("later", s.value)))
 	}
-	add(form("strings"), "with an unknown member of a surrogate pair", true, k.base.set("later", `"\ud83d\ude00"`).bytes())
-	add(form("strings"), "with an unknown member of C0 controls escaped", true, k.base.set("later", `"\u0000\u001f\b\f\n\r\t\"\\\/"`).bytes())
-	add(form("strings"), "with an unknown member of upper case escapes", true, k.base.set("later", `"\u00E9\uD83D\uDE00"`).bytes())
-	add(form("utf8"), "with an unknown member of four-byte UTF-8", true, k.base.set("later", "\"\xf0\x9f\x98\x80\"").bytes())
-	add(form("utf8"), "with an unknown member of UTF-8 above U+10FFFF", false, k.base.set("later", "\"\xf4\x90\x80\x80\"").bytes())
-	add(form("utf8"), "with an unknown member of a cut UTF-8 sequence", false, k.base.set("later", "\"\xe2\x82\"").bytes())
-	add(form("utf8"), "with an unknown member of a lone continuation byte", false, k.base.set("later", "\"\x80\"").bytes())
+	add(form("strings"), "with an unknown member of a surrogate pair", true, k.put(k.base.set("later", `"\ud83d\ude00"`)))
+	add(form("strings"), "with an unknown member of C0 controls escaped", true, k.put(k.base.set("later", `"\u0000\u001f\b\f\n\r\t\"\\\/"`)))
+	add(form("strings"), "with an unknown member of upper case escapes", true, k.put(k.base.set("later", `"\u00E9\uD83D\uDE00"`)))
+	add(form("utf8"), "with an unknown member of four-byte UTF-8", true, k.put(k.base.set("later", "\"\xf0\x9f\x98\x80\"")))
+	add(form("utf8"), "with an unknown member of UTF-8 above U+10FFFF", false, k.put(k.base.set("later", "\"\xf4\x90\x80\x80\"")))
+	add(form("utf8"), "with an unknown member of a cut UTF-8 sequence", false, k.put(k.base.set("later", "\"\xe2\x82\"")))
+	add(form("utf8"), "with an unknown member of a lone continuation byte", false, k.put(k.base.set("later", "\"\x80\"")))
 	return out
 }
 
-// makeGenVectors returns the vectors of strict-generated.json.
+// makeGenVectors returns the vectors of strict-generated-*.json.
 func makeGenVectors() genVectors {
 	var v genVectors
 	for _, k := range recordKinds() {
 		v.Records = append(v.Records, genKindVectors(k)...)
 	}
+	v.Records = append(v.Records, recordVectors()...)
 	for _, k := range commandKinds() {
 		v.Commands = append(v.Commands, genKindVectors(k)...)
 	}
@@ -823,37 +744,110 @@ func encodeSections(sections []genSection) []byte {
 	return b.Bytes()
 }
 
-func encodeGenVectors(v genVectors) []byte {
-	return encodeSections([]genSection{{"records", v.Records}, {"commands", v.Commands}, {"manifests", v.Manifests}})
-}
+// genFileMax is the most bytes a file of the generated vectors holds, under
+// tools/repocheck's limit on a file.
+const genFileMax = 900 << 10
 
-// TestStrictGenerated checks that testdata/interop/strict-generated.json is
-// what the tables give (go test -update writes it), and Go's verdict on
-// every record and command of it; internal/clip checks the manifests.
-func TestStrictGenerated(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "interop", "strict-generated.json")
-	want := encodeGenVectors(makeGenVectors())
-	if *update {
-		if err := os.WriteFile(path, want, 0o644); err != nil {
-			t.Fatal(err)
+// genFileName is the name of the generated vectors' file i, from 1.
+func genFileName(i int) string { return fmt.Sprintf("strict-generated-%d.json", i) }
+
+// encodeGenFiles writes v as strict-generated-1.json, -2.json and so on:
+// each file has the three sections, the vectors in order, and at most
+// genFileMax bytes.
+func encodeGenFiles(v genVectors) [][]byte {
+	var files []genVectors
+	cur, size := genVectors{Records: []genVector{}, Commands: []genVector{}, Manifests: []genVector{}}, 0
+	add := func(l *[]genVector, c genVector) {
+		line, err := json.Marshal(c)
+		if err != nil {
+			panic(err)
+		}
+		if size+len(line) > genFileMax-100 && size > 0 {
+			files = append(files, cur)
+			cur, size = genVectors{Records: []genVector{}, Commands: []genVector{}, Manifests: []genVector{}}, 0
+		}
+		size += len(line) + 6
+		switch l {
+		case &v.Records:
+			cur.Records = append(cur.Records, c)
+		case &v.Commands:
+			cur.Commands = append(cur.Commands, c)
+		default:
+			cur.Manifests = append(cur.Manifests, c)
 		}
 	}
-	data, err := os.ReadFile(path)
+	for _, l := range []*[]genVector{&v.Records, &v.Commands, &v.Manifests} {
+		for _, c := range *l {
+			add(l, c)
+		}
+	}
+	files = append(files, cur)
+	var out [][]byte
+	for _, f := range files {
+		out = append(out, encodeSections([]genSection{{"records", f.Records}, {"commands", f.Commands}, {"manifests", f.Manifests}}))
+	}
+	return out
+}
+
+// readGenFiles reads the generated vectors' files of dir, all of them.
+func readGenFiles(dir string) (genVectors, error) {
+	var v genVectors
+	for i := 1; ; i++ {
+		data, err := os.ReadFile(filepath.Join(dir, genFileName(i)))
+		if errors.Is(err, fs.ErrNotExist) && i > 1 {
+			return v, nil
+		}
+		if err != nil {
+			return v, err
+		}
+		var f genVectors
+		if err := json.Unmarshal(data, &f); err != nil {
+			return v, fmt.Errorf("%s: %w", genFileName(i), err)
+		}
+		v.Records = append(v.Records, f.Records...)
+		v.Commands = append(v.Commands, f.Commands...)
+		v.Manifests = append(v.Manifests, f.Manifests...)
+	}
+}
+
+// TestStrictGenerated checks that testdata/interop/strict-generated-*.json
+// are what the tables give (go test -update writes them), and Go's verdict
+// on every record and command of them; internal/clip checks the manifests.
+func TestStrictGenerated(t *testing.T) {
+	dir := filepath.Join("..", "..", "testdata", "interop")
+	want := encodeGenFiles(makeGenVectors())
+	if *update {
+		for i, b := range want {
+			if err := os.WriteFile(filepath.Join(dir, genFileName(i+1)), b, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for i := len(want) + 1; ; i++ {
+			if err := os.Remove(filepath.Join(dir, genFileName(i))); err != nil {
+				break
+			}
+		}
+	}
+	for i, b := range want {
+		data, err := os.ReadFile(filepath.Join(dir, genFileName(i+1)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(data, b) {
+			t.Fatalf("%s is not what the tables give: run go test ./internal/group -run TestStrictGenerated -update", genFileName(i+1))
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, genFileName(len(want)+1))); err == nil {
+		t.Fatalf("%s is left over: run go test ./internal/group -run TestStrictGenerated -update", genFileName(len(want)+1))
+	}
+	v, err := readGenFiles(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(data, want) {
-		t.Fatal("strict-generated.json is not what the tables give: run go test ./internal/group -run TestStrictGenerated -update")
-	}
-	var v genVectors
-	if err := json.Unmarshal(data, &v); err != nil {
-		t.Fatal(err)
-	}
 	for _, c := range v.Records {
-		// Records of version 1, valid or not, are refused: version 2
-		// reads only its own canonical bodies (docs/records-v2.md).
-		if _, err := authority.ParseBody(c.Full()); err == nil {
-			t.Errorf("record %q of version 1 taken", c.Name)
+		_, err := authority.ParseBody(c.Full())
+		if (err == nil) != c.Valid {
+			t.Errorf("record %q (%s): valid %v, got %v", c.Name, c.Rule, c.Valid, err)
 		}
 	}
 	for _, c := range v.Commands {

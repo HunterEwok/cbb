@@ -242,14 +242,10 @@ func TestStrictManifests(t *testing.T) {
 }
 
 // TestStrictGeneratedManifests checks the manifests of
-// testdata/interop/strict-generated.json, which internal/group writes from
+// testdata/interop/strict-generated-*.json, which internal/group writes from
 // the tables of docs/protocol.md.
 func TestStrictGeneratedManifests(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "strict-generated.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var v struct {
+	type file struct {
 		Manifests []struct {
 			Name  string `json:"name"`
 			Rule  string `json:"rule"`
@@ -257,8 +253,24 @@ func TestStrictGeneratedManifests(t *testing.T) {
 			Valid bool   `json:"valid"`
 		} `json:"manifests"`
 	}
-	if err := json.Unmarshal(data, &v); err != nil || len(v.Manifests) == 0 {
-		t.Fatalf("no manifests: %v", err)
+	var v file
+	files, err := filepath.Glob(filepath.Join("..", "..", "testdata", "interop", "strict-generated-*.json"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no generated vectors: %v", err)
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var part file
+		if err := json.Unmarshal(data, &part); err != nil {
+			t.Fatal(err)
+		}
+		v.Manifests = append(v.Manifests, part.Manifests...)
+	}
+	if len(v.Manifests) == 0 {
+		t.Fatal("no manifests")
 	}
 	for _, c := range v.Manifests {
 		var m Manifest

@@ -107,10 +107,9 @@ type CA struct {
 	Key  crypto.Signer // a P-256 key; nil when this device does not hold the key
 }
 
-// NewGroupCA creates a group CA with path length 0, which certifies the
-// members, as groups were made before admin CAs; every Linux and Windows
-// member of such a group holds its key. New groups have a root CA
-// (NewRootCA).
+// NewGroupCA creates a CA with path length 0, which certifies members
+// only, as group CAs were before 0.4: an identity with one is refused
+// (ErrOldGroup). New groups have a root CA (NewRootCA).
 func NewGroupCA(now time.Time) (*CA, error) {
 	return newCA(&x509.Certificate{
 		Subject: pkix.Name{CommonName: groupCAName + " " + now.UTC().Format(time.DateOnly)},

@@ -2,10 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Writes the licenses of the crates that the lite member is built from, for
-# one target, so that a release archive carries their notices:
+# Writes the licenses of the crates that the lite member, or another package
+# of the workspace, is built from, for one target, so that a release archive
+# carries their notices:
 #
-#   sh lite/packaging/notices.sh TARGET >THIRD_PARTY_NOTICES
+#   sh lite/packaging/notices.sh TARGET [PACKAGE] >THIRD_PARTY_NOTICES
+#
+# PACKAGE is clipboardbridge-lite by default; the Go release archives take
+# clipboardbridge-wasm, the Rust core the service runs.
 #
 # Each crate of the normal dependency graph (not build or dev dependencies)
 # appears with its name, version and license expression, followed by its
@@ -13,22 +17,29 @@
 # crates downloaded (cargo fetch or a build).
 set -eu
 
-if [ $# -ne 1 ]; then
-	echo "usage: sh lite/packaging/notices.sh TARGET" >&2
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+	echo "usage: sh lite/packaging/notices.sh TARGET [PACKAGE]" >&2
 	exit 2
 fi
 target=$1
+package=${2:-clipboardbridge-lite}
 cd "$(dirname "$0")/.."
 
 meta=$(mktemp)
 trap 'rm -f "$meta"' EXIT
 cargo metadata --locked --format-version 1 >"$meta"
 
-echo "The lite member of Clipboard Bridge is free software under the GNU Affero General"
-echo "Public License v3.0 only (LICENSE). It is built with the crates below, under"
-echo "their own licenses. The source code of each is on crates.io, at the version"
-echo "shown (https://crates.io/crates/NAME/VERSION)."
-cargo tree --locked -e normal -p clipboardbridge-lite --target "$target" --prefix none \
+if [ "$package" = clipboardbridge-lite ]; then
+	echo "The lite member of Clipboard Bridge is free software under the GNU Affero General"
+	echo "Public License v3.0 only (LICENSE). It is built with the crates below, under"
+	echo "their own licenses."
+else
+	echo "The Rust core in it ($package) is built with the crates below, under their own"
+	echo "licenses."
+fi
+echo "The source code of each is on crates.io, at the version shown"
+echo "(https://crates.io/crates/NAME/VERSION)."
+cargo tree --locked -e normal -p "$package" --target "$target" --prefix none \
 	-f '{p}' | sed 's/ (.*//; s/ (\*)$//' | sort -u |
 	while read -r name version; do
 		version=${version#v}

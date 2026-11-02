@@ -101,6 +101,9 @@ class PhoneGroup internal constructor(
     /** The computer is a rootless install, which is never an admin (D-79). */
     class Rootless : Exception("it is installed without root")
 
+    /** The group's key level does not let the device's keys be an admin or the root; the root sets another level first. */
+    class BelowKeyLevel : Exception("the group's key level does not let these keys in")
+
     /** Whether this phone may admit devices, renew certificates and remove devices: the root and the admins. */
     val isAdmin: Boolean get() = isRoot || adminCA != null
 
@@ -339,6 +342,16 @@ class PhoneGroup internal constructor(
             b.keys = revoke.distinctBy { it.toHex() }.sortedWith { a, b2 -> compareBytes(a, b2) }
             out += sign(b, rootSigner)
         }
+        // The state counts only the current root's settings: the old root's
+        // go on under this one, the takeover delay and key level.
+        val old = Records.keyHashOfCert(if (roots.size >= 2) roots[roots.size - 2] else groupCA)
+        val (delay, level) = settings(old)
+        if (delay != null || level != null) {
+            val b = Records.Body.of("settings", rootSigner, now)
+            b.takeoverDelayMS = delay
+            b.keyLevel = level
+            out += sign(b, rootSigner)
+        }
         adminCA = null
         return out
     }
@@ -365,7 +378,50 @@ class PhoneGroup internal constructor(
         if (ms !in 0..7L * 24 * 3600 * 1000) throw Failure(INVALID_DELAY)
         val b = Records.Body.of("settings", rootSigner, now)
         b.takeoverDelayMS = ms
+        // The newest settings record counts whole, so this one keeps the level.
+        b.keyLevel = settings(b.signer).second
         return sign(b, rootSigner)
+    }
+
+    /** The group's key level: which keys may be its root, an admin or a hub. */
+    val keyLevel: String get() = records.keyLevel
+
+    /**
+     * Sets the group's key level (Records.KEY_LEVELS), as the current root,
+     * keeping the takeover delay; never a level this phone's own key does
+     * not pass. It returns the record to send. The admins whose keys the new
+     * level would not let in stay until the user removes them (belowKeyLevel
+     * lists them).
+     */
+    fun setKeyLevel(level: String, rootSigner: CertificateSigner, now: Instant): Member.Record {
+        if (!isRoot) throw Failure("only the root does that")
+        if (level !in Records.KEY_LEVELS) throw Failure(INVALID_KEY_LEVEL)
+        val own = devices.firstOrNull { it.id == device }?.store ?: Records.HARDWARE
+        if (!Records.levelAllows(level, own, true)) throw BelowKeyLevel()
+        val b = Records.Body.of("settings", rootSigner, now)
+        b.takeoverDelayMS = settings(b.signer).first
+        b.keyLevel = level
+        return sign(b, rootSigner)
+    }
+
+    /** The admins, other than this phone, whose keys the level would not let in, by device ID. */
+    fun belowKeyLevel(level: String): List<String> =
+        devices.filter { it.id != device && it.adminKey != null && !Records.levelAllows(level, it.store, true) }.map { it.id }
+
+    /** What the newest settings record of the root whose key hash is root set, so that a new one keeps what it does not change. */
+    internal fun settings(root: ByteArray): Pair<Long?, String?> {
+        var seq = -1L
+        var out: Pair<Long?, String?> = null to null
+        for (r in records.authorityRecords) {
+            runCatching {
+                val o = Wire.parse(r.body) ?: return@runCatching
+                val q = o.optLong("seq") ?: return@runCatching
+                if (o.optString("type") != "settings" || o.optBytes("signer")?.contentEquals(root) != true || q <= seq) return@runCatching
+                seq = q
+                out = o.optLong("takeover_delay_ms") to o.optString("key_level")
+            }
+        }
+        return out
     }
 
     /**
@@ -527,6 +583,7 @@ class PhoneGroup internal constructor(
         val proven = d.store == Records.PROVEN
         val store = if (proven) d.store else Records.storeOf(keyStore, d.role)
         if (store == Records.ROOTLESS || d.store == Records.ROOTLESS) throw Rootless()
+        if (!Records.levelAllows(keyLevel, store, true)) throw BelowKeyLevel()
         if (store == Records.FILE && !allowFileKey) throw FileKey()
         val ca = GroupCertificates.adminCA(device, adminKey, currentRoot, rootSigner)
         val r = record(
@@ -867,6 +924,7 @@ class PhoneGroup internal constructor(
         const val NO_TAKEOVER = "the root did not give this admin the power to take the group over"
         const val CLAIM_WAITING = "this admin's claim to take the group over waits already"
         const val INVALID_DELAY = "the delay before a claim takes effect is 0 to 7 days"
+        const val INVALID_KEY_LEVEL = "the key level is proven, hardware or files"
 
         /** The record or command a watch signed: body, its signature (ECDSA with SHA-256, DER) and the watch's admin CA. */
         fun watchRecord(body: ByteArray, signature: ByteArray, watchCA: ByteArray): Member.Record = Member.Record(body, signature, listOf(watchCA))

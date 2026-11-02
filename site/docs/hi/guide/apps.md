@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3a3178c99395 -->
+<!-- source: 65f0a956514b -->
 # ऐप
 
 Clipboard Bridge के ऐप फ़ोन, घड़ी और डेस्कटॉप के लिए हैं। फ़ोन के ऐप समूह को संभालते हैं; डेस्कटॉप के ऐप उस सेवा की एक खिड़की हैं जो कंप्यूटर पर पहले से चल रही है।
@@ -8,11 +8,11 @@ Clipboard Bridge के ऐप फ़ोन, घड़ी और डेस्क
 |---|---|---|
 | Android | हर [रिलीज़](https://github.com/HunterEwok/clipboardbridge/releases) में `clipboardbridge-X.Y.Z.apk` | CI में बना और जाँचा गया, अभी असली फ़ोन पर नहीं |
 | बिना Google वाला Android | `clipboardbridge-fdroid-X.Y.Z.apk`, और स्वीकार होने पर F-Droid: वही ऐप, बिना Wear OS घड़ी के | CI में बना और जाँचा गया |
-| iPhone और iPad | TestFlight, जब वह खुलेगा | CI में बना और जाँचा गया, अभी असली फ़ोन पर नहीं |
+| iPhone और iPad | TestFlight, जब वह खुलेगा | CI में बना और जाँचा गया; डेवलपर की अपनी टीम से बनाने पर iPhone पर चलता है |
 | Wear OS | `clipboardbridge-wear-X.Y.Z.apk`, जब तक ऐप Google Play पर नहीं आता, इसे घड़ी की वायरलेस डीबगिंग से कंप्यूटर से `adb install` द्वारा घड़ी पर डाला जाता है | बना हुआ |
-| Apple Watch | iPhone ऐप के साथ | बना हुआ |
+| Apple Watch | iPhone ऐप के साथ | बना हुआ; iPhone ऐप के साथ Apple Watch पर चलता है |
 | Mac ऐप | अभी डाउनलोड के रूप में नहीं: फ़िलहाल `apps/macos` से बनाया जाता है | बना हुआ |
-| Linux और Windows के लिए ट्रे ऐप | अभी डाउनलोड के रूप में नहीं: फ़िलहाल `apps/desktop` से बनाया जाता है | बना हुआ |
+| Linux और Windows के लिए ट्रे ऐप | हर रिलीज़ के Windows और Linux आर्काइव में, सेवा के साथ इंस्टॉल होता है | बना हुआ; Windows 11 वर्चुअल मशीन में चलाया गया |
 
 ## फ़ोन
 

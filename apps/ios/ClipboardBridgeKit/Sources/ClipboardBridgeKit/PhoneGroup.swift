@@ -178,6 +178,11 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         case noRecovery
         /// The group's recovery key now is not the one this phone holds.
         case notTheRecoveryKey
+        /// The key level is none of Records.keyLevels.
+        case invalidKeyLevel
+        /// The group's key level does not let the device's keys be an admin
+        /// or the root; the root sets another level first.
+        case belowKeyLevel
     }
 
     /// Adds records from other members, then follows the roots they lead
@@ -359,6 +364,16 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
             b.keys = Array(Set(revoke)).sorted { $0.base64EncodedString() < $1.base64EncodedString() }
             out.append(try sign(b, caSigner: rootSigner))
         }
+        // The state counts only the current root's settings: the old
+        // root's go on under this one, the takeover delay and key level.
+        if let k = try? Records.keyHash(cert: roots.count >= 2 ? roots[roots.count - 2] : groupCA) {
+            let (delay, level) = settings(of: k)
+            if delay != nil || level != nil {
+                var b = Records.Body(type: "settings", signer: Self.signer(rootSigner), timeMS: Records.ms(now))
+                (b.takeover_delay_ms, b.key_level) = (delay, level)
+                out.append(try sign(b, caSigner: rootSigner))
+            }
+        }
         adminCA = nil
         return out
     }
@@ -380,8 +395,49 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         guard isRoot else { throw Failure.notRoot }
         guard (0...7 * 24 * 3600 * 1000).contains(ms) else { throw Failure.invalidDelay }
         var b = Records.Body(type: "settings", signer: Self.signer(rootSigner), timeMS: Records.ms(now))
-        b.takeover_delay_ms = ms
+        // The newest settings record counts whole, so this one keeps the level.
+        (b.takeover_delay_ms, b.key_level) = (ms, settings(of: Self.signer(rootSigner)).level)
         return try sign(b, caSigner: rootSigner)
+    }
+
+    /// The group's key level: which keys may be its root, an admin or a hub.
+    public var keyLevel: String { records.keyLevel }
+
+    /// Sets the group's key level (Records.keyLevels), as the current root,
+    /// keeping the takeover delay; never a level this phone's own key does
+    /// not pass. It returns the record to send. The admins whose keys the
+    /// new level would not let in stay until the user removes them
+    /// (belowKeyLevel lists them).
+    public mutating func setKeyLevel(_ level: String, rootSigner: CertificateSigner, now: Date) throws -> Member.Record {
+        guard isRoot else { throw Failure.notRoot }
+        guard Records.keyLevels.contains(level) else { throw Failure.invalidKeyLevel }
+        let own = devices.first { $0.id == device }?.store ?? Records.hardware
+        guard Records.levelAllows(level, store: own, consent: true) else { throw Failure.belowKeyLevel }
+        var b = Records.Body(type: "settings", signer: Self.signer(rootSigner), timeMS: Records.ms(now))
+        (b.takeover_delay_ms, b.key_level) = (settings(of: Self.signer(rootSigner)).delay, level)
+        return try sign(b, caSigner: rootSigner)
+    }
+
+    /// The admins, other than this phone, whose keys the level would not
+    /// let in, by device ID.
+    public func belowKeyLevel(_ level: String) -> [String] {
+        devices.filter { $0.id != device && $0.adminKey != nil && !Records.levelAllows(level, store: $0.store, consent: true) }
+            .map(\.id)
+    }
+
+    /// What the newest settings record of the root whose key hash is root
+    /// set, so that a new one keeps what it does not change.
+    func settings(of root: Data) -> (delay: Int64?, level: String?) {
+        var seq: Int64 = -1
+        var out: (delay: Int64?, level: String?) = (nil, nil)
+        for r in records.authorityRecords {
+            guard let o = try? JSONSerialization.jsonObject(with: r.body) as? [String: Any], o["type"] as? String == "settings",
+                  let s = o["signer"] as? String, Data(base64Encoded: s) == root,
+                  let q = (o["seq"] as? NSNumber)?.int64Value, q > seq else { continue }
+            seq = q
+            out = ((o["takeover_delay_ms"] as? NSNumber)?.int64Value, o["key_level"] as? String)
+        }
+        return out
     }
 
     /// Renews this phone's own member certificate when it is due; reports
@@ -526,6 +582,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         let proven = d.store == Records.proven
         let store = proven ? d.store : Records.store(keyStore, role: d.role)
         guard store != Records.rootless, d.store != Records.rootless else { throw Failure.rootless }
+        guard Records.levelAllows(keyLevel, store: store, consent: true) else { throw Failure.belowKeyLevel }
         guard store != Records.file || allowFileKey else { throw Failure.fileKey }
         let ca = try GroupCertificates.adminCA(device: device, publicKey: adminKey, root: currentRoot, rootSigner: rootSigner)
         let r = try record(device: device, name: d.name, role: d.role, os: d.os, key: d.key, admin: Records.keyHash(cert: ca),

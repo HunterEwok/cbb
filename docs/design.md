@@ -488,8 +488,9 @@ sync away from home, the admins, and remote paste.
   computer that is in no group creates it: the root CA and the iPhone CA. That computer is
   the group's root; any computer, a Mac included, may create a group.
 - **Root CA**: ECDSA P-256, valid 20 years, path length 1, so it certifies the admins' admin
-  CAs (path length 0) as well as members. Groups made before 0.4 have a group CA with path
-  length 0, which `cbb upgrade` replaces ("Full members, admins and the operating system").
+  CAs (path length 0) as well as members. Groups made before 0.4 had a group CA with path
+  length 0; from 0.6 on a computer leaves such a group ("Full members, admins and the
+  operating system").
   Every member has its own P-256
   key and a certificate from the group CA, valid 2 years and renewed when less than 240 days
   remain. Its `NotBefore` is the CA's, and members check certificates with their own clock but
@@ -1759,12 +1760,13 @@ in a phone group, without a new group:
 
 **Groups made before admin CAs.** A group made before this change has a group CA with path
 length 0, and every Linux and Windows member holds the keys of both CAs. Records of version 2
-have no upgrade from it (`cbb upgrade` went with version 1), so such a group is set up again
-to get a root.
+have no upgrade from it, so a computer leaves such a group at its first start of 0.6, and the
+group is set up again to get a root.
 
 **The shortcut is a legacy way.** An iPhone without the app joins through a shortcut and a
 token (section "The iPhone button"), never with a key of its own. It stays for now, since
-the app does not yet run on a real iPhone, but it is not developed further, and every user
+the app is not yet in TestFlight (it runs on a real iPhone only when built with a developer's
+own team, apps/ios/device.sh), but it is not developed further, and every user
 is expected to use the app. Everything it needs comes with it: the iPhone CA, its key on the
 admins, and the rule for who holds `clipboardbridge.local`. It is removed with all of these
 once the app runs on real iPhones through TestFlight (roadmap.md, item 17): the group is
@@ -1786,7 +1788,7 @@ then simpler, with one kind of trust, and every key in it can be revoked by a re
    removing any device but the root by record, and replacing the iPhone CA when an admin
    goes. A Mac can create a group and be an admin from here on.
 5. Taking over from a lost root computer (`cbb takeover`).
-6. `cbb upgrade` for groups made before.
+6. `cbb upgrade` for groups made before (gone with records of version 2 in 0.6).
 
 ### Who may remove an admin
 
@@ -2329,7 +2331,7 @@ What the image needs:
 - **One small image for every CPU.** `cbb` is static and carries its own certificate roots,
   so the image is the binary and nothing else (`FROM scratch`), for linux/amd64, linux/arm64 and linux/arm/v7, published
   to the GitHub Container Registry with each release and carrying the same build
-  attestations as the release archives. The documentation pins it by digest.
+  attestations as the release archives, and a software bill of materials. The documentation pins it by digest.
 - **No privileges.** The tunnel runs in the process (WireGuard on gVisor netstack), so the
   container needs no `NET_ADMIN`, no `/dev/net/tun` and no `--privileged`. It runs as its
   own user with a read-only root file system; the state is one volume
@@ -2505,7 +2507,7 @@ defence, is in [threat-model.md](threat-model.md). In short:
 | A bug in the network code                                      | memory-safe language; the service runs as an unprivileged user in a systemd sandbox (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateDevices`, no capabilities, restricted address families and system calls) |
 | A local user abuses the console helper                         | the helper listens on nothing; the control socket admits only root and the `clipboardbridge` group; single-line injection by default with control characters removed |
 | Requests from outside the home network                         | the service accepts connections only from private, unique-local and link-local addresses, checked in the program and by systemd; away from home only through the group's WireGuard tunnel, whose port drops every packet without a key from the group's records |
-| Someone copies a computer's keys                               | the identity and tunnel files are readable only by the service; whoever copies them can act as that device until it is removed, so removing it makes every member and the hub refuse it at once. A Linux computer with a TPM keeps its member, admin and tunnel keys there; every device shows where its keys are; the Secure Enclave on Macs and the TPM on Windows are not built yet ([roadmap.md](roadmap.md#device-keys-in-hardware)) |
+| Someone copies a computer's keys                               | the identity and tunnel files are readable only by the service; whoever copies them can act as that device until it is removed, so removing it makes every member and the hub refuse it at once. A Linux computer with a TPM keeps its member, admin and tunnel keys there, a Windows PC with a TPM and a Mac with a Secure Enclave their member and admin keys; every device shows where its keys are ([roadmap.md](roadmap.md#device-keys-in-hardware)) |
 | Someone on the internet reads or traces the traffic           | the member TLS inside the group's own WireGuard tunnel, a preshared key per client, chunk frames padded to 16 KiB; clients talk only to the hub; the project's forwarder holds no keys and passes each packet only to its own group's hub |
 | An admin orders a paste on a member                           | off until the target's user turns it on, Enter and root consoles separately; any admin turns it off everywhere; only admins send; the command is signed and expires in 30 seconds, and the target checks the signature, the revocations and a replay cache; control characters removed; a notification and a log on the target; a rate limit; a phone signs only behind Face ID or the fingerprint; a stolen admin computer is frozen by any other admin and removed by the root or an admin phone (see "Who may remove an admin") |
 | A compromised dependency or build                              | few dependencies, `govulncheck` and OSV-Scanner, actions pinned to commit SHAs, release builds in CI with checksums and build provenance |
@@ -2513,11 +2515,14 @@ defence, is in [threat-model.md](threat-model.md). In short:
 ### Device keys in hardware
 
 The phones keep their keys in the Secure Enclave or the Android Keystore. A Linux computer
-with a TPM 2.0 keeps its new member, admin and tunnel keys there (`internal/tpmkey`,
-`CBB_TPM=off` turns it off); Macs, Windows PCs, Linux computers without a TPM and the lite
-member keep them in files readable only by the service. The rest of the plan (the Secure
-Enclave on Macs, the TPM on Windows and the key levels as a setting) is in
-[roadmap.md](roadmap.md#device-keys-in-hardware) (D-44, D-47).
+or a Windows PC with a TPM 2.0 keeps its new member, admin and tunnel keys there
+(`internal/tpmkey`, `CBB_TPM=off` turns it off; Windows through its TPM Base Services, under
+the storage root key Windows keeps at 0x81000001, since Windows holds the owner hierarchy's
+password). A Mac with a Secure Enclave keeps its member, admin and server keys there
+(`internal/sekey`), while its tunnel key stays in a file. Intel Macs without the T2 chip,
+computers without a TPM and the lite member keep them in files readable only by the
+service. The rest of the plan is in [roadmap.md](roadmap.md#device-keys-in-hardware)
+(D-44, D-47).
 
 ### Passwords
 

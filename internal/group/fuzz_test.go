@@ -13,18 +13,14 @@ import (
 	"github.com/HunterEwok/clipboardbridge/internal/strict"
 )
 
-// fuzzSeeds adds the bodies of a section of strict-generated.json, valid
+// fuzzSeeds adds the bodies of a section of strict-generated-*.json, valid
 // and not, as the seed corpus of a fuzz target.
 func fuzzSeeds(f *testing.F, section string) {
-	data, err := os.ReadFile("../../testdata/interop/strict-generated.json")
+	v, err := readGenFiles("../../testdata/interop")
 	if err != nil {
 		f.Fatal(err)
 	}
-	var v map[string][]genVector
-	if err := json.Unmarshal(data, &v); err != nil {
-		f.Fatal(err)
-	}
-	for _, c := range v[section] {
+	for _, c := range map[string][]genVector{"records": v.Records, "commands": v.Commands, "manifests": v.Manifests}[section] {
 		if c.Pad == 0 {
 			f.Add(c.Body)
 		}

@@ -15,11 +15,15 @@ import (
 	"crypto/x509/pkix"
 	"math/big"
 	"net"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
 	"github.com/HunterEwok/clipboardbridge/internal/tpmkey/tpmtest"
+	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/tpm2/transport/tcp"
 )
 
 func TestKey(t *testing.T) {
@@ -136,5 +140,81 @@ func TestSeal(t *testing.T) {
 	}
 	if _, err := tpm.Unseal(k.Blob()); err == nil {
 		t.Error("unsealed a signing key")
+	}
+}
+
+// A TPM whose owner hierarchy has a password, as Windows sets one, takes
+// keys and sealed objects under the storage root key at PersistentSRK,
+// which needs none, and loads them again after a restart.
+func TestOwnerPassword(t *testing.T) {
+	tpmtest.Start(t)
+	provision(t)
+	tpm, err := tpmkey.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tpm.Close()
+	k, err := tpm.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Blob().Parent != tpmkey.PersistentSRK {
+		t.Fatalf("the key's parent is %#x", k.Blob().Parent)
+	}
+	sealed, err := tpm.Seal([]byte("wireguard"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpm.Close()
+	if tpm, err = tpmkey.Open(); err != nil {
+		t.Fatal(err)
+	}
+	again, err := tpm.LoadKey(k.Blob())
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := sha256.Sum256([]byte("hello"))
+	sig, err := again.Sign(rand.Reader, d[:], crypto.SHA256)
+	if err != nil || !ecdsa.VerifyASN1(k.Public().(*ecdsa.PublicKey), d[:], sig) {
+		t.Fatalf("signing with the loaded key: %v", err)
+	}
+	if got, err := tpm.Unseal(sealed); err != nil || string(got) != "wireguard" {
+		t.Fatalf("Unseal = %q, %v", got, err)
+	}
+	if _, err := tpm.LoadKey(tpmkey.Blob{Public: k.Blob().Public, Private: k.Blob().Private}); err == nil {
+		t.Error("a blob of the persistent key loaded under the one the template makes")
+	}
+}
+
+// provision does what Windows does to the simulator: an RSA storage root
+// key at PersistentSRK, then a password on the owner hierarchy that the
+// service never learns.
+func provision(t *testing.T) {
+	t.Helper()
+	addr := os.Getenv("CBB_TPM_SIMULATOR")
+	host, port, _ := net.SplitHostPort(addr)
+	p, _ := strconv.Atoi(port)
+	tr, err := tcp.Open(tcp.Config{CommandAddress: addr, PlatformAddress: net.JoinHostPort(host, strconv.Itoa(p+1))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.Close()
+	srk, err := tpm2.CreatePrimary{PrimaryHandle: tpm2.TPMRHOwner, InPublic: tpm2.New2B(tpm2.RSASRKTemplate)}.Execute(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tpm2.FlushContext{FlushHandle: srk.ObjectHandle}.Execute(tr)
+	if _, err := (tpm2.EvictControl{
+		Auth:             tpm2.TPMRHOwner,
+		ObjectHandle:     &tpm2.NamedHandle{Handle: srk.ObjectHandle, Name: srk.Name},
+		PersistentHandle: tpm2.TPMIDHPersistent(tpmkey.PersistentSRK),
+	}).Execute(tr); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (tpm2.HierarchyChangeAuth{
+		AuthHandle: tpm2.TPMRHOwner,
+		NewAuth:    tpm2.TPM2BAuth{Buffer: []byte("random, then forgotten")},
+	}).Execute(tr); err != nil {
+		t.Fatal(err)
 	}
 }

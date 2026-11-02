@@ -11,8 +11,8 @@ can check it, and which level of strictness to choose. The exact rules are in th
 
 | Where | Devices | What a thief gets |
 |---|---|---|
-| **In a file** | Macs and Windows PCs, Linux computers without a TPM, the lite member | a copy of the file, which works anywhere until an admin removes the device |
-| **In hardware** | iPhones (Secure Enclave), Android phones (Keystore: StrongBox or the TEE), Linux computers with a TPM | nothing to copy: the key signs only on that device, and on a phone the root's and admins' keys only after your face, fingerprint or passcode |
+| **In a file** | Intel Macs without the T2 chip, Windows PCs and Linux computers without a TPM, the lite member | a copy of the file, which works anywhere until an admin removes the device |
+| **In hardware** | iPhones (Secure Enclave), Android phones (Keystore: StrongBox or the TEE), Macs with Apple silicon or the T2 chip (Secure Enclave), Linux computers and Windows PCs with a TPM | nothing to copy: the key signs only on that device, and on a phone the root's and admins' keys only after your face, fingerprint or passcode |
 | **Proven hardware** | an Android phone whose key the group's root checked | the same as hardware, and the group knows it is true, not only that the device says so |
 
 The devices list in the apps and `cbb status` (the KEYS column) show which one each device
@@ -81,9 +81,14 @@ The levels above are the design; this version builds part of it:
 
 - Android phones prove their keys, and the root checks the proof and Google's list. The
   copy on `cbb.tools` starts once the project's signing keys exist.
-- The levels are not a setting yet. Groups work as at level 2, and a computer becomes an
-  admin only with the warning of level 3, unless it is a Linux computer with a TPM.
-- Linux computers with a TPM keep their member and admin keys in it, from the moment they
-  join a group; a computer that joined earlier keeps its file until it joins again. The
-  group's root key on a computer, Macs (the Secure Enclave), Windows PCs (the TPM) and App
-  Attest are not built yet: until then their keys are in a file.
+- The level is a setting: Settings, Admin keys, on the root phone, or `cbb keys` on a root
+  computer. A group made on a phone starts at level 2; making a computer with keys in a
+  file an admin there, after the warning, moves the group to level 3. A group made on a
+  computer whose root key is in a file starts at level 3, since its root does not pass
+  level 2 itself. Level 1 does not yet ask the services outside your home, and a phone
+  whose own key is not proven cannot choose it.
+- Linux computers and Windows PCs with a TPM 2.0 keep their member and admin keys in it,
+  from the moment they join a group; a computer that joined earlier keeps its file until it
+  joins again. On Windows this is not yet tested on a real PC. Macs with Apple silicon or the
+  T2 chip keep them in the Secure Enclave in the same way. The group's root key on a
+  computer and App Attest are not built yet: until then their keys are in a file.

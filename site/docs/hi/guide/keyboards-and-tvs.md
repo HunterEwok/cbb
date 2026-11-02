@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 97be486697d2 -->
+<!-- source: b61def346d84 -->
 # कीबोर्ड और टीवी
 
 उन लोगों के लिए जो किसी टीवी, टैबलेट, कंसोल या ऐसे कंप्यूटर में लंबा पासवर्ड, कोई लिंक या खोज टाइप करना चाहते हैं जिसमें Clipboard Bridge का कुछ भी नहीं है। आपके समूह का एक डिवाइस वहाँ टेक्स्ट को कीबोर्ड या टीवी के रिमोट की तरह टाइप करता है, आपके टैप करने पर या जब कोई एडमिन रिमोट पेस्ट भेजता है।
@@ -65,6 +65,13 @@ sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a s
 sudo cbb remote code 123456              # within two minutes
 ```
 
+Apple TV भी इसी तरह पेयर होता है, उस पर दिखने वाले चार अंकों के PIN से। पहले Apple TV पर Settings, AirPlay and HomeKit, Allow Access को "Everyone on the Same Network" पर रखें: "Only People Sharing This Home" के साथ वह हर पेयरिंग मना कर देता है।
+
+```sh
+sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
+sudo cbb remote code 1234                # within two minutes
+```
+
 Roku में न पेयरिंग है न एन्क्रिप्शन: टेक्स्ट आपके होम नेटवर्क पर सादे HTTP के रूप में गुज़रता है, इसलिए वह तभी जोड़ा जाता है जब आप `-consent` से यह कहें। Roku पर पहले सेटिंग्स, सिस्टम, एडवांस्ड सिस्टम सेटिंग्स, मोबाइल ऐप्स द्वारा नियंत्रण को सक्षम या अनुमत (Permissive) करें।
 
 ```sh
@@ -78,7 +85,7 @@ echo 'the film' | sudo cbb remote type
 sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that TV
 ```
 
-`cbb remote` टीवी की सूची दिखाता है, कई होने पर `-tv NAME` एक चुनता है, और `sudo cbb remote remove NAME` एक को भुला देता है। रीसेट किया गया Android TV दोबारा पेयर करना होगा।
+`cbb remote` टीवी की सूची दिखाता है, कई होने पर `-tv NAME` एक चुनता है, और `sudo cbb remote remove NAME` एक को भुला देता है। रीसेट किया गया, या इस कंप्यूटर को भूल चुका Android TV या Apple TV दोबारा पेयर करना होगा।
 
 ## सुरक्षा
 

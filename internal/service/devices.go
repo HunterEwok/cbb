@@ -186,18 +186,8 @@ func (s *Service) adoptRootsLocked() error {
 	if err != nil {
 		return err
 	}
-	dropped := s.id.GroupCA.Key != nil && next.GroupCA.Key == nil
-	if dropped {
-		next = s.withAdminKey(next)
-	}
 	if err := s.setIdentityLocked(next); err != nil {
 		return err
-	}
-	if dropped {
-		// The hellos of new connections tell the others that this member
-		// no longer holds the old keys.
-		s.logf("cbb: the group was upgraded; deleted this member's copies of its old CA keys")
-		go s.nd.Reconnect()
 	}
 	if len(roots) == 0 {
 		// A takeover from the first root stopped counting.
@@ -641,14 +631,12 @@ func (s *Service) devices() ([]control.Device, error) {
 		frozen[d.ID] = d.Frozen
 	}
 	selfFrozen := s.frozen(id)
-	// In a legacy group every Linux and Windows member holds the CA keys.
-	legacy := id.Legacy()
 	now := s.cfg.now()
 	var out []control.Device
 	shown := map[group.DeviceID]bool{}
 	entry := func(dev group.DeviceID, name, role, os, store string, admin, listed bool) {
 		d := control.Device{ID: string(dev), Name: name, Role: role, OS: os, Store: store, Listed: listed, Self: dev == id.ID, Root: dev == root, Frozen: frozen[dev]}
-		d.Admin = admin || (legacy && keyHolder(role, os))
+		d.Admin = admin
 		if _, ok := peers[dev]; ok || d.Self {
 			d.Online, d.LastSeenMS = true, now.UnixMilli()
 		} else if t, ok := seen[dev]; ok {
@@ -711,14 +699,12 @@ func (s *Service) revoke(target string) (string, error) {
 	}
 	// An admin of a group whose root is a computer held the iPhone CA,
 	// which goes with it; a watch never held it.
-	replace := admin != nil && d.Role != group.RoleWatch && !id.Legacy() && (id.IsRoot() || s.computerRooted())
+	replace := admin != nil && d.Role != group.RoleWatch && (id.IsRoot() || s.computerRooted())
 	switch {
 	case !id.IsAdmin():
 		return "", errNotAdmin
 	case d.Self:
 		return "", errors.New("a device cannot remove itself; run cbb remove on another member")
-	case id.Legacy() && keyHolder(d.Role, d.OS):
-		return "", fmt.Errorf("%s holds the group's keys, so removing it needs a new group; this is not supported yet", d.Name)
 	case d.ID == string(root) && !undoing && d.Role == group.RolePhone:
 		return "", fmt.Errorf("%s holds the group's root; remove it on another admin phone, which takes the group over", d.Name)
 	case d.ID == string(root) && !undoing:
@@ -849,8 +835,6 @@ func (s *Service) freeze(target string, on bool) (string, error) {
 		return "", errNotAdmin
 	case d.Self:
 		return "", errors.New("a device cannot freeze or unfreeze itself")
-	case id.Legacy():
-		return "", errors.New("a legacy group has no admins to freeze")
 	case d.ID == string(root):
 		return "", fmt.Errorf("%s holds the group's root, which nobody freezes", d.Name)
 	case admin == nil || d.Role == group.RolePhone:
@@ -953,10 +937,6 @@ func (g phoneGroup) PhoneRevoked(phoneID string) bool {
 	defer g.s.recMu.Unlock()
 	return g.s.records != nil && g.s.records.Revoked(group.PhoneKeyHash(raw))
 }
-
-// keyHolder reports whether a device of a legacy group holds the CA keys:
-// every computer but a Mac does.
-func keyHolder(role, os string) bool { return role == group.RoleFull && os != group.OSMacOS }
 
 // deviceRecord returns the devices list's entry for dev, or nil.
 func (s *Service) deviceRecord(dev group.DeviceID) *group.Device {

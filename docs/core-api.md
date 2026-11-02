@@ -40,10 +40,14 @@ phones. The Swift kit links it as the module `CCbbCore` (`Core.swift`), the Kotl
 `libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call, as Go does.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
-`libcbb_ffi`, and on Windows, macOS and FreeBSD through the same core built as WebAssembly
-(`lite/wasm`, `cbb_call` and its memory functions), run by wazero under the tag `cbbwasm`. `lite/wasm/build.sh` builds the module and writes the
-`go build -overlay` file that lays it over `internal/core/cbb_core.wasm`, so no build output
-lands in the source tree.
+`libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its
+memory functions), run by wazero under the tag `cbbwasm`. Every release build of `cbb`, on
+every system and architecture, takes `cbbwasm`, so it stays one static binary without cgo
+(the release workflow checks the tag with `go version -m`), and `cbb version` names the
+rules it runs; a build without either tag, as `go build` and `go test` are, evaluates with
+Go's own `internal/authority`, which only the tests use as a reference.
+`lite/wasm/build.sh` builds the module and writes the `go build -overlay` file that lays it
+over `internal/core/cbb_core.wasm`, so no build output lands in the source tree.
 
 ## Operations
 

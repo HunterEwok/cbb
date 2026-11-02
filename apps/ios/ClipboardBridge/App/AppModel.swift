@@ -40,6 +40,10 @@ protocol GroupController: AnyObject {
     func makeRecoveryOnCard(pin: String) async throws -> UInt8
     /// Removes the group's recovery key; only the root phone does.
     func removeRecovery() async throws
+    /// The group's key level (Records.keyLevels) on the root phone; nil elsewhere.
+    var keyLevel: String? { get }
+    /// Sets the group's key level; only the root phone does.
+    func setKeyLevel(_ level: String) async throws
     /// Unfreezes an admin computer that another admin froze.
     func unfreeze(_ id: String) async throws
     /// Whether this phone holds the group's root.
@@ -128,6 +132,8 @@ extension GroupController {
     func makeRecovery() async throws -> Core.RecoverySheet { throw PhoneGroup.Failure.notRoot }
     func makeRecoveryOnCard(pin: String) async throws -> UInt8 { throw PhoneGroup.Failure.notRoot }
     func removeRecovery() async throws { throw PhoneGroup.Failure.notRoot }
+    var keyLevel: String? { nil }
+    func setKeyLevel(_ level: String) async throws { throw PhoneGroup.Failure.notRoot }
     func resolve(_ ids: [Data]) async throws {}
     var handedOver: Bool { false }
     func takeHandedGroup() async throws {}
@@ -237,6 +243,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var isRoot = false
     /// When the group's recovery key was made; nil without one.
     @Published private(set) var recoveryMade: Date?
+    /// The group's key level on the root phone; nil elsewhere.
+    @Published private(set) var keyLevel: String?
     /// What the group's records stop and what ends it.
     @Published private(set) var alerts: [GroupAlert] = []
     /// Whether the group's root handed the group to this phone, which may
@@ -625,6 +633,7 @@ final class AppModel: ObservableObject {
         alerts = group.alerts
         handedOver = group.handedOver
         recoveryMade = group.recoveryMade
+        keyLevel = group.keyLevel
         await refreshAway()
         await refreshHub()
         await refreshRelay()
@@ -1001,6 +1010,19 @@ final class AppModel: ObservableObject {
         recoveryMade = group.recoveryMade
     }
 
+    /// Sets which keys may be the group's admins and hubs.
+    func setKeyLevel(_ level: String) async {
+        do {
+            try await group.setKeyLevel(level)
+            message = String(localized: "Saved. Every device of the group follows it.", bundle: .app)
+        } catch PhoneGroup.Failure.belowKeyLevel {
+            message = String(localized: "This phone's own key is not proven, so the group cannot ask for proven keys yet.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        keyLevel = group.keyLevel
+    }
+
     /// Makes a computer an admin.
     func makeAdmin(_ id: String) async {
         do {
@@ -1010,6 +1032,7 @@ final class AppModel: ObservableObject {
             message = Self.describe(error)
         }
         devices = group.devices
+        keyLevel = group.keyLevel
     }
 
     /// A tile below this phone's: a device, or a collection with its
@@ -1230,6 +1253,9 @@ final class AppModel: ObservableObject {
         }
         if let f = error as? PhoneGroup.Failure, f == .rootless {
             return String(localized: "This computer is installed without root, so any of its programs can read its keys. It can never be an admin.", bundle: .app)
+        }
+        if let f = error as? PhoneGroup.Failure, f == .belowKeyLevel {
+            return String(localized: "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.", bundle: .app)
         }
         if let f = error as? PhoneGroup.Failure, f == .fileKey {
             return String(localized: "This computer keeps its keys in a file. Make it an admin first on its page, which warns what that means.", bundle: .app)
