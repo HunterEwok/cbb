@@ -32,7 +32,7 @@ func cards() ([]Card, error) {
 	var n C.uint32_t
 	if r := C.SCardListReaders(ctx, nil, nil, &n); r != C.SCARD_S_SUCCESS || n == 0 {
 		C.SCardReleaseContext(ctx)
-		if r == C.SCARD_E_NO_READERS_AVAILABLE || r == C.SCARD_S_SUCCESS {
+		if uint32(r) == uint32(C.SCARD_E_NO_READERS_AVAILABLE) || r == C.SCARD_S_SUCCESS {
 			return nil, ErrNoCard
 		}
 		return nil, scardErr("SCardListReaders", r)
