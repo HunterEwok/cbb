@@ -503,6 +503,7 @@ internal class ParsedCertificate(der: ByteArray) {
  * key. It is a minimal DER reader, not a verifier.
  */
 class CertificateInfo(der: ByteArray) {
+    val rawIssuer: ByteArray
     val rawSubject: ByteArray
     val notBefore: Instant
     val notAfter: Instant
@@ -516,13 +517,16 @@ class CertificateInfo(der: ByteArray) {
         if (tbs.peek == 0xa0) tbs.readAny() // version
         tbs.read(0x02) // serial
         tbs.read(0x30) // algorithm
-        tbs.readAny() // issuer
+        rawIssuer = tbs.readAny(raw = true).bytes
         val validity = tbs.read(0x30)
         notBefore = validity.readTime()
         notAfter = validity.readTime()
         rawSubject = tbs.readAny(raw = true).bytes
         publicKey = tbs.readAny(raw = true).bytes
     }
+
+    /** Whether the certificate names itself as its issuer, as a root does. */
+    val selfIssued: Boolean get() = rawIssuer.contentEquals(rawSubject)
 
     /** The subject's common name, or null without one. */
     val commonName: String?

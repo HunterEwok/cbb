@@ -21,12 +21,26 @@ import java.util.concurrent.TimeUnit
  * [PhoneGroup.finishTakeOver] then makes the phone the root. The recovery
  * key is not kept: the claim is the one thing it signs.
  */
-class Restore(
-    private val key: Core.RecoveredKey,
-    /** This phone's member key, a SubjectPublicKeyInfo; the key itself stays in the Keystore. */
+class Restore private constructor(
+    /** The recovery key as a signer. */
+    private val signer: CertificateSigner,
+    /** The recovery key's admin CA, DER, from the QR code or the YubiKey's slot. */
+    val adminCA: ByteArray,
+    /** The key hash of the admin CA's key, which the records name in their state. */
+    private val admin: ByteArray,
+    /** The group's tag from the sheet's QR code; null from a YubiKey. */
+    private val groupTag: String?,
     memberKey: ByteArray,
     now: Instant,
 ) {
+    /**
+     * Restores with the recovery key from the sheet's QR code. memberKey is
+     * this phone's member key, a SubjectPublicKeyInfo; the key itself stays
+     * in the Keystore.
+     */
+    constructor(key: Core.RecoveredKey, memberKey: ByteArray, now: Instant) :
+        this(signer(key), key.cert ?: throw Failure(Kind.NEEDS_QR, NEEDS_QR), checked(key), key.group, memberKey, now)
+
     class Failure(val kind: Kind, message: String) : Exception(message)
 
     enum class Kind {
@@ -43,12 +57,6 @@ class Restore(
         NOT_A_MEMBER,
     }
 
-    /** The recovery key's admin CA, DER, from the QR code. */
-    val adminCA: ByteArray = key.cert ?: throw Failure(Kind.NEEDS_QR, NEEDS_QR)
-
-    /** The recovery key as a signer. */
-    private val signer: CertificateSigner = signer(key)
-
     /** This phone's new device ID. */
     val device: String = SyncEngine.newID()
 
@@ -57,10 +65,6 @@ class Restore(
 
     /** The chain this phone presents in TLS, leaf first. */
     val chain: List<ByteArray> get() = listOf(memberCert, adminCA)
-
-    init {
-        if (!Records.keyHashOfCert(adminCA).contentEquals(key.admin)) throw Failure(Kind.NEEDS_QR, "the sheet's admin CA is for another key")
-    }
 
     /**
      * Checks what a computer of the group sent (fetched), and returns the
@@ -74,7 +78,7 @@ class Restore(
     fun group(fetched: Fetched, now: Instant): PhoneGroup {
         val groupCA = fetched.groupCA ?: throw Failure(Kind.NOT_A_MEMBER, "the computer did not send the group's first root")
         val tag = GroupCertificates.tag(groupCA)
-        if (key.group != null && key.group != tag) throw Failure(Kind.OTHER_GROUP, "the computer is of another group than the sheet")
+        if (groupTag != null && groupTag != tag) throw Failure(Kind.OTHER_GROUP, "the computer is of another group than the sheet")
         try {
             GroupCertificates.checkRoot(groupCA)
         } catch (e: GroupCertificates.VerifyException) {
@@ -86,7 +90,7 @@ class Restore(
         g.adminCA = adminCA
         g.records.addAll(fetched.records, groupCA)
         g.adoptRoots()
-        if (g.records.recovery?.contentEquals(key.admin) != true || g.records.isRevoked(key.admin)) {
+        if (g.records.recovery?.contentEquals(admin) != true || g.records.isRevoked(admin)) {
             throw Failure(Kind.NOT_THE_KEY, NOT_THE_KEY)
         }
         if (g.trusted.none { root -> runCatching { GroupCertificates.checkAdminCA(adminCA, root) }.isSuccess }) {
@@ -106,8 +110,13 @@ class Restore(
     /**
      * Claims group, which [group] returned, for newRoot, a root CA for a
      * new key of this phone, with the recovery key: the record to send.
+     * with is the recovery key again, as a YubiKey held to the phone a
+     * second time gives it.
      */
-    fun claim(group: PhoneGroup, newRoot: ByteArray, now: Instant): Member.Record = group.claimWithRecovery(signer, newRoot, now)
+    fun claim(group: PhoneGroup, newRoot: ByteArray, now: Instant, with: CertificateSigner = signer): Member.Record {
+        if (!with.publicKeyDER.contentEquals(signer.publicKeyDER)) throw Failure(Kind.NOT_THE_KEY, "this is another key than the one that issued this phone's certificate")
+        return group.claimWithRecovery(with, newRoot, now)
+    }
 
     /** What a computer sent on a records-only connection. */
     class Fetched(
@@ -183,6 +192,28 @@ class Restore(
 
         /** The most records one exchange takes: the core's set keeps no more. */
         private const val MAX_RECORDS = 4096
+
+        /**
+         * Restores with the recovery key on a YubiKey: signer is the key in
+         * the slot whose certificate, adminCA, is the key's admin CA
+         * ([Piv.recoveryKeys]). The card signs this phone's member
+         * certificate here and, held again, the claim.
+         */
+        fun onCard(signer: CertificateSigner, adminCA: ByteArray, memberKey: ByteArray, now: Instant): Restore {
+            val info = try {
+                CertificateInfo(adminCA)
+            } catch (e: Exception) {
+                throw Failure(Kind.NOT_THE_KEY, "the YubiKey's certificate does not parse")
+            }
+            if (!info.publicKey.contentEquals(signer.publicKeyDER)) throw Failure(Kind.NOT_THE_KEY, "the YubiKey's certificate is for another key")
+            return Restore(signer, adminCA, Records.keyHashOfCert(adminCA), null, memberKey, now)
+        }
+
+        private fun checked(key: Core.RecoveredKey): ByteArray {
+            val ca = key.cert ?: throw Failure(Kind.NEEDS_QR, NEEDS_QR)
+            if (!Records.keyHashOfCert(ca).contentEquals(key.admin)) throw Failure(Kind.NEEDS_QR, "the sheet's admin CA is for another key")
+            return key.admin
+        }
 
         private fun signer(key: Core.RecoveredKey): CertificateSigner {
             val spki = p256SPKI(key.public) ?: throw Failure(Kind.NEEDS_QR, "the recovery key is not a P-256 key")

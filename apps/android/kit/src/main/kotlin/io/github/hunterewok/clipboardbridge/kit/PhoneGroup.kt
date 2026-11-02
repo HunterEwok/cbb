@@ -556,12 +556,27 @@ class PhoneGroup internal constructor(
         val pair = SoftwareSigner.generate()
         val s = (pair.private as java.security.interfaces.ECPrivateKey).s.toByteArray().takeLast(32)
         val key = ByteArray(32 - s.size) + s.toByteArray()
-        val ca = GroupCertificates.adminCA(SyncEngine.newID(), pair.public.encoded, currentRoot, rootSigner)
-        val sheet = Core.recoverySheet(key, ca, tag)
+        val (ca, r) = recoveryFor(pair.public.encoded, rootSigner, now)
+        return Recovery(key, ca, r, Core.recoverySheet(key, ca, tag))
+    }
+
+    /**
+     * Makes the group's recovery key from a key a YubiKey made (publicKey, a
+     * SubjectPublicKeyInfo; [Piv.generate]), as the root: its admin CA,
+     * which goes into the YubiKey's slot, and the `recovery` record that
+     * names it.
+     */
+    fun makeRecoveryOnCard(publicKey: ByteArray, rootSigner: CertificateSigner, now: Instant): Pair<ByteArray, Member.Record> {
+        if (!isRoot) throw Failure("only the root makes the recovery key")
+        return recoveryFor(publicKey, rootSigner, now)
+    }
+
+    private fun recoveryFor(publicKey: ByteArray, rootSigner: CertificateSigner, now: Instant): Pair<ByteArray, Member.Record> {
+        val ca = GroupCertificates.adminCA(SyncEngine.newID(), publicKey, currentRoot, rootSigner)
         val b = Records.Body.of("recovery", rootSigner, now)
-        b.admin = sheet.admin
+        b.admin = Records.keyHashOfCert(ca)
         b.cert = ca
-        return Recovery(key, ca, sign(b, rootSigner), sheet)
+        return ca to sign(b, rootSigner)
     }
 
     /** Removes the group's recovery key, as the root: a revocation of its key. It returns the record to send. */

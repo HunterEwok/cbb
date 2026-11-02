@@ -109,6 +109,34 @@ class RestoreTest {
         assertNull(group.records.refused(group.memberChain))
     }
 
+    /** The same with the recovery key on a YubiKey: the card signs the member certificate, then, held again, the claim. */
+    @Test
+    fun restoresWithCard() {
+        val g = Group(t0)
+        val card = FakePivCard()
+        Piv.select(card)
+        Piv.verify(card, "123456")
+        Piv.authenticate(card)
+        val slot = Piv.freeSlot(card)
+        val (ca, _) = g.root.makeRecoveryOnCard(Piv.generate(card, slot), g.rootKey, t0)
+        Piv.putCertificate(card, slot, ca)
+
+        Piv.select(card)
+        val (s, cert) = Piv.recoveryKeys(card).single()
+        val r = Restore.onCard(Piv.Signer(card, s, CertificateInfo(cert).publicKey, "123456"), cert, SoftwareSigner().publicKeyDER, t0)
+        val (phone, pc) = computer(g.root.records.records, g.root.groupCA, listOf(g.computer.cert))
+        val fetched = Restore.exchange(phone, "New", "android", t0, quietMS = 300)
+        pc.join()
+        val group = r.group(fetched, t0)
+        group.records.clock = { t0 }
+        val newRoot = GroupCertificates.groupCA(SoftwareSigner(), t0, pathLength = 1)
+        assertEquals(Restore.Kind.NOT_THE_KEY, assertFailsWith<Restore.Failure> { r.claim(group, newRoot, t0, SoftwareSigner()) }.kind)
+        Piv.select(card)
+        r.claim(group, newRoot, t0, Piv.Signer(card, s, CertificateInfo(cert).publicKey, "123456"))
+        assertEquals("pending", group.claimState)
+        assertEquals(2, card.signed)
+    }
+
     @Test
     fun refusesWhatDoesNotFit() {
         val g = Group(t0)

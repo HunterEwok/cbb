@@ -101,6 +101,37 @@ final class RestoreTests: XCTestCase {
         XCTAssertEqual(group.records.verdict(chain: group.memberChain), .ok)
     }
 
+    /// The same with the recovery key on a YubiKey: the card signs the
+    /// member certificate, then, held again, the claim.
+    func testRestoresWithCard() async throws {
+        var g = try Group(t0: t0)
+        let card = FakePivCard()
+        try Piv.select(card)
+        try Piv.verify(card, pin: "123456")
+        try Piv.authenticate(card)
+        let slot = try Piv.freeSlot(card)
+        let (ca, _) = try g.root.makeRecoveryOnCard(publicKey: try Piv.generate(card, slot: slot), rootSigner: g.rootKey, now: t0)
+        try Piv.putCertificate(card, slot: slot, cert: ca)
+
+        try Piv.select(card)
+        let keys = try Piv.recoveryKeys(card)
+        XCTAssertEqual(keys.count, 1)
+        let spki = try CertificateInfo(der: keys[0].cert).publicKey
+        let r = try Restore(card: Piv.Signer(card: card, slot: keys[0].slot, publicKeyDER: spki, pin: "123456"), adminCA: keys[0].cert,
+                            memberKey: SoftwareSigner().publicKeyDER, now: t0)
+        let (phone, pc) = computer(g.root.records.records, groupCA: g.root.groupCA, chain: [g.computer.cert])
+        let fetched = try await Restore.exchange(phone, name: "New", os: "ios", now: t0, quiet: 0.3)
+        _ = try await pc.value
+        var group = try r.group(fetched, now: t0)
+        group.records.clock = { self.t0 }
+        let newRoot = try GroupCertificates.groupCA(signer: SoftwareSigner(), now: t0, pathLength: 1)
+        XCTAssertThrowsError(try r.claim(&group, newRoot: newRoot, now: t0, with: SoftwareSigner()))
+        try Piv.select(card)
+        _ = try r.claim(&group, newRoot: newRoot, now: t0, with: Piv.Signer(card: card, slot: keys[0].slot, publicKeyDER: spki, pin: "123456"))
+        XCTAssertEqual(group.claimState, "pending")
+        XCTAssertEqual(card.signed, 2)
+    }
+
     func testRefusesWhatDoesNotFit() async throws {
         var g = try Group(t0: t0)
         let memberKey = SoftwareSigner().publicKeyDER

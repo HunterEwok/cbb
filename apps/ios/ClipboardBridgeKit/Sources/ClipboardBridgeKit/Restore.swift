@@ -46,9 +46,14 @@ public struct Restore: Sendable {
     /// The most records one exchange takes: the core's set keeps no more.
     static let maxRecords = 4096
 
-    private let key: Core.RecoveredKey
-    private let signingKey: P256.Signing.PrivateKey
-    /// The recovery key's admin CA, DER, from the QR code.
+    /// The recovery key as a signer: a software key from the sheet, or the
+    /// key on a YubiKey.
+    private let signer: any CertificateSigner & Sendable
+    /// The key hash of the admin CA's key, which the records name.
+    private let admin: Data
+    /// The group's tag from the sheet's QR code; nil from a YubiKey.
+    private let groupTag: String?
+    /// The recovery key's admin CA, DER, from the QR code or the YubiKey's slot.
     public let adminCA: Data
     /// This phone's new device ID.
     public let device: String
@@ -65,11 +70,23 @@ public struct Restore: Sendable {
             throw Failure(kind: .needsQR, message: "the recovery key is not a P-256 key")
         }
         guard (try? Records.keyHash(cert: ca)) == key.admin else { throw Failure(kind: .needsQR, message: "the sheet's admin CA is for another key") }
-        self.key = key
-        signingKey = k
-        adminCA = ca
+        try self.init(signer: SoftwareSigner(k), adminCA: ca, admin: key.admin, groupTag: key.group, memberKey: memberKey, now: now)
+    }
+
+    /// Restores with the recovery key on a YubiKey: signer is the key in
+    /// the slot whose certificate, adminCA, is the key's admin CA
+    /// (Piv.recoveryKeys). The card signs this phone's member certificate
+    /// here and, held again, the claim.
+    public init(card signer: Piv.Signer, adminCA: Data, memberKey: Data, now: Date) throws {
+        guard let info = try? CertificateInfo(der: adminCA) else { throw Failure(kind: .notTheKey, message: "the YubiKey's certificate does not parse") }
+        guard info.publicKey == signer.publicKeyDER else { throw Failure(kind: .notTheKey, message: "the YubiKey's certificate is for another key") }
+        try self.init(signer: signer, adminCA: adminCA, admin: Records.keyHash(spki: info.publicKey), groupTag: nil, memberKey: memberKey, now: now)
+    }
+
+    private init(signer: any CertificateSigner & Sendable, adminCA: Data, admin: Data, groupTag: String?, memberKey: Data, now: Date) throws {
+        (self.signer, self.adminCA, self.admin, self.groupTag) = (signer, adminCA, admin, groupTag)
         device = SyncEngine.newID()
-        memberCert = try GroupCertificates.member(device: device, publicKey: memberKey, ca: ca, caSigner: SoftwareSigner(k), now: now)
+        memberCert = try GroupCertificates.member(device: device, publicKey: memberKey, ca: adminCA, caSigner: signer, now: now)
     }
 
     /// What a computer sent on a records-only connection.
@@ -90,7 +107,7 @@ public struct Restore: Sendable {
     /// the path and name a device the records list.
     public func group(_ fetched: Fetched, now: Date) throws -> PhoneGroup {
         guard let groupCA = fetched.groupCA else { throw Failure(kind: .notAMember, message: "the computer did not send the group's first root") }
-        if let tag = key.group, tag != GroupCertificates.tag(groupCA: groupCA) {
+        if let tag = groupTag, tag != GroupCertificates.tag(groupCA: groupCA) {
             throw Failure(kind: .otherGroup, message: "the computer is of another group than the sheet")
         }
         do {
@@ -102,7 +119,7 @@ public struct Restore: Sendable {
         (g.isRoot, g.memberIssuer, g.adminCA) = (false, adminCA, adminCA)
         g.records.addAll(fetched.records, groupCA: groupCA)
         g.adoptRoots()
-        guard g.records.recovery == key.admin, !g.records.revoked.contains(key.admin) else {
+        guard g.records.recovery == admin, !g.records.revoked.contains(admin) else {
             throw Failure(kind: .notTheKey, message: Self.notTheKeyMessage)
         }
         guard g.trusted.contains(where: { (try? GroupCertificates.checkAdminCA(adminCA, root: $0)) != nil }) else {
@@ -123,8 +140,14 @@ public struct Restore: Sendable {
     /// Claims group, which group(_:now:) returned, for newRoot, a root CA
     /// for a new key of this phone, with the recovery key: the record to
     /// send.
-    public func claim(_ group: inout PhoneGroup, newRoot: Data, now: Date) throws -> Member.Record {
-        try group.claimWithRecovery(recoverySigner: SoftwareSigner(signingKey), newRoot: newRoot, now: now)
+    /// with is the recovery key again, as a YubiKey held to the phone a
+    /// second time gives it.
+    public func claim(_ group: inout PhoneGroup, newRoot: Data, now: Date, with: (any CertificateSigner)? = nil) throws -> Member.Record {
+        let s: any CertificateSigner = with ?? signer
+        guard s.publicKeyDER == signer.publicKeyDER else {
+            throw Failure(kind: .notTheKey, message: "this is another key than the one that issued this phone's certificate")
+        }
+        return try group.claimWithRecovery(recoverySigner: s, newRoot: newRoot, now: now)
     }
 
     /// Exchanges records with a computer on a connection that carries

@@ -552,13 +552,25 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     public mutating func makeRecovery(rootSigner: CertificateSigner, now: Date) throws -> Recovery {
         guard isRoot else { throw Failure.notRoot }
         let key = P256.Signing.PrivateKey()
-        let ca = try GroupCertificates.adminCA(device: SyncEngine.newID(), publicKey: key.publicKey.derRepresentation,
-                                               root: currentRoot, rootSigner: rootSigner)
+        let (ca, r) = try recovery(for: key.publicKey.derRepresentation, rootSigner: rootSigner, now: now)
         let sheet = try Core.recoverySheet(key: key.rawRepresentation, cert: ca, group: tag)
-        var b = Records.Body(type: "recovery", signer: Self.signer(rootSigner), timeMS: Records.ms(now))
-        (b.admin, b.cert) = (sheet.admin, ca)
-        let r = try sign(b, caSigner: rootSigner)
         return Recovery(key: key.rawRepresentation, adminCA: ca, record: r, sheet: sheet)
+    }
+
+    /// Makes the group's recovery key from a key a YubiKey made (publicKey,
+    /// a SubjectPublicKeyInfo; Piv.generate), as the root: its admin CA,
+    /// which goes into the YubiKey's slot, and the `recovery` record that
+    /// names it.
+    public mutating func makeRecoveryOnCard(publicKey: Data, rootSigner: CertificateSigner, now: Date) throws -> (adminCA: Data, record: Member.Record) {
+        guard isRoot else { throw Failure.notRoot }
+        return try recovery(for: publicKey, rootSigner: rootSigner, now: now)
+    }
+
+    private mutating func recovery(for publicKey: Data, rootSigner: CertificateSigner, now: Date) throws -> (adminCA: Data, record: Member.Record) {
+        let ca = try GroupCertificates.adminCA(device: SyncEngine.newID(), publicKey: publicKey, root: currentRoot, rootSigner: rootSigner)
+        var b = Records.Body(type: "recovery", signer: Self.signer(rootSigner), timeMS: Records.ms(now))
+        (b.admin, b.cert) = (try Records.keyHash(cert: ca), ca)
+        return (ca, try sign(b, caSigner: rootSigner))
     }
 
     /// Removes the group's recovery key, as the root: a revocation of its
