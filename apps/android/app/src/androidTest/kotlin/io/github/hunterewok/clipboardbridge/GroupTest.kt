@@ -15,11 +15,13 @@ import android.os.Build
 import android.provider.MediaStore
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -272,7 +274,8 @@ class GroupTest {
         val note = model.message?.let { "${str(it.text)} ${it.detail.orEmpty()}" }
         val stacks = Thread.getAllStackTraces().filter { (_, s) -> s.any { it.className.startsWith("io.github.hunterewok") } }
             .entries.joinToString("\n") { (t, s) -> "${t.name} (${t.state}):\n" + s.take(25).joinToString("\n") { "  at $it" } }
-        return "the app: phase ${model.phase}, busy ${model.busy}, message $note\n$stacks"
+        val screen = runCatching { compose.onAllNodes(isRoot()).printToString(maxDepth = 30) }.getOrElse { it.toString() }
+        return "the app: phase ${model.phase}, busy ${model.busy}, message $note\nthe screen:\n$screen\n$stacks"
     }
 
     /** The texts of the app's notifications that show now. */
