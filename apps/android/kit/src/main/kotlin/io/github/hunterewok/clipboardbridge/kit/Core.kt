@@ -153,6 +153,50 @@ object Core {
         return ok.optBytes("key") ?: throw Mismatch("the answer to seal_public has no key")
     }
 
+    /** A recovery sheet (docs/protocol.md, section 10, "The recovery key"): the QR code's text, the key in groups of four, and the key hash the `recovery` record names. */
+    class RecoverySheet(val qr: String, val text: String, val admin: ByteArray)
+
+    /** The recovery sheet for key (its 32 bytes), its admin CA and the group's tag. */
+    fun recoverySheet(key: ByteArray, cert: ByteArray, group: String): RecoverySheet {
+        val ok = run("recovery_sheet", Wire.obj("key" to Wire.bytes(key), "cert" to Wire.bytes(cert), "group" to Wire.str(group))) as? JsonObject
+            ?: throw Mismatch("the answer to recovery_sheet is not an object")
+        return RecoverySheet(
+            ok.optString("qr") ?: throw Mismatch("the answer to recovery_sheet has no qr"),
+            ok.optString("text") ?: throw Mismatch("the answer to recovery_sheet has no text"),
+            ok.optBytes("admin") ?: throw Mismatch("the answer to recovery_sheet has no admin"),
+        )
+    }
+
+    /** A recovery key read from a sheet: [key] its 32 bytes, [public] uncompressed, [admin] its key hash; [cert] and [group] only from its QR code. */
+    class RecoveredKey(
+        val key: ByteArray,
+        val pkcs8: ByteArray,
+        val public: ByteArray,
+        val admin: ByteArray,
+        val cert: ByteArray?,
+        val group: String?,
+    )
+
+    /** What read_recovery_sheet says of a text: the key, or why it is not one. */
+    sealed class SheetReading {
+        class Key(val key: RecoveredKey) : SheetReading()
+
+        /** reason is not_sheet, damaged, check, key, cert, mismatch or group; message a sentence for the user. */
+        class Refused(val reason: String, val message: String) : SheetReading()
+    }
+
+    /** Reads what the user scanned or typed from a recovery sheet. */
+    fun readRecoverySheet(text: String): SheetReading {
+        val ok = run("read_recovery_sheet", Wire.obj("text" to Wire.str(text))) as? JsonObject
+            ?: throw Mismatch("the answer to read_recovery_sheet is not an object")
+        (ok["sheet"] as? JsonObject)?.let { s ->
+            fun need(k: String) = s.optBytes(k) ?: throw Mismatch("the answer to read_recovery_sheet has no $k")
+            return SheetReading.Key(RecoveredKey(need("key"), need("pkcs8"), need("public"), need("admin"), s.optBytes("cert"), s.optString("group")))
+        }
+        val r = ok["refused"] as? JsonObject ?: throw Mismatch("the answer to read_recovery_sheet has neither sheet nor refused")
+        return SheetReading.Refused(r.optString("reason") ?: "", r.optString("message") ?: "")
+    }
+
     /** The linked core's version, ABI and the commit it was built from. */
     fun version(): Version {
         val ok = run("version") as? JsonObject ?: throw Mismatch("the answer to version is not an object")

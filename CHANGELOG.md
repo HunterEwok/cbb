@@ -7,6 +7,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- The recovery sheet's format in the Rust core: a QR code with the recovery key, its admin CA
+  and the group's tag, and the key as text in groups of four with a check group, which the core
+  makes and reads (`recovery_sheet`, `read_recovery_sheet`; docs/protocol.md, section 10). The
+  phones' kits make the group's recovery key with its admin CA and `recovery` record, and remove
+  it; the apps' button follows.
 - A `handover` record: the group's root hands the group to an admin, whose claim then takes
   effect at once instead of after the delay, for moving the root to a new phone or from a
   computer to a phone. A `recovery` record carries the recovery key's admin CA (`cert`), so a
