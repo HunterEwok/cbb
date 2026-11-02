@@ -37,7 +37,7 @@ func (t *TPM) Seal(data []byte) (Blob, error) {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	srk, err := t.parent()
+	srk, handle, err := t.parent()
 	if err != nil {
 		return Blob{}, err
 	}
@@ -59,7 +59,7 @@ func (t *TPM) Seal(data []byte) (Blob, error) {
 	if err != nil {
 		return Blob{}, fmt.Errorf("tpmkey: sealing: %w", err)
 	}
-	return Blob{Public: tpm2.Marshal(rsp.OutPublic), Private: tpm2.Marshal(rsp.OutPrivate)}, nil
+	return Blob{Public: tpm2.Marshal(rsp.OutPublic), Private: tpm2.Marshal(rsp.OutPrivate), Parent: handle}, nil
 }
 
 // Unseal returns the data that Seal kept in b.
@@ -77,7 +77,7 @@ func (t *TPM) Unseal(b Blob) ([]byte, error) {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	srk, err := t.parent()
+	srk, err := t.parentOf(b.Parent)
 	if err != nil {
 		return nil, err
 	}

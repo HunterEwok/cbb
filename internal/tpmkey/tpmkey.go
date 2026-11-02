@@ -41,7 +41,10 @@ type TPM struct {
 	mu  sync.Mutex
 	t   transport.TPMCloser
 	srk *tpm2.CreatePrimaryResponse // loaded on first use
-	ek  *Endorsement                // read on first use
+	// psrk is the persistent storage root key at PersistentSRK, read on
+	// first use when the owner hierarchy has a password, as on Windows.
+	psrk *tpm2.CreatePrimaryResponse
+	ek   *Endorsement // read on first use
 	// keys are the keys loaded, which room flushes when the TPM has no
 	// room for another object.
 	keys []*Key
@@ -92,6 +95,7 @@ func (t *TPM) Close() error {
 		tpm2.FlushContext{FlushHandle: t.srk.ObjectHandle}.Execute(t.t)
 		t.srk = nil
 	}
+	t.psrk = nil // persistent: never flushed
 	t.evict()
 	t.ek = nil
 	return t.t.Close()
@@ -121,9 +125,45 @@ func (t *TPM) evict() {
 	t.keys = nil
 }
 
-// parent returns the storage root key, made from the standard template so
-// that it is the same each time and needs no persistent handle.
-func (t *TPM) parent() (*tpm2.CreatePrimaryResponse, error) {
+// PersistentSRK is where Windows, and other systems that keep the owner
+// hierarchy's password, keep a storage root key that needs none (TCG's
+// "Provisioning Guidance", the SRK's handle).
+const PersistentSRK uint32 = 0x81000001
+
+// parent returns the storage root key for a new object, and the handle a
+// blob records for it: the one made from the standard template, the same
+// each time without a persistent handle (0), or, when the owner hierarchy
+// has a password that this program does not know, PersistentSRK. t.mu is
+// held.
+func (t *TPM) parent() (*tpm2.CreatePrimaryResponse, uint32, error) {
+	if t.psrk == nil {
+		srk, err := t.made()
+		if err == nil {
+			return srk, 0, nil
+		}
+		if t.persistent() != nil {
+			return nil, 0, err
+		}
+	}
+	return t.psrk, PersistentSRK, nil
+}
+
+// parentOf returns the storage root key of a blob's parent handle.
+func (t *TPM) parentOf(handle uint32) (*tpm2.CreatePrimaryResponse, error) {
+	switch handle {
+	case 0:
+		return t.made()
+	case PersistentSRK:
+		if err := t.persistent(); err != nil {
+			return nil, err
+		}
+		return t.psrk, nil
+	}
+	return nil, fmt.Errorf("tpmkey: an unknown parent handle %#x", handle)
+}
+
+// made returns the storage root key made from the standard template.
+func (t *TPM) made() (*tpm2.CreatePrimaryResponse, error) {
 	if t.srk != nil {
 		return t.srk, nil
 	}
@@ -136,6 +176,23 @@ func (t *TPM) parent() (*tpm2.CreatePrimaryResponse, error) {
 	}
 	t.srk = rsp
 	return rsp, nil
+}
+
+// persistent reads the storage root key at PersistentSRK into t.psrk.
+func (t *TPM) persistent() error {
+	if t.psrk != nil {
+		return nil
+	}
+	rp, err := tpm2.ReadPublic{ObjectHandle: tpm2.TPMHandle(PersistentSRK)}.Execute(t.t)
+	if err != nil {
+		return fmt.Errorf("tpmkey: reading the storage root key at %#x: %w", PersistentSRK, err)
+	}
+	pub, err := rp.OutPublic.Contents()
+	if err != nil || !pub.ObjectAttributes.Restricted || !pub.ObjectAttributes.Decrypt || !pub.ObjectAttributes.FixedTPM {
+		return fmt.Errorf("tpmkey: the object at %#x is no storage root key", PersistentSRK)
+	}
+	t.psrk = &tpm2.CreatePrimaryResponse{ObjectHandle: tpm2.TPMHandle(PersistentSRK), OutPublic: rp.OutPublic, Name: rp.Name}
+	return nil
 }
 
 // keyTemplate is a P-256 key that signs with ECDSA and never leaves the
@@ -158,10 +215,12 @@ var keyTemplate = tpm2.TPMTPublic{
 }
 
 // Blob is what a device stores of a key: its public and private areas,
-// the private one encrypted under the TPM's storage root key.
+// the private one encrypted under the TPM's storage root key, and that
+// key's persistent handle, 0 for the one made from the standard template.
 type Blob struct {
 	Public  []byte `json:"public"`
 	Private []byte `json:"private"`
+	Parent  uint32 `json:"parent,omitempty"`
 }
 
 // A Key is a P-256 key in the TPM. It is a crypto.Signer.
@@ -176,7 +235,7 @@ type Key struct {
 func (t *TPM) NewKey() (*Key, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	srk, err := t.parent()
+	srk, handle, err := t.parent()
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +250,7 @@ func (t *TPM) NewKey() (*Key, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tpmkey: making a key: %w", err)
 	}
-	return t.key(Blob{Public: tpm2.Marshal(rsp.OutPublic), Private: tpm2.Marshal(rsp.OutPrivate)})
+	return t.key(Blob{Public: tpm2.Marshal(rsp.OutPublic), Private: tpm2.Marshal(rsp.OutPrivate), Parent: handle})
 }
 
 // LoadKey returns the key of a blob that NewKey made in this TPM.
@@ -238,7 +297,7 @@ func (k *Key) loaded() (*tpm2.LoadResponse, error) {
 	if k.handle != nil {
 		return k.handle, nil
 	}
-	srk, err := k.tpm.parent()
+	srk, err := k.tpm.parentOf(k.blob.Parent)
 	if err != nil {
 		return nil, err
 	}

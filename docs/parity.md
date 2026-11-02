@@ -39,7 +39,7 @@ on every platform of the class, on the roadmap).
 | Text-console helper (tmux) | yes (`--console`) | **OS** | **OS** | for a Linux machine without a desktop; a Mac and a Windows PC always have one |
 | Removal from the system's app list | — | **OS** | yes (Settings, Apps) | Linux has no common list; the Mac app (item 22) brings it to macOS |
 | Signed program | — | planned (`.pkg`, Developer ID) | ready, needs a certificate | the release signs with Authenticode once the secrets hold a certificate (G5) |
-| Device keys in hardware | yes, with a TPM (`internal/tpmkey`) | planned | planned | roadmap item 13: the Secure Enclave on a Mac, the TPM on Windows |
+| Device keys in hardware | yes, with a TPM (`internal/tpmkey`) | planned | yes, with a TPM 2.0, not yet tested on a real PC | roadmap item 13: the Secure Enclave on a Mac |
 | Update itself, by hand and once a day | yes (`cbb update`) | yes, or Homebrew | yes (`cbb update`), or winget | [installing](guide/install.md#updating) |
 | Quick actions and remote paste as a target | yes | yes | yes | each off until the device's own user turns it on |
 | Firewall rules only with the user's consent, listed one by one; `--express` without questions | yes | yes | yes (`-Express`) | nftables and iptables get the commands only, as their rules do not survive a restart |

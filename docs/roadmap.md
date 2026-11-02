@@ -50,7 +50,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
    `.pkg` for macOS waits for the Apple developer account.
 - **11.** The lite member in Rust: done on Linux and OpenWrt. On the Arduino Nano ESP32 see item
     15; other ESP32 boards follow on the same `lite/core`.
-- **13.** Device keys in hardware: done for Linux with a TPM; the Mac and Windows follow. See
+- **13.** Device keys in hardware: done for Linux and Windows with a TPM (Windows not yet
+    tested on a real PC); the Mac follows. See
     "Device keys in hardware" below.
 - **14.** **The ZX Spectrum Next** through its own Raspberry Pi: `cbb next` on the lite member and
     the `.cbb` dot command (`apps/zxnext`) are written, not yet run on a real Next; the
@@ -587,7 +588,8 @@ The user picks one of three levels for the group, at its root:
 
 On the phones the member key and the root and admin keys live in the Secure Enclave or the
 Android Keystore and cannot be exported. A Linux computer with a TPM 2.0 keeps its new
-member, admin and tunnel keys there (built in 0.6, `internal/tpmkey`). On the other
+member, admin and tunnel keys there (built in 0.6, `internal/tpmkey`), and so does a
+Windows PC (through TBS, under Windows' own storage root key). On the other
 computers the member key, the WireGuard key and the CA keys sit in files readable only by
 the service, so whoever gets root on such a computer, or a copy of its disk, can copy them
 and act as that device until it is removed. The plan, of which the Linux TPM part and the

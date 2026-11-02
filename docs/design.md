@@ -2513,10 +2513,11 @@ defence, is in [threat-model.md](threat-model.md). In short:
 ### Device keys in hardware
 
 The phones keep their keys in the Secure Enclave or the Android Keystore. A Linux computer
-with a TPM 2.0 keeps its new member, admin and tunnel keys there (`internal/tpmkey`,
-`CBB_TPM=off` turns it off); Macs, Windows PCs, Linux computers without a TPM and the lite
-member keep them in files readable only by the service. The rest of the plan (the Secure
-Enclave on Macs, the TPM on Windows and the key levels as a setting) is in
+or a Windows PC with a TPM 2.0 keeps its new member, admin and tunnel keys there
+(`internal/tpmkey`, `CBB_TPM=off` turns it off; Windows through its TPM Base Services, under
+the storage root key Windows keeps at 0x81000001, since Windows holds the owner hierarchy's
+password); Macs, computers without a TPM and the lite member keep them in files readable
+only by the service. The rest of the plan (the Secure Enclave on Macs) is in
 [roadmap.md](roadmap.md#device-keys-in-hardware) (D-44, D-47).
 
 ### Passwords

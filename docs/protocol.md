@@ -3233,8 +3233,8 @@ far.
   `store` `file`. Moving the hub to such a computer makes it an admin only through that
   dialog.
 - **The root.** `cbb new` on a computer warns that its root key is a file: the group's CA
-  keys are not in the TPM yet, and Macs and Windows PCs keep all their keys in a file until
-  the service uses the Secure Enclave and the Windows TPM (roadmap, D-44). From then on
+  keys are not in the TPM yet, and Macs keep all their keys in a file until the service
+  uses the Secure Enclave (roadmap, D-44). From then on
   making a group or an admin with keys in a file asks first too.
 - **The attestation challenge.** An Android key is made with the attestation challenge
   `SHA-256("cbb attest v1" || field(group tag) || field(member key) || salt)`, where

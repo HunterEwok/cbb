@@ -641,9 +641,19 @@ func (s *Service) hubWait(hub group.DeviceID) time.Duration {
 func tunnelVerbose() bool { return os.Getenv("CBB_DEBUG") == "1" }
 
 // keysInFile tells whether this device keeps its keys in files, not in
-// hardware; every computer does until the keys move to a TPM or a Secure
-// Enclave (docs/roadmap.md, "Device keys in hardware").
-const keysInFile = true
+// hardware (docs/roadmap.md, "Device keys in hardware"): its member key's
+// store, or, before it has one, whether a new key would go into a TPM.
+// s.mu is not held.
+func (s *Service) keysInFile() bool {
+	s.mu.Lock()
+	id := s.id
+	s.mu.Unlock()
+	if id != nil {
+		st := s.keyStore(id)
+		return st != group.StoreHardware && st != group.StoreProven
+	}
+	return s.cfg.Rootless || !group.HardwareKeys()
+}
 
 // away turns sync away from home on or off on this device, or makes it the
 // group's hub (docs/design.md, "Turning it on, step by step").
@@ -692,7 +702,7 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 		if s.tunnel != nil {
 			return false, nil, nil, nil
 		}
-		if keysInFile && !m.Consent {
+		if s.keysInFile() && !m.Consent {
 			return false, nil, nil, errors.New("this device keeps its keys in files, so sync away from home needs your consent; run cbb global on and read what it says")
 		}
 		st, err := s.awayOnLocked(tag)
@@ -810,7 +820,7 @@ func (s *Service) awayOnLocked(tag string) (*tunnel.State, error) {
 		return nil, err
 	}
 	st.ForGroup(tag)
-	st.KeysInFile = keysInFile
+	st.KeysInFile = s.keysInFile()
 	if err := st.Save(s.cfg.StateDir); err != nil {
 		return nil, fmt.Errorf("saving the tunnel state: %w", err)
 	}
