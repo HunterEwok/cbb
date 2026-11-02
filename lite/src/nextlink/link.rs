@@ -121,6 +121,8 @@ pub struct Link<W: Write> {
     conns: Vec<Option<Conn>>,
     gens: u64,
     busy_since: Option<Instant>,
+    /// The ESP's answers when busy_since was set.
+    answers: u64,
     keys: VecDeque<u8>,
     keys_sent: Option<Instant>,
     /// The time the Next's clock gave, in seconds since 1970, to set.
@@ -149,6 +151,7 @@ impl<W: Write> Link<W> {
             conns: (0..esp::LINKS).map(|_| None).collect(),
             gens: 0,
             busy_since: None,
+            answers: 0,
             keys: VecDeque::new(),
             keys_sent: None,
             clock: None,
@@ -322,6 +325,11 @@ impl<W: Write> Link<W> {
 
     /// Hands the ESP's events to the connections and sends what is due.
     fn after(&mut self, now: Instant) {
+        if self.esp.answers() != self.answers {
+            // An answer came: the wait for the next one starts now.
+            self.answers = self.esp.answers();
+            self.busy_since = None;
+        }
         if self.esp.busy() {
             let since = *self.busy_since.get_or_insert(now);
             if now.duration_since(since) > ESP_TIMEOUT {
@@ -899,6 +907,27 @@ mod tests {
         link.tick(now + ESP_TIMEOUT + Duration::from_secs(1));
         link.tick(now + ESP_TIMEOUT + Duration::from_secs(1));
         assert_eq!(sent(&link, &mut next, &mut at).0, "AT\r\n");
+    }
+
+    #[test]
+    fn a_busy_esp_that_answers_is_not_restarted() {
+        let (mut link, mut next, now) = new_link();
+        link.handle(Msg::Uart(encode(frame::HELLO, b"")), now);
+        let mut at = 0;
+        // Each answer comes within the timeout, the whole stretch after it.
+        let step = ESP_TIMEOUT / 2 + Duration::from_secs(1);
+        let mut t = now;
+        for cmd in ["AT\r\n", "ATE0\r\n", "AT+CIPMUX=1\r\n"] {
+            let (esp, ack) = sent(&link, &mut next, &mut at);
+            assert_eq!(esp, cmd);
+            link.handle(Msg::Uart(ack), t);
+            link.tick(t);
+            t += step;
+            link.tick(t);
+            link.handle(from_esp(b"\r\nOK\r\n"), t);
+        }
+        assert!(t.duration_since(now) > ESP_TIMEOUT);
+        assert!(link.esp.ready());
     }
 
     #[test]

@@ -87,6 +87,8 @@ pub struct Esp {
     sends: [VecDeque<Vec<u8>>; LINKS as usize],
     /// The connection whose block goes next, if it has one.
     turn: u8,
+    /// Counts the ESP's answers, so a wait is timed from the last one.
+    answers: u64,
 }
 
 impl Default for Esp {
@@ -110,6 +112,7 @@ impl Esp {
             serve: None,
             sends: Default::default(),
             turn: 0,
+            answers: 0,
         };
         e.start();
         e
@@ -216,6 +219,13 @@ impl Esp {
         self.wait != Wait::None
     }
 
+    /// How many answers (a prompt, OK, SEND OK, an error) the ESP has
+    /// given: while commands follow each other, the link times only the
+    /// wait for the next answer, not the whole busy stretch.
+    pub fn answers(&self) -> u64 {
+        self.answers
+    }
+
     /// Takes bytes from the ESP.
     pub fn input(&mut self, bytes: &[u8]) {
         self.buf.extend_from_slice(bytes);
@@ -244,6 +254,7 @@ impl Esp {
                 self.out.extend_from_slice(data);
             }
             self.wait = Wait::SendOk;
+            self.answers += 1;
             return true;
         }
         let Some(end) = self.buf.windows(2).position(|w| w == b"\r\n") else {
@@ -314,6 +325,7 @@ impl Esp {
     }
 
     fn done(&mut self) {
+        self.answers += 1;
         if matches!(self.current, Some(Cmd::Mux)) {
             self.ready = true;
             self.events.push(Event::Ready);
@@ -324,7 +336,15 @@ impl Esp {
     }
 
     fn failed(&mut self, why: &str) {
+        self.answers += 1;
         match self.current.take() {
+            // Connections are open (`link is builded`), so several were
+            // taken before: after a restart of the link or of the setup
+            // with the ESP's connections still up.
+            Some(Cmd::Mux) => {
+                self.ready = true;
+                self.events.push(Event::Ready);
+            }
             Some(Cmd::Dial { id, .. }) => self.events.push(Event::Failed(id, why.into())),
             Some(Cmd::Send { id, .. }) => {
                 // The bytes were lost: the connection cannot go on.
@@ -597,5 +617,24 @@ mod tests {
         e.input(b"0,CLOSED\r\n");
         assert_eq!(sent(&mut e).1, SEND_MAX); // the one in flight
         assert!(e.take_output().is_empty());
+    }
+
+    #[test]
+    fn mux_with_links_open_is_ready() {
+        let mut e = Esp::new();
+        talk(&mut e, "AT\r\n", b"OK\r\n");
+        talk(&mut e, "ATE0\r\n", b"OK\r\n");
+        talk(&mut e, "AT+CIPMUX=1\r\n", b"link is builded\r\n\r\nERROR\r\n");
+        assert!(e.ready());
+        assert_eq!(e.take_events(), vec![Event::Ready]);
+    }
+
+    #[test]
+    fn answers_count() {
+        let mut e = ready();
+        let before = e.answers();
+        e.send(0, b"x");
+        sent(&mut e);
+        assert_eq!(e.answers(), before + 2); // the prompt and SEND OK
     }
 }

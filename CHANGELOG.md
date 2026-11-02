@@ -1067,6 +1067,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   instead of sending in the order the bytes came: a burst to the phone held back the lite
   member's pings to the computer it dials for so long that the computer closed the connection.
   A datagram of `-udp` goes in one block, whole.
+- `cbb next link` times each wait for the ESP's answer on its own: it timed a whole stretch of
+  busy traffic, took more than 10 seconds of it for a silent ESP and set it up again, and after
+  that took the ESP's refusal of `AT+CIPMUX=1` while connections were open as not ready, so it
+  dialed nothing more.
 
 - On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
   network, instead of doing nothing.
