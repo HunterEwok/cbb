@@ -56,9 +56,13 @@ Commands:
                        code would name the wrong addresses).
   join -code host:port Join with the code from cbb pair on a Linux member.
   run [-name name] [-port port] [-peer host:port]... [-no-mdns] [-no-listen]
+      [-tunnel-via host:port]
                        Run the service (started by systemd or procd): it
                        dials the computers, and phones and other lite
                        members dial it on the member port (8764, CBB_PORT).
+                       -tunnel-via: the tunnel to the hub sends its packets
+                       there, a local UDP port that leads to the hub (cbb
+                       next link -udp on the ZX Spectrum Next).
   copy [-secret]       Send standard input to the group.
   paste [-terminal [-lines] [-secret]]
                        Print this member's clipboard text; -terminal makes
@@ -413,6 +417,7 @@ fn cmd_run(g: &Global, args: &[String]) -> Result<()> {
         peers: Vec::new(),
         mdns: true,
         port: Some(member_port()),
+        tunnel_via: None,
     };
     let mut i = 0;
     while i < args.len() {
@@ -420,6 +425,7 @@ fn cmd_run(g: &Global, args: &[String]) -> Result<()> {
         match flag(&args[i]) {
             Some("name") => cfg.name = next()?,
             Some("peer") => cfg.peers.push(resolve(&next()?)?),
+            Some("tunnel-via") => cfg.tunnel_via = Some(resolve(&next()?)?),
             Some("port") => cfg.port = Some(next()?.parse().context("the port is a number")?),
             Some("no-mdns") => {
                 cfg.mdns = false;

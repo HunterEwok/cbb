@@ -699,6 +699,20 @@ func TestLiteMemberAway(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the lite member has it", func() bool { return away.paste(t) == "to the lite member, away" })
+	away.stop()
+
+	// Through a local UDP port that leads to the hub (cbb next link -udp
+	// on the ZX Spectrum Next): -tunnel-via sends the tunnel's packets
+	// there instead of the hub's address.
+	relayed := udpRelay(t, port)
+	away = startLite(t, bin, dir, "-no-mdns", "-no-listen", "-tunnel-via", relayed.addr)
+	waitUpTo(t, 30*time.Second, "the lite member reaches the hub through the local UDP port", func() bool {
+		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
+	})
+	if relayed.n.Load() == 0 {
+		t.Fatal("no packet went through the local UDP port")
+	}
 
 	// Off, from an admin (cbb global off -on, an away-off command
 	// through the tunnel): the key is gone, and so is the connection
@@ -764,4 +778,52 @@ func TestLiteRootless(t *testing.T) {
 	if out, err := run("action", "enable", "restart", "-yes"); err != nil {
 		t.Fatalf("action enable restart, rootless: %v; %s", err, out)
 	}
+}
+
+// udpRelayPort is a UDP port that passes every datagram to a port on 127.0.0.1
+// and the answers back to the last sender, as cbb next link -udp does
+// through the Next's ESP; n counts the datagrams it passed out.
+type udpRelayPort struct {
+	addr string
+	n    atomic.Int64
+}
+
+func udpRelay(t *testing.T, to int) *udpRelayPort {
+	t.Helper()
+	in, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: to})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { in.Close(); out.Close() })
+	r := &udpRelayPort{addr: in.LocalAddr().String()}
+	var last atomic.Pointer[net.UDPAddr]
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			n, from, err := in.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			last.Store(from)
+			r.n.Add(1)
+			out.Write(buf[:n])
+		}
+	}()
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			n, err := out.Read(buf)
+			if err != nil {
+				return
+			}
+			if a := last.Load(); a != nil {
+				in.WriteToUDP(buf[:n], a)
+			}
+		}
+	}()
+	return r
 }
