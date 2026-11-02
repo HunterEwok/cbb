@@ -7,6 +7,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- A Windows PC with a TPM 2.0 keeps its new member, admin and tunnel keys in it, as a Linux
+  computer does, through TPM Base Services and under the storage root key Windows keeps;
+  sync away from home and an invitation then ask no consent for keys in files there. Not
+  yet tested on a real PC.
 - A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both

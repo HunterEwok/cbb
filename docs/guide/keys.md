@@ -11,8 +11,8 @@ can check it, and which level of strictness to choose. The exact rules are in th
 
 | Where | Devices | What a thief gets |
 |---|---|---|
-| **In a file** | Macs and Windows PCs, Linux computers without a TPM, the lite member | a copy of the file, which works anywhere until an admin removes the device |
-| **In hardware** | iPhones (Secure Enclave), Android phones (Keystore: StrongBox or the TEE), Linux computers with a TPM | nothing to copy: the key signs only on that device, and on a phone the root's and admins' keys only after your face, fingerprint or passcode |
+| **In a file** | Macs, Windows PCs and Linux computers without a TPM, the lite member | a copy of the file, which works anywhere until an admin removes the device |
+| **In hardware** | iPhones (Secure Enclave), Android phones (Keystore: StrongBox or the TEE), Linux computers and Windows PCs with a TPM | nothing to copy: the key signs only on that device, and on a phone the root's and admins' keys only after your face, fingerprint or passcode |
 | **Proven hardware** | an Android phone whose key the group's root checked | the same as hardware, and the group knows it is true, not only that the device says so |
 
 The devices list in the apps and `cbb status` (the KEYS column) show which one each device
@@ -83,7 +83,8 @@ The levels above are the design; this version builds part of it:
   copy on `cbb.tools` starts once the project's signing keys exist.
 - The levels are not a setting yet. Groups work as at level 2, and a computer becomes an
   admin only with the warning of level 3, unless it is a Linux computer with a TPM.
-- Linux computers with a TPM keep their member and admin keys in it, from the moment they
-  join a group; a computer that joined earlier keeps its file until it joins again. The
-  group's root key on a computer, Macs (the Secure Enclave), Windows PCs (the TPM) and App
-  Attest are not built yet: until then their keys are in a file.
+- Linux computers and Windows PCs with a TPM 2.0 keep their member and admin keys in it,
+  from the moment they join a group; a computer that joined earlier keeps its file until it
+  joins again. On Windows this is not yet tested on a real PC. The group's root key on a
+  computer, Macs (the Secure Enclave) and App Attest are not built yet: until then their
+  keys are in a file.

@@ -55,6 +55,16 @@ func NewDeviceKey() (crypto.Signer, error) {
 	return NewKey()
 }
 
+// HardwareKeys tells whether NewDeviceKey would put a new key in the TPM:
+// the machine has one this program may use, and CBB_TPM is not off.
+func HardwareKeys() bool {
+	if os.Getenv(TPMEnv) == "off" {
+		return false
+	}
+	_, err := theTPM()
+	return err == nil
+}
+
 // KeyStoreOf returns where k lives: StoreHardware for a key in the TPM,
 // StoreFile otherwise.
 func KeyStoreOf(k crypto.Signer) string {
@@ -77,7 +87,7 @@ func keyBlob(k crypto.Signer) *tpmkey.Blob {
 func loadTPMKey(b *tpmkey.Blob) (crypto.Signer, error) {
 	t, err := theTPM()
 	if errors.Is(err, tpmkey.ErrNoTPM) {
-		return nil, fmt.Errorf("group: this device's key is in a TPM that is not there (%s); was the identity copied from another machine?", tpmkey.Device)
+		return nil, errors.New("group: this device's key is in a TPM that is not there; was the identity copied from another machine?")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("group: opening the TPM that holds this device's key: %w", err)
@@ -110,7 +120,7 @@ func (Sealer) Seal(secret []byte) (*tpmkey.Blob, error) {
 func (Sealer) Unseal(b *tpmkey.Blob) ([]byte, error) {
 	t, err := theTPM()
 	if errors.Is(err, tpmkey.ErrNoTPM) {
-		return nil, fmt.Errorf("the key is sealed by a TPM that is not there (%s); was the state copied from another machine?", tpmkey.Device)
+		return nil, errors.New("the key is sealed by a TPM that is not there; was the state copied from another machine?")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("opening the TPM that sealed the key: %w", err)
