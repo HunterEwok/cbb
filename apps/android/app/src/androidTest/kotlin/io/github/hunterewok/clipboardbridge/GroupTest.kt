@@ -13,11 +13,13 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -95,8 +97,7 @@ class GroupTest {
         assertEquals(AppModel.Phase.START, model.phase)
         compose.onNodeWithText(str(R.string.connect_device)).performClick()
         val (code, pairing) = Bench.pairCode(Bench.PC)
-        compose.onNode(hasSetTextAction()).performTextInput(code)
-        compose.onNodeWithText(str(R.string.add)).performClick()
+        typeAndAdd(code)
         until(90, "the phone admits ${Bench.PC}; the app says ${model.message}") { model.phase == AppModel.Phase.HOME }
         val out = pairing.finish(60)
         assertTrue("cbb pair on ${Bench.PC} did not join:\n$out", out.contains("Joined the group."))
@@ -229,12 +230,30 @@ class GroupTest {
         assertFalse("a notification shows a copy: ${notifications()}", notifications().any { it.contains("cbb-bench phone") })
     }
 
+    /**
+     * Types the QR code's text on the add page and taps Add once the button
+     * takes it, scrolled into view: below a working camera's preview the
+     * page scrolls, and a tap outside the screen reaches nothing.
+     */
+    private fun typeAndAdd(code: String) {
+        compose.onNode(hasSetTextAction()).performScrollTo().performTextInput(code)
+        val add = compose.onNodeWithText(str(R.string.add))
+        add.performScrollTo()
+        until(10, "Add takes the code") { runCatching { add.assertIsEnabled() }.isSuccess }
+        add.performClick()
+        // Pairing takes seconds: the app is busy, or it says why it is not.
+        try {
+            until(10, "the app starts admitting") { model.busy || model.message != null }
+        } catch (e: AssertionError) {
+            throw AssertionError("${e.message}\n${appState()}")
+        }
+    }
+
     /** Admits a member in no group from Home's add button, by its QR code's text. */
     private fun admit(dev: String) {
         compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
         val (code, pairing) = Bench.pairCode(dev)
-        compose.onNode(hasSetTextAction()).performTextInput(code)
-        compose.onNodeWithText(str(R.string.add)).performClick()
+        typeAndAdd(code)
         val out = try {
             pairing.finish(90)
         } catch (e: AssertionError) {
