@@ -44,7 +44,7 @@ type TPM struct {
 	// psrk is the persistent storage root key at PersistentSRK, read on
 	// first use when the owner hierarchy has a password, as on Windows.
 	psrk *tpm2.CreatePrimaryResponse
-	ek  *Endorsement                // read on first use
+	ek   *Endorsement // read on first use
 	// keys are the keys loaded, which room flushes when the TPM has no
 	// room for another object.
 	keys []*Key
