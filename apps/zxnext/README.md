@@ -20,6 +20,10 @@ tools. Test them on the machine before relying on them.
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
 .cbb join             join the group: scan the code on the screen with the phone app
+.cbb net on -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00
+                      the Pi's network through the ESP, in the background
+.cbb net off          stop it
+.cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb -d paste         the same, with the cause under each error (debug mode)
 ```
 
@@ -36,10 +40,91 @@ comes later.
    `clipboardbridge-lite-linux-armv6` of a release) to the Pi, for example with `.piput`, and put it on the shell's `PATH` (NextPi's root is
    read-only: `mount -o remount,rw /`, copy, `mount -o remount,ro /`).
 3. Give the Pi a network: the Zero W's own Wi-Fi, which NextPi turns off, or the Next's
-   ESP8266 (planned).
+   ESP8266 through `CBB.DRV` (below). Many Accelerated boards carry a Pi Zero without a radio: NextPi's
+   shell shows which (`cat /proc/device-tree/model`), and `ls /sys/class/net` lists only
+   `lo` on such a Pi.
 4. Start `cbb run` at boot, then run `.cbb join` on the Next.
 
 The exact NextPi paths and the start script come with the first test on a real Next.
+
+## Test bench: the Pi's shell over the network
+
+`.pibridge` opens NextPi's shell (`SUP>`) to a computer on the home network, so a test can
+drive the Pi without typing on the Next, even on a Pi Zero without a radio. The Next's
+ESP8266 dials the computer in its stock AT firmware's passthrough mode, and the Z80 copies
+bytes between the Pi's UART and the ESP's until SPACE is pressed. The shell is root's and
+travels in the clear: use it only on a network of your own, and only while testing.
+
+1. Join the ESP8266 to the Wi-Fi network once, as NextZXOS's own tools do.
+2. On the computer, listen on one port and take only the Next's address:
+
+   ```sh
+   socat TCP-LISTEN:2323,reuseaddr,range=NEXT_IP/32 -,raw,echo=0
+   ```
+
+3. On the Next: `.pibridge COMPUTER_IP 2323` (`.pibridge -d ...` shows the ESP's answers,
+   its firmware version among them). The computer gets the `SUP>` prompt. The bridge keeps
+   the address in `PIBRIDGE.CFG` next to itself, so later a plain `.pibridge` dials it again.
+4. SPACE on the Next stops it. It then says how many bytes went each way, how full its ring
+   towards the ESP got, and whether a receive buffer filled up, which would mean lost bytes.
+
+It runs the Z80 at 28 MHz while it works. The ESP can take the Pi's output more slowly than
+the Pi writes it, so the bridge sends the Pi XOFF when its ring is three quarters full and
+XON when it has room again; that needs `ixon` on the Pi's terminal (`stty -a` shows it).
+Tried on a real Next: 12.5 KB of the Pi's output arrived whole; at 3.5 MHz the bridge lost
+bytes.
+
+**Updates while it runs.** The computer can replace a file in the bridge's own folder (a new
+`PIBRIDGE`, say) without the card leaving the Next. It sends the bytes `00 1B 43 42 42 55`
+(`CBBU` after NUL and ESC), then a line `NAME LENGTH CRC32` ending in CR, with an 8.3 name
+and the CRC-32 in 8 hex digits as zlib computes it. The bridge answers `CBBU GO`, takes the
+file in blocks of 256 bytes, answering `+` after writing each, so the computer sends the
+next block only then; it writes to `UPDATE.TMP` and replaces the file only when the CRC-32
+matches, then answers `CBBU OK` or `CBBU ERR` with the cause. The Pi waits (XOFF) meanwhile.
+NextZXOS keeps a running dot command's file open, and an open file cannot be renamed or
+written, so the bridge closes its own file once it has loaded (from 0.4.2); the new version
+runs from the next start. Before the first such update, copy the bridge to the card once, for example with NextZXOS's
+`.http`, which downloads through the same ESP.
+
+## The driver: the network in the background
+
+`CBB.DRV` (`drv/`) is a NextZXOS driver that gives the lite member on the Pi a network
+through the ESP8266 while any program runs (docs/roadmap.md, "The Next's network in the
+background"). Its 512 bytes (`stub.asm`) page its 8K bank in at $E000 on every frame's
+interrupt and for its API, and put back the bank they found; the bank (`bank.asm`) does
+the work:
+
+- it reads the Pi's frames while its 1 KB ring for the ESP has room for one more, so the
+  Pi's bytes wait in the Pi's UART, never lost, and sends the ESP what its 64-byte buffer
+  takes;
+- it sends the Pi up to 48 of the ESP's bytes a frame, how many of the Pi's bytes it has
+  taken (the Pi sends at most 384 ahead), a hello every second and the clock every minute
+  (NextZXOS's `drv_drvrtc`);
+- it types the characters of the Pi's key frames, one a frame once the program took the
+  last (`LAST_K` and bit 5 of `FLAGS`, as the ROM does for a key);
+- it restores the UART selection it found, and stops on the Pi's quit frame.
+
+The frames are those of `cbb next link` (lite/README.md, "The network through the Next's
+ESP8266"). The driver starts off, so that nothing reaches NextPi's shell before the link
+runs; its API turns it on: `DRIVER 124,2,1` (1 the counters: the ESP's overflows, dropped
+frames, bytes taken; 2 on or off; 3 whether it is on, in A and DE). Its id, 124, is not
+assigned by NextZXOS's maintainers yet.
+
+To use it, copy `CBB` to `C:/DOT` and `CBB.DRV` to `/cbb`, install the driver once after
+each start (`.install /cbb/CBB.DRV`), join the ESP to the Wi-Fi network as NextZXOS's own
+tools do, and run:
+
+```
+.cbb net on -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00
+```
+
+It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
+keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
+member at home, `-serve` the ESP's port for the phones and the lite member's own,
+`-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's
+ESP8266"). The lite member (`cbb run -peer 127.0.0.1:8769`) has to run on the Pi as well.
+While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
+`join` ask for `.cbb net off` first.
 
 ## Build
 
@@ -47,9 +132,11 @@ With [z88dk](https://github.com/z88dk/z88dk) 2.3 (`zcc` on the `PATH`, `ZCCCFG` 
 at its `lib/config`):
 
 ```sh
-make          # build/CBB: copy it to C:/DOT on the Next's SD card
-make test     # the frame parser's tests, with the host's C compiler
+make          # build/CBB, build/PIBRIDGE (copy them to C:/DOT) and build/CBB.DRV
+make test     # the frame parser's tests with the host's C compiler, and the driver's
+              # bank in a Z80 emulator against two played UARTs (drvtest, with cargo)
 ```
 
 CI's `ZX Spectrum Next` job builds z88dk from its release source, checked against a
-SHA-256, and runs both.
+SHA-256, and runs both; the run keeps `CBB`, `PIBRIDGE` and `CBB.DRV` as its artifact
+`clipboardbridge-zxnext-dot`.

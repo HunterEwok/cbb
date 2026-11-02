@@ -56,6 +56,9 @@ const RESTART_AFTER: Duration = Duration::from_millis(500);
 pub(crate) const DESKTOP: &str = "desktop";
 pub(crate) const TMUX: &str = "tmux";
 pub(crate) const CONSOLE: &str = "console";
+/// The ZX Spectrum Next's keyboard, through `cbb next link` and the Next's
+/// driver on a Next's Pi.
+pub(crate) const NEXT: &str = "next";
 
 /// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
 /// more for each byte, as on a full member.
@@ -786,7 +789,7 @@ impl Service {
             );
             return res;
         }
-        let mut order = vec![DESKTOP, TMUX];
+        let mut order = vec![DESKTOP, TMUX, NEXT];
         if set.console {
             order.push(CONSOLE);
         }
@@ -804,7 +807,7 @@ impl Service {
             res.reason = if console && !set.console {
                 "only a text console is here, and its user did not allow consoles (sudo cbb paste-receive on -console)"
             } else {
-                "nothing on this device can paste: no tmux or console helper of Clipboard Bridge runs here"
+                "nothing on this device can paste: no tmux or console helper of Clipboard Bridge, nor cbb next link, runs here"
             }
             .into();
             return res;
@@ -1135,7 +1138,7 @@ impl Service {
             }
         };
         let mut target = match m.header.inject.as_str() {
-            t @ ("" | DESKTOP | TMUX | CONSOLE) => t.to_string(),
+            t @ ("" | DESKTOP | TMUX | CONSOLE | NEXT) => t.to_string(),
             t => {
                 (self.log)(&format!("cbb: a watcher offers the paste target {t:?}, which is not known"));
                 String::new()
@@ -1145,13 +1148,14 @@ impl Service {
         // the system does not name, or a console helper that is not root,
         // never takes one.
         let uid = if target.is_empty() { None } else { peer::uid(&out) };
-        if !target.is_empty() && (uid.is_none() || target == CONSOLE && !uid.is_some_and(peer::privileged)) {
+        let keyboard = target == CONSOLE || target == NEXT;
+        if !target.is_empty() && (uid.is_none() || keyboard && !uid.is_some_and(peer::privileged)) {
             (self.log)(&format!(
                 "cbb: a watcher offers the paste target {target} as a user that may not take it; it gets no remote pastes"
             ));
             target.clear();
         }
-        let board = !m.header.paste_only && target != TMUX && target != CONSOLE;
+        let board = !m.header.paste_only && target != TMUX && !keyboard;
         if board && let (Ok(text), Ok(kind)) = (String::from_utf8(m.payload), kind_of(&m.header.kind)) {
             node.engine.clipboard_is(&text, kind);
         }

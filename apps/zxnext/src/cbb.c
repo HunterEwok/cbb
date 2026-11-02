@@ -16,7 +16,7 @@
 #include "frame.h"
 #include "link.h"
 
-#define VERSION "0.1.0"
+#define VERSION "0.2.0"
 // The lite member on the Pi; the NextPi set-up puts it on the shell's PATH.
 #define CBB_LITE "cbb"
 // The longest text pasted or copied.
@@ -41,6 +41,13 @@ static void usage(void)
            ".cbb join          join the group:\n"
            "                   scan the code with\n"
            "                   the phone app\n"
+           ".cbb net on [-to HOST:PORT]\n"
+           "   [-serve ESP:PORT] [-zone +HH:MM]\n"
+           "                   the Pi's network\n"
+           "                   through the ESP,\n"
+           "                   in the background\n"
+           ".cbb net off       stop it\n"
+           ".cbb net           how it stands\n"
            ".cbb -d ...        show error details\n");
 }
 
@@ -61,9 +68,38 @@ static int link_fail(uint8_t err)
     return fail("the Pi stopped answering", "timeout");
 }
 
+// CBB.DRV (drv/): its id, and where .cbb net keeps the link's settings.
+#define DRIVER_ID 124
+#define NET_CFG "/cbb/NET.CFG"
+#define DRV_COUNTERS 1
+#define DRV_SWITCH 2
+#define DRV_STATE 3
+
+static struct esx_drvapi drv;
+
+// Calls the driver; 0 when it answered (its values in drv), 1 when it is
+// not installed.
+static uint8_t driver(uint8_t function, uint16_t de)
+{
+    drv.call.driver = DRIVER_ID;
+    drv.call.function = function;
+    drv.de = de;
+    drv.hl = 0;
+    return esx_m_drvapi(&drv) != 0;
+}
+
+// Whether the driver holds the Pi's UART for the network.
+static uint8_t net_on(void)
+{
+    return driver(DRV_STATE, 0) == 0 && drv.de != 0;
+}
+
 // Types a command for the lite member at NextPi's shell.
 static int command(const char *args)
 {
+    if (net_on()) {
+        return fail("the network uses the Pi's line; stop it first with .cbb net off", "CBB.DRV is on");
+    }
     if (link_shell()) {
         return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
     }
@@ -244,6 +280,123 @@ static int join(void)
     return 0;
 }
 
+// The link's settings: the -to, -serve and -zone of `cbb next link`.
+static char net_args[120];
+
+static uint8_t net_load(void)
+{
+    uint8_t fh;
+    uint16_t n;
+    errno = 0;
+    fh = esx_f_open(NET_CFG, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) return 1;
+    n = esx_f_read(fh, net_args, sizeof net_args - 1);
+    esx_f_close(fh);
+    net_args[n] = 0;
+    return n == 0;
+}
+
+static int net_save(void)
+{
+    uint8_t fh;
+    uint16_t n = strlen(net_args);
+    errno = 0;
+    fh = esx_f_open(NET_CFG, ESX_MODE_W | ESX_MODE_OPEN_CREAT_TRUNC);
+    if (errno) return fail("cannot save the settings; is there a folder /cbb?", NET_CFG);
+    if (esx_f_write(fh, net_args, n) != n) {
+        esx_f_close(fh);
+        return fail("cannot save the settings", NET_CFG);
+    }
+    esx_f_close(fh);
+    return 0;
+}
+
+// Only characters that NextPi's shell takes as they are: a setting cannot
+// run a command of its own on the Pi.
+static uint8_t plain(const char *s)
+{
+    for (; *s; s++) {
+        char c = *s;
+        if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') &&
+            !strchr(".:-+[]", c)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int net_start(int argc, char **argv)
+{
+    int i;
+    uint16_t n = 0;
+    if (driver(DRV_STATE, 0)) {
+        return fail("the driver is not installed: .install /cbb/CBB.DRV", "M_DRVAPI 124 failed");
+    }
+    if (drv.de) return fail("the network runs already", 0);
+    if (argc) {
+        for (i = 0; i < argc; i++) {
+            if (!plain(argv[i])) return fail("a setting has a character the Pi's shell would take", argv[i]);
+            if (n + strlen(argv[i]) + 2 > sizeof net_args) return fail("the settings are too long", 0);
+            if (n) net_args[n++] = ' ';
+            strcpy(net_args + n, argv[i]);
+            n += strlen(argv[i]);
+        }
+        if (!strstr(net_args, "-to ")) return fail("the computer to dial is missing: -to HOST:PORT", 0);
+        if (net_save()) return 1;
+    } else if (net_load()) {
+        return fail("no settings yet: .cbb net on -to HOST:PORT", NET_CFG);
+    }
+    if (link_shell()) {
+        return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
+    }
+    link_send_str(CBB_LITE " next link ");
+    link_send_str(net_args);
+    link_send_str(" -log /ram/link.log\n");
+    // The link waits for the driver's hello, and the driver reads past the
+    // shell's echo to the first frame.
+    if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
+    printf("The Pi's network runs through\nthe ESP in the background.\n");
+    return 0;
+}
+
+static int net_stop(void)
+{
+    // The quit frame: the start byte, Q, no data, the sum.
+    static const uint8_t quit[] = {0x7E, 'Q', 0, 'Q'};
+    uint8_t i;
+    if (!net_on()) return fail("the network does not run", 0);
+    driver(DRV_SWITCH, 0);
+    for (i = 0; i < sizeof quit; i++) link_send(quit[i]);
+    if (link_shell()) return fail("the network stopped, but the Pi does not answer", "no SUP> prompt");
+    printf("The network stopped.\n");
+    return 0;
+}
+
+static int net_show(void)
+{
+    if (driver(DRV_STATE, 0)) {
+        printf("The driver is not installed:\n.install /cbb/CBB.DRV\n");
+        return 0;
+    }
+    printf(drv.de ? "The network runs.\n" : "The network does not run.\n");
+    if (!net_load()) printf("Settings: %s\n", net_args);
+    if (driver(DRV_COUNTERS, 0) == 0) {
+        printf("Taken from the Pi: %u bytes\n", drv.hl);
+        printf("Frames dropped: %u\n", drv.de);
+        printf("ESP overflows: %u\n", drv.bc);
+    }
+    return 0;
+}
+
+static int net(int argc, char **argv)
+{
+    if (argc == 0) return net_show();
+    if (strcmp(argv[0], "on") == 0) return net_start(argc - 1, argv + 1);
+    if (strcmp(argv[0], "off") == 0 && argc == 1) return net_stop();
+    usage();
+    return 1;
+}
+
 static int run(int argc, char **argv)
 {
     int i = 1;
@@ -266,6 +419,7 @@ static int run(int argc, char **argv)
     if (strcmp(argv[i], "copy") == 0 && argc - i == 2) return copy_file(argv[i + 1]);
     if (strcmp(argv[i], "text") == 0 && argc - i >= 2) return copy_words(argc - i - 1, argv + i + 1);
     if (strcmp(argv[i], "join") == 0 && argc - i == 1) return join();
+    if (strcmp(argv[i], "net") == 0) return net(argc - i - 1, argv + i + 1);
     usage();
     return 1;
 }

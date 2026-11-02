@@ -16,6 +16,7 @@
 #define PORT_SELECT 0x153B    // bit 6: the Pi's UART instead of the ESP's
 #define STATUS_RX_AVAIL 0x01
 #define STATUS_TX_BUSY 0x02
+#define STATUS_RX_FULL 0x04
 
 #define NR_VIDEO_TIMING 0x11
 #define NR_PI_PERIPHERALS 0xA0
@@ -35,16 +36,63 @@ static uint8_t nextreg(uint8_t reg)
     return z80_inp(0x253B);
 }
 
-void link_open(void)
+// Sets the selected UART's speed.
+static void set_speed(uint32_t speed)
 {
-    uint32_t speed = 115200UL, prescaler;
-    ZXN_NEXTREG(NR_PI_PERIPHERALS, 0x30); // the UART on the Pi's GPIO 14 and 15
-    z80_outp(PORT_SELECT, 0x40);
-    // .pisend -q stores 2 for 2 Mbit/s and 8 for 115200 [check on the Next].
-    if (nextreg(NR_USER) == 2) speed = 2000000UL;
-    prescaler = clocks[nextreg(NR_VIDEO_TIMING) & 7] / speed;
+    uint32_t prescaler = clocks[nextreg(NR_VIDEO_TIMING) & 7] / speed;
     z80_outp(PORT_RX_BAUD, (uint8_t)(prescaler & 0x7F));
     z80_outp(PORT_RX_BAUD, (uint8_t)(((prescaler >> 7) & 0x7F) | 0x80));
+}
+
+void link_open(void)
+{
+    uint32_t speed = 115200UL;
+    ZXN_NEXTREG(NR_PI_PERIPHERALS, 0x30); // the UART on the Pi's GPIO 14 and 15
+    z80_outp(PORT_SELECT, LINK_PI);
+    // .pisend -q stores 2 for 2 Mbit/s and 8 for 115200 [check on the Next].
+    if (nextreg(NR_USER) == 2) speed = 2000000UL;
+    set_speed(speed);
+}
+
+void link_open_esp(uint32_t speed)
+{
+    z80_outp(PORT_SELECT, LINK_ESP);
+    set_speed(speed);
+}
+
+void link_use(uint8_t uart)
+{
+    z80_outp(PORT_SELECT, uart);
+}
+
+static uint16_t overflows;
+
+uint8_t link_ready(void)
+{
+    uint8_t status = z80_inp(PORT_TX_STATUS);
+    // A full receive buffer drops what comes next [check on the Next].
+    if (status & STATUS_RX_FULL) overflows++;
+    return status & STATUS_RX_AVAIL;
+}
+
+uint8_t link_get(void)
+{
+    return z80_inp(PORT_RX_BAUD);
+}
+
+uint8_t link_can_send(void)
+{
+    return !(z80_inp(PORT_TX_STATUS) & STATUS_TX_BUSY);
+}
+
+void link_put(uint8_t c)
+{
+    z80_outp(PORT_TX_STATUS, c);
+}
+
+uint16_t link_overflows(void)
+{
+    return overflows;
 }
 
 void link_send(uint8_t c)

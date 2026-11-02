@@ -2071,9 +2071,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: the frame parser's tests on the host
-        working-directory: apps/zxnext
-        run: make test
       - name: z88dk from the cache
         id: z88dk
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -2100,6 +2097,22 @@ jobs:
           export PATH="$RUNNER_TEMP/z88dk/bin:$PATH" ZCCCFG="$RUNNER_TEMP/z88dk/lib/config"
           make
           test -s build/CBB
+          test -s build/PIBRIDGE
+          test -s build/CBB.DRV
+      - name: the frame parser's tests on the host, and the driver's in an emulator
+        working-directory: apps/zxnext
+        run: |
+          rustup toolchain install stable --profile minimal
+          export PATH="$RUNNER_TEMP/z88dk/bin:$PATH" ZCCCFG="$RUNNER_TEMP/z88dk/lib/config"
+          make test
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: clipboardbridge-zxnext-dot
+          path: |
+            apps/zxnext/build/CBB
+            apps/zxnext/build/PIBRIDGE
+            apps/zxnext/build/CBB.DRV
+          retention-days: 14
 
   phonetunnel:
     name: phone tunnel (${{ matrix.target }})
