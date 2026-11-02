@@ -476,6 +476,7 @@
     <string name="error_yubikey_no_piv">Эта карта не YubiKey с PIV.</string>
     <string name="error_yubikey_wrong_pin">Неверный PIN. После трёх неверных попыток YubiKey блокирует PIN.</string>
     <string name="error_yubikey_blocked">PIN YubiKey заблокирован. Разблокируйте его PUK-кодом в Yubico Authenticator и попробуйте снова.</string>
+    <string name="error_yubikey_old">Прошивка этого YubiKey старше 5.7, а приложению нужна 5.7 или новее, чтобы записать на него ключ. Напечатайте лист восстановления.</string>
     <string name="error_yubikey_management_key">У этого YubiKey свой ключ управления, которым приложение не может воспользоваться. Напечатайте лист восстановления.</string>
     <string name="error_yubikey_full">Все свободные слоты PIV на этом YubiKey заняты.</string>
     <string name="error_yubikey_no_key">На этом YubiKey нет ключа восстановления группы.</string>

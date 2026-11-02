@@ -1190,6 +1190,8 @@ final class AppModel: ObservableObject {
             case .blocked: return String(localized: "The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.", bundle: .app)
             case .managementKey:
                 return String(localized: "This YubiKey's management key is not the factory one, so the app cannot put a key on it. Use the printed sheet instead.", bundle: .app)
+            case .oldFirmware:
+                return String(localized: "This YubiKey is older than firmware 5.7, which the app needs to put a key on it. Use the printed sheet instead.", bundle: .app)
             case .noFreeSlot: return String(localized: "This YubiKey has no free slot for the key.", bundle: .app)
             case .noKey: return String(localized: "This YubiKey holds no recovery key.", bundle: .app)
             case .card: return String(localized: "The YubiKey did not answer as expected. Hold it still to the phone and try again.", bundle: .app)

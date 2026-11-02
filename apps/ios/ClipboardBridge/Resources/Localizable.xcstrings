@@ -3934,6 +3934,16 @@
         }
       }
     },
+    "This YubiKey is older than firmware 5.7, which the app needs to put a key on it. Use the printed sheet instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прошивка этого YubiKey старше 5.7, а приложению нужна 5.7 или новее, чтобы записать на него ключ. Используйте напечатанный лист."
+          }
+        }
+      }
+    },
     "This YubiKey has no free slot for the key.": {
       "localizations": {
         "ru": {

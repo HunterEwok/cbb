@@ -479,6 +479,7 @@
     <string name="error_yubikey_no_piv">This card is not a YubiKey with PIV.</string>
     <string name="error_yubikey_wrong_pin">Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</string>
     <string name="error_yubikey_blocked">The YubiKey\'s PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</string>
+    <string name="error_yubikey_old">This YubiKey is older than firmware 5.7, which the app needs to put a key on it. Print a recovery sheet instead.</string>
     <string name="error_yubikey_management_key">This YubiKey has its own management key, which the app cannot use. Print a recovery sheet instead.</string>
     <string name="error_yubikey_full">Every free PIV slot of this YubiKey is in use.</string>
     <string name="error_yubikey_no_key">This YubiKey holds no recovery key of a group.</string>

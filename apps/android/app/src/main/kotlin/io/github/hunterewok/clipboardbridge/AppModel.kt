@@ -1056,6 +1056,7 @@ class AppModel(private val app: Context) {
                 Piv.Kind.WRONG_PIN -> R.string.error_yubikey_wrong_pin
                 Piv.Kind.BLOCKED -> R.string.error_yubikey_blocked
                 Piv.Kind.MANAGEMENT_KEY -> R.string.error_yubikey_management_key
+                Piv.Kind.OLD_FIRMWARE -> R.string.error_yubikey_old
                 Piv.Kind.NO_FREE_SLOT -> R.string.error_yubikey_full
                 Piv.Kind.NO_KEY -> R.string.error_yubikey_no_key
                 Piv.Kind.CARD -> R.string.error_yubikey

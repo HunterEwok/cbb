@@ -840,8 +840,9 @@ the app on real devices.
   key"; the kits' `Piv`). The root phone's Settings, "Recovery key", has "Put it on a
   YubiKey": after the PIN, the YubiKey held to the phone makes a P-256 key in its first free
   retired PIV slot, with the PIN and a touch before each signature, and the root's admin CA
-  for it goes into the slot. Only the factory management key works there; a YubiKey with its
-  own takes a sheet instead. The restore screen has "Use a YubiKey instead": the YubiKey held
+  for it goes into the slot. Only the factory management key with AES works there, as a
+  YubiKey has from firmware 5.7; an older YubiKey, or one with its own key, takes a sheet
+  instead. The restore screen has "Use a YubiKey instead": the YubiKey held
   once issues the phone's member certificate from each slot whose certificate is an admin
   CA, the phone finds the group's computers (any group, since the YubiKey carries no tag) and
   takes the one whose records name that key, and the YubiKey held again signs the claim. On
