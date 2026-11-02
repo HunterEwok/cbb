@@ -719,6 +719,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Changed
 
+- Dependencies: der 0.8.3 for the lite member and the firmware, goldmark 1.8.6 (the website),
+  coder/websocket 1.8.15 (the tray app), the Android Gradle plugin 9.5.0 and Robolectric 4.17.
+  godbus stays at 5.1.0, as 5.2 panics on a message with an array of file descriptors, and
+  trouble-host at 0.7, as 0.8 needs a bt-hci that esp-radio does not implement yet; Dependabot
+  leaves both alone until then.
 - `cbb global` no longer repeats that the device keeps its keys in files each time it
   shows the status; `cbb global on` says it once, when the user agrees.
 - Remote paste on the phones: with the text left empty, Paste sends what the phone's

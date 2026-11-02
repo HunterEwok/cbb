@@ -186,21 +186,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bt-hci"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f63b3d6f0ef006d9b87a075705d6c142b03681ad34090659647f0e227c1c667f"
-dependencies = [
- "bt-hci-transport",
- "btuuid",
- "embassy-sync 0.8.0",
- "embedded-io 0.7.1",
- "embedded-io-async 0.7.0",
- "futures-intrusive",
- "heapless 0.9.3",
-]
-
-[[package]]
 name = "bt-hci-transport"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -308,7 +293,7 @@ dependencies = [
  "base64",
  "chacha20",
  "chacha20poly1305",
- "der 0.8.2",
+ "der 0.8.3",
  "getrandom 0.4.3",
  "hmac 0.13.0",
  "hpke",
@@ -700,9 +685,9 @@ dependencies = [
 
 [[package]]
 name = "der"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a878c850e9e421b20262e9b41f9c860e4785fa07541c266b62ff9d1ef998a80a"
+checksum = "6a996a108feb8b427a6e12fcf6af4aa83409b79d72c15337d7741368131ee004"
 dependencies = [
  "const-oid 0.10.2",
  "der_derive",
@@ -780,7 +765,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0681a4fc24c767085329728d8dfba959af91228aa4610cca4f8ce317ba46ae0"
 dependencies = [
- "der 0.8.2",
+ "der 0.8.3",
  "digest 0.11.3",
  "elliptic-curve 0.14.1",
  "rfc6979",
@@ -1336,7 +1321,7 @@ version = "1.0.0-beta.2"
 source = "git+https://github.com/esp-rs/esp-hal?rev=8a70d09fe0065d5387dac82e4fbe937e95e496e1#8a70d09fe0065d5387dac82e4fbe937e95e496e1"
 dependencies = [
  "allocator-api2",
- "bt-hci 0.9.0",
+ "bt-hci",
  "bt-hci-transport",
  "docsplay",
  "document-features",
@@ -2243,7 +2228,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "451913da69c775a56034ea8d9003d27ee8948e12443eae7c038ba100a4f21cb7"
 dependencies = [
- "der 0.8.2",
+ "der 0.8.3",
  "spki",
 ]
 
@@ -2629,7 +2614,7 @@ checksum = "d56d437c2f19203ce5f7122e507831de96f3d2d4d3be5af44a0b0a09d8a80e4d"
 dependencies = [
  "base16ct 1.0.0",
  "ctutils",
- "der 0.8.2",
+ "der 0.8.3",
  "hybrid-array",
  "subtle",
  "zeroize",
@@ -2835,7 +2820,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ef958a98b9d5da290cfc78946e9f3e61e1e62a18db0d92cac0b83cc161491a9"
 dependencies = [
  "base64ct",
- "der 0.8.2",
+ "der 0.8.3",
 ]
 
 [[package]]
@@ -3048,12 +3033,12 @@ dependencies = [
 
 [[package]]
 name = "trouble-host"
-version = "0.8.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19a566cc37ceaff5cc2a6ff8cc02debd1ee6b95d59ced8830d005da8b080cbe9"
+checksum = "bb9fe2be24000037431b036ba244cdb1d26f40e1719548553fb43c3fc62d496b"
 dependencies = [
  "aes 0.8.4",
- "bt-hci 0.10.1",
+ "bt-hci",
  "cmac",
  "embassy-futures",
  "embassy-sync 0.8.0",
@@ -3072,9 +3057,9 @@ dependencies = [
 
 [[package]]
 name = "trouble-host-macros"
-version = "0.6.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbabd47f6c65856f670fd2a1857fb9d40f978bfc81aed431f8689b8a4506b2fe"
+checksum = "2562dc74f79ad12f7bf088da55c936d5eb1d022f2caac9849175326307a5eec1"
 dependencies = [
  "convert_case",
  "darling 0.20.11",
@@ -3385,7 +3370,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "105ef4642d9cb137ef83d623d0e4bf08b8adf69e9918ca904a174adb6d3d038b"
 dependencies = [
  "const-oid 0.10.2",
- "der 0.8.2",
+ "der 0.8.3",
  "spki",
 ]
 
