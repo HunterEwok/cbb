@@ -613,7 +613,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -626,6 +626,23 @@ jobs:
         run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/clipboardbridge packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/clipboardbridge.init packaging/openwrt/clipboardbridge.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/clipboardbridge-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
+      - name: the software bills of materials, as the release makes them (tools/sbom)
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/sbom-cbb" ./cmd/cbb
+          out=$RUNNER_TEMP/sbom
+          mkdir -p "$out"
+          go run ./tools/sbom go -o "$out/sbom-go.cdx.json" -version v0.0.0 "$RUNNER_TEMP/sbom-cbb"
+          go run ./tools/sbom cargo -o "$out/sbom-lite.cdx.json" -version v0.0.0 -manifest lite/Cargo.toml \
+            -package clipboardbridge-lite -target x86_64-unknown-linux-musl,mips-unknown-linux-musl
+          go run ./tools/sbom cargo -o "$out/sbom-phone-core.cdx.json" -version v0.0.0 -manifest lite/Cargo.toml \
+            -package clipboardbridge-ffi -target aarch64-apple-ios,aarch64-linux-android
+          go run ./tools/sbom swift -o "$out/sbom-ios-kit.cdx.json" -version v0.0.0 apps/ios/ClipboardBridgeKit/Package.resolved
+          for f in "$out"/*.cdx.json; do
+            jq -e '.bomFormat == "CycloneDX" and (.components | length > 0)' "$f" >/dev/null
+          done
+          # The Go programs carry golang.org/x/crypto; the lite member, rustls.
+          jq -e 'any(.components[]; .name == "golang.org/x/crypto")' "$out/sbom-go.cdx.json" >/dev/null
+          jq -e 'any(.components[]; .name == "rustls")' "$out/sbom-lite.cdx.json" >/dev/null
       - name: systemd-analyze verify
         run: |
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
@@ -1633,6 +1650,14 @@ jobs:
           ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease \
             :app:testFullDebugUnitTest :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
             :shared:testDebugUnitTest :shared:lintDebug :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
+      - name: the Android apps' software bill of materials, as the release makes it (tools/sbom)
+        working-directory: apps/android
+        run: |
+          ./gradlew --no-daemon --no-configuration-cache --init-script ../../packaging/sbom.init.gradle.kts \
+            -Pcbb.sbom.configs=fullReleaseRuntimeClasspath,fdroidReleaseRuntimeClasspath,releaseRuntimeClasspath :app:cbbSbom :wear:cbbSbom
+          cd ../..
+          go run ./tools/sbom gradle -o "$RUNNER_TEMP/sbom-android.cdx.json" -version v0.0.0 apps/android/build/sbom/*.txt
+          jq -e 'any(.components[]; .group == "androidx.core")' "$RUNNER_TEMP/sbom-android.cdx.json" >/dev/null
       - name: the F-Droid build has no Google Play services
         working-directory: apps/android
         run: |

@@ -2329,7 +2329,7 @@ What the image needs:
 - **One small image for every CPU.** `cbb` is static and carries its own certificate roots,
   so the image is the binary and nothing else (`FROM scratch`), for linux/amd64, linux/arm64 and linux/arm/v7, published
   to the GitHub Container Registry with each release and carrying the same build
-  attestations as the release archives. The documentation pins it by digest.
+  attestations as the release archives, and a software bill of materials. The documentation pins it by digest.
 - **No privileges.** The tunnel runs in the process (WireGuard on gVisor netstack), so the
   container needs no `NET_ADMIN`, no `/dev/net/tun` and no `--privileged`. It runs as its
   own user with a read-only root file system; the state is one volume

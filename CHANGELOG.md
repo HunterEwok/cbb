@@ -7,6 +7,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- Each release carries software bills of materials in CycloneDX 1.6 JSON, listed in
+  `SHA256SUMS` and the signed `release.json`: the Go programs' modules, the lite member's crates,
+  the phones' Rust core, the iPhone kit's Swift packages and the Android apps' Maven modules,
+  made by `tools/sbom`; the Docker image carries its own as an attestation in the registry
+  (docs/maintaining.md, "Releases").
 - A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both

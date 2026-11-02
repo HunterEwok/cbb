@@ -240,7 +240,7 @@ func TestPublish(t *testing.T) {
 	g.file(g.channel(), "stable.json", &c)
 	g.file(g.release("v0.6.0"), "release.json", &r)
 	if ks.Seq != 1 || len(ks.Keys) != 2 || ks.Keys[1].Use != release.UseChannel || c.Seq != 1 || c.Release != "0.6.0" ||
-		r.MinFrom != "0.5.0" || r.Docker == nil || len(r.Files) != 3 {
+		r.MinFrom != "0.5.0" || r.Docker == nil || len(r.Files) != 4 {
 		t.Fatalf("keys %+v, channel %+v, release %+v", ks, c, r)
 	}
 	g.verifyPublished("v0.6.0")

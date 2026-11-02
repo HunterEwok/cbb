@@ -156,7 +156,7 @@ func publish(args []string) error {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if strings.HasSuffix(name, ".json") {
+		if describes(name) {
 			// From an earlier run; signed again below.
 			if err := os.Remove(filepath.Join(dir, name)); err != nil {
 				return err

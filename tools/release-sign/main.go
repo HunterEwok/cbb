@@ -126,7 +126,7 @@ func buildManifest(dir, version, ch, minFrom, docker string) (release.Release, e
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if !e.Type().IsRegular() || strings.HasSuffix(name, ".json") {
+		if !e.Type().IsRegular() || describes(name) {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(dir, name))
@@ -148,6 +148,14 @@ func buildManifest(dir, version, ch, minFrom, docker string) (release.Release, e
 		return r, err
 	}
 	return r, nil
+}
+
+// describes tells the files that describe a release (release.json and the
+// like, which release-sign signs) from the release's own files; the
+// software bills of materials (tools/sbom) are JSON too, and are the
+// release's files.
+func describes(name string) bool {
+	return strings.HasSuffix(name, ".json") && !strings.HasSuffix(name, ".cdx.json")
 }
 
 func hexSum(data []byte) string {

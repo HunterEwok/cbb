@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Builds a release from a version tag: an archive per platform, the lite
 # member's archives, the Android app's and the Wear OS app's APKs, SHA256SUMS,
-# the Linux and Windows installers and a build provenance attestation for each
-# file, the Docker image on ghcr.io and the winget manifest; with a
+# the Linux and Windows installers, a software bill of materials for each part
+# (tools/sbom) and a build provenance attestation for each file, the Docker
+# image on ghcr.io with its bill of materials and the winget manifest; with a
 # certificate in the secrets, the signed Windows programs, and with the
 # feed's key, the OpenWrt apk feed.
 # It makes a draft release, only after the iPhone app's CodeQL analysis
@@ -201,6 +202,11 @@ jobs:
           cp app/build/outputs/apk/full/release/app-full-release.apk "$RUNNER_TEMP/dist/clipboardbridge-$version.apk"
           cp app/build/outputs/apk/fdroid/release/app-fdroid-release.apk "$RUNNER_TEMP/dist/clipboardbridge-fdroid-$version.apk"
           cp wear/build/outputs/apk/release/wear-release.apk "$RUNNER_TEMP/dist/clipboardbridge-wear-$version.apk"
+          # What the three are built from (tools/sbom); the Rust core and the Go
+          # tunnel inside them are in the release's other bills of materials.
+          ./gradlew --no-daemon --no-configuration-cache --init-script ../../packaging/sbom.init.gradle.kts \
+            -Pcbb.sbom.configs=fullReleaseRuntimeClasspath,fdroidReleaseRuntimeClasspath,releaseRuntimeClasspath :app:cbbSbom :wear:cbbSbom
+          (cd ../.. && go run ./tools/sbom gradle -o "$RUNNER_TEMP/dist/sbom-android.cdx.json" -version "$version" apps/android/build/sbom/*.txt)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android
@@ -333,7 +339,7 @@ jobs:
     if: github.ref_type == 'tag'
     needs: [build, android, lite, litemips, codeql-swift, openwrt-feed]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: write # create the release
       id-token: write # sign the attestations
@@ -346,11 +352,30 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # a release builds from scratch
+      - name: the software bills of materials (tools/sbom, docs/maintaining.md)
+        # The Go programs' modules from the programs themselves; the crates of
+        # the lite member and of the phones' Rust core on their targets; the
+        # Swift kit's packages. The Android apps' came with their APKs.
+        run: |
+          go run ./tools/sbom go -o dist/sbom-go.cdx.json -version "$GITHUB_REF_NAME" \
+            dist/clipboardbridge-linux-*.tar.gz dist/clipboardbridge-darwin-*.tar.gz \
+            dist/clipboardbridge-freebsd-*.tar.gz dist/clipboardbridge-windows-*.zip
+          go run ./tools/sbom cargo -o dist/sbom-lite.cdx.json -version "$GITHUB_REF_NAME" -manifest lite/Cargo.toml \
+            -package clipboardbridge-lite \
+            -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl
+          go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$GITHUB_REF_NAME" -manifest lite/Cargo.toml \
+            -package clipboardbridge-ffi \
+            -target aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          go run ./tools/sbom swift -o dist/sbom-ios-kit.cdx.json -version "$GITHUB_REF_NAME" apps/ios/ClipboardBridgeKit/Package.resolved
       - name: checksums
         run: |
           cp packaging/get.sh packaging/windows/get.ps1 dist/
           cd dist
-          set -- *.tar.gz *.zip get.sh get.ps1
+          set -- *.tar.gz *.zip get.sh get.ps1 *.cdx.json
           for f in *.apk; do [ -e "$f" ] && set -- "$@" "$f"; done
           sha256sum -- "$@" >SHA256SUMS
           cat SHA256SUMS
@@ -406,6 +431,14 @@ jobs:
           pattern: clipboardbridge-linux-*
           path: dist
           merge-multiple: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # a release builds from scratch
+      - name: the image's bill of materials, from the programs in it (tools/sbom)
+        run: |
+          go run ./tools/sbom go -o "$RUNNER_TEMP/image.cdx.json" -name "$IMAGE" -version "$GITHUB_REF_NAME" \
+            dist/clipboardbridge-linux-amd64.tar.gz dist/clipboardbridge-linux-arm64.tar.gz dist/clipboardbridge-linux-armv7.tar.gz
       - name: the build context
         run: |
           for a in amd64 arm64 armv7; do
@@ -425,8 +458,9 @@ jobs:
           version=${GITHUB_REF_NAME#v}
           set -- -t "$IMAGE:$version"
           case $GITHUB_REF_NAME in *-*) ;; *) set -- "$@" -t "$IMAGE:latest" ;; esac
-          # The attestation below is GitHub's; buildx's own would add a platform
-          # "unknown" to the index, which confuses some NAS systems.
+          # The attestations below are GitHub's, the provenance and the bill of
+          # materials; buildx's own would add a platform "unknown" to the
+          # index, which confuses some NAS systems.
           docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --provenance=false --sbom=false \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.version=$version" \
@@ -439,6 +473,12 @@ jobs:
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3.0.0
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/image.cdx.json
           push-to-registry: true
       - name: the digest in the release notes
         env:

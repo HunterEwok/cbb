@@ -194,6 +194,23 @@ Rules for workflows:
   check the result by importing it on an iPhone, and commit the signed file.
 - Published with `SHA256SUMS` and a build provenance attestation
   (`actions/attest-build-provenance`), which users can check with `gh attestation verify`.
+- What a release is built from: a software bill of materials in CycloneDX 1.6 JSON for each
+  part, made by `tools/sbom` and listed in `SHA256SUMS` and the signed `release.json` like the
+  other files:
+  - `sbom-go.cdx.json`: the Go modules of every program in the archives (`cbb` and the tray
+    app), read from the programs' own build information, and Go's standard library;
+  - `sbom-lite.cdx.json`: the crates the lite member is built with on its targets, without the
+    ones only tests and build scripts use, with their checksums from `lite/Cargo.lock`;
+  - `sbom-phone-core.cdx.json`: the same for the Rust core both phone apps link (`lite/ffi`);
+  - `sbom-ios-kit.cdx.json`: the Swift packages of the iPhone kit (`Package.resolved`);
+  - `sbom-android.cdx.json`: the Maven modules of the Android app's two builds and the Wear OS
+    app, listed by `packaging/sbom.init.gradle.kts`, an init script that leaves the apps' build
+    files as they are.
+
+  The Docker image carries its own as a GitHub attestation in the registry
+  (`actions/attest-sbom`), not as buildx's, which would add a platform "unknown" to the index.
+  The same input makes the same file (no time; a serial number derived from the content).
+  CI's `packaging` and `Android app` jobs make them on every change, as the release does.
 - After the draft, the `docker` job builds the image of `packaging/docker` from the
   release's own Linux archives for amd64, arm64 and armv7, pushes it to
   `ghcr.io/hunterewok/clipboardbridge` as `X.Y.Z` (and `latest`, but not for a pre-release),
