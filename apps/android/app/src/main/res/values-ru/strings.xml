@@ -55,6 +55,7 @@
     <string name="scan_hint">Наведите камеру на QR-код cbb pair или на код, который показывает ваш другой телефон.</string>
     <string name="paste_hint">Вставьте текст QR-кода cbb pair.</string>
     <string name="camera_denied">Доступ к камере не разрешён. Разрешите его в настройках приложения, чтобы сканировать, или вставьте текст QR-кода cbb pair.</string>
+    <string name="camera_failed">Камера не запустилась. Вставьте вместо этого текст QR-кода cbb pair.</string>
     <string name="qr_text">Текст QR-кода</string>
     <string name="connecting">Подключение к устройству…</string>
     <string name="not_a_code">Это не QR-код Clipboard Bridge.</string>

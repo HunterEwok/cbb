@@ -359,6 +359,8 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
     }
     // The device being admitted: one at a time; leaving the page cancels it.
     var adding by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    // Why the camera did not start, if it did not.
+    var cameraError by remember { mutableStateOf<Exception?>(null) }
     val add = { text: String ->
         if (adding == null) {
             adding = scope.launch {
@@ -372,12 +374,16 @@ internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
     }
     BackHandler { close() }
     Page(stringResource(R.string.add_device), close) {
-        if (hasCamera && allowed) {
+        if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> scope.launch { if (!model.busy) add(text) } },
                 modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
+                onError = { cameraError = it },
             )
             Text(stringResource(R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        } else if (cameraError != null) {
+            // The camera did not start: the text of the QR code still works.
+            NoteText(model.describe(cameraError!!, R.string.camera_failed, log = false))
         } else {
             Text(
                 stringResource(if (hasCamera) R.string.camera_denied else R.string.paste_hint),

@@ -175,6 +175,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Whether the app is in front: the phone is the hub only then, unless the user lets it run in the background. */
     @Volatile private var foreground = false
+    private var started = 0 // under lock: the app's started activities
 
     /**
      * This phone's sync mode (docs/design.md, "Sync modes"), in the file
@@ -268,9 +269,16 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Whether the app is in front now, so the hub's status says it waits for it. */
     val inForeground: Boolean get() = foreground
 
-    /** Tells the group the app came to the front or went to the background; the hub follows. */
+    /**
+     * Tells the group an activity of the app came to the front (on) or
+     * stopped; the hub follows. It counts them: a finished activity may
+     * stop after the next one started, and the app is in front while one is.
+     */
     fun setForeground(on: Boolean) {
-        foreground = on
+        foreground = synchronized(lock) {
+            started = maxOf(0, started + if (on) 1 else -1)
+            started > 0
+        }
         refreshHub()
     }
 
@@ -408,8 +416,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val trusted = { synchronized(lock) { state?.trusted }.orEmpty() }
         val onError: (Exception) -> Unit = { e -> Log.w(TAG, "a member connection to the hub failed", e) }
         val loop = synchronized(lock) { tunnelListener } ?: runCatching {
-            MemberListener(n, member.privateKey, g.memberChain, trusted, onError = onError)
-        }.onFailure { Log.w(TAG, "the hub cannot listen", it) }.getOrNull()?.also { l -> synchronized(lock) { tunnelListener = l } } ?: return
+            MemberListener(n, member.privateKey, g.memberChain, trusted, onError = onError,
+                onEnded = { id -> Log.i(TAG, "a member connection to the hub through its tunnel ended: $id") })
+        }.onFailure { Log.w(TAG, "the hub cannot listen", it) }.getOrNull()?.also { l ->
+            synchronized(lock) { tunnelListener = l }
+            Log.i(TAG, "the hub's member listener takes connections through the tunnel on port ${l.port}")
+        } ?: return
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         h.start(HubOnPhone.Group(loop.port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords))
         if (!h.isHome(currentNetwork())) {
@@ -441,9 +453,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     private fun stopHub() {
         stopHome()
-        val l = synchronized(lock) { tunnelListener.also { tunnelListener = null } }
+        val (l, h) = synchronized(lock) { tunnelListener.also { tunnelListener = null } to hub }
+        if (l != null) Log.i(TAG, "the hub's member listener on port ${l.port} stops${if (h == null) ", with no hub to stop" else ""}")
         l?.stop()
-        synchronized(lock) { hub }?.stop()
+        h?.stop()
     }
 
     /** Forgets the hub's clients the records removed and hands its forwarder the new authority records. */
@@ -905,6 +918,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Sets this phone's own sync mode and keeps it. */
     fun setOwnMode(mode: String) {
         require(mode in Member.MODES) { "unknown sync mode $mode" }
+        // A phone making its first group sets its mode before the group's
+        // file, which makes the folder, is written.
+        modeFile.parentFile?.mkdirs()
         val tmp = File(modeFile.parentFile, "mode.tmp")
         tmp.writeText(mode + "\n")
         if (!tmp.renameTo(modeFile)) throw IOException("cannot save the sync mode")
@@ -1377,6 +1393,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Stops syncing and starts again, with a new certificate or new roots. */
     private fun restartSync() {
+        Log.i(TAG, "connecting to the group again")
         val (d, b, n) = synchronized(lock) {
             Triple(dialer, browser, node).also {
                 dialer = null
@@ -1593,6 +1610,18 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Whether a computer is connected now. */
     val online: Boolean get() = currentNode?.connected?.isNotEmpty() == true
+
+    /**
+     * The group's latest copy while the button would fetch it first
+     * (SyncRule.decide): another device's, younger than RECENT_COPY_MS;
+     * null otherwise. The tests wait it out before they send.
+     */
+    internal val recentCopy: Member.Event?
+        get() {
+            val (n, device) = synchronized(lock) { node to state?.device }
+            val e = n?.current ?: return null
+            return e.takeIf { it.origin != device && it.via == Member.Via.COPY && it.ageMS < SyncRule.RECENT_COPY_MS }
+        }
 
     /** What the button fetched for the phone's clipboard: a text, or an image in the app's cache with its text. */
     sealed class Got {
