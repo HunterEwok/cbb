@@ -58,7 +58,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 import java.io.File
 import java.io.IOException
 import java.net.Inet4Address
@@ -1149,6 +1152,44 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         return WatchState.Admission(request.device, ca, g.tag)
     }
 
+    /** When the group's recovery key was made, while it has one (docs/protocol.md, section 10, "The recovery key"). */
+    val recoveryMade: Instant?
+        get() = synchronized(lock) {
+            val g = state ?: return null
+            val key = g.records.recovery ?: return null
+            recoveryTime?.takeIf { it.first.contentEquals(key) }?.let { return it.second }
+            recoveryMade(key, g.records.records).also { recoveryTime = key to it }
+        }
+
+    /** The recovery key's hash and when its record says it was made, so the records are read once per key. lock is held. */
+    private var recoveryTime: Pair<ByteArray, Instant?>? = null
+
+    /**
+     * Makes the group's recovery key: the root key, after the fingerprint,
+     * the face or the screen lock, issues it an admin CA and signs the
+     * `recovery` record, which every member gets. The key itself leaves
+     * only on its sheet.
+     */
+    suspend fun makeRecovery(): Core.RecoverySheet {
+        if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
+        val root = caSigner(R.string.reason_make_recovery)
+        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
+        val made = withContext(Dispatchers.IO) { g.makeRecovery(root, Instant.now()) }
+        withContext(Dispatchers.IO) { adopt(g) }
+        published(listOf(made.record))
+        return made.sheet
+    }
+
+    /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */
+    suspend fun removeRecovery() {
+        if (!isRoot) throw PhoneGroup.Failure("only the root removes the recovery key")
+        val root = caSigner(R.string.reason_remove_recovery)
+        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
+        val r = withContext(Dispatchers.IO) { g.removeRecovery(root, Instant.now()) }
+        withContext(Dispatchers.IO) { adopt(g) }
+        published(listOf(r))
+    }
+
     /** What the group's watch may do to a device (PhoneGroup.WatchAction keys). */
     fun watchActions(id: String): List<String> = synchronized(lock) { state?.watchActions(id).orEmpty().map { it.key } }
 
@@ -1722,6 +1763,19 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
 
     companion object {
+        /** The time of the newest `recovery` record that names key. */
+        internal fun recoveryMade(key: ByteArray, records: List<Member.Record>): Instant? {
+            for (r in records.asReversed()) {
+                val o = runCatching { Json.parseToJsonElement(String(r.body)).jsonObject }.getOrNull() ?: continue
+                fun field(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
+                if (field("type") != "recovery") continue
+                val admin = field("admin")?.let { runCatching { java.util.Base64.getDecoder().decode(it) }.getOrNull() } ?: continue
+                val ms = (o["time_ms"] as? JsonPrimitive)?.longOrNull ?: continue
+                if (admin.contentEquals(key)) return Instant.ofEpochMilli(ms)
+            }
+            return null
+        }
+
         private const val TAG = "clipboardbridge"
 
         /** The most command IDs the replay cache keeps; a command lives at most 30 s, as Go's maxCommandIDs. */

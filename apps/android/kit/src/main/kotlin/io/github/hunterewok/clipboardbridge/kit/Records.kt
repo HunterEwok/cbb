@@ -58,6 +58,9 @@ object Records {
         // claim
         var root: ByteArray? = null
 
+        // recovery: the recovery key's admin CA, DER
+        var cert: ByteArray? = null
+
         // settings
         var takeoverDelayMS: Long? = null
 
@@ -92,6 +95,7 @@ object Records {
                 "keys" to once(keys),
                 "records" to once(records),
                 "root" to b(root),
+                "cert" to b(cert),
                 "takeover_delay_ms" to takeoverDelayMS?.let { Wire.num(it) },
                 "hubs" to strs(hubs),
             )
@@ -313,11 +317,13 @@ class RecordSet {
         val conflicts: List<Conflict> = emptyList(),
         /** How many records of a later version the set keeps. */
         val newer: Int = 0,
+        /** The key hash of the group's recovery key, while one counts. */
+        val recovery: ByteArray? = null,
     ) {
         override fun equals(other: Any?): Boolean =
             other is State && rootDevice == other.rootDevice && roots.sameAs(other.roots) && stop == other.stop && claims == other.claims &&
                 revoked.sameAs(other.revoked) && noSecretsTo == other.noSecretsTo && nothingTo == other.nothingTo &&
-                conflicts == other.conflicts && newer == other.newer
+                conflicts == other.conflicts && newer == other.newer && recovery.contentEquals(other.recovery)
 
         override fun hashCode(): Int = stop.hashCode()
 
@@ -349,6 +355,7 @@ class RecordSet {
                     Conflict(c.optString("kind") ?: "", c.optBytesList("records").orEmpty(), c.optBytesList("signers").orEmpty())
                 },
                 newer = o.optArray("newer")?.size ?: 0,
+                recovery = o.optBytes("recovery"),
             )
         }
     }
@@ -502,6 +509,9 @@ class RecordSet {
 
     /** The keys the records revoke, in hex. */
     val revoked: Set<String> get() = view.state.revoked.map { it.toHex() }.toSet()
+
+    /** The key hash of the group's recovery key, while one counts. */
+    val recovery: ByteArray? get() = view.state.recovery
 
     /** Whether a key hash is revoked. */
     fun isRevoked(keyHash: ByteArray): Boolean = keyHash.toHex() in revoked

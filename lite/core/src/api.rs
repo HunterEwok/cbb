@@ -181,6 +181,8 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "canonicalize" => canonicalize(serde_json::from_value(args).map_err(bad_args)?),
         "check_member" => check_member(serde_json::from_value(args).map_err(bad_args)?),
         "read_invite" => read_invite(serde_json::from_value(args).map_err(bad_args)?),
+        "recovery_sheet" => recovery_sheet(serde_json::from_value(args).map_err(bad_args)?),
+        "read_recovery_sheet" => read_recovery_sheet(serde_json::from_value(args).map_err(bad_args)?),
         _ => group::dispatch(op, &args)
             .or_else(|| signed::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
@@ -460,6 +462,68 @@ fn read_invite(a: InviteArgs) -> Result<Vec<u8>, Refusal> {
     }))
 }
 
+/// The arguments of `recovery_sheet`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SheetArgs {
+    #[serde(with = "b64")]
+    key: Vec<u8>,
+    #[serde(with = "b64")]
+    cert: Vec<u8>,
+    group: String,
+}
+
+/// `recovery_sheet`: the recovery sheet for a key of 32 bytes, its admin
+/// CA and the group's tag: `{"qr", "text", "admin"}`, the QR code's text,
+/// the key as groups of four, and the key's hash as the `recovery` record
+/// names it.
+fn recovery_sheet(a: SheetArgs) -> Result<Vec<u8>, Refusal> {
+    use crate::recovery::{self, Reason};
+    let key = recovery::secret_key(&a.key)
+        .ok_or_else(|| refuse(Code::Request, Error::msg("The recovery key is not a P-256 key of 32 bytes.")))?;
+    let qr = recovery::qr(&key, &a.cert, &a.group).map_err(|r| {
+        let code = if r == Reason::Group { Code::Request } else { Code::Cert };
+        refuse(code, Error::msg(alloc::format!("The recovery sheet cannot be made: {}.", r.message())))
+    })?;
+    let sheet = recovery::Sheet { key, cert: None, group: None };
+    let admin =
+        sheet.admin().ok_or_else(|| refuse(Code::Request, Error::msg("The recovery key's hash cannot be made.")))?;
+    Ok(json(serde_json::json!({
+        "qr": qr,
+        "text": recovery::text(&sheet.key),
+        "admin": b64_value(&admin),
+    })))
+}
+
+/// `read_recovery_sheet`: a recovery sheet's QR code or text read and
+/// checked: `{"sheet": {"key", "pkcs8", "public", "admin", "cert",
+/// "group"}}` (cert and group only from the QR code), or `{"refused":
+/// {"reason", "message"}}` as read_invite.
+fn read_recovery_sheet(a: InviteArgs) -> Result<Vec<u8>, Refusal> {
+    let s = match crate::recovery::read(&a.text) {
+        Ok(s) => s,
+        Err(r) => {
+            return Ok(json(serde_json::json!({ "refused": { "reason": r.name(), "message": r.message() } })));
+        }
+    };
+    let (pkcs8, admin) = s
+        .pkcs8()
+        .zip(s.admin())
+        .ok_or_else(|| refuse(Code::Request, Error::msg("The recovery key cannot be encoded.")))?;
+    let mut m = serde_json::Map::new();
+    m.insert("key".into(), b64_value(&s.scalar()));
+    m.insert("pkcs8".into(), b64_value(&pkcs8));
+    m.insert("public".into(), b64_value(&s.public()));
+    m.insert("admin".into(), b64_value(&admin));
+    if let Some(cert) = &s.cert {
+        m.insert("cert".into(), b64_value(cert));
+    }
+    if let Some(group) = &s.group {
+        m.insert("group".into(), Value::from(group.as_str()));
+    }
+    Ok(json(serde_json::json!({ "sheet": Value::Object(m) })))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -493,6 +557,50 @@ mod tests {
             let want = alloc::format!("{{\"abi\":{ABI},\"ok\":{}}}", c["state"].as_str().unwrap());
             assert_eq!(String::from_utf8(out).unwrap(), want, "{}", c["name"]);
         }
+    }
+
+    /// recovery_sheet and read_recovery_sheet give what
+    /// testdata/interop/recovery-sheet.json says, and refuse bad requests.
+    #[test]
+    fn recovery_sheets() {
+        let path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/interop/recovery-sheet.json");
+        let v: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let s = &v["sheet"];
+        let args = serde_json::json!({"key": s["key"], "cert": s["cert"], "group": s["group"]});
+        let got = ask("recovery_sheet", args.clone());
+        assert_eq!(got["ok"], serde_json::json!({"qr": s["qr"], "text": s["text"], "admin": s["admin"]}));
+
+        let got = &ask("read_recovery_sheet", serde_json::json!({"text": s["qr"]}))["ok"]["sheet"];
+        for f in ["key", "cert", "group", "admin"] {
+            assert_eq!(got[f], s[f], "{f}");
+        }
+        let pkcs8 = base64::engine::general_purpose::STANDARD.decode(got["pkcs8"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            crate::identity::public_key(&pkcs8).unwrap(),
+            base64::engine::general_purpose::STANDARD.decode(got["public"].as_str().unwrap()).unwrap()
+        );
+        let got = &ask("read_recovery_sheet", serde_json::json!({"text": s["text"]}))["ok"]["sheet"];
+        assert_eq!(got["key"], s["key"]);
+        assert_eq!(got["admin"], s["admin"]);
+        assert!(got.get("cert").is_none() && got.get("group").is_none(), "{got}");
+        for c in v["refused"].as_array().unwrap() {
+            let got = ask("read_recovery_sheet", serde_json::json!({"text": c["text"]}));
+            assert_eq!(got["ok"]["refused"]["reason"], c["reason"], "{c}");
+            assert!(!got["ok"]["refused"]["message"].as_str().unwrap().is_empty());
+        }
+
+        let mut bad = args.clone();
+        bad["key"] = Value::from("AAAA");
+        assert_eq!(code(&ask("recovery_sheet", bad)), Code::Request as u64);
+        let mut bad = args.clone();
+        bad["group"] = Value::from("nope");
+        assert_eq!(code(&ask("recovery_sheet", bad)), Code::Request as u64);
+        let mut bad = args.clone();
+        bad["key"] = v["texts"][1]["key"].clone();
+        assert_eq!(code(&ask("recovery_sheet", bad)), Code::Cert as u64);
+        assert_eq!(code(&ask("recovery_sheet", serde_json::json!({}))), Code::Request as u64);
+        assert_eq!(code(&ask("read_recovery_sheet", serde_json::json!({}))), Code::Request as u64);
     }
 
     /// read_invite answers each text of testdata/interop/invites.json as

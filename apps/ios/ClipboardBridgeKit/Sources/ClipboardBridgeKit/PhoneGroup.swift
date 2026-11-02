@@ -172,6 +172,8 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         case notAWatch
         /// A watch may not do that to the device (section 10, "Watches").
         case notForWatch
+        /// The group has no recovery key to remove.
+        case noRecovery
     }
 
     /// Adds records from other members, then follows the roots they lead
@@ -476,6 +478,43 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
                            store: store, kind: proven ? d.kind : nil, proof: proven ? d.proof : nil, seal: d.seal, caSigner: rootSigner, now: now)
         computerAdmins[device] = ca
         return (ca, r)
+    }
+
+    /// A new recovery key (docs/protocol.md, section 10, "The recovery
+    /// key"): its 32 bytes, the admin CA the root issued it, the
+    /// `recovery` record to send and the sheet to print. The app shows the
+    /// sheet once and then forgets the key; nothing of it stays here.
+    public struct Recovery: Sendable {
+        public var key: Data
+        public var adminCA: Data
+        public var record: Member.Record
+        public var sheet: Core.RecoverySheet
+    }
+
+    /// Makes the group's recovery key, as the root: a new P-256 key, an
+    /// admin CA for it under the current root (its CN names a random ID,
+    /// since the key has no device) and the `recovery` record that names
+    /// it, which replaces the recovery key before it.
+    public mutating func makeRecovery(rootSigner: CertificateSigner, now: Date) throws -> Recovery {
+        guard isRoot else { throw Failure.notRoot }
+        let key = P256.Signing.PrivateKey()
+        let ca = try GroupCertificates.adminCA(device: SyncEngine.newID(), publicKey: key.publicKey.derRepresentation,
+                                               root: currentRoot, rootSigner: rootSigner)
+        let sheet = try Core.recoverySheet(key: key.rawRepresentation, cert: ca, group: tag)
+        var b = Records.Body(type: "recovery", signer: Self.signer(rootSigner), timeMS: Records.ms(now))
+        (b.admin, b.cert) = (sheet.admin, ca)
+        let r = try sign(b, caSigner: rootSigner)
+        return Recovery(key: key.rawRepresentation, adminCA: ca, record: r, sheet: sheet)
+    }
+
+    /// Removes the group's recovery key, as the root: a revocation of its
+    /// key. It returns the record to send.
+    public mutating func removeRecovery(rootSigner: CertificateSigner, now: Date) throws -> Member.Record {
+        guard isRoot else { throw Failure.notRoot }
+        guard let k = records.recovery else { throw Failure.noRecovery }
+        var b = Records.Body(type: "revoke", signer: Self.signer(rootSigner), timeMS: Records.ms(now))
+        b.keys = [k]
+        return try sign(b, caSigner: rootSigner)
     }
 
     /// Makes a watch an admin (section 10, "Watches"): the root issues an

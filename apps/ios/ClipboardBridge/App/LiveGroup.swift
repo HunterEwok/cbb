@@ -191,6 +191,57 @@ final class LiveGroup: GroupController {
     var isRoot: Bool { state?.isRoot ?? false }
     var alerts: [GroupAlert] { state?.records.alerts ?? [] }
 
+    /// When the counting recovery record was signed, from its body; kept
+    /// for its key, since the app asks on every refresh.
+    var recoveryMade: Date? {
+        guard let g = state, let key = g.records.recovery else { return nil }
+        if let c = recoveryTime, c.key == key { return c.at }
+        let at = Self.recoveryMade(of: key, in: g.records.records)
+        recoveryTime = (key, at)
+        return at
+    }
+
+    private var recoveryTime: (key: Data, at: Date?)?
+
+    private static func recoveryMade(of key: Data, in records: [Member.Record]) -> Date? {
+        for r in records.reversed() {
+            guard let o = try? JSONSerialization.jsonObject(with: r.body) as? [String: Any], o["type"] as? String == "recovery",
+                  let admin = (o["admin"] as? String).flatMap({ Data(base64Encoded: $0) }), admin == key,
+                  let ms = (o["time_ms"] as? NSNumber)?.int64Value else { continue }
+            return Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
+        }
+        return nil
+    }
+
+    /// Makes the group's recovery key (docs/protocol.md, section 10, "The
+    /// recovery key"): the root key, after Face ID, issues it an admin CA and
+    /// signs the recovery record, which every member gets. The key itself
+    /// leaves only on its sheet.
+    func makeRecovery() async throws -> Core.RecoverySheet {
+        guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
+        let root = try await caSigner(reason: String(localized: "Make a recovery key", bundle: .app))
+        guard var g = state else { throw PhoneGroup.Failure.notRoot }
+        let made = try g.makeRecovery(rootSigner: root, now: Date())
+        try g.save(to: file)
+        state = g
+        groupChanged()
+        await node?.sendRecords([made.record])
+        return made.sheet
+    }
+
+    /// Removes the group's recovery key: a revocation of it, signed with the
+    /// root key after Face ID and sent to every member.
+    func removeRecovery() async throws {
+        guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
+        let root = try await caSigner(reason: String(localized: "Remove the recovery key", bundle: .app))
+        guard var g = state else { throw PhoneGroup.Failure.notRoot }
+        let r = try g.removeRecovery(rootSigner: root, now: Date())
+        try g.save(to: file)
+        state = g
+        groupChanged()
+        await node?.sendRecords([r])
+    }
+
     /// The label of the key this phone signs with: the root key, or the
     /// admin key of a phone that joined.
     nonisolated static func signingLabel(_ g: PhoneGroup?) -> String { g?.isRoot == false ? adminLabel : caLabel }

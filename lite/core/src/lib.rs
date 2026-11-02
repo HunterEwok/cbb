@@ -56,6 +56,7 @@ pub mod invite;
 pub mod keyboard;
 pub mod media;
 pub mod pair;
+pub mod recovery;
 pub mod release;
 pub mod seal;
 pub mod store;
