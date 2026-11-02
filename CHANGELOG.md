@@ -12,6 +12,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   makes and reads (`recovery_sheet`, `read_recovery_sheet`; docs/protocol.md, section 10). The
   phones' kits make the group's recovery key with its admin CA and `recovery` record, and remove
   it; the apps' button follows.
+- The iPhone app makes the recovery key: Settings, "Recovery key" on the root phone, after Face
+  ID. Its sheet shows once, to print or save as a PDF, and the phone forgets the key when it
+  closes; a new key replaces the old one, and the key can be removed.
 - The quick action `keyboard-layout` switches the layout a Linux computer's Bluetooth keyboard
   types in to the next one (`us`, `ru`), for when the device it types on switched its own; the
   apps show it as "Switch the keyboard's layout" once the computer's user turns it on.
