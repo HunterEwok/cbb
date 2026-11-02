@@ -66,9 +66,11 @@ func trim(b []byte) []byte {
 	return bytes.TrimLeft(b, "\x00")
 }
 
-// srpX is x = H(s | H(I ":" P)).
-func srpX(salt []byte, password string) *big.Int {
-	return hashInt(trim(salt), hash([]byte(SRPUser+":"+password)))
+// srpX is x = H(s | H(I ":" P)), P the PIN the TV shows for this one
+// pairing. SHA-512 is the protocol's: nothing is stored to slow down a
+// guess, and a wrong guess ends the pairing on the TV.
+func srpX(salt []byte, code string) *big.Int {
+	return hashInt(trim(salt), hash([]byte(SRPUser+":"+code)))
 }
 
 // srpProofs are M1 = H(H(N) xor H(g) | H(I) | s | A | B | K) and
@@ -112,10 +114,10 @@ func newSRPClient(a *big.Int) *SRPClient {
 	return &SRPClient{a: a, A: new(big.Int).Exp(srpG, a, srpN)}
 }
 
-// Respond takes the TV's salt and public key B and the code, and returns
+// Respond takes the TV's salt and public key B and the PIN, and returns
 // the client's public key A, its proof M1, the proof M2 the TV must send
 // back, and the session key K.
-func (c *SRPClient) Respond(salt, serverPublic []byte, password string) (public, m1, m2, key []byte, err error) {
+func (c *SRPClient) Respond(salt, serverPublic []byte, code string) (public, m1, m2, key []byte, err error) {
 	b := new(big.Int).SetBytes(serverPublic)
 	if new(big.Int).Mod(b, srpN).Sign() == 0 {
 		return nil, nil, nil, nil, errors.New("the TV's SRP public key is zero")
@@ -124,7 +126,7 @@ func (c *SRPClient) Respond(salt, serverPublic []byte, password string) (public,
 	if u.Sign() == 0 {
 		return nil, nil, nil, nil, errors.New("the SRP scrambler is zero")
 	}
-	x := srpX(salt, password)
+	x := srpX(salt, code)
 	v := new(big.Int).Exp(srpG, x, srpN)
 	base := new(big.Int).Sub(b, new(big.Int).Mul(srpK, v))
 	base.Mod(base, srpN)
@@ -137,13 +139,12 @@ func (c *SRPClient) Respond(salt, serverPublic []byte, password string) (public,
 
 // SRPServer is the TV's side, for the fake TV of the tests.
 type SRPServer struct {
-	Salt     []byte
-	v, b, B  *big.Int
-	password string
+	Salt    []byte
+	v, b, B *big.Int
 }
 
 // NewSRPServer makes a salt and the server's keys for the code.
-func NewSRPServer(password string) (*SRPServer, error) {
+func NewSRPServer(code string) (*SRPServer, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return nil, err
@@ -152,15 +153,15 @@ func NewSRPServer(password string) (*SRPServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newSRPServer(salt, b, password), nil
+	return newSRPServer(salt, b, code), nil
 }
 
-func newSRPServer(salt []byte, b *big.Int, password string) *SRPServer {
-	v := new(big.Int).Exp(srpG, srpX(salt, password), srpN)
+func newSRPServer(salt []byte, b *big.Int, code string) *SRPServer {
+	v := new(big.Int).Exp(srpG, srpX(salt, code), srpN)
 	B := new(big.Int).Mul(srpK, v)
 	B.Add(B, new(big.Int).Exp(srpG, b, srpN))
 	B.Mod(B, srpN)
-	return &SRPServer{Salt: salt, v: v, b: b, B: B, password: password}
+	return &SRPServer{Salt: salt, v: v, b: b, B: B}
 }
 
 // Public is B.
