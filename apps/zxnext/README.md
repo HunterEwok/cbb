@@ -82,16 +82,41 @@ written, so the bridge closes its own file once it has loaded (from 0.4.2); the 
 runs from the next start. Before the first such update, copy the bridge to the card once, for example with NextZXOS's
 `.http`, which downloads through the same ESP.
 
+## The driver: the network in the background
+
+`CBB.DRV` (`drv/`) is a NextZXOS driver that gives the lite member on the Pi a network
+through the ESP8266 while any program runs (docs/roadmap.md, "The Next's network in the
+background"). Its 512 bytes (`stub.asm`) page its 8K bank in at $E000 on every frame's
+interrupt and for its API, and put back the bank they found; the bank (`bank.asm`) does
+the work:
+
+- it reads the Pi's frames while its 1 KB ring for the ESP has room for one more, so the
+  Pi's bytes wait in the Pi's UART, never lost, and sends the ESP what its 64-byte buffer
+  takes;
+- it sends the Pi up to 48 of the ESP's bytes a frame, how many of the Pi's bytes it has
+  taken (the Pi sends at most 384 ahead), a hello every second and the clock every minute
+  (NextZXOS's `drv_drvrtc`);
+- it types the characters of the Pi's key frames, one a frame once the program took the
+  last (`LAST_K` and bit 5 of `FLAGS`, as the ROM does for a key);
+- it restores the UART selection it found, and stops on the Pi's quit frame.
+
+The frames are those of `cbb next link` (lite/README.md, "The network through the Next's
+ESP8266"). The driver starts off, so that nothing reaches NextPi's shell before the link
+runs; its API turns it on: `DRIVER 124,2,1` (1 the counters: the ESP's overflows, dropped
+frames, bytes taken; 2 on or off; 3 whether it is on). Its id, 124, is not assigned by
+NextZXOS's maintainers yet.
+
 ## Build
 
 With [z88dk](https://github.com/z88dk/z88dk) 2.3 (`zcc` on the `PATH`, `ZCCCFG` pointing
 at its `lib/config`):
 
 ```sh
-make          # build/CBB and build/PIBRIDGE: copy them to C:/DOT on the Next's SD card
-make test     # the frame parser's tests, with the host's C compiler
+make          # build/CBB, build/PIBRIDGE (copy them to C:/DOT) and build/CBB.DRV
+make test     # the frame parser's tests with the host's C compiler, and the driver's
+              # bank in a Z80 emulator against two played UARTs (drvtest, with cargo)
 ```
 
 CI's `ZX Spectrum Next` job builds z88dk from its release source, checked against a
-SHA-256, and runs both; the run keeps `CBB` and `PIBRIDGE` as its artifact
+SHA-256, and runs both; the run keeps `CBB`, `PIBRIDGE` and `CBB.DRV` as its artifact
 `clipboardbridge-zxnext-dot`.

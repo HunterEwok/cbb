@@ -42,6 +42,7 @@ go.work.sum
 /apps/android/**/build/
 # The ZX Spectrum Next's dot command
 /apps/zxnext/build/
+/apps/zxnext/drvtest/target/
 /apps/android/**/.gradle/
 /apps/android/**/.kotlin/
 /apps/android/local.properties

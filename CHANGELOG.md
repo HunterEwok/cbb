@@ -20,6 +20,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   member's connections through the ESP to a member at home, and the ESP's own connections
   (a phone that syncs or admits it) to the lite member; the TLS stays on the Pi. The Next's
   clock sets the Pi's.
+- `CBB.DRV`, a NextZXOS driver for the ZX Spectrum Next (`apps/zxnext/drv`): on every
+  frame's interrupt it passes bytes between the ESP8266 and the Pi in `cbb next link`'s
+  frames and types the characters the Pi sends, while any program runs; a host test runs
+  its code in a Z80 emulator.
 - A single-colour glyph for the Mac's menu bar and the tray on Windows and Linux: the app icon's
   clipboard and key, in three states (no group, in a group, another device online). `tools/icon`
   makes the Mac's template images, the symbolic SVGs for Linux and white and black ICOs for
