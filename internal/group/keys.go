@@ -5,16 +5,19 @@ package group
 
 import (
 	"crypto"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"os"
 	"sync"
 
+	"github.com/HunterEwok/clipboardbridge/internal/keyseal"
+	"github.com/HunterEwok/clipboardbridge/internal/sekey"
 	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
 )
 
-// TPMEnv set to "off" keeps new member and admin keys out of the TPM; a
-// key already in it stays there.
+// TPMEnv set to "off" keeps new member and admin keys out of the TPM and
+// a Mac's Secure Enclave; a key already in one stays there.
 const TPMEnv = "CBB_TPM"
 
 var (
@@ -39,8 +42,9 @@ func ReopenTPM() {
 }
 
 // NewDeviceKey makes a member or admin key: in the TPM when the machine has
-// one that this program may use (docs/protocol.md, section 17), and in
-// memory, to be saved in the identity file, otherwise.
+// one that this program may use, in the Secure Enclave on a Mac that has
+// one (docs/protocol.md, section 17), and in memory, to be saved in the
+// identity file, otherwise.
 func NewDeviceKey() (crypto.Signer, error) {
 	if os.Getenv(TPMEnv) != "off" {
 		if t, err := theTPM(); err == nil {
@@ -51,27 +55,72 @@ func NewDeviceKey() (crypto.Signer, error) {
 			// A TPM that opens but cannot make keys (full, or refusing
 			// the template) leaves the key in a file.
 		}
+		if sekey.Available() {
+			if k, err := sekey.New(); err == nil {
+				return k, nil
+			}
+		}
 	}
 	return NewKey()
 }
 
-// HardwareKeys tells whether NewDeviceKey would put a new key in the TPM:
-// the machine has one this program may use, and CBB_TPM is not off.
+// HardwareKeys tells whether NewDeviceKey would put a new key in the TPM
+// or the Secure Enclave: the machine has one this program may use, and
+// CBB_TPM is not off.
 func HardwareKeys() bool {
 	if os.Getenv(TPMEnv) == "off" {
 		return false
 	}
 	_, err := theTPM()
-	return err == nil
+	return err == nil || sekey.Available()
 }
 
-// KeyStoreOf returns where k lives: StoreHardware for a key in the TPM,
-// StoreFile otherwise.
+// KeyStoreOf returns where k lives: StoreHardware for a key in the TPM or
+// the Secure Enclave, StoreFile otherwise.
 func KeyStoreOf(k crypto.Signer) string {
-	if _, ok := k.(*tpmkey.Key); ok {
+	switch k.(type) {
+	case *tpmkey.Key, *sekey.Key:
 		return StoreHardware
 	}
 	return StoreFile
+}
+
+// A storedKey is how a file keeps a device key: one of a TPM blob, the
+// Secure Enclave's blob, or the key itself in PKCS #8.
+type storedKey struct {
+	der []byte
+	tpm *tpmkey.Blob
+	se  []byte
+}
+
+// storeKey returns what to keep of k.
+func storeKey(k crypto.Signer) (storedKey, error) {
+	if b := keyBlob(k); b != nil {
+		return storedKey{tpm: b}, nil
+	}
+	if s, ok := k.(*sekey.Key); ok {
+		return storedKey{se: s.Blob()}, nil
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(k)
+	return storedKey{der: der}, err
+}
+
+// load loads the key that s keeps.
+func (s storedKey) load() (crypto.Signer, error) {
+	switch {
+	case s.tpm != nil:
+		return loadTPMKey(s.tpm)
+	case s.se != nil:
+		k, err := sekey.Load(s.se)
+		if errors.Is(err, sekey.ErrNoEnclave) {
+			return nil, errors.New("group: this device's key is in a Secure Enclave that is not there; was the identity copied from another machine?")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("group: loading this device's key from the Secure Enclave: %w", err)
+		}
+		return k, nil
+	}
+	return parseKey(s.der)
 }
 
 // keyBlob returns the TPM blob of k, nil for a key in a file.
@@ -95,29 +144,46 @@ func loadTPMKey(b *tpmkey.Blob) (crypto.Signer, error) {
 	return t.LoadKey(*b)
 }
 
-// Sealer seals secrets, as the WireGuard key, with the TPM that would
-// hold new device keys; where new keys go into a file, Seal returns nil,
-// nil and the secret stays in its file too.
+// Sealer seals secrets, as the WireGuard key, with the TPM or the Secure
+// Enclave that would hold new device keys; where new keys go into a file,
+// Seal returns nil, nil and the secret stays in its file too.
 type Sealer struct{}
 
-// Seal seals secret, or returns nil, nil without a TPM to use.
-func (Sealer) Seal(secret []byte) (*tpmkey.Blob, error) {
+// Seal seals secret, or returns nil, nil without hardware to use.
+func (Sealer) Seal(secret []byte) (*keyseal.Blob, error) {
 	if os.Getenv(TPMEnv) == "off" {
 		return nil, nil
 	}
-	t, err := theTPM()
-	if err != nil {
-		return nil, nil
+	if t, err := theTPM(); err == nil {
+		b, err := t.Seal(secret)
+		if err != nil {
+			return nil, nil // as NewDeviceKey: a TPM that cannot seal leaves the file
+		}
+		return &keyseal.Blob{TPM: &b}, nil
 	}
-	b, err := t.Seal(secret)
-	if err != nil {
-		return nil, nil // as NewDeviceKey: a TPM that cannot seal leaves the file
+	if sekey.Available() {
+		if b, err := sekey.Seal(secret); err == nil {
+			return &keyseal.Blob{SE: b}, nil
+		}
 	}
-	return &b, nil
+	return nil, nil
 }
 
 // Unseal returns what Seal sealed in b.
-func (Sealer) Unseal(b *tpmkey.Blob) ([]byte, error) {
+func (Sealer) Unseal(b *keyseal.Blob) ([]byte, error) {
+	if b.SE != nil {
+		secret, err := sekey.Unseal(b.SE)
+		if errors.Is(err, sekey.ErrNoEnclave) {
+			return nil, errors.New("the key is sealed by a Secure Enclave that is not there; was the state copied from another machine?")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("opening the key sealed by the Secure Enclave: %w", err)
+		}
+		return secret, nil
+	}
+	if b.TPM == nil {
+		return nil, errors.New("a sealed key without its blob")
+	}
 	t, err := theTPM()
 	if errors.Is(err, tpmkey.ErrNoTPM) {
 		return nil, errors.New("the key is sealed by a TPM that is not there; was the state copied from another machine?")
@@ -125,5 +191,5 @@ func (Sealer) Unseal(b *tpmkey.Blob) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening the TPM that sealed the key: %w", err)
 	}
-	return t.Unseal(*b)
+	return t.Unseal(*b.TPM)
 }

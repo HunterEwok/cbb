@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 75a4b281a1c4 -->
+<!-- source: ba8bb2b8b763 -->
 # Установка
 
 Clipboard Bridge работает как небольшая фоновая служба на каждом компьютере. Его команда —

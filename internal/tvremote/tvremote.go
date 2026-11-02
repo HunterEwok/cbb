@@ -3,8 +3,8 @@
 
 // Package tvremote keeps the TVs a member types on as their remote
 // (docs/roadmap.md, item 25, ways 2 and 4; cbb tv): an Android TV or a
-// Google TV through its remote protocol (androidtv), and a Roku through
-// ECP (roku). A TV is a target, not a member: it holds no key of the
+// Google TV through its remote protocol (androidtv), an Apple TV through
+// the Companion protocol (appletv), and a Roku through ECP (roku). A TV is a target, not a member: it holds no key of the
 // group, and it is reached only on the home network.
 package tvremote
 
@@ -24,30 +24,35 @@ import (
 	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
 	"github.com/HunterEwok/clipboardbridge/internal/netguard"
 	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv"
+	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv"
 	"github.com/HunterEwok/clipboardbridge/internal/tvremote/roku"
 )
 
 // The kinds of TV.
 const (
 	AndroidTV = "androidtv"
+	AppleTV   = "appletv"
 	Roku      = "roku"
 )
 
 // stateFile is the TVs in the state directory. It holds the remote's
-// private key for the Android TVs, so it is the service's alone.
+// private keys for the Android TVs and the Apple TVs, so it is the
+// service's alone.
 const stateFile = "tvs.json"
 
 // MaxTVs is how many TVs a member keeps.
 const MaxTVs = 16
 
-// TV is one TV: its name, kind and address, and for an Android TV the pin
-// of its certificate. Pastes says the group's remote pastes go to it.
+// TV is one TV: its name, kind and address, for an Android TV the pin of
+// its certificate, and for an Apple TV the pairing's keys. Pastes says the
+// group's remote pastes go to it.
 type TV struct {
-	Name   string `json:"name"`
-	Kind   string `json:"kind"`
-	Host   string `json:"host"`
-	Pin    []byte `json:"pin,omitempty"`
-	Pastes bool   `json:"pastes,omitempty"`
+	Name   string               `json:"name"`
+	Kind   string               `json:"kind"`
+	Host   string               `json:"host"`
+	Pin    []byte               `json:"pin,omitempty"`
+	Apple  *appletv.Credentials `json:"apple,omitempty"`
+	Pastes bool                 `json:"pastes,omitempty"`
 }
 
 // State is the member's TVs, and the identity it pairs with Android TVs.
@@ -164,8 +169,9 @@ func Dialer() *net.Dialer {
 	return &net.Dialer{Timeout: 5 * time.Second, Control: netguard.ControlHome}
 }
 
-// Type types text on the TV, with Enter for each line break; client is the
-// identity paired with an Android TV.
+// Type types text on the TV, with Enter for each line break (an Apple TV
+// takes the line break into the field's text); client is the identity
+// paired with an Android TV.
 func Type(ctx context.Context, t TV, client *androidtv.Client, text string) error {
 	switch t.Kind {
 	case AndroidTV:
@@ -181,11 +187,24 @@ func Type(ctx context.Context, t TV, client *androidtv.Client, text string) erro
 			return err
 		}
 		return r.Type(text)
+	case AppleTV:
+		if t.Apple == nil {
+			return appletv.ErrNotPaired
+		}
+		r, err := appletv.Dial(ctx, t.Host, *t.Apple, RemoteName)
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+		return r.Type(text)
 	case Roku:
 		return roku.New(t.Host, Dialer().DialContext).Type(ctx, text)
 	}
 	return fmt.Errorf("the TV's kind %q is unknown", t.Kind)
 }
+
+// RemoteName is how an Apple TV knows the remote while it is connected.
+const RemoteName = "Clipboard Bridge"
 
 // fieldWait is how long Type waits for an Android TV to say a text field
 // is open, which it does right after the remote starts.

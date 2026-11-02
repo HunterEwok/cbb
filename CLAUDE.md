@@ -57,6 +57,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `internal/service/keyboard.go`; `bluetest` plays BlueZ in tests).
 - `internal/tvremote`: a member as a TV's remote (`cbb remote`, `internal/service/tvremote.go`):
   `androidtv` (Android TV Remote v2: pairing, the remote, `wire` its framing, `atvtest` a fake TV),
+  `appletv` (the Companion protocol: pair-setup by PIN, pair-verify, the text field; `wire` its
+  OPACK, TLV8, SRP, frames and archives, `atvtest` a fake Apple TV),
   `roku` (ECP); only on the home network (`netguard.ControlHome`).
 - `internal/actions`: quick actions on a member (the presets, the user's settings, the checks
   on the signer, the log; `system_linux.go` runs them through logind and writes the polkit

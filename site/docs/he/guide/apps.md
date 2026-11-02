@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3a3178c99395 -->
+<!-- source: 65f0a956514b -->
 # האפליקציות
 
 ל-Clipboard Bridge יש אפליקציות לטלפונים, לשעונים ולמחשבים שולחניים. אפליקציות הטלפון מחזיקות את הקבוצה; אפליקציות המחשב הן חלון אל השירות שכבר רץ במחשב.
@@ -8,11 +8,11 @@
 |---|---|---|
 | Android | ‏`clipboardbridge-X.Y.Z.apk` בכל [גרסה](https://github.com/HunterEwok/clipboardbridge/releases) | נבנתה ונבדקה ב-CI, עדיין לא בטלפון אמיתי |
 | Android בלי Google | ‏`clipboardbridge-fdroid-X.Y.Z.apk`, ו-F-Droid כשתתקבל: אותה אפליקציה בלי שעון Wear OS | נבנתה ונבדקה ב-CI |
-| iPhone ו-iPad | ‏TestFlight, כשייפתח | נבנתה ונבדקה ב-CI, עדיין לא בטלפון אמיתי |
+| iPhone ו-iPad | ‏TestFlight, כשייפתח | נבנתה ונבדקה ב-CI; רצה על iPhone כשנבנית עם הצוות של מפתח |
 | Wear OS | ‏`clipboardbridge-wear-X.Y.Z.apk`, מותקן בשעון ממחשב באמצעות `adb install` דרך ניפוי השגיאות האלחוטי של השעון, עד שהאפליקציה תהיה ב-Google Play | נבנתה |
-| Apple Watch | עם אפליקציית ה-iPhone | נבנתה |
+| Apple Watch | עם אפליקציית ה-iPhone | נבנתה; רצה על Apple Watch עם אפליקציית ה-iPhone |
 | אפליקציית Mac | עדיין לא להורדה: בינתיים נבנית מ-`apps/macos` | נבנתה |
-| אפליקציית המגש ל-Linux ול-Windows | עדיין לא להורדה: בינתיים נבנית מ-`apps/desktop` | נבנתה |
+| אפליקציית המגש ל-Linux ול-Windows | בארכיוני Windows ו-Linux של כל גרסה, מותקנת עם השירות | נבנתה; הורצה במכונה וירטואלית של Windows 11 |
 
 ## טלפונים
 

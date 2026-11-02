@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 75a4b281a1c4 -->
+<!-- source: ba8bb2b8b763 -->
 # 安装
 
 Clipboard Bridge 在每台电脑上作为一个小型后台服务运行，它的命令是 `cbb`。下面每种方式安装的都是同一个程序，选你喜欢的即可。

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 7358caef15ed -->
+<!-- source: 00a76d11e6c5 -->
 # 不用应用
 
 群组并不需要手机应用。群组可以由一台电脑来持有，没有应用的 iPhone 则通过快捷指令加入。在 iPhone 应用还在等待 TestFlight 的这段时间，这也是可行的办法。
@@ -51,10 +51,10 @@ sudo cbb pair -phone
 
 ```sh
 sudo cbb admin NAME                   # on the root; NAME as cbb status shows it, and it must be on
-sudo cbb admin -allow-file-key NAME   # for a Mac, a Windows PC or a Linux computer without a TPM
+sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure Enclave
 ```
 
-带 TPM 的 Linux 电脑把管理员密钥保存在 TPM 里。Mac、Windows 电脑或没有 TPM 的 Linux 电脑则把它保存在文件里，所以 `cbb admin` 会先要求你加上 `-allow-file-key`：谁复制了这个文件，谁就能以管理员身份行事，直到另一位管理员移除这台电脑，所以只把你妥善保管的电脑设为管理员。
+带 TPM 的 Linux 或 Windows 电脑把管理员密钥保存在 TPM 里，Mac 则保存在 Secure Enclave 里。两者都没有的电脑则把它保存在文件里，所以 `cbb admin` 会先要求你加上 `-allow-file-key`：谁复制了这个文件，谁就能以管理员身份行事，直到另一位管理员移除这台电脑，所以只把你妥善保管的电脑设为管理员。
 
 如果根丢失或损坏，管理员可以接管群组，其他所有设备都保留：
 
@@ -73,10 +73,6 @@ sudo cbb takeover NAME       # on the admin; NAME is the lost root
 
 数字码从不以明文传输：配对在 SSH 或你的 VPN 内部进行，同时还在 TLS 内部。新电脑会通过这条路径同步，直到它的服务重启；若要之后继续同步，请在关闭连接之前，在两边都开启[离家同步](away-from-home.md)。
 
-## 0.4 之前的群组
+## 0.6 之前的群组
 
-0.4 之前创建的群组没有根：每个 Linux 和 Windows 成员都持有自己的密钥。等所有设备都运行 0.4 或更高版本后，在其中一台上给它设一个根；除了使用快捷指令的 iPhone，其他设备都不必重新配对：
-
-```sh
-sudo cbb upgrade
-```
+0.6 只读取第 2 版的群组记录，不保留回到旧群组的途径。从早期版本更新的电脑在第一次启动时离开旧群组：它把群组的文件移到状态目录中的 `before-0.6`，保留自己的设置，`cbb status` 会说明这一点。请重新建立群组：在一台电脑上运行 `cbb new`，然后在其他电脑上运行 `cbb pair`。

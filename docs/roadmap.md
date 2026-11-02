@@ -51,7 +51,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **11.** The lite member in Rust: done on Linux and OpenWrt. On the Arduino Nano ESP32 see item
     15; other ESP32 boards follow on the same `lite/core`.
 - **13.** Device keys in hardware: done for Linux and Windows with a TPM (Windows not yet
-    tested on a real PC); the Mac follows. See
+    tested on a real PC) and for a Mac's Secure Enclave; sealing the Mac's tunnel key
+    follows. See
     "Device keys in hardware" below.
 - **14.** **The ZX Spectrum Next** through its own Raspberry Pi: `cbb next` on the lite member and
     the `.cbb` dot command (`apps/zxnext`) are written, not yet run on a real Next; the
@@ -580,7 +581,7 @@ One pull request each, smaller ones together:
 1. The TV variant of the Android app, with the accessibility target of item 18, step 4.
 2. Remotes in Go: Android TV Remote v2 and the Apple TV Companion protocol first, then
    Samsung and LG, Roku last; `cbb remote add` pairs a TV, and the apps add theirs (Android
-   TV and Roku done in 0.6, untried on real TVs; for now the user sends a computer's remote
+   TV, Apple TV and Roku done in 0.6, untried on real TVs; for now the user sends a computer's remote
    pastes to one of its TVs with `cbb remote pastes`, as with `cbb keyboard on -pastes`,
    and addressing a TV by name with `cbb paste -on` comes with the device list's targets).
 3. The Bluetooth keyboard on Android and Linux.
@@ -592,7 +593,8 @@ One pull request each, smaller ones together:
 The TV variant is part of the one APK of the phone app. For Apple TV the spike with pyatv is
 done (2026-11-01, Apple TV 4K of the second generation, tvOS 27.2): the Companion protocol
 pairs with a PIN shown on the TV and then sets the whole text of the focused field at once,
-with no key presses, so the Companion protocol in Go comes next. The Bluetooth keyboard of a
+with no key presses; the Companion protocol in Go (`cbb remote add -appletv`) followed in
+0.6. The Bluetooth keyboard of a
 Linux computer typed on the same Apple TV too (a Steam Deck, 2026-11-01), with two fixes to
 make: the TV lists the computer twice under one name (its classic Bluetooth and the
 keyboard over Bluetooth LE, the one with a battery), so the keyboard needs a name of its own;
@@ -688,8 +690,9 @@ The user picks one of three levels for the group, at its root:
 - Found on the way:
   - Android keys made today carry no attestation challenge, so each phone makes a new key
     to be proven.
-  - The Mac's service runs as a LaunchDaemon, and a daemon cannot use the Secure Enclave,
-    so the signing moves to the user's LaunchAgent.
+  - The Mac's service runs as a LaunchDaemon, and a daemon can use the Secure Enclave
+    after all: a key that no keychain keeps needs no entitlement, and the service keeps
+    the enclave's encrypted copy of it (checked on a Mac with macOS 27).
   - The Linux unit's `PrivateDevices=yes` hides `/dev/tpmrm0` and changes with the TPM
     work.
 - Groups made before 0.6 keep working; one whose root or admins hold keys in files shows a
@@ -713,8 +716,8 @@ marks in `cbb status` are built:
   so the calls are our own), and a Mac in the Secure Enclave (Apple silicon or the T2
   chip), so the keys are used there and never leave it. WireGuard's X25519 is not offered
   by these chips; that key is kept sealed by the TPM or the Secure Enclave and opened only
-  in the service's memory. A LaunchDaemon cannot use the Secure Enclave, so on a Mac the
-  keys are used by the user's LaunchAgent on the service's behalf; on Linux the unit gives
+  in the service's memory. On a Mac the LaunchDaemon itself uses the Secure Enclave (built
+  in 0.6, `internal/sekey`, through Security.framework); on Linux the unit gives
   the service `/dev/tpmrm0` in place of `PrivateDevices=yes`.
 - **Without hardware** (many Raspberry Pis and older PCs, Intel Macs without the T2): the
   key stays in a file readable only by the service, on Linux sealed with `systemd-creds`

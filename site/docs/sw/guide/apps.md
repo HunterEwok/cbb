@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3a3178c99395 -->
+<!-- source: 65f0a956514b -->
 # Programu
 
 Clipboard Bridge ina programu za simu, saa na kompyuta za mezani. Programu za simu hushikilia kikundi; programu za kompyuta ni dirisha la kuangalia huduma ambayo tayari inaendeshwa kwenye kompyuta.
@@ -8,11 +8,11 @@ Clipboard Bridge ina programu za simu, saa na kompyuta za mezani. Programu za si
 |---|---|---|
 | Android | `clipboardbridge-X.Y.Z.apk` katika kila [toleo](https://github.com/HunterEwok/clipboardbridge/releases) | imejengwa na kujaribiwa katika CI, bado haijajaribiwa kwenye simu halisi |
 | Android bila Google | `clipboardbridge-fdroid-X.Y.Z.apk`, na F-Droid itakapokubaliwa: programu ile ile bila saa ya Wear OS | imejengwa na kujaribiwa katika CI |
-| iPhone na iPad | TestFlight, itakapofunguliwa | imejengwa na kujaribiwa katika CI, bado haijajaribiwa kwenye simu halisi |
+| iPhone na iPad | TestFlight, itakapofunguliwa | imejengwa na kujaribiwa katika CI; inaendeshwa kwenye iPhone ikijengwa kwa timu ya msanidi mwenyewe |
 | Wear OS | `clipboardbridge-wear-X.Y.Z.apk`, huwekwa kwenye saa kutoka kwenye kompyuta kwa `adb install` kupitia utatuzi usiotumia waya wa saa, hadi programu iwe kwenye Google Play | imejengwa |
-| Apple Watch | pamoja na programu ya iPhone | imejengwa |
+| Apple Watch | pamoja na programu ya iPhone | imejengwa; inaendeshwa kwenye Apple Watch pamoja na programu ya iPhone |
 | Programu ya Mac | si ya kupakua bado: kwa sasa hujengwa kutoka `apps/macos` | imejengwa |
-| Programu ya trei ya Linux na Windows | si ya kupakua bado: kwa sasa hujengwa kutoka `apps/desktop` | imejengwa |
+| Programu ya trei ya Linux na Windows | katika kumbukumbu za Windows na Linux za kila toleo, husakinishwa pamoja na huduma | imejengwa; imeendeshwa kwenye mashine pepe ya Windows 11 |
 
 ## Simu
 

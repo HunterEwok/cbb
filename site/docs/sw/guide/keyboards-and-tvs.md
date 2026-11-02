@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 97be486697d2 -->
+<!-- source: b61def346d84 -->
 # Kibodi na televisheni
 
 Kwa yeyote anayetaka kuandika nenosiri refu, kiungo au utafutaji kwenye televisheni, kompyuta kibao, kiweko cha michezo au kompyuta ambayo haina chochote cha Clipboard Bridge. Kifaa kimoja cha kikundi chako huandika maandishi hayo pale kama kibodi au kama rimoti ya televisheni, unapogusa wewe au msimamizi anapotuma ubandikaji wa mbali.
@@ -65,6 +65,13 @@ sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a s
 sudo cbb remote code 123456              # within two minutes
 ```
 
+Apple TV huoanishwa vivyo hivyo, kwa PIN ya tarakimu nne inayoonyesha. Kwanza kwenye Apple TV, weka Settings, AirPlay and HomeKit, Allow Access kuwa "Everyone on the Same Network": ikiwa "Only People Sharing This Home" inakataa kila uoanishaji.
+
+```sh
+sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
+sudo cbb remote code 1234                # within two minutes
+```
+
 Roku haina uoanishaji wala usimbaji fiche: maandishi hupita kwenye mtandao wako wa nyumbani kama HTTP wazi, kwa hivyo huongezwa tu unaposema hivyo kwa `-consent`. Kwenye Roku, kwanza weka Mipangilio, Mfumo, Mipangilio ya hali ya juu ya mfumo, Udhibiti kwa programu za simu kuwa Imewezeshwa au Ruhusu.
 
 ```sh
@@ -78,7 +85,7 @@ echo 'the film' | sudo cbb remote type
 sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that TV
 ```
 
-`cbb remote` huorodhesha televisheni, `-tv NAME` huchagua moja zikiwa nyingi, na `sudo cbb remote remove NAME` husahau moja. Android TV iliyowekwa upya lazima ioanishwe tena.
+`cbb remote` huorodhesha televisheni, `-tv NAME` huchagua moja zikiwa nyingi, na `sudo cbb remote remove NAME` husahau moja. Android TV au Apple TV iliyowekwa upya, au iliyosahau kompyuta hii, lazima ioanishwe tena.
 
 ## Usalama
 

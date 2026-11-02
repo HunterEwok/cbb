@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3a3178c99395 -->
+<!-- source: 65f0a956514b -->
 # التطبيقات
 
 لدى Clipboard Bridge تطبيقات للهواتف والساعات وأسطح المكتب. تحمل تطبيقات الهاتف المجموعة؛ أما تطبيقات سطح المكتب فهي نافذة على الخدمة التي تعمل أصلًا على الحاسوب.
@@ -8,11 +8,11 @@
 |---|---|---|
 | Android | `clipboardbridge-X.Y.Z.apk` في كل [إصدار](https://github.com/HunterEwok/clipboardbridge/releases) | مبني ومختبَر في CI، ولم يُجرَّب بعد على هاتف حقيقي |
 | Android من دون Google | `clipboardbridge-fdroid-X.Y.Z.apk`، وF-Droid بعد قبوله: التطبيق نفسه من دون ساعة Wear OS | مبني ومختبَر في CI |
-| iPhone وiPad | TestFlight، عندما يُفتح | مبني ومختبَر في CI، ولم يُجرَّب بعد على هاتف حقيقي |
+| iPhone وiPad | TestFlight، عندما يُفتح | مبني ومختبَر في CI؛ يعمل على iPhone إذا بُني بفريق المطوّر الخاص |
 | Wear OS | `clipboardbridge-wear-X.Y.Z.apk`، يُثبَّت على الساعة من حاسوب بالأمر `adb install` عبر التصحيح اللاسلكي للساعة، إلى أن يصبح التطبيق على Google Play | مبني |
-| Apple Watch | مع تطبيق iPhone | مبني |
+| Apple Watch | مع تطبيق iPhone | مبني؛ يعمل على Apple Watch مع تطبيق iPhone |
 | تطبيق Mac | ليس للتنزيل بعد: يُبنى حاليًا من `apps/macos` | مبني |
-| تطبيق شريط المهام لـ Linux وWindows | ليس للتنزيل بعد: يُبنى حاليًا من `apps/desktop` | مبني |
+| تطبيق شريط المهام لـ Linux وWindows | في أرشيفات Windows وLinux لكل إصدار، ويُثبَّت مع الخدمة | مبني؛ جُرّب في آلة افتراضية بنظام Windows 11 |
 
 ## الهواتف
 

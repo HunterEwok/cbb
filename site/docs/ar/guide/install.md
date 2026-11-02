@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 75a4b281a1c4 -->
+<!-- source: ba8bb2b8b763 -->
 # التثبيت
 
 يعمل Clipboard Bridge كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.

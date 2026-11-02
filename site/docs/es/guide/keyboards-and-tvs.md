@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 97be486697d2 -->
+<!-- source: b61def346d84 -->
 # Teclados y televisores
 
 Para quien quiere escribir una contraseña larga, un enlace o una búsqueda en un televisor, una tableta, una consola o un ordenador que no tiene nada de Clipboard Bridge. Un dispositivo de tu grupo escribe allí el texto como teclado o como mando a distancia del televisor, cuando tú lo pulsas o cuando un administrador envía un pegado remoto.
@@ -65,6 +65,13 @@ sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a s
 sudo cbb remote code 123456              # within two minutes
 ```
 
+Un Apple TV se empareja igual, con el PIN de cuatro cifras que muestra. Antes, en el Apple TV, pon Ajustes, AirPlay y HomeKit, Permitir acceso en "Todos en la misma red": con "Solo quienes comparten esta casa" rechaza cualquier emparejamiento.
+
+```sh
+sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
+sudo cbb remote code 1234                # within two minutes
+```
+
 Un Roku no tiene emparejamiento ni cifrado: el texto cruza tu red doméstica como HTTP sin cifrar, así que solo se añade cuando lo dices con `-consent`. En el Roku, pon antes Ajustes, Sistema, Ajustes avanzados del sistema, Control por aplicaciones móviles en Habilitado o Permisivo.
 
 ```sh
@@ -78,7 +85,7 @@ echo 'the film' | sudo cbb remote type
 sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that TV
 ```
 
-`cbb remote` enumera los televisores, `-tv NAME` elige uno cuando hay varios, y `sudo cbb remote remove NAME` olvida uno. Un Android TV que se restableció debe volver a emparejarse.
+`cbb remote` enumera los televisores, `-tv NAME` elige uno cuando hay varios, y `sudo cbb remote remove NAME` olvida uno. Un Android TV o un Apple TV que se restableció, o que olvidó este ordenador, debe volver a emparejarse.
 
 ## Seguridad
 

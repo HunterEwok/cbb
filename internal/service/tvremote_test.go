@@ -14,6 +14,7 @@ import (
 
 	"github.com/HunterEwok/clipboardbridge/internal/control"
 	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv/atvtest"
+	appletvtest "github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv/atvtest"
 )
 
 // TestRemote: cbb remote against a fake Android TV and a fake Roku:
@@ -94,6 +95,77 @@ func TestRemote(t *testing.T) {
 	}
 	if len(m.Status.TVs) != 0 || slices.Contains(m.Status.Paste.Targets, targetTV) {
 		t.Errorf("after remove: %+v, %v", m.Status.TVs, m.Status.Paste.Targets)
+	}
+}
+
+// TestRemoteAppleTV: cbb remote against a fake Apple TV: pairing with its
+// PIN, typing, a remote paste sent to it, and a TV that forgot the remote.
+func TestRemoteAppleTV(t *testing.T) {
+	tv := appletvtest.New(t)
+	var h hub
+	pi := startService(t, &h, "pi")
+	deck := startService(t, &h, "deck")
+	pairWith(t, pi, deck)
+	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
+
+	add := control.Header{Op: control.OpRemote, Name: "add", Address: tv.Addr(), Value: "appletv", NewName: "Lounge"}
+	m, err := deck.do(t, add, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tvs := m.Status.TVs; len(tvs) != 1 || !tvs[0].Pairing || tvs[0].Kind != "appletv" {
+		t.Fatalf("pairing: %+v", tvs)
+	}
+	wrong := "0000"
+	if tv.PIN() == wrong {
+		wrong = "1111"
+	}
+	if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "code", Code: wrong}, ""); err == nil || !strings.Contains(err.Error(), "not the PIN") {
+		t.Errorf("a wrong PIN: %v", err)
+	}
+	if _, err := deck.do(t, add, ""); err != nil {
+		t.Fatal(err)
+	}
+	m, err = deck.do(t, control.Header{Op: control.OpRemote, Name: "code", Code: tv.PIN()}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tvs := m.Status.TVs; len(tvs) != 1 || tvs[0].Name != "Lounge" || tvs[0].Kind != "appletv" || tvs[0].Pairing {
+		t.Fatalf("paired: %+v", tvs)
+	}
+	if names := tv.Names(); len(names) != 1 || names[0] != "Clipboard Bridge deck" {
+		t.Errorf("the TV knows the remote as %q", names)
+	}
+
+	if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "type"}, "hi"); err == nil || !strings.Contains(err.Error(), "no text field") {
+		t.Errorf("typing with no text field: %v", err)
+	}
+	tv.Focus()
+	if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "type"}, "\u041f\u0440\u0438\u0432\u0435\u0442"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := deck.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "pastes", Device: "lounge", Value: "on"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	paste := func(text string) error {
+		time.Sleep(time.Second) // one paste a second from one sender
+		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "deck"}, text)
+		return err
+	}
+	if err := paste("Wi-Fi 42"); err != nil {
+		t.Fatal(err)
+	}
+	tv.Wait(t, 2)
+	if text := tv.Text(); !slices.Equal(text, []string{"\u041f\u0440\u0438\u0432\u0435\u0442", "Wi-Fi 42"}) {
+		t.Errorf("the TV got %q", text)
+	}
+	tv.Forget()
+	if err := paste("x"); err == nil || !strings.Contains(err.Error(), "Lounge (Apple TV)") || !strings.Contains(err.Error(), "pair it again") {
+		t.Errorf("a reset TV: %v", err)
 	}
 }
 
