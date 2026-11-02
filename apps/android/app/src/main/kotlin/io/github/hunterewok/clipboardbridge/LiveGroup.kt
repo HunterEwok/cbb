@@ -42,6 +42,7 @@ import io.github.hunterewok.clipboardbridge.kit.PhoneGroup
 import io.github.hunterewok.clipboardbridge.kit.PhoneHub
 import io.github.hunterewok.clipboardbridge.kit.RecordStore
 import io.github.hunterewok.clipboardbridge.kit.Records as KitRecords
+import io.github.hunterewok.clipboardbridge.kit.Restore
 import io.github.hunterewok.clipboardbridge.kit.ServerCredentials
 import io.github.hunterewok.clipboardbridge.kit.SyncEngine
 import io.github.hunterewok.clipboardbridge.kit.TLSListener
@@ -65,6 +66,7 @@ import kotlinx.serialization.json.longOrNull
 import java.io.File
 import java.io.IOException
 import java.net.Inet4Address
+import java.net.InetSocketAddress
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.security.MessageDigest
@@ -91,7 +93,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     class CommandRefused(val reason: String) : Exception(reason)
 
     class Failure(val kind: Kind) : Exception(kind.name) {
-        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN }
+        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT, NO_GROUP_COMPUTER }
     }
 
     /** A device of the group, as the screens show it: a computer, or this phone. */
@@ -230,6 +232,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Whether this phone holds the group's root, which ends conflicts. */
     val isRoot: Boolean get() = synchronized(lock) { state?.isRoot ?: false }
+
+    /** Whether the group's root handed the group to this phone (cbb handover), which has not taken it yet. */
+    val handedOver: Boolean get() = synchronized(lock) { state?.handedToMe == true }
 
     /** What the group's records stop and what ends it (GroupAlert). */
     val alerts: List<GroupAlert> get() = synchronized(lock) { state?.records?.alerts.orEmpty() }
@@ -755,6 +760,137 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
+    /**
+     * Joins a computer's group (docs/protocol.md, section 6, "A phone joins
+     * a computer's group"): finds the pairing window that `cbb pair` opened
+     * on the group's root by mDNS (`p=1`), dials it and takes code, which
+     * the user typed from the computer's screen. Browsing waits up to 10 s
+     * for a window, then 2 s more for a second one, as the computers'
+     * joiner does: two windows at once and it refuses, rather than try the
+     * code on the wrong one. The root makes this phone an admin with the
+     * admin key it offers; a TV offers none and joins as a member.
+     */
+    suspend fun joinComputer(code: String) {
+        if (hasGroup) return
+        if (withContext(Dispatchers.IO) { LocalAddresses.current() }.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
+        val window = findWindow()
+        val joined = withContext(Dispatchers.IO) {
+            val member = memberSigner()
+            val admin = if (Tv.isTv(context)) null else Keys.load(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN)
+            val cert = GroupCertificates.selfSigned(SyncEngine.newID(), member)
+            val info = Pairing.Info(PhoneGroup.validName(deviceName), "android", admin?.publicKeyDER, seal = sealKey())
+            // The window's certificate is checked by the code's exchange, not here.
+            val t = TLSTransport.dial(window.hostString, window.port, Pairing.ALPN, member.privateKey, listOf(cert)) { it.isNotEmpty() }
+            closingOnCancel({ t.close() }) {
+                try {
+                    val leaf = t.peerCertificate ?: throw PairingJoiner.Failure("the computer sent no certificate")
+                    val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
+                    PairingJoiner.join(t, code, info, leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
+                } catch (e: PairingJoiner.Failure) {
+                    // An admin computer that is not the root refuses a phone.
+                    if (e.code == Pairing.ErrorCode.REFUSED) throw Failure(Failure.Kind.NEEDS_ROOT).apply { initCause(e) }
+                    throw e
+                } finally {
+                    t.close()
+                }
+            }
+        }
+        withContext(Dispatchers.IO) {
+            synchronized(lock) {
+                newDeviceMode()
+                state = PhoneGroup.joined(joined)
+            }
+            startSync()
+        }
+    }
+
+    /**
+     * Restores the group on this new phone with its recovery key, read from
+     * the QR code of the sheet (docs/protocol.md, section 10, "The recovery
+     * key"): finds the group's computers by mDNS (the sheet's tag), takes
+     * and checks the records from one on a connection that carries records
+     * only, makes a new root key and claims the group with the recovery key,
+     * and sends the claim. The phone is then a member of the group whose
+     * claim waits the group's delay, unless the root phone cancels it;
+     * [finishTakeOverIfDue] then makes it the root. The recovery key is not
+     * kept.
+     */
+    suspend fun restore(sheet: Core.RecoveredKey) {
+        if (hasGroup) return
+        val tag = sheet.group ?: throw Restore.Failure(Restore.Kind.NEEDS_QR, Restore.NEEDS_QR)
+        if (withContext(Dispatchers.IO) { LocalAddresses.current() }.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
+        val computers = findComputers(tag)
+        withContext(Dispatchers.IO) {
+            val member = memberSigner()
+            val r = Restore(sheet, member.publicKeyDER, Instant.now())
+            var last: Exception = Failure(Failure.Kind.NO_GROUP_COMPUTER)
+            for (addr in computers) {
+                // The handshake takes any certificate; Restore.group checks the computer's against the records.
+                val dial = { TLSTransport.dial(addr.hostString, addr.port, Member.ALPN, member.privateKey, r.chain) { it.isNotEmpty() } }
+                val g = try {
+                    r.group(Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now()), Instant.now())
+                } catch (e: Restore.Failure) {
+                    if (e.kind == Restore.Kind.NOT_THE_KEY) throw e
+                    last = e
+                    continue
+                } catch (e: IOException) {
+                    last = e
+                    continue
+                }
+                // A root key left from a group this phone made before goes.
+                val root = Keys.create(context, Keys.ROOT, g.tag)
+                val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
+                val claim = r.claim(g, newRoot, Instant.now())
+                synchronized(lock) {
+                    newDeviceMode()
+                    g.save(file)
+                    state = g
+                }
+                // Sync sends the claim too, as the records differ; this way it is out at once.
+                runCatching { Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now(), send = listOf(claim)) }
+                    .onFailure { Log.w(TAG, "sending the claim; sync sends it later", it) }
+                startSync()
+                return@withContext
+            }
+            throw last
+        }
+    }
+
+    /** The addresses of the computers of the group with tag that mDNS finds within BROWSE_MS. */
+    private suspend fun findComputers(tag: String): List<InetSocketAddress> {
+        val members = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        val b = NsdBrowser(context) { found -> members.set(found.filter { it.group == tag }.map { it.device }.toSet()) }
+        try {
+            b.start()
+            withTimeoutOrNull(BROWSE_MS) {
+                while (members.get().isEmpty()) delay(100)
+            } ?: throw Failure(Failure.Kind.NO_GROUP_COMPUTER)
+            // The others that answer a moment later.
+            delay(PAIRING_SETTLE_MS)
+            return members.get().mapNotNull { b.address(it) }.ifEmpty { throw Failure(Failure.Kind.NO_GROUP_COMPUTER) }
+        } finally {
+            b.stop()
+        }
+    }
+
+    /** The address of the one computer announcing a pairing window; see joinComputer. */
+    private suspend fun findWindow(): InetSocketAddress {
+        val windows = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        val b = NsdBrowser(context) { members -> windows.set(members.filter { it.pairing }.map { it.device }.toSet()) }
+        try {
+            b.start()
+            withTimeoutOrNull(BROWSE_MS) {
+                while (windows.get().isEmpty()) delay(100)
+            } ?: throw Failure(Failure.Kind.NO_WINDOW)
+            delay(PAIRING_SETTLE_MS)
+            val found = windows.get()
+            if (found.size > 1) throw Failure(Failure.Kind.TWO_WINDOWS)
+            return found.firstNotNullOfOrNull { b.address(it) } ?: throw Failure(Failure.Kind.NO_WINDOW)
+        } finally {
+            b.stop()
+        }
+    }
+
     // Removing
 
     /**
@@ -1254,6 +1390,27 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
+     * Takes the group the root handed to this phone (`cbb handover`,
+     * docs/protocol.md, section 10, "Handing the group over"): makes a new
+     * root key and claims the group with this phone's admin key; the claim
+     * takes effect at once, so this phone becomes the root right after. The
+     * computer that was the root stays in the group.
+     */
+    suspend fun takeHandedGroup() {
+        val admin = signer(Keys.ADMIN, R.string.reason_take_handed)
+        val r = withContext(Dispatchers.IO) {
+            val g = copyOfState() ?: return@withContext null
+            val root = Keys.create(context, Keys.ROOT, g.tag)
+            val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
+            val r = g.takeHandedOver(admin, newRoot, Instant.now())
+            adopt(g)
+            r
+        } ?: return
+        published(listOf(r))
+        finishTakeOverIfDue()
+    }
+
+    /**
      * Makes this phone the group's root once its claim took effect: it
      * signs, with the new root key, what a new root starts with, and becomes
      * the hub when the lost phone was (docs/design.md, "Losing the phone").
@@ -1274,7 +1431,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         try {
             val root = signer(Keys.ROOT, R.string.reason_take_over)
             val rs = withContext(Dispatchers.IO) {
-                val rs = g.finishTakeOver(root, Instant.now())
+                val rs = g.finishTakeOver(root, Instant.now(), PhoneGroup.validName(deviceName), sealKey())
                 adopt(g)
                 rs
             }
@@ -1814,6 +1971,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         /** How long the join QR code is good for, and how many wrong codes it takes, as for cbb pair (docs/protocol.md, section 6). */
         const val JOIN_WINDOW_MS = 300_000L
         const val JOIN_ATTEMPTS = 3
+
+        /** How long joinComputer browses for a pairing window, and then for a second one. */
+        const val BROWSE_MS = 10_000L
+        const val PAIRING_SETTLE_MS = 2_000L
 
         /** How long the button waits for a computer to connect before it says none is. */
         const val CONNECT_WAIT_MS = 5_000L

@@ -52,8 +52,9 @@ Commands:
   takeover <name or ID>   Claim the group from its lost root computer (on an admin); it waits.
   takeover -delay <duration>
                           Set how long such a claim waits, 0s to 168h (on the root; 72h by default).
-  recovery                Claim the group with its recovery key, typed from the sheet, when
-                          every phone with the group is lost; it waits as a takeover does.
+  recovery [-yubikey]     Claim the group with its recovery key, typed from the sheet or on a
+                          YubiKey, when every phone with the group is lost; it waits as a
+                          takeover does.
   handover <name or ID>   Let an admin take the group over at once, as a new phone (on the root).
   freeze <name or ID>     Stop an admin computer, as a stolen one, until the root decides.
   unfreeze <name or ID>   Make a frozen admin computer an admin again (on the group's root).

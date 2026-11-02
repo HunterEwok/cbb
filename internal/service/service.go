@@ -10,6 +10,7 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -33,6 +34,7 @@ import (
 	"github.com/HunterEwok/clipboardbridge/internal/node"
 	"github.com/HunterEwok/clipboardbridge/internal/pair"
 	"github.com/HunterEwok/clipboardbridge/internal/phone"
+	"github.com/HunterEwok/clipboardbridge/internal/piv"
 	"github.com/HunterEwok/clipboardbridge/internal/remotepaste"
 	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
 )
@@ -70,6 +72,9 @@ type Config struct {
 	// readSheet reads what the user typed or scanned from a recovery
 	// sheet; the Rust core's read_recovery_sheet if nil. Tests replace it.
 	readSheet func(string) (*recoverySheet, error)
+	// openCard finds the recovery key on a YubiKey, the slot whose
+	// certificate match takes; piv.Open if nil. Tests replace it.
+	openCard func(match func(*x509.Certificate) bool) (*piv.Key, error)
 	// browseFor is how long join looks for a pairing window; ten seconds
 	// if zero.
 	browseFor time.Duration

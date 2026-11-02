@@ -212,6 +212,56 @@ class PhoneGroup internal constructor(
     fun takeOver(lost: String, adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
         if (adminCA == null || isRoot) throw Failure("this phone is no admin")
         if (lost != records.rootDevice || lost == device) throw Failure("that phone does not hold the root")
+        return makeClaim(lost, adminSigner, newRoot, now)
+    }
+
+    /**
+     * Whether the group's root handed the group to this phone's admin key
+     * (`cbb handover`, docs/protocol.md, section 10, "Handing the group
+     * over"), and this phone has not claimed it yet.
+     */
+    val handedToMe: Boolean
+        get() {
+            val ca = adminCA ?: return false
+            if (isRoot || claim != null) return false
+            val to = records.handedTo ?: return false
+            return runCatching { Records.keyHashOfCert(ca) }.getOrNull()?.contentEquals(to) == true
+        }
+
+    /**
+     * Takes the group the root handed to this phone: a claim, as in
+     * [takeOver], that takes effect at once because the root signed a
+     * handover for this phone's admin key; [finishTakeOver] then makes this
+     * phone the root. The old root's device stays in the group. It returns
+     * the record to send.
+     */
+    fun takeHandedOver(adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
+        if (!handedToMe) throw Failure("the group was not handed to this phone")
+        return makeClaim(null, adminSigner, newRoot, now)
+    }
+
+    /**
+     * Claims the group with its recovery key (docs/protocol.md, section
+     * 10, "The recovery key"), on a new phone that [Restore] made a member
+     * of it under the key's admin CA: a claim, signed with the recovery key
+     * (recoverySigner), that hands the group to newRoot, as in [takeOver].
+     * The lost root's device goes when it takes effect. It returns the
+     * record to send.
+     */
+    internal fun claimWithRecovery(recoverySigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
+        val ca = adminCA ?: throw Failure("this phone holds no recovery key")
+        if (isRoot) throw Failure("this phone is the group's root already")
+        if (claim != null) throw Failure(CLAIM_WAITING)
+        if (records.recovery?.contentEquals(Records.keyHashOfCert(ca)) != true) throw Failure(Restore.NOT_THE_KEY)
+        val b = Records.Body.of("claim", recoverySigner, now)
+        b.root = newRoot
+        val r = sign(b, recoverySigner)
+        claim = newRoot
+        claimedFrom = records.rootDevice
+        return r
+    }
+
+    private fun makeClaim(lost: String?, adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
         if (claim != null) throw Failure(CLAIM_WAITING)
         val me = devices.firstOrNull { it.id == device }
         if (me == null || !me.may("takeover")) throw Failure(NO_TAKEOVER)
@@ -245,10 +295,13 @@ class PhoneGroup internal constructor(
      * the current root, and signs what a new root starts with: its own device
      * that holds the root, the admins it keeps, and a removal of the lost
      * root's device and the shortcuts. rootSigner is the new root's key. A
-     * claim that was cancelled or became void is dropped. It returns the
-     * records to send; none while the claim waits.
+     * phone that claimed with the recovery key has no device record yet: the
+     * new root signs one, under name, with seal. This phone's member
+     * certificate is reissued from the new root, as a root admits only with
+     * a certificate of its own. A claim that was cancelled or became void is
+     * dropped. It returns the records to send; none while the claim waits.
      */
-    fun finishTakeOver(rootSigner: CertificateSigner, now: Instant): List<Member.Record> {
+    fun finishTakeOver(rootSigner: CertificateSigner, now: Instant, name: String = "Android", seal: ByteArray? = null): List<Member.Record> {
         records.refresh()
         adoptRoots()
         val c = claim ?: return emptyList()
@@ -262,9 +315,14 @@ class PhoneGroup internal constructor(
         claim = null
         claimedFrom = null
         val out = mutableListOf<Member.Record>()
-        list.firstOrNull { it.id == device }?.let { me ->
-            out += record(device, me.name, "phone", me.key, rootSigner, now, os = me.os ?: "android", store = me.store, kind = me.kind, proof = me.proof,
-                seal = me.seal)
+        val memberKey = CertificateInfo(memberCert).publicKey
+        memberCert = GroupCertificates.member(device, memberKey, currentRoot, rootSigner, now)
+        memberIssuer = null
+        val me = list.firstOrNull { it.id == device }
+        out += if (me != null) {
+            record(device, me.name, "phone", me.key, rootSigner, now, os = me.os ?: "android", store = me.store, kind = me.kind, proof = me.proof, seal = me.seal)
+        } else {
+            record(device, validName(name), "phone", Records.keyHash(memberKey), rootSigner, now, os = "android", store = Records.HARDWARE, seal = seal)
         }
         val revoke = mutableListOf<ByteArray>()
         for (d in list) {
@@ -498,12 +556,27 @@ class PhoneGroup internal constructor(
         val pair = SoftwareSigner.generate()
         val s = (pair.private as java.security.interfaces.ECPrivateKey).s.toByteArray().takeLast(32)
         val key = ByteArray(32 - s.size) + s.toByteArray()
-        val ca = GroupCertificates.adminCA(SyncEngine.newID(), pair.public.encoded, currentRoot, rootSigner)
-        val sheet = Core.recoverySheet(key, ca, tag)
+        val (ca, r) = recoveryFor(pair.public.encoded, rootSigner, now)
+        return Recovery(key, ca, r, Core.recoverySheet(key, ca, tag))
+    }
+
+    /**
+     * Makes the group's recovery key from a key a YubiKey made (publicKey, a
+     * SubjectPublicKeyInfo; [Piv.generate]), as the root: its admin CA,
+     * which goes into the YubiKey's slot, and the `recovery` record that
+     * names it.
+     */
+    fun makeRecoveryOnCard(publicKey: ByteArray, rootSigner: CertificateSigner, now: Instant): Pair<ByteArray, Member.Record> {
+        if (!isRoot) throw Failure("only the root makes the recovery key")
+        return recoveryFor(publicKey, rootSigner, now)
+    }
+
+    private fun recoveryFor(publicKey: ByteArray, rootSigner: CertificateSigner, now: Instant): Pair<ByteArray, Member.Record> {
+        val ca = GroupCertificates.adminCA(SyncEngine.newID(), publicKey, currentRoot, rootSigner)
         val b = Records.Body.of("recovery", rootSigner, now)
-        b.admin = sheet.admin
+        b.admin = Records.keyHashOfCert(ca)
         b.cert = ca
-        return Recovery(key, ca, sign(b, rootSigner), sheet)
+        return ca to sign(b, rootSigner)
     }
 
     /** Removes the group's recovery key, as the root: a revocation of its key. It returns the record to send. */

@@ -115,6 +115,41 @@ class RootTest {
         assertEquals(g.one.device, GroupCertificates.verifyMember(renewed, g.b.currentRoot, later))
     }
 
+    /**
+     * The root hands the group to B (cbb handover): B's claim takes effect
+     * at once, and the old root's device stays in the group as a member.
+     */
+    @Test
+    fun handedOver() {
+        val now = Instant.now()
+        val g = Group(now)
+        assertFalse(g.b.handedToMe)
+        val h = Records.Body.of("handover", g.rootKey, now)
+        h.admin = Records.keyHashOfCert(g.adminCA)
+        g.b.add(listOf(g.root.sign(h, g.rootKey)))
+        assertTrue(g.b.handedToMe)
+        assertFalse(g.root.handedToMe, "the root is no admin to hand the group to")
+        val newRoot = GroupCertificates.groupCA(g.newRootKey, now, pathLength = 1)
+        g.b.takeHandedOver(g.adminKey, newRoot, now)
+        assertFalse(g.b.handedToMe, "it claimed the group")
+        assertEquals("effective", g.b.claimState, "a handed group needs no wait")
+        val rs = g.b.finishTakeOver(g.newRootKey, now)
+        assertEquals(1, rs.size, "B's own device; nothing removed")
+        assertTrue(g.b.isRoot)
+        assertEquals(g.b.device, g.b.records.rootDevice)
+        assertNull(g.b.records.handedTo, "the new root handed nothing")
+        assertEquals(listOf("B", "Lost", "one", "two"), g.b.devices.map { it.name }.sorted())
+        assertNull(g.b.records.refused(listOf(g.root.memberCert)), "the old root stays a member")
+
+        // A handover to another admin key is not this phone's.
+        val other = Group(now)
+        val o = Records.Body.of("handover", other.rootKey, now)
+        o.admin = Records.keyHash(SoftwareSigner().publicKeyDER)
+        other.b.add(listOf(other.root.sign(o, other.rootKey)))
+        assertFalse(other.b.handedToMe)
+        assertFailsWith<PhoneGroup.Failure> { other.b.takeHandedOver(other.adminKey, newRoot, now) }
+    }
+
     /** The root cancels a claim while it waits, and the claimant stays an admin. */
     @Test
     fun claimCancelled() {

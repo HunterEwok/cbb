@@ -17,6 +17,7 @@ struct RootView: View {
             switch model.phase {
             case .start: StartView()
             case .joining: JoinView()
+            case .joiningComputer: JoinComputerView()
             case .home: HomeView()
             }
         }

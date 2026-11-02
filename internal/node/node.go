@@ -563,6 +563,11 @@ func (n *Node) recordsOnly(ctx context.Context, tc *tls.Conn, id group.DeviceID,
 	out := helloOut{Hello: clip.Hello{Wall: n.cfg.Now().UnixMilli()}, Name: n.cfg.Name, OS: n.cfg.OS}
 	if st != nil {
 		out.Records = st.Digest()
+		if g, ok := st.(interface{ GroupCA() *x509.Certificate }); ok && errors.Is(why, group.ErrNotListed) && n.cfg.Role == Full {
+			if ca := g.GroupCA(); ca != nil {
+				out.GroupCA = ca.Raw
+			}
+		}
 	}
 	data, err := encode(out)
 	if err != nil {

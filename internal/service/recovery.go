@@ -5,6 +5,7 @@ package service
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"github.com/HunterEwok/clipboardbridge/internal/authority"
 	"github.com/HunterEwok/clipboardbridge/internal/core"
 	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/clipboardbridge/internal/piv"
 )
 
 // recoverySheet is what a recovery sheet gives (docs/protocol.md, section
@@ -66,6 +68,8 @@ func readSheetWithCore(text string) (*recoverySheet, error) {
 	return s, nil
 }
 
+var errNoRecoveryKey = errors.New("the group has no recovery key: the root phone has not made one, or removed it")
+
 // recoverGroup claims the group with its recovery key, on a computer of the
 // group whose root is lost (docs/protocol.md, section 10, "The recovery
 // key"): text is what the user typed or scanned from the sheet. The
@@ -74,11 +78,65 @@ func readSheetWithCore(text string) (*recoverySheet, error) {
 // cancels it, this computer is the group's root (finishTakeoverLocked). The
 // recovery key itself is not kept.
 func (s *Service) recoverGroup(text string) error {
+	if err := s.canRecover(); err != nil {
+		return err
+	}
+	read := s.cfg.readSheet
+	if read == nil {
+		read = readSheetWithCore
+	}
+	sheet, err := read(text)
+	if err != nil {
+		return err
+	}
+	return s.claimWithRecovery(sheet.Key, sheet.Admin, sheet.Cert, sheet.Group)
+}
+
+// recoverWithCard claims the group as recoverGroup does, with the recovery
+// key on a YubiKey (internal/piv), which signs the claim after pin and, as
+// the root phone set it, a touch: the key never leaves the card. The card's
+// slot that holds it is the one whose certificate is the admin CA of the
+// key the records name.
+func (s *Service) recoverWithCard(pin string) error {
+	if err := s.canRecover(); err != nil {
+		return err
+	}
+	s.recMu.Lock()
+	var named *authority.Hash
+	if s.records != nil {
+		named = s.records.State().Recovery
+	}
+	s.recMu.Unlock()
+	if named == nil {
+		return errNoRecoveryKey
+	}
+	open := s.cfg.openCard
+	if open == nil {
+		open = piv.Open
+	}
+	k, err := open(func(c *x509.Certificate) bool { return group.KeyHashOf(c) == *named })
+	if err != nil {
+		return err
+	}
+	defer k.Card.Close()
+	if err := piv.Verify(k.Card, pin); err != nil {
+		return err
+	}
+	signer, err := k.Signer()
+	if err != nil {
+		return err
+	}
+	return s.claimWithRecovery(signer, group.KeyHashOf(k.Cert), k.Cert.Raw, "")
+}
+
+// canRecover says why this device cannot claim the group with its recovery
+// key, if it cannot.
+func (s *Service) canRecover() error {
 	if err := s.keysAllowed(); err != nil {
 		return err
 	}
 	s.mu.Lock()
-	id, nd := s.id, s.nd
+	id := s.id
 	s.mu.Unlock()
 	switch {
 	case id == nil:
@@ -90,39 +148,45 @@ func (s *Service) recoverGroup(text string) error {
 	case id.Claim != nil:
 		return errors.New("this device's claim to take the group over is waiting already; cbb status shows the time left")
 	}
-	read := s.cfg.readSheet
-	if read == nil {
-		read = readSheetWithCore
+	return nil
+}
+
+// claimWithRecovery claims the group for a new root of this device with
+// key, the recovery key, whose admin CA has the key hash admin: cert is
+// that admin CA as the sheet or the card gives it, used when the records
+// do not carry it, and tag the group's tag from the sheet, if any.
+func (s *Service) claimWithRecovery(key crypto.Signer, admin group.KeyHash, cert []byte, tag string) error {
+	s.mu.Lock()
+	id, nd := s.id, s.nd
+	s.mu.Unlock()
+	if id == nil {
+		return s.errNoGroup()
 	}
-	sheet, err := read(text)
-	if err != nil {
-		return err
-	}
-	if sheet.Group != "" && sheet.Group != group.Tag(id.GroupCA.Cert) {
+	if tag != "" && tag != group.Tag(id.GroupCA.Cert) {
 		return errors.New("this recovery key is of another group")
 	}
 	s.recMu.Lock()
 	var named *authority.Hash
-	var cert []byte
+	var kept []byte
 	if s.records != nil {
 		named = s.records.State().Recovery
-		cert = recoveryCert(s.records.All(), sheet.Admin)
+		kept = recoveryCert(s.records.All(), admin)
 	}
 	s.recMu.Unlock()
 	switch {
 	case named == nil:
-		return errors.New("the group has no recovery key: the root phone has not made one, or removed it")
-	case *named != sheet.Admin:
+		return errNoRecoveryKey
+	case *named != admin:
 		return errors.New("this is not the group's recovery key: the root phone made a new one since, which replaced it")
 	}
-	if cert == nil {
-		cert = sheet.Cert
+	if kept != nil {
+		cert = kept
 	}
 	adminCA, err := x509.ParseCertificate(cert)
 	if err != nil {
 		return fmt.Errorf("the recovery key's admin CA: %w", err)
 	}
-	if group.KeyHashOf(adminCA) != sheet.Admin || !group.SameKey(sheet.Key, adminCA.PublicKey) {
+	if group.KeyHashOf(adminCA) != admin || !group.SameKey(key, adminCA.PublicKey) {
 		return errors.New("the recovery key's admin CA is for another key")
 	}
 	newRoot, err := group.NewRootCA(s.cfg.now())
@@ -141,7 +205,7 @@ func (s *Service) recoverGroup(text string) error {
 		return err
 	}
 	s.awaitRecords(next)
-	r, err := s.signAs(sheet.Key, adminCA, group.RecordBody{Type: group.RecordClaim, Root: newRoot.Cert.Raw, TimeMS: s.cfg.now().UnixMilli()})
+	r, err := s.signAs(key, adminCA, group.RecordBody{Type: group.RecordClaim, Root: newRoot.Cert.Raw, TimeMS: s.cfg.now().UnixMilli()})
 	if err != nil {
 		s.mu.Lock()
 		if back, e := s.id.WithClaim(nil); e == nil {

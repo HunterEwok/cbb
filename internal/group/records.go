@@ -192,6 +192,9 @@ type held struct {
 	sig string
 }
 
+// GroupCA returns the group's first root, which names the group.
+func (s *Records) GroupCA() *x509.Certificate { return s.groupCA }
+
 // NewRecords returns an empty set for the group of groupCA, the group's
 // first root, which names the group for good.
 func NewRecords(groupCA *x509.Certificate) *Records {

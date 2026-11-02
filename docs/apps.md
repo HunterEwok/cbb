@@ -28,7 +28,9 @@ they look, so both apps are built to the same plan.
 1. **Start** (no group yet): one sentence, the big button "Connect a new device" with a hint
    below it (on a computer, run `cbb pair` and scan the code it shows; `clipboardbridge
    pair -phone` in the mode without the app), and a second button, "I already use
-   Clipboard Bridge on another phone", which joins that phone's group. The camera opens at once;
+   Clipboard Bridge on another phone", which joins that phone's group, and a third, "My group was
+   made on a computer", where the user types the six-digit code that `cbb pair` shows on the
+   group's root and the phone joins that group as an admin. The camera opens at once;
    after the scan the app creates the group key in the Secure Enclave or StrongBox, admits
    the device and goes to Home. At the first launch the app makes this phone's own key and
    says so once, in a card: "This phone is ready", what the key is for in plain words, and
@@ -811,6 +813,29 @@ the app on real devices.
   admins and removes the lost phone. The kit keeps the records file and asks the Rust core
   what it says (`RecordSet`, docs/core-api.md, "The record set"); the Android kit does the
   same, with its root key in the Keystore behind BiometricPrompt.
+- A phone joins a computer's group from its Start screen ("My group was made on a computer";
+  docs/protocol.md, section 6, "A phone joins a computer's group"): it browses up to 10 s for
+  a computer announcing a pairing window (`p=1`), then 2 s more, and refuses when two
+  announce one; it dials that window with its own self-signed certificate, confirms the code
+  first (`PairingJoiner.join`) and checks the Welcome, whose admin CA the root issued for the
+  admin key it offered. An admin computer that is not the root refuses a phone, and the app
+  says to run `cbb pair` on the computer that created the group.
+- When the root hands the group to this phone (`cbb handover` on the root computer, a
+  `handover` record naming this phone's admin key, which `group_view` reports as `handed_to`),
+  Home shows "The group is yours to take". Its button makes a new root key (the Secure Enclave
+  or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
+  (`takeHandedOver`), which takes effect at once, and finishes the takeover as after a lost
+  root; the computer is not removed.
+- A new phone restores the group with the recovery key from its Start screen ("I have the
+  group's recovery sheet"; docs/protocol.md, section 10, "The recovery key"). It scans the
+  sheet's QR code (the typed key carries no admin CA, so a new phone needs the QR code; a
+  computer of the group takes the typed key with `cbb recovery`), finds the group's computers
+  by their tag and lets the recovery key issue its member certificate (`Restore`). A computer
+  takes it on a connection that carries records only and sends the group's first root in its
+  hello; the app checks the records and the computer, makes a new root key behind Face ID or
+  BiometricPrompt, signs a claim with the recovery key and sends it, and forgets the key. Home
+  then shows the claim's time left, and once it takes effect the app finishes as after a lost
+  root: it signs its own device record and gets a member certificate from the new root.
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

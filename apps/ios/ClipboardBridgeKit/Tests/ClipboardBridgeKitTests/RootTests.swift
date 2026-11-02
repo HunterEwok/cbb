@@ -89,6 +89,41 @@ final class RootTests: XCTestCase {
         XCTAssertNotNil(forwarder.refused(chain: [g.root.memberCert]))
     }
 
+    /// The root hands the group to B (cbb handover): B's claim takes
+    /// effect at once, and the old root's device stays in the group as a
+    /// member.
+    func testHandedOver() throws {
+        let now = Date()
+        var g = try Group(now: now)
+        XCTAssertFalse(g.b.handedToMe)
+        var h = Records.Body(type: "handover", signer: PhoneGroup.signer(g.rootKey), timeMS: Records.ms(now))
+        h.admin = try Records.keyHash(cert: g.adminCA)
+        g.b.add([try g.root.sign(h, caSigner: g.rootKey)])
+        XCTAssertTrue(g.b.handedToMe)
+        XCTAssertFalse(g.root.handedToMe, "the root is no admin to hand the group to")
+        let newRoot = try GroupCertificates.groupCA(signer: g.newRootKey, now: now, pathLength: 1)
+        _ = try g.b.takeHandedOver(adminSigner: g.adminKey, newRoot: newRoot, now: now)
+        XCTAssertFalse(g.b.handedToMe, "it claimed the group")
+        XCTAssertEqual(g.b.claimState, "effective", "a handed group needs no wait")
+        let rs = try g.b.finishTakeOver(rootSigner: g.newRootKey, now: now)
+        XCTAssertEqual(rs.count, 1, "B's own device; nothing removed")
+        XCTAssertTrue(g.b.isRoot)
+        XCTAssertEqual(g.b.records.rootDevice, g.b.device)
+        XCTAssertNil(g.b.records.handedTo, "the new root handed nothing")
+        XCTAssertEqual(g.b.devices.map(\.name).sorted(), ["B", "Lost", "one", "two"])
+        XCTAssertNil(g.b.records.refused(chain: [g.root.memberCert]), "the old root stays a member")
+
+        // A handover to another admin key is not this phone's.
+        var other = try Group(now: now)
+        var o = Records.Body(type: "handover", signer: PhoneGroup.signer(other.rootKey), timeMS: Records.ms(now))
+        o.admin = Records.keyHash(spki: SoftwareSigner().publicKeyDER)
+        other.b.add([try other.root.sign(o, caSigner: other.rootKey)])
+        XCTAssertFalse(other.b.handedToMe)
+        XCTAssertThrowsError(try other.b.takeHandedOver(adminSigner: other.adminKey, newRoot: newRoot, now: now)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .notHandedOver)
+        }
+    }
+
     func testTakeOver() throws {
         var g = try Group(now: t0)
         let lost = g.root.device

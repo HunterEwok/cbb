@@ -36,6 +36,16 @@
 // that proves it knows the secret it prints "fingerprint F" and admits it or
 // not; then it prints the group CA in base64, or fails with the first failed
 // attempt. Test use only.
+//
+//   clipboardbridge-interop restore-tls HOST PORT KEY CERT GROUP   (macOS)
+//
+// restores the group of the Go member at HOST:PORT on a new phone with the
+// group's recovery key (internal/node, TestSwiftRestoresWithRecoveryKey):
+// KEY (its 32 bytes) and CERT (its admin CA, DER), both base64, and GROUP,
+// the group's tag, make the sheet's QR code, which the tool reads as the
+// app does. It takes the records, checks them, claims the group for a new
+// root, sends the claim on a second connection, and prints its device ID,
+// then the new root in base64. Test use only.
 
 import ClipboardBridgeKit
 import Foundation
@@ -177,6 +187,28 @@ func joinTLS(host: String, port: UInt16, code: String) async throws {
     print(adminCA.base64EncodedString())
 }
 
+func restoreTLS(host: String, port: UInt16, key: Data, cert: Data, tag: String) async throws {
+    let qr = try Core.recoverySheet(key: key, cert: cert, group: tag).qr
+    guard case let .key(sheet) = try Core.readRecoverySheet(qr) else { throw TLSTransport.Failure.notReady("the sheet's QR code does not read") }
+    let label = "clipboardbridge-interop-restore-\(SyncEngine.newID())"
+    let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
+    let now = Date()
+    let r = try Restore(key: sheet, memberKey: signer.publicKeyDER, now: now)
+    let identity = try KeychainIdentity.identity(certificate: r.memberCert, key: signer.key, label: label, storeKey: false)
+    func dial() async throws -> TLSTransport {
+        // The handshake takes any certificate; Restore.group checks the computer's against the records.
+        let tls = TLSTransport(host: host, port: port, alpn: Member.alpn, identity: identity, chain: [r.adminCA]) { _ in true }
+        try await tls.start()
+        return tls
+    }
+    var g = try r.group(try await Restore.exchange(try await dial(), name: "iPhone", os: "ios", now: now), now: now)
+    let newRoot = try GroupCertificates.groupCA(signer: SoftwareSigner(), now: now, pathLength: 1)
+    let claim = try r.claim(&g, newRoot: newRoot, now: now)
+    _ = try await Restore.exchange(try await dial(), name: "iPhone", os: "ios", now: Date(), send: [claim])
+    print(r.device)
+    print(newRoot.base64EncodedString())
+}
+
 /// The group the window's attempts change.
 final class GroupBox: @unchecked Sendable {
     var group: PhoneGroup
@@ -227,6 +259,21 @@ if args.count == 4, args[1] == "invite-window", let secret = Data(base64Encoded:
     }
     #else
     FileHandle.standardError.write("invite-window needs Network.framework\n".data(using: .utf8)!)
+    exit(2)
+    #endif
+}
+if args.count == 7, args[1] == "restore-tls", let port = UInt16(args[3]), let key = Data(base64Encoded: args[4]),
+   let cert = Data(base64Encoded: args[5]) {
+    #if canImport(Network)
+    do {
+        try await restoreTLS(host: args[2], port: port, key: key, cert: cert, tag: args[6])
+        exit(0)
+    } catch {
+        FileHandle.standardError.write("clipboardbridge-interop: \(error)\n".data(using: .utf8)!)
+        exit(1)
+    }
+    #else
+    FileHandle.standardError.write("restore-tls needs Network.framework\n".data(using: .utf8)!)
     exit(2)
     #endif
 }
