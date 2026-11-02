@@ -825,9 +825,16 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     color = palette.textDim,
                 )
                 if (!hub.home) QuietButton(stringResource(R.string.hub_add_home), onClick = { if (!busy) act { model.addHomeNetwork() } })
-                var address by rememberSaveable(hub.forwarder) { mutableStateOf(hub.forwarder?.endpoint ?: "") }
-                var pin by rememberSaveable(hub.forwarder) { mutableStateOf(hub.forwarder?.pin ?: "") }
+                // The fields show the user's own forwarder; the project's leaves them empty.
+                val own = hub.forwarder?.takeUnless { it.isProject }
+                var address by rememberSaveable(hub.forwarder) { mutableStateOf(own?.endpoint ?: "") }
+                var pin by rememberSaveable(hub.forwarder) { mutableStateOf(own?.pin ?: "") }
                 Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
+                Text(
+                    stringResource(if (hub.forwarder?.isProject == true) R.string.hub_forwarder_project else R.string.hub_forwarder_back),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.textDim,
+                )
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
@@ -845,7 +852,7 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                val changed = address != (hub.forwarder?.endpoint ?: "") || pin != (hub.forwarder?.pin ?: "")
+                val changed = address != (own?.endpoint ?: "") || pin != (own?.pin ?: "")
                 AccentButton(stringResource(R.string.hub_forwarder_save), enabled = changed && !busy, onClick = { act { model.setForwarder(address, pin) } })
                 Row(
                     Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = !busy) { act { model.setHubInBackground(!hub.background) } },

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3559494df42f -->
+<!-- source: 985320ae0bdc -->
 # Mbali na nyumbani
 
 Nyumbani vifaa vyako husawazisha vyenyewe. Ili kuendelea kusawazisha laptopu au simu inapokuwa mahali pengine, kompyuta moja nyumbani huwa **kitovu** cha kikundi, na vifaa vinavyosafiri hukifikia kupitia handaki lililosimbwa la kikundi chenyewe. Picha za kila hali ziko katika [Jinsi inavyofanya kazi](how-it-works.md#away-from-home-the-hub).
@@ -54,10 +54,10 @@ Anwani ya nyumbani kwako ikibadilika, kitovu huvijulisha vifaa wakati ujao vitak
 Nyuma ya carrier-grade NAT, kitovu hujisajili badala yake kwenye **kisambazaji** kilicho kwenye intaneti, kwa muunganisho wa kutoka nje, kwa hiyo hakuna kinachohitaji kufunguliwa nyumbani. Kisambazaji hupitisha tu pakiti zilizosimbwa na hakina funguo.
 
 ```sh
-sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>
+sudo cbb global hub
 ```
 
-Anwani na ufunguo hutoka kwenye kisambazaji. Unaweza [kuendesha chako mwenyewe](../admin/self-hosting.md#a-forwarder) kwenye seva yoyote ndogo. Kisambazaji cha mradi kwenye `cbb.tools` bado hakijafunguliwa kwa wote; anwani na ufunguo wake vitakuwa hapa kitakapofunguliwa.
+Bila anwani zake, kitovu hupitia kisambazaji cha mradi kwenye `cbb.tools`: cbb inajua anwani na ufunguo wake, na simu inayokuwa kitovu huitumia pia. `-forwarder default` huiongeza kwa kitovu chenye anwani zake pia. Kwa [kisambazaji chako mwenyewe](../admin/self-hosting.md#a-forwarder) kwenye seva yoyote ndogo, toa anwani na ufunguo wake badala yake: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`; kwenye simu, chini ya **This phone as the hub**.
 
 Kitovu kinaweza kuwa na anwani yake na kisambazaji kwa wakati mmoja: vifaa hujaribu kitovu kwanza na kisambazaji mwisho.
 

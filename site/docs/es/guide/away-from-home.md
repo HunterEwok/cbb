@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3559494df42f -->
+<!-- source: 985320ae0bdc -->
 # Fuera de casa
 
 En casa, tus dispositivos se sincronizan solos. Para seguir sincronizando cuando un portátil o un teléfono está en otro sitio, un ordenador de casa se convierte en el **hub** del grupo, y los dispositivos que viajan llegan a él por el túnel cifrado del propio grupo. Las imágenes de cada caso están en [Cómo funciona](how-it-works.md#away-from-home-the-hub).
@@ -54,10 +54,10 @@ Cuando cambia la dirección de tu casa, el hub se lo dice a los dispositivos la 
 Tras un NAT de operador, el hub se registra en cambio en un **reenviador** de internet, mediante una conexión saliente, así que no hace falta abrir nada en casa. El reenviador solo pasa paquetes cifrados y no guarda claves.
 
 ```sh
-sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>
+sudo cbb global hub
 ```
 
-La dirección y la clave las da el reenviador. Puedes [ejecutar el tuyo](../admin/self-hosting.md#a-forwarder) en cualquier servidor pequeño. El reenviador del proyecto en `cbb.tools` aún no está abierto a todos; su dirección y su clave estarán aquí cuando lo esté.
+Sin direcciones propias, el hub pasa por el reenviador del proyecto en `cbb.tools`: cbb conoce su dirección y su clave, y un teléfono que hace de hub también lo usa. `-forwarder default` lo añade a un hub que además tiene sus propias direcciones. Para [tu propio reenviador](../admin/self-hosting.md#a-forwarder), en cualquier servidor pequeño, da en su lugar su dirección y su clave: `sudo cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key <key>`; en un teléfono, en **This phone as the hub**.
 
 El hub puede tener a la vez su propia dirección y un reenviador: los dispositivos prueban primero el hub y el reenviador en último lugar.
 

@@ -141,6 +141,10 @@ type ForwarderLink struct {
 	// hub learns when it registers; nil until then.
 	VLESSID string
 	VLESS   *VLESS
+	// Project marks the project's forwarder, whose pins the service takes
+	// from keys.json at each start (forward.ProjectPins); Pin is the one
+	// it accepted when the hub was set.
+	Project bool
 }
 
 // RelayLink is a device's blind relay: its address, for UDP and TCP, and
@@ -251,6 +255,7 @@ type forwarderFile struct {
 	Pin      string         `json:"key"`
 	VLESSID  string         `json:"vless_id,omitempty"`
 	VLESS    *VLESS         `json:"vless,omitempty"`
+	Project  bool           `json:"project,omitempty"`
 }
 
 type hubFile struct {
@@ -335,7 +340,7 @@ func LoadState(dir string) (*State, error) {
 		s.Members = append(s.Members, Member(c))
 	}
 	if f.Forwarder != nil {
-		s.Forwarder = &ForwarderLink{Endpoint: f.Forwarder.Endpoint, Pin: f.Forwarder.Pin, VLESSID: f.Forwarder.VLESSID, VLESS: f.Forwarder.VLESS}
+		s.Forwarder = &ForwarderLink{Endpoint: f.Forwarder.Endpoint, Pin: f.Forwarder.Pin, VLESSID: f.Forwarder.VLESSID, VLESS: f.Forwarder.VLESS, Project: f.Forwarder.Project}
 	}
 	if f.Relay != nil {
 		s.Relay = &RelayLink{Endpoint: f.Relay.Endpoint, Pin: f.Relay.Pin}
@@ -399,7 +404,7 @@ func (s *State) Save(dir string) error {
 		f.Members = append(f.Members, memberFile(c))
 	}
 	if fw := s.Forwarder; fw != nil {
-		f.Forwarder = &forwarderFile{Endpoint: fw.Endpoint, Pin: fw.Pin, VLESSID: fw.VLESSID, VLESS: fw.VLESS}
+		f.Forwarder = &forwarderFile{Endpoint: fw.Endpoint, Pin: fw.Pin, VLESSID: fw.VLESSID, VLESS: fw.VLESS, Project: fw.Project}
 	}
 	if r := s.Relay; r != nil {
 		f.Relay = &forwarderFile{Endpoint: r.Endpoint, Pin: r.Pin}

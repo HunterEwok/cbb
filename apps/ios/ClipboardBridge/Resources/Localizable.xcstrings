@@ -2774,6 +2774,26 @@
         }
       }
     },
+    "Reached from afar through the project's forwarder at cbb.tools. To use your own, enter its address and key." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Издалека хаб доступен через форвардер проекта на cbb.tools. Чтобы использовать свой, введите его адрес и ключ."
+          }
+        }
+      }
+    },
+    "To go back to the project's forwarder, empty both fields and save." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы вернуться к форвардеру проекта, очистите оба поля и сохраните."
+          }
+        }
+      }
+    },
     "Keep this phone" : {
       "localizations" : {
         "ru" : {

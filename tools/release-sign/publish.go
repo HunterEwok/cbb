@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
@@ -89,7 +90,8 @@ func (s *signing) flags(fs *flag.FlagSet) {
 	fs.Func("release", "NAME=KEY.pem of one more release key, such as one on a YubiKey, added to keys.json (repeatable)", add(release.UseRelease))
 	fs.Func("status", "NAME=KEY.pem of a key that signs attest-status.json, added to keys.json (repeatable)", add(release.UseStatus))
 	fs.Func("channel", "NAME=KEY.pem of a key that renews the channel file, added to keys.json (repeatable)", add(release.UseChannel))
-	fs.Func("drop", "the NAME of a key keys.json drops, lost or stolen (repeatable)", func(v string) error {
+	fs.Func("forwarder", "ADDRESS=KEY.pem of the project's forwarder (cbb.tools:8764), whose pin hubs then accept, added to keys.json (repeatable: the old and the new key while it changes)", add(release.UseForwarder))
+	fs.Func("drop", "the NAME of a key keys.json drops, lost or stolen, or a forwarder key's pin (repeatable)", func(v string) error {
 		s.drop = append(s.drop, v)
 		return nil
 	})
@@ -436,7 +438,8 @@ func (s *signing) keysFor(prev release.File, rs crypto.Signer) (release.File, er
 	}
 	kept := k.Keys[:0:0]
 	for _, key := range k.Keys {
-		if !slices.Contains(s.drop, key.Name) {
+		pin := sha256.Sum256(key.Key)
+		if !slices.Contains(s.drop, key.Name) && !slices.Contains(s.drop, base64.StdEncoding.EncodeToString(pin[:])) {
 			kept = append(kept, key)
 		}
 	}

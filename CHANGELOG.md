@@ -7,6 +7,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- The project's forwarder at `cbb.tools:8764` is built in: `cbb global hub` without
+  addresses, or with `-forwarder default` (also for `cbb global move`), goes through it, and a
+  phone that is the hub uses it unless the user saves their own; nobody types its address or
+  key. `keys.json` may list its keys (`use` `forwarder`, `release-sign -forwarder`), whose pins
+  then take the built-in one's place, so a new key reaches the hubs without a release and
+  both are accepted while it changes.
 - The tray app comes with the release: the Windows installer puts it in Program Files, starts
   it at every sign-in and adds Clipboard Bridge to the Start menu; on Linux (x86-64 and
   ARM64) the installer adds it with an autostart entry and a menu entry when the desktop has

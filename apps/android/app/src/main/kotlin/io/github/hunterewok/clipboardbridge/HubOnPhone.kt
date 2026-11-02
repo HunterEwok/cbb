@@ -33,7 +33,19 @@ data class HubState(
     val clients: List<PhoneHub.Client> = emptyList(),
 ) {
     /** The forwarder: its endpoint, "ip:port", and the pin of its key: SHA-256 of its key in standard base64. */
-    data class Forwarder(val endpoint: String, val pin: String)
+    data class Forwarder(val endpoint: String, val pin: String) {
+        /** Whether this is the project's forwarder. */
+        val isProject get() = pin == PROJECT_PIN
+
+        companion object {
+            /** The project's forwarder, which the hub uses unless the user gives their own: its name with the port, looked up when it is set, and the pin of its key, as cbb has them (internal/forward/project.go). */
+            const val PROJECT_HOST = "cbb.tools:8764"
+            const val PROJECT_PIN = "efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="
+
+            /** The project's forwarder at the address its name has now, IPv4 first; null when it cannot be looked up. On an IO thread. */
+            fun project(): Forwarder? = HubState.resolve(PROJECT_HOST)?.let { Forwarder(it, PROJECT_PIN) }
+        }
+    }
 
     fun encode(): ByteArray = JsonObject(mapOfValues(
         "key" to bytes(key),
