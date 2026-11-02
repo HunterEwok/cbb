@@ -142,6 +142,8 @@
     <string name="hub_forwarder_address">Адрес, например 198.51.100.9:8764</string>
     <string name="hub_forwarder_key">Ключ, 44 символа</string>
     <string name="hub_forwarder_save">Сохранить форвардер</string>
+    <string name="hub_forwarder_project">Издалека хаб доступен через форвардер проекта на cbb.tools. Чтобы использовать свой, введите его адрес и ключ.</string>
+    <string name="hub_forwarder_back">Чтобы вернуться к форвардеру проекта, очистите оба поля и сохраните.</string>
     <string name="hub_bad_forwarder">Укажите адрес форвардера с портом и его ключ, как их выводит cbb forward, или оставьте оба поля пустыми.</string>
     <string name="hub_background">Хаб работает и в фоне (расходует батарею)</string>
     <string name="hub_home_note">Этот телефон — хаб: синхронизация работает, пока приложение открыто.</string>
@@ -300,6 +302,7 @@
     <string name="action_shutdown">Выключить</string>
     <string name="action_cancel">Отменить перезагрузку или выключение</string>
     <string name="action_restart">Перезапустить Clipboard Bridge</string>
+    <string name="action_keyboard_layout">Сменить раскладку клавиатуры</string>
     <string name="action_confirm_title">%1$s: %2$s?</string>
     <string name="action_confirm_body">Это произойдёт через минуту; до тех пор её остановит «Отменить перезагрузку или выключение».</string>
     <string name="action_done">Готово.</string>

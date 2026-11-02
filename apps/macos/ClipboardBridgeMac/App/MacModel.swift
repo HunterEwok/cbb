@@ -42,10 +42,12 @@ final class MacModel: ObservableObject {
     var isRoot: Bool { this?.root == true }
     var awayOn: Bool { status?.away != nil }
 
-    /// The menu bar's symbol: linked while another device is online.
-    var symbol: String {
-        if problem != nil || !inGroup { return "clipboard" }
-        return others.contains { $0.online } ? "link.circle.fill" : "link.circle"
+    /// The menu bar's image, a template from the asset catalog (drawn by
+    /// tools/icon): the plain glyph without a group or with a problem, the
+    /// group's mark in one, filled while another device is online.
+    var trayImage: String {
+        if problem != nil || !inGroup { return "Tray" }
+        return others.contains { $0.online } ? "TrayOnline" : "TrayGroup"
     }
 
     func start() {

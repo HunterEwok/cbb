@@ -4,6 +4,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -86,6 +89,17 @@ func TestGlobalCommand(t *testing.T) {
 	inGroup := func(a *control.Away) control.Header {
 		return control.Header{Status: &control.Status{Role: "full", OS: "linux", Group: "g", Away: a}}
 	}
+	lookup := lookupNetIP
+	t.Cleanup(func() { lookupNetIP = lookup })
+	lookupNetIP = func(_ context.Context, _, host string) ([]netip.Addr, error) {
+		if host != "cbb.tools" {
+			return nil, errors.New("no such host")
+		}
+		return []netip.Addr{netip.MustParseAddr("2001:db8::20"), netip.MustParseAddr("198.51.100.20")}, nil
+	}
+	project := func(m *control.Message) bool {
+		return m.Forwarder == "198.51.100.20:8764" && m.ForwarderKey == "default" && len(m.Addrs) == 0
+	}
 	runCommandCases(t, []commandCase{
 		{name: "status", args: []string{"global"}, answer: inGroup(&control.Away{HubDevice: "deck", Through: true}), check: sent(control.OpStatus, nil), stdout: "connected to the hub deck"},
 		{name: "status off", args: []string{"global"}, answer: inGroup(nil), check: sent(control.OpStatus, nil), stdout: "Sync away from home: off"},
@@ -105,12 +119,21 @@ func TestGlobalCommand(t *testing.T) {
 			check: sent(control.OpAway, func(m *control.Message) bool {
 				return m.Forwarder == "198.51.100.9:8764" && m.ForwarderKey == "KEY" && m.VLESS && len(m.Addrs) == 0
 			})},
-		{name: "hub without an address", args: []string{"global", "hub"}, code: 2, stderr: "usage: cbb global"},
+		{name: "hub without an address goes through the project's forwarder", args: []string{"global", "hub"},
+			check: sent(control.OpAway, project), stdout: "cbb.tools is at 198.51.100.20:8764."},
+		{name: "hub through the project's forwarder", args: []string{"global", "hub", "-forwarder", "default", "-vless"},
+			check: sent(control.OpAway, func(m *control.Message) bool { return project(m) && m.VLESS })},
+		{name: "the project's forwarder takes no key", args: []string{"global", "hub", "-forwarder", "default", "-forwarder-key", "K"},
+			code: 1, stderr: "takes no -forwarder-key"},
+		{name: "default is no key of another forwarder", args: []string{"global", "hub", "-forwarder", "198.51.100.9:8764", "-forwarder-key", "default"},
+			code: 1, stderr: "goes with -forwarder default"},
 		{name: "hub with a strange firewall", args: []string{"global", "hub", "-firewall", "maybe", "a:1"}, code: 2},
 		{name: "move", args: []string{"global", "move", "desk", "203.0.113.8:8764"},
 			check: sent(control.OpAway, func(m *control.Message) bool {
 				return m.Device == "desk" && strings.Join(m.Addrs, ",") == "203.0.113.8:8764"
 			})},
+		{name: "move to the project's forwarder", args: []string{"global", "move", "desk", "-forwarder", "default"},
+			check: sent(control.OpAway, func(m *control.Message) bool { return m.Device == "desk" && project(m) })},
 		{name: "move without a device", args: []string{"global", "move", "-forwarder", "x:1"}, code: 2},
 		{name: "relay, declined", args: []string{"global", "relay", "198.51.100.9:8765", "-key", "K"}, stdin: "no\n",
 			answer: inGroup(&control.Away{}), check: sent(control.OpStatus, nil), code: 1, stdout: "A blind relay is a meeting point"},

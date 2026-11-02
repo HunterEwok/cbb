@@ -7,6 +7,22 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- The quick action `keyboard-layout` switches the layout a Linux computer's Bluetooth keyboard
+  types in to the next one (`us`, `ru`), for when the device it types on switched its own; the
+  apps show it as "Switch the keyboard's layout" once the computer's user turns it on.
+- A Linux computer's Bluetooth keyboard advertises itself as "Clipboard Bridge" and the
+  computer's name, and when a device it typed on forgot it (BlueZ 5.82 or later tells why the
+  link dropped), it forgets that device's old pairing too, so the two can pair again.
+- The project's forwarder at `cbb.tools:8764` is built in: `cbb global hub` without
+  addresses, or with `-forwarder default` (also for `cbb global move`), goes through it, and a
+  phone that is the hub uses it unless the user saves their own; nobody types its address or
+  key. `keys.json` may list its keys (`use` `forwarder`, `release-sign -forwarder`), whose pins
+  then take the built-in one's place, so a new key reaches the hubs without a release and
+  both are accepted while it changes.
+- The tray app comes with the release: the Windows installer puts it in Program Files, starts
+  it at every sign-in and adds Clipboard Bridge to the Start menu; on Linux (x86-64 and
+  ARM64) the installer adds it with an autostart entry and a menu entry when the desktop has
+  GTK 4 and WebKitGTK 6.0, and names the packages otherwise. The uninstallers remove it.
 - `.pibridge`, a test tool for the ZX Spectrum Next (`apps/zxnext`): it opens NextPi's shell
   to a computer on the home network through the Next's ESP8266, so a test can drive the Pi
   without typing on the Next, even on a Pi Zero without a radio. It carries the shell in the
@@ -740,6 +756,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Changed
 
+- The Mac app lives in the menu bar only, as the tray app does on Windows and Linux: no Dock
+  icon, no window at launch (the menu opens it), and it starts at login unless Settings turns
+  that off. The menu bar and the tray show a single-colour glyph in three states, drawn
+  white or black to suit the menu bar, the taskbar or the panel.
 - `cbb global` no longer repeats that the device keeps its keys in files each time it
   shows the status; `cbb global on` says it once, when the user agrees.
 - Remote paste on the phones: with the text left empty, Paste sends what the phone's

@@ -49,6 +49,7 @@ type BlueZ struct {
 	discoverable []bool
 	agents       []string
 	pairable     bool
+	removed      []dbus.ObjectPath
 }
 
 // Start runs a private bus with the fake on it, its adapter powered.
@@ -79,6 +80,7 @@ func Start(t testing.TB) *BlueZ {
 	f.conn.Export(adapter{f}, adapterPath, gattManager)
 	f.conn.Export(adapter{f}, adapterPath, advManager)
 	f.conn.Export(adapter{f}, adapterPath, propsIface)
+	f.conn.Export(adapter{f}, adapterPath, adapterIface)
 	f.conn.Export(agents{f}, "/org/bluez", agentManager)
 	if r, err := f.conn.RequestName(bluezBus, dbus.NameFlagDoNotQueue); err != nil || r != dbus.RequestNameReplyPrimaryOwner {
 		t.Fatalf("taking BlueZ's name: %v %v", r, err)
@@ -210,6 +212,26 @@ func (a adapter) RegisterAdvertisement(sender dbus.Sender, adv dbus.ObjectPath, 
 }
 
 func (a adapter) UnregisterAdvertisement(dbus.ObjectPath) *dbus.Error { return nil }
+
+func (a adapter) RemoveDevice(dev dbus.ObjectPath) *dbus.Error {
+	a.f.mu.Lock()
+	defer a.f.mu.Unlock()
+	a.f.removed = append(a.f.removed, dev)
+	return nil
+}
+
+// Disconnect says that BlueZ disconnected the device at dev for reason,
+// as BlueZ 5.82 and later do.
+func (f *BlueZ) Disconnect(dev dbus.ObjectPath, reason string) error {
+	return f.conn.Emit(dev, "org.bluez.Device1.Disconnected", reason, "")
+}
+
+// Removed lists the devices whose bonds were removed.
+func (f *BlueZ) Removed() []dbus.ObjectPath {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]dbus.ObjectPath(nil), f.removed...)
+}
 
 func (a adapter) Set(iface, name string, v dbus.Variant) *dbus.Error {
 	a.f.mu.Lock()

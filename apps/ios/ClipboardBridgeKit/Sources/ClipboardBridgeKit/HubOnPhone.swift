@@ -14,6 +14,16 @@ public struct HubState: Codable, Equatable, Sendable {
         public var endpoint: String
         public var pin: String
         public init(endpoint: String, pin: String) { (self.endpoint, self.pin) = (endpoint, pin) }
+
+        /// The project's forwarder, which the hub uses unless the user
+        /// gives their own: its name with the port, looked up when it is
+        /// set, and the pin of its key, as cbb has them
+        /// (internal/forward/project.go).
+        public static let projectHost = "cbb.tools:8764"
+        public static let projectPin = "efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="
+
+        /// Whether this is the project's forwarder.
+        public var isProject: Bool { pin == Self.projectPin }
     }
 
     public var key: Data
