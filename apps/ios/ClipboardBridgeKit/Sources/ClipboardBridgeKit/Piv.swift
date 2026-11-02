@@ -230,8 +230,10 @@ public enum Piv {
         guard answer == (try crypt(alg, key, challenge, encrypt: true)) else { throw fail(.card, "the card did not prove the management key") }
     }
 
-    /// One block with the management key: 3DES or AES in ECB.
+    /// One block with the management key, 3DES or AES: CBC with a zero IV,
+    /// which on one block is the block cipher itself.
     static func crypt(_ alg: UInt8, _ key: Data, _ block: Data, encrypt: Bool) throws -> Data {
+        guard block.count == (alg == 0x03 ? 8 : 16) else { throw fail(.card, "the YubiKey's challenge is not one block") }
         #if canImport(CommonCrypto)
         let algorithm = alg == 0x03 ? CCAlgorithm(kCCAlgorithm3DES) : CCAlgorithm(kCCAlgorithmAES)
         var out = Data(count: block.count)
@@ -239,15 +241,15 @@ public enum Piv {
         let status = out.withUnsafeMutableBytes { o in
             block.withUnsafeBytes { i in
                 key.withUnsafeBytes { k in
-                    CCCrypt(CCOperation(encrypt ? kCCEncrypt : kCCDecrypt), algorithm, CCOptions(kCCOptionECBMode),
-                            k.baseAddress, key.count, nil, i.baseAddress, block.count, o.baseAddress, block.count, &moved)
+                    CCCrypt(CCOperation(encrypt ? kCCEncrypt : kCCDecrypt), algorithm, CCOptions(0),
+                            k.baseAddress, key.count, [UInt8](repeating: 0, count: block.count), i.baseAddress, block.count, o.baseAddress, block.count, &moved)
                 }
             }
         }
         guard status == CCCryptorStatus(kCCSuccess), moved == block.count else { throw fail(.card, "the management key's cipher failed") }
         return out
         #else
-        // One block of CBC with a zero IV is ECB; 3DES has no implementation here.
+        // 3DES has no implementation here.
         guard alg != 0x03 else { throw fail(.managementKey, "3DES is not available on this platform") }
         let k = SymmetricKey(data: key)
         let iv = try AES._CBC.IV(ivBytes: [UInt8](repeating: 0, count: 16))

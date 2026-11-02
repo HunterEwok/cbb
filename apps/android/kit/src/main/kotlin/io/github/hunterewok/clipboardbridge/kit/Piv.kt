@@ -5,6 +5,7 @@ package io.github.hunterewok.clipboardbridge.kit
 
 import java.security.SecureRandom
 import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
@@ -206,7 +207,11 @@ object Piv {
         val keyLen = when (alg) { 0x0a -> 16; 0x0c -> 32; else -> 24 }
         if (key.size != keyLen) fail(Kind.MANAGEMENT_KEY, "the YubiKey's management key is not the default one")
         val spec = SecretKeySpec(key, cipher)
-        fun crypt(mode: Int, b: ByteArray): ByteArray = Cipher.getInstance("$cipher/ECB/NoPadding").run { init(mode, spec); doFinal(b) }
+        // One block, as the card's challenge and witness are: CBC with a zero IV is the block cipher itself.
+        fun crypt(mode: Int, b: ByteArray): ByteArray {
+            if (b.size != block) fail(Kind.CARD, "the YubiKey's challenge is not one block")
+            return Cipher.getInstance("$cipher/CBC/NoPadding").run { init(mode, spec, IvParameterSpec(ByteArray(block))); doFinal(b) }
+        }
 
         val (w, sw1) = command(card, 0x87, alg, MANAGEMENT_SLOT, tlv(0x7c, tlv(0x80, ByteArray(0))))
         if (sw1 != 0x9000) cardFail("starting authentication", sw1)
