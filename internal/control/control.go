@@ -50,6 +50,8 @@ const (
 	OpAdmin       = "admin"          // client → service: on the root, make the device Name names an admin
 	OpTakeover    = "takeover"       // client → service: on an admin, take the group over from the lost root Name names
 	OpDelay       = "takeover-delay" // client → service: on the root, set how long a claim waits to Value, a duration
+	OpRecovery    = "recovery"       // client → service: claim the group with its recovery key, the payload the sheet's text or QR code
+	OpHandover    = "handover"       // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
 	OpInvite      = "invite"         // client → service: make a remote invitation on the hub; answers and a question follow
 	OpAnswer      = "answer"         // client → service: Consent answers the service's question during a request

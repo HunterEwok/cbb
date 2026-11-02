@@ -74,8 +74,9 @@ type Identity struct {
 	// them and take the root record (docs/protocol.md, section 10). Nil
 	// elsewhere.
 	PrevCert, PrevIssuer *x509.Certificate
-	// Claim is the new root, with its key, of a claim this admin signed
-	// to take the group over that has not taken effect yet: when the
+	// Claim is the new root, with its key, of a claim this admin, or
+	// this member with the group's recovery key, signed to take the group
+	// over that has not taken effect yet: when the
 	// records make it the current root, TakenOver makes this device the
 	// root with it (docs/protocol.md, section 10, "Handing the group over"). Nil
 	// elsewhere.
@@ -233,8 +234,9 @@ func (id *Identity) WithAdminCA(der []byte, now time.Time) (*Identity, error) {
 	return &next, nil
 }
 
-// TakenOver returns the identity of an admin that took the group over from
-// a lost root (docs/protocol.md, section 10): roots, as the records lead
+// TakenOver returns the identity of an admin, or of a member that claimed
+// with the recovery key, that took the group over from a lost root
+// (docs/protocol.md, section 10): roots, as the records lead
 // to them after its root record, end with root, whose key this device
 // holds from now on as the group's root, and its admin key and admin CA
 // go. Its member certificate is reissued from the new root at once: a
@@ -242,8 +244,8 @@ func (id *Identity) WithAdminCA(der []byte, now time.Time) (*Identity, error) {
 // admitter's alike, so a root admits only with a certificate of its own.
 func (id *Identity) TakenOver(root *CA, roots []*x509.Certificate, now time.Time) (*Identity, error) {
 	switch {
-	case id.Legacy() || id.IsRoot() || id.AdminCA == nil:
-		return nil, errors.New("group: only an admin of a group with a root takes it over")
+	case id.Legacy() || id.IsRoot() || id.Claim == nil && id.AdminCA == nil:
+		return nil, errors.New("group: only an admin, or a member that claimed with the recovery key, takes a group with a root over")
 	case root.Key == nil || len(roots) == 0 || !roots[len(roots)-1].Equal(root.Cert):
 		return nil, errors.New("group: the records do not lead to the new root; another admin may have taken the group over first")
 	}
@@ -257,6 +259,17 @@ func (id *Identity) TakenOver(root *CA, roots []*x509.Certificate, now time.Time
 		return nil, err
 	}
 	next.Issuer = nil
+	// The root serves the shortcut: a member that claimed with the
+	// recovery key held no iPhone CA, so it makes one; the new root
+	// replaces it anyway once it took over.
+	if next.PhoneCA == nil {
+		if next.PhoneCA, err = NewPhoneCA(now); err != nil {
+			return nil, err
+		}
+		if next.Phone, err = next.PhoneCA.IssuePhone(PublicKey(id.Key), now); err != nil {
+			return nil, err
+		}
+	}
 	if err := next.Check(); err != nil {
 		return nil, err
 	}
@@ -281,8 +294,9 @@ func (id *Identity) Upgraded(root *CA, roots []*x509.Certificate, phoneCA CA, no
 	return next.WithPhoneCA(phoneCA, now)
 }
 
-// WithClaim returns the identity of an admin that signed a claim to take
-// the group over with the new root ca (Claim); nil ca drops it, as after
+// WithClaim returns the identity of an admin, or of a member with the
+// group's recovery key, that signed a claim to take the group over with the
+// new root ca (Claim); nil ca drops it, as after
 // the claim was cancelled.
 func (id *Identity) WithClaim(ca *CA) (*Identity, error) {
 	next := *id
@@ -370,8 +384,8 @@ func (id *Identity) Check() error {
 		return errors.New("group: the root key is not the key of the group's current root")
 	}
 	if id.Claim != nil {
-		if id.AdminCA == nil || id.Claim.Key == nil || !SameKey(id.Claim.Key, id.Claim.Cert.PublicKey) {
-			return errors.New("group: only an admin holds a claim's new root, with its key")
+		if id.Legacy() || id.IsRoot() || id.Claim.Key == nil || !SameKey(id.Claim.Key, id.Claim.Cert.PublicKey) {
+			return errors.New("group: only a member that is not the root holds a claim's new root, with its key")
 		}
 		if err := checkRoot(id.Claim.Cert); err != nil {
 			return err
