@@ -175,8 +175,8 @@ final class StartUITests: XCTestCase {
     /// Whether e shows as selected within a few seconds: a tap reaches the
     /// app's state and then the accessibility tree a moment later, more so
     /// on a loaded simulator, so reading isSelected at once can see the
-    /// state before the tap.
-    private func selected(_ e: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+    /// state before the tap. CI's simulators can take seconds per step.
+    private func selected(_ e: XCUIElement, timeout: TimeInterval = 15) -> Bool {
         let done = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: e)
         return XCTWaiter().wait(for: [done], timeout: timeout) == .completed
     }
