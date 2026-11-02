@@ -26,7 +26,11 @@ pub const TIME: u8 = b'T';
 /// little-endian count (driver to Pi); the Pi sends no more than WINDOW
 /// bytes ahead.
 pub const ACK: u8 = b'A';
+/// The driver stops the link, and NextPi's shell has the UART again
+/// (driver to Pi).
+pub const QUIT: u8 = b'Q';
 /// Characters to type, in the Spectrum character set (Pi to driver).
+#[allow(dead_code)] // the driver's keys, its next step
 pub const KEYS: u8 = b'K';
 
 /// How many bytes on the wire the Pi sends before the driver's ACK: less

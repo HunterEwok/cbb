@@ -118,6 +118,7 @@ impl Esp {
     }
 
     /// Opens a UDP connection to one peer, from local_port.
+    #[allow(dead_code)] // for sync away from home, the tunnel's next step
     pub fn dial_udp(&mut self, id: u8, host: &str, port: u16, local_port: u16) {
         self.dial(id, format!("AT+CIPSTART={id},\"UDP\",\"{}\",{port},{local_port},0", quote(host)));
     }
