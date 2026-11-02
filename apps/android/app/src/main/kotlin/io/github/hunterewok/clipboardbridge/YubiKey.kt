@@ -103,11 +103,12 @@ internal fun YubiKeyPinDialog(title: String, body: String, dismiss: () -> Unit, 
                 Text(body)
                 OutlinedTextField(
                     value = pin,
+                    // Six to eight characters, not only digits.
                     onValueChange = { v -> pin = v.take(8) },
                     singleLine = true,
                     label = { Text(stringResource(R.string.yubikey_pin)) },
                     visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, autoCorrectEnabled = false),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
                 )
             }
         },
@@ -115,7 +116,7 @@ internal fun YubiKeyPinDialog(title: String, body: String, dismiss: () -> Unit, 
             TextButton(onClick = {
                 dismiss()
                 go(pin)
-            }, enabled = pin.length in 6..8) { Text(stringResource(R.string.yubikey_go), color = palette.accent) }
+            }, enabled = pin.toByteArray().size in 6..8) { Text(stringResource(R.string.yubikey_go), color = palette.accent) }
         },
         dismissButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.cancel)) } },
         containerColor = palette.surface,
