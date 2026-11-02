@@ -70,7 +70,7 @@ Hali nyingine (kupokea tu, kutuma tu) ziko katika [amri](../reference/cli.md#cbb
 
 Kikundi hufanya kazi na simu pekee, lakini mambo mawili ni bora kwenye kompyuta inayobaki imewashwa, kama seva ya nyumbani, Raspberry Pi au kompyuta ya mezani:
 
-- **Ifanye msimamizi.** Kwenye simu, gusa kompyuta kwenye Mwanzo kisha **Make it an admin**. Mac, Windows PC au kompyuta ya Linux isiyo na TPM huweka funguo zake kwenye faili, na programu hukuonya kwanza ([funguo](keys.md#the-three-levels)). Baada ya hapo inaweza pia kuongeza na kuondoa vifaa (`sudo cbb pair`, `sudo cbb revoke NAME`), kwa hiyo huhitaji simu mkononi kila mara. Simu inabaki mzizi wa kikundi, kifaa chake kinachoaminika zaidi: ufunguo wa mzizi haondoki kamwe kwenye chipu ya usalama ya simu.
+- **Ifanye msimamizi.** Kwenye simu, gusa kompyuta kwenye Mwanzo kisha **Make it an admin**. Mac, Windows PC au kompyuta ya Linux isiyo na TPM huweka funguo zake kwenye faili, na programu hukuonya kwanza ([funguo](keys.md#the-three-levels)). Baada ya hapo inaweza pia kuongeza na kuondoa vifaa (`sudo cbb pair`, `sudo cbb remove NAME`), kwa hiyo huhitaji simu mkononi kila mara. Simu inabaki mzizi wa kikundi, kifaa chake kinachoaminika zaidi: ufunguo wa mzizi haondoki kamwe kwenye chipu ya usalama ya simu.
 - **Ifanye kitovu**, ili vifaa vyako viendelee kusawazisha vikiwa mbali na nyumbani. Tazama [Mbali na nyumbani](away-from-home.md).
 
 Ongeza pia simu ya pili, ili kupoteza simu moja kusipoteze chochote: kwenye simu ya pili gusa **I already use Clipboard Bridge on another phone** na uchanganue msimbo wake kwa **+** kwenye ya kwanza. Simu ya kwanza huifanya msimamizi.

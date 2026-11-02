@@ -135,7 +135,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G33 | Admins at once: two remove one device; two rename one device; one admits while another removes; two freeze each other; every member ends with the same list | fleet | |
 | G34 | Key levels for admins: a file key refused at level 2 (the default), allowed at level 3 after the warning, only proven keys at level 1 | fleet | |
 | G35 | A device whose hello names another system than its record gets a new record from an admin | fleet | |
-| G36 | A computer of a phone's group becomes an admin: the root phone's "Make it an admin" certifies the key its hello offers, after the warning; the computer then admits and removes with `cbb pair` and `cbb revoke` | ui, fleet | |
+| G36 | A computer of a phone's group becomes an admin: the root phone's "Make it an admin" certifies the key its hello offers, after the warning; the computer then admits and removes with `cbb pair` and `cbb remove` | ui, fleet | |
 
 ### 2.3 Watches
 

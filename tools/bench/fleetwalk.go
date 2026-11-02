@@ -198,7 +198,7 @@ func randomWalk(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 			if w.mark == "" {
 				by = pick(actors())
 			}
-			if _, err := Run(ctx, by.d, "cbb revoke "+w.id, ""); err != nil {
+			if _, err := Run(ctx, by.d, "cbb remove "+w.id, ""); err != nil {
 				return "", err
 			}
 			drop(w)

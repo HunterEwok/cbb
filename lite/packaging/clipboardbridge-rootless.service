@@ -17,7 +17,7 @@ Type=simple
 Environment=CBB_ROOTLESS=1
 # install.sh --rootless --port N writes CBB_PORT here.
 EnvironmentFile=-%E/clipboardbridge/clipboardbridge.env
-ExecStart=/usr/local/bin/cbb run
+ExecStart=/usr/local/bin/cbb service
 # The control and admin sockets, in $XDG_RUNTIME_DIR/clipboardbridge.
 RuntimeDirectory=clipboardbridge
 RuntimeDirectoryMode=0700

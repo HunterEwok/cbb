@@ -69,7 +69,7 @@ The safest way back is a second device that may act for the group:
 
 | What happened | What to do |
 |---|---|
-| A device was reinstalled or replaced | remove the old one (`sudo cbb revoke NAME`, or Remove in the app), then pair the new one as a new device |
+| A device was reinstalled or replaced | remove the old one (`sudo cbb remove NAME`, or Remove in the app), then pair the new one as a new device |
 | A computer was restored from its own backup, on the same hardware | start the service; it rejoins with its old keys, as long as nobody removed it |
 | The root computer is gone and an admin remains | `sudo cbb takeover LOST_ROOT` on the admin, with the lost root's name or ID |
 | The root phone is gone and an admin phone remains | remove the lost root on the admin phone; the app takes the group over in the same step |

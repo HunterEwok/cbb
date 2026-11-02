@@ -276,5 +276,5 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 устройства остаются, поэтому повторная установка возвращает его в свою группу. Чтобы удалить и
 их, добавьте `--purge` (`-Purge` в Windows, с
 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`),
-затем удалите устройство из группы на другом устройстве (`sudo cbb revoke NAME`, или на
+затем удалите устройство из группы на другом устройстве (`sudo cbb remove NAME`, или на
 телефоне).

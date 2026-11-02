@@ -525,7 +525,7 @@ if [ "$steamos" = yes ]; then
 	run=$cbb
 fi
 if [ "$kind" = lite ]; then
-	echo "Next: see lite/README.md; in short, sudo -u clipboardbridge $run join here, and scan its QR code with the phone app."
+	echo "Next: see lite/README.md; in short, sudo -u clipboardbridge $run pair here, and scan its QR code with the phone app."
 else
 	echo "Next: run sudo $run pair and scan its QR code with the Clipboard Bridge app on your phone; without the app, see docs/guide/without-app.md."
 fi

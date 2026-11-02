@@ -327,7 +327,7 @@ func recordLimits(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 		return nil
 	})
 	r.Do(p+"root-still-removes", func() error {
-		if _, err := Run(ctx, root, "cbb revoke "+admins[0].Name, ""); err != nil {
+		if _, err := Run(ctx, root, "cbb remove "+admins[0].Name, ""); err != nil {
 			return err
 		}
 		return listsAs(ctx, []*Device{root, t, admins[1]}, admins[0].Name, "", true, 3*timeout)
@@ -386,7 +386,7 @@ func adminChain(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 		return syncs(ctx, g, m, d, "to a device an admin admitted", timeout)
 	})
 	r.Do(p+"kept-after-removal", func() error {
-		if _, err := Run(ctx, root, "cbb revoke "+admin.Name, ""); err != nil {
+		if _, err := Run(ctx, root, "cbb remove "+admin.Name, ""); err != nil {
 			return err
 		}
 		if err := listsAs(ctx, []*Device{root, m}, admin.Name, "", true, timeout); err != nil {

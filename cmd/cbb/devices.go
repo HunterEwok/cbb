@@ -107,10 +107,10 @@ func seen(d control.Device, now time.Time) string {
 	return fmt.Sprintf("%d days ago", int(ago/(24*time.Hour)))
 }
 
-// cmdRevoke removes a device from the group.
-func cmdRevoke(args []string, stdout, stderr io.Writer) int {
+// cmdRemove removes a device from the group.
+func cmdRemove(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 || helpFlag(args[0]) {
-		fmt.Fprintln(stderr, "cbb: usage: cbb revoke <name or device ID>; cbb status lists them")
+		fmt.Fprintln(stderr, "cbb: usage: cbb remove <name or device ID>; cbb status lists them")
 		return 2
 	}
 	c, err := control.DialFor(control.OpRevoke)
@@ -149,7 +149,7 @@ func cmdRename(args []string, stdout, stderr io.Writer) int {
 // take the group over waits on each member.
 func cmdTakeoverDelay(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 || helpFlag(args[0]) {
-		fmt.Fprintln(stderr, "cbb: usage: cbb takeover-delay <duration>, from 0s to 168h, as 72h")
+		fmt.Fprintln(stderr, "cbb: usage: cbb takeover -delay <duration>, from 0s to 168h, as 72h")
 		return 2
 	}
 	c, err := control.DialFor(control.OpDelay)
@@ -167,7 +167,7 @@ func cmdTakeoverDelay(args []string, stdout, stderr io.Writer) int {
 // cmdHubs sets the group's main hubs, in the order they serve.
 func cmdHubs(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || len(args) == 1 && helpFlag(args[0]) {
-		fmt.Fprintln(stderr, "cbb: usage: cbb hubs <name or ID>..., the group's main hubs in the order they serve")
+		fmt.Fprintln(stderr, "cbb: usage: cbb global hubs <name or ID>..., the group's main hubs in the order they serve")
 		return 2
 	}
 	c, err := control.DialFor(control.OpHubs)
@@ -209,7 +209,7 @@ func cmdFreeze(args []string, on bool, stdout, stderr io.Writer) int {
 	}
 	if on {
 		fmt.Fprintf(stdout, "Froze %s: it is no admin and the members refuse it as soon as they hear of it.\n"+
-			"The group's root or an admin phone unfreezes it (cbb unfreeze) or removes it (cbb revoke).\n", m.Name)
+			"The group's root or an admin phone unfreezes it (cbb unfreeze) or removes it (cbb remove).\n", m.Name)
 	} else {
 		fmt.Fprintf(stdout, "Unfroze %s: it is an admin again.\n", m.Name)
 	}
@@ -245,6 +245,9 @@ func cmdAdmin(args []string, stdout, stderr io.Writer) int {
 // cmdTakeover takes the group over from its lost root computer, on an
 // admin.
 func cmdTakeover(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "-delay" {
+		return cmdTakeoverDelay(args[1:], stdout, stderr)
+	}
 	if len(args) != 1 || helpFlag(args[0]) {
 		fmt.Fprintln(stderr, "cbb: usage: cbb takeover <name or device ID of the lost root>; cbb status shows it")
 		return 2

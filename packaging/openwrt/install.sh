@@ -161,7 +161,7 @@ answers /usr/bin/cbb || true
 echo "Clipboard Bridge is running on TCP port $port, on the lan zone. To remove it: sh /usr/share/clipboardbridge/uninstall.sh"
 echo "Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one."
 if /usr/bin/cbb version 2>/dev/null | grep -q "lite member"; then
-	echo "Next: run su -s /bin/sh clipboardbridge -c 'cbb join -name router' and scan its QR code with the Clipboard Bridge app on your phone."
+	echo "Next: run su -s /bin/sh clipboardbridge -c 'cbb pair -name router' and scan its QR code with the Clipboard Bridge app on your phone."
 else
 	echo "Next: run cbb pair and scan its QR code with the Clipboard Bridge app on your phone."
 fi

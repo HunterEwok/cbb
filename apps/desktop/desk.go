@@ -277,7 +277,7 @@ func (d *Desk) Fetch() {
 // MakeAdmin's dialog warns that the computer's key is a file, which
 // -allow-file-key consents to.
 func (d *Desk) Rename(id, name string) { d.admin([]string{"rename", id, name}, false, "Renamed.") }
-func (d *Desk) Remove(id string)       { d.admin([]string{"revoke", id}, false, "Removed from the group.") }
+func (d *Desk) Remove(id string)       { d.admin([]string{"remove", id}, false, "Removed from the group.") }
 func (d *Desk) MakeAdmin(id string) {
 	d.admin([]string{"admin", "-allow-file-key", id}, false, "It is an admin now.")
 }

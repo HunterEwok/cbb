@@ -43,7 +43,7 @@ struct DeviceDetail: View {
         .confirmationDialog(Text("Make \(device?.name ?? "") an admin?"), isPresented: $promoting) {
             Button { Task { await model.makeAdmin(id) } } label: { Text("Make it an admin") }
         } message: {
-            Text("It can then add and remove devices with cbb pair and cbb revoke. Its key is a file on the computer, so do this only for a computer you keep safe.")
+            Text("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.")
         }
         .confirmationDialog(Text("Freeze \(device?.name ?? "")?"), isPresented: $freezing) {
             Button(role: .destructive) { Task { await model.freeze(id) } } label: { Text("Freeze") }

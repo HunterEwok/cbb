@@ -9,7 +9,7 @@
 على هاتف مشرف، اضغط الجهاز المفقود في **الصفحة الرئيسية** ثم **Remove**. وعلى حاسوب مشرف:
 
 ```sh
-sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
+sudo cbb remove NAME     # NAME, or the device ID, as cbb status shows it
 ```
 
 يعلم كل جهاز في المجموعة بذلك ويتوقف عن الحديث مع الجهاز المفقود. ولا يزيل المشرفَ إلا الجذر أو هاتف مشرف.
@@ -22,7 +22,7 @@ sudo cbb revoke NAME     # NAME, or the device ID, as cbb status shows it
 sudo cbb freeze NAME
 ```
 
-لا يستطيع المشرف المجمَّد تجميد الجذر ولا هاتف مشرف. وإذا جمّد بدوره فيبقى الاثنان مجمَّدين إلى أن يقرر الجذر (`cbb unfreeze` أو `cbb revoke` على الجذر، أو **Unfreeze** و**Remove** على هاتف الجذر).
+لا يستطيع المشرف المجمَّد تجميد الجذر ولا هاتف مشرف. وإذا جمّد بدوره فيبقى الاثنان مجمَّدين إلى أن يقرر الجذر (`cbb unfreeze` أو `cbb remove` على الجذر، أو **Unfreeze** و**Remove** على هاتف الجذر).
 
 ## 3. إن كان الجذر: تولَّ المجموعة
 

@@ -93,7 +93,7 @@ such as a home server, a Raspberry Pi or a desktop:
   **Make it an admin**. A Mac, a Windows PC or a Linux computer without a TPM keeps its
   keys in a file, and the app warns you about that first
   ([keys](keys.md#the-three-levels)). It can then add and remove devices too (`sudo cbb pair`,
-  `sudo cbb revoke NAME`), so you do not need the phone at hand every time. The phone stays
+  `sudo cbb remove NAME`), so you do not need the phone at hand every time. The phone stays
   the group's root, its most trusted device: the root's key never leaves the phone's
   security chip.
 - **Make it the hub**, so your devices keep syncing when they are away from home. See

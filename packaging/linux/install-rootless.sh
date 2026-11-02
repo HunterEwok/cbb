@@ -222,7 +222,7 @@ case ":$PATH:" in
 esac
 echo "For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q $share/tmux.conf"
 if [ "$kind" = lite ]; then
-	echo "Next: see lite/README.md; in short, $run join here, and scan its QR code with the phone app."
+	echo "Next: see lite/README.md; in short, $run pair here, and scan its QR code with the phone app."
 else
 	echo "Next: run $run pair and scan its QR code with the Clipboard Bridge app on your phone."
 fi

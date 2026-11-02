@@ -15,7 +15,7 @@ Wants=network-online.target
 Type=simple
 # install.sh --port N writes CBB_PORT here.
 EnvironmentFile=-/etc/clipboardbridge/clipboardbridge.env
-ExecStart=/usr/local/bin/cbb run
+ExecStart=/usr/local/bin/cbb service
 User=clipboardbridge
 Group=clipboardbridge
 StateDirectory=clipboardbridge
