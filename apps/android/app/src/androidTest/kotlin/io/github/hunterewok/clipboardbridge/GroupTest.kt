@@ -250,15 +250,22 @@ class GroupTest {
         val widgets = AppWidgetManager.getInstance(context).getInstalledProvidersForPackage(context.packageName, null)
         assertTrue("no home-screen widget: $widgets", widgets.any { it.provider.className == SendWidget::class.java.name })
         val text = "cbb-bench phone A12 from the tile ${System.currentTimeMillis()}"
-        // Settles what earlier tests left, so the send screen finds the group connected.
-        runBlocking { model.sync() }
-        setClip(text)
-        InstrumentationRegistry.getInstrumentation().runOnMainSync { model.message = null }
-        // What the widget's and the tile's PendingIntent start.
-        context.startActivity(SendActivity.intent(context))
-        until(30, "the send screen says what it did") { model.message != null }
-        assertEquals("the send screen says ${model.message}", R.string.sent, model.message?.text)
-        Bench.arrives(Bench.PC, text)
+        // In the mode own only the button sends: shared would send the new copy by itself.
+        val self = model.group.devices.first { it.isSelf }.id
+        runBlocking { model.setMode(self, "own") }
+        try {
+            // Settles what earlier tests left, so the send screen finds the group connected.
+            runBlocking { model.sync() }
+            setClip(text)
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { model.message = null }
+            // What the widget's and the tile's PendingIntent start.
+            context.startActivity(SendActivity.intent(context))
+            until(30, "the send screen says what it did") { model.message != null }
+            assertEquals("the send screen says ${model.message}", R.string.sent, model.message?.text)
+            Bench.arrives(Bench.PC, text)
+        } finally {
+            runBlocking { model.setMode(self, "shared") }
+        }
     }
 
     /** O11: Share sends a file, which the computer saves; a file the computer copies lands in Downloads. */
