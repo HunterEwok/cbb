@@ -19,8 +19,6 @@ struct AddDeviceView: View {
 
     init(restore: Bool = false) { self.restore = restore }
 
-    init(restore: Bool = false) { self.restore = restore }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: Tokens.spacingLarge) {
