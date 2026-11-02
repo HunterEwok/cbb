@@ -67,6 +67,9 @@ type Config struct {
 	listen func() (net.Listener, error)
 	// now is the clock for certificates; time.Now if nil.
 	now func() time.Time
+	// readSheet reads what the user typed or scanned from a recovery
+	// sheet; the Rust core's read_recovery_sheet if nil. Tests replace it.
+	readSheet func(string) (*recoverySheet, error)
 	// browseFor is how long join looks for a pairing window; ten seconds
 	// if zero.
 	browseFor time.Duration

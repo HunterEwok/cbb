@@ -7,6 +7,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- `cbb recovery`: when every phone with the group is lost, any computer of the group claims it
+  with the recovery key typed from the sheet (or its QR code's text) and becomes the root after
+  the group's wait, unless the root phone cancels the claim. `cbb handover NAME`, on the root,
+  lets an admin, as a new phone, take the group over at once.
 - `.pibridge`, a test tool for the ZX Spectrum Next (`apps/zxnext`): it opens NextPi's shell
   to a computer on the home network through the Next's ESP8266, so a test can drive the Pi
   without typing on the Next, even on a Pi Zero without a radio. It carries the shell in the
