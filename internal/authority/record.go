@@ -74,6 +74,7 @@ const (
 	TypeCheckpoint = "checkpoint"
 	TypeHubs       = "hubs"
 	TypeRecovery   = "recovery"
+	TypeHandover   = "handover"
 )
 
 // MaxHubs is how many devices a hubs record names.
@@ -187,6 +188,8 @@ type Body struct {
 	Seen    []Seen `json:"seen,omitempty"`
 	Records []Hash `json:"records,omitempty"`
 	Root    []byte `json:"root,omitempty"`
+	// Cert is the recovery key's admin CA (DER), in a recovery record.
+	Cert []byte `json:"cert,omitempty"`
 
 	TakeoverDelayMS *int64 `json:"takeover_delay_ms,omitempty"`
 	// KeyLevel is which keys may be the group's root, an admin or a hub:
@@ -213,7 +216,8 @@ var (
 		TypeSettings:   set("takeover_delay_ms", "key_level"),
 		TypeCheckpoint: set("heads", "keep"),
 		TypeHubs:       set("hubs"),
-		TypeRecovery:   set("admin"),
+		TypeRecovery:   set("admin", "cert"),
+		TypeHandover:   set("admin"),
 	}
 	common = []string{"v", "alg", "type", "group", "signer", "seq", "time_ms"}
 )
@@ -251,6 +255,7 @@ func (b *Body) present() []string {
 	add(len(b.Seen) > 0, "seen")
 	add(len(b.Records) > 0, "records")
 	add(len(b.Root) > 0, "root")
+	add(len(b.Cert) > 0, "cert")
 	add(b.TakeoverDelayMS != nil, "takeover_delay_ms")
 	add(b.KeyLevel != "", "key_level")
 	add(len(b.Heads) > 0, "heads")
@@ -377,8 +382,16 @@ func (b *Body) check() error {
 	case TypeHubs:
 		return checkHubs(b.Hubs)
 	case TypeRecovery:
+		if b.Admin == nil || len(b.Cert) == 0 {
+			return errors.New("authority: a recovery record needs admin and cert")
+		}
+		ca, err := x509.ParseCertificate(b.Cert)
+		if err != nil || KeyHashOf(ca) != *b.Admin {
+			return errors.New("authority: a recovery record's cert is not the admin CA of its admin key")
+		}
+	case TypeHandover:
 		if b.Admin == nil {
-			return errors.New("authority: a recovery record needs admin")
+			return errors.New("authority: a handover record needs admin")
 		}
 	}
 	return nil
