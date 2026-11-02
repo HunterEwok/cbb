@@ -56,7 +56,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   member's connections through the ESP to a member at home, and the ESP's own connections
   (a phone that syncs or admits it) to the lite member; the TLS stays on the Pi. The Next's
   clock sets the Pi's. The link is a remote paste target too (`next`): an admin's paste is
-  typed on the Next, 50 characters a second.
+  typed on the Next, 50 characters a second. With `-udp` it also leads a local UDP port to
+  the hub or a forwarder, and `cbb run -tunnel-via` sends the tunnel of sync away from home
+  there, so the Pi syncs away from home through the ESP.
 - `CBB.DRV`, a NextZXOS driver for the ZX Spectrum Next (`apps/zxnext/drv`): on every
   frame's interrupt it passes bytes between the ESP8266 and the Pi in `cbb next link`'s
   frames and types the characters the Pi sends, while any program runs; a host test runs
