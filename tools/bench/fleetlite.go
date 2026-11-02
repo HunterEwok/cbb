@@ -56,7 +56,7 @@ func joinLite(ctx context.Context, hub, d *Device) error {
 	}
 	// Under systemd the join runs as the service's user, as lite/README.md
 	// tells, so that the service reads what it saves.
-	join := "cbb join -name lite -code " + net.JoinHostPort(ip, "8764")
+	join := "cbb pair -name lite -code " + net.JoinHostPort(ip, "8764")
 	if out, _ := Run(ctx, d, "id -u clipboardbridge 2>/dev/null; true", ""); strings.TrimSpace(out) != "" {
 		join = "su -s /bin/sh clipboardbridge -c '" + join + "'"
 	}
@@ -66,7 +66,7 @@ func joinLite(ctx context.Context, hub, d *Device) error {
 		return err
 	}
 	if !strings.Contains(out, "Joined the group") {
-		return fmt.Errorf("cbb join on the lite member said %q", out)
+		return fmt.Errorf("cbb pair on the lite member said %q", out)
 	}
 	want, err := groupOf(ctx, hub)
 	if err != nil {

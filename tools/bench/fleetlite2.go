@@ -11,11 +11,11 @@ import (
 	"time"
 )
 
-// liteOptions (H5): the lite member's options (cbb join -name, which
+// liteOptions (H5): the lite member's options (cbb pair -name, which
 // names the device in the group, every join runs): cbb run -port moves the
 // member port, -no-listen opens none,
 // -no-mdns publishes nothing on UDP 5353 and -peer dials a computer at its
-// address, so that the lite member syncs with mDNS off; cbb join -addr puts
+// address, so that the lite member syncs with mDNS off; cbb pair -addr puts
 // the address given in the phone's QR code.
 func liteOptions(ctx context.Context, r *Report, f *Fleet, g *benchGroup, hub, lite *Device, timeout time.Duration) {
 	const p = "fleet/H5-lite-options/"
@@ -69,9 +69,9 @@ func liteOptions(ctx context.Context, r *Report, f *Fleet, g *benchGroup, hub, l
 		if err != nil {
 			return err
 		}
-		out, _ := RunFor(ctx, fresh, "timeout 5 cbb join -name fresh -addr 198.51.100.9:8800; true", "", 30*time.Second)
+		out, _ := RunFor(ctx, fresh, "timeout 5 cbb pair -name fresh -addr 198.51.100.9:8800; true", "", 30*time.Second)
 		if !strings.Contains(out, "198.51.100.9") {
-			return fmt.Errorf("cbb join -addr did not put the address in what it shows: %q", lastLines(out, 3))
+			return fmt.Errorf("cbb pair -addr did not put the address in what it shows: %q", lastLines(out, 3))
 		}
 		return nil
 	})

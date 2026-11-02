@@ -124,14 +124,14 @@ The service waits until the device joins a group. Join as the service's user, so
 can read its keys:
 
 ```sh
-sudo -u clipboardbridge cbb join -name pi
+sudo -u clipboardbridge cbb pair -name pi
 ```
 
 It shows a QR code: in the Clipboard Bridge app (iPhone or Android) tap "Connect a new device"
 (or, on an iPhone with the shortcut, run "clipboardbridge: add a computer") and scan it. The phone reaches the device on
 TCP port 8764 (`-port` to change it), while it joins and afterwards to sync. In a group
 without a phone, run `cbb pair` on the group's root or an admin and
-`sudo -u clipboardbridge cbb join -code <that member>:8764` here, then type the code.
+`sudo -u clipboardbridge cbb pair -code <that member>:8764` here, then type the code.
 
 The installer adds the user who ran `sudo` to the `clipboardbridge` group, for the control
 socket without `sudo`:
@@ -163,7 +163,7 @@ On a Linux computer where you have no `sudo`, install it for your own user inste
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh -s -- --lite --rootless
-cbb join -name pi              # as yourself, without sudo -u
+cbb pair -name pi              # as yourself, without sudo -u
 ```
 
 It runs as your own systemd user service (`systemctl --user status clipboardbridge`), with the
@@ -185,7 +185,7 @@ member syncs only at home for now, without sync away from home), as root:
 
 ```sh
 uclient-fetch -qO - https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh -s -- --lite
-su -s /bin/sh clipboardbridge -c 'cbb join -name router'
+su -s /bin/sh clipboardbridge -c 'cbb pair -name router'
 ```
 
 It installs OpenWrt's procd service, the same as a full member's
@@ -273,7 +273,7 @@ do. These commands answer in frames a Z80 reads without a parser:
 | --- | --- |
 | `cbb next paste [-max bytes]` | `CBB1 <len> <crc32>`, then len bytes of the latest text (cut to bytes), then CR, then the status line. |
 | `cbb next copy [-secret] <len> <crc32>` | `CBBGO` once the service answers; the Next then sends exactly len bytes, which the lite member reads with the terminal in raw mode (no echo, no CR to LF; it gives up after 10 s without a byte), checks the CRC-32 and sends to the group, as a secret with `-secret` (as `cbb copy -secret`); then the status line. |
-| `cbb next join [-name name] [-port port] [-addr host[:port]]...` | `CBBQ <size>`, then size rows of the QR code for the phone app, each of (size + 3) / 4 hex digits with the leftmost module in the high bit of the first digit and a set bit dark; the Next draws it, the phone scans it, and after the pairing the status line (up to 5 minutes). A join payload makes a code of about 41 modules, which fits the 192 lines of the screen at 4 pixels per module. |
+| `cbb next pair [-name name] [-port port] [-addr host[:port]]...` | `CBBQ <size>`, then size rows of the QR code for the phone app, each of (size + 3) / 4 hex digits with the leftmost module in the high bit of the first digit and a set bit dark; the Next draws it, the phone scans it, and after the pairing the status line (up to 5 minutes). A join payload makes a code of about 41 modules, which fits the 192 lines of the screen at 4 pixels per module. |
 
 ### The network through the Next's ESP8266
 
@@ -293,7 +293,7 @@ cbb run -peer 127.0.0.1:8769
   see only ciphertext.
 - `-serve esp-port:local-port`: the ESP takes connections on its own port and leads each
   to the local one, where the lite member listens: phones that sync with it, and the phone
-  that admits it (`cbb next join -addr <the ESP's address>:<esp-port>`).
+  that admits it (`cbb next pair -addr <the ESP's address>:<esp-port>`).
 - `-udp local-port:host:port`: a local UDP port that leads, through one UDP connection
   of the ESP, to host:port: the hub, or a forwarder that leads to it. With
   `cbb run -tunnel-via 127.0.0.1:local-port`, the tunnel of sync away from home sends its

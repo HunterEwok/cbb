@@ -108,7 +108,7 @@ From the audit box, which is in no group, attempt to join or to be answered as a
 - dial a member's port and present no certificate, a self-signed certificate, and a
   certificate from a different (foreign) CA;
 - replay a connection captured earlier on the LAN;
-- run `cbb pair -code` / `cbb join -code` with a wrong code, an expired code, and a code
+- run `cbb pair -code` with a wrong code, an expired code, and a code
   reused after it was already spent;
 - offer a forged hello and a record signed by a key that is not in the group.
 

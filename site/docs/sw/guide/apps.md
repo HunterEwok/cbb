@@ -20,7 +20,7 @@ Clipboard Bridge ina programu za simu, saa na kompyuta za mezani. Programu za si
 
 1. [Sakinisha](install.md) Clipboard Bridge kwenye kompyuta na uendeshe `sudo cbb pair` hapo. Huonyesha msimbo wa QR.
 2. Fungua programu na ugonge **Connect a new device**, kisha changanua msimbo. Programu huunda ufunguo wa kikundi ndani ya chipu ya usalama ya simu (Secure Enclave kwenye iPhone, Keystore kwenye Android), huongeza kompyuta na kufungua Mwanzo.
-3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u clipboardbridge cbb join` kwenye kifaa hicho huonyesha msimbo wake).
+3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u clipboardbridge cbb pair` kwenye kifaa hicho huonyesha msimbo wake).
 
 Kamera isipoweza kutumika: kwenye iPhone, andika tarakimu sita ambazo kompyuta inaonyesha; kwenye Android, bandika maandishi ya msimbo wa QR, ambayo `cbb pair` pia huyachapisha.
 

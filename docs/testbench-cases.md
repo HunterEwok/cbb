@@ -44,7 +44,7 @@ What `smoke` and `full` do first.
    run (mDNS does not cross subnets) and restarts its service.
 3. On the hub: `cbb new`.
 4. For each other device: on the hub `cbb pair` (shows a six-digit code and waits); on the
-   device `cbb pair -code [HUB:PORT]` (the lite member: `sudo -u clipboardbridge cbb join -code
+   device `cbb pair -code [HUB:PORT]` (the lite member: `sudo -u clipboardbridge cbb pair -code
    HUB:PORT`), the code on standard input. The hub's `cbb pair` ends when the device joins.
 5. On every device, right after it made or joined the group: `cbb mode shared` (the lite
    member: `sudo cbb mode shared`), since a new device keeps its own clipboard (design.md,

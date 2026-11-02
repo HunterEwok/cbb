@@ -50,11 +50,11 @@ use identity::Stored as _;
 const USAGE: &str = "Usage: cbb [-state dir] [-socket path] [-debug] <command> [arguments]
 
 Commands:
-  join [-name name] [-port port] [-addr host[:port]]...
+  pair [-name name] [-port port] [-addr host[:port]]...
                        Join a group: show a QR code for the phone app to scan
                        (-addr: where the phone reaches this device, when the
                        code would name the wrong addresses).
-  join -code host:port Join with the code from cbb pair on a Linux member.
+  pair -code host:port Join with the code from cbb pair on a full member.
   run [-name name] [-port port] [-peer host:port]... [-no-mdns] [-no-listen]
       [-tunnel-via host:port]
                        Run the service (started by systemd or procd): it
@@ -93,7 +93,7 @@ Commands:
   paste-helper tmux|console
                        The paste targets: tmux starts the one for tmux, the
                        clipboardbridge-console unit the one for the console.
-  next paste|copy|join The same for the ZX Spectrum Next's .cbb dot command,
+  next paste|copy|pair The same for the ZX Spectrum Next's .cbb dot command,
                        in frames its Z80 reads (lite/README.md).
   update [-check]      Install the newest signed release, with sudo; -check
                        only says whether there is one. The previous version
@@ -107,8 +107,8 @@ Commands:
   version              Print the version and that this is the lite member.
   help                 Print this help.
 
-This is the lite member: the commands of a full member, such as pair or
-invite, are not here. The state directory is /var/lib/clipboardbridge
+This is the lite member: the commands of a full member, such as invite or
+revoke, are not here. The state directory is /var/lib/clipboardbridge
 (CBB_STATE), the control socket /run/clipboardbridge/control.sock
 (CBB_SOCKET); on OpenWrt /etc/clipboardbridge/state and
 /var/run/clipboardbridge/control.sock; installed without root (install.sh
@@ -120,7 +120,7 @@ port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
 const FULL_ONLY: &[&str] =
-    &["revoke", "admin", "takeover", "new", "pair", "invite", "holder", "forward", "relay", "service", "agent"];
+    &["revoke", "admin", "takeover", "new", "invite", "holder", "forward", "relay", "service", "agent"];
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -171,7 +171,8 @@ fn main() {
         Some(cmd) => {
             let rest = &args[1..];
             let res = match cmd {
-                "join" => join(&g, rest, false),
+                "pair" => join(&g, rest, false),
+                "join" => Err(Error::msg("cbb join is cbb pair now, as on a full member")),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "run" => cmd_run(&g, rest),
                 "copy" => cmd_copy(&g, rest),
@@ -339,7 +340,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 print!("{}", qr(text));
                 println!("\nOr paste this into the app: {text}");
                 println!("\nWaiting up to 5 minutes. Press Ctrl+C to cancel.");
-                println!("Without a phone: run cbb pair on a full member and cbb join -code <its address> here.");
+                println!("Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.");
                 std::io::stdout().flush().ok();
             };
             let log = |s: &str| {
@@ -384,7 +385,7 @@ fn wait_for_group(g: &Global) {
 }
 
 /// Draws text as a QR code with half blocks, black on white whatever the
-/// terminal's colors, as cbb join does.
+/// terminal's colors, as cbb pair does.
 fn qr(text: &str) -> String {
     let Ok(code) = qrcode::QrCode::with_error_correction_level(text, qrcode::EcLevel::M) else {
         return String::new();

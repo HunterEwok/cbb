@@ -780,6 +780,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   `clipboardbridge.sh`.
 
 ### Changed
+- The lite member joins a group with `cbb pair`, as a full member outside a group does
+  (`cbb pair -code HOST:PORT` with a code); `cbb join` is gone. The same holds for
+  `cbb next pair`, the Next's `.cbb pair` (0.4.0) and the ESP32 console's `pair`.
 
 - Dependencies: der 0.8.3 for the lite member and the firmware, goldmark 1.8.6 (the website),
   coder/websocket 1.8.15 (the tray app), the Android Gradle plugin 9.5.0 and Robolectric 4.17.
