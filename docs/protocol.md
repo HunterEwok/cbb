@@ -122,11 +122,13 @@ these words depends on it.
   `credentials/<type>/<field>` and `releases/<type>/<field>` for a row of a table) and whether
   a member takes the body, and in strict-files.json its `kind`; a vector with `pad` has `pad` bytes `a`
   inserted at the offset `pad_at` of its body. The tests fail when the file is not what the
-  tables give, and when any implementation reads a vector otherwise. The records in these
-  files are still of version 1, which every member now refuses whatever the vector says; the
-  record bodies of version 2 are read by `internal/authority` and `cbb_core::authority`
-  alone (the phones through the core), and their strict and canonical forms are checked by
-  those packages' own tests and the differential run.
+  tables give, and when any implementation reads a vector otherwise. Record bodies are read
+  by `internal/authority` and `cbb_core::authority` alone (the phones through the core), and
+  only in their canonical form with no member their type does not know, so a record vector
+  that another kind takes with whitespace or an unknown member is refused; strict-generated.json
+  also holds the canonical form's own cases (`form/canonical`) and the sizes of a record and a
+  checkpoint. The records of `strict.json` and of `strict-mutants-*.json` are of version 1,
+  which every member refuses whatever the vector says.
 - **Frames.** Every channel of this document between devices, and between a device and a
   server, carries the same frames: a 4-byte big-endian length, then that many bytes of one
   JSON object in UTF-8, with no newline after it. A length of 0, or over the channel's limit,

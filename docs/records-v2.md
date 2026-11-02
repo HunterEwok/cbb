@@ -79,9 +79,10 @@ Every rule of version 2 is in [protocol.md](protocol.md), section 10:
   another root issued; and `handover`: a claim at once, one made before it and another admin's
   waiting, the root cancelling it, a newer one replacing it. (The 1 MiB limit has a Go test only: its set would be
   over a megabyte of vectors.)
-- `testdata/interop/strict-generated.json` and `strict-files.json`, written from the tables of
-  protocol.md; their records are of version 1 and are all refused, and the record bodies of
-  version 2 are checked by the tests of `internal/authority` and `cbb_core::authority`.
+- `testdata/interop/strict-generated.json`, written from the tables of protocol.md: every
+  record type of version 2, each field against its row, the canonical form and the sizes,
+  read alike by `internal/authority` and `cbb_core::authority`. The records of `strict.json`
+  and of `strict-mutants-*.json` are of version 1 and are all refused.
 - An order-independence fuzz in Go: random sets over a few phones, computers and roots,
   evaluated in several orders, batch and one by one, checking the same state, no hang and an
   iteration limit.

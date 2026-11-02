@@ -664,7 +664,7 @@ fn strict() {
             .collect::<Vec<_>>()
     };
     // The records of strict.json are of version 1, which the core no longer
-    // reads; crate::authority checks the bodies of version 2.
+    // reads; strict-generated.json has those of version 2.
     assert!(!cases("records").is_empty());
     for (name, body, valid) in cases("commands") {
         let got = crate::command::Command::parse(&body);
@@ -693,9 +693,7 @@ fn strict_generated() {
 
 /// The mutant vectors (strict-mutants-*.json): valid bodies changed byte by
 /// byte, each with the verdict of the tables of docs/protocol.md. They hold
-/// record bodies of version 1 only, which the core no longer reads, so this
-/// checks that the files are there and that any command or manifest in them
-/// is read as the tables say.
+/// record bodies of version 1 only, which the core refuses.
 #[test]
 fn strict_mutants() {
     let mut wrong = Vec::new();
@@ -718,9 +716,7 @@ fn strict_mutants() {
 /// strict-generated.json that the lite member reads otherwise.
 fn strict_wrong(v: &Value) -> Vec<String> {
     let mut wrong = Vec::new();
-    // The records of these files are of version 1, which the core no longer
-    // reads.
-    for kind in ["commands", "manifests"] {
+    for kind in ["records", "commands", "manifests"] {
         let Some(cases) = v[kind].as_array() else { continue };
         for c in cases {
             let mut body = bytes(&c["body"]);
@@ -729,12 +725,16 @@ fn strict_wrong(v: &Value) -> Vec<String> {
                 body.splice(at..at, std::iter::repeat_n(b'a', pad as usize));
             }
             let got = match kind {
+                "records" => crate::authority::Body::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
                 "commands" => crate::command::Command::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
                 _ => serde_json::from_slice::<crate::media::Manifest>(&body)
                     .map_err(|e| e.to_string())
                     .and_then(|m| m.validate().map_err(|e| e.to_string())),
             };
-            if got.is_ok() != c["valid"].as_bool().unwrap() {
+            // The mutants' records are of version 1, whose verdicts were
+            // those of its tables: every member refuses them now.
+            let valid = c["valid"].as_bool().unwrap() && !(kind == "records" && c["rule"] == "mutant");
+            if got.is_ok() != valid {
                 wrong.push(format!(
                     "{kind} {:?} ({}): valid {}, got {got:?}",
                     c["name"].as_str().unwrap(),

@@ -100,6 +100,8 @@ final class StrictTests: XCTestCase {
         let v = try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: url.appendingPathComponent("testdata/interop/strict-generated.json")))
         var wrong: [String] = []
         let kinds: [(String, [Case], (Data) -> Bool)] = [
+            // Record bodies are the core's to check.
+            ("records", v.records, { (b: Data) in self.takes(b) }),
             ("commands", v.commands, { (b: Data) in (try? Commands.parse(b)) != nil }),
             ("manifests", v.manifests, { (b: Data) in
                 (Strict.integersOnly(b) ? try? JSONDecoder().decode(Media.Manifest.self, from: b) : nil)?.isValid ?? false

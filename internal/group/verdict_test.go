@@ -59,12 +59,12 @@ func TestVerdicts(t *testing.T) {
 }
 
 // writeVerdictCorpus writes a corpus of one valid record of version 2, one
-// of version 1, which is refused, a record set and a release file.
+// that the tables refuse, a record set and a release file.
 func writeVerdictCorpus(t *testing.T) string {
 	v := readStrictGenerated(t)
 	var invalid []byte
 	for _, c := range v.Records {
-		if invalid == nil {
+		if invalid == nil && !c.Valid {
 			invalid = c.Full()
 		}
 	}

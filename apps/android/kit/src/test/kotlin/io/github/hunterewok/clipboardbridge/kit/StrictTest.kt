@@ -119,16 +119,18 @@ class StrictTest {
      */
     private fun strictWrong(v: JsonObject): List<String> {
         val wrong = mutableListOf<String>()
-        // Record bodies are the core's to check; records() and v2Mutants() cover them.
-        for (kind in listOf("commands", "manifests")) {
+        // Record bodies are the core's to check (check_body). The mutants' records are of version 1, which it refuses.
+        for (kind in listOf("records", "commands", "manifests")) {
             for (c in v[kind]?.jsonArray ?: continue) {
                 val o = c.jsonObject
+                if (kind == "records" && o.str("rule") == "mutant") continue
                 var body = b64(o.str("body"))
                 o["pad"]?.let {
                     val at = o.getValue("pad_at").jsonPrimitive.int
                     body = body.copyOfRange(0, at) + ByteArray(it.jsonPrimitive.int) { 'a'.code.toByte() } + body.copyOfRange(at, body.size)
                 }
                 val got = when (kind) {
+                    "records" -> takes(body)
                     "commands" -> try {
                         Commands.parse(body)
                         true
