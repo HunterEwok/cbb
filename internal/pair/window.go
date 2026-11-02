@@ -95,6 +95,9 @@ type Result struct {
 	Device group.DeviceID
 	Info   Info
 	Cert   *x509.Certificate
+	// AdminCA is the admin CA the root issued a phone for its admin key;
+	// nil for any other device.
+	AdminCA *x509.Certificate
 	// Confirmed reports whether the device said that it stored its
 	// identity. When it did not, it may still hold the certificate, and,
 	// for a Linux member, the CA keys.
@@ -497,6 +500,13 @@ func (w *Window) serve(ctx context.Context, conn *tls.Conn, memberFirst bool) (r
 			return nil, true, ErrDeclined
 		}
 	}
+	// A phone joins a computer's group only through its root, which makes
+	// it an admin at once with the admin key it offered (docs/protocol.md,
+	// section 6, "A phone joins a computer's group").
+	if info.Phone() && !w.admin.IsRoot() {
+		writeFrame(conn, &frame{Error: "refused"})
+		return nil, true, ErrPhoneNeedsRoot
+	}
 	// The joiner knows the code. Certify the key it proved it holds in the
 	// TLS handshake.
 	pub := cs.PeerCertificates[0].PublicKey.(*ecdsa.PublicKey)
@@ -510,12 +520,23 @@ func (w *Window) serve(ctx context.Context, conn *tls.Conn, memberFirst bool) (r
 	if err != nil {
 		return nil, true, err
 	}
+	var adminCA *x509.Certificate
+	if info.Phone() && info.AdminKey != nil {
+		key, err := parseAdminKey(info.AdminKey)
+		if err != nil {
+			return nil, true, err
+		}
+		if adminCA, err = ca.IssueAdmin(joiner, key, w.now()); err != nil {
+			return nil, true, err
+		}
+		welcome.AdminCA = adminCA.Raw
+	}
 	if err := w.commit(); err != nil {
 		return nil, true, err
 	}
 	// From here on the device counts as admitted: the welcome may reach it
 	// even if this side sees an error.
-	res = &Result{Device: joiner, Info: info, Cert: cert}
+	res = &Result{Device: joiner, Info: info, Cert: cert, AdminCA: adminCA}
 	final := &frame{Welcome: welcome}
 	if !memberFirst {
 		final.Tag = st.Tag()

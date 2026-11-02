@@ -7,6 +7,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
+  its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
+  can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). The
+  phones' side follows.
 - `.pibridge`, a test tool for the ZX Spectrum Next (`apps/zxnext`): it opens NextPi's shell
   to a computer on the home network through the Next's ESP8266, so a test can drive the Pi
   without typing on the Next, even on a Pi Zero without a radio. It carries the shell in the
