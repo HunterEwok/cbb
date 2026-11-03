@@ -16,7 +16,10 @@
 #include <string.h>
 
 #include "frame.h"
+// The logo lives in the far page (far.asm): far_byte() reads it.
+#pragma constseg PAGE_13
 #include "logo.h"
+#pragma constseg rodata_compiler
 #include "link.h"
 
 #define VERSION "0.5.0"
@@ -32,9 +35,11 @@ static uint8_t text[MAX_TEXT];
 static char line[200];
 static uint8_t debug;
 
-static void usage(void)
-{
-    printf("CBB " VERSION "\n\n"
+extern uint8_t far_byte(const uint8_t *p) __z88dk_fastcall;
+
+// The usage, in the far page.
+#pragma constseg PAGE_13
+static const char usage_text[] = "CBB " VERSION "\n\n"
            ".cbb paste [FILE]  show the group's\n"
            "                   text, or save it\n"
            ".cbb copy FILE     send a file\n"
@@ -58,7 +63,14 @@ static void usage(void)
            "                   the Pi's cbb too\n"
            ".cbb update        the same: newer\n"
            "                   files only\n"
-           ".cbb -d ...        show error details\n");
+           ".cbb -d ...        show error details\n";
+#pragma constseg rodata_compiler
+
+static void usage(void)
+{
+    const char *p = usage_text;
+    char c;
+    while ((c = far_byte((const uint8_t *)p++))) putchar(c);
 }
 
 // While .cbb install's screen shows, messages go to its lower rows
@@ -886,15 +898,13 @@ static void colour(uint8_t ink)
 static void logo_unpack(void)
 {
     const uint8_t *p = logo_packed;
-    uint8_t *out = text, n;
+    uint8_t *out = text, n, k;
     while (out < text + LOGO_BYTES) {
-        n = *p++;
+        n = far_byte(p++);
         if (n < 128) {
-            memcpy(out, p, n + 1);
-            p += n + 1;
-            out += n + 1;
+            for (k = 0; k <= n; k++) *out++ = far_byte(p++);
         } else {
-            memset(out, *p++, 257 - n);
+            memset(out, far_byte(p++), 257 - n);
             out += 257 - n;
         }
     }
