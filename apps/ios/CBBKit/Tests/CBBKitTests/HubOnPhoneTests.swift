@@ -194,7 +194,7 @@ final class HubOnPhoneTests: XCTestCase {
         XCTAssertEqual(h.offer(device: pc, key: Data(repeating: 2, count: 32))?.obfuscation, obf)
         h.start(group())
         let t = try XCTUnwrap(tunnels.started.last)
-        XCTAssertEqual(t.obfuscation, try obf.jsonText())
+        XCTAssertEqual(try JSONDecoder().decode(Member.Obfuscation.self, from: Data(t.obfuscation.utf8)), obf)
         XCTAssertEqual(t.vlessID, "")
 
         try h.setDisguise(.vless)
