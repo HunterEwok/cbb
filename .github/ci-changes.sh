@@ -33,6 +33,7 @@ files=$(git diff --name-only "$base...$head")
 for f in $files; do
 	case $f in
 	.github/workflows/ci.yml | .github/ci-changes.sh | .github/differential.sh | go.mod | go.sum | testdata/*) all=true ;;
+	packaging/zxnext/*) zxnext=true ;; # the Next's files for the site, not the members' packages
 	cmd/* | internal/* | mobile/* | packaging/* | tools/e2e/*) core=true ;;
 	tools/tokens/* | tools/icon/* | apps/design/*) design=true; tools=true ;;
 	tools/site/*) site=true; tools=true ;;

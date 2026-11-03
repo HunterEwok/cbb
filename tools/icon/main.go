@@ -15,7 +15,8 @@
 // Android it writes the foreground of the adaptive icon, the light clipboard
 // on a transparent 432 by 432 canvas inside the launcher's safe zone; the
 // fill is the icon's background colour in res/values/ic_launcher.xml.
-// The single-colour glyph of the menu bar and the tray is in tray.go.
+// The single-colour glyph of the menu bar and the tray is in tray.go, and
+// the ZX Spectrum Next's logo for the ULA screen in zx.go.
 //
 //	go run ./tools/icon          rewrite the icons
 //	go run ./tools/icon -check   fail if they are out of date
@@ -278,6 +279,12 @@ func main() {
 		os.Exit(1)
 	}
 	write(tray, *check)
+	logo, err := zxLogoOutput()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "icon:", err)
+		os.Exit(1)
+	}
+	write(logo, *check)
 }
 
 // write writes each file, or with check fails if one differs.

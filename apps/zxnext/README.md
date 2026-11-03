@@ -25,6 +25,8 @@ tools. Test them on the machine before relying on them.
                       the Pi's network through the ESP, in the background
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
+.cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below)
+.cbb update           the same, for the files the site has newer
 .cbb -d paste         the same, with the cause under each error (debug mode)
 ```
 
@@ -34,12 +36,47 @@ Texts use the Spectrum character set: printable ASCII, the pound sign and the co
 sign. The lite member on the Pi converts them; every other character arrives as `?`. Cyrillic
 comes later.
 
+## Install
+
+Through the ESP8266, once it is on the Wi-Fi network (NextZXOS's own tools join it), from
+NextBASIC:
+
+```
+MKDIR "/cbb": CD "/cbb"
+.http -h cbb.tools -u /zxnext -f CBB
+../CBB install
+```
+
+`.http` fetches `.cbb` itself; `install` fetches the rest from cbb.tools into `/cbb`
+(`CBB.DRV` and the lite member for the Pi), then copies the Pi's `cbb` over the
+UART to `/NextPi/nextpi`, where it writes a start script `cbb` that keeps the member's state
+in `/NextPi/nextpi/cbb-state` (NextPi's root is read-only). Nothing else on the card or the Pi
+changes; the Pi's copy is removed from the card once the Pi has it.
+
+A line shows each download: the percentage, the kilobytes, the speed and the time left, and
+the border blinks while it runs. SPACE stops it, and `.cbb install` goes on from where a
+download stopped or broke off. Every file is checked against the site's list (its size and
+CRC-32 on the Next, its MD5 on the Pi) before it replaces the old one. `.cbb update` does
+the same and fetches only the files that changed. The files come over plain HTTP, since
+neither `.http` nor the ESP has TLS: the checks find a damaged download, not a changed one,
+until the list is signed (docs/roadmap.md, "Installing").
+
+Over an earlier installation: `.cbb install` asks for `.cbb net off` first while the network
+runs, and replaces only the files that differ. It installs `CBB.DRV` itself, and a driver
+already installed, which runs from memory, it uninstalls and installs again when the file is
+new. On the Pi it stops the old `cbb service`, so the next `.cbb net on` starts the new
+one, and an old `cbb` that is the program itself, not the start script, is kept as
+`cbb.old`. A `CBB` in `C:/DOT` that differs from the new one is reported, not touched:
+`.cbb` runs that one, `../CBB` in `/cbb` the new one.
+
+Not yet run on a real Next.
+
 ## Set up the Pi
 
 1. Make sure NextPi answers: `.pisend -q`.
-2. Copy the lite member's binary `cbb` for the Pi Zero (from
-   `cbb-lite-linux-armv6` of a release) to the Pi, for example with `.piput`, and put it on the shell's `PATH` (NextPi's root is
-   read-only: `mount -o remount,rw /`, copy, `mount -o remount,ro /`).
+2. Put the lite member's binary `cbb` for the Pi Zero on the Pi: `.cbb install` (above), or
+   by hand from `cbb-lite-linux-armv6` of a release, for example with `.piput`,
+   in `/NextPi/nextpi`, which is on the shell's `PATH`.
 3. Give the Pi a network: the Zero W's own Wi-Fi, which NextPi turns off, or the Next's
    ESP8266 through `CBB.DRV` (below). Many Accelerated boards carry a Pi Zero without a radio: NextPi's
    shell shows which (`cat /proc/device-tree/model`), and `ls /sys/class/net` lists only
@@ -54,7 +91,8 @@ The exact NextPi paths and the start script come with the first test on a real N
 drive the Pi without typing on the Next, even on a Pi Zero without a radio. The Next's
 ESP8266 dials the computer in its stock AT firmware's passthrough mode, and the Z80 copies
 bytes between the Pi's UART and the ESP's until SPACE is pressed. The shell is root's and
-travels in the clear: use it only on a network of your own, and only while testing.
+travels in the clear: use it only on a network of your own, and only while testing. For
+that reason `.cbb install` does not fetch it; copy it from CI's artifact when a test needs it.
 
 1. Join the ESP8266 to the Wi-Fi network once, as NextZXOS's own tools do.
 2. On the computer, listen on one port and take only the Next's address:
@@ -112,8 +150,7 @@ frames, bytes taken; 2 on or off, and turning it on starts the counts again, as 
 dropped frame; 6 the last 64 bytes from the Pi, which `.cbb -d net` shows). Its id, 124, is not
 assigned by NextZXOS's maintainers yet.
 
-To use it, copy `CBB` to `C:/DOT` and `CBB.DRV` to `/cbb`, install the driver once after
-each start (`.install /cbb/CBB.DRV`), join the ESP to the Wi-Fi network as NextZXOS's own
+To use it, put `CBB` and `CBB.DRV` in `/cbb` (`.cbb install` does), join the ESP to the Wi-Fi network as NextZXOS's own
 tools do, and run:
 
 ```
@@ -121,7 +158,10 @@ tools do, and run:
 ```
 
 NextBASIC ends a statement at a colon, so each setting with one goes in quotes; the quotes
-do not reach the Pi. It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
+do not reach the Pi. After a reset or a power cycle, which drop installed drivers, `.cbb net on` installs
+`/cbb/CBB.DRV` again by itself: a dot command cannot run `.install`, so it does what
+`.install` does through the driver API (M_DRVAPI with driver 0, and IDE_BANK for the 8K
+bank); `.install /cbb/CBB.DRV` still works too. It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
 keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
 member at home, `-serve` the ESP's port for the phones and the lite member's own,
 `-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's
