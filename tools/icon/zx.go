@@ -124,9 +124,10 @@ func zxDraw() zxShapes {
 			s.board[i] = s.boardDist[i] < 0
 			// The page on the cells' grid, the clip's cells cut out of it.
 			s.page[i] = x >= 16 && x < 96 && y >= 32 && y < 128 && !(x >= 24 && x < 88 && y < 40)
-			s.bar[i] = zxRoundRect(fx, fy, 24, 16, 88, 40, 4) < 0
-			s.tab[i] = math.Hypot(fx-56, fy-10) < 8 && fy < 20
-			hole := math.Hypot(fx-56, fy-9.5) < 3
+			s.bar[i] = fy >= 15 && fy < 39.5 && math.Abs(fx-56.5) < zxClipWidth(fy)
+			s.tab[i] = fy < 17 && (math.Hypot(fx-56.5, fy-10.5) < 9 ||
+				fy >= 10.5 && math.Abs(fx-56.5) < 9+(fy-10.5)*0.5)
+			hole := math.Hypot(fx-56.5, fy-10.5) < 3.8
 			s.clip[i] = (s.bar[i] || s.tab[i]) && !hole
 		}
 	}
@@ -139,7 +140,7 @@ func zxDraw() zxShapes {
 				continue
 			}
 			s.clipEdge[i] = !in(s.clip, x-1, y) || !in(s.clip, x+1, y) || !in(s.clip, x, y-1) || !in(s.clip, x, y+1) ||
-				(s.bar[i] && y == 34)
+				(s.bar[i] && y == 35)
 		}
 	}
 	return s
@@ -219,6 +220,18 @@ func zxBoardLight(s zxShapes) zxField {
 	return light
 }
 
+// zxNextTo tells a pixel beside m, which keeps a black line between the
+// clip and the board around it.
+func zxNextTo(m []bool, x, y int) bool {
+	for _, d := range [4][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+		px, py := x+d[0], y+d[1]
+		if px >= 0 && px < zxW && py >= 0 && py < zxH && m[py*zxW+px] {
+			return true
+		}
+	}
+	return false
+}
+
 // zxPercentile is numpy's percentile of sorted values, linear between them.
 func zxPercentile(sorted []float64, p float64) float64 {
 	at := p / 100 * float64(len(sorted)-1)
@@ -229,24 +242,37 @@ func zxPercentile(sorted []float64, p float64) float64 {
 	return sorted[i] + (at-float64(i))*(sorted[i+1]-sorted[i])
 }
 
-// zxClipLight is the clip's light: a polished bar, round across with its
-// shine a third of the way in, lighter at the top, its lip in shade; the
-// tab above it round too.
+// zxClipWidth is half the clip's width at fy: narrow at its top, widening
+// in a curve to its lip, the corners rounded.
+func zxClipWidth(fy float64) float64 {
+	t := (fy - 15) / 24.5
+	w := 21 + 11*math.Pow(math.Max(0, t), 1.6)
+	w -= math.Max(0, 17-fy)*1.2 + math.Max(0, fy-37)*1.5
+	return w
+}
+
+// zxClipLight is the clip's light, as on the icon: a polished bar, round
+// across with its shine a third of the way in, a light edge along its top,
+// its lip folded under in shade; the hump with the hole lit at its top left.
 func zxClipLight(s zxShapes, x, y int) float64 {
 	fx, fy := float64(x)+0.5, float64(y)+0.5
 	i := y*zxW + x
 	if s.tab[i] && !s.bar[i] {
-		u := (fx - 48) / 16
-		return 0.15 + 0.8*math.Max(0, math.Min(1, math.Cos((u-0.35)*2.6)))*(1-(fy-2)/30)
+		u := (fx - 47) / 19
+		return 0.2 + 0.75*math.Max(0, math.Min(1, math.Cos((u-0.35)*2.6)))*(1-(fy-2)/28)
 	}
-	u := (fx - 24) / 64
+	w := zxClipWidth(fy)
+	u := (fx - (56.5 - w)) / (2 * w)
 	prof := math.Max(0, math.Min(1, math.Cos((u-0.33)*2.9)))
-	v := math.Max(0, math.Min(1, (fy-16)/24))
+	v := math.Max(0, math.Min(1, (fy-16)/20))
 	f := 0.12 + 0.88*math.Pow(prof, 1.3)*(1-0.35*v)
-	if fy >= 35 {
-		f *= 0.45
+	if fy < 19 {
+		f += 0.2
 	}
-	return f
+	if fy >= 36 {
+		f = 0.15 + 0.4*prof
+	}
+	return math.Min(1, f)
 }
 
 func zxLogoOutput() (map[string][]byte, error) {
@@ -299,6 +325,10 @@ func zxLogoOutput() (map[string][]byte, error) {
 						on = s.page[i] && px[i].ink > 0.45
 					case zxClip:
 						on = s.clip[i] && !s.clipEdge[i] && zxClipLight(s, x, y) > th
+						// The board in the clip's cells, in the clip's colour: the clash.
+						if !s.clip[i] && s.board[i] && !s.page[i] && !s.clipEdge[i] {
+							on = lo+(hi-lo)*light[i] > th && !zxNextTo(s.clip, x, y)
+						}
 					case zxBoard:
 						on = s.board[i] && !s.page[i] && !s.clip[i] && lo+(hi-lo)*light[i] > th
 					}
