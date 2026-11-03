@@ -502,7 +502,7 @@ final class AppModel: ObservableObject {
             return String(localized: "The code did not match. Check the code on the computer's screen and type it again.", bundle: .app)
         }
         if f != nil || error is PairingJoiner.Spent {
-            return String(localized: "The computer's group could not be joined. Run cbb pair on it again.", bundle: .app)
+            return String(localized: "The computer's group could not be joined. Run cbb pair -admin on it again.", bundle: .app)
         }
         return nil
     }
@@ -1236,11 +1236,11 @@ final class AppModel: ObservableObject {
             case .tooManyWrongCodes: return String(localized: "Too many wrong codes. Try again with a new code.", bundle: .app)
             case .notAdmin: return String(localized: "Only an admin phone can do this.", bundle: .app)
             case .noWindow:
-                return String(localized: "No computer is waiting for a phone. Run cbb pair on the computer that created the group, then try again.", bundle: .app)
+                return String(localized: "No computer is waiting for a phone. Run cbb pair -admin on the computer that created the group, then try again.", bundle: .app)
             case .twoWindows:
                 return String(localized: "Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.", bundle: .app)
             case .needsRoot:
-                return String(localized: "This computer cannot add a phone. Run cbb pair on the computer that created the group.", bundle: .app)
+                return String(localized: "This computer did not open its window for a phone. Run cbb pair -admin on the computer that created the group.", bundle: .app)
             case .noGroupComputer:
                 return String(localized: "No computer of the group was found on this network. Turn one on and keep this phone on its network, then try again.", bundle: .app)
             default: break

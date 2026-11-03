@@ -86,6 +86,12 @@ object PairingMember {
             runCatching { t.writeFrame(Pairing.Frame(error = Pairing.ErrorCode.WRONG_CODE.wire)) }
             throw Failure("wrong code", Pairing.ErrorCode.WRONG_CODE)
         }
+        // A phone proves it holds the admin key it offers, on this
+        // connection, before any admin CA is made for it.
+        if (info.adminKey != null && !info.provesAdminKey(sessionID)) {
+            runCatching { t.writeFrame(Pairing.Frame(error = Pairing.ErrorCode.REFUSED.wire)) }
+            throw Failure("the phone did not prove that it holds its admin key", Pairing.ErrorCode.REFUSED)
+        }
         if (invitation != null && !invitation.confirm(Request(device, info, Pairing.fingerprint(joinerCert)))) {
             runCatching { t.writeFrame(Pairing.Frame(error = Pairing.ErrorCode.DECLINED.wire)) }
             throw Failure("the admin did not confirm the device", Pairing.ErrorCode.DECLINED)

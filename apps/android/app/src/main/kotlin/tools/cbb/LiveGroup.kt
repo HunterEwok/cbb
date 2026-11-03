@@ -15,6 +15,7 @@ import tools.cbb.kit.alerts
 import tools.cbb.kit.GroupAlert
 import tools.cbb.kit.AndroidAttestation
 import tools.cbb.kit.CertificateInfo
+import tools.cbb.kit.CertificateSigner
 import tools.cbb.kit.CredentialKeeper
 import tools.cbb.kit.Core
 import tools.cbb.kit.CredentialRefresh
@@ -72,9 +73,12 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.security.Signature
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -224,8 +228,20 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** The node, read under the lock; its methods are called outside it, as it calls back into the group under its own. */
     private val currentNode: MemberNode? get() = synchronized(lock) { node }
 
-    /** Asks for the fingerprint, the face or the screen lock before the root or admin key signs. */
-    val authenticator = Authenticator()
+    /** Asks for the fingerprint, the face or the screen lock before each signature of the root or admin key. */
+    private val authenticator = Authenticator()
+
+    /**
+     * What came due for the root or admin key while it could not ask: the
+     * peers' chains whose certificates need renewing, by their leaf, and on
+     * the root the attestations peers sent, by device. [signDue] signs them
+     * when the app is open.
+     */
+    private val dueRenewals = ConcurrentHashMap<String, List<ByteArray>>()
+    private val dueProofs = ConcurrentHashMap<String, Pair<List<ByteArray>, Member.Evidence>>()
+
+    /** Whether the root's credential refresh found the period due (docs/protocol.md, section 18). */
+    @Volatile private var periodDue = false
 
     /** The activity that shows the authentication prompt; null while the app is in the background. */
     @Volatile var activity: Context? = null
@@ -557,29 +573,71 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * The signer of this phone's root or admin key for an action the user
-     * asked for: after the fingerprint, the face or the screen lock, asked
-     * once and good for the signatures of the next few minutes. A phone
-     * that is no admin has no such key.
+     * asked for: each signature asks for the fingerprint, the face or the
+     * screen lock with reason, and subtitle when given, so an action asks
+     * once for each signature it makes. A phone that is no admin has no
+     * such key.
      */
-    private suspend fun caSigner(reason: Int): KeystoreSigner {
+    private suspend fun caSigner(reason: Int, subtitle: String? = null, prompts: Prompts = Prompts()): KeystoreSigner {
         if (!isAdmin) throw Failure(Failure.Kind.NOT_ADMIN)
-        return signer(signingAlias(synchronized(lock) { state }), reason)
+        return signer(signingAlias(synchronized(lock) { state }), reason, subtitle, prompts)
     }
 
-    private suspend fun signer(alias: String, reason: Int): KeystoreSigner {
+    private suspend fun signer(alias: String, reason: Int, subtitle: String? = null, prompts: Prompts = Prompts()): KeystoreSigner {
+        if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
+        return withContext(Dispatchers.IO) { authorized(alias, reason, subtitle, prompts) }
+    }
+
+    /** The key under alias, made now when there is none, whose every signature asks with reason. */
+    private fun authorized(alias: String, reason: Int, subtitle: String? = null, prompts: Prompts = Prompts()): KeystoreSigner =
+        Keys.loadOrCreateAuthorized(context, alias, authorize = prompter(reason, subtitle, prompts))
+
+    /** A new root key for the group tagged tag, replacing one left from before, whose every signature asks with reason. */
+    private fun newRootKey(tag: String, reason: Int, prompts: Prompts = Prompts()): KeystoreSigner {
+        Keys.create(context, Keys.ROOT, tag)
+        return authorized(Keys.ROOT, reason, prompts = prompts)
+    }
+
+    /**
+     * The prompts of one action, counted so that each says which it is
+     * ("Signature 2 of 5"): total is how many signatures the action makes
+     * (PhoneGroupTest's signaturesPerAction keeps the kit to them), null
+     * when that is not fixed, and then the second and later say their
+     * number alone.
+     */
+    private class Prompts(val total: Int? = null) {
+        val made = AtomicInteger(0)
+    }
+
+    /** Asks the user, on the activity open now, for one signature. */
+    private fun prompter(reason: Int, subtitle: String?, prompts: Prompts): (Signature) -> Signature = { s ->
         val ui = activity ?: throw Failure(Failure.Kind.NO_SCREEN)
-        authenticator.authenticate(ui, ui.getString(reason))
-        return withContext(Dispatchers.IO) { Keys.loadOrCreate(context, alias) }
+        val n = prompts.made.incrementAndGet()
+        val total = prompts.total
+        val which = when {
+            total != null && total > 1 && n <= total -> ui.getString(R.string.signature_of, n, total)
+            n > 1 -> ui.getString(R.string.signature_n, n)
+            else -> null
+        }
+        authenticator.authorize(ui, ui.getString(reason), listOfNotNull(subtitle, which).joinToString(" · ").ifEmpty { null }, s)
     }
 
     // Admitting
 
     /** Admits the device whose QR code the user scanned. */
     suspend fun admit(code: JoinCode) {
-        val ca = caSigner(R.string.reason_add)
+        val existing = withContext(Dispatchers.IO) { copyOfState() }
+        // A new group gets a new root key; one left from before goes. Making
+        // the group signs three times, admitting the computer twice.
+        val prompts = Prompts(if (existing == null) 5 else 2)
+        val ca = if (existing == null) {
+            if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
+            withContext(Dispatchers.IO) { newRootKey("", R.string.reason_add, prompts) }
+        } else {
+            caSigner(R.string.reason_add, prompts = prompts)
+        }
         val member = withContext(Dispatchers.IO) { memberSigner() }
         val name = deviceName
-        val existing = withContext(Dispatchers.IO) { copyOfState() }
         val g = existing ?: withContext(Dispatchers.IO) { PhoneGroup.create(ca, member.publicKeyDER, Instant.now(), PhoneGroup.validName(name), sealKey()) }
         var failure: Exception? = null
         for (addr in SyncRule.ordered(code.addrs)) {
@@ -677,10 +735,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val alias = signingAlias(g)
         val invitation = PairingMember.Invitation(guest.secret) { req ->
             // The window's thread waits for the user, up to the 5 minutes the device waits.
-            runBlocking { ask(req) && runCatching { signer(alias, R.string.reason_add) }.isSuccess }
+            runBlocking { ask(req) && activity != null }
         }
-        // The key signs only once the user unlocked it in ask.
-        val admitted = g.admit(t, "", joinerCert, sid, Keys.loadOrCreate(context, alias), Instant.now(), invitation = invitation)
+        // Each signature asks the user, after they confirmed the device in ask.
+        val admitted = g.admit(t, "", joinerCert, sid, authorized(alias, R.string.reason_add), Instant.now(), invitation = invitation)
         guest.admitted()
         adopt(g)
         published(g.records.records)
@@ -727,7 +785,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val member = memberSigner()
             // The admin key, behind the screen lock like the root key;
             // reading its public key asks for nothing.
-            val admin = if (Tv.isTv(context)) null else Keys.load(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN)
+            val admin = if (Tv.isTv(context)) null else Keys.loadCurrent(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN)
             val device = SyncEngine.newID()
             val cert = GroupCertificates.selfSigned(device, member)
             val listener = TLSListener(0, Pairing.ALPN, member.privateKey, listOf(cert)) { it.isNotEmpty() }
@@ -749,7 +807,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         val joined = try {
             withTimeoutOrNull(JOIN_WINDOW_MS) {
-                closingOnCancel(stop) { accept(listener, stopped, code, info, cert) }
+                closingOnCancel(stop) { accept(listener, stopped, code, info, cert, admin) }
             }
         } finally {
             stop()
@@ -765,7 +823,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /** Takes connections until an admin phone admits this one; blocks. */
-    private fun accept(listener: TLSListener, stopped: AtomicBoolean, code: JoinCode, info: Pairing.Info, cert: ByteArray): PairingJoiner.Joined {
+    private fun accept(listener: TLSListener, stopped: AtomicBoolean, code: JoinCode, info: Pairing.Info, cert: ByteArray, admin: KeystoreSigner?): PairingJoiner.Joined {
         var wrong = 0
         while (true) {
             val t = try {
@@ -777,7 +835,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             try {
                 val leaf = t.peerCertificate ?: continue
                 val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
-                return PairingJoiner.accept(t, code.code, info, leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
+                return PairingJoiner.accept(t, code.code, proveAdmin(info, sid, admin), leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
             } catch (e: PairingJoiner.Failure) {
                 if (e.code == Pairing.ErrorCode.WRONG_CODE) {
                     wrong++
@@ -790,6 +848,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 t.close()
             }
         }
+    }
+
+    /**
+     * The description with the admin key's proof for the session sid
+     * (docs/protocol.md, section 6), signed in a prompt of its own; as is
+     * without an admin key, as on a TV.
+     */
+    private fun proveAdmin(info: Pairing.Info, sid: ByteArray, admin: KeystoreSigner?): Pairing.Info {
+        if (admin == null || info.adminKey == null) return info
+        if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
+        return info.proving(sid, authorized(Keys.ADMIN, R.string.reason_join))
     }
 
     /**
@@ -808,7 +877,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val window = findWindow()
         val joined = withContext(Dispatchers.IO) {
             val member = memberSigner()
-            val admin = if (Tv.isTv(context)) null else Keys.load(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN)
+            val admin = if (Tv.isTv(context)) null else Keys.loadCurrent(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN)
             val cert = GroupCertificates.selfSigned(SyncEngine.newID(), member)
             val info = Pairing.Info(PhoneGroup.validName(deviceName), "android", admin?.publicKeyDER, seal = sealKey())
             // The window's certificate is checked by the code's exchange, not here.
@@ -817,7 +886,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 try {
                     val leaf = t.peerCertificate ?: throw PairingJoiner.Failure("the computer sent no certificate")
                     val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
-                    PairingJoiner.join(t, code, info, leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
+                    PairingJoiner.join(t, code, proveAdmin(info, sid, admin), leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
                 } catch (e: PairingJoiner.Failure) {
                     // An admin computer that is not the root refuses a phone.
                     if (e.code == Pairing.ErrorCode.REFUSED) throw Failure(Failure.Kind.NEEDS_ROOT).apply { initCause(e) }
@@ -870,7 +939,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     continue
                 }
                 // A root key left from a group this phone made before goes.
-                val root = Keys.create(context, Keys.ROOT, g.tag)
+                val root = newRootKey(g.tag, R.string.reason_restore)
                 val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
                 val claim = r.claim(g, newRoot, Instant.now())
                 synchronized(lock) {
@@ -1041,20 +1110,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /**
      * Brings the group's server credentials up to date as far as this phone
      * can (docs/protocol.md, section 18) and sends what it signed to the
-     * computers: its server key for the period; on the root, the period
-     * when one is due, while the user's last authentication lasts, and the
-     * hubs' and members' credentials; on a listed admin, the members'.
+     * computers: its server key for the period; on the root, the hubs' and
+     * members' credentials, and the period when one is due and period, the
+     * root key's signer for it, is given ([signDue]); on a listed admin, the
+     * members'.
      */
-    private fun refreshCredentials() {
+    private fun refreshCredentials(period: CertificateSigner? = null) {
         credentialWork.execute {
             val signed = runCatching {
                 synchronized(lock) {
                     val g = state ?: return@execute
                     val s = credentialsLocked(g)
-                    val root = if (g.isRoot) {
-                        { if (authenticator.isFresh) Keys.load(Keys.ROOT) else null }
-                    } else {
-                        null
+                    // The root key signs a due period only in signDue, which asks the user.
+                    val root: (() -> CertificateSigner?)? = when {
+                        !g.isRoot -> null
+                        period != null -> { { period } }
+                        else -> { { periodDue = true; null } }
                     }
                     CredentialRefresh.refresh(s, g.records, g.groupCA, g.currentRoot, memberSigner(), Keys.PhoneKeys, System.currentTimeMillis(), root)
                         .also { if (it.isNotEmpty()) saveCredentialsLocked(s) }
@@ -1386,7 +1457,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     suspend fun makeRecovery(): Core.RecoverySheet {
         if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
-        val root = caSigner(R.string.reason_make_recovery)
+        val root = caSigner(R.string.reason_make_recovery, prompts = Prompts(2))
         val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
         val made = withContext(Dispatchers.IO) { g.makeRecovery(root, Instant.now()) }
         withContext(Dispatchers.IO) { adopt(g) }
@@ -1479,8 +1550,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
             throw last
         }
-        val root = withContext(Dispatchers.IO) { Keys.create(context, Keys.ROOT, g.tag) }
-        val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
+        val newRoot = withContext(Dispatchers.IO) {
+            GroupCertificates.groupCA(newRootKey(g.tag, R.string.reason_restore), Instant.now(), pathLength = 1)
+        }
         waitForSecondTap()
         val claim = YubiKeyNfc.withCard(ui) { card ->
             Piv.select(card)
@@ -1554,11 +1626,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * [finishTakeOverIfDue] then makes this phone the root.
      */
     private suspend fun takeOver(id: String) {
-        val admin = signer(Keys.ADMIN, R.string.reason_take_over)
+        val prompts = Prompts()
+        val admin = signer(Keys.ADMIN, R.string.reason_take_over, prompts = prompts)
         val r = withContext(Dispatchers.IO) {
             val g = copyOfState() ?: return@withContext null
             // A root key left from a group this phone made before goes.
-            val root = Keys.create(context, Keys.ROOT, g.tag)
+            val root = newRootKey(g.tag, R.string.reason_take_over, prompts)
             val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
             val r = g.takeOver(id, admin, newRoot, Instant.now())
             adopt(g)
@@ -1575,10 +1648,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * computer that was the root stays in the group.
      */
     suspend fun takeHandedGroup() {
-        val admin = signer(Keys.ADMIN, R.string.reason_take_handed)
+        val prompts = Prompts()
+        val admin = signer(Keys.ADMIN, R.string.reason_take_handed, prompts = prompts)
         val r = withContext(Dispatchers.IO) {
             val g = copyOfState() ?: return@withContext null
-            val root = Keys.create(context, Keys.ROOT, g.tag)
+            val root = newRootKey(g.tag, R.string.reason_take_handed, prompts)
             val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
             val r = g.takeHandedOver(admin, newRoot, Instant.now())
             adopt(g)
@@ -1855,18 +1929,19 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Issues a renewed member certificate with the root or admin key for a
-     * peer that is due, without asking: only while the user's last
-     * authentication lasts, so a computer that connects before that gets
-     * its renewal on a later connection (docs/protocol.md, section 2).
+     * Notes a peer whose member certificate is due for renewal on an admin
+     * phone (docs/protocol.md, section 2). The root and admin keys sign
+     * only after the user's authentication, so the renewal waits for
+     * [signDue], which sends it on the peer's connection; one that is gone
+     * by then gets it on a later one.
      */
     private fun renew(chain: List<ByteArray>): MemberNode.Renewal? {
         val g = synchronized(lock) { state } ?: return null
         val cert = chain.firstOrNull() ?: return null
-        recordProofs(null)
-        if (!g.isAdmin || !authenticator.isFresh || !GroupCertificates.isDue(cert, g.adminCA ?: g.currentRoot, Instant.now())) return null
-        val signer = Keys.load(signingAlias(g)) ?: return null
-        return synchronized(lock) { state?.renewal(chain, signer, Instant.now()) }
+        if (g.isAdmin && GroupCertificates.isDue(cert, g.adminCA ?: g.currentRoot, Instant.now())) {
+            dueRenewals[java.util.Base64.getEncoder().encodeToString(cert)] = chain
+        }
+        return null
     }
 
     /** The attestation of this phone's member key, which every peer gets (docs/protocol.md, section 17, "Evidence"); none for a key made without one. */
@@ -1881,32 +1956,88 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** The revocation list the root checks evidence against. */
     private val attestStatus by lazy { AttestStatus(File(context.filesDir, "attest-status")) }
 
-    /**
-     * On the root, records what the attestation a peer sent shows, and what
-     * this phone's own shows, as renew does while the user's authentication
-     * lasts: a peer sends it on every connection, so one that comes later
-     * is recorded then.
-     */
+    /** On the root, notes the attestation a peer sent, which [signDue] records. */
     private fun evidenceReceived(peer: String?, chain: List<ByteArray>, e: Member.Evidence) {
-        if (peer != null) recordProofs(Triple(peer, chain, e))
+        val g = synchronized(lock) { state } ?: return
+        if (g.isRoot) attestStatus.refreshIfDue()
+        if (peer != null && g.isRoot) dueProofs[peer] = chain to e
     }
 
-    /** Records what peer's evidence, when given, and this phone's own show, on the root while its authentication lasts. */
-    private fun recordProofs(peer: Triple<String, List<ByteArray>, Member.Evidence>?) {
-        val g = synchronized(lock) { state } ?: return
+    /**
+     * Signs, with the root or admin key, what came due while it could not
+     * ask the user: the renewals of the peers' certificates, on the root
+     * what the peers' attestations and this phone's own show, and the next
+     * period of the group's server credentials. Each signature asks; a
+     * cancelled one ends the run, and what is left waits for the next time
+     * the app opens. Only what needs a signature asks: an attestation that
+     * shows what the records say already signs nothing.
+     */
+    suspend fun signDue() {
+        if (activity == null) return
+        try {
+            renewDue()
+            if (synchronized(lock) { state }?.isRoot == true) {
+                proveDue()
+                if (periodDue) signPeriod()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "signing what came due; the next start asks again", e)
+        }
+    }
+
+    private suspend fun renewDue() {
+        for ((leaf, chain) in dueRenewals.entries.toList()) {
+            val g = copyOfState() ?: return
+            if (!g.isAdmin) return
+            val cert = chain.first()
+            val name = g.devices.firstOrNull { it.key.contentEquals(KitRecords.keyHashOfCert(cert)) }?.name
+            val ca = caSigner(R.string.reason_renew_peer, name)
+            // The kit takes a failed renewal for none; a cancelled prompt ends the run.
+            var refused: Exception? = null
+            val watched = object : CertificateSigner {
+                override val publicKeyDER = ca.publicKeyDER
+
+                override fun signature(data: ByteArray): ByteArray = try {
+                    ca.signature(data)
+                } catch (e: Exception) {
+                    refused = e
+                    throw e
+                }
+            }
+            val renewal = withContext(Dispatchers.IO) { g.renewal(chain, watched, Instant.now()) }
+            refused?.let { throw it }
+            dueRenewals.remove(leaf)
+            if (renewal != null) currentNode?.sendCert(cert, renewal)
+        }
+    }
+
+    private suspend fun proveDue() {
         val own = ownEvidence().firstOrNull()
-        if (g.isRoot) attestStatus.refreshIfDue()
-        if (!g.isRoot || !authenticator.isFresh || peer == null && (own == null || g.devices.any { it.id == g.device && it.proof != null })) return
-        val signer = Keys.load(Keys.ROOT) ?: return
-        val copy = copyOfState() ?: return
-        val now = Instant.now()
-        val rs = listOfNotNull(
-            peer?.let { (dev, chain, e) -> prove(copy, dev, chain, e, signer, now) },
-            own?.let { prove(copy, copy.device, copy.memberChain.take(1), it, signer, now) },
-        )
-        if (rs.isEmpty()) return
-        adopt(copy)
-        published(rs)
+        val g = copyOfState() ?: return
+        val due: MutableList<Pair<String, Pair<List<ByteArray>, Member.Evidence>>> = dueProofs.entries.map { it.key to it.value }.toMutableList()
+        if (own != null && g.devices.none { it.id == g.device && it.proof != null }) due += g.device to (g.memberChain.take(1) to own)
+        for ((dev, p) in due) {
+            val copy = copyOfState() ?: return
+            if (!copy.isRoot) return
+            val name = copy.devices.firstOrNull { it.id == dev }?.name
+            val root = signer(Keys.ROOT, R.string.reason_record_proof, name)
+            val r = withContext(Dispatchers.IO) { prove(copy, dev, p.first, p.second, root, Instant.now()) }
+            // A newer attestation the peer sent meanwhile stays for the next run.
+            dueProofs.remove(dev, p)
+            if (r == null) continue
+            withContext(Dispatchers.IO) { adopt(copy) }
+            published(listOf(r))
+        }
+    }
+
+    /** Signs the next period of the server credentials, asking first, since the refresh signs it under the lock. */
+    private suspend fun signPeriod() {
+        val root = signer(Keys.ROOT, R.string.reason_period)
+        val once = withContext(Dispatchers.IO) { root.once() }
+        periodDue = false
+        refreshCredentials(period = once)
     }
 
     private fun prove(g: PhoneGroup, device: String, chain: List<ByteArray>, e: Member.Evidence, signer: KeystoreSigner, now: Instant) = try {

@@ -73,6 +73,10 @@ public enum Pairing {
         /// A phone's admin key, a SubjectPublicKeyInfo, for the admin CA the
         /// root may issue it; only from a phone.
         public var adminKey: Data?
+        /// The admin key's signature (ECDSA with SHA-256, DER) over
+        /// `Info.adminProofMessage` of this connection's session ID, which
+        /// proves the phone holds the key; it comes with adminKey.
+        public var adminProof: Data?
         /// `Info.lite` for a lite member, which only dials and never holds
         /// CA keys; nil for a full device.
         public var role: String?
@@ -84,10 +88,32 @@ public enum Pairing {
         /// The role of a lite member.
         public static let lite = "lite"
 
-        enum CodingKeys: String, CodingKey { case name, os, adminKey = "admin_key", role, seal }
+        enum CodingKeys: String, CodingKey { case name, os, adminKey = "admin_key", adminProof = "admin_proof", role, seal }
 
         public init(name: String, os: String, adminKey: Data? = nil, role: String? = nil, seal: Data? = nil) {
             (self.name, self.os, self.adminKey, self.role, self.seal) = (name, os, adminKey, role, seal)
+        }
+
+        /// What the admin key signs to prove the phone holds it: the label,
+        /// a zero byte and sessionID, the TLS exporter's output of the
+        /// pairing connection (docs/protocol.md, section 6).
+        public static func adminProofMessage(sessionID: [UInt8]) -> Data {
+            Data("cbb pairing admin key".utf8) + Data([0]) + Data(sessionID)
+        }
+
+        /// This description with the admin key's proof for sessionID, signed
+        /// by admin, the key adminKey names.
+        public func proving(sessionID: [UInt8], with admin: CertificateSigner) throws -> Info {
+            var i = self
+            if adminKey != nil { i.adminProof = try admin.signature(for: Self.adminProofMessage(sessionID: sessionID)) }
+            return i
+        }
+
+        /// Whether adminProof is adminKey's signature for sessionID.
+        public func provesAdminKey(sessionID: [UInt8]) -> Bool {
+            guard let adminKey, let adminProof, let key = P256.Signing.PublicKey(spki: adminKey),
+                  let sig = try? P256.Signing.ECDSASignature(derRepresentation: adminProof) else { return false }
+            return key.isValidSignature(sig, for: Self.adminProofMessage(sessionID: sessionID))
         }
 
         /// The size of a key for sealed messages (an X-Wing public key).
@@ -123,6 +149,7 @@ public enum Pairing {
                   name.unicodeScalars.allSatisfy(Self.printable),
                   role == nil || role == Self.lite else { return false }
             if let seal, seal.count != Self.sealKeySize { return false }
+            guard (adminKey == nil) == (adminProof == nil) else { return false }
             guard let adminKey else { return true }
             return isPhone && P256.Signing.PublicKey(spki: adminKey) != nil
         }

@@ -42,11 +42,15 @@ class PhoneGroupTest {
         signer: CertificateSigner,
         l: Listener,
         info: Pairing.Info,
+        admin: CertificateSigner? = null,
         code: String = "123456",
         joinerCode: String? = null,
         makeAdmin: Boolean = true,
         addrs: List<String> = emptyList(),
     ): Pair<Result<PairingMember.Admitted>, Result<PairingJoiner.Joined>> {
+        // With admin, the key info's adminKey names, the joiner proves it for the session.
+        @Suppress("NAME_SHADOWING")
+        val info = admin?.let { info.proving(sid, it) } ?: info
         val (m, j) = Pipe.pair()
         val member = Background { admitter.admit(m, code, l.cert, sid, signer, t0, makeAdmin, addrs) }
         val joined = runCatching {
@@ -67,7 +71,7 @@ class PhoneGroupTest {
         // The second phone joins with an admin key and gets its admin CA.
         val second = Listener()
         val adminKey = SoftwareSigner()
-        val (m, j) = pair(root, rootKey, second, Pairing.Info("Second", "android", adminKey.publicKeyDER, seal = seal))
+        val (m, j) = pair(root, rootKey, second, Pairing.Info("Second", "android", adminKey.publicKeyDER, seal = seal), adminKey)
         val joined = j.getOrThrow()
         assertTrue(m.getOrThrow().confirmed)
         assertEquals(second.device, joined.device)
@@ -135,12 +139,43 @@ class PhoneGroupTest {
         assertNotNull(root.records.refused(listOf(joined.welcome.cert)))
     }
 
+    /** A signer that counts its signatures. */
+    private class Counting : CertificateSigner {
+        private val key = SoftwareSigner()
+        var made = 0
+        override val publicKeyDER get() = key.publicKeyDER
+        override fun signature(data: ByteArray): ByteArray = key.signature(data).also { made++ }
+    }
+
+    /**
+     * How many signatures each action makes: on Android each asks the user,
+     * and the app's prompts say "Signature 2 of 5" by these counts
+     * (LiveGroup's Prompts), so a change here changes them too.
+     */
+    @Test
+    fun signaturesPerAction() {
+        val root = Counting()
+        val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, t0)
+        assertEquals(3, root.made, "making a group")
+        for (i in 1..2) {
+            root.made = 0
+            val (m, j) = pair(g, root, Listener(), Pairing.Info("pi", "linux"))
+            j.getOrThrow()
+            m.getOrThrow()
+            assertEquals(2, root.made, "admitting a computer")
+        }
+        root.made = 0
+        g.makeRecovery(root, t0)
+        assertEquals(2, root.made, "making the recovery key")
+    }
+
     @Test
     fun phoneWithoutAdmin() {
         val rootKey = SoftwareSigner()
         val root = PhoneGroup.create(rootKey, SoftwareSigner().publicKeyDER, t0)
         val l = Listener()
-        val (_, j) = pair(root, rootKey, l, Pairing.Info("Third", "ios", SoftwareSigner().publicKeyDER), makeAdmin = false)
+        val third = SoftwareSigner()
+        val (_, j) = pair(root, rootKey, l, Pairing.Info("Third", "ios", third.publicKeyDER), third, makeAdmin = false)
         val joined = j.getOrThrow()
         assertNull(joined.welcome.adminCA)
         assertEquals(false, root.devices.firstOrNull { it.id == l.device }?.admin)
@@ -151,9 +186,10 @@ class PhoneGroupTest {
 
         // An admin that is not the root makes no admins.
         val adminKey = SoftwareSigner()
-        val (_, j2) = pair(root, rootKey, Listener(), Pairing.Info("Admin", "ios", adminKey.publicKeyDER))
+        val (_, j2) = pair(root, rootKey, Listener(), Pairing.Info("Admin", "ios", adminKey.publicKeyDER), adminKey)
         val admin = PhoneGroup.joined(j2.getOrThrow())
-        val (_, j3) = pair(admin, adminKey, Listener(), Pairing.Info("Fourth", "android", SoftwareSigner().publicKeyDER))
+        val fourth = SoftwareSigner()
+        val (_, j3) = pair(admin, adminKey, Listener(), Pairing.Info("Fourth", "android", fourth.publicKeyDER), fourth)
         assertNull(j3.getOrThrow().welcome.adminCA)
     }
 

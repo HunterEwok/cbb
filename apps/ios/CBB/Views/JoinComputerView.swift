@@ -2,7 +2,7 @@
 
 import SwiftUI
 
-/// Joining a computer's group: the six-digit code that cbb pair shows on
+/// Joining a computer's group: the six-digit code that cbb pair -admin shows on
 /// the group's root, typed here; the phone finds the computer by itself
 /// (docs/protocol.md, section 6, "A phone joins a computer's group").
 struct JoinComputerView: View {
@@ -18,7 +18,7 @@ struct JoinComputerView: View {
                 .font(.system(.title, design: .monospaced).weight(.bold))
                 .foregroundStyle(palette.accent)
                 .multilineTextAlignment(.center)
-            Text("On the computer that created the group, run cbb pair, then type the six-digit code it shows. Keep this phone on the same network.")
+            Text("On the computer that created the group, run cbb pair -admin, then type the six-digit code it shows. Keep this phone on the same network.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(palette.textDim)
             TextField(text: $code) { Text("Code") }

@@ -281,7 +281,7 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		}
 		reply(c, control.Header{Status: s.statusWithRemoved(), Done: true}, nil)
 	case control.OpPair:
-		s.pair(ctx, c, r)
+		s.pair(ctx, c, r, m.Admins)
 	case control.OpPairPhone:
 		s.pairPhone(ctx, c, r, m.NewToken)
 	case control.OpJoin:
@@ -540,8 +540,8 @@ func (s *Service) groupStatus(st *control.Status) {
 
 // pair opens a pairing window and reports its end; a client that hangs up
 // closes the window.
-func (s *Service) pair(ctx context.Context, c net.Conn, r *control.Reader) {
-	w, _, end, err := s.openWindow(pair.NewCode())
+func (s *Service) pair(ctx context.Context, c net.Conn, r *control.Reader, admins bool) {
+	w, _, end, err := s.openWindow(pair.NewCode(), admins)
 	if err != nil {
 		fail(c, err)
 		return
@@ -576,8 +576,9 @@ func (s *Service) pair(ctx context.Context, c net.Conn, r *control.Reader) {
 // group's root or an admin; the window is published and takes pairing
 // connections on the member port. end closes the window and frees it; it may be called
 // more than once, and runs before the last answer to a client, so it can
-// pair again at once.
-func (s *Service) openWindow(code string) (*pair.Window, *group.Identity, func(), error) {
+// pair again at once. With admins, on the root only, the window makes a
+// phone that offers an admin key an admin (cbb pair -admin).
+func (s *Service) openWindow(code string, admins bool) (*pair.Window, *group.Identity, func(), error) {
 	s.mu.Lock()
 	id, busy, joining := s.id, s.window != nil || s.opening, s.joining
 	if !busy && !joining {
@@ -616,7 +617,7 @@ func (s *Service) openWindow(code string) (*pair.Window, *group.Identity, func()
 		end()
 		return nil, nil, nil, s.errNotAdmitter()
 	}
-	opened, err := pair.Open(id, code, pair.Options{Now: benchtime.Now, Records: s.pathRecords, ClaimTimes: s.claimTimes, Taken: s.idTaken})
+	opened, err := pair.Open(id, code, pair.Options{Now: benchtime.Now, Records: s.pathRecords, ClaimTimes: s.claimTimes, Taken: s.idTaken, Admins: admins, KnownKey: s.keyKnown})
 	if err != nil {
 		end()
 		return nil, nil, nil, err
@@ -706,6 +707,26 @@ func (s *Service) createGroup() (*group.Identity, error) {
 	return id, nil
 }
 
+// keyKnown reports whether the records name the key hash h: a device's
+// key, an admin key or the recovery key.
+func (s *Service) keyKnown(h group.KeyHash) bool {
+	s.recMu.Lock()
+	defer s.recMu.Unlock()
+	if s.records == nil {
+		return false
+	}
+	st := s.records.State()
+	if st.Recovery != nil && *st.Recovery == h {
+		return true
+	}
+	for _, d := range st.Devices {
+		if d.Admin != nil && *d.Admin == h || slices.Contains(d.Keys, h) {
+			return true
+		}
+	}
+	return false
+}
+
 // windowResult returns how a window that closed ended, and logs it.
 func (s *Service) windowResult(w *pair.Window) (*pair.Result, error) {
 	res, err := w.Result()
@@ -718,7 +739,11 @@ func (s *Service) windowResult(w *pair.Window) (*pair.Result, error) {
 		s.logf("cbb: %s (%s) got its certificate but did not confirm it stored it", res.Info.Name, res.Device)
 		return nil, fmt.Errorf("%s got its certificate but did not confirm that it stored it; check it with cbb status there, and pair it again if needed", res.Info.Name)
 	}
-	s.logf("cbb: %s (%s) joined the group", res.Info.Name, res.Device)
+	if res.AdminCA != nil {
+		s.logf("cbb: %s (%s) joined the group as an admin phone, with the powers %s", res.Info.Name, res.Device, strings.Join(computerAdminPowers(true), ", "))
+	} else {
+		s.logf("cbb: %s (%s) joined the group", res.Info.Name, res.Device)
+	}
 	s.recordAdmitted(res)
 	return res, nil
 }
