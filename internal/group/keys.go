@@ -24,6 +24,9 @@ var (
 	tpmOnce sync.Once
 	tpm     *tpmkey.TPM
 	tpmErr  error
+	// keyErr is why the last NewDeviceKey left its key in a file though
+	// the TPM opened.
+	keyErr error
 )
 
 // theTPM opens the machine's TPM once; every key of the process uses it.
@@ -54,6 +57,7 @@ func NewDeviceKey() (crypto.Signer, error) {
 			}
 			// A TPM that opens but cannot make keys (full, or refusing
 			// the template) leaves the key in a file.
+			keyErr = err
 		}
 		if sekey.Available() {
 			if k, err := sekey.New(); err == nil {
@@ -73,6 +77,26 @@ func HardwareKeys() bool {
 	}
 	_, err := theTPM()
 	return err == nil || sekey.Available()
+}
+
+// WhyNotHardware tells why a key is not in the TPM: TPM support turned
+// off, the TPM that did not open, or the error of the last key it did not
+// make; "" when nothing failed (a machine without a TPM, or a Mac's Secure
+// Enclave, whose errors are not kept).
+func WhyNotHardware() string {
+	if os.Getenv(TPMEnv) == "off" {
+		return TPMEnv + " is off"
+	}
+	if _, err := theTPM(); err != nil {
+		if errors.Is(err, tpmkey.ErrNoTPM) {
+			return ""
+		}
+		return "the TPM: " + err.Error()
+	}
+	if keyErr != nil {
+		return "a key in the TPM: " + keyErr.Error()
+	}
+	return ""
 }
 
 // KeyStoreOf returns where k lives: StoreHardware for a key in the TPM or
