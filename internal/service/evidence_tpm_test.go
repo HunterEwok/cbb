@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/group/grouptest"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey/tpmtest"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/group/grouptest"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
 )
 
 // TestTPMEvidence checks that a computer whose member key is in a TPM with

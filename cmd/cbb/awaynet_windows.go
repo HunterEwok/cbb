@@ -21,7 +21,7 @@ func isElevated() bool { return windows.GetCurrentProcessToken().IsElevated() }
 // network, as install.ps1 -HomeCgnat on keeps in its environment, so that
 // the rule leaves that range to it too.
 var homeCGNAT = func() bool {
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Services\clipboardbridge`, registry.QUERY_VALUE)
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Services\cbb`, registry.QUERY_VALUE)
 	if err != nil {
 		return false
 	}
@@ -34,7 +34,7 @@ var homeCGNAT = func() bool {
 const adminName = "an administrator"
 
 // closeHint closes the hub's port that cbb opened.
-const closeHint = "run Remove-NetFirewallRule -Name clipboardbridge-hub in a PowerShell opened as administrator"
+const closeHint = "run Remove-NetFirewallRule -Name cbb-hub in a PowerShell opened as administrator"
 
 // expressHint is how the installer adds the firewall rules without asking.
 const expressHint = "-Express"

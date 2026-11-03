@@ -2,7 +2,7 @@
 # Roadmap
 
 What comes next, the designs that are agreed but not built yet, and the questions to study
-before anything is planned. How Clipboard Bridge works today is in [design.md](design.md),
+before anything is planned. How Copy Beyond Borders works today is in [design.md](design.md),
 the decisions in [decisions.md](decisions.md); what works on real devices is the
 [status table](../README.md#status).
 
@@ -41,6 +41,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     ([design](design.md#the-phone-as-the-hub-while-its-app-is-open)).
 - **32.** What the forwarder and the relay learn, cut to short server credentials, in 0.6
     ([design](design.md#what-the-servers-learn)).
+- **48.** The name Copy Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
+    CBB under the icons, the full name in the stores, the docs and the site; the apps'
+    identifiers start with `tools.cbb`.
 
 ### Partly done
 
@@ -186,7 +189,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     once the owner's Apple developer account puts the app on real iPhones: with it go the
     iPhone CA and its key on the admins, the shortcut endpoints and pages on the member port,
     the configuration profile and its plain-HTTP port, the tokens, and the rule for who
-    holds `clipboardbridge.local`, which only the shortcut uses. The group then has one kind
+    holds `cbb.local`, which only the shortcut uses. The group then has one kind
     of trust, the member certificates, and no key that cannot be revoked by a record.
 - **31.** **Key levels**: the user picks who may be the group's root, an admin or a hub: only
     devices whose hardware key is proven by attestation, devices with a key in hardware (the
@@ -211,7 +214,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **38.** **Planned after 0.6.** The Android app and Google: the project has a Google Play
     Console account (2026-10-27).
     - Before 2027, when Android installs sideloaded apps only from registered developers:
-      register the package `io.github.hunterewok.clipboardbridge` there with the
+      register the package `tools.cbb` there with the
       certificate of the release key that signs the APKs of the releases
       (docs/maintaining.md, "Android signing key"), so that those APKs and their own
       updates (docs/apps.md, "Updates") keep installing.
@@ -326,27 +329,6 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     asks to add it; a card then gives the steps to Settings, Accessibility, Touch, Back Tap,
     Double Tap. The file names the release bundle identifier, so it waits for TestFlight; a
     copy for a Personal Team build tests it before.
-- **48.** **Planned for 0.6, before the launch.** A new name: **Copy Beyond Borders**,
-    short **CBB**. At least four other projects are called "Clipboard Bridge", two of them
-    older than this one and one in Google Play, so the old name cannot be found or told
-    apart. "Copy Beyond Borders" has no trademark or project of that name (searched
-    2026-11-02); the borders are the ones between a user's devices, never a way around a
-    network's blocks, and every text that explains the name says so. Where it goes:
-    - "CBB" under the icons (the iPhone's home screen, Android's launcher, the Windows Start
-      menu and taskbar, the Linux desktop's menus and tray, the Mac's `CBB.app`), in short
-      titles, Shortcuts and Siri; "Copy Beyond Borders" in full in the apps' About and first
-      screens, the website, the README, the docs and the release notes.
-    - The app stores: "Copy Beyond Borders" with a subtitle that says what it does
-      ("Clipboard sync between devices"). Not "CBB" alone: the App Store has an app called
-      "CBB", and the EU has a registered word mark "CBB" for software (class 9), so the full
-      name leads in every store; the App Store's review notes explain that CBB is the
-      short form of the project's own name.
-    - What stays: the command `cbb`, its subcommands, the paths, the service and package
-      names, the bundle and application identifiers and the repository's address (so
-      installs, updates and links keep working), and the site `cbb.tools`.
-    - The README and the site say once "formerly Clipboard Bridge", and BRAND.md takes the
-      new name with the same rules (no exclusive claim to "CBB", which others use).
-    - The translations of the apps and the site in the project's languages (item 49).
 - **49.** **Planned for 0.7.** One set of languages across the project: every app (the
     phones, the watches, the Mac app, the tray app) speaks the languages of the website
     (Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and offers a choice
@@ -357,7 +339,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     project has no translation for it. One list of the languages serves the site, the apps and
     the command line; Arabic and Hebrew lay the screens out right to left; a native speaker
     reads the new translations before a release.
-- **50.** **Planned for 0.7.** A LuCI page on OpenWrt, `luci-app-clipboardbridge`, in the
+- **50.** **Planned for 0.7.** A LuCI page on OpenWrt, `luci-app-cbb`, in the
     project's own apk feed: the group's devices and their state, adding a device with its
     QR code, sync away from home and the hub, the network zones; the same sections in the
     same order as the apps, in LuCI's own look. A JavaScript view with a small rpcd backend
@@ -601,7 +583,7 @@ keyboard over Bluetooth LE, the one with a battery), so the keyboard needs a nam
 and forgetting either entry on the TV forgets both, while the computer keeps its key and
 then fails every connection ("PIN or Key Missing"), so the keyboard drops a bond its host
 lost and becomes visible again. It typed in the TV's own layout: with Russian on the TV and
-`-layout us` on the computer, "clipboardbridge ble 123" came out in Cyrillic, the
+`-layout us` on the computer, "cbb ble 123" came out in Cyrillic, the
 Russian letters on those keys, since a keyboard sends keys, not letters. For now the keyboard types as it is,
 and the apps get a "switch the layout" action for the keyboard's device, with the quick
 actions (restart and the others): the keyboard presses the device's shortcut
@@ -686,7 +668,7 @@ The user picks one of three levels for the group, at its root:
     names the TPM for good, so the user is warned first.
   - `cbb.tools` fetches Google's list of revoked attestation keys once a day and serves it
     signed. No device asks Google, and no copy goes into the releases.
-  - Groups made before 0.6 are offered, never forced, a move of the root to a proven key.
+  - A group is offered, never forced, a move of the root to a proven key.
 - Found on the way:
   - Android keys made today carry no attestation challenge, so each phone makes a new key
     to be proven.
@@ -695,8 +677,8 @@ The user picks one of three levels for the group, at its root:
     the enclave's encrypted copy of it (checked on a Mac with macOS 27).
   - The Linux unit's `PrivateDevices=yes` hides `/dev/tpmrm0` and changes with the TPM
     work.
-- Groups made before 0.6 keep working; one whose root or admins hold keys in files shows a
-  warning and suggests moving the root to a phone.
+- A group whose root or admins hold keys in files shows a warning and suggests moving the
+  root to a phone.
 - The guide "Keys and attestation" (docs/guide) says all of this plainly.
 
 ## Device keys in hardware

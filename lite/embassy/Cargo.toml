@@ -2,7 +2,7 @@
 # Copyright (C) 2026 HunterEwok
 
 [package]
-name = "clipboardbridge-embassy"
+name = "cbb-embassy"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.87"
@@ -24,7 +24,7 @@ test = false
 # host builds the Linux program: embassy's executor and clock for std and a
 # TAP device as the network card.
 host = [
-  "clipboardbridge-core/std",
+  "cbb-core/std",
   "dep:critical-section",
   "dep:embassy-executor",
   "dep:embassy-net-tuntap",
@@ -34,7 +34,7 @@ host = [
 ]
 
 [dependencies]
-clipboardbridge-core = { path = "../core", features = ["tls"] }
+cbb-core = { path = "../core", features = ["tls"] }
 embassy-net = { version = "0.9", features = ["medium-ethernet", "proto-ipv4", "tcp"] }
 embassy-time = "0.5"
 embedded-io-async = "0.7"

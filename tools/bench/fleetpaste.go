@@ -12,7 +12,7 @@ import (
 )
 
 // tmuxPaste (T1, T2, T6, T7, T9, T10, T13, T14): remote paste into root's tmux on a fleet
-// member, with the helper tmux starts from clipboardbridge's tmux.conf, and
+// member, with the helper tmux starts from cbb's tmux.conf, and
 // each refusal with its reason sent back to the admin.
 func tmuxPaste(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/T2-tmux/"
@@ -27,7 +27,7 @@ func tmuxPaste(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) 
 		if id, err = deviceOf(ctx, b); err != nil {
 			return err
 		}
-		// The line of clipboardbridge.conf that starts the helper.
+		// The line of cbb.conf that starts the helper.
 		_, err = Run(ctx, b, "tmux new-session -d -s cbb -x 120 -y 30 && tmux run-shell -b 'cbb paste-helper tmux >/tmp/cbb-helper.log 2>&1 || true'", "")
 		return err
 	}) != nil {

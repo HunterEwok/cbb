@@ -175,7 +175,7 @@ func captures(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if err != nil {
 			return err
 		}
-		addr := ip + ":8764 -servername cb-" + id + ".local -alpn clipboardbridge/2"
+		addr := ip + ":8764 -servername cb-" + id + ".local -alpn cbb/2"
 		if out, _ := runOut(ctx, hub, "openssl s_client -tls1_2 -connect "+addr+" </dev/null 2>&1", time.Minute); !strings.Contains(out, "alert protocol version") {
 			return fmt.Errorf("the member port at home did not refuse TLS 1.2 by its version: %q", out)
 		}

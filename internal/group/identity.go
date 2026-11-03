@@ -16,8 +16,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
 // FileName is the name of the identity file in the state directory.
@@ -34,7 +34,7 @@ var ErrOldGroup = errors.New("group: this device's group was made before 0.4 and
 // An Identity is this device's place in a group: its device ID, its key,
 // its member certificate and the group CA. The computer that created the
 // group holds the root key; it and the admins it made hold the iPhone CA
-// key and their own clipboardbridge.local certificates, so they can serve
+// key and their own cbb.local certificates, so they can serve
 // the shortcut. Every other full member holds an admin key that waits for
 // an admin CA (docs/design.md, "Full members, admins and the operating
 // system").
@@ -60,7 +60,7 @@ type Identity struct {
 	// on; nil elsewhere.
 	RootKey crypto.Signer
 	// PhoneCA is the iPhone CA with its key, and Phone the
-	// clipboardbridge.local certificate for Key, on a member that serves
+	// cbb.local certificate for Key, on a member that serves
 	// the shortcut: the root computer and its admins. Both are nil
 	// elsewhere.
 	PhoneCA *CA
@@ -144,7 +144,7 @@ func (id *Identity) RootCA() *CA {
 }
 
 // ServesPhone reports whether this device holds the iPhone CA key and its
-// clipboardbridge.local certificate, so it can serve the shortcut.
+// cbb.local certificate, so it can serve the shortcut.
 func (id *Identity) ServesPhone() bool {
 	return id.PhoneCA != nil && id.PhoneCA.Key != nil && id.Phone != nil
 }
@@ -301,7 +301,7 @@ func (id *Identity) WithRoots(roots []*x509.Certificate) (*Identity, error) {
 }
 
 // WithPhoneCA returns the identity with the iPhone CA ca, its key
-// included, and a new clipboardbridge.local certificate from it: for an
+// included, and a new cbb.local certificate from it: for an
 // admin of a group a computer created, which serves the shortcut with it.
 func (id *Identity) WithPhoneCA(ca CA, now time.Time) (*Identity, error) {
 	if ca.Key == nil {
@@ -323,7 +323,7 @@ func (id *Identity) WithPhoneCA(ca CA, now time.Time) (*Identity, error) {
 }
 
 // WithoutPhoneCA returns the identity without the iPhone CA and its
-// clipboardbridge.local certificate, after the records revoked that CA.
+// cbb.local certificate, after the records revoked that CA.
 func (id *Identity) WithoutPhoneCA() *Identity {
 	next := *id
 	next.PhoneCA, next.Phone = nil, nil
@@ -331,7 +331,7 @@ func (id *Identity) WithoutPhoneCA() *Identity {
 }
 
 // AdminName is the subject CN of the admin CA of a device.
-func AdminName(dev DeviceID) string { return "clipboardbridge admin " + string(dev) }
+func AdminName(dev DeviceID) string { return "cbb admin " + string(dev) }
 
 // Check reports whether the parts of the identity belong together: the
 // certificates name this device and its key and were signed by the CAs, and
@@ -399,11 +399,11 @@ func (id *Identity) Check() error {
 	if err := id.checkAdmin(); err != nil {
 		return err
 	}
-	// The iPhone CA comes with its key and the clipboardbridge.local
+	// The iPhone CA comes with its key and the cbb.local
 	// certificate. The root holds it, an admin may.
 	serves := id.PhoneCA != nil
 	if serves != (id.Phone != nil) || serves && id.PhoneCA.Key == nil {
-		return errors.New("group: the identity holds only some of the iPhone CA, its key and the clipboardbridge.local certificate")
+		return errors.New("group: the identity holds only some of the iPhone CA, its key and the cbb.local certificate")
 	}
 	switch {
 	case id.IsRoot() && !serves:
@@ -417,7 +417,7 @@ func (id *Identity) Check() error {
 	if err := checkCA(id.PhoneCA, "iPhone CA", 0); err != nil {
 		return err
 	}
-	if err := checkLeaf(id.Phone, id.PhoneCA.Cert, id.Key, "clipboardbridge.local certificate"); err != nil {
+	if err := checkLeaf(id.Phone, id.PhoneCA.Cert, id.Key, "cbb.local certificate"); err != nil {
 		return err
 	}
 	if err := id.Phone.VerifyHostname(PhoneName); err != nil {
@@ -511,8 +511,8 @@ func hasUsage(c *x509.Certificate, u x509.ExtKeyUsage) bool {
 
 // Renew returns an identity with new certificates for those that end
 // within their renewal period (240 days for the member certificate, 60 days
-// for the clipboardbridge.local one), and reports whether anything changed. A
-// clipboardbridge.local certificate that starts in the future, issued while the
+// for the cbb.local one), and reports whether anything changed. A
+// cbb.local certificate that starts in the future, issued while the
 // clock was ahead, is replaced too, since the iPhone would reject it. A
 // certificate that already ends with its CA is kept: a new one could not
 // last longer. Only a device that holds the CA keys, or an admin CA, renews

@@ -17,8 +17,8 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 // maxHTML is the largest formatted text read; a larger one is left out

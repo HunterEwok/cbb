@@ -27,12 +27,12 @@ import (
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/chacha20"
 
-	"github.com/HunterEwok/clipboardbridge/internal/frame"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/group/grouptest"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
-	"github.com/HunterEwok/clipboardbridge/internal/vless"
-	"github.com/HunterEwok/clipboardbridge/internal/vless/vlesstest"
+	"github.com/HunterEwok/cbb/internal/frame"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/group/grouptest"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless"
+	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
 // member returns a member certificate of a new group with its chain, as a

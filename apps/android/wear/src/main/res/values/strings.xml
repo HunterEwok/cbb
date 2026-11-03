@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <resources>
     <string name="app_name" translatable="false">CBB</string>
-    <string name="no_group">Open Clipboard Bridge on the phone to make or join a group.</string>
+    <string name="no_group">Open CBB on the phone to make or join a group.</string>
     <string name="online_count">%1$d of %2$d online</string>
     <string name="away">Away from home</string>
     <string name="away_off">Off</string>

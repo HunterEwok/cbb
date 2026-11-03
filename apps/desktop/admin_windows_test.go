@@ -11,8 +11,8 @@ import (
 
 // Every argument is a literal: a name with quotes and $ runs nothing.
 func TestPSScript(t *testing.T) {
-	s := psScript(`C:\Program Files\clipboardbridge\cbb.exe`, []string{"rename", "ab12", "Bob's $(x)"}, false, true, `C:\T\o.txt`)
-	want := "$env:CBB_DEBUG = '1'\n& 'C:\\Program Files\\clipboardbridge\\cbb.exe' 'rename' 'ab12' 'Bob''s $(x)' *> 'C:\\T\\o.txt'\nexit $LASTEXITCODE\n"
+	s := psScript(`C:\Program Files\cbb\cbb.exe`, []string{"rename", "ab12", "Bob's $(x)"}, false, true, `C:\T\o.txt`)
+	want := "$env:CBB_DEBUG = '1'\n& 'C:\\Program Files\\cbb\\cbb.exe' 'rename' 'ab12' 'Bob''s $(x)' *> 'C:\\T\\o.txt'\nexit $LASTEXITCODE\n"
 	if s != want {
 		t.Errorf("psScript =\n%s\nwant\n%s", s, want)
 	}

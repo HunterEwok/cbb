@@ -22,7 +22,7 @@
 set -eu
 
 dir=/usr/local/libexec/cbbbench
-state="/Library/Application Support/clipboardbridge/state"
+state="/Library/Application Support/cbb/state"
 
 usage() {
 	echo "usage: cbbbench-root purge | install ARCHIVE [SUMS SIG] | grep RUN | perms | stranger | logs | fill-log | log-sizes" >&2
@@ -32,8 +32,8 @@ usage() {
 case ${1:-} in
 purge)
 	[ $# -eq 1 ] || usage
-	if [ -f /usr/local/share/clipboardbridge/uninstall.sh ]; then
-		sh /usr/local/share/clipboardbridge/uninstall.sh --purge
+	if [ -f /usr/local/share/cbb/uninstall.sh ]; then
+		sh /usr/local/share/cbb/uninstall.sh --purge
 	fi
 	;;
 install)
@@ -64,7 +64,7 @@ install)
 		exit 1
 	fi
 	tar -xzf "$work/archive.tar.gz" -C "$work"
-	sh "$work/clipboardbridge/packaging/macos/install.sh" --express "$work/clipboardbridge/cbb"
+	sh "$work/cbb/packaging/macos/install.sh" --express "$work/cbb/cbb"
 	;;
 grep)
 	[ $# -eq 2 ] || usage
@@ -83,20 +83,20 @@ stranger)
 	;;
 logs)
 	[ $# -eq 1 ] || usage
-	cat /Library/Logs/clipboardbridge/service.log
+	cat /Library/Logs/cbb/service.log
 	;;
 fill-log)
 	[ $# -eq 1 ] || usage
-	log=/Library/Logs/clipboardbridge/service.log
+	log=/Library/Logs/cbb/service.log
 	rm -f "$log.1"
 	line="2026-01-01 00:00:00 cbb: the bench fills the log to rotate it $(printf '%060d' 0)"
 	# 1 MiB and a little more, in lines of 100 bytes.
 	yes "$line" | head -n 10496 >>"$log"
-	launchctl kickstart -k system/io.github.hunterewok.clipboardbridge
+	launchctl kickstart -k system/tools.cbb
 	;;
 log-sizes)
 	[ $# -eq 1 ] || usage
-	for f in /Library/Logs/clipboardbridge/service.log /Library/Logs/clipboardbridge/service.log.1; do
+	for f in /Library/Logs/cbb/service.log /Library/Logs/cbb/service.log.1; do
 		if [ -f "$f" ]; then stat -f %z "$f"; else echo -1; fi
 	done
 	;;

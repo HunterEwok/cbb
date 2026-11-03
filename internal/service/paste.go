@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/remotepaste"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/remotepaste"
 )
 
 // Remote paste (design.md, "Remote paste"; docs/protocol.md, section 15):
@@ -319,12 +319,12 @@ func (s *Service) inject(body group.CommandBody, text string, set remotepaste.Se
 	}
 	s.mu.Unlock()
 	if len(ws) == 0 {
-		res.Reason = "nothing on this device can paste: no desktop session, tmux or console helper of Clipboard Bridge runs here"
+		res.Reason = "nothing on this device can paste: no desktop session, tmux or console helper of CBB runs here"
 		if s.cfg.OS == group.OSMacOS {
 			// Only the app pastes on a Mac: macOS lets an app press keys
 			// once its user allowed it in Accessibility, and the service
 			// and its pasteboard agent are not apps.
-			res.Reason = "a Mac pastes through the Clipboard Bridge app, and it is not open here; its user opens it and allows it in System Settings, Privacy & Security, Accessibility"
+			res.Reason = "a Mac pastes through the CBB app, and it is not open here; its user opens it and allows it in System Settings, Privacy & Security, Accessibility"
 		}
 		if console && !set.Console {
 			res.Reason = "only a text console is here, and its user did not allow consoles (cbb paste-receive on -console)"

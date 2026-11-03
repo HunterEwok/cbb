@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 func phoneInfo(t *testing.T) (Info, *ecdsa.PrivateKey) {

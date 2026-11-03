@@ -28,7 +28,7 @@ func deviceLogs(ctx context.Context, r *Report, devices []*Device) {
 		case "windows":
 			r.Do(p+d.Name+"/rotated", func() error { return winRotated(ctx, d) })
 			r.Do(p+d.Name+"/agent", func() error {
-				out, err := Run(ctx, d, `$f = "$env:LOCALAPPDATA\clipboardbridge\agent.log"; if (Test-Path $f) { Get-Content -Raw $f } else { 'none' }`, "")
+				out, err := Run(ctx, d, `$f = "$env:LOCALAPPDATA\cbb\agent.log"; if (Test-Path $f) { Get-Content -Raw $f } else { 'none' }`, "")
 				if err != nil {
 					return err
 				}
@@ -42,19 +42,19 @@ func deviceLogs(ctx context.Context, r *Report, devices []*Device) {
 			})
 		case "linux", "linux-lite":
 			r.Do(p+d.Name+"/journal", func() error {
-				out, err := Run(ctx, d, "sudo -n journalctl -u clipboardbridge -n 20 --no-pager -o cat", "")
+				out, err := Run(ctx, d, "sudo -n journalctl -u cbb -n 20 --no-pager -o cat", "")
 				if err != nil {
 					return noSudo(d, err)
 				}
 				if !strings.Contains(out, "cbb") {
-					return fmt.Errorf("the journal of clipboardbridge.service has no line of the service: %q", firstLine(out))
+					return fmt.Errorf("the journal of cbb.service has no line of the service: %q", firstLine(out))
 				}
 				return nil
 			})
 		case "darwin":
 			r.Do(p+d.Name+"/rotated", func() error { return macRotated(ctx, d) })
 			r.Do(p+d.Name+"/agent", func() error {
-				out, err := Run(ctx, d, `f=~/Library/Logs/clipboardbridge/agent.log; if [ -f "$f" ]; then tail -n 20 "$f"; else echo none; fi`, "")
+				out, err := Run(ctx, d, `f=~/Library/Logs/cbb/agent.log; if [ -f "$f" ]; then tail -n 20 "$f"; else echo none; fi`, "")
 				if err != nil {
 					return err
 				}
@@ -74,9 +74,9 @@ func deviceLogs(ctx context.Context, r *Report, devices []*Device) {
 // service stopped and starts it: in no group, it says so at once, and that
 // line moves the full log to service.log.1.
 func winRotated(ctx context.Context, d *Device) error {
-	const log = `$env:ProgramData\clipboardbridge\logs\service.log`
+	const log = `$env:ProgramData\cbb\logs\service.log`
 	filler := fmt.Sprintf(`$line = '2026-01-01 00:00:00 cbb: the bench fills the log to rotate it ' + ('x' * 60); $sb = New-Object Text.StringBuilder; while ($sb.Length -lt %d) { [void]$sb.AppendLine($line) }; [IO.File]::AppendAllText("%s", $sb.ToString())`, 1<<20+1024, log)
-	if _, err := RunFor(ctx, d, "Stop-Service clipboardbridge; Remove-Item -ErrorAction SilentlyContinue \""+log+".1\"; "+filler+"; Start-Service clipboardbridge", "", 2*time.Minute); err != nil {
+	if _, err := RunFor(ctx, d, "Stop-Service cbb; Remove-Item -ErrorAction SilentlyContinue \""+log+".1\"; "+filler+"; Start-Service cbb", "", 2*time.Minute); err != nil {
 		return err
 	}
 	if err := eventually(ctx, 30*time.Second, func() error {

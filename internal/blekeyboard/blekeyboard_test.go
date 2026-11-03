@@ -15,8 +15,8 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/clipboardbridge/internal/blekeyboard/bluetest"
-	"github.com/HunterEwok/clipboardbridge/internal/keyboard"
+	"github.com/HunterEwok/cbb/internal/blekeyboard/bluetest"
+	"github.com/HunterEwok/cbb/internal/keyboard"
 )
 
 func TestKeyboard(t *testing.T) {

@@ -14,7 +14,7 @@ writes the same field under the lock, races with a timer that fires while a peer
 race detector caught it when a hub closed (`go test -race ./internal/forward`). wireguard-go
 clears its flag under the lock, as this copy now does. In `conn/mark_unix.go`, `SetMark`
 passes the mark's four bytes to `setsockopt` instead of converting the `uint32` to `int`,
-a conversion that code scanning flags because it can wrap on 32-bit systems (clipboardbridge
+a conversion that code scanning flags because it can wrap on 32-bit systems (cbb
 sets no mark). In `conn/bind_std.go`, `Open` keeps the port the IPv4 socket got when
 the IPv6 listen fails: upstream took the failed listen's port 0, so on a host without IPv6
 the device's next rebind, which a netstack device's own "up" event can cause right after
@@ -23,7 +23,7 @@ the device's next rebind, which a netstack device's own "up" event can cause rig
 
 The code is under the MIT license in [LICENSE](LICENSE), not under the AGPL; the files keep
 their original copyright notices, moved into line comments at the top, and the files that
-had none got a line that points to LICENSE. clipboardbridge release archives carry this notice.
+had none got a line that points to LICENSE. cbb release archives carry this notice.
 
 To update it, copy the same packages of a newer version over these, without `_test.go`
 files, apply the change again unless upstream fixed it (then remove the copy and the

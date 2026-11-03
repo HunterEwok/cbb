@@ -20,11 +20,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/forward"
-	"github.com/HunterEwok/clipboardbridge/internal/frame"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/frame"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // Link is a member's relay: its address, the same for UDP and TCP, and the

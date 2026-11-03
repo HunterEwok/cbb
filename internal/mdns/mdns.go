@@ -2,19 +2,19 @@
 // Copyright (C) 2026 HunterEwok
 
 // Package mdns is the small multicast DNS responder and browser of
-// clipboardbridge (RFC 6762 and RFC 6763): Linux members publish and browse, a Mac
+// cbb (RFC 6762 and RFC 6763): Linux members publish and browse, a Mac
 // and a device about to join only browse (D-32).
 //
-// A member publishes its service instance <device ID>._clipboardbridge._tcp.local
+// A member publishes its service instance <device ID>._cbb._tcp.local
 // with SRV and TXT records, its own host name cb-<device ID>.local and, while
-// the group elected it, clipboardbridge.local with a lifetime of 10 seconds. It
-// finds the other members by browsing for _clipboardbridge._tcp.local.
+// the group elected it, cbb.local with a lifetime of 10 seconds. It
+// finds the other members by browsing for _cbb._tcp.local.
 //
 // It shares UDP port 5353 with avahi-daemon or systemd-resolved, publishes
 // only private IPv4, unique-local and link-local IPv6 addresses, and answers
 // each query with the addresses of the interface the query arrived on.
 // Names are not probed: device IDs are random, and the group's election, not
-// a probe, decides who holds clipboardbridge.local.
+// a probe, decides who holds cbb.local.
 package mdns
 
 import (
@@ -159,7 +159,7 @@ func (r *Responder) SetTXT(txt []string) {
 	r.wake()
 }
 
-// SetHolder makes the member answer for clipboardbridge.local, or stop doing so
+// SetHolder makes the member answer for cbb.local, or stop doing so
 // with a goodbye, so the iPhone forgets the old address at once.
 func (r *Responder) SetHolder(hold bool) {
 	r.mu.Lock()

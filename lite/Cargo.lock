@@ -168,6 +168,78 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "cbb-core"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.23.1",
+ "chacha20 0.10.2",
+ "chacha20poly1305 0.11.0",
+ "der",
+ "getrandom 0.4.3",
+ "hmac 0.13.0",
+ "hpke",
+ "p256",
+ "proptest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "spin 0.12.3",
+ "x25519-dalek 3.0.0",
+ "x509-cert",
+]
+
+[[package]]
+name = "cbb-embassy"
+version = "0.1.0"
+dependencies = [
+ "cbb-core",
+ "critical-section",
+ "embassy-executor",
+ "embassy-net",
+ "embassy-net-tuntap",
+ "embassy-time",
+ "embedded-io-async",
+ "getrandom 0.4.3",
+ "static_cell",
+]
+
+[[package]]
+name = "cbb-ffi"
+version = "0.1.0"
+dependencies = [
+ "cbb-core",
+ "serde_json",
+]
+
+[[package]]
+name = "cbb-lite"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "cbb-core",
+ "getrandom 0.4.3",
+ "gotatun",
+ "if-addrs",
+ "libc",
+ "mdns-sd",
+ "p256",
+ "qrcode",
+ "serde",
+ "serde_json",
+ "smoltcp",
+]
+
+[[package]]
+name = "cbb-wasm"
+version = "0.1.0"
+dependencies = [
+ "cbb-core",
+ "getrandom 0.4.3",
+]
+
+[[package]]
 name = "cc"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -259,78 +331,6 @@ dependencies = [
  "block-buffer 0.12.1",
  "crypto-common 0.2.2",
  "inout 0.2.5",
-]
-
-[[package]]
-name = "clipboardbridge-core"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "base64 0.23.1",
- "chacha20 0.10.2",
- "chacha20poly1305 0.11.0",
- "der",
- "getrandom 0.4.3",
- "hmac 0.13.0",
- "hpke",
- "p256",
- "proptest",
- "rustls",
- "serde",
- "serde_json",
- "sha2",
- "spin 0.12.3",
- "x25519-dalek 3.0.0",
- "x509-cert",
-]
-
-[[package]]
-name = "clipboardbridge-embassy"
-version = "0.1.0"
-dependencies = [
- "clipboardbridge-core",
- "critical-section",
- "embassy-executor",
- "embassy-net",
- "embassy-net-tuntap",
- "embassy-time",
- "embedded-io-async",
- "getrandom 0.4.3",
- "static_cell",
-]
-
-[[package]]
-name = "clipboardbridge-ffi"
-version = "0.1.0"
-dependencies = [
- "clipboardbridge-core",
- "serde_json",
-]
-
-[[package]]
-name = "clipboardbridge-lite"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "clipboardbridge-core",
- "getrandom 0.4.3",
- "gotatun",
- "if-addrs",
- "libc",
- "mdns-sd",
- "p256",
- "qrcode",
- "serde",
- "serde_json",
- "smoltcp",
-]
-
-[[package]]
-name = "clipboardbridge-wasm"
-version = "0.1.0"
-dependencies = [
- "clipboardbridge-core",
- "getrandom 0.4.3",
 ]
 
 [[package]]

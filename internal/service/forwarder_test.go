@@ -6,7 +6,7 @@ package service
 import (
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/forward"
+	"github.com/HunterEwok/cbb/internal/forward"
 )
 
 // The project's forwarder: the command line sends its resolved address

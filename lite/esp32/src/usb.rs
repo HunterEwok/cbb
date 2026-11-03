@@ -114,7 +114,7 @@ pub fn start(
 
     let driver = Driver::new(Usb::new_fs(usb, dp, dm), EP_OUT.init([0; 1024]), Config::default());
     let mut config = embassy_usb::Config::new(VID, PID);
-    config.manufacturer = Some("clipboardbridge");
+    config.manufacturer = Some("cbb");
     config.product = Some("cbb keyboard");
     config.max_power = 100;
     let mut builder = Builder::new(

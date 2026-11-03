@@ -71,19 +71,19 @@ func installerErrors(ctx context.Context, r *Report, f *Fleet, archive string) {
 		}
 		return nil
 	}
-	install := "clipboardbridge/packaging/linux/install.sh --no-firewall --auto-update off clipboardbridge/cbb"
+	install := "cbb/packaging/linux/install.sh --no-firewall --auto-update off cbb/cbb"
 	r.Do(p+"install-status", func() error {
 		return fails(install, "", 7, []string{"install.sh: failed (exit status 7). " + hint}, []string{"+ install "})
 	})
 	r.Do(p+"install-details", func() error {
 		return fails(install, "CBB_ERROR_DETAILS=1", 7, []string{"+ install ", "+ failed 7"}, []string{hint})
 	})
-	uninstall := "/usr/local/share/clipboardbridge/uninstall.sh"
+	uninstall := "/usr/local/share/cbb/uninstall.sh"
 	r.Do(p+"uninstall-status", func() error {
 		return fails(uninstall, "", 5, []string{"uninstall.sh: failed (exit status 5). " + hint}, []string{"+ sh "})
 	})
 	r.Do(p+"uninstall-details", func() error {
-		return fails(uninstall, "CBB_ERROR_DETAILS=1", 5, []string{"+ sh /usr/local/share/clipboardbridge/firewall.sh close", "+ failed 5"}, []string{hint})
+		return fails(uninstall, "CBB_ERROR_DETAILS=1", 5, []string{"+ sh /usr/local/share/cbb/firewall.sh close", "+ failed 5"}, []string{hint})
 	})
 	r.Do(p+"then-works", func() error {
 		// Without the stand-ins both run through.

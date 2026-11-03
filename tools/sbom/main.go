@@ -6,7 +6,7 @@
 // with (docs/maintaining.md, "What a release is built from"):
 //
 //	sbom go -o sbom-go.cdx.json -version 0.6.0 ARCHIVE|BINARY...
-//	sbom cargo -o sbom-lite.cdx.json -version 0.6.0 -manifest lite/Cargo.toml -package clipboardbridge-lite -target T,...
+//	sbom cargo -o sbom-lite.cdx.json -version 0.6.0 -manifest lite/Cargo.toml -package cbb-lite -target T,...
 //	sbom swift -o sbom-ios-kit.cdx.json -version 0.6.0 Package.resolved
 //	sbom gradle -o sbom-android.cdx.json -version 0.6.0 DEPENDENCIES...
 //
@@ -146,8 +146,8 @@ var opts common
 func run(kind string, args []string, cmd func([]string) ([]Component, error)) error {
 	flags = flag.NewFlagSet(kind, flag.ContinueOnError)
 	names := map[string]string{
-		"go": "clipboardbridge (the Go programs)", "cargo": "clipboardbridge (Rust)",
-		"swift": "ClipboardBridgeKit (Swift packages)", "gradle": "clipboardbridge (Android)",
+		"go": "cbb (the Go programs)", "cargo": "cbb (Rust)",
+		"swift": "CBBKit (Swift packages)", "gradle": "cbb (Android)",
 	}
 	opts = common{}
 	opts.register(flags, names[kind])
@@ -189,10 +189,10 @@ func Document(name, version string, comps []Component) ([]byte, error) {
 	b := BOM{
 		BOMFormat: "CycloneDX", SpecVersion: "1.6", Version: 1,
 		Metadata: Metadata{
-			Tools: Tools{Components: []Component{{Type: "application", BOMRef: "tool", Name: "clipboardbridge tools/sbom"}}},
+			Tools: Tools{Components: []Component{{Type: "application", BOMRef: "tool", Name: "cbb tools/sbom"}}},
 			Component: Component{Type: "application", BOMRef: "root", Name: name, Version: version,
 				Licenses: []License{{Expression: "AGPL-3.0-only"}},
-				ExtRefs:  []ExtRef{{Type: "vcs", URL: "https://github.com/HunterEwok/clipboardbridge"}}},
+				ExtRefs:  []ExtRef{{Type: "vcs", URL: "https://github.com/HunterEwok/cbb"}}},
 		},
 		Components:   []Component{},
 		Dependencies: []Dependency{{Ref: "root", DependsOn: refs}},
@@ -278,7 +278,7 @@ func GoModules(info *buildinfo.BuildInfo) []Component {
 		}
 		c := Component{Name: m.Path, Version: m.Version, Purl: purl("golang", m.Path, m.Version)}
 		if m.Sum != "" {
-			c.Properties = []Property{{Name: "clipboardbridge:go:h1", Value: m.Sum}}
+			c.Properties = []Property{{Name: "cbb:go:h1", Value: m.Sum}}
 		}
 		comps = append(comps, c)
 	}
@@ -527,7 +527,7 @@ func SwiftPackages(data []byte) ([]Component, error) {
 		c := Component{Name: p.Identity, Version: version, Purl: purl("swift", name, version),
 			ExtRefs: []ExtRef{{Type: "vcs", URL: p.Location}}}
 		if p.State.Revision != "" {
-			c.Properties = []Property{{Name: "clipboardbridge:swift:revision", Value: p.State.Revision}}
+			c.Properties = []Property{{Name: "cbb:swift:revision", Value: p.State.Revision}}
 		}
 		comps = append(comps, c)
 	}

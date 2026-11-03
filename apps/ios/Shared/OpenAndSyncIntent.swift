@@ -8,7 +8,7 @@ import AppIntents
 /// carries it too; with openAppWhenRun the app runs it.
 struct OpenAndSyncIntent: AppIntent {
     static let title: LocalizedStringResource = "Sync clipboard"
-    static let description = IntentDescription("Opens Clipboard Bridge and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.")
+    static let description = IntentDescription("Opens CBB and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.")
     static let openAppWhenRun = true
     static let isDiscoverable = false
 

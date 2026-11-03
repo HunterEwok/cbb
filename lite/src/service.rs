@@ -391,7 +391,7 @@ fn kind_of(s: &str) -> Result<Kind> {
 fn via_of(s: &str) -> Result<Via> {
     match s {
         "" | "copy" => Ok(Via::Copy),
-        "phone" | "iphone" => Ok(Via::Phone),
+        "phone" => Ok(Via::Phone),
         "universal-clipboard" => Ok(Via::Universal),
         _ => Err(Error::msg(format!("unknown via {s:?}"))),
     }
@@ -817,7 +817,7 @@ impl Service {
             res.reason = if console && !set.console {
                 "only a text console is here, and its user did not allow consoles (sudo cbb paste-receive on -console)"
             } else {
-                "nothing on this device can paste: no tmux or console helper of Clipboard Bridge, nor cbb next link, runs here"
+                "nothing on this device can paste: no tmux or console helper of CBB, nor cbb next link, runs here"
             }
             .into();
             return res;

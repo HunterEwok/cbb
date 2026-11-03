@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // The content of images and files (docs/protocol.md, section 4, "Content"):

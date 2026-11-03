@@ -145,7 +145,7 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
         run: |
-          cargo mutants --in-place --no-shuffle --shard "$SHARD/8" -p clipboardbridge-core \
+          cargo mutants --in-place --no-shuffle --shard "$SHARD/8" -p cbb-core \
             -f core/src/authority.rs -f core/src/strict.rs || true
           {
             echo "### cargo mutants, shard $SHARD/8"

@@ -57,7 +57,7 @@ func forgeHostOn(ctx context.Context, f *Fleet, net string, m *Device, signers .
 		if err := os.Mkdir(sd, 0o700); err != nil {
 			return nil, err
 		}
-		if _, err := docker(ctx, "cp", d.Container+":/var/lib/clipboardbridge/.", sd); err != nil {
+		if _, err := docker(ctx, "cp", d.Container+":/var/lib/cbb/.", sd); err != nil {
 			return nil, err
 		}
 		if _, err := docker(ctx, "cp", sd, h.Container+":/tmp/"+d.Name); err != nil {
@@ -371,7 +371,7 @@ func adminChain(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 	}
 	r.Do(p+"chain-presented", func() error {
 		// Its certificate is the admin CA's, not the root's.
-		out, err := Run(ctx, d, "cat /var/lib/clipboardbridge/identity.json", "")
+		out, err := Run(ctx, d, "cat /var/lib/cbb/identity.json", "")
 		if err == nil && !strings.Contains(out, "issuer") {
 			err = fmt.Errorf("the identity of a device an admin admitted names no issuer: %.200s", out)
 		}

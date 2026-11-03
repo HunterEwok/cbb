@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // fakeService answers every request on a control socket with answer and
@@ -289,7 +289,7 @@ func TestPairWithThePhone(t *testing.T) {
 		t.Errorf("pair sent %+v", m.Header)
 	}
 	if !strings.Contains(stdout.String(), "Connect a new device") || !strings.Contains(stdout.String(), "\x1b[") ||
-		!strings.Contains(stdout.String(), "paste this into the app: clipboardbridge://") ||
+		!strings.Contains(stdout.String(), "paste this into the app: cbb://") ||
 		!strings.Contains(stdout.String(), "Joined the group") {
 		t.Errorf("pair printed:\n%s", stdout.String())
 	}
@@ -311,7 +311,7 @@ func TestWriteDevices(t *testing.T) {
 	}, []control.Device{{ID: "c3", SkewMS: 9000}}, "0.6.1", now)
 	out := b.String()
 	for _, want := range []string{"pi (this device)", "online", "5 min ago", "deck *", "not in the devices list yet",
-		"Linux", "macOS", "Windows", "root", "admin", "off by 9s", "MODE", "VERSION", "0.6.0 (old)", "below Clipboard Bridge 0.6.1"} {
+		"Linux", "macOS", "Windows", "root", "admin", "off by 9s", "MODE", "VERSION", "0.6.0 (old)", "below CBB 0.6.1"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -418,7 +418,7 @@ func TestPasteTerminal(t *testing.T) {
 }
 
 func TestFailDetails(t *testing.T) {
-	err := &control.DialError{Msg: "the Clipboard Bridge service is not running; start it", Err: errors.New("dial unix /run/x: connect: no such file or directory")}
+	err := &control.DialError{Msg: "the CBB service is not running; start it", Err: errors.New("dial unix /run/x: connect: no such file or directory")}
 	for _, c := range []struct {
 		debug  string
 		detail bool

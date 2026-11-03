@@ -15,7 +15,7 @@ import (
 // the user's clipboard alone.
 func private(t *testing.T) *Board {
 	t.Helper()
-	b := Private(fmt.Sprintf("io.github.hunterewok.clipboardbridge.test.%d.%s", os.Getpid(), t.Name()))
+	b := Private(fmt.Sprintf("tools.cbb.test.%d.%s", os.Getpid(), t.Name()))
 	t.Cleanup(b.Release)
 	return b
 }

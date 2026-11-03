@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 985320ae0bdc -->
+<!-- source: e1c2123fe696 -->
 # 离家使用
 
 在家时，你的设备会自动同步。要让笔记本或手机在别处也能继续同步，需要让家里的一台电脑成为群组的**中枢**，外出的设备通过群组自己的加密隧道连接到它。各种情形的图示见[工作原理](how-it-works.md#away-from-home-the-hub)。
@@ -70,10 +70,10 @@ sudo cbb global hub
 离家同步可用之后，远处的电脑可以凭中枢发出的邀请加入群组：
 
 ```sh
-sudo cbb invite        # on the hub: writes clipboardbridge.cbbinvite, valid for an hour
+sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
 ```
 
-通过你信任的渠道（比如你用来给自己发消息的通讯软件）把这个文件发给新电脑；在使用之前，它是一个秘密。在新电脑上运行 `sudo cbb pair -invite clipboardbridge.cbbinvite`。两台电脑都会显示新电脑的密钥指纹；只有在两者一致时，才在中枢上输入 `yes`。手机目前还不能通过邀请加入：请在家里添加。
+通过你信任的渠道（比如你用来给自己发消息的通讯软件）把这个文件发给新电脑；在使用之前，它是一个秘密。在新电脑上运行 `sudo cbb pair -invite cbb.cbbinvite`。两台电脑都会显示新电脑的密钥指纹；只有在两者一致时，才在中枢上输入 `yes`。手机目前还不能通过邀请加入：请在家里添加。
 
 通过 SSH 或你自己的 VPN 从远处加入的其他方式，见[不使用应用](without-app.md#joining-from-another-network)。
 

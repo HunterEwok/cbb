@@ -13,7 +13,7 @@
 # ["relay", "-group", "TAG", "-listen", ":8764"] (cbb status shows a group's tag).
 services:
   forward:
-    image: ghcr.io/hunterewok/clipboardbridge:latest # pin a release by its digest
+    image: ghcr.io/hunterewok/cbb:latest # pin a release by its digest
     command: ["forward", "-listen", ":8764"]
     # With VLESS: add "-vless-site", "www.example.com" and publish 443/tcp.
     restart: unless-stopped
@@ -24,7 +24,7 @@ services:
       - "8764:8764/udp"
       - "8764:8764/tcp"
     volumes:
-      - state:/var/lib/clipboardbridge
+      - state:/var/lib/cbb
 
 volumes:
   state:

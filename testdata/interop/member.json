@@ -383,7 +383,7 @@
 				"kind": "text",
 				"text": "x"
 			},
-			"valid": true
+			"valid": false
 		},
 		{
 			"json": {

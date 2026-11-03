@@ -19,11 +19,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/release"
-	"github.com/HunterEwok/clipboardbridge/internal/rootless"
-	"github.com/HunterEwok/clipboardbridge/internal/update"
-	"github.com/HunterEwok/clipboardbridge/internal/version"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/release"
+	"github.com/HunterEwok/cbb/internal/rootless"
+	"github.com/HunterEwok/cbb/internal/update"
+	"github.com/HunterEwok/cbb/internal/version"
 )
 
 const updateUsage = `usage: cbb update [-check | -to VERSION]
@@ -176,7 +176,7 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 	if !check && !elevated {
 		return needAdmin()
 	}
-	// install.ps1 stops every program in Program Files\clipboardbridge,
+	// install.ps1 stops every program in Program Files\cbb,
 	// this one too: the update runs from a copy in its own folder.
 	if runtime.GOOS == "windows" && !check && os.Getenv("CBB_UPDATE_FROM") == "" {
 		return updateFromCopy(dir, exe, args, stdout, stderr)
@@ -235,21 +235,21 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 	}
 	switch {
 	case !found.Newer && to == "":
-		fmt.Fprintf(out, "Clipboard Bridge %s is the newest release; this device runs %s.\n", r.Version, version.Version)
+		fmt.Fprintf(out, "CBB %s is the newest release; this device runs %s.\n", r.Version, version.Version)
 		return 0
 	case !found.Newer:
 		fmt.Fprintf(out, "This device runs %s, which is not below %s.\n", version.Version, r.Version)
 		return 0
 	case m != update.MethodGet:
 		if !timer {
-			fmt.Fprintf(out, "Clipboard Bridge %s is available; this device runs %s. It came from %s, which updates it:\n", r.Version, version.Version, m)
+			fmt.Fprintf(out, "CBB %s is available; this device runs %s. It came from %s, which updates it:\n", r.Version, version.Version, m)
 			for _, c := range update.MethodCommands(m) {
 				fmt.Fprintln(out, "  "+c)
 			}
 		}
 		return 0
 	case check:
-		fmt.Fprintf(out, "Clipboard Bridge %s is available; this device runs %s. To install it: %s\n", r.Version, version.Version, updateCommand())
+		fmt.Fprintf(out, "CBB %s is available; this device runs %s. To install it: %s\n", r.Version, version.Version, updateCommand())
 		return 0
 	case version.Version == "dev":
 		return fail(stderr, fmt.Errorf("this is a development build; cbb update installs %s only over a release", r.Version))

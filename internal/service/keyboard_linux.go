@@ -17,12 +17,12 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/blekeyboard"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/keyboard"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/blekeyboard"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/keyboard"
+	"github.com/HunterEwok/cbb/internal/node"
 )
 
 // This computer as a Bluetooth keyboard (docs/roadmap.md, item 25, way 3;
@@ -60,13 +60,13 @@ func (s *Service) keyboardBus() (*dbus.Conn, error) {
 }
 
 // keyboardName is what a host shows for the keyboard before it pairs:
-// "Clipboard Bridge" and this device's name, short enough for an
+// "CBB" and this device's name, short enough for an
 // advertisement. After pairing a host shows the GAP name, the computer's
 // Bluetooth name.
 func (s *Service) keyboardName() string {
-	// "Clipboard Bridge", as everything a user sees but does not type, and
+	// "CBB", as everything a user sees but does not type, and
 	// the computer's name, within the 29 bytes a scan response leaves for it.
-	name := "Clipboard Bridge " + s.cfg.Name
+	name := "CBB " + s.cfg.Name
 	for len(name) > 29 {
 		_, n := utf8.DecodeLastRuneInString(name)
 		name = name[:len(name)-n]

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/budget"
+	"github.com/HunterEwok/cbb/internal/budget"
 )
 
 // Limits bound what an open relay (Config.Open), which serves any group

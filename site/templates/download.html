@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-{{define "title"}}{{t "Download"}}: Clipboard Bridge{{end}}
-{{define "description"}}{{t "Download Clipboard Bridge for Android, iPhone, Windows, Mac and Linux. Free and open source."}}{{end}}
+{{define "title"}}{{t "Download"}}: Copy Beyond Borders{{end}}
+{{define "description"}}{{t "Download Copy Beyond Borders for Android, iPhone, Windows, Mac and Linux. Free and open source."}}{{end}}
 
 {{define "content"}}
 <section class="wrap page">
   <h1>{{t "Download"}}</h1>
-  <p class="lead">{{t "Install the app on your phone and Clipboard Bridge on your computers. Every way installs the same program, and every release is free."}}</p>
-  <p class="dim">{{t "Latest version: %s, released on %s." (link "https://github.com/HunterEwok/clipboardbridge/releases/latest" .Version) .Date}}
-     {{t "What changed: %s." (link "https://github.com/HunterEwok/clipboardbridge/blob/main/CHANGELOG.md" (t "the changelog"))}}</p>
+  <p class="lead">{{t "Install the app on your phone and Copy Beyond Borders on your computers. Every way installs the same program, and every release is free."}}</p>
+  <p class="dim">{{t "Latest version: %s, released on %s." (link "https://github.com/HunterEwok/cbb/releases/latest" .Version) .Date}}
+     {{t "What changed: %s." (link "https://github.com/HunterEwok/cbb/blob/main/CHANGELOG.md" (t "the changelog"))}}</p>
   <p class="actions pick" hidden>
-    <a class="button accent go" data-os="android" href="https://github.com/HunterEwok/clipboardbridge/releases/latest" data-goatcounter-click="pick-android" hidden>{{t "Download for Android"}}</a>
+    <a class="button accent go" data-os="android" href="https://github.com/HunterEwok/cbb/releases/latest" data-goatcounter-click="pick-android" hidden>{{t "Download for Android"}}</a>
     <a class="button accent go" data-os="iphone" href="#iphone" hidden>{{t "iPhone: what to do now"}}</a>
     <a class="button accent go" data-os="windows" href="#windows" hidden>{{t "Install on Windows"}}</a>
     <a class="button accent go" data-os="mac" href="#unix" hidden>{{t "Install on a Mac"}}</a>
@@ -22,7 +22,7 @@
       <p class="badge mine-badge">{{t "Your device"}}</p>
       <h3>Android</h3>
       <p>{{t "Android 10 or later. Download the APK from the latest release on the phone and open it."}}</p>
-      <p><a class="button accent go" href="https://github.com/HunterEwok/clipboardbridge/releases/latest" data-goatcounter-click="android-apk">{{t "Download for Android"}}</a></p>
+      <p><a class="button accent go" href="https://github.com/HunterEwok/cbb/releases/latest" data-goatcounter-click="android-apk">{{t "Download for Android"}}</a></p>
     </div>
     <div class="card" id="iphone" data-os="iphone">
       <p class="badge mine-badge">{{t "Your device"}}</p>
@@ -38,35 +38,35 @@
       <p class="badge mine-badge">{{t "Your device"}}</p>
       <h3>{{t "Linux and Mac"}}</h3>
       <p>{{t "Any Linux with systemd (x86-64, ARM64, ARMv7, ARMv6) and any Mac. In a terminal:"}}</p>
-      <pre><code>curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh</code></pre>
+      <pre><code>curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh</code></pre>
       <p>{{t "Or on a Mac with Homebrew, which also updates it; run the second line again after each upgrade:"}}</p>
-      <pre><code>brew install hunterewok/tap/clipboardbridge
-sudo sh "$(brew --prefix)/opt/clipboardbridge/share/clipboardbridge/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/clipboardbridge/bin/cbb"</code></pre>
+      <pre><code>brew install hunterewok/tap/cbb
+sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"</code></pre>
     </section>
     <section class="os" id="windows" data-os="windows">
       <p class="badge mine-badge">{{t "Your device"}}</p>
       <h3>Windows</h3>
       <p>{{t "Windows 10 (1809 or later) or 11, x86-64 or ARM64. In a PowerShell opened with “Run as administrator”:"}}</p>
-      <pre><code>irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex</code></pre>
+      <pre><code>irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex</code></pre>
     </section>
   </div></div>
   <div class="cards computers">
     <div class="card">
       <h3>{{t "A NAS or a home server"}}</h3>
-      <p>{{t "The Docker image %s runs as an ordinary member that is always on." (code "ghcr.io/hunterewok/clipboardbridge")}}</p>
+      <p>{{t "The Docker image %s runs as an ordinary member that is always on." (code "ghcr.io/hunterewok/cbb")}}</p>
     </div>
     <div class="card">
       <h3>{{t "Small devices"}}</h3>
       <p>{{t "A router or a Raspberry Pi Zero that should only sync takes the lite member. On Linux:"}}</p>
-      <pre><code>curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --lite</code></pre>
+      <pre><code>curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --lite</code></pre>
     </div>
   </div>
-  <p>{{t "The installer checks the download, starts Clipboard Bridge and asks before it opens the firewall for it. Then run %s and scan its QR code in the app." (code "sudo cbb pair")}}
+  <p>{{t "The installer checks the download, starts Copy Beyond Borders and asks before it opens the firewall for it. Then run %s and scan its QR code in the app." (code "sudo cbb pair")}}
      {{t "All the ways and options: %s." (link (printf "/%s/docs/guide/install.html" .Lang.Code) (t "installing"))}}</p>
 
   <h2 id="check">{{t "Checking a download"}}</h2>
   <p>{{t "The installers check every file against the release's checksums. Each file also has a build attestation that ties it to this repository and the build that made it, which %s checks:" (code "gh attestation verify")}}</p>
-  <pre><code>gh attestation verify clipboardbridge-linux-amd64.tar.gz --repo HunterEwok/clipboardbridge</code></pre>
+  <pre><code>gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb</code></pre>
   <p>{{t "Free code signing provided by %s, certificate by %s." (link "https://about.signpath.io" "SignPath.io") (link "https://signpath.org" "SignPath Foundation")}}
      {{t "Which programs are signed, and who approves it: %s." (link "code-signing.html" (t "Code signing policy"))}}</p>
 

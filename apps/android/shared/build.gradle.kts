@@ -10,7 +10,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.hunterewok.clipboardbridge.shared"
+    namespace = "tools.cbb.shared"
     compileSdk = 37
 
     defaultConfig {

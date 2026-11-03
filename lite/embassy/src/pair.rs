@@ -43,7 +43,7 @@ pub trait Saver {
 pub struct Pairing {
     joiner: Joiner,
     code: String,
-    /// The QR code's text, a clipboardbridge://join link.
+    /// The QR code's text, a cbb://join link.
     pub text: String,
 }
 

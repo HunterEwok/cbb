@@ -24,9 +24,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/benchtime"
-	"github.com/HunterEwok/clipboardbridge/internal/core"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/benchtime"
+	"github.com/HunterEwok/cbb/internal/core"
 )
 
 // PeriodLifetime is how long a period lasts, and PeriodRenew how old it may

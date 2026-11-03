@@ -1,1 +1,1 @@
-Clipboard Bridge
+CBB: Copy Beyond Borders

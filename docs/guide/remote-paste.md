@@ -27,12 +27,12 @@ before it as a command wherever a terminal does not take the paste as one piece.
 On GNOME and KDE the first paste opens the system's dialog for remote control on the screen;
 allow it once and it is remembered. To skip the dialog, install the uinput helper:
 install again with `--uinput`
-(`curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --uinput`),
+(`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`),
 which adds a virtual keyboard that presses only
 Shift+Insert and Enter for the user on the screen.
 
 Without a desktop, tmux and the text console need their helpers. Every installation adds
-Clipboard Bridge's part of `/etc/tmux.conf`, which starts the tmux helper with tmux;
+CBB's part of `/etc/tmux.conf`, which starts the tmux helper with tmux;
 `install.sh --console` adds the console helper's service.
 
 ## Paste from an admin

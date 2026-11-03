@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // phoneGroup is a group rooted in a phone: a root CA with path length 1 and
@@ -37,7 +37,7 @@ func newRoot(t *testing.T) *CA {
 		t.Fatal(err)
 	}
 	tmpl := &x509.Certificate{
-		Subject:               pkix.Name{CommonName: "clipboardbridge group root 2026-10-21"},
+		Subject:               pkix.Name{CommonName: "cbb group root 2026-10-21"},
 		NotBefore:             t0.Add(-backdate),
 		NotAfter:              t0.AddDate(caYears, 0, 0),
 		IsCA:                  true,
@@ -59,7 +59,7 @@ func adminCA(t *testing.T, root *CA) *CA {
 		t.Fatal(err)
 	}
 	cert, err := create(&x509.Certificate{
-		Subject:               pkix.Name{CommonName: "clipboardbridge admin " + string(NewDeviceID())},
+		Subject:               pkix.Name{CommonName: "cbb admin " + string(NewDeviceID())},
 		NotBefore:             root.Cert.NotBefore,
 		NotAfter:              root.Cert.NotAfter,
 		IsCA:                  true,

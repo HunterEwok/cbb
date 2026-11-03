@@ -10,7 +10,7 @@ import (
 	"net/netip"
 	"sync"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // A recordSet is a group's authority records as the relay keeps them: the

@@ -45,7 +45,7 @@ func (f *Fleet) AddSystemd(ctx context.Context, net string) (*Device, error) {
 		"--tmpfs", "/run", "--tmpfs", "/run/lock"}
 	if fleetCoverDir != "" {
 		// The unit's environment does not reach the service; the case
-		// that wants coverage adds GOCOVERDIR to clipboardbridge.env.
+		// that wants coverage adds GOCOVERDIR to cbb.env.
 		args = append(args, "-v", fleetCoverDir+":/cover")
 	}
 	if _, err := docker(ctx, append(args, systemdImage)...); err != nil {
@@ -68,10 +68,10 @@ func (f *Fleet) AddSystemd(ctx context.Context, net string) (*Device, error) {
 // installArchive copies the release archive in dir to d and runs its
 // install.sh with flags, and returns what it printed.
 func installArchive(ctx context.Context, d *Device, dir, flags string) (string, error) {
-	if _, err := docker(ctx, "cp", dir+"/clipboardbridge-linux-"+goarchOf()+".tar.gz", d.Container+":/tmp/cbb.tar.gz"); err != nil {
+	if _, err := docker(ctx, "cp", dir+"/cbb-linux-"+goarchOf()+".tar.gz", d.Container+":/tmp/cbb.tar.gz"); err != nil {
 		return "", err
 	}
-	return RunFor(ctx, d, "cd /tmp && rm -rf clipboardbridge && tar xzf cbb.tar.gz && sh clipboardbridge/packaging/linux/install.sh "+flags+" clipboardbridge/cbb", "", 3*time.Minute)
+	return RunFor(ctx, d, "cd /tmp && rm -rf cbb && tar xzf cbb.tar.gz && sh cbb/packaging/linux/install.sh "+flags+" cbb/cbb", "", 3*time.Minute)
 }
 
 // runsVersion waits until the service on d answers with version.

@@ -2,18 +2,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs clipboardbridge, the full member or the lite one, on OpenWrt
+# Installs cbb, the full member or the lite one, on OpenWrt
 # 25.12 or later, as root:
 #
 #   sh install.sh [--port N] [--auto-update on|off] path/to/cbb
 #
-# It installs the binary to /usr/bin, the user and group clipboardbridge,
-# the procd init script, the settings in /etc/config/clipboardbridge (kept
+# It installs the binary to /usr/bin, the user and group cbb,
+# the procd init script, the settings in /etc/config/cbb (kept
 # when they exist), the NTP hook that starts the service once the clock is
 # set, the capability file and the list of files sysupgrade keeps, and
 # starts or restarts the service. The keys live in
-# /etc/clipboardbridge/state. The service works on the devices of the lan
-# zone; list other zones in /etc/config/clipboardbridge. Its firewall rules
+# /etc/cbb/state. The service works on the devices of the lan
+# zone; list other zones in /etc/config/cbb. Its firewall rules
 # come and go with the service (the init script); /etc/config/firewall is
 # not touched. --auto-update on|off (or CBB_AUTO_UPDATE) answers whether the
 # full member updates itself once a day to a signed release, from cron,
@@ -96,9 +96,9 @@ fi
 set +u
 # shellcheck disable=SC1091
 . /lib/functions.sh
-gid=$(group_add_next clipboardbridge)
-if ! user_exists clipboardbridge; then
-	user_add clipboardbridge "" "$gid" "Clipboard Bridge" /var/run/clipboardbridge /bin/false
+gid=$(group_add_next cbb)
+if ! user_exists cbb; then
+	user_add cbb "" "$gid" "CBB" /var/run/cbb /bin/false
 fi
 set -u
 
@@ -108,25 +108,25 @@ put() {
 	chmod "$1" "$3.new"
 	mv -f "$3.new" "$3"
 }
-mkdir -p /usr/share/clipboardbridge /etc/hotplug.d/ntp /lib/upgrade/keep.d /etc/capabilities
+mkdir -p /usr/share/cbb /etc/hotplug.d/ntp /lib/upgrade/keep.d /etc/capabilities
 put 0755 "$bin" /usr/bin/cbb
-put 0755 "$here/clipboardbridge.init" /etc/init.d/clipboardbridge
-put 0644 "$here/clipboardbridge.ntp" /etc/hotplug.d/ntp/50-clipboardbridge
-put 0644 "$here/clipboardbridge.keep" /lib/upgrade/keep.d/clipboardbridge
-put 0644 "$here/clipboardbridge.json" /etc/capabilities/clipboardbridge.json
-put 0644 "$here/firewall.sh" /usr/share/clipboardbridge/firewall.sh
-put 0644 "$here/uninstall.sh" /usr/share/clipboardbridge/uninstall.sh
-if [ ! -f /etc/config/clipboardbridge ]; then
-	put 0644 "$here/clipboardbridge.config" /etc/config/clipboardbridge
+put 0755 "$here/cbb.init" /etc/init.d/cbb
+put 0644 "$here/cbb.ntp" /etc/hotplug.d/ntp/50-cbb
+put 0644 "$here/cbb.keep" /lib/upgrade/keep.d/cbb
+put 0644 "$here/cbb.json" /etc/capabilities/cbb.json
+put 0644 "$here/firewall.sh" /usr/share/cbb/firewall.sh
+put 0644 "$here/uninstall.sh" /usr/share/cbb/uninstall.sh
+if [ ! -f /etc/config/cbb ]; then
+	put 0644 "$here/cbb.config" /etc/config/cbb
 fi
 if [ -n "$port" ]; then
-	uci set clipboardbridge.main.port="$port"
-	uci commit clipboardbridge
+	uci set cbb.main.port="$port"
+	uci commit cbb
 fi
-port=$(uci -q get clipboardbridge.main.port || echo 8764)
-mkdir -p /etc/clipboardbridge/state
-chmod 0700 /etc/clipboardbridge/state
-chown clipboardbridge:clipboardbridge /etc/clipboardbridge/state
+port=$(uci -q get cbb.main.port || echo 8764)
+mkdir -p /etc/cbb/state
+chmod 0700 /etc/cbb/state
+chown cbb:cbb /etc/cbb/state
 # How this copy came, and automatic updates.
 # shellcheck source=packaging/update.sh
 . "$here/../update.sh"
@@ -135,20 +135,20 @@ update_setup /usr/bin/cbb "$bin" "$auto"
 # The router is up and has set its clock long ago; the wait for NTP is for
 # the next boot.
 mkdir -p /var/state
-touch /var/state/clipboardbridge.time
+touch /var/state/cbb.time
 
-/etc/init.d/clipboardbridge enable
+/etc/init.d/cbb enable
 if ! ubus call service list >/dev/null 2>&1; then
 	# A root file system without procd, such as a container.
-	echo "Clipboard Bridge is installed; procd is not running here, so it starts at the next boot."
+	echo "CBB is installed; procd is not running here, so it starts at the next boot."
 	exit 0
 fi
-/etc/init.d/clipboardbridge restart
+/etc/init.d/cbb restart
 
 answers() { # cbb
 	i=0
 	while [ $i -lt 40 ]; do
-		out=$(CBB_SOCKET=/var/run/clipboardbridge/control.sock "$1" status 2>&1) && return 0
+		out=$(CBB_SOCKET=/var/run/cbb/control.sock "$1" status 2>&1) && return 0
 		case $out in *"in a group"* | *"no group"*) return 0 ;; esac
 		sleep 1
 		i=$((i + 1))
@@ -158,10 +158,10 @@ answers() { # cbb
 	return 1
 }
 answers /usr/bin/cbb || true
-echo "Clipboard Bridge is running on TCP port $port, on the lan zone. To remove it: sh /usr/share/clipboardbridge/uninstall.sh"
+echo "CBB is running on TCP port $port, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh"
 echo "Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one."
 if /usr/bin/cbb version 2>/dev/null | grep -q "lite member"; then
-	echo "Next: run su -s /bin/sh clipboardbridge -c 'cbb pair -name router' and scan its QR code with the Clipboard Bridge app on your phone."
+	echo "Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
 else
-	echo "Next: run cbb pair and scan its QR code with the Clipboard Bridge app on your phone."
+	echo "Next: run cbb pair and scan its QR code with the CBB app on your phone."
 fi

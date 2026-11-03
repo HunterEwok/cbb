@@ -27,7 +27,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // The window's tests (docs/testbench-catalogue.md, A5, A8, A9, A15, A16,
@@ -390,7 +390,7 @@ func (w *window) errors(t *testing.T) {
 	w.svc.stop()
 	defer w.svc.start()
 	w.open("en")
-	plain := "The Clipboard Bridge service is not running on this computer."
+	plain := "The CBB service is not running on this computer."
 	w.wait(`$h() === "The service does not answer"`)
 	w.wait(fmt.Sprintf(`$q(".notice p").textContent === %q`, plain))
 

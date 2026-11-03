@@ -20,7 +20,7 @@ func TestInterfacesSetting(t *testing.T) {
 	if names, err := Interfaces(); err != nil || len(names) != 0 {
 		t.Errorf("default: %q %v", names, err)
 	}
-	EnvFile = filepath.Join(dir, "clipboardbridge.env")
+	EnvFile = filepath.Join(dir, "cbb.env")
 	os.WriteFile(EnvFile, []byte("CBB_INTERFACES=\"br-lan, br-iot\"\n"), 0o644)
 	if names, err := Interfaces(); err != nil || !slices.Equal(names, []string{"br-lan", "br-iot"}) {
 		t.Errorf("from the file: %q %v", names, err)

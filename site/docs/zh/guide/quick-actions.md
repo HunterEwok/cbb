@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: ce6e8f0e4357 -->
+<!-- source: 9311cbfc4998 -->
 # 快捷操作
 
 适合想从手机或群组中的另一台电脑锁定、休眠或重启一台电脑的人。管理员只需点一下或敲一条命令就能执行某个操作；设备只有在它自己的用户已在本机开启该操作时才会执行。
@@ -13,7 +13,7 @@
 | `reboot` | 一分钟后重启电脑 | 电脑、轻量成员 |
 | `shutdown` | 一分钟后关闭电脑 | 电脑 |
 | `cancel-shutdown` | 取消待执行的重启或关机 | 电脑、轻量成员 |
-| `restart` | 重启 Clipboard Bridge 服务 | 电脑、轻量成员 |
+| `restart` | 重启 Copy Beyond Borders 服务 | 电脑、轻量成员 |
 | `keyboard-layout` | 在你切换了设备本身的布局之后，把它的[蓝牙键盘](keyboards-and-tvs.md)所用的布局切换到下一个 | 打开了键盘的 Linux 电脑 |
 | 你自己的操作 | 以当前登录的用户身份运行你选定的程序 | 电脑 |
 

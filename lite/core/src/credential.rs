@@ -17,7 +17,7 @@ use p256::ecdsa::signature::Verifier;
 use p256::ecdsa::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
-use crate::certs::{KeyHash, b64, hex, sha256};
+use crate::certs::{KeyHash, b64, sha256};
 use crate::error::{Error, Result};
 use crate::group::Records;
 
@@ -155,9 +155,11 @@ impl Body {
     }
 }
 
-/// The name of a server key at the relay: its hash in hex.
+/// The name of a server key at the relay: its fingerprint, the hash in
+/// standard base64.
 pub fn pseudonym(k: &KeyHash) -> String {
-    hex(k)
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(k)
 }
 
 /// What the group's credentials must list, by member key, as Go's

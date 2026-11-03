@@ -20,9 +20,9 @@ import (
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/ei"
-	"github.com/HunterEwok/clipboardbridge/internal/ei/eitest"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/ei"
+	"github.com/HunterEwok/cbb/internal/ei/eitest"
 )
 
 // fakePortal plays xdg-desktop-portal's RemoteDesktop on a private bus,

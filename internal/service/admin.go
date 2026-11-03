@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
 )
 
 // Admins of a group a computer created (docs/design.md, "Full members,
@@ -62,7 +62,7 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 	case peer.KeyStore == group.StoreRootless || d.Store == group.StoreRootless:
 		return "", fmt.Errorf("%s is installed without root, so every program of its user can read its keys; such a device is never an admin (D-79)", d.Name)
 	case peer.AdminKey == nil:
-		return "", fmt.Errorf("%s offers no admin key: it runs an older Clipboard Bridge, or in a container that may not hold the group's keys (its log says so)", d.Name)
+		return "", fmt.Errorf("%s offers no admin key: it runs an older CBB, or in a container that may not hold the group's keys (its log says so)", d.Name)
 	}
 	store, kind, proof := group.StoreOf(peer.KeyStore, group.RoleFull), "", ""
 	if rec := s.deviceRecord(peer.ID); rec != nil && rec.Key == peer.Key && rec.Store == group.StoreProven {

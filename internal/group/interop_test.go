@@ -20,7 +20,7 @@ import (
 var update = flag.Bool("update", false, "rewrite the interop test vectors")
 
 // TestSwiftCertificates checks the group CA and member certificate that the
-// phone app's ClipboardBridgeKit issues (testdata/interop/swift-certs.json,
+// phone app's CBBKit issues (testdata/interop/swift-certs.json,
 // written by its CertificateTests): a computer must take them as its own
 // identity and use them in member TLS.
 func TestSwiftCertificates(t *testing.T) {
@@ -71,7 +71,7 @@ func TestSwiftCertificates(t *testing.T) {
 	}
 }
 
-// TestSwiftRecords reads the records the phone app's ClipboardBridgeKit signs
+// TestSwiftRecords reads the records the phone app's CBBKit signs
 // (testdata/interop/swift-records.json, or the file in the directory
 // CBB_INTEROP_OUT names, which CI fills from a fresh Swift run) and
 // checks that Go reads the same devices, revocations and digest.
@@ -194,7 +194,7 @@ func TestSwiftRenewal(t *testing.T) {
 }
 
 // TestSwiftAdmin checks what an admin phone makes in the phone app's
-// ClipboardBridgeKit (testdata/interop/swift-admin.json, or the file in
+// CBBKit (testdata/interop/swift-admin.json, or the file in
 // CBB_INTEROP_OUT): its admin CA under the root, a computer's
 // certificate from that CA, which the computer takes as its identity, and
 // records signed through the admin CA.

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Your own build and your own keys
 
-For anyone who builds Clipboard Bridge from source: a distribution package, a fork with
+For anyone who builds Copy Beyond Borders from source: a distribution package, a fork with
 changes, or a build for your own devices. [BRAND.md](../BRAND.md) says what a build with
 changes may call itself; this page says what in the code ties a build to this project's
 releases and how to tie it to your own.
@@ -13,7 +13,7 @@ Every build checks and installs updates from this project unless it is changed:
 - **The release roots**: two public keys pinned in every program
   (`internal/release/roots/roots.pem`). An update installs only when its `keys.json` is
   signed by one of them ([protocol.md](protocol.md), section 16).
-- **The addresses**: GitHub's releases of `HunterEwok/clipboardbridge`, their mirror
+- **The addresses**: GitHub's releases of `HunterEwok/cbb`, their mirror
   `dl.cbb.tools`, and the branch `channel` with the current `keys.json` and `stable.json`.
 
 So there are three cases.

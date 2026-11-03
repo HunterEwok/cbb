@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
+	"github.com/HunterEwok/cbb/internal/clip"
 )
 
 // memContent holds parts in memory.

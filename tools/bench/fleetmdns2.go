@@ -11,7 +11,7 @@ import (
 )
 
 // besideAvahi (D1, the fleet's part): two computers with systemd and
-// avahi-daemon, each in a group of its own. clipboardbridge publishes and
+// avahi-daemon, each in a group of its own. cbb publishes and
 // browses beside avahi, which keeps publishing its host and finds the
 // member's service, and a member never connects to the other group's
 // member it finds.
@@ -45,12 +45,12 @@ func besideAvahi(ctx context.Context, r *Report, f *Fleet, archive string) {
 		return eventually(ctx, 30*time.Second, func() error {
 			for _, d := range ds {
 				if out, err := Run(ctx, d, "systemctl is-active avahi-daemon", ""); err != nil || strings.TrimSpace(out) != "active" {
-					return fmt.Errorf("avahi-daemon on %s is %q beside clipboardbridge", d.Name, strings.TrimSpace(out))
+					return fmt.Errorf("avahi-daemon on %s is %q beside cbb", d.Name, strings.TrimSpace(out))
 				}
 			}
 			// avahi on b finds a's member, with its group in the TXT
 			// record, and a's own host, which avahi on a publishes.
-			out, err := Run(ctx, b, "avahi-browse -rtp _clipboardbridge._tcp", "")
+			out, err := Run(ctx, b, "avahi-browse -rtp _cbb._tcp", "")
 			if err != nil {
 				return err
 			}
@@ -62,7 +62,7 @@ func besideAvahi(ctx context.Context, r *Report, f *Fleet, archive string) {
 				return err
 			}
 			if out, err := Run(ctx, b, "avahi-resolve -4 -n "+strings.TrimSpace(host)+".local", ""); err != nil || !strings.Contains(out, ".local") {
-				return fmt.Errorf("avahi on %s does not resolve %s's host beside clipboardbridge: %q %v", b.Name, a.Name, out, err)
+				return fmt.Errorf("avahi on %s does not resolve %s's host beside cbb: %q %v", b.Name, a.Name, out, err)
 			}
 			return nil
 		})

@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // TestSwiftMemberAdmitsGoJoiner runs the phone app's pairing code against
-// this joiner: clipboardbridge-interop (apps/ios/ClipboardBridgeKit), named by
+// this joiner: cbb-interop (apps/ios/CBBKit), named by
 // CBB_SWIFT_INTEROP, creates a group as the phone does, dials, and
 // admits the Linux joiner without CA keys. The two exchange certificates
 // over plain TCP in place of a TLS handshake, with a fixed session ID; the
@@ -34,7 +34,7 @@ import (
 func TestSwiftMemberAdmitsGoJoiner(t *testing.T) {
 	tool := os.Getenv("CBB_SWIFT_INTEROP")
 	if tool == "" {
-		t.Skip("CBB_SWIFT_INTEROP names no clipboardbridge-interop binary")
+		t.Skip("CBB_SWIFT_INTEROP names no cbb-interop binary")
 	}
 	for _, tc := range []struct {
 		name, code, toolCode string
@@ -100,7 +100,7 @@ func TestSwiftMemberAdmitsGoJoiner(t *testing.T) {
 			if err != nil || string(caDER) != string(id.GroupCA.Cert.Raw) {
 				t.Errorf("the joiner holds another group CA than the phone made")
 			}
-			if ca := id.GroupCA.Cert; ca.MaxPathLen != 1 || !strings.HasPrefix(ca.Subject.CommonName, "clipboardbridge group root ") {
+			if ca := id.GroupCA.Cert; ca.MaxPathLen != 1 || !strings.HasPrefix(ca.Subject.CommonName, "cbb group root ") {
 				t.Errorf("the phone's group CA is %q with path length %d, want its root with 1", ca.Subject.CommonName, ca.MaxPathLen)
 			}
 		})
@@ -144,7 +144,7 @@ func writeBlob(w io.Writer, b []byte) error {
 func TestSwiftMemberAdmitsGoJoinerTLS(t *testing.T) {
 	tool := os.Getenv("CBB_SWIFT_INTEROP_TLS")
 	if tool == "" {
-		t.Skip("CBB_SWIFT_INTEROP_TLS names no clipboardbridge-interop binary")
+		t.Skip("CBB_SWIFT_INTEROP_TLS names no cbb-interop binary")
 	}
 	for _, tc := range []struct {
 		name   string
@@ -198,7 +198,7 @@ func TestSwiftMemberAdmitsGoJoinerTLS(t *testing.T) {
 			if err != nil || string(caDER) != string(id.GroupCA.Cert.Raw) {
 				t.Errorf("the joiner holds another group CA than the phone made")
 			}
-			if ca := id.GroupCA.Cert; ca.MaxPathLen != 1 || !strings.HasPrefix(ca.Subject.CommonName, "clipboardbridge group root ") {
+			if ca := id.GroupCA.Cert; ca.MaxPathLen != 1 || !strings.HasPrefix(ca.Subject.CommonName, "cbb group root ") {
 				t.Errorf("the phone's group CA is %q with path length %d, want its root with 1", ca.Subject.CommonName, ca.MaxPathLen)
 			}
 		})
@@ -214,7 +214,7 @@ func TestSwiftMemberAdmitsGoJoinerTLS(t *testing.T) {
 func TestSwiftHubAdmitsInvitedGoJoiner(t *testing.T) {
 	tool := os.Getenv("CBB_SWIFT_INTEROP_TLS")
 	if tool == "" {
-		t.Skip("CBB_SWIFT_INTEROP_TLS names no clipboardbridge-interop binary")
+		t.Skip("CBB_SWIFT_INTEROP_TLS names no cbb-interop binary")
 	}
 	secret := make([]byte, MinSecret)
 	rand.Read(secret)
@@ -294,7 +294,7 @@ func TestSwiftHubAdmitsInvitedGoJoiner(t *testing.T) {
 func TestSwiftJoinsComputerRoot(t *testing.T) {
 	tool := os.Getenv("CBB_SWIFT_INTEROP_TLS")
 	if tool == "" {
-		t.Skip("CBB_SWIFT_INTEROP_TLS names no clipboardbridge-interop binary")
+		t.Skip("CBB_SWIFT_INTEROP_TLS names no cbb-interop binary")
 	}
 	for _, tc := range []struct {
 		name  string

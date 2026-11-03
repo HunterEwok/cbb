@@ -9,8 +9,8 @@ import Foundation
 /// build signed ad hoc, the app keeps its file in its own Application
 /// Support and the extension finds no group.
 enum Shared {
-    static let appGroup = "group.io.github.hunterewok.clipboardbridge"
-    static let memberLabel = "io.github.hunterewok.clipboardbridge.member"
+    static let appGroup = "group.tools.cbb"
+    static let memberLabel = "tools.cbb.member"
 
     /// The app group's container, or nil without the entitlement. Asked
     /// once: without it, every use of the group's settings would wait on
@@ -21,11 +21,11 @@ enum Shared {
     /// write there, else in the app's own Application Support.
     static var groupFile: URL {
         if let c = container,
-           (try? FileManager.default.createDirectory(at: c.appendingPathComponent("clipboardbridge"), withIntermediateDirectories: true)) != nil {
-            return c.appendingPathComponent("clipboardbridge/group.json")
+           (try? FileManager.default.createDirectory(at: c.appendingPathComponent("cbb"), withIntermediateDirectories: true)) != nil {
+            return c.appendingPathComponent("cbb/group.json")
         }
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("clipboardbridge/group.json")
+            .appendingPathComponent("cbb/group.json")
     }
 
     /// The settings the app and the extension share: the app group's, or

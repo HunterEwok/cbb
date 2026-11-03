@@ -58,8 +58,8 @@ jobs:
             sleep 20
           done
           go run ./tools/release-sign verify "$rel"
-          sh packaging/homebrew/formula.sh "$GITHUB_REF_NAME" "$rel/SHA256SUMS" >"$RUNNER_TEMP/clipboardbridge.rb"
-          cat "$RUNNER_TEMP/clipboardbridge.rb"
+          sh packaging/homebrew/formula.sh "$GITHUB_REF_NAME" "$rel/SHA256SUMS" >"$RUNNER_TEMP/cbb.rb"
+          cat "$RUNNER_TEMP/cbb.rb"
       - name: push it to the tap
         # A deploy key with write access to the tap repository only
         # (docs/maintaining.md, "Homebrew"); without it the tap keeps its formula.
@@ -86,19 +86,19 @@ jobs:
           dry=
           if [ "$GITHUB_REF_TYPE" != tag ]; then
             # A stand-in that never leaves the runner.
-            echo "# a check of the deploy key" >"$tap/Formula/clipboardbridge.rb"
+            echo "# a check of the deploy key" >"$tap/Formula/cbb.rb"
             dry=--dry-run
           else
-            cp "$RUNNER_TEMP/clipboardbridge.rb" "$tap/Formula/clipboardbridge.rb"
+            cp "$RUNNER_TEMP/cbb.rb" "$tap/Formula/cbb.rb"
           fi
           cd "$tap"
-          git add Formula/clipboardbridge.rb
+          git add Formula/cbb.rb
           if git diff --cached --quiet; then
             echo "The tap has this formula already."
             exit 0
           fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -q -m "clipboardbridge $GITHUB_REF_NAME"
+            commit -q -m "cbb $GITHUB_REF_NAME"
           # shellcheck disable=SC2086 # $dry is one word or none
           git push $dry origin HEAD:main
 

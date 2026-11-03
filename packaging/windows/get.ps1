@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs or updates clipboardbridge on Windows from a release, in a
+# Installs or updates cbb on Windows from a release, in a
 # PowerShell opened with "Run as administrator":
 #
-#   irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+#   irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 #
 # Options, which a piped script cannot take, come from the environment:
 # CBB_PORT=N moves the member port from 8764 to N, CBB_HOME_CGNAT=1 counts
 # 100.64.0.0/10 as the home network too (0 goes back), CBB_FIREWALL=express
-# adds the firewall rules clipboardbridge needs without asking and says what
+# adds the firewall rules cbb needs without asking and says what
 # it added, CBB_FIREWALL=no adds none and prints the commands that would
 # (without either, install.ps1 lists the rules and asks), CBB_AUTO_UPDATE=on
 # or off answers whether it updates itself once a day to a signed release
@@ -33,7 +33,7 @@
 	Set-StrictMode -Version 3
 	$ErrorActionPreference = 'Stop'
 	$ProgressPreference = 'SilentlyContinue'
-	$repo = 'https://github.com/HunterEwok/clipboardbridge'
+	$repo = 'https://github.com/HunterEwok/cbb'
 	$step = 'starting'
 	$details = $env:CBB_ERROR_DETAILS -eq '1'
 
@@ -48,7 +48,7 @@
 	# Where the current keys.json and stable.json are: the branch channel,
 	# since a published release takes no new files and these are signed
 	# again while it is current (docs/protocol.md, section 16).
-	$channelFiles = 'https://raw.githubusercontent.com/HunterEwok/clipboardbridge/channel'
+	$channelFiles = 'https://raw.githubusercontent.com/HunterEwok/cbb/channel'
 
 	# The roots the release is checked against; none while CBB_VERIFY=skip.
 	$roots = $releaseRoots
@@ -236,8 +236,8 @@
 		} else {
 			throw 'CBB_VERSION must look like v1.2.3'
 		}
-		$archive = "clipboardbridge-windows-$arch.zip"
-		$tmp = Join-Path ([IO.Path]::GetTempPath()) ("clipboardbridge-" + [Guid]::NewGuid())
+		$archive = "cbb-windows-$arch.zip"
+		$tmp = Join-Path ([IO.Path]::GetTempPath()) ("cbb-" + [Guid]::NewGuid())
 		New-Item -ItemType Directory -Path $tmp | Out-Null
 		try {
 			# The latest release is the one stable.json names, checked below,
@@ -297,7 +297,7 @@
 			}
 			if ($env:CBB_RELEASE_DIR -or $attestation -eq 'skip') {
 			} elseif ($signedIn) {
-				if ((Invoke-Quietly -program $gh.Source -arguments 'attestation', 'verify', (Join-Path $tmp $archive), '--repo', 'HunterEwok/clipboardbridge') -ne 0) {
+				if ((Invoke-Quietly -program $gh.Source -arguments 'attestation', 'verify', (Join-Path $tmp $archive), '--repo', 'HunterEwok/cbb') -ne 0) {
 					throw "$archive does not have this repository's build attestation; not installing it"
 				}
 				Write-Host "The archive's build attestation checks out."
@@ -311,7 +311,7 @@
 			Expand-Archive -Path (Join-Path $tmp $archive) -DestinationPath $tmp
 
 			$step = 'running install.ps1'
-			$arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $tmp 'clipboardbridge\packaging\windows\install.ps1'))
+			$arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $tmp 'cbb\packaging\windows\install.ps1'))
 			if ($env:CBB_PORT) {
 				$arguments += @('-Port', $env:CBB_PORT)
 			}

@@ -18,7 +18,7 @@ import (
 
 	"github.com/jezek/xgb/xproto"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 // TestX11Paste pastes and types into an xterm that writes what it gets to

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/benchtime"
+	"github.com/HunterEwok/cbb/internal/benchtime"
 )
 
 // claimCheck is how often a member looks again at the claims to take the

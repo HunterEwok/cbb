@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 // TestWaylandPaste pastes and types into foot, a Wayland terminal that

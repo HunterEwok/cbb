@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Settings and environment variables
 
-Every setting Clipboard Bridge reads from a file or from the environment. The commands and
+Every setting Copy Beyond Borders reads from a file or from the environment. The commands and
 their flags are in the [command reference](cli.md); where each system keeps its keys,
 state and logs is in [devices, ports and files](devices.md#files-and-logs).
 
@@ -13,12 +13,12 @@ option, so it is set by hand, and the installers and `cbb update` keep that line
 
 | File | Systems | Who writes it | What it holds |
 |---|---|---|---|
-| `/etc/clipboardbridge/clipboardbridge.env` | Linux, macOS, the lite member | the installers (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | `CBB_PORT`, `CBB_HOME_CGNAT`, `CBB_INTERFACES`, one `NAME=value` per line; systemd passes them to the service. A full member's service and `cbb` also read the file themselves; the lite member reads only its environment |
-| `/usr/local/etc/clipboardbridge/clipboardbridge.env` | FreeBSD, OPNsense | the installer | the same as on Linux; rc.d passes them to the service |
-| `HKLM\SYSTEM\CurrentControlSet\Services\clipboardbridge`, the value `Environment` (a multi-string) | Windows | `install.ps1` (`-Port`, `-HomeCgnat`); `CBB_INTERFACES` by hand, which `install.ps1` keeps | the same values as the file on Linux |
-| `/etc/config/clipboardbridge` | OpenWrt | the package, then you (UCI) | `port`, the firewall `zone` list the service works in (it becomes `CBB_INTERFACES`), `wait_ntp` (start once NTP has set the clock), `memlimit` (`GOMEMLIMIT`); apply a change with `/etc/init.d/clipboardbridge reload` |
-| `/etc/clipboardbridge/forward.env` | a server running `cbb forward` | you | `CBB_FORWARD_FLAGS`, see [running your own servers](../admin/self-hosting.md) |
-| `/etc/clipboardbridge/relay.env` | a server running `cbb relay` | you | `CBB_RELAY_FLAGS`, see [running your own servers](../admin/self-hosting.md) |
+| `/etc/cbb/cbb.env` | Linux, macOS, the lite member | the installers (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | `CBB_PORT`, `CBB_HOME_CGNAT`, `CBB_INTERFACES`, one `NAME=value` per line; systemd passes them to the service. A full member's service and `cbb` also read the file themselves; the lite member reads only its environment |
+| `/usr/local/etc/cbb/cbb.env` | FreeBSD, OPNsense | the installer | the same as on Linux; rc.d passes them to the service |
+| `HKLM\SYSTEM\CurrentControlSet\Services\cbb`, the value `Environment` (a multi-string) | Windows | `install.ps1` (`-Port`, `-HomeCgnat`); `CBB_INTERFACES` by hand, which `install.ps1` keeps | the same values as the file on Linux |
+| `/etc/config/cbb` | OpenWrt | the package, then you (UCI) | `port`, the firewall `zone` list the service works in (it becomes `CBB_INTERFACES`), `wait_ntp` (start once NTP has set the clock), `memlimit` (`GOMEMLIMIT`); apply a change with `/etc/init.d/cbb reload` |
+| `/etc/cbb/forward.env` | a server running `cbb forward` | you | `CBB_FORWARD_FLAGS`, see [running your own servers](../admin/self-hosting.md) |
+| `/etc/cbb/relay.env` | a server running `cbb relay` | you | `CBB_RELAY_FLAGS`, see [running your own servers](../admin/self-hosting.md) |
 
 The group's own settings (sync modes, remote paste, quick actions, the hubs, sync away from
 home) are not in these files: they live in the state directory, are changed by `cbb`
@@ -32,12 +32,12 @@ A variable set in the environment wins over the same name in the settings file.
 |---|---|---|
 | `CBB_DEBUG` | `cbb`, the lite member, the tray app | `1` shows the underlying error under each message; `0` hides it in a development build, which shows it by default. The service's log always has the details. In the service's environment, also WireGuard's own messages for sync away from home and the member connections a peer closed or reset. The Mac app and the tray app pass it to `cbb` when their own error details switch is on. |
 | `CBB_PORT` | the service, the lite member's `cbb service`, the installers | The member port, 8764 by default. Change it by running the installer again with `--port N` (`-Port N` on Windows), which keeps it in the settings file. |
-| `CBB_INTERFACES` | the service, the lite member | Network interfaces by name, separated by commas or spaces (`br-lan,br-iot`): mDNS, the member port and a listening join work only there, so that a router never answers on its internet side, even with a private address there or a firewall opened by mistake. Unset or empty, every interface. On OpenWrt the init script sets it from the zones in `/etc/config/clipboardbridge`. |
+| `CBB_INTERFACES` | the service, the lite member | Network interfaces by name, separated by commas or spaces (`br-lan,br-iot`): mDNS, the member port and a listening join work only there, so that a router never answers on its internet side, even with a private address there or a firewall opened by mistake. Unset or empty, every interface. On OpenWrt the init script sets it from the zones in `/etc/config/cbb`. |
 | `CBB_HOME_CGNAT` | the service, the installers | `1` counts 100.64.0.0/10, the carrier-grade NAT range, as the home network too, for a home network that uses it: the service accepts and reaches it, publishes its addresses there, and the installers open it in the firewall and in the system's outbound limit (the systemd drop-in `cgnat.conf` on Linux, the Windows rule). Unset or `0`, it is outside the home network. Set it with `--home-cgnat on` (`off` goes back) or `-HomeCgnat on` on Windows. |
 | `CBB_TPM` | the service on Linux, Windows and macOS | `off` keeps new member and admin keys out of the TPM and a Mac's Secure Enclave, in files; a key already in one stays there. Unset, a computer with a TPM 2.0 or a Secure Enclave makes its keys in it ([keys and attestation](../guide/keys.md)). |
 | `CBB_CONTAINER` | the service | Set by the Docker image: the service runs in a container, whose keys are in a file in its volume, so it makes no group (`cbb new`, `cbb takeover`) and offers no admin key, and the root cannot make it an admin. |
 | `CBB_KEYS_IN_FILE` | the service, in a container | `yes` allows a container to hold the group's keys anyway: to make the group, or to be made an admin and so the hub. Anyone who copies its volume then has those keys. |
-| `CBB_ROOTLESS` | `cbb` on Linux, the lite member too | `1`, set by the user units of a rootless install (`install.sh --rootless`), makes `cbb` use the user's own paths: the socket in `$XDG_RUNTIME_DIR/clipboardbridge`, the state, settings and update folder under the user's home; the service then refuses to be the root, an admin or a hub. Unset, `cbb` in `~/.local/bin` does the same. |
+| `CBB_ROOTLESS` | `cbb` on Linux, the lite member too | `1`, set by the user units of a rootless install (`install.sh --rootless`), makes `cbb` use the user's own paths: the socket in `$XDG_RUNTIME_DIR/cbb`, the state, settings and update folder under the user's home; the service then refuses to be the root, an admin or a hub. Unset, `cbb` in `~/.local/bin` does the same. |
 | `CBB_SOCKET` | `cbb`, the lite member, the Mac app | Another control socket, for tests or a second instance. |
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
 | `CBB_STATE` | the lite member | Another state directory. |
@@ -89,14 +89,14 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_INTEROP_OUT` | the Swift and Kotlin kits' tests, Go's interop tests | A directory where the kits write fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
-| `CBB_UPDATE_VECTORS` | the lite core's keyboard tests | `1` writes the keyboard layouts' vectors again (`cargo test -p clipboardbridge-core keyboard`). |
+| `CBB_UPDATE_VECTORS` | the lite core's keyboard tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
 | `CBB_SOURCE` | the Rust core's build | The commit the core is built from, which its `version` call names ([the core's entry point](../core-api.md)); empty when unset. |
 | `CBB_WRITE_INTEROP` | the Swift kit's certificate tests | Writes the certificates that Go's `TestSwiftCertificates` checks. |
-| `CBB_SWIFT_INTEROP` | Go's interop tests | The `clipboardbridge-interop` tool, which plays the phone in Go tests over plain TCP. |
+| `CBB_SWIFT_INTEROP` | Go's interop tests | The `cbb-interop` tool, which plays the phone in Go tests over plain TCP. |
 | `CBB_SWIFT_INTEROP_TLS` | Go's interop tests, on macOS | The same tool for the tests over real TLS, with a key in the keychain. |
 | `CBB_TEAM` | `apps/ios/device.sh` | The Apple team that signs the iPhone app for your own phone, its 10-character ID; without it the script takes the Personal Team of the Apple ID signed in to Xcode. |
 | `CBB_DEVICE` | `apps/ios/device.sh` | The iPhone to install on, its identifier, when more than one is connected. |
-| `CBB_BUNDLE_ID` | `apps/ios/device.sh` | The app's bundle identifier for that build, `dev.<team>.clipboardbridge` by default, so that it never takes the release one. |
+| `CBB_BUNDLE_ID` | `apps/ios/device.sh` | The app's bundle identifier for that build, `dev.<team>.cbb` by default, so that it never takes the release one. |
 | `CBB_NFC` | `apps/ios/device.sh` | `1` signs that build with NFC (`Nfc.entitlements`), for the recovery key on a YubiKey, where the team's profile may carry it. |
 | `CBB_DERIVED` | `apps/ios/device.sh` | Where the build goes, `/tmp/cbb-device.noindex` by default: a folder the Mac empties at a restart, and Spotlight skips it, so the built apps never show up in a search. |
 | `CBB_LOCK_CHILD`, `CBB_MDNS_CHILD` | Go tests | Set by a test for the child process it starts; never set them yourself. |

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Names, icon and official builds
 
-Clipboard Bridge reads your clipboard, and a clipboard sometimes holds passwords. So you
+Copy Beyond Borders reads your clipboard, and a clipboard sometimes holds passwords. So you
 should always know whose build you install. This page says which builds are official, what
 belongs to the project, and what others may do with it.
 
@@ -10,7 +10,7 @@ belongs to the project, and what others may do with it.
 An official build is one of these:
 
 - a release of this repository, from its
-  [Releases page](https://github.com/HunterEwok/clipboardbridge/releases), built by the
+  [Releases page](https://github.com/HunterEwok/cbb/releases), built by the
   repository's release workflow and described by release files signed with the project's
   release keys ([docs/protocol.md, section 16](docs/protocol.md#16-signed-releases));
 - an app that the maintainer publishes in an app store.
@@ -25,7 +25,7 @@ To check a download:
   repository and the build that made it. With the [GitHub CLI](https://cli.github.com/):
 
   ```sh
-  gh attestation verify clipboardbridge-linux-amd64.tar.gz --repo HunterEwok/clipboardbridge
+  gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
   ```
 
 - The Android app in each release is signed with the project's release key
@@ -43,15 +43,14 @@ To check a download:
 
 ## The name
 
-"Clipboard Bridge" is the name of this project. Other projects, not connected with this
-one, have similar names, for example
-[copypasteengine/clipboard-bridge](https://github.com/copypasteengine/clipboard-bridge) and
-[Mattboxx/Clipboard-Bridge](https://github.com/Mattboxx/Clipboard-Bridge). This project is not
-responsible for them, and they are not responsible for it.
+"Copy Beyond Borders", short "CBB", is the name of this project. The borders are the ones
+between your own devices, never a way around a network's blocks. The project claims no
+exclusive right to "CBB", which others use too, so the full name leads wherever the project
+is listed: "CBB: Copy Beyond Borders" in every store.
 
 ## What you may do without asking
 
-- Talk about the project: "works with Clipboard Bridge", reviews, articles, videos.
+- Talk about the project: "works with Copy Beyond Borders", reviews, articles, videos.
 - Share the official releases unchanged.
 - Package it for a distribution (Debian, Arch, Homebrew and the like), with patches for
   building and packaging, as long as they do not change the protocol, the cryptography or
@@ -82,6 +81,6 @@ the icon, the project's servers and keys, and how a build presents itself, which
 ## Contact
 
 For a [commercial license](README.md#license), open an issue with the **Commercial
-license** form on [GitHub](https://github.com/HunterEwok/clipboardbridge/issues/new/choose):
+license** form on [GitHub](https://github.com/HunterEwok/cbb/issues/new/choose):
 say in a few words who you are and what you need, and the maintainer continues in private.
 Questions about these rules go in an issue with the feature request form.

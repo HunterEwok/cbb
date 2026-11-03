@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Limits and lifetimes
 
-The sizes, rates, timeouts and lifetimes that Clipboard Bridge enforces, in one place. A
+The sizes, rates, timeouts and lifetimes that Copy Beyond Borders enforces, in one place. A
 limit that a device's user can change says so and names the command. The wire format behind
 them is in the [protocol](../protocol.md).
 
@@ -57,7 +57,7 @@ them is in the [protocol](../protocol.md).
 |---|---|
 | The group's CA certificates | 20 years |
 | A member certificate (computers, lite members and phones) | 2 years, renewed 240 days before its end |
-| The `clipboardbridge.local` certificate the iPhone shortcut sees | 397 days (below the 825 days iOS allows), renewed 60 days before its end |
+| The `cbb.local` certificate the iPhone shortcut sees | 397 days (below the 825 days iOS allows), renewed 60 days before its end |
 | A period of the server credentials | 35 days; the root starts the next after 30, which on a phone asks for Face ID or the fingerprint about once a month |
 | A release's signed files (`keys.json`, `release.json`) | at most 100 days |
 | The signed status of the stable release (`stable.json`) | at most 8 days, so an old one cannot hold back an update |

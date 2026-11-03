@@ -14,7 +14,7 @@ it only if its own user turned that action on there.
 | `reboot` | restarts the computer a minute later | computers, the lite member |
 | `shutdown` | shuts the computer down a minute later | computers |
 | `cancel-shutdown` | cancels a pending reboot or shutdown | computers, the lite member |
-| `restart` | restarts the Clipboard Bridge service | computers, the lite member |
+| `restart` | restarts the Copy Beyond Borders service | computers, the lite member |
 | `keyboard-layout` | switches the layout its [Bluetooth keyboard](keyboards-and-tvs.md) types in to the next one, after you switch the device's own | Linux computers with the keyboard on |
 | your own | runs a program you chose, as the user signed in | computers |
 

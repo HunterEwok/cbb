@@ -61,7 +61,7 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
       GOMIPS: ${{ matrix.gomips }}
-      ARCHIVE: clipboardbridge-${{ matrix.goos }}-${{ matrix.name }}.${{ matrix.ext }}
+      ARCHIVE: cbb-${{ matrix.goos }}-${{ matrix.name }}.${{ matrix.ext }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,10 +73,10 @@ jobs:
       - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
         run: |
           CBB_SOURCE="$GITHUB_SHA" sh lite/wasm/build.sh
-          sh lite/packaging/notices.sh wasm32-unknown-unknown clipboardbridge-wasm >"$RUNNER_TEMP/core-notices"
+          sh lite/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
       - name: build
         run: |
-          ldflags="-s -w -X github.com/HunterEwok/clipboardbridge/internal/version.Version=$GITHUB_REF_NAME"
+          ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
           # Every release build runs the Rust core under wazero, never Go's
           # own rules, which only the tests use.
           overlay=$GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json
@@ -121,7 +121,7 @@ jobs:
           trap 'rm -f "$cert" "$pass"' EXIT
           for f in cbb.exe cbbw.exe cbb-desktop.exe; do
             osslsigncode sign -pkcs12 "$cert" -readpass "$pass" -h sha256 \
-              -n clipboardbridge -i https://github.com/HunterEwok/clipboardbridge \
+              -n cbb -i https://github.com/HunterEwok/cbb \
               -ts http://timestamp.digicert.com \
               -in "$RUNNER_TEMP/$f" -out "$RUNNER_TEMP/$f.signed"
             mv "$RUNNER_TEMP/$f.signed" "$RUNNER_TEMP/$f"
@@ -209,9 +209,9 @@ jobs:
           "$apksigner" verify --print-certs app/build/outputs/apk/full/release/app-full-release.apk
           "$apksigner" verify --print-certs app/build/outputs/apk/fdroid/release/app-fdroid-release.apk
           "$apksigner" verify --print-certs wear/build/outputs/apk/release/wear-release.apk
-          cp app/build/outputs/apk/full/release/app-full-release.apk "$RUNNER_TEMP/dist/clipboardbridge-$version.apk"
-          cp app/build/outputs/apk/fdroid/release/app-fdroid-release.apk "$RUNNER_TEMP/dist/clipboardbridge-fdroid-$version.apk"
-          cp wear/build/outputs/apk/release/wear-release.apk "$RUNNER_TEMP/dist/clipboardbridge-wear-$version.apk"
+          cp app/build/outputs/apk/full/release/app-full-release.apk "$RUNNER_TEMP/dist/cbb-$version.apk"
+          cp app/build/outputs/apk/fdroid/release/app-fdroid-release.apk "$RUNNER_TEMP/dist/cbb-fdroid-$version.apk"
+          cp wear/build/outputs/apk/release/wear-release.apk "$RUNNER_TEMP/dist/cbb-wear-$version.apk"
           # What the three are built from (tools/sbom); the Rust core and the Go
           # tunnel inside them are in the release's other bills of materials.
           ./gradlew --no-daemon --no-configuration-cache --init-script ../../packaging/sbom.init.gradle.kts \
@@ -235,7 +235,7 @@ jobs:
       security-events: write
 
   lite:
-    name: build (clipboardbridge-lite-linux-${{ matrix.name }})
+    name: build (cbb-lite-linux-${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -245,7 +245,7 @@ jobs:
           - { target: aarch64-unknown-linux-musl, name: arm64 }
           - { target: arm-unknown-linux-musleabihf, name: armv6 }
     env:
-      ARCHIVE: clipboardbridge-lite-linux-${{ matrix.name }}.tar.gz
+      ARCHIVE: cbb-lite-linux-${{ matrix.name }}.tar.gz
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -267,7 +267,7 @@ jobs:
           retention-days: 1
 
   litemips:
-    name: build (clipboardbridge-lite-linux-${{ matrix.name }}, no tunnel)
+    name: build (cbb-lite-linux-${{ matrix.name }}, no tunnel)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -276,7 +276,7 @@ jobs:
           - { target: mips-unknown-linux-musl, arch: mips, name: mips }
           - { target: mipsel-unknown-linux-musl, arch: mipsel, name: mipsle }
     env:
-      ARCHIVE: clipboardbridge-lite-linux-${{ matrix.name }}.tar.gz
+      ARCHIVE: cbb-lite-linux-${{ matrix.name }}.tar.gz
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -314,7 +314,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: ${{ runner.temp }}/dist
-          pattern: clipboardbridge-linux-*
+          pattern: cbb-linux-*
           merge-multiple: true
       - name: build and sign the feed in Alpine, whose apk has mkpkg
         env:
@@ -335,7 +335,7 @@ jobs:
           docker run --rm -v "$RUNNER_TEMP/dist:/dist:ro" -v "$PWD:/src:ro" -v "$key:/key:ro" -v "$RUNNER_TEMP/feed:/feed" \
             alpine:3.23@sha256:3d67941fed5ae436b2bb9791cb3f50a252441c7706bbc5b4e738936df8ff8306 \
             sh /src/packaging/openwrt/feed.sh "$tag" /dist /feed /key/private.pem
-          openssl ec -in "$key/private.pem" -pubout -out "$RUNNER_TEMP/feed/clipboardbridge.pem" 2>/dev/null
+          openssl ec -in "$key/private.pem" -pubout -out "$RUNNER_TEMP/feed/cbb.pem" 2>/dev/null
           mkdir -p "$RUNNER_TEMP/out"
           tar -czf "$RUNNER_TEMP/out/openwrt-feed.tar.gz" -C "$RUNNER_TEMP/feed" .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -372,15 +372,15 @@ jobs:
         # Swift kit's packages. The Android apps' came with their APKs.
         run: |
           go run ./tools/sbom go -o dist/sbom-go.cdx.json -version "$GITHUB_REF_NAME" \
-            dist/clipboardbridge-linux-*.tar.gz dist/clipboardbridge-darwin-*.tar.gz \
-            dist/clipboardbridge-freebsd-*.tar.gz dist/clipboardbridge-windows-*.zip
+            dist/cbb-linux-*.tar.gz dist/cbb-darwin-*.tar.gz \
+            dist/cbb-freebsd-*.tar.gz dist/cbb-windows-*.zip
           go run ./tools/sbom cargo -o dist/sbom-lite.cdx.json -version "$GITHUB_REF_NAME" -manifest lite/Cargo.toml \
-            -package clipboardbridge-lite \
+            -package cbb-lite \
             -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl
           go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$GITHUB_REF_NAME" -manifest lite/Cargo.toml \
-            -package clipboardbridge-ffi \
+            -package cbb-ffi \
             -target aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-          go run ./tools/sbom swift -o dist/sbom-ios-kit.cdx.json -version "$GITHUB_REF_NAME" apps/ios/ClipboardBridgeKit/Package.resolved
+          go run ./tools/sbom swift -o dist/sbom-ios-kit.cdx.json -version "$GITHUB_REF_NAME" apps/ios/CBBKit/Package.resolved
       - name: checksums
         run: |
           cp packaging/get.sh packaging/windows/get.ps1 dist/
@@ -415,7 +415,7 @@ jobs:
           # A draft: the maintainer signs it and publishes it on their Mac with
           # release-sign publish (docs/maintaining.md, "Signed releases").
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
-            --title "clipboardbridge $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" \
+            --title "cbb $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" \
             --generate-notes --verify-tag --draft $prerelease
 
   docker:
@@ -431,14 +431,14 @@ jobs:
       id-token: write # sign the attestation
       attestations: write
     env:
-      IMAGE: ghcr.io/hunterewok/clipboardbridge
+      IMAGE: ghcr.io/hunterewok/cbb
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: clipboardbridge-linux-*
+          pattern: cbb-linux-*
           path: dist
           merge-multiple: true
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -448,16 +448,16 @@ jobs:
       - name: the image's bill of materials, from the programs in it (tools/sbom)
         run: |
           go run ./tools/sbom go -o "$RUNNER_TEMP/image.cdx.json" -name "$IMAGE" -version "$GITHUB_REF_NAME" \
-            dist/clipboardbridge-linux-amd64.tar.gz dist/clipboardbridge-linux-arm64.tar.gz dist/clipboardbridge-linux-armv7.tar.gz
+            dist/cbb-linux-amd64.tar.gz dist/cbb-linux-arm64.tar.gz dist/cbb-linux-armv7.tar.gz
       - name: the build context
         run: |
           for a in amd64 arm64 armv7; do
             mkdir -p "$RUNNER_TEMP/$a"
-            tar -xzf "dist/clipboardbridge-linux-$a.tar.gz" -C "$RUNNER_TEMP/$a"
+            tar -xzf "dist/cbb-linux-$a.tar.gz" -C "$RUNNER_TEMP/$a"
           done
           t=$RUNNER_TEMP
-          sh packaging/docker/context.sh "$t/image" amd64="$t/amd64/clipboardbridge/cbb" arm64="$t/arm64/clipboardbridge/cbb" \
-            armv7="$t/armv7/clipboardbridge/cbb" notices="$t/amd64/clipboardbridge/THIRD_PARTY_NOTICES"
+          sh packaging/docker/context.sh "$t/image" amd64="$t/amd64/cbb/cbb" arm64="$t/arm64/cbb/cbb" \
+            armv7="$t/armv7/cbb/cbb" notices="$t/amd64/cbb/THIRD_PARTY_NOTICES"
       - name: build and push
         id: push
         env:

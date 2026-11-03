@@ -44,8 +44,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/clipboardbridge/internal/hlc"
-	"github.com/HunterEwok/clipboardbridge/internal/uptime"
+	"github.com/HunterEwok/cbb/internal/hlc"
+	"github.com/HunterEwok/cbb/internal/uptime"
 )
 
 const (
@@ -138,7 +138,7 @@ func (v *Via) UnmarshalText(b []byte) error {
 	switch string(b) {
 	case "copy":
 		*v = Copy
-	case "phone", "iphone": // iphone: the name before phones other than the iPhone
+	case "phone":
 		*v = Phone
 	case "universal-clipboard":
 		*v = Universal
@@ -282,7 +282,7 @@ type Engine struct {
 	rejoinAt    time.Duration  // uptime of the last Rejoin
 }
 
-// localText is the text of the member's own clipboard, as far as clipboardbridge
+// localText is the text of the member's own clipboard, as far as cbb
 // knows it: the last local copy or the last text it wrote there.
 type localText struct {
 	text  string // empty when unknown, or media without a text
@@ -359,7 +359,7 @@ func (e *Engine) Current() (Event, bool) {
 	return e.withAge(), true
 }
 
-// Local returns the text of this member's own clipboard, as far as clipboardbridge
+// Local returns the text of this member's own clipboard, as far as cbb
 // knows it, and how long ago it was copied. cbb paste and the iPhone
 // button use it. It reports false when unknown or an expired secret; for
 // images or files, their plain-text alternative, as a Text.
@@ -379,7 +379,7 @@ func (e *Engine) Local() (string, Kind, time.Duration, bool) {
 // LocalMedia returns the images or files of this member's own clipboard,
 // with their plain-text alternative and how long ago they were copied:
 // what cbb paste -o writes. It reports false when the clipboard holds no
-// media, as far as clipboardbridge knows.
+// media, as far as cbb knows.
 func (e *Engine) LocalMedia() (*Manifest, string, time.Duration, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

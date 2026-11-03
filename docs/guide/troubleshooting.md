@@ -5,19 +5,19 @@ Start with `cbb status` on the device that misbehaves: it says whether the servi
 group it is in, which members are connected and the state of sync away from home. Each
 message is short; `CBB_DEBUG=1 cbb status` (on Windows `$env:CBB_DEBUG = "1"` first) shows
 the underlying error under it. The service's log always has the details: on Linux
-`journalctl -u clipboardbridge`, and the desktop connector's in the session's journal,
+`journalctl -u cbb`, and the desktop connector's in the session's journal,
 `journalctl --user`; the other systems are in [files and logs](../reference/devices.md#files-and-logs).
 The details switch of every part, the apps and the installers included, is in
 [error messages and details](../reference/errors.md).
 
 ## Commands
 
-**"the Clipboard Bridge service is not running"**: start it
-(`sudo systemctl start clipboardbridge` on Linux; `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`
-on a Mac; `Start-Service clipboardbridge` on Windows) and look at its log.
+**"the CBB service is not running"**: start it
+(`sudo systemctl start cbb` on Linux; `sudo launchctl kickstart -k system/tools.cbb`
+on a Mac; `Start-Service cbb` on Windows) and look at its log.
 
 **"permission denied" on the control socket, right after installing**: the installer added
-you to the `clipboardbridge` group, and a group counts only from the next login. Log out and
+you to the `cbb` group, and a group counts only from the next login. Log out and
 in again (on Windows, open a new terminal); until then, `sudo cbb ...` works.
 
 ## Devices do not see each other
@@ -44,7 +44,7 @@ in again (on Windows, open a new terminal); until then, `sudo cbb ...` works.
 - **The phone cannot reach the computer after scanning its QR code**: the phone and the
   computer must be on the same network, and the computer's port must be open (above). On
   iOS, allow Local Network for the app (Settings, Privacy & Security, Local Network).
-- **The shortcut cannot reach `clipboardbridge.local`**: only the group's root and admin
+- **The shortcut cannot reach `cbb.local`**: only the group's root and admin
   computers serve it, on port 8764 only; at least one must be on (`cbb status` on each
   computer says whether it answers). Check that the profile is installed and fully
   trusted ([Without the app](without-app.md#3-add-an-iphone-with-the-shortcut)).
@@ -60,10 +60,10 @@ blocks VPNs needs [AmneziaWG or VLESS](blocked-networks.md). With `CBB_DEBUG=1` 
 environment the log also shows WireGuard's handshakes. On Linux:
 
 ```sh
-sudo systemctl edit clipboardbridge     # add the two lines below, save
+sudo systemctl edit cbb     # add the two lines below, save
 # [Service]
 # Environment=CBB_DEBUG=1
-sudo systemctl restart clipboardbridge
+sudo systemctl restart cbb
 ```
 
 ## Android
@@ -75,7 +75,7 @@ sudo systemctl restart clipboardbridge
 
 ## Still stuck
 
-Open an [issue](https://github.com/HunterEwok/clipboardbridge/issues) with the output of
+Open an [issue](https://github.com/HunterEwok/cbb/issues) with the output of
 `CBB_DEBUG=1 cbb status`, the relevant part of the log and the systems involved. Remove
 anything you copied that is private. Security problems go to [SECURITY.md](../../SECURITY.md)
 instead.

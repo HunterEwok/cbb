@@ -15,7 +15,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/clipboardbridge/internal/jsonnum"
+	"github.com/HunterEwok/cbb/internal/jsonnum"
 )
 
 // maxStrictDepth bounds how deeply a signed body nests arrays and objects.

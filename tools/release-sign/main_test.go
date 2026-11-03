@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // call runs a command and returns what it wrote.
@@ -65,25 +65,25 @@ func archives(t *testing.T, dir string) {
 	for _, f := range []struct {
 		name string
 		mode int64
-	}{{"clipboardbridge/cbb", 0o755}, {"clipboardbridge/LICENSE", 0o644}, {"clipboardbridge/packaging/linux/install.sh", 0o755}} {
+	}{{"cbb/cbb", 0o755}, {"cbb/LICENSE", 0o644}, {"cbb/packaging/linux/install.sh", 0o755}} {
 		tw.WriteHeader(&tar.Header{Name: f.name, Mode: f.mode, Size: 4, Typeflag: tar.TypeReg})
 		tw.Write([]byte("data"))
 	}
 	tw.Close()
 	gz.Close()
-	write(t, filepath.Join(dir, "clipboardbridge-linux-amd64.tar.gz"), tgz.Bytes())
+	write(t, filepath.Join(dir, "cbb-linux-amd64.tar.gz"), tgz.Bytes())
 	var z bytes.Buffer
 	zw := zip.NewWriter(&z)
-	for _, name := range []string{"clipboardbridge/cbb.exe", "clipboardbridge/cbbw.exe", "clipboardbridge/LICENSE"} {
+	for _, name := range []string{"cbb/cbb.exe", "cbb/cbbw.exe", "cbb/LICENSE"} {
 		w, _ := zw.Create(name)
 		w.Write([]byte(name))
 	}
 	zw.Close()
-	write(t, filepath.Join(dir, "clipboardbridge-windows-amd64.zip"), z.Bytes())
+	write(t, filepath.Join(dir, "cbb-windows-amd64.zip"), z.Bytes())
 	// A software bill of materials is JSON, and one of the release's files.
 	write(t, filepath.Join(dir, "sbom-go.cdx.json"), []byte(`{"bomFormat":"CycloneDX"}`))
 	var sums strings.Builder
-	for _, name := range []string{"clipboardbridge-linux-amd64.tar.gz", "clipboardbridge-windows-amd64.zip", "sbom-go.cdx.json"} {
+	for _, name := range []string{"cbb-linux-amd64.tar.gz", "cbb-windows-amd64.zip", "sbom-go.cdx.json"} {
 		sum := sha256.Sum256(must(os.ReadFile(filepath.Join(dir, name))))
 		fmt.Fprintf(&sums, "%x  %s\n", sum, name)
 	}
@@ -100,7 +100,7 @@ func TestFlow(t *testing.T) {
 	archives(t, dist)
 
 	body := write(t, filepath.Join(keysDir, "release.body"),
-		call(t, manifest, "-version", "v0.6.0", "-min-from", "0.5.0", "-docker", "ghcr.io/x/clipboardbridge@sha256:"+strings.Repeat("ab", 32), dist))
+		call(t, manifest, "-version", "v0.6.0", "-min-from", "0.5.0", "-docker", "ghcr.io/x/cbb@sha256:"+strings.Repeat("ab", 32), dist))
 	var r release.Release
 	if err := json.Unmarshal(must(os.ReadFile(body)), &r); err != nil {
 		t.Fatal(err)
@@ -108,11 +108,11 @@ func TestFlow(t *testing.T) {
 	if _, ok := r.Asset("sbom-go.cdx.json"); r.Version != "0.6.0" || len(r.Files) != 4 || !ok {
 		t.Fatalf("the manifest is %+v", r)
 	}
-	tgz, _ := r.Asset("clipboardbridge-linux-amd64.tar.gz")
-	if len(tgz.Binaries) != 1 || tgz.Binaries[0].Name != "clipboardbridge/cbb" {
+	tgz, _ := r.Asset("cbb-linux-amd64.tar.gz")
+	if len(tgz.Binaries) != 1 || tgz.Binaries[0].Name != "cbb/cbb" {
 		t.Errorf("the tar.gz lists %+v", tgz.Binaries)
 	}
-	z, _ := r.Asset("clipboardbridge-windows-amd64.zip")
+	z, _ := r.Asset("cbb-windows-amd64.zip")
 	if len(z.Binaries) != 2 {
 		t.Errorf("the zip lists %+v", z.Binaries)
 	}
@@ -197,8 +197,8 @@ func TestCheckSums(t *testing.T) {
 		return fmt.Sprintf("%x", s)
 	}
 	r := release.Release{Files: []release.Asset{
-		{Name: "clipboardbridge-linux-amd64.tar.gz", SHA256: sum("clipboardbridge-linux-amd64.tar.gz")},
-		{Name: "clipboardbridge-windows-amd64.zip", SHA256: sum("clipboardbridge-windows-amd64.zip")},
+		{Name: "cbb-linux-amd64.tar.gz", SHA256: sum("cbb-linux-amd64.tar.gz")},
+		{Name: "cbb-windows-amd64.zip", SHA256: sum("cbb-windows-amd64.zip")},
 		{Name: "SHA256SUMS", SHA256: sum("SHA256SUMS")},
 	}}
 	if err := checkSums(dir, r); err != nil {
@@ -209,9 +209,9 @@ func TestCheckSums(t *testing.T) {
 	if checkSums(dir, r) == nil {
 		t.Error("took a manifest that disagrees with SHA256SUMS")
 	}
-	r.Files[1].SHA256 = sum("clipboardbridge-windows-amd64.zip")
+	r.Files[1].SHA256 = sum("cbb-windows-amd64.zip")
 	// A line whose file changed.
-	write(t, filepath.Join(dir, "clipboardbridge-windows-amd64.zip"), []byte("other"))
+	write(t, filepath.Join(dir, "cbb-windows-amd64.zip"), []byte("other"))
 	if checkSums(dir, r) == nil {
 		t.Error("took a file SHA256SUMS gives another sum")
 	}

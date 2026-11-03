@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/uptime"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/uptime"
 )
 
 // Window is an open pairing window for an iPhone: a six-digit code that the
@@ -137,15 +137,15 @@ func Profile(ca *group.CA) []byte {
 	<array>
 		<dict>
 			<key>PayloadCertificateFileName</key>
-			<string>clipboardbridge-iphone-ca.cer</string>
+			<string>cbb-iphone-ca.cer</string>
 			<key>PayloadContent</key>
 			<data>` + der + `</data>
 			<key>PayloadDescription</key>
-			<string>Lets the Clipboard Bridge shortcut reach clipboardbridge.local. The certificate is limited to that name.</string>
+			<string>Lets the CBB shortcut reach cbb.local. The certificate is limited to that name.</string>
 			<key>PayloadDisplayName</key>
 			<string>` + template.HTMLEscapeString(ca.Cert.Subject.CommonName) + `</string>
 			<key>PayloadIdentifier</key>
-			<string>io.github.hunterewok.clipboardbridge.ca</string>
+			<string>tools.cbb.ca</string>
 			<key>PayloadType</key>
 			<string>com.apple.security.root</string>
 			<key>PayloadUUID</key>
@@ -155,11 +155,11 @@ func Profile(ca *group.CA) []byte {
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>Trust for Clipboard Bridge on this home network.</string>
+	<string>Trust for CBB on this home network.</string>
 	<key>PayloadDisplayName</key>
-	<string>Clipboard Bridge</string>
+	<string>CBB</string>
 	<key>PayloadIdentifier</key>
-	<string>io.github.hunterewok.clipboardbridge</string>
+	<string>tools.cbb</string>
 	<key>PayloadRemovalDisallowed</key>
 	<false/>
 	<key>PayloadType</key>
@@ -177,9 +177,9 @@ func Profile(ca *group.CA) []byte {
 // that walks the user through the steps, the profile, and the shortcut.
 func ProfileHandler(ca *group.CA) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /clipboardbridge.mobileconfig", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /cbb.mobileconfig", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-apple-aspen-config")
-		w.Header().Set("Content-Disposition", `attachment; filename="clipboardbridge.mobileconfig"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="cbb.mobileconfig"`)
 		w.Write(Profile(ca))
 	})
 	for _, name := range []string{SyncShortcut} {
@@ -258,7 +258,7 @@ func pairJSON(w http.ResponseWriter, r *http.Request, wd *Window) {
 	}
 	var req pairRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.V.String() != "1" {
-		reply(pairReply{Message: "The shortcut is from another version of clipboardbridge; install it again."})
+		reply(pairReply{Message: "The shortcut is from another version of cbb; install it again."})
 		return
 	}
 	if wd == nil {
@@ -301,7 +301,7 @@ func page(w http.ResponseWriter, t *template.Template, data map[string]string) {
 
 const pageHead = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>clipboardbridge</title>
+<title>cbb</title>
 <style>body{font:17px -apple-system,system-ui,sans-serif;margin:24px;max-width:36em;line-height:1.45}
 input,button{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #888}
 code{word-break:break-all;font-size:15px}.err{color:#b00020}.fp{font:20px ui-monospace,monospace}
@@ -310,17 +310,17 @@ code{word-break:break-all;font-size:15px}.err{color:#b00020}.fp{font:20px ui-mon
 </head><body>`
 
 var profilePage = template.Must(template.New("profile").Parse(pageHead + `
-<h1>clipboardbridge on this iPhone</h1>
+<h1>cbb on this iPhone</h1>
 <ol>
-<li><p><a class="btn" href="/clipboardbridge.mobileconfig">Install the profile</a></p>
+<li><p><a class="btn" href="/cbb.mobileconfig">Install the profile</a></p>
 <p>Allow the download, then open Settings: the profile waits at the top, under <b>Profile Downloaded</b>. Tap <b>Install</b>.</p></li>
-<li><p>In Settings &rsaquo; General &rsaquo; VPN &amp; Device Management &rsaquo; clipboardbridge &rsaquo; More Details, compare the SHA-256 fingerprint with the one in the <b>computer's terminal</b>, where <code>cbb pair -phone</code> runs. This page cannot show it: it comes over plain HTTP, and anyone on the network could change it.</p>
+<li><p>In Settings &rsaquo; General &rsaquo; VPN &amp; Device Management &rsaquo; cbb &rsaquo; More Details, compare the SHA-256 fingerprint with the one in the <b>computer's terminal</b>, where <code>cbb pair -phone</code> runs. This page cannot show it: it comes over plain HTTP, and anyone on the network could change it.</p>
 <p>If the fingerprint does not start with what the terminal shows, remove the profile and stop: someone else is answering. Do not turn on full trust for it.</p></li>
-<li><p>Settings &rsaquo; General &rsaquo; About &rsaquo; Certificate Trust Settings: turn on <b>clipboardbridge</b>. Without it, the shortcut reports that it cannot make a secure connection.</p></li>
-{{if .Shortcut}}<li><p><a class="btn" href="/clipboardbridge.shortcut">Add the shortcut</a></p>
+<li><p>Settings &rsaquo; General &rsaquo; About &rsaquo; Certificate Trust Settings: turn on <b>cbb</b>. Without it, the shortcut reports that it cannot make a secure connection.</p></li>
+{{if .Shortcut}}<li><p><a class="btn" href="/cbb.shortcut">Add the shortcut</a></p>
 <p>Then run it once: it asks for the six-digit code that the computer shows, and remembers this iPhone.</p></li>
-{{else}}<li><p>Add the clipboardbridge shortcut from the release page, run it once, and type the six-digit code that the computer shows.</p></li>
-{{end}}<li><p>Put the shortcut on Back Tap: Settings &rsaquo; Accessibility &rsaquo; Touch &rsaquo; Back Tap &rsaquo; Double Tap &rsaquo; clipboardbridge. On an iPhone with an Action button, use that instead.</p></li>
+{{else}}<li><p>Add the cbb shortcut from the release page, run it once, and type the six-digit code that the computer shows.</p></li>
+{{end}}<li><p>Put the shortcut on Back Tap: Settings &rsaquo; Accessibility &rsaquo; Touch &rsaquo; Back Tap &rsaquo; Double Tap &rsaquo; cbb. On an iPhone with an Action button, use that instead.</p></li>
 </ol>
 </body></html>`))
 
@@ -336,7 +336,7 @@ var codePage = template.Must(template.New("code").Parse(pageHead + `
 
 var tokenPage = template.Must(template.New("token").Parse(pageHead + `
 <h1>Paired</h1>
-<p>Install the clipboardbridge shortcut and paste this token when it asks for it:</p>
+<p>Install the cbb shortcut and paste this token when it asks for it:</p>
 <p><code>{{.Token}}</code></p>
 <p>Keep it private: it lets the shortcut use the group's clipboard. Then assign the shortcut to the Action button or to Back Tap.</p>
 </body></html>`))

@@ -335,7 +335,7 @@ func stolenAdmin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 			return err
 		}
 		defer os.RemoveAll(dir)
-		if _, err := docker(ctx, "cp", admin.Container+":/var/lib/clipboardbridge/.", dir); err != nil {
+		if _, err := docker(ctx, "cp", admin.Container+":/var/lib/cbb/.", dir); err != nil {
 			return err
 		}
 		if err := f.stop(ctx, admin); err != nil {
@@ -344,7 +344,7 @@ func stolenAdmin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 		if err := f.stop(ctx, thief); err != nil {
 			return err
 		}
-		if _, err := docker(ctx, "cp", dir+"/.", thief.Container+":/var/lib/clipboardbridge/"); err != nil {
+		if _, err := docker(ctx, "cp", dir+"/.", thief.Container+":/var/lib/cbb/"); err != nil {
 			return err
 		}
 		return f.start(ctx, thief)

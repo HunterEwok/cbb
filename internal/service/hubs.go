@@ -14,12 +14,12 @@ import (
 	"slices"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
-	"github.com/HunterEwok/clipboardbridge/internal/uptime"
-	"github.com/HunterEwok/clipboardbridge/internal/vless"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/uptime"
+	"github.com/HunterEwok/cbb/internal/vless"
 )
 
 // Several hubs (docs/protocol.md, section 11, "Several hubs"): the group's

@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/crypto/chacha20"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // An obfuscated group's packets (docs/design.md, "Blocked networks") start

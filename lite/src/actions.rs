@@ -221,7 +221,7 @@ pub fn run(name: &str) -> std::result::Result<(), Failure> {
     let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
     if denied(&said) {
         return Err(Failure::Refused(format!(
-            "this device's user has not given Clipboard Bridge the right to {name}; they run sudo cbb action enable {name} there"
+            "this device's user has not given CBB the right to {name}; they run sudo cbb action enable {name} there"
         )));
     }
     Err(Failure::Failed(Error::msg(format!("{bin} {}: {} {said}", args.join(" "), out.status))))
@@ -233,7 +233,7 @@ fn denied(said: &str) -> bool {
 }
 
 /// The service's user, which the polkit rule lets act.
-const SERVICE_USER: &str = "clipboardbridge";
+const SERVICE_USER: &str = "cbb";
 
 /// The polkit actions of each preset that needs one: a reboot while
 /// someone is logged in needs the multiple-sessions right too, and
@@ -269,11 +269,8 @@ pub fn grant(root: &Path, on: &[String]) -> Result<PathBuf> {
     }
     // The old polkit has the local authority and no rules directory.
     let js = rules.exists() || !pkla.parent().is_some_and(Path::exists);
-    let (path, data) = if js {
-        (rules.join("60-clipboardbridge.rules"), js_rule(&ids))
-    } else {
-        (pkla.join("clipboardbridge.pkla"), pkla_rule(&ids))
-    };
+    let (path, data) =
+        if js { (rules.join("60-cbb.rules"), js_rule(&ids)) } else { (pkla.join("cbb.pkla"), pkla_rule(&ids)) };
     if ids.is_empty() {
         match std::fs::remove_file(&path) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
@@ -291,7 +288,7 @@ pub fn grant(root: &Path, on: &[String]) -> Result<PathBuf> {
 fn js_rule(ids: &[&str]) -> String {
     let q: Vec<String> = ids.iter().map(|id| format!("\"{id}\"")).collect();
     format!(
-        "// Written by cbb action enable: lets the Clipboard Bridge service ask logind
+        "// Written by cbb action enable: lets the CBB service ask logind
 // for the quick actions this computer's user turned on, and nothing else.
 polkit.addRule(function (action, subject) {{
 \tif (subject.user != \"{SERVICE_USER}\") return polkit.Result.NOT_HANDLED;
@@ -305,9 +302,9 @@ polkit.addRule(function (action, subject) {{
 
 fn pkla_rule(ids: &[&str]) -> String {
     format!(
-        "# Written by cbb action enable: lets the Clipboard Bridge service ask logind
+        "# Written by cbb action enable: lets the CBB service ask logind
 # for the quick actions this computer's user turned on, and nothing else.
-[Clipboard Bridge quick actions]
+[CBB quick actions]
 Identity=unix-user:{SERVICE_USER}
 Action={}
 ResultAny=yes
@@ -433,19 +430,19 @@ mod tests {
         std::fs::create_dir_all(dir.join("etc/polkit-1/rules.d")).unwrap();
         let path = grant(&dir, &[REBOOT.into(), RESTART.into()]).unwrap();
         let rule = std::fs::read_to_string(&path).unwrap();
-        assert!(path.ends_with("60-clipboardbridge.rules"));
+        assert!(path.ends_with("60-cbb.rules"));
         assert!(rule.contains(
             r#"var allowed = ["org.freedesktop.login1.reboot", "org.freedesktop.login1.reboot-multiple-sessions"];"#
         ));
-        assert!(rule.contains(r#"subject.user != "clipboardbridge""#));
+        assert!(rule.contains(r#"subject.user != "cbb""#));
         grant(&dir, &[RESTART.into()]).unwrap();
         assert!(!path.exists(), "the rule goes with the last right");
         let old = temp("pkla");
         std::fs::create_dir_all(old.join("etc/polkit-1/localauthority")).unwrap();
         let path = grant(&old, &[REBOOT.into()]).unwrap();
-        assert!(path.ends_with("clipboardbridge.pkla"));
+        assert!(path.ends_with("cbb.pkla"));
         assert!(std::fs::read_to_string(&path).unwrap().contains(
-            "Identity=unix-user:clipboardbridge\nAction=org.freedesktop.login1.reboot;org.freedesktop.login1.reboot-multiple-sessions\n"
+            "Identity=unix-user:cbb\nAction=org.freedesktop.login1.reboot;org.freedesktop.login1.reboot-multiple-sessions\n"
         ));
         std::fs::remove_dir_all(&dir).unwrap();
         std::fs::remove_dir_all(&old).unwrap();

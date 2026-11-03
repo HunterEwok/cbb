@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The Mac app's Xcode project, for XcodeGen: cd apps/macos && xcodegen generate.
-# The generated ClipboardBridgeMac.xcodeproj and Info.plist are not committed.
-name: ClipboardBridgeMac
+# The generated CBBMac.xcodeproj and Info.plist are not committed.
+name: CBBMac
 options:
-  bundleIdPrefix: io.github.hunterewok
+  bundleIdPrefix: tools.cbb
   deploymentTarget:
     macOS: "14.0"
   developmentLanguage: en
@@ -16,20 +16,20 @@ settings:
     SWIFT_EMIT_LOC_STRINGS: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 targets:
-  ClipboardBridgeMac:
+  CBBMac:
     type: application
     platform: macOS
     sources:
-      - ClipboardBridgeMac
+      - CBBMac
       # The phone's colours and glass.
-      - ../ios/ClipboardBridge/Theme
+      - ../ios/CBB/Theme
       # The arrangement of the tiles, the same model as the phone's.
-      - ../ios/ClipboardBridgeKit/Sources/ClipboardBridgeKit/Arrangement.swift
+      - ../ios/CBBKit/Sources/CBBKit/Arrangement.swift
     info:
-      path: ClipboardBridgeMac/Info.plist
+      path: CBBMac/Info.plist
       properties:
         CFBundleName: CBB
-        CFBundleDisplayName: Clipboard Bridge
+        CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ru]
         LSApplicationCategoryType: public.app-category.utilities
@@ -38,11 +38,11 @@ targets:
         LSUIElement: true
         # The type of a dragged tile, which stays in the app (Views/Arrange.swift).
         UTExportedTypeDeclarations:
-          - UTTypeIdentifier: io.github.hunterewok.clipboardbridge.mac.tile
+          - UTTypeIdentifier: tools.cbb.mac.tile
             UTTypeConformsTo: [public.data]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.hunterewok.clipboardbridge.mac
+        PRODUCT_BUNDLE_IDENTIFIER: tools.cbb.mac
         PRODUCT_NAME: CBB
         # Drawn by tools/icon.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -55,13 +55,13 @@ targets:
         # load into the app signed ad hoc.
         Release:
           ENABLE_HARDENED_RUNTIME: YES
-  ClipboardBridgeMacTests:
+  CBBMacTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - ClipboardBridgeMacTests
+      - CBBMacTests
     dependencies:
-      - target: ClipboardBridgeMac
+      - target: CBBMac
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -69,28 +69,28 @@ targets:
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/CBB.app/Contents/MacOS/CBB
         BUNDLE_LOADER: $(TEST_HOST)
   # The window driven as a person would (XCUITest).
-  ClipboardBridgeMacUITests:
+  CBBMacUITests:
     type: bundle.ui-testing
     platform: macOS
     sources:
-      - ClipboardBridgeMacUITests
+      - CBBMacUITests
       # The app's texts, to look up the Russian the window shows.
-      - path: ClipboardBridgeMac/Resources/Localizable.xcstrings
+      - path: CBBMac/Resources/Localizable.xcstrings
         buildPhase: resources
     dependencies:
-      - target: ClipboardBridgeMac
+      - target: CBBMac
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: ClipboardBridgeMac
+        TEST_TARGET_NAME: CBBMac
         # The tests' own strings stay out of the app's catalog.
         SWIFT_EMIT_LOC_STRINGS: NO
 schemes:
-  ClipboardBridgeMac:
+  CBBMac:
     build:
       targets:
-        ClipboardBridgeMac: all
+        CBBMac: all
     test:
       targets:
-        - ClipboardBridgeMacTests
-        - ClipboardBridgeMacUITests
+        - CBBMacTests
+        - CBBMacUITests

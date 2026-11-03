@@ -12,10 +12,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/jsonnum"
-	signed "github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/jsonnum"
+	signed "github.com/HunterEwok/cbb/internal/release"
 )
 
 // The member protocol runs over a TLS connection made with the group's

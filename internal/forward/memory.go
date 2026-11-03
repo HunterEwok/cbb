@@ -17,8 +17,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/HunterEwok/clipboardbridge/internal/budget"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/budget"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // What the forwarder keeps of the groups that are not registered now. A

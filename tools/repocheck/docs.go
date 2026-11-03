@@ -17,7 +17,7 @@ import (
 //
 //   - a relative link in a Markdown file names a file or directory of the
 //     repository, and its #anchor, if any, a heading of that file;
-//   - the project's old name does not come back, outside the changelog;
+//   - the project's old names do not come back, in any file (oldName);
 //   - every command of cbb, the full and the lite member, is in docs/reference/cli.md,
 //     the lite member's in its section;
 //   - every subcommand of the full member that has flags of its own, and each
@@ -36,13 +36,14 @@ import (
 //     field of its header (internal/control's Header) is named in section 8;
 //   - the pages for users and administrators (docs/guide, docs/admin and the
 //     READMEs) do not tell the reader something is easy ("simply", "easy",
-//     "easily", "obviously", "of course"), and call the product Clipboard
-//     Bridge: the lowercase clipboardbridge only in code, a link or quotes.
+//     "easily", "obviously", "of course").
 
 var (
 	mdLink    = regexp.MustCompile(`\]\(([^)\s]+)\)`)
 	mdHeading = regexp.MustCompile(`^#{1,6}\s+(.+?)\s*#*\s*$`)
-	oldName   = regexp.MustCompile(`(?i)\bclipbridge\b`)
+	// oldName matches the project's old names in every spelling, written
+	// in pieces so that this file does not hold them either.
+	oldName   = regexp.MustCompile(`(?i)clip(?:` + `board)?[ _.-]?` + `bridge`)
 	goCommand = regexp.MustCompile(`(?m)^\s*case "([a-z]+)"`)
 	rsCommand = regexp.MustCompile(`(?m)^\s*"([a-z]+)" => cmd_`)
 	// envQuoted is a variable's name as a string in Go, Rust, Swift and
@@ -60,12 +61,10 @@ var (
 	rsPort     = regexp.MustCompile(`const \w*PORT: u16 = (\d{2,5});`)
 	listenPort = regexp.MustCompile(`\.String\("[\w-]*listen", "[\w.]*:(\d{2,5})"`)
 	plannedFor = regexp.MustCompile(`(?i)\bplanned for (\d+)\.(\d+)\b`)
-	// easyWord is a word that tells the reader something is easy;
-	// lowerName the product's name as its files spell it; notProse what a
-	// line holds besides prose: code, a link's target, a URL, a quote.
-	easyWord  = regexp.MustCompile(`(?i)\b(simply|easy|easily|obviously|of course)\b`)
-	lowerName = regexp.MustCompile(`\bclipboardbridge\b`)
-	notProse  = regexp.MustCompile("`[^`]*`|\\]\\([^)]*\\)|<[^>]*>|https?://\\S+|\"[^\"]*\"")
+	// easyWord is a word that tells the reader something is easy; notProse
+	// what a line holds besides prose: code, a link's target, a URL, a quote.
+	easyWord = regexp.MustCompile(`(?i)\b(simply|easy|easily|obviously|of course)\b`)
+	notProse = regexp.MustCompile("`[^`]*`|\\]\\([^)]*\\)|<[^>]*>|https?://\\S+|\"[^\"]*\"")
 )
 
 // notEnv are the CBB_ names in the code that are not environment variables.
@@ -78,6 +77,20 @@ const configRef = "docs/reference/config.md"
 
 // checkDocs checks the rules above in one file; files maps every checked
 // path to its content.
+// checkOldName reports each line of a file that holds one of the
+// project's old names: the project is Copy Beyond Borders (CBB), and its
+// command and every technical name are cbb, in code, docs and the
+// changelog alike.
+func checkOldName(name string, data []byte) []string {
+	var problems []string
+	for i, line := range strings.Split(string(data), "\n") {
+		if oldName.MatchString(line) {
+			problems = append(problems, fmt.Sprintf("%s:%d: an old name; the project is Copy Beyond Borders (CBB) and every technical name cbb", name, i+1))
+		}
+	}
+	return problems
+}
+
 func checkDocs(name string, data []byte, files map[string][]byte) []string {
 	// A translated page keeps the links of its English original, which
 	// the website resolves from the original's place; tools/site checks
@@ -94,9 +107,6 @@ func checkDocs(name string, data []byte, files map[string][]byte) []string {
 		}
 		if inCode {
 			continue
-		}
-		if name != "CHANGELOG.md" && oldName.MatchString(line) {
-			problems = append(problems, fmt.Sprintf("%s:%d: the old name clipbridge; the project is clipboardbridge and its command cbb", name, i+1))
 		}
 		for _, m := range mdLink.FindAllStringSubmatch(line, -1) {
 			if p := checkLink(name, m[1], files); p != "" {
@@ -526,9 +536,6 @@ func checkStyle(files map[string][]byte) []string {
 			prose := notProse.ReplaceAllString(line, "")
 			if m := easyWord.FindString(prose); m != "" {
 				problems = append(problems, fmt.Sprintf("%s:%d: %q tells the reader it is easy; say what to do instead", name, i+1, m))
-			}
-			if lowerName.MatchString(prose) {
-				problems = append(problems, fmt.Sprintf("%s:%d: the product is Clipboard Bridge in prose; clipboardbridge only in code, links or quotes", name, i+1))
 			}
 		}
 	}

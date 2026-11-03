@@ -145,9 +145,9 @@ func makeVectors() vectorFile {
 		v.Refused = append(v.Refused, refusedVector{Name: name, Text: text, Reason: r})
 	}
 	good := build(nil)
-	refuse("another scheme", "clipboardbridge://join?code=123456", NotInvitation)
+	refuse("another scheme", "cbb://join?code=123456", NotInvitation)
 	refuse("empty", "", NotInvitation)
-	refuse("prefix in capitals", "CLIPBOARDBRIDGE://invite#"+strings.TrimPrefix(good, prefix), NotInvitation)
+	refuse("prefix in capitals", "CBB://invite#"+strings.TrimPrefix(good, prefix), NotInvitation)
 	refuse("no-break space around", "\u00a0"+good, NotInvitation)
 	refuse("cut", good[:len(good)-5], Damaged)
 	refuse("padding after the padding", good+"==", Damaged)

@@ -37,32 +37,32 @@ mkdir -p "$work"
 # The checks after an install, and after the removal, in OpenWrt's shell.
 installed_files='
 test -x /usr/bin/cbb
-test -x /etc/init.d/clipboardbridge
-test -f /etc/config/clipboardbridge
-test -f /etc/hotplug.d/ntp/50-clipboardbridge
-test -f /lib/upgrade/keep.d/clipboardbridge
-test -f /etc/capabilities/clipboardbridge.json
-grep -q "^clipboardbridge:" /etc/passwd
-grep -q "^clipboardbridge:" /etc/group
-test "$(ls -ld /etc/clipboardbridge/state | awk "{print \$3}")" = clipboardbridge
-ls /etc/rc.d | grep -q clipboardbridge
-ash -n /etc/init.d/clipboardbridge
-ash -n /usr/share/clipboardbridge/firewall.sh
+test -x /etc/init.d/cbb
+test -f /etc/config/cbb
+test -f /etc/hotplug.d/ntp/50-cbb
+test -f /lib/upgrade/keep.d/cbb
+test -f /etc/capabilities/cbb.json
+grep -q "^cbb:" /etc/passwd
+grep -q "^cbb:" /etc/group
+test "$(ls -ld /etc/cbb/state | awk "{print \$3}")" = cbb
+ls /etc/rc.d | grep -q cbb
+ash -n /etc/init.d/cbb
+ash -n /usr/share/cbb/firewall.sh
 '
 # set -x names the check that failed in CI's log.
 installed="
 set -ex
 $installed_files
-test \"\$(uci get clipboardbridge.main.port)\" = 9000
+test \"\$(uci get cbb.main.port)\" = 9000
 "
 removed='
 set -e
-for f in /usr/bin/cbb /etc/init.d/clipboardbridge /etc/config/clipboardbridge /etc/hotplug.d/ntp/50-clipboardbridge \
-	/lib/upgrade/keep.d/clipboardbridge /etc/capabilities/clipboardbridge.json /usr/share/clipboardbridge /etc/clipboardbridge \
-	/etc/clipboardbridge-update; do
+for f in /usr/bin/cbb /etc/init.d/cbb /etc/config/cbb /etc/hotplug.d/ntp/50-cbb \
+	/lib/upgrade/keep.d/cbb /etc/capabilities/cbb.json /usr/share/cbb /etc/cbb \
+	/etc/cbb-update; do
 	if [ -e "$f" ]; then echo "left behind: $f" >&2; exit 1; fi
 done
-if ls /etc/rc.d | grep -q clipboardbridge; then echo "left enabled" >&2; exit 1; fi
+if ls /etc/rc.d | grep -q cbb; then echo "left enabled" >&2; exit 1; fi
 '
 
 case $mode in
@@ -72,13 +72,13 @@ rootfs)
 		mkdir -p /var/lock /var/run /tmp
 		CBB_VERIFY=skip CBB_RELEASE_DIR=/rel sh /rel/get.sh --port 9000
 		$installed
-		sh /usr/share/clipboardbridge/uninstall.sh --purge
+		sh /usr/share/cbb/uninstall.sh --purge
 		$removed
 		echo 'rootfs: installed and removed'
 		CBB_VERIFY=skip CBB_RELEASE_DIR=/rel sh /rel/get.sh --lite --port 9000
 		$installed
 		cbb version | grep -q 'lite member'
-		sh /usr/share/clipboardbridge/uninstall.sh --purge
+		sh /usr/share/cbb/uninstall.sh --purge
 		$removed
 		echo 'rootfs: the lite member installed and removed'
 	"
@@ -96,19 +96,19 @@ feed)
 		mkdir -p /var/lock /var/run /tmp
 		test -f /feed/amd64/packages.adb
 		# Without our key apk refuses the feed.
-		if apk add --repositories-file /dev/null --repository /feed/amd64/packages.adb clipboardbridge 2>/dev/null; then
+		if apk add --repositories-file /dev/null --repository /feed/amd64/packages.adb cbb 2>/dev/null; then
 			echo 'apk took a feed signed with an unknown key' >&2
 			exit 1
 		fi
-		cp /key/public.pem /etc/apk/keys/clipboardbridge.pem
-		apk add --repositories-file /dev/null --repository /feed/amd64/packages.adb clipboardbridge
-		apk info -e clipboardbridge
+		cp /key/public.pem /etc/apk/keys/cbb.pem
+		apk add --repositories-file /dev/null --repository /feed/amd64/packages.adb cbb
+		apk info -e cbb
 		$installed_files
-		apk del clipboardbridge
-		for f in /usr/bin/cbb /etc/init.d/clipboardbridge /usr/share/clipboardbridge/firewall.sh; do
+		apk del cbb
+		for f in /usr/bin/cbb /etc/init.d/cbb /usr/share/cbb/firewall.sh; do
 			if [ -e \"\$f\" ]; then echo \"apk del left \$f\" >&2; exit 1; fi
 		done
-		if ls /etc/rc.d | grep -q clipboardbridge; then echo 'left enabled' >&2; exit 1; fi
+		if ls /etc/rc.d | grep -q cbb; then echo 'left enabled' >&2; exit 1; fi
 		echo 'feed: signed, installed and removed'
 	"
 	;;
@@ -155,7 +155,7 @@ vm)
 	run "$installed"
 	run '
 		set -ex
-		ubus call service list "{\"name\":\"clipboardbridge\"}" | grep -q "\"running\": true"
+		ubus call service list "{\"name\":\"cbb\"}" | grep -q "\"running\": true"
 		for i in $(seq 30); do cbb status 2>&1 | grep -q "Not in a group" && break; sleep 1; done
 		cbb status 2>&1 | grep -q "Not in a group"
 		logread -e cbb | grep -q "work only on br-lan"
@@ -168,22 +168,22 @@ vm)
 		echo "vm: the service runs on br-lan, and a join waits on port 9000"
 
 		# The port of the hub: service data, which fw4 loads. fw4 names such
-		# a rule by its source (ubus:clipboardbridge[instance1] rule N) in
+		# a rule by its source (ubus:cbb[instance1] rule N) in
 		# its comment, not by the name in the data.
-		sh /usr/share/clipboardbridge/firewall.sh hub-open 51820
-		test "$(sh /usr/share/clipboardbridge/firewall.sh hub-port)" = 51820
-		hubrule() { nft list ruleset | grep "ubus:clipboardbridge" | grep -q "dport 51820"; }
+		sh /usr/share/cbb/firewall.sh hub-open 51820
+		test "$(sh /usr/share/cbb/firewall.sh hub-port)" = 51820
+		hubrule() { nft list ruleset | grep "ubus:cbb" | grep -q "dport 51820"; }
 		for i in $(seq 20); do hubrule && break; sleep 1; done
 		if ! hubrule; then
 			echo "no hub rule in nftables; the service data and what fw4 makes of it:" >&2
 			ubus call service get_data "{\"type\":\"firewall\"}" >&2 || true
-			fw4 print 2>&1 | grep -i -B2 -A2 clipboardbridge >&2 || true
+			fw4 print 2>&1 | grep -i -B2 -A2 cbb >&2 || true
 			exit 1
 		fi
-		sh /usr/share/clipboardbridge/firewall.sh hub-close
+		sh /usr/share/cbb/firewall.sh hub-close
 		for i in $(seq 20); do hubrule || break; sleep 1; done
 		if hubrule; then echo "the hub rule stayed" >&2; exit 1; fi
-		if grep -q clipboardbridge /etc/config/firewall; then echo "/etc/config/firewall was changed" >&2; exit 1; fi
+		if grep -q cbb /etc/config/firewall; then echo "/etc/config/firewall was changed" >&2; exit 1; fi
 		echo "vm: the hub rule came and went with the service data"
 
 		# After a boot the service waits for NTP; ntpd itself stays out of it.
@@ -191,25 +191,25 @@ vm)
 		# ntpd sent before it stopped may still bring the flag back; only a
 		# service that runs without the flag fails.
 		/etc/init.d/sysntpd stop
-		/etc/init.d/clipboardbridge stop
+		/etc/init.d/cbb stop
 		for i in $(seq 20); do pgrep -f "cbb service" >/dev/null || break; sleep 1; done
 		if pgrep -f "cbb service" >/dev/null; then echo "it did not stop" >&2; exit 1; fi
-		rm -f /var/state/clipboardbridge.time
-		/etc/init.d/clipboardbridge start
+		rm -f /var/state/cbb.time
+		/etc/init.d/cbb start
 		sleep 2
-		if pgrep -f "cbb service" >/dev/null && [ ! -f /var/state/clipboardbridge.time ]; then
+		if pgrep -f "cbb service" >/dev/null && [ ! -f /var/state/cbb.time ]; then
 			echo "it started before NTP" >&2; exit 1
 		fi
-		if [ -f /var/state/clipboardbridge.time ]; then
+		if [ -f /var/state/cbb.time ]; then
 			echo "vm: a late NTP event set the flag again; checking the wait once more"
-			/etc/init.d/clipboardbridge stop
+			/etc/init.d/cbb stop
 			for i in $(seq 20); do pgrep -f "cbb service" >/dev/null || break; sleep 1; done
-			rm -f /var/state/clipboardbridge.time
-			/etc/init.d/clipboardbridge start
+			rm -f /var/state/cbb.time
+			/etc/init.d/cbb start
 			sleep 2
 			if pgrep -f "cbb service" >/dev/null; then echo "it started before NTP" >&2; exit 1; fi
 		fi
-		ACTION=stratum sh /etc/hotplug.d/ntp/50-clipboardbridge
+		ACTION=stratum sh /etc/hotplug.d/ntp/50-cbb
 		for i in $(seq 20); do pgrep -f "cbb service" >/dev/null && break; sleep 1; done
 		pgrep -f "cbb service" >/dev/null
 		echo "vm: it waited for NTP and started after it"
@@ -218,8 +218,8 @@ vm)
 		# reload; procd starts a killed service again.
 		svcpid() { pgrep -f "cbb service" | head -n1; }
 		tr "\0" "\n" </proc/$(svcpid)/environ | grep -qx GOMEMLIMIT=64MiB
-		uci set clipboardbridge.main.memlimit=48MiB && uci commit clipboardbridge
-		/etc/init.d/clipboardbridge reload
+		uci set cbb.main.memlimit=48MiB && uci commit cbb
+		/etc/init.d/cbb reload
 		for i in $(seq 20); do p=$(svcpid); [ -n "$p" ] && tr "\0" "\n" </proc/$p/environ | grep -qx GOMEMLIMIT=48MiB && break; sleep 1; done
 		tr "\0" "\n" </proc/$(svcpid)/environ | grep -qx GOMEMLIMIT=48MiB
 		old=$(svcpid)
@@ -230,16 +230,16 @@ vm)
 
 		# A sysupgrade keeps the state, the settings and the program: its
 		# list of kept files and its backup hold them.
-		touch /etc/clipboardbridge/state/keep-probe
+		touch /etc/cbb/state/keep-probe
 		sysupgrade -l >/tmp/keep.list
-		for f in /etc/clipboardbridge/state/keep-probe /etc/config/clipboardbridge /usr/bin/cbb /etc/init.d/clipboardbridge; do
+		for f in /etc/cbb/state/keep-probe /etc/config/cbb /usr/bin/cbb /etc/init.d/cbb; do
 			grep -qx "$f" /tmp/keep.list || { echo "sysupgrade would not keep $f" >&2; exit 1; }
 		done
 		sysupgrade -b /tmp/backup.tgz
-		tar -tzf /tmp/backup.tgz | grep -qx "etc/clipboardbridge/state/keep-probe"
+		tar -tzf /tmp/backup.tgz | grep -qx "etc/cbb/state/keep-probe"
 		echo "vm: a sysupgrade keeps the state, the settings and the program"
 
-		sh /usr/share/clipboardbridge/uninstall.sh --purge
+		sh /usr/share/cbb/uninstall.sh --purge
 		if pgrep -f "cbb service" >/dev/null; then echo "still running" >&2; exit 1; fi
 	'
 	run "$removed"
@@ -251,12 +251,12 @@ vm)
 	run '
 		set -ex
 		cbb version | grep -q "lite member"
-		ubus call service list "{\"name\":\"clipboardbridge\"}" | grep -q "\"running\": true"
+		ubus call service list "{\"name\":\"cbb\"}" | grep -q "\"running\": true"
 		for i in $(seq 30); do logread -e cbb | grep -q "work only on br-lan" && break; sleep 1; done
 		logread -e cbb | grep -q "work only on br-lan"
-		grep -qx br-lan /var/run/clipboardbridge/interfaces
+		grep -qx br-lan /var/run/cbb/interfaces
 		cbb status 2>&1 | grep -q "no group"
-		sh /usr/share/clipboardbridge/uninstall.sh --purge
+		sh /usr/share/cbb/uninstall.sh --purge
 	'
 	run "$removed"
 	echo "vm: the lite member installed, checked and removed"

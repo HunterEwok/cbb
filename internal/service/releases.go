@@ -11,12 +11,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/release"
-	"github.com/HunterEwok/clipboardbridge/internal/update"
-	"github.com/HunterEwok/clipboardbridge/internal/version"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/release"
+	"github.com/HunterEwok/cbb/internal/update"
+	"github.com/HunterEwok/cbb/internal/version"
 )
 
 // releaseFile keeps the newest signed release the group passed around, as
@@ -147,7 +147,7 @@ func (s *Service) takeRelease(set node.ReleaseSet) (bool, error) {
 	}
 	s.rel = h
 	if offered(h.version) {
-		s.logf("cbb: Clipboard Bridge %s is available; cbb update installs it", h.version)
+		s.logf("cbb: CBB %s is available; cbb update installs it", h.version)
 	}
 	go s.pruneReleaseFiles()
 	return true, nil

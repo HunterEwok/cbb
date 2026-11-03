@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 func TestCollect(t *testing.T) {

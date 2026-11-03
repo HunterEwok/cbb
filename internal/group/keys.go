@@ -11,9 +11,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/HunterEwok/clipboardbridge/internal/keyseal"
-	"github.com/HunterEwok/clipboardbridge/internal/sekey"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/keyseal"
+	"github.com/HunterEwok/cbb/internal/sekey"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
 // TPMEnv set to "off" keeps new member and admin keys out of the TPM and

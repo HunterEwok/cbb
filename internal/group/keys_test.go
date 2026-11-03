@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey/tpmtest"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // useTPM points the package at the TPM that tpmtest started, for one test.

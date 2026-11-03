@@ -26,7 +26,7 @@ func TestCheck(t *testing.T) {
 		// The problems must contain these strings, in order; none means no problems.
 		want []string
 	}{
-		{name: "English text", file: "README.md", content: "# clipboardbridge\n\nOne clipboard.\n"},
+		{name: "English text", file: "README.md", content: "# cbb\n\nOne clipboard.\n"},
 		{name: "symbols are fine", file: "docs/design.md", content: "Mac \u2192 Linux, 10\u201320 s, \u2318C\n"},
 		{
 			name: "Cyrillic text", file: "docs/notes.md", content: "line one\n" + cyrillicWord + "\n",
@@ -45,7 +45,7 @@ func TestCheck(t *testing.T) {
 		{name: "a PE program", file: "cbb.exe", content: "MZ" + strings.Repeat("\x00", 0x3a) + "\x40\x00\x00\x00PE\x00\x00", want: []string{"cbb.exe:1: a compiled program (PE)"}},
 		{name: "text starting with MZ", file: "notes.txt", content: "MZ is a prefix\n"},
 		{name: "a large file", file: "big.png", content: "\x89PNG" + strings.Repeat("\x00", 1<<20), want: []string{"big.png:1: 1048580 bytes, over the limit"}},
-		{name: "a String Catalog", file: "apps/ios/ClipboardBridge/Resources/Localizable.xcstrings", content: `{"ru":"` + cyrillicWord + `"}`},
+		{name: "a String Catalog", file: "apps/ios/CBB/Resources/Localizable.xcstrings", content: `{"ru":"` + cyrillicWord + `"}`},
 		{name: "an Android translation", file: "apps/android/app/src/main/res/values-ru/strings.xml", content: "<string>" + cyrillicWord + "</string>\n"},
 		{
 			name: "the default Android strings", file: "apps/android/app/src/main/res/values/strings.xml", content: "<string>" + cyrillicWord + "</string>\n",

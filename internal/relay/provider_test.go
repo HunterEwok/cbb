@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/budget"
+	"github.com/HunterEwok/cbb/internal/budget"
 )
 
 // from6 returns an address of the IPv6 provider 2001:db8::/32 in its wide

@@ -93,7 +93,7 @@ item is on its road to the Linux lite member's set.
 One pull request each, in this order; anything under 100 lines rides in the open one.
 
 1. **G1**, done: `--port` in the Mac installer and `get.sh` on a Mac, kept in
-   `/etc/clipboardbridge/clipboardbridge.env` as on Linux.
+   `/etc/cbb/cbb.env` as on Linux.
 2. **G2**, done: `CBB_ERROR_DETAILS=1` in `install.sh`, `uninstall.sh` and `get.sh` on Linux
    and macOS shows every command as it runs; without it a failure names its exit status.
 3. **P5**, done: an error details switch in both apps' Settings, hidden behind a few taps on the

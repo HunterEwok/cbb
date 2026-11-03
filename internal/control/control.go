@@ -9,7 +9,7 @@
 // payload, usually a clipboard text. A client sends a request and reads the
 // answers; a watcher keeps its connection open, receives writes and reports
 // copies on it. Who may connect is decided by the socket's file permissions:
-// only root and the clipboardbridge group.
+// only root and the cbb group.
 package control
 
 import (
@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 const (
@@ -267,7 +267,7 @@ type Status struct {
 	// decides.
 	Conflicts []Conflict `json:"conflicts,omitempty"`
 	// Newer is how many records of a later version this member keeps: an
-	// update of Clipboard Bridge reads them.
+	// update of CBB reads them.
 	Newer int `json:"newer,omitempty"`
 	// CertEndsMS is when this device's member certificate ends, in Unix
 	// milliseconds: the members refuse it afterwards, unless an admin
@@ -275,7 +275,7 @@ type Status struct {
 	CertEndsMS int64  `json:"cert_ends_ms,omitempty"`
 	Role       string `json:"role"`
 	OS         string `json:"os,omitempty"`     // this device's operating system
-	Holder     bool   `json:"holder,omitempty"` // answers for clipboardbridge.local
+	Holder     bool   `json:"holder,omitempty"` // answers for cbb.local
 	// HoldSetting is the holder setting: auto, first, fallback or never.
 	HoldSetting string `json:"hold_setting,omitempty"`
 	// HoldPriority is the holder priority it publishes: 1 first, 2 as a
@@ -432,7 +432,7 @@ type Device struct {
 	Name   string `json:"name,omitempty"`
 	Role   string `json:"role,omitempty"`
 	OS     string `json:"os,omitempty"`      // its operating system; "" when unknown
-	Store  string `json:"store,omitempty"`   // where its keys live: group.StoreFile, StoreHardware, StoreProven or StoreRootless; "" before 0.6
+	Store  string `json:"store,omitempty"`   // where its keys live: group.StoreFile, StoreHardware, StoreProven or StoreRootless; "" when the member does not say
 	SkewMS int64  `json:"skew_ms,omitempty"` // how far its clock is ahead of this one
 	// Form, OSVersion, Version and MAC are what its hello says about its
 	// device; "" when it says nothing or is not connected.

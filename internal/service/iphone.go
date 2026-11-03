@@ -12,13 +12,13 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/mdns"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/phone"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/mdns"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/phone"
 )
 
 // phoneGroup is the member as the iPhone endpoint sees it.
@@ -93,7 +93,7 @@ func (s *Service) servePhone(ctx context.Context, addr net.Addr) {
 }
 
 // pairPhone opens an iPhone pairing window on the member that answers for
-// clipboardbridge.local, serves the profile while it is open, and reports the
+// cbb.local, serves the profile while it is open, and reports the
 // end; a client that hangs up closes the window. With newToken it first
 // revokes the token of every shortcut paired so far, so a token that was
 // copied or stolen stops working and the iPhone gets a new one.
@@ -114,7 +114,7 @@ func (s *Service) pairPhone(ctx context.Context, c net.Conn, r *control.Reader, 
 		fail(c, errors.New("only the group's root and its admins pair an iPhone for the shortcut; run cbb pair -phone on one of them, or cbb admin on the root to make this one an admin"))
 		return
 	case !holder:
-		fail(c, errors.New("this member does not answer for clipboardbridge.local; run cbb pair -phone on the member that cbb status shows as holding it"))
+		fail(c, errors.New("this member does not answer for cbb.local; run cbb pair -phone on the member that cbb status shows as holding it"))
 		return
 	case busy:
 		fail(c, errors.New("an iPhone pairing window is already open: stop the cbb pair -phone that opened it (Ctrl+C in its terminal), or wait until it closes"))

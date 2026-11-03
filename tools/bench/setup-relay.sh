@@ -31,7 +31,7 @@ setup)
 	port=${2:-8765}
 	cat >"$unit" <<EOF
 [Unit]
-Description=clipboardbridge blind relay (holds no group keys, keeps no logs)
+Description=cbb blind relay (holds no group keys, keeps no logs)
 After=network-online.target
 Wants=network-online.target
 

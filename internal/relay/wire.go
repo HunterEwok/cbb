@@ -14,8 +14,8 @@
 package relay
 
 import (
-	"github.com/HunterEwok/clipboardbridge/internal/frame"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/frame"
+	"github.com/HunterEwok/cbb/internal/group"
 
 	"net"
 	"net/netip"
@@ -23,11 +23,11 @@ import (
 )
 
 // Protocol is the ALPN protocol of a member's registration.
-const Protocol = "clipboardbridge-relay/2"
+const Protocol = "cbb-relay/2"
 
 // proofLabel is the label of the key, from the registration's TLS, under
 // which a member proves its WireGuard key.
-const proofLabel = "clipboardbridge relay key"
+const proofLabel = "cbb relay key"
 
 // Addr is the relay's own address inside the tunnels; it gives each member
 // another one.

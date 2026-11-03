@@ -24,8 +24,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/protowire"
 
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv/wire"
+	"github.com/HunterEwok/cbb/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv/wire"
 )
 
 // The TV's ports: pairing, and the remote.
@@ -60,7 +60,7 @@ func NewClient(name string) (Client, error) {
 	now := time.Now()
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: name, Organization: []string{"Clipboard Bridge"}},
+		Subject:      pkix.Name{CommonName: name, Organization: []string{"CBB"}},
 		NotBefore:    now.Add(-time.Hour),
 		NotAfter:     now.AddDate(30, 0, 0),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,

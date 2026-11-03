@@ -9,11 +9,11 @@ import (
 	"io"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // cmdHolder shows or changes whether this computer holds
-// clipboardbridge.local first, only as a fallback, or never.
+// cbb.local first, only as a fallback, or never.
 func cmdHolder(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 1 || len(args) == 1 && helpFlag(args[0]) {
 		fmt.Fprintln(stderr, "usage: cbb holder [auto|first|fallback|never]")
@@ -68,7 +68,7 @@ func quietLine(st *control.Status) string {
 }
 
 // holderLine says how this computer takes part in holding
-// clipboardbridge.local, the name the shortcut on an iPhone reaches.
+// cbb.local, the name the shortcut on an iPhone reaches.
 func holderLine(st *control.Status) string {
 	setting := st.HoldSetting
 	if setting == "auto" {
@@ -87,13 +87,13 @@ func holderLine(st *control.Status) string {
 	}
 	switch {
 	case st.Group == "":
-		return fmt.Sprintf("Holder of clipboardbridge.local: setting %s.", setting)
+		return fmt.Sprintf("Holder of cbb.local: setting %s.", setting)
 	case turn == "" && st.HoldSetting == "never":
-		return fmt.Sprintf("Never holds clipboardbridge.local (setting %s).", setting)
+		return fmt.Sprintf("Never holds cbb.local (setting %s).", setting)
 	case turn == "":
-		return "Never holds clipboardbridge.local: it does not hold the group's iPhone key."
+		return "Never holds cbb.local: it does not hold the group's iPhone key."
 	case st.Holder:
-		return fmt.Sprintf("Answers for clipboardbridge.local (%s; setting %s).", turn, setting)
+		return fmt.Sprintf("Answers for cbb.local (%s; setting %s).", turn, setting)
 	}
-	return fmt.Sprintf("Answers for clipboardbridge.local %s when elected; another member does now (setting %s).", turn, setting)
+	return fmt.Sprintf("Answers for cbb.local %s when elected; another member does now (setting %s).", turn, setting)
 }

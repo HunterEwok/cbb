@@ -19,16 +19,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/tmuxpaste"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/tmuxpaste"
 )
 
 // cmdPasteHelper runs a paste target without a clipboard (design.md,
-// "Remote paste"): cbb paste-helper tmux, which clipboardbridge's tmux.conf
+// "Remote paste"): cbb paste-helper tmux, which cbb's tmux.conf
 // starts in the background, or cbb paste-helper console on Linux, which the
-// clipboardbridge-console unit runs, or cbb paste-helper uinput, the keys
-// of a paste for the desktop connectors, which clipboardbridge-uinput runs.
+// cbb-console unit runs, or cbb paste-helper uinput, the keys
+// of a paste for the desktop connectors, which cbb-uinput runs.
 func cmdPasteHelper(args []string, stderr io.Writer) int {
 	if len(args) != 1 || (args[0] != "tmux" && args[0] != "console" && args[0] != "uinput") {
 		fmt.Fprintln(stderr, "usage: cbb paste-helper tmux|console|uinput")
@@ -51,7 +51,7 @@ func cmdPasteHelper(args []string, stderr io.Writer) int {
 func runTmuxHelper(ctx context.Context, stderr io.Writer) int {
 	sock, _, _ := strings.Cut(os.Getenv("TMUX"), ",")
 	if sock == "" {
-		return fail(stderr, errors.New("not inside tmux: start it from tmux, as clipboardbridge's tmux.conf does"))
+		return fail(stderr, errors.New("not inside tmux: start it from tmux, as cbb's tmux.conf does"))
 	}
 	lock, ok := lockHelper(sock)
 	if !ok {
@@ -93,7 +93,7 @@ func runTmuxHelper(ctx context.Context, stderr io.Writer) int {
 	return 0
 }
 
-// stateDir is the user's directory for clipboardbridge's own files, made
+// stateDir is the user's directory for cbb's own files, made
 // if missing.
 func stateDir() (string, error) {
 	dir := os.Getenv("XDG_STATE_HOME")
@@ -104,7 +104,7 @@ func stateDir() (string, error) {
 		}
 		dir = filepath.Join(home, ".local", "state")
 	}
-	dir = filepath.Join(dir, "clipboardbridge")
+	dir = filepath.Join(dir, "cbb")
 	return dir, os.MkdirAll(dir, 0o700)
 }
 
@@ -118,7 +118,7 @@ func lockHelper(sock string) (*os.File, bool) {
 	if dir == "" {
 		dir = filepath.Dir(sock) // tmux's own directory, the user's alone
 	}
-	f, err := os.OpenFile(filepath.Join(dir, "clipboardbridge-tmux-"+hex.EncodeToString(sum[:8])+".lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(filepath.Join(dir, "cbb-tmux-"+hex.EncodeToString(sum[:8])+".lock"), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, true
 	}

@@ -1,27 +1,27 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# clipboardbridge as an always-on member at home, on a NAS or a home server:
+# cbb as an always-on member at home, on a NAS or a home server:
 #
 #   docker compose -f compose.home.yaml up -d
-#   docker exec -it clipboardbridge cbb pair
+#   docker exec -it cbb cbb pair
 #
 # It needs the host's network: mDNS and the member port must be on the home
 # network, where Docker's bridge would hide them. The host's firewall stays
 # the host's: let the home network reach TCP 8764 (CBB_PORT) and UDP 5353.
 services:
-  clipboardbridge:
-    image: ghcr.io/hunterewok/clipboardbridge:latest # pin a release by its digest
-    container_name: clipboardbridge
+  cbb:
+    image: ghcr.io/hunterewok/cbb:latest # pin a release by its digest
+    container_name: cbb
     restart: unless-stopped
     network_mode: host
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     tmpfs:
-      - /run/clipboardbridge:uid=65532,gid=65532,mode=0750
+      - /run/cbb:uid=65532,gid=65532,mode=0750
     volumes:
-      - state:/var/lib/clipboardbridge
+      - state:/var/lib/cbb
     # environment:
     #   CBB_PORT: "8764"
     #   # Only to let it hold the group's keys, as an admin or the hub, in

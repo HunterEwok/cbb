@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/budget"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/group/grouptest"
+	"github.com/HunterEwok/cbb/internal/budget"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/group/grouptest"
 )
 
 // settled is the relay's state once the registrations it refused have

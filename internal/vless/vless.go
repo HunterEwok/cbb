@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 	goreality "github.com/xtls/reality"
 	"github.com/xtls/xray-core/app/dispatcher"
 	xlog "github.com/xtls/xray-core/app/log"
@@ -73,7 +73,7 @@ type ServerConfig struct {
 // keeping, and it tells nothing about the key.
 func ShortID(key [32]byte) string {
 	m := hmac.New(sha256.New, key[:])
-	m.Write([]byte("clipboardbridge reality short id"))
+	m.Write([]byte("cbb reality short id"))
 	return hex.EncodeToString(m.Sum(nil)[:8])
 }
 

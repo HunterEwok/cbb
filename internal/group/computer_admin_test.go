@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // adminCAFor issues an admin CA for the key pub of the device dev, as the
@@ -176,7 +176,7 @@ func TestComputerRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !serving.ServesPhone() || serving.Phone.VerifyHostname(PhoneName) != nil || !SameKey(serving.Key, serving.Phone.PublicKey) {
-		t.Error("the admin does not serve the shortcut with its own clipboardbridge.local certificate")
+		t.Error("the admin does not serve the shortcut with its own cbb.local certificate")
 	}
 	dir := t.TempDir()
 	if err := serving.Save(dir); err != nil {

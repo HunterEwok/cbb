@@ -111,22 +111,22 @@
         }
       }
     },
-    "Open Clipboard Bridge on the iPhone to make or join a group.": {
+    "Open CBB on the iPhone to make or join a group.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Откройте Clipboard Bridge на iPhone, чтобы создать группу или войти в неё."
+            "value": "Откройте CBB на iPhone, чтобы создать группу или войти в неё."
           }
         }
       }
     },
-    "Open Clipboard Bridge on the iPhone, then try again.": {
+    "Open CBB on the iPhone, then try again.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Откройте Clipboard Bridge на iPhone и попробуйте снова."
+            "value": "Откройте CBB на iPhone и попробуйте снова."
           }
         }
       }

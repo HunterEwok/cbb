@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: ce6e8f0e4357 -->
+<!-- source: 9311cbfc4998 -->
 # Acciones rápidas
 
 Para quien quiere bloquear, suspender o reiniciar un ordenador desde un teléfono u otro ordenador del grupo. Un administrador ejecuta la acción con una pulsación o un comando; el dispositivo solo la ejecuta si su propio usuario activó esa acción allí.
@@ -13,7 +13,7 @@ Para quien quiere bloquear, suspender o reiniciar un ordenador desde un teléfon
 | `reboot` | reinicia el ordenador un minuto después | ordenadores, el miembro ligero |
 | `shutdown` | apaga el ordenador un minuto después | ordenadores |
 | `cancel-shutdown` | cancela un reinicio o apagado pendiente | ordenadores, el miembro ligero |
-| `restart` | reinicia el servicio de Clipboard Bridge | ordenadores, el miembro ligero |
+| `restart` | reinicia el servicio de Copy Beyond Borders | ordenadores, el miembro ligero |
 | `keyboard-layout` | cambia la distribución en la que escribe su [teclado Bluetooth](keyboards-and-tvs.md) a la siguiente, después de que cambies la del propio dispositivo | ordenadores Linux con el teclado activado |
 | la tuya | ejecuta un programa que tú elijas, como el usuario con sesión iniciada | ordenadores |
 

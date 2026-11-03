@@ -52,7 +52,7 @@ func TestX11(t *testing.T) {
 		t.Fatalf("Next = %+v, %v, %v", it, ok, err)
 	}
 
-	text := "written by clipboardbridge \u043f\u0440\u0438\u0432\u0435\u0442\nline two"
+	text := "written by cbb \u043f\u0440\u0438\u0432\u0435\u0442\nline two"
 	if err := b.Write(text, false); err != nil {
 		t.Fatal(err)
 	}

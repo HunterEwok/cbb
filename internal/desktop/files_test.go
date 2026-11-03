@@ -20,7 +20,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 func TestFilePaths(t *testing.T) {

@@ -13,17 +13,17 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/consolepaste"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/uinput"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/consolepaste"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/uinput"
 )
 
 // runConsoleHelper is the helper for the text console, run by the
-// clipboardbridge-console unit as root; it logs to the journal.
+// cbb-console unit as root; it logs to the journal.
 func runConsoleHelper(ctx context.Context, stderr io.Writer) int {
 	if os.Geteuid() != 0 {
-		return fail(stderr, errors.New("the console helper runs as root, from the clipboardbridge-console unit"))
+		return fail(stderr, errors.New("the console helper runs as root, from the cbb-console unit"))
 	}
 	logf := func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
 	logf("cbb: pasting into the active text console")
@@ -33,15 +33,15 @@ func runConsoleHelper(ctx context.Context, stderr io.Writer) int {
 	return 0
 }
 
-// runUinputHelper is the keys helper, run by the clipboardbridge-uinput
+// runUinputHelper is the keys helper, run by the cbb-uinput
 // unit as root: it holds a uinput keyboard and presses a paste's keys for
 // the user of the active graphical session (internal/uinput).
 func runUinputHelper(ctx context.Context, stderr io.Writer) int {
 	if os.Geteuid() != 0 {
-		return fail(stderr, errors.New("the uinput helper runs as root, from the clipboardbridge-uinput unit"))
+		return fail(stderr, errors.New("the uinput helper runs as root, from the cbb-uinput unit"))
 	}
 	logf := func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
-	kbd, err := uinput.Open(uinput.Device, "Clipboard Bridge remote paste")
+	kbd, err := uinput.Open(uinput.Device, "CBB remote paste")
 	if err != nil {
 		return fail(stderr, fmt.Errorf("%w (is the uinput module loaded?)", err))
 	}
@@ -50,7 +50,7 @@ func runUinputHelper(ctx context.Context, stderr io.Writer) int {
 	// through the group of the service's control socket.
 	fi, err := os.Stat(control.SocketPath())
 	if err != nil {
-		return fail(stderr, fmt.Errorf("the service's control socket: %w (is clipboardbridge running?)", err))
+		return fail(stderr, fmt.Errorf("the service's control socket: %w (is cbb running?)", err))
 	}
 	gid := int(fi.Sys().(*syscall.Stat_t).Gid)
 	if err := os.MkdirAll(filepath.Dir(uinput.Socket), 0o755); err != nil {

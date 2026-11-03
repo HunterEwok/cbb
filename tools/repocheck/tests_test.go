@@ -67,13 +67,13 @@ func TestTestsKept(t *testing.T) {
 // A Swift file is a test's under Tests and under an Xcode test target.
 func TestSwiftTestFiles(t *testing.T) {
 	for name, want := range map[string]bool{
-		"apps/ios/ClipboardBridgeKit/Tests/ClipboardBridgeKitTests/A.swift": true,
-		"apps/ios/ClipboardBridgeTests/A.swift":                             true,
-		"apps/macos/ClipboardBridgeMacTests/A.swift":                        true,
-		"apps/ios/ClipboardBridgeUITests/A.swift":                           true,
-		"apps/ios/ClipboardBridge/Tests.swift":                              false,
-		"apps/ios/ClipboardBridge/A.swift":                                  false,
-		"apps/ios/ClipboardBridgeTests/A.txt":                               false,
+		"apps/ios/CBBKit/Tests/CBBKitTests/A.swift": true,
+		"apps/ios/CBBTests/A.swift":                 true,
+		"apps/macos/CBBMacTests/A.swift":            true,
+		"apps/ios/CBBUITests/A.swift":               true,
+		"apps/ios/CBB/Tests.swift":                  false,
+		"apps/ios/CBB/A.swift":                      false,
+		"apps/ios/CBBTests/A.txt":                   false,
 	} {
 		if got := swiftTest(name); got != want {
 			t.Errorf("swiftTest(%q) = %v, want %v", name, got, want)

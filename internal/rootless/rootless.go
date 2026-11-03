@@ -72,23 +72,23 @@ func dir(env, fallback string) string {
 	return filepath.Join(home, fallback)
 }
 
-// StateDir is the service's state: ~/.local/state/clipboardbridge, which
+// StateDir is the service's state: ~/.local/state/cbb, which
 // install.sh --rootless makes.
 func StateDir() string {
-	return filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "clipboardbridge")
+	return filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "cbb")
 }
 
-// UpdateDir is cbb update's folder: ~/.local/state/clipboardbridge-update.
+// UpdateDir is cbb update's folder: ~/.local/state/cbb-update.
 func UpdateDir() string {
-	return filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "clipboardbridge-update")
+	return filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "cbb-update")
 }
 
-// ConfigDir holds the installer's settings, clipboardbridge.env:
-// ~/.config/clipboardbridge.
-func ConfigDir() string { return filepath.Join(dir("XDG_CONFIG_HOME", ".config"), "clipboardbridge") }
+// ConfigDir holds the installer's settings, cbb.env:
+// ~/.config/cbb.
+func ConfigDir() string { return filepath.Join(dir("XDG_CONFIG_HOME", ".config"), "cbb") }
 
-// ShareDir holds the installer's own files: ~/.local/share/clipboardbridge.
-func ShareDir() string { return filepath.Join(dir("XDG_DATA_HOME", ".local/share"), "clipboardbridge") }
+// ShareDir holds the installer's own files: ~/.local/share/cbb.
+func ShareDir() string { return filepath.Join(dir("XDG_DATA_HOME", ".local/share"), "cbb") }
 
 // UnitDir is where the user units go: ~/.config/systemd/user.
 func UnitDir() string { return filepath.Join(dir("XDG_CONFIG_HOME", ".config"), "systemd", "user") }
@@ -100,5 +100,5 @@ func Socket() string {
 	if !filepath.IsAbs(run) {
 		run = filepath.Join("/run/user", strconv.Itoa(os.Getuid()))
 	}
-	return filepath.Join(run, "clipboardbridge", "control.sock")
+	return filepath.Join(run, "cbb", "control.sock")
 }

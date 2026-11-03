@@ -7,9 +7,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/seal"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/seal"
 )
 
 // TestSealKeysRecorded: each computer makes its key for sealed messages

@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/invite"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/invite"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // TestPairInvite joins with an invitation as the service takes it: the

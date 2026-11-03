@@ -24,7 +24,7 @@ func systemLimit(ctx context.Context, r *Report, f *Fleet, archive string, timeo
 	}
 	hub := a.hub
 	dropIn := func(d *Device) string {
-		out, _ := Run(ctx, d, "cat /etc/systemd/system/clipboardbridge.service.d/away.conf 2>/dev/null; true", "")
+		out, _ := Run(ctx, d, "cat /etc/systemd/system/cbb.service.d/away.conf 2>/dev/null; true", "")
 		return out
 	}
 	allowLine := func(d *Device) string {
@@ -47,7 +47,7 @@ func systemLimit(ctx context.Context, r *Report, f *Fleet, archive string, timeo
 		if err := a.in.reach(ctx, d); err != nil {
 			return err
 		}
-		if out, err := Run(ctx, d, "systemctl show -p IPAddressDeny clipboardbridge.service", ""); err != nil || !strings.Contains(out, "IPAddressDeny=") || strings.TrimSpace(out) == "IPAddressDeny=" {
+		if out, err := Run(ctx, d, "systemctl show -p IPAddressDeny cbb.service", ""); err != nil || !strings.Contains(out, "IPAddressDeny=") || strings.TrimSpace(out) == "IPAddressDeny=" {
 			return fmt.Errorf("the installed unit does not keep the service on the home network: %q %v", out, err)
 		}
 		if err := inviteJoin(ctx, a.benchGroup, d); err != nil {

@@ -16,14 +16,14 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // serviceName is the name of the Windows service, as install.ps1 creates it.
-const serviceName = "clipboardbridge"
+const serviceName = "cbb"
 
 // runService runs the service under the service manager, logging to
-// ProgramData\clipboardbridge\logs\service.log, or in a console until
+// ProgramData\cbb\logs\service.log, or in a console until
 // Ctrl+C when started by hand.
 func runService(stderr io.Writer, run func(context.Context, func(string, ...any)) error) int {
 	isService, err := svc.IsWindowsService()
@@ -39,7 +39,7 @@ func runService(stderr io.Writer, run func(context.Context, func(string, ...any)
 		}
 		return 0
 	}
-	l, err := openLog(filepath.Join(control.ProgramData(), "clipboardbridge", "logs", "service.log"))
+	l, err := openLog(filepath.Join(control.ProgramData(), "cbb", "logs", "service.log"))
 	if err != nil {
 		return 1 // nowhere to say why; the service manager shows the exit
 	}
@@ -93,7 +93,7 @@ func (h *handler) Execute(_ []string, req <-chan svc.ChangeRequest, st chan<- sv
 }
 
 // agentLog returns where the agent logs: its standard error in a console,
-// else LocalAppData\clipboardbridge\agent.log, since the sign-in starts it
+// else LocalAppData\cbb\agent.log, since the sign-in starts it
 // without one.
 func agentLog(stderr io.Writer) (io.Writer, func(), error) {
 	if h, err := windows.GetStdHandle(windows.STD_ERROR_HANDLE); err == nil && h != 0 && h != windows.InvalidHandle {
@@ -103,7 +103,7 @@ func agentLog(stderr io.Writer) (io.Writer, func(), error) {
 	if err != nil {
 		return stderr, func() {}, err
 	}
-	l, err := openLog(filepath.Join(dir, "clipboardbridge", "agent.log"))
+	l, err := openLog(filepath.Join(dir, "cbb", "agent.log"))
 	if err != nil {
 		return stderr, func() {}, err
 	}
@@ -114,7 +114,7 @@ func agentLog(stderr io.Writer) (io.Writer, func(), error) {
 // mutex stays open until the agent exits, so a second agent sees it and
 // leaves.
 func firstAgent() bool {
-	name, _ := windows.UTF16PtrFromString(`Local\clipboardbridge-agent`)
+	name, _ := windows.UTF16PtrFromString(`Local\cbb-agent`)
 	h, err := windows.CreateMutex(nil, false, name)
 	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 		windows.CloseHandle(h)
@@ -124,5 +124,5 @@ func firstAgent() bool {
 }
 
 func defaultStateDir() string {
-	return filepath.Join(control.ProgramData(), "clipboardbridge", "state")
+	return filepath.Join(control.ProgramData(), "cbb", "state")
 }

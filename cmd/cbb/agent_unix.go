@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/desktop"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/desktop"
 )
 
 // runDesktop is the agent on a Linux desktop: it opens the session's
@@ -65,7 +65,7 @@ func lockAgent() bool {
 	if dir == "" {
 		return true
 	}
-	f, err := os.OpenFile(filepath.Join(dir, "clipboardbridge-agent.lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(filepath.Join(dir, "cbb-agent.lock"), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return true
 	}

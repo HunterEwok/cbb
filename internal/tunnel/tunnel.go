@@ -11,7 +11,7 @@
 // only encrypted UDP on one port: there is no network interface, no route and
 // no firewall rule. Behind the hub's tunnel the stack has one listening port,
 // the member protocol's, and nothing else: no forwarding, no other host, so
-// the tunnel cannot carry anything but clipboardbridge.
+// the tunnel cannot carry anything but cbb.
 //
 // Each client has exactly one tunnel address, and the hub's WireGuard drops
 // every packet whose source is not the address of the key that sent it.
@@ -39,7 +39,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-go/conn"
 	"github.com/amnezia-vpn/amneziawg-go/device"
 
-	"github.com/HunterEwok/clipboardbridge/internal/third_party/netstack"
+	"github.com/HunterEwok/cbb/internal/third_party/netstack"
 )
 
 // Port is the member protocol's port inside the tunnel, the same as on the

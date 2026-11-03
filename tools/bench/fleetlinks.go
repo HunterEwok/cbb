@@ -367,14 +367,14 @@ func diskFull(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	var d *Device
 	if r.Do(p+"join", func() error {
 		var err error
-		if d, err = f.AddWith(ctx, f.net, []string{"--tmpfs", "/var/lib/clipboardbridge:size=512k"}); err != nil {
+		if d, err = f.AddWith(ctx, f.net, []string{"--tmpfs", "/var/lib/cbb:size=512k"}); err != nil {
 			return err
 		}
 		if _, err := pairOne(ctx, g.hub, d); err != nil {
 			return err
 		}
 		g.members = append(g.members, d)
-		_, err = Run(ctx, d, "dd if=/dev/zero of=/var/lib/clipboardbridge/fill bs=1k 2>/dev/null; true", "")
+		_, err = Run(ctx, d, "dd if=/dev/zero of=/var/lib/cbb/fill bs=1k 2>/dev/null; true", "")
 		return err
 	}) != nil {
 		return
@@ -387,7 +387,7 @@ func diskFull(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		return syncs(ctx, g, g.hub, d, "to a full disk", timeout)
 	})
 	r.Do(p+"room-again", func() error {
-		if _, err := Run(ctx, d, "rm /var/lib/clipboardbridge/fill && "+fleetKill, ""); err != nil {
+		if _, err := Run(ctx, d, "rm /var/lib/cbb/fill && "+fleetKill, ""); err != nil {
 			return err
 		}
 		if err := listsAs(ctx, []*Device{d}, "u8-renamed", "", false, timeout); err != nil {

@@ -6,7 +6,7 @@
 // An admin opens a pairing window: the group's root, or a member the root (a
 // computer or a phone) made an admin. The window has a code, valid for five minutes, one attempt at a time, closed
 // after a success or the third failed attempt. The new device connects to the member's port
-// over TLS 1.3 with the ALPN protocol clipboardbridge-pair/2 and presents a
+// over TLS 1.3 with the ALPN protocol cbb-pair/2 and presents a
 // self-signed certificate for the key it will keep. Neither side can check
 // the other's certificate yet; instead both run the CPace
 // password-authenticated key exchange with the code, bound to this TLS
@@ -52,17 +52,17 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	wire "github.com/HunterEwok/clipboardbridge/internal/frame"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/seal"
+	wire "github.com/HunterEwok/cbb/internal/frame"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/seal"
 )
 
 // Protocol is the ALPN protocol of pairing connections.
-const Protocol = "clipboardbridge-pair/2"
+const Protocol = "cbb-pair/2"
 
 const (
-	exporterLabel = "EXPERIMENTAL-clipboardbridge-pair-v2"
-	channelPrefix = "clipboardbridge pair v2\x00"
+	exporterLabel = "EXPERIMENTAL-cbb-pair-v2"
+	channelPrefix = "cbb pair v2\x00"
 
 	// Lifetime is how long a pairing window stays open, counting the time
 	// the machine sleeps. An attempt that has started may finish after it.

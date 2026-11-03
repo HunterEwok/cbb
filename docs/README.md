@@ -3,7 +3,7 @@
 
 Pick the part for what you are doing. Each page says at the top who it is for.
 
-## Using Clipboard Bridge
+## Using Copy Beyond Borders
 
 For anyone with a phone or a computer, in plain words.
 

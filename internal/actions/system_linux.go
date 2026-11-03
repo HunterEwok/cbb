@@ -17,7 +17,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
 )
 
 // On Linux the service asks logind over the system bus, and a polkit rule
@@ -79,14 +79,14 @@ func logindError(name string, err error) error {
 	if errors.As(err, &de) {
 		switch de.Name {
 		case "org.freedesktop.DBus.Error.AccessDenied", "org.freedesktop.DBus.Error.InteractiveAuthorizationRequired":
-			return &Refusal{Reason: fmt.Sprintf("this device's user has not given Clipboard Bridge the right to %s; they run sudo cbb action enable %s there", name, name)}
+			return &Refusal{Reason: fmt.Sprintf("this device's user has not given CBB the right to %s; they run sudo cbb action enable %s there", name, name)}
 		}
 	}
 	return fmt.Errorf("logind: %w", err)
 }
 
 // serviceUser is the service's user, which the polkit rule lets act.
-const serviceUser = "clipboardbridge"
+const serviceUser = "cbb"
 
 // rights are the polkit actions of each preset that needs one. A reboot or
 // shutdown while someone is logged in needs the multiple-sessions right
@@ -114,9 +114,9 @@ func Rights(on []string) []string {
 var (
 	polkitRoot = "/"
 	rulesDir   = "etc/polkit-1/rules.d"
-	rulesFile  = "60-clipboardbridge.rules"
+	rulesFile  = "60-cbb.rules"
 	pklaDir    = "etc/polkit-1/localauthority/50-local.d"
-	pklaFile   = "clipboardbridge.pkla"
+	pklaFile   = "cbb.pkla"
 )
 
 // Grant writes the polkit rule that lets the service do the presets in on,
@@ -161,7 +161,7 @@ func jsRule(ids []string) string {
 	for i, id := range ids {
 		q[i] = fmt.Sprintf("%q", id)
 	}
-	return `// Written by cbb action enable: lets the Clipboard Bridge service ask logind
+	return `// Written by cbb action enable: lets the CBB service ask logind
 // for the quick actions this computer's user turned on, and nothing else.
 polkit.addRule(function (action, subject) {
 	if (subject.user != "` + serviceUser + `") return polkit.Result.NOT_HANDLED;
@@ -172,9 +172,9 @@ polkit.addRule(function (action, subject) {
 }
 
 func pklaRule(ids []string) string {
-	return `# Written by cbb action enable: lets the Clipboard Bridge service ask logind
+	return `# Written by cbb action enable: lets the CBB service ask logind
 # for the quick actions this computer's user turned on, and nothing else.
-[Clipboard Bridge quick actions]
+[CBB quick actions]
 Identity=unix-user:` + serviceUser + `
 Action=` + strings.Join(ids, ";") + `
 ResultAny=yes

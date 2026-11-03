@@ -9,7 +9,7 @@ import (
 
 	"github.com/amnezia-vpn/amneziawg-go/conn"
 
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/netguard"
 )
 
 // newBind returns the UDP socket for a hub or a client: wireguard-go's

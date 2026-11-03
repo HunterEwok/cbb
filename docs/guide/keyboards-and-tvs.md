@@ -2,7 +2,7 @@
 # Keyboards and TVs
 
 For anyone who wants to type a long password, a link or a search into a TV, a tablet, a
-console or a computer that has nothing of Clipboard Bridge on it. One device of your group
+console or a computer that has nothing of Copy Beyond Borders on it. One device of your group
 types the text there as a keyboard or as the TV's remote, at your tap or when an admin sends
 a remote paste.
 
@@ -55,7 +55,7 @@ allowed for remote paste.
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
+# add "CBB <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```

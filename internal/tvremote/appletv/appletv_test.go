@@ -9,8 +9,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv/atvtest"
+	"github.com/HunterEwok/cbb/internal/tvremote/appletv"
+	"github.com/HunterEwok/cbb/internal/tvremote/appletv/atvtest"
 )
 
 func pair(t *testing.T, tv *atvtest.TV) appletv.Credentials {

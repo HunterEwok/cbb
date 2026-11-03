@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/HunterEwok/clipboardbridge/internal/mdns"
+	"github.com/HunterEwok/cbb/internal/mdns"
 )
 
 // runAs opens what only root may open and then runs the process as the

@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv/wire"
+	"github.com/HunterEwok/cbb/internal/tvremote/appletv/wire"
 )
 
 // ErrNoField is no text field open on the TV.

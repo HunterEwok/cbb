@@ -3,7 +3,7 @@
 
 Away from home, your devices reach the hub through the group's own WireGuard tunnel. Some
 networks block WireGuard: hotel and office Wi-Fi, some mobile operators, and whole
-countries that filter VPNs. Clipboard Bridge has two ways around it. Both are switched on
+countries that filter VPNs. Copy Beyond Borders has two ways around it. Both are switched on
 at the hub, and the devices pick them up the next time they meet the hub at home.
 
 | Way | What the network sees | You need | Works on |

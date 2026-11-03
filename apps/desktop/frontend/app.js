@@ -292,7 +292,7 @@ function alertLines(st) {
       out.push({ text: t("%s claims the group, and the group is stopped until its root decides.", c.by), remove: [c.by] });
     }
   }
-  if (st.newer > 0) out.push({ text: t("The group holds %d records of a later version: update Clipboard Bridge to read them.", st.newer), newer: true, remove: [] });
+  if (st.newer > 0) out.push({ text: t("The group holds %d records of a later version: update CBB to read them.", st.newer), newer: true, remove: [] });
   return out;
 }
 
@@ -579,7 +579,7 @@ function renderDetail() {
   const lines = [[t("Type"), t(kinds[kind])]];
   const sys = systemWithVersion(d);
   if (sys) lines.push([t("Operating system"), sys]);
-  if (d.version) lines.push(["Clipboard Bridge", d.version, true]);
+  if (d.version) lines.push(["CBB", d.version, true]);
   if (d.mac) lines.push([t("MAC address"), d.mac, true]);
   else if (kind === "phone" || kind === "tablet") lines.push([t("MAC address"), t("hidden by the system")]);
   lines.push([t("Role"), t({ phone: "Phone app", lite: "Lite member", shortcut: "Shortcut" }[d.role] ?? "Full member")]);

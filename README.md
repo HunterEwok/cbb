@@ -1,8 +1,8 @@
-# Clipboard Bridge
+# Copy Beyond Borders
 
 One clipboard for your phone and every computer at home: copy on one, paste on another.
 Android, iPhone, Linux, Windows and Mac, on your own network, with no cloud and no
-accounts. Its command is `cbb`.
+accounts. Its short name is CBB and its command is `cbb`.
 
 > **Status: early development.** What works, and what has been tried on real devices, is
 > in the [status table](#status) below.
@@ -12,18 +12,18 @@ accounts. Its command is `cbb`.
 ## Get started
 
 1. Install the app on your phone (Android: the APK in the
-   [latest release](https://github.com/HunterEwok/clipboardbridge/releases/latest); iPhone:
+   [latest release](https://github.com/HunterEwok/cbb/releases/latest); iPhone:
    TestFlight, coming).
-2. Install Clipboard Bridge on a computer:
+2. Install Copy Beyond Borders on a computer:
 
    ```sh
    # Linux and Mac
-   curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
    ```
 
    ```powershell
    # Windows 10 or 11, in an administrator PowerShell
-   irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+   irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
    ```
 
 3. Run `sudo cbb pair` on the computer and scan its QR code in the app.
@@ -45,7 +45,7 @@ The [quick start](docs/guide/quickstart.md) walks through it step by step;
 | Computer ↔ iPhone | One press of the Action button or a double tap on the back, then paste. |
 
 iOS does not let apps read the clipboard in the background, so the iPhone needs one
-gesture. Apple devices on one Apple Account already share a clipboard; Clipboard Bridge
+gesture. Apple devices on one Apple Account already share a clipboard; Copy Beyond Borders
 connects them to everything else. On Linux it works with any desktop, and without one
 through tmux and `cbb copy` and `cbb paste`.
 
@@ -125,13 +125,13 @@ The order of what comes next is the [roadmap](docs/roadmap.md).
 
 ## License
 
-Clipboard Bridge is free software, licensed under the
+Copy Beyond Borders is free software, licensed under the
 [GNU Affero General Public License v3.0 only](LICENSE).
 
 One author holds all the rights, so a commercial license without the AGPL's obligations is
 also available, for example to build the lite member (`lite/`) into routers and other
 devices. To ask for one, open an issue with the **Commercial license** form on
-[GitHub](https://github.com/HunterEwok/clipboardbridge/issues/new/choose).
+[GitHub](https://github.com/HunterEwok/cbb/issues/new/choose).
 
 Which builds are official, what others may do with the icon and the name, and the other
 projects with similar names: [BRAND.md](BRAND.md). The text of the protocol,

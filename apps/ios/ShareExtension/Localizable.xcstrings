@@ -41,12 +41,12 @@
         }
       }
     },
-    "Open Clipboard Bridge once, then share again.": {
+    "Open CBB once, then share again.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Откройте Clipboard Bridge один раз и поделитесь снова."
+            "value": "Откройте CBB один раз и поделитесь снова."
           }
         }
       }
@@ -91,12 +91,12 @@
         }
       }
     },
-    "This phone is in no group yet: open Clipboard Bridge to make one or join one.": {
+    "This phone is in no group yet: open CBB to make one or join one.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Этот телефон ещё не в группе: откройте Clipboard Bridge, чтобы создать группу или вступить в неё."
+            "value": "Этот телефон ещё не в группе: откройте CBB, чтобы создать группу или вступить в неё."
           }
         }
       }

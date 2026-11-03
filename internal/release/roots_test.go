@@ -155,8 +155,8 @@ func TestRootCopies(t *testing.T) {
 	b64 := regexp.MustCompile(`"(MF[A-Za-z0-9+/=]{100,})"|'(MF[A-Za-z0-9+/=]{100,})'`)
 	for _, p := range []string{
 		"packaging/windows/get.ps1",
-		"apps/android/kit/src/main/kotlin/io/github/hunterewok/clipboardbridge/kit/Releases.kt",
-		"apps/ios/ClipboardBridgeKit/Sources/ClipboardBridgeKit/Releases.swift",
+		"apps/android/kit/src/main/kotlin/tools/cbb/kit/Releases.kt",
+		"apps/ios/CBBKit/Sources/CBBKit/Releases.swift",
 	} {
 		var got [][]byte
 		for _, m := range b64.FindAllStringSubmatch(read(p), -1) {

@@ -1,4 +1,4 @@
-Copy on one device, paste on another. Clipboard Bridge gives your phones and computers one clipboard: Android, iPhone, Linux, Windows and Mac, on your own network, with no cloud and no accounts.
+Copy on one device, paste on another. Copy Beyond Borders gives your phones and computers one clipboard: Android, iPhone, Linux, Windows and Mac, on your own network, with no cloud and no accounts.
 
 <b>How it works</b>
 <ul>
@@ -15,6 +15,6 @@ Copy on one device, paste on another. Clipboard Bridge gives your phones and com
 <li>No telemetry, no ads, no account.</li>
 </ul>
 
-The computers run the Clipboard Bridge service, free software too: see the project's page for installing it on Linux, Windows or a Mac.
+The computers run the Copy Beyond Borders service, free software too: see the project's page for installing it on Linux, Windows or a Mac.
 
 This build has no Wear OS watch, which only Google Play services reach; the build on the project's releases page has it and is signed with the same key, so either updates the other.

@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/core"
-	"github.com/HunterEwok/clipboardbridge/internal/seal"
+	"github.com/HunterEwok/cbb/internal/core"
+	"github.com/HunterEwok/cbb/internal/seal"
 )
 
 // The types of commands (docs/protocol.md, section 15): CommandMode sets
@@ -160,12 +160,12 @@ func (b *CommandBody) setOrders(o commandOrders) {
 
 // commandAAD is a sealed command's associated data: its open header, each
 // string with its length before it (4 bytes, big-endian) and each time in
-// 8 bytes, big-endian, after the context "clipboardbridge command v2".
+// 8 bytes, big-endian, after the context "cbb command v2".
 // Sealed orders open only under the header they were sealed with, so that
 // no other signer can send them again in a command of its own.
 func (b *CommandBody) aad() []byte {
 	var out []byte
-	for _, f := range []string{"clipboardbridge command v2", b.Type, b.Group, string(b.By), string(b.To), b.ID} {
+	for _, f := range []string{"cbb command v2", b.Type, b.Group, string(b.By), string(b.To), b.ID} {
 		out = binary.BigEndian.AppendUint32(out, uint32(len(f)))
 		out = append(out, f...)
 	}

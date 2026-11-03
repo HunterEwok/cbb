@@ -18,7 +18,7 @@ use serde_json::{Map, Value};
 use crate::strict;
 
 /// The start of an invitation's text.
-pub const PREFIX: &str = "clipboardbridge://invite#";
+pub const PREFIX: &str = "cbb://invite#";
 /// The shortest pairing secret an invitation carries.
 pub const MIN_SECRET: usize = 16;
 /// The longest pairing secret an invitation carries.
@@ -71,9 +71,9 @@ impl Reason {
     /// A sentence for the user.
     pub fn message(self) -> &'static str {
         match self {
-            Reason::NotInvitation => "this is not a clipboardbridge invitation",
+            Reason::NotInvitation => "this is not a cbb invitation",
             Reason::Damaged => "the invitation is damaged",
-            Reason::Version => "the invitation is of another version; update clipboardbridge",
+            Reason::Version => "the invitation is of another version; update cbb",
             Reason::Group => "the invitation names no group",
             Reason::Hub => "the invitation names no hub",
             Reason::Key => "the invitation lacks a key",

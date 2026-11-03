@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // The phone's protocol core in Kotlin, the Android twin of
-// apps/ios/ClipboardBridgeKit: pairing, certificates, records and the
+// apps/ios/CBBKit: pairing, certificates, records and the
 // member protocol. It has no Android dependencies; its tests run against
 // the Go implementation's vectors in testdata/interop.
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -13,7 +13,7 @@ plugins {
     jacoco
 }
 
-group = "io.github.hunterewok.clipboardbridge"
+group = "tools.cbb"
 version = "0"
 
 java {
@@ -44,7 +44,7 @@ val lite = rootDir.resolve("../../../lite").canonicalFile
 val coreDir = lite.resolve("target/release").path
 val buildCore by tasks.registering(Exec::class) {
     workingDir = lite
-    commandLine("cargo", "build", "--locked", "--release", "-p", "clipboardbridge-ffi")
+    commandLine("cargo", "build", "--locked", "--release", "-p", "cbb-ffi")
 }
 
 tasks.test {
@@ -62,18 +62,18 @@ tasks.jacocoTestReport {
     reports { xml.required.set(true); html.required.set(false) }
 }
 
-// A script that runs InteropMain, the Kotlin twin of clipboardbridge-interop,
+// A script that runs InteropMain, the Kotlin twin of cbb-interop,
 // for Go's interop tests: CBB_SWIFT_INTEROP and CBB_SWIFT_INTEROP_TLS name it.
 val interopScript by tasks.registering {
     val classpath = sourceSets.test.get().runtimeClasspath
-    val script = layout.buildDirectory.file("interop/clipboardbridge-interop")
+    val script = layout.buildDirectory.file("interop/cbb-interop")
     dependsOn(tasks.testClasses, buildCore)
     inputs.files(classpath)
     outputs.file(script)
     doLast {
         val f = script.get().asFile
         val java = File(System.getProperty("java.home"), "bin/java").path
-        f.writeText("#!/bin/sh\nexec '$java' -Djna.library.path='$coreDir' -cp '${classpath.asPath}' io.github.hunterewok.clipboardbridge.kit.InteropMainKt \"\$@\"\n")
+        f.writeText("#!/bin/sh\nexec '$java' -Djna.library.path='$coreDir' -cp '${classpath.asPath}' tools.cbb.kit.InteropMainKt \"\$@\"\n")
         f.setExecutable(true)
     }
 }

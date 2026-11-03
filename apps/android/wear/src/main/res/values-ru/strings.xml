@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <resources>
-    <string name="no_group">Откройте Clipboard Bridge на телефоне, чтобы создать группу или войти в неё.</string>
+    <string name="no_group">Откройте CBB на телефоне, чтобы создать группу или войти в неё.</string>
     <string name="online_count">%1$d из %2$d в сети</string>
     <string name="away">Вне дома</string>
     <string name="away_off">Выключено</string>

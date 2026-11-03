@@ -12,13 +12,13 @@ import (
 )
 
 // The shortcut: UnsignedShortcut builds it as a property list, which
-// tools/shortcut writes to shortcut/clipboardbridge.plist. iOS imports only a
+// tools/shortcut writes to shortcut/cbb.plist. iOS imports only a
 // signed shortcut, so the maintainer converts that file to the binary form
 // and signs it on a Mac with `shortcuts sign` into
-// shortcut/clipboardbridge.shortcut, which the build embeds and the profile port
+// shortcut/cbb.shortcut, which the build embeds and the profile port
 // serves (see docs/maintaining.md).
 //
-// The shortcut keeps its token in iCloud Drive at Shortcuts/clipboardbridge/token.txt.
+// The shortcut keeps its token in iCloud Drive at Shortcuts/cbb/token.txt.
 // Without it, it asks for the pairing code, gets a token from /pair and
 // saves it. With it, it posts the clipboard to /sync and copies what comes
 // back; told that the token is unknown, it deletes the file, so the next
@@ -29,7 +29,7 @@ var shortcutFiles embed.FS
 
 // The shortcuts, by the base name of their files.
 const (
-	SyncShortcut = "clipboardbridge" // the button: sync, and pair on the first run
+	SyncShortcut = "cbb" // the button: sync, and pair on the first run
 )
 
 // Shortcut returns a signed shortcut, or nil in a build without it.
@@ -46,7 +46,7 @@ func UnsignedShortcuts() map[string][]byte {
 	return map[string][]byte{SyncShortcut: UnsignedShortcut()}
 }
 
-const tokenPath = "clipboardbridge/token.txt"
+const tokenPath = "cbb/token.txt"
 
 // UnsignedShortcut returns the shortcut as an XML property list.
 func UnsignedShortcut() []byte {
@@ -66,7 +66,7 @@ func UnsignedShortcut() []byte {
 	})
 	paired := output("pair", "Contents of URL")
 	add("is.workflow.actions.downloadurl", map[string]any{
-		"UUID": paired.uuid, "WFURL": "https://clipboardbridge.local:8764/pair", "WFHTTPMethod": "POST",
+		"UUID": paired.uuid, "WFURL": "https://cbb.local:8764/pair", "WFHTTPMethod": "POST",
 		"WFHTTPBodyType": "JSON", "WFJSONValues": fields(numberField("v", "1"), textField("code", "", code)),
 	})
 	tok := output("token", "Dictionary Value")
@@ -87,7 +87,7 @@ func UnsignedShortcut() []byte {
 	add("is.workflow.actions.getclipboard", map[string]any{"UUID": clipboard.uuid})
 	synced := output("sync", "Contents of URL")
 	add("is.workflow.actions.downloadurl", map[string]any{
-		"UUID": synced.uuid, "WFURL": "https://clipboardbridge.local:8764/sync", "WFHTTPMethod": "POST",
+		"UUID": synced.uuid, "WFURL": "https://cbb.local:8764/sync", "WFHTTPMethod": "POST",
 		"ShowHeaders": true, "WFHTTPHeaders": fields(textField("Authorization", "Bearer ", file)),
 		"WFHTTPBodyType": "JSON", "WFJSONValues": fields(numberField("v", "1"), textField("text", "", clipboard)),
 	})
@@ -191,7 +191,7 @@ func valueFor(o out, key string, dict out) map[string]any {
 
 func notify(msg out) (string, map[string]any) {
 	return "is.workflow.actions.notification", map[string]any{
-		"UUID": uuid("notify-" + msg.uuid), "WFNotificationActionTitle": "clipboardbridge", "WFNotificationActionBody": text("", &msg),
+		"UUID": uuid("notify-" + msg.uuid), "WFNotificationActionTitle": "cbb", "WFNotificationActionBody": text("", &msg),
 	}
 }
 

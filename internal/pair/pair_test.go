@@ -23,12 +23,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/group/grouptest"
-	"github.com/HunterEwok/clipboardbridge/internal/seal"
-	"github.com/HunterEwok/clipboardbridge/internal/testnet"
-	"github.com/HunterEwok/clipboardbridge/internal/third_party/cpace"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/group/grouptest"
+	"github.com/HunterEwok/cbb/internal/seal"
+	"github.com/HunterEwok/cbb/internal/testnet"
+	"github.com/HunterEwok/cbb/internal/third_party/cpace"
 )
 
 var t0 = time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
@@ -1036,8 +1036,8 @@ func phoneRoot(t *testing.T) (root, admin *group.CA) {
 		}
 		return &group.CA{Cert: c, Key: key}
 	}
-	root = mk("clipboardbridge group root 2026-10-21", 1, nil)
-	return root, mk("clipboardbridge admin "+string(group.NewDeviceID()), 0, root)
+	root = mk("cbb group root 2026-10-21", 1, nil)
+	return root, mk("cbb admin "+string(group.NewDeviceID()), 0, root)
 }
 
 // TestJoinerTakesAnAdminWelcome checks a welcome from an admin phone: the

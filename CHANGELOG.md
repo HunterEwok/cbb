@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to clipboardbridge are documented in this file. The format follows
+All notable changes to cbb are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
@@ -11,7 +11,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own
   remote (`internal/tvremote/appletv`), with no key presses. The TV must allow access to
-  everyone on the same network. Tested against a fake Apple TV; not yet on a real one.
+  everyone on the same network. Tested on an Apple TV 4K (tvOS 27.2).
 - A Mac with a Secure Enclave (Apple silicon or the T2 chip) keeps its member, admin and server
   keys there (`internal/sekey`, through Security.framework): the service, a LaunchDaemon, makes
   them without a keychain and keeps only the enclave's encrypted copy, which opens on no other
@@ -87,7 +87,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - The quick action `keyboard-layout` switches the layout a Linux computer's Bluetooth keyboard
   types in to the next one (`us`, `ru`), for when the device it types on switched its own; the
   apps show it as "Switch the keyboard's layout" once the computer's user turns it on.
-- A Linux computer's Bluetooth keyboard advertises itself as "Clipboard Bridge" and the
+- A Linux computer's Bluetooth keyboard advertises itself as "CBB" and the
   computer's name, and when a device it typed on forgot it (BlueZ 5.82 or later tells why the
   link dropped), it forgets that device's old pairing too, so the two can pair again.
 - The project's forwarder at `cbb.tools:8764` is built in: `cbb global hub` without
@@ -97,7 +97,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   then take the built-in one's place, so a new key reaches the hubs without a release and
   both are accepted while it changes.
 - The tray app comes with the release: the Windows installer puts it in Program Files, starts
-  it at every sign-in and adds Clipboard Bridge to the Start menu; on Linux (x86-64 and
+  it at every sign-in and adds CBB to the Start menu; on Linux (x86-64 and
   ARM64) the installer adds it with an autostart entry and a menu entry when the desktop has
   GTK 4 and WebKitGTK 6.0, and names the packages otherwise. The uninstallers remove it.
 - `.pibridge`, a test tool for the ZX Spectrum Next (`apps/zxnext`): it opens NextPi's shell
@@ -402,10 +402,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - docs/own-build.md: what ties a build to this project's releases, and how a fork or a
   build of one's own uses its own roots and addresses; `TestProjectAddresses` checks that
   every copy of the project's addresses matches `internal/update`.
-- SteamOS: `install.sh` (and so `get.sh`) puts Clipboard Bridge in `/opt/clipboardbridge`
+- SteamOS: `install.sh` (and so `get.sh`) puts CBB in `/opt/cbb`
   on a Steam Deck, whose system files each update replaces, and lists its files in `/etc`
   in SteamOS's keep list, so the install and the device's group survive SteamOS updates;
-  cbb update keeps its folder in `/opt/clipboardbridge-update` there. Not yet run on a real
+  cbb update keeps its folder in `/opt/cbb-update` there. Not yet run on a real
   Steam Deck.
 - Rootless installs on Linux (D-79): `get.sh --rootless` and `install.sh --rootless`, run
   without `sudo`, install the full member for one user as systemd user units, with its
@@ -459,7 +459,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   Command-comma opens Settings, Escape closes a device's details), and CI runs the app's
   tests on an iPad simulator as well as an iPhone one. The iPad's Settings no longer speak
   of a paired Apple Watch.
-- The Android app's F-Droid build, `clipboardbridge-fdroid-X.Y.Z.apk` in each release: the
+- The Android app's F-Droid build, `cbb-fdroid-X.Y.Z.apk` in each release: the
   same app without Google Play services, so without the Wear OS watch, and without its own
   update, which F-Droid does. It builds reproducibly, as F-Droid needs to publish our signed
   APK, and CI checks it; the recipe for fdroiddata and the store texts are in the repository
@@ -561,7 +561,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   keeps, what its hosting provider sees, and what a system VPN on a device hides.
 - BRAND.md: which builds are official and how to check them, what belongs to the project
   (the icon, `cbb.tools`, the release keys), what anyone may do without asking, and what a
-  build with changes should not do; it names the other projects called Clipboard Bridge.
+  build with changes should not do; it names the other projects called CBB.
 - A commercial license is available without the AGPL's obligations; ask with the new
   **Commercial license** issue form.
 - The text of docs/protocol.md is under CC BY 4.0, so anyone may write a compatible
@@ -645,12 +645,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - Remote paste targets on Linux: the desktop connector of an X11 session pastes through
   the clipboard and Shift+Insert, or types with XTEST in any layout, and refuses while the
   session is locked or the screen saver is on; in tmux, `cbb paste-helper tmux`, which
-  clipboardbridge.conf starts, pastes into the active pane of the client used last, and
+  cbb.conf starts, pastes into the active pane of the client used last, and
   refuses when no one is attached. On Wayland compositors with virtual keyboards (sway,
   Hyprland, labwc), the desktop connector pastes through data-control and Shift+Insert, or
   types any character through a keymap of its own; it also refuses while swaylock or
   another locker runs. On the text console, `cbb paste-helper console`, which `install.sh
-  --console` runs as the `clipboardbridge-console` unit with `CAP_SYS_ADMIN` alone, types
+  --console` runs as the `cbb-console` unit with `CAP_SYS_ADMIN` alone, types
   into the active console where a user is logged in. A text with a line break goes to tmux,
   a console or the keys only when the user allowed Enter, since it would run there.
 - Remote paste on GNOME and KDE: the desktop connector presses the keys through the
@@ -660,7 +660,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   the user's layout. In a Wayland session the X11 connector of XWayland uses it too, since
   XTEST's keys reach only X11 programs there.
 - `install.sh --uinput` (and `get.sh --uinput`) adds the uinput helper, `cbb paste-helper
-  uinput` in the `clipboardbridge-uinput` unit: a virtual keyboard that presses only
+  uinput` in the `cbb-uinput` unit: a virtual keyboard that presses only
   Shift+Insert and Enter for the desktop connector of the session on the screen, so that
   remote paste works on GNOME and KDE without the portal's dialog. It presses them only for
   a remote paste that the service took under the paste switches and handed to that
@@ -804,13 +804,13 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - Routers: `CBB_INTERFACES` limits mDNS, the member port and a listening join to the named
   interfaces, so a router never answers on its internet side, even with a private address
   there or its firewall opened by mistake. On OpenWrt the control socket is in `/var/run`,
-  the state in `/etc/clipboardbridge/state` and the device's form is a router. Release
+  the state in `/etc/cbb/state` and the device's form is a router. Release
   archives for mips and mipsle (softfloat), whose tests a CI job runs under qemu-mips
   (big-endian).
 - OpenWrt 25.12 and later: `get.sh` installs the full member on a router (`uclient-fetch`,
   mips or mipsle by the package architecture) with a procd service that runs as its own
   user without capabilities, only on the devices of the zones in
-  `/etc/config/clipboardbridge` (`lan` by default), and starts once NTP has set the clock.
+  `/etc/config/cbb` (`lan` by default), and starts once NTP has set the clock.
   Its firewall rules are its own procd data, which fw4 loads while it runs, so
   `/etc/config/firewall` is never changed; `cbb global hub` opens the hub's port on `wan`
   this way. sysupgrade keeps the keys and the program. A CI job installs it on OpenWrt
@@ -822,7 +822,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   from home, since its WireGuard library needs 64-bit atomics): `get.sh --lite` installs it with the
   same procd service, which runs `cbb run`. The lite member takes `CBB_INTERFACES` too, for
   mDNS, the member port and the QR code's addresses, and its defaults on OpenWrt are
-  `/etc/clipboardbridge/state` and `/var/run/clipboardbridge/control.sock`.
+  `/etc/cbb/state` and `/var/run/cbb/control.sock`.
 - The test bench takes OpenWrt routers and FreeBSD computers as devices under test.
 - The desktop connector on FreeBSD: the clipboard of X11 and Wayland desktops, and remote
   paste through XTEST or the virtual keyboard, from `cbb agent`, which XDG autostart starts
@@ -834,9 +834,27 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - OPNsense: the installer adds a plugin hook that names the service's pf anchor in
   OPNsense's ruleset and lists the service under System > Diagnostics > Services. pfSense,
   unsupported: the installer prints the rules to add and starts the service through
-  `clipboardbridge.sh`.
+  `cbb.sh`.
 
 ### Changed
+- The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
+  Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
+  installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the stores. The apps' identifiers
+  start with `tools.cbb` (the Android app and the watch `tools.cbb`, the iPhone app
+  `tools.cbb`, the Mac app `tools.cbb.mac`), so the apps install anew. Every other technical
+  name follows: the repository `HunterEwok/cbb` and its Go module, the service `cbb.service`
+  (`tools.cbb` on macOS), the user `cbb` (`_cbb` on macOS and FreeBSD), the directories
+  (`/etc/cbb`, `/var/lib/cbb`, `/opt/cbb` and the others), the release archives
+  (`cbb-linux-amd64.tar.gz` and the others), the Homebrew formula and the OpenWrt package
+  `cbb`, the protocol's names (`_cbb._tcp`, `cbb.local`, the ALPN protocols, the `cbb://` links
+  and QR codes, the signature labels), the Swift package `CBBKit` and the Kotlin package
+  `tools.cbb`. An install of 0.5 is not moved: remove it with its own uninstaller.
+- What earlier versions left behind is gone, as nothing before 0.6 is read: the installers no
+  longer remove or move installs under earlier names, `get.sh` no longer finds the lite
+  member's archives of 0.4 and earlier, members refuse the event `via` `iphone`, the tunnel
+  states of a single hub (`to_hub`, phones' state versions 1 to 4) and a forwarder's entries
+  without an expiry are not read, the phones no longer carry the old single theme over, and a
+  phone's missing sync mode file means `own`.
 - The lite member joins a group with `cbb pair`, as a full member in no group does, instead of
   `cbb join` (`cbb pair -code` for the code of a full member, `cbb next pair` for the ZX
   Spectrum Next); `cbb join` is gone. The Next's dot command is `.cbb pair` (0.4.0) and the
@@ -866,7 +884,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - Remote paste on the phones: with the text left empty, Paste sends what the phone's
   clipboard holds, and the button that put the clipboard in the field is gone.
 - On a Mac the service and the agent write their own logs, as on Windows:
-  `/Library/Logs/clipboardbridge/service.log` and `~/Library/Logs/clipboardbridge/agent.log`,
+  `/Library/Logs/cbb/service.log` and `~/Library/Logs/cbb/agent.log`,
   each line after the time, each moved to `.1` at 1 MiB, so a log no longer grows without
   end; the agent's log is new.
 - The protocol's section 10 now specifies the group records of version 2 (docs/protocol.md,
@@ -878,8 +896,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   bindings, and building the Android app, F-Droid's build included, needs the Rust of
   `cbb.rust` in `apps/android/gradle.properties` with cargo-ndk.
 - One form for each thing on the wire (docs/protocol.md, Conventions), with the next ALPN
-  version of every channel: `clipboardbridge/2`, `clipboardbridge-pair/2`,
-  `clipboardbridge-forward/2` and `clipboardbridge-relay/2`, so members, forwarders and relays
+  version of every channel: `cbb/2`, `cbb-pair/2`,
+  `cbb-forward/2` and `cbb-relay/2`, so members, forwarders and relays
   of 0.5 and of this version do not connect to each other.
   - One framing: the registrations at a forwarder and a relay and the requests inside a
     relay's tunnel are a 4-byte length and JSON, as the member protocol and pairing are,
@@ -1024,7 +1042,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   its flags is in `docs/reference/cli.md`, and that every port the code listens on by
   default is in the ports table of `docs/reference/devices.md`. The pages for users and
   administrators may not tell the reader something is easy ("simply", "easily") or call
-  the product `clipboardbridge` outside code, links and quotes, and every field of the
+  the product `cbb` outside code, links and quotes, and every field of the
   control socket's header must be in section 8 of `docs/protocol.md`. Against a base, it
   also reports a test that skips where it did not, and counts the Swift tests of the Xcode
   projects' test targets too.
@@ -1037,7 +1055,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   where its header protection is defined, the registration ID's 64 bits, the missing message
   and control header fields, and the hub exception for phones. docs/cryptography.md says
   which keys do leave a device, the member certificates' real lifetime on phones (2 years;
-  397 days is the `clipboardbridge.local` certificate's, in limits.md too) and the
+  397 days is the `cbb.local` certificate's, in limits.md too) and the
   invitation secret; the threat model says which WireGuard keys a hub admits.
 - docs/design.md follows arc42: goals and constraints, context, solution strategy, building
   blocks, runtime, deployment, crosscutting concepts, decisions, quality requirements, risks
@@ -1207,7 +1225,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   could leave the earlier one in `desktop.json`.
 - The tray app no longer hangs when the service does not answer, and opened while the
   service is not running it says so instead of showing an empty window.
-- On Linux the tray item is named Clipboard Bridge instead of Wails.
+- On Linux the tray item is named CBB instead of Wails.
 - The Mac and iPhone apps take ShowErrorDetails given as YES or NO text, as a launch argument gives it;
   before, such a value was ignored.
 - A computer that signs two group records in one pass, or at the same moment, gives them
@@ -1521,7 +1539,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - A second device using an invitation that was used hears that its pairing window is
   closed, not "tls: internal error".
 - The installers and `cbb update` keep a `CBB_INTERFACES` line set by hand in
-  `clipboardbridge.env` (Linux, macOS, FreeBSD) or in the service's registry environment
+  `cbb.env` (Linux, macOS, FreeBSD) or in the service's registry environment
   (Windows); before, the next install or update dropped it, and the service then answered
   on every interface again.
 - The forwarder's drop-in for VLESS on port 443 also sets `PrivateUsers=no`: inside the
@@ -1651,7 +1669,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   only `cbb` in it, for amd64, arm64 and armv7; it runs as its own user without
   capabilities, on a read-only root file system, with its state in one volume. Compose files
   run it as an always-on member at home or as a forwarder or relay on a server
-  (packaging/docker). Each release publishes it as `ghcr.io/hunterewok/clipboardbridge` with a
+  (packaging/docker). Each release publishes it as `ghcr.io/hunterewok/cbb` with a
   build provenance attestation and gives its digest in the release notes.
 - Sync modes on the computers: `cbb mode own|shared|receive|send` sets what moves between a
   computer's clipboard and the group. A computer that makes or joins a group from now on
@@ -1696,7 +1714,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ### Changed
 
 - On a Linux desktop that starts `graphical-session.target` (GNOME, KDE Plasma) the desktop
-  agent runs as the user unit `clipboardbridge-agent.service`, which the installer starts
+  agent runs as the user unit `cbb-agent.service`, which the installer starts
   again in each running session after an update: the clipboard links again without logging
   out and in. Other desktops keep the autostart entry, and a lock keeps it to one agent a
   session.
@@ -1705,23 +1723,21 @@ All notable changes to clipboardbridge are documented in this file. The format f
   admin and it cannot be the hub, since its keys would be in a file in the volume. The
   refusal says how to allow it anyway: `CBB_KEYS_IN_FILE=yes` in the container's
   environment.
-- The home compose file names its container `clipboardbridge`, so `docker exec -it
-  clipboardbridge cbb pair` works as the documentation says.
+- The home compose file names its container `cbb`, so `docker exec -it
+  cbb cbb pair` works as the documentation says.
 
 - `cbb global relay` first says what a relay learns (which devices are online and from
   where, which talk, when and how much) and asks you to type yes, or takes `-yes`; the
   service takes a relay only with that consent. Where sync away from home is off, it turns
   it on as well, after the same warning about keys in files as `cbb global on`. The design
   no longer keeps the relay to self-hosting only (D-68).
-- The lite member's release archives are `clipboardbridge-lite-linux-amd64.tar.gz`, `-arm64`
-  and `-armv6`, holding `clipboardbridge-lite/`, like the full member's `clipboardbridge-*`
-  (they were `cbb-lite-linux-*`). `get.sh --lite` takes the new names, and the old ones for
-  a release before 0.5 named in `CBB_VERSION`.
-- What people read calls the project Clipboard Bridge: the installers' and `cbb`'s messages,
+- The lite member's release archives are named like the full member's, and `get.sh --lite`
+  takes those names.
+- What people read calls the project CBB: the installers' and `cbb`'s messages,
   the Windows service, its firewall rules and its entry in Settings, Apps (an update renames
   the service), the systemd units' and the desktop entry's descriptions, the iPhone profile
-  and the release notes. Commands, paths, the service's and the group's names stay
-  `clipboardbridge` and `cbb`.
+  and the release notes. Commands, paths and the service's and the group's names stay as
+  they were.
 - The documentation for users is rewritten in plain words, under `docs/guide` and
   `docs/reference`: the quick start begins with the phone app as the group's root and then
   suggests making an always-on computer an admin and the hub; "How it works" draws every
@@ -1729,8 +1745,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   networks that block VPNs), in SVG pictures of one style with a light and a dark theme,
   drawn by `tools/diagrams`; new pages cover installing, sync away from home, AmneziaWG and
   VLESS, the devices, ports and files, and running one's own forwarder or relay. Text for
-  readers says Clipboard Bridge; commands, paths and packages keep `clipboardbridge` and
-  `cbb`.
+  readers says CBB; commands, paths and packages keep their names.
 
 ### Fixed
 
@@ -1758,7 +1773,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   it is the hub with a forwarder it does not run.
 - On a Mac, a `cbb` built without cgo, which has no pasteboard, says so in `cbb version` and
   `cbb status`, and the installer refuses it; its agent only exited, over and over.
-- The lite member says that a user outside the `clipboardbridge` group must join it, not
+- The lite member says that a user outside the `cbb` group must join it, not
   that the service may not be running; its unit keeps the service's memory out of swap
   (`MemorySwapMax=0`), as the full member's does.
 - Moving the hub could leave a device far from home without a hub: the old hub stopped its
@@ -1796,7 +1811,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - Releases carry `winget-manifest.zip`: the release workflow writes it before it
   publishes the release, since an immutable release takes no files afterwards (0.4.0 went
   out without it).
-- The release notes name the Wear OS app's APK, `clipboardbridge-wear-X.Y.Z.apk`, in the
+- The release notes name the Wear OS app's APK, `cbb-wear-X.Y.Z.apk`, in the
   install steps and the file table.
 
 ## [0.4.0] - 2026-10-25
@@ -1817,7 +1832,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   Settings; the background service hears of them at once.
 - Android: the Glass design of the iPhone app: ten colours and a Dark, Light or System theme
   (Material You stays a choice), one page with every device as tiles or a list, a device's
-  own page with its type, system and version, Clipboard Bridge version, MAC address and
+  own page with its type, system and version, CBB version, MAC address and
   role, and on tablets and foldables the orbits with the details beside them. The app's
   name on the home screen is CBB.
 - iPhone: notifications of the group's events (a device joined or was removed, became an
@@ -1840,12 +1855,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - The Android and iPhone apps keep the home network addresses from the QR code of each
   computer they add, and dial a computer there while mDNS does not find it, so a member in
   another subnet (an IoT VLAN, for example) syncs with the phone too.
-- winget: each release writes the manifest of `HunterEwok.clipboardbridge`, and `cbb install`
+- winget: each release writes the manifest of `HunterEwok.cbb`, and `cbb install`
   installs the service from the copy that winget unpacked. The release signs the Windows
   programs with Authenticode when its secrets hold a certificate.
 - ZX Spectrum Next: `.cbb text -s` and `.cbb copy -s` send a secret, through the lite
   member's `cbb next copy -secret`.
-- iPhone: Share → Clipboard Bridge sends a text or a link to the computers at once (a share
+- iPhone: Share → CBB sends a text or a link to the computers at once (a share
   extension), and a Control Center control and a home-screen widget "Sync clipboard".
   Android: the home-screen widget "Send clipboard".
 - Rename a device: `cbb rename NAME NEW-NAME` on an admin computer, and Rename in the Devices
@@ -1864,7 +1879,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   Windows outbound rule. By default that range stays outside the home network.
 
 - The Mac installer takes `--port N` like the Linux one, kept in
-  `/etc/clipboardbridge/clipboardbridge.env`, and `get.sh` passes it on a Mac too.
+  `/etc/cbb/cbb.env`, and `get.sh` passes it on a Mac too.
 - `CBB_ERROR_DETAILS=1` for the Linux and macOS installers, uninstallers and `get.sh`: they
   show every command as it runs. Without it a failure says it failed, with its exit status.
 - [docs/parity.md](docs/parity.md): what each computer, phone and lite device can do, the
@@ -1954,7 +1969,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   address answers its clients anywhere on its UDP port only (on Linux by the program alone).
 - The installers no longer open firewall ports without asking. They find the firewall
   (ufw, firewalld, nftables or iptables on Linux, the macOS application firewall, Windows
-  Firewall), list each rule clipboardbridge needs with its protocol, port, source and
+  Firewall), list each rule cbb needs with its protocol, port, source and
   purpose, and ask `Add these rules now? [y/N]`. Yes adds them and keeps them current on
   every update; No, the default and the answer when there is no terminal, adds none and
   prints the exact commands. The answer is kept for updates. `--express` (`-Express`,
@@ -1970,7 +1985,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - The lite member dials no address outside the home network: `-peer` names a member at
   home, and away from home the device reaches the group only through the tunnel.
 - The lite member's command is `cbb`, as on a full member, with the same paths, user and
-  service (`/usr/local/bin/cbb`, `/var/lib/clipboardbridge`, `clipboardbridge.service`);
+  service (`/usr/local/bin/cbb`, `/var/lib/cbb`, `cbb.service`);
   `cbb version` says which member a device runs, and the commands of a full member answer
   that this is the lite member. Its archive (`cbb-lite-linux-*`) carries the same Linux
   `install.sh` and `uninstall.sh` as a full member's, and `get.sh --lite` installs it.
@@ -1992,7 +2007,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   device. `cbb join` is gone, and `cbb pair` no longer creates a group by itself.
 - One `get.sh` installs on Linux and on a Mac: it picks the archive for the system and the
   architecture, checks it against `SHA256SUMS` and runs that system's `install.sh`. On a
-  Mac, `install.sh` keeps `uninstall.sh` in `/usr/local/share/clipboardbridge`, as on Linux,
+  Mac, `install.sh` keeps `uninstall.sh` in `/usr/local/share/cbb`, as on Linux,
   so every platform has the same three: get, install and uninstall.
 - `cbb desktop` is gone: `cbb agent` links the clipboard on every desktop, the Mac's, the
   Windows one and a Linux desktop's (Wayland or X11), and the Linux autostart entry runs it.
@@ -2067,7 +2082,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - Security: a forwarder takes at most 16 registrations from one address and 64 from one
   network (/24 or /64), and gives each network a sixteenth of the budget for checking
   handshakes against the groups, so a few hosts can no longer fill it or use up the budget.
-- Security: membership in the `clipboardbridge` group gives the clipboard only. The service
+- Security: membership in the `cbb` group gives the clipboard only. The service
   takes what changes the group (`new`, `pair`, `invite`, `revoke`, `rename`, `admin`,
   `takeover`, `upgrade`, `freeze`, `unfreeze`, the holder setting, `global` on, off and hub)
   only on a new admin socket next to the control socket, which only root reaches (on Windows
@@ -2106,7 +2121,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 - Security: on a Mac with Homebrew, the service, which holds the group's keys, no longer runs
   the binary under Homebrew's prefix, which the user and their programs may replace.
-  `install.sh --in-place` copies it to `/Library/Application Support/clipboardbridge/bin`,
+  `install.sh --in-place` copies it to `/Library/Application Support/cbb/bin`,
   where only root can change it; the agent and `cbb` in PATH still run Homebrew's. Running
   `install.sh` again after `brew upgrade` refreshes the copy, as before.
 
@@ -2127,7 +2142,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   member) enforces this from the records alone (docs/protocol.md, section 10).
 
 - Security: the iPhone shortcut's token only syncs. `POST /admit` and the shortcut
-  "clipboardbridge: add a computer" are gone, so a copied token can no longer add a computer
+  "cbb: add a computer" are gone, so a copied token can no longer add a computer
   (which on Linux got the group's keys); computers join through the phone apps or
   `cbb pair`. `cbb pair -phone -new-token` revokes every shortcut's token and pairs the
   iPhone with a new one.
@@ -2157,7 +2172,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   rebind, which its own "up" event can cause while it starts, took any free port.
 
 - A data race in the tunnel's WireGuard timers when a peer stops, as when a hub closes: a
-  timer that fired at that moment cleared its state outside its lock. clipboardbridge now
+  timer that fired at that moment cleared its state outside its lock. cbb now
   builds with a copy of amneziawg-go that clears it under the lock
   (`internal/third_party/amneziawg-go`).
 - Sync away from home works on Linux: the service's unit lets it reach only the home network,
@@ -2168,7 +2183,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - Every computer keeps the service on the home network until sync away from home is on: the
   service refuses its own connections outside the home network (`internal/netguard`), as the
   member port already refused connections from there. On Windows the installer adds an
-  outbound block rule of Windows Firewall for the service (`clipboardbridge-home-only`) as
+  outbound block rule of Windows Firewall for the service (`cbb-home-only`) as
   well, which `cbb global on` and `cbb pair -invite`, run as administrator, lift, and `cbb global
   off` puts back, as `sudo` does on Linux. A Mac gets the system's own limit with the Mac
   app's Network Extension later (docs/roadmap.md).
@@ -2203,7 +2218,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   when it has not connected for 30 seconds, the other dials too, and of two connections the
   one the lower ID dialed stays. `cbb-lite` dials the Macs as it dials every computer. A Mac
   still does not admit devices.
-- Which computer holds `clipboardbridge.local` (D-53): one without a battery comes first and a
+- Which computer holds `cbb.local` (D-53): one without a battery comes first and a
   laptop only when no other is on, then the lowest device ID; the computers publish their
   priority in the TXT key `h`. `cbb holder auto|first|fallback|never` changes the guess, and
   `cbb status` says how this computer takes part.
@@ -2243,12 +2258,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and reports `phone` too. Names that belong to the shortcut, for an iPhone without the
   app, keep the word: the iPhone CA, the `iphone` token role, `to_iphone` and `from_iphone`.
 
-- **clipbridge is now clipboardbridge, and its command is `cbb`.** Everything is renamed: the
-  repository, the binary (`/usr/local/bin/cbb`), the service (`clipboardbridge.service`, on
-  macOS `io.github.hunterewok.clipboardbridge`), the user and group, the directories, the
+- **The command is now `cbb`.** Everything is renamed: the
+  repository, the binary (`/usr/local/bin/cbb`), the service (`cbb.service`, on
+  macOS `tools.cbb`), the user and group, the directories, the
   environment variables (`CBB_PORT` and the others), and the protocol's names
-  (`_clipboardbridge._tcp`, `clipboardbridge.local`, the ALPN protocols, the QR code
-  scheme, the signature labels). It does not reach 0.2.0: the installers remove clipbridge,
+  (`_cbb._tcp`, `cbb.local`, the ALPN protocols, the QR code
+  scheme, the signature labels). It does not reach 0.2.0: the installers remove the earlier install,
   with its keys, its user and its firewall rules, and each device pairs again.
 
 - Members accept a group CA with path length 1, the root that the phone app creates for its
@@ -2259,13 +2274,13 @@ All notable changes to clipboardbridge are documented in this file. The format f
   simulator cannot make a Secure Enclave key that needs Face ID.
 - `cbb join` names the app's "Connect a new device" and prints the QR code's text
   as well, to paste into the app on a phone without a camera.
-- The Linux installer opens clipboardbridge's ports from the home network on every run, not only
+- The Linux installer opens cbb's ports from the home network on every run, not only
   from `get.sh`, so an update fixes a firewall turned on after the first install: in ufw as
-  before, and now in firewalld too (a `clipboardbridge` service and rules for the home network);
+  before, and now in firewalld too (a `cbb` service and rules for the home network);
   under a bare nftables or iptables setup that drops input it prints the commands.
   `CBB_FIREWALL=no` leaves the firewall alone. `cbb join` names the firewall
   when the phone cannot connect.
-- clipboardbridge needs one TCP port, 8764: a listening `cbb join` waits on it (the
+- cbb needs one TCP port, 8764: a listening `cbb join` waits on it (the
   computer is in no group yet), and the iPhone shortcut's HTTPS and the profile moved there
   from 8765 and 8766; the member port tells the connections apart by their first bytes.
   Installed shortcuts stop working: run `cbb pair -phone` and add the new one from
@@ -2273,7 +2288,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - The Linux installer keeps track of the firewall rules it adds and removes them before
   adding new ones, so a changed port leaves nothing open; it never touches other rules.
 - The phone app's Start screen says what to do in plain words: "Connect a new device" (a
-  computer or another phone) and "I already use clipboardbridge on another phone". Its buttons
+  computer or another phone) and "I already use cbb on another phone". Its buttons
   and cards use Liquid Glass from iOS 26, with materials before.
 
 ### Added
@@ -2307,13 +2322,13 @@ All notable changes to clipboardbridge are documented in this file. The format f
   clients that stay.
 
 - Homebrew, on macOS and Linux (x86-64, ARM64):
-  `brew install hunterewok/tap/clipboardbridge`. The formula installs the
+  `brew install hunterewok/tap/cbb`. The formula installs the
   release archive as it is, so it needs no Apple signing, and the release workflow updates
   the tap after each release (`packaging/homebrew/formula.sh`, docs/maintaining.md). On a
   Mac, `install.sh --in-place` runs the service and the agent from Homebrew's binary, so a
   `brew upgrade` followed by the same command updates them.
 
-- `packaging/macos/uninstall.sh` removes clipboardbridge from a Mac, keeping its keys unless
+- `packaging/macos/uninstall.sh` removes cbb from a Mac, keeping its keys unless
   `--purge`.
 
 - **Windows 10 (1809 or later) and 11, x86-64 and ARM64.** The service runs as a Windows
@@ -2325,8 +2340,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
   Windows Firewall, and Settings, Apps, Uninstall (`uninstall.ps1`, `-Purge` for the keys)
   removes it with exactly those rules. The installers name the step that failed and the
   system's message; `-Details` or `CBB_ERROR_DETAILS=1` adds the full error. The service
-  logs to `ProgramData\clipboardbridge\logs`, the agent to
-  `LocalAppData\clipboardbridge\agent.log`.
+  logs to `ProgramData\cbb\logs`, the agent to
+  `LocalAppData\cbb\agent.log`.
 - **The lite member, `cbb-lite`, in Rust** (`lite/`): a small member for weak Linux devices
   (a Raspberry Pi, a router) that joins a phone group by QR code (or a computer group with
   the code from `cbb pair`) and never holds CA keys. It dials the computers, and publishes
@@ -2368,7 +2383,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   none, with the accessibility service "Send my copies by themselves", which notices a copy
   and takes the input focus for a moment to read the clipboard (Settings explains it and
   opens the system's page).
-  The app has its icon, and a release carries `clipboardbridge-X.Y.Z.apk`, signed with the
+  The app has its icon, and a release carries `cbb-X.Y.Z.apk`, signed with the
   project's release key (docs/apps.md, "Releasing the Android app").
 
 - A new app icon, a clipboard with a key: light, and dark in the system's dark mode
@@ -2377,9 +2392,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   anything up: Back Tap or the Action button sends or fetches by the Home button's rule
   without opening the app, and says what it did.
 - `install.sh --port N` (and `get.sh --port N`) moves the member port from 8764; it is kept
-  in `/etc/clipboardbridge/clipboardbridge.env` as `CBB_PORT` for later updates, and the
+  in `/etc/cbb/cbb.env` as `CBB_PORT` for later updates, and the
   installer says to allow it in other firewalls. The phone app needs no setting.
-- `uninstall.sh`, installed to `/usr/local/share/clipboardbridge`, removes clipboardbridge and the
+- `uninstall.sh`, installed to `/usr/local/share/cbb`, removes cbb and the
   firewall rules its installer added; `--purge` also deletes the device's keys.
 - The phone app's language can be chosen in the app (System, English, Russian), in Settings
   and, when the system's language has no translation, on the Start screen; Settings, with
@@ -2445,8 +2460,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 - A quick start, [docs/guide/quickstart.md](docs/guide/quickstart.md): install with one command, make
   the group, add the iPhone and the other computers.
-- The devices list: `clipbridge devices` shows every device of the group with its role, an
-  admin mark and when this member last saw it; `clipbridge revoke <name or ID>` removes a
+- The devices list: `cbb devices` shows every device of the group with its role, an
+  admin mark and when this member last saw it; `cbb revoke <name or ID>` removes a
   Mac, a phone or an iPhone's shortcut from the group. Members keep signed device and
   revocation records, give them to each other, and refuse removed devices at once; a removed
   iPhone's token stops working. A Linux member records the devices it admits, and the
@@ -2455,8 +2470,8 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Fixed
 
-- `clipbridge pair` and the installers told the new computer to run `clipbridge join`, which
-  now shows a QR code for the phone; for the code they show, it is `clipbridge join -code`.
+- `cbb pair` and the installers told the new computer to run `cbb join`, which
+  now shows a QR code for the phone; for the code they show, it is `cbb join -code`.
 
 ## [0.1.1] - 2026-10-21
 
@@ -2468,46 +2483,46 @@ archives, so it has no release.
 - Repository scaffolding: license (AGPL-3.0-only), security policy, contributing rules,
   code of conduct, issue forms and repository settings.
 - Design document: [docs/design.md](docs/design.md).
-- The `clipbridge` command: `service` runs the service; `pair` and `join` admit a computer to
+- The `cbb` command: `service` runs the service; `pair` and `join` admit a computer to
   the group with a six-digit code; `copy` and `paste` use the group's clipboard; `status`
   shows the group and the connected members.
 - The service: the group's certificates, pairing, mDNS discovery (publishing on Linux,
   browsing on a Mac), member connections and the sync engine, and a local control socket.
 - The connector package, which links a desktop clipboard to the service.
-- Linux desktops: `clipbridge desktop` links the session's clipboard, through Wayland
+- Linux desktops: `cbb desktop` links the session's clipboard, through Wayland
   data-control or X11 (XWayland on GNOME), started by an XDG autostart entry.
 - Linux packaging: a hardened systemd unit, the service user, a tmux configuration, an
   optional tmux start on the text console, and `packaging/linux/install.sh`.
-- macOS: `clipbridge agent` links the pasteboard (secrets stay on the Mac and carry the
+- macOS: `cbb agent` links the pasteboard (secrets stay on the Mac and carry the
   concealed marker); the service runs as a LaunchDaemon and the agent as a LaunchAgent,
   installed by `packaging/macos/install.sh`.
-- iPhone: `clipbridge pair -phone` on the member that holds `clipbridge.local` serves the
+- iPhone: `cbb pair -phone` on the member that holds `cbb.local` serves the
   profile with the iPhone CA and a pairing page that issues the shortcut's token; the
   shortcut's `/sync` sends the iPhone's text to the group or brings a recent copy back.
   `pair -phone` shows a QR code of a page that walks through the steps; the shortcut,
   generated from the code and signed on a Mac, asks for the six-digit code on its first run
   and keeps its token.
-- The phone as the main device: `clipbridge pair -phone` on a Linux machine in no group
-  creates the group, and `clipbridge join` listens and shows a QR code (a `clipbridge://join`
-  URL with its code, addresses and certificate fingerprint) that the shortcut "clipbridge:
+- The phone as the main device: `cbb pair -phone` on a Linux machine in no group
+  creates the group, and `cbb join` listens and shows a QR code (a `cbb://join`
+  URL with its code, addresses and certificate fingerprint) that the shortcut "cbb:
   add a computer" scans; the Linux member then dials the computer, so no announcement and
   no multicast are needed, and a device that does not know the code learns nothing from a
-  try. `clipbridge join -code` keeps the code from `clipbridge pair`.
+  try. `cbb join -code` keeps the code from `cbb pair`.
 - Certificate renewal: a Linux member renews its own certificates and, with a new `cert`
   message, those of the members it is connected to, months before they expire.
 - The member protocol accepts the roles `phone` (the phone apps) and `lite` (a lite member),
   which connect like a Mac.
 - Releases from a version tag: archives for Linux and macOS, `SHA256SUMS` and build
   provenance attestations; `get.sh` installs the latest release on Linux in one command,
-  checks it, and opens clipbridge's ports in ufw for the home network only. The member port
+  checks it, and opens cbb's ports in ufw for the home network only. The member port
   is 8764 and a listening join 8767 when they are free.
 - Linux members without the CA keys, for groups whose root will be the phone: a welcome
   without them makes such a member, which syncs but admits nobody and never holds
-  `clipbridge.local`.
-- The start of the phone app: `apps/ios/ClipbridgeKit`, a Swift package with CPace (checked
+  `cbb.local`.
+- The start of the phone app: `apps/ios/CBBKit`, a Swift package with CPace (checked
   against the draft's test vectors), the pairing frames and the join QR code, tested on
   Linux and macOS against vectors from the Go side in `testdata/interop/`.
-- ClipbridgeKit admits a computer as the phone will: it dials, confirms the code first and
+- CBBKit admits a computer as the phone will: it dials, confirms the code first and
   issues the computer's certificate; a Go test runs it against the Go joiner.
 - Protocol specification: [docs/protocol.md](docs/protocol.md); the plan for the phone apps:
   [docs/apps.md](docs/apps.md).
@@ -2519,10 +2534,10 @@ archives, so it has no release.
 - The release build packs the macOS archives with `packaging/macos`; CI now builds every
   release archive on each pull request with the same script, `packaging/archive.sh`.
 
-[Unreleased]: https://github.com/HunterEwok/clipboardbridge/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/HunterEwok/clipboardbridge/compare/v0.4.1...v0.5.0
-[0.4.1]: https://github.com/HunterEwok/clipboardbridge/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/HunterEwok/clipboardbridge/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/HunterEwok/clipboardbridge/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/HunterEwok/clipboardbridge/compare/v0.1.1...v0.2.0
-[0.1.1]: https://github.com/HunterEwok/clipboardbridge/releases/tag/v0.1.1
+[Unreleased]: https://github.com/HunterEwok/cbb/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/HunterEwok/cbb/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/HunterEwok/cbb/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/HunterEwok/cbb/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/HunterEwok/cbb/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/HunterEwok/cbb/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/HunterEwok/cbb/releases/tag/v0.1.1

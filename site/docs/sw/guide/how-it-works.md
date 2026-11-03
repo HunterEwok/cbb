@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e3f44a3e70d3 -->
+<!-- source: 895e2077a95e -->
 # Jinsi inavyofanya kazi
 
-Ukurasa huu unaeleza Clipboard Bridge kwa picha: nani yumo kwenye kikundi, jinsi vifaa vinavyopatana nyumbani, na kila njia ambayo vinaweza kuendelea kuwasiliana vikiwa mbali. Kanuni kamili ziko kwenye [muundo](../design.md); huzihitaji ili kuutumia.
+Ukurasa huu unaeleza Copy Beyond Borders kwa picha: nani yumo kwenye kikundi, jinsi vifaa vinavyopatana nyumbani, na kila njia ambayo vinaweza kuendelea kuwasiliana vikiwa mbali. Kanuni kamili ziko kwenye [muundo](../design.md); huzihitaji ili kuutumia.
 
 ## Kikundi
 
@@ -17,11 +17,11 @@ Vifaa vyako huunda **kikundi**. Ni vifaa ulivyoviruhusu tu vinavyokuwa ndani yak
 | **Mwanachama bila root** | kompyuta ya Linux iliyosakinishwa bila `sudo` | husawazisha kama mwanachama, lakini kamwe si mzizi, msimamizi wala kitovu ([tazama hapa chini](#rootless-members)) |
 | **Kitovu** | kompyuta ya msimamizi nyumbani, au simu wakati programu yake imefunguliwa, ukipenda | huwezesha vifaa vyako kusawazisha vikiwa mbali na nyumbani |
 
-Ufunguo wa simu hutengenezwa ndani ya chipu yake ya usalama (Secure Enclave, Keystore ya Android) na haitoki kamwe; kila matumizi huomba uso wako, alama ya kidole au nambari ya siri. Kompyuta huweka funguo zake kwenye faili ambazo Clipboard Bridge pekee ndiyo huzisoma.
+Ufunguo wa simu hutengenezwa ndani ya chipu yake ya usalama (Secure Enclave, Keystore ya Android) na haitoki kamwe; kila matumizi huomba uso wako, alama ya kidole au nambari ya siri. Kompyuta huweka funguo zake kwenye faili ambazo Copy Beyond Borders pekee ndiyo huzisoma.
 
 ### Wanachama bila root
 
-Kwa kawaida kisakinishi huhitaji `sudo` mara moja, ili Clipboard Bridge ifanye kazi chini ya akaunti yake yenyewe: kivinjari chako, michezo yako na kila programu nyingine unayoendesha haziwezi kusoma funguo zake, na mfumo huweka huduma ndani ya mazingira finyu yaliyotengwa. Usakinishaji bila root huruka hilo, kwa kompyuta ambayo huna `sudo`, kazini kwa mfano. Husawazisha kama mwanachama yeyote, lakini programu yoyote yako inaweza kunakili ufunguo wake na kujifanya yeye, kwa hiyo kamwe hawezi kuwa mzizi, msimamizi wala kitovu, hata ukiomba. Orodha ya vifaa huuweka alama "rootless". Steam Deck haihitaji hili: inatumia usakinishaji wa kawaida ([kusakinisha](install.md#steamos-steam-deck)).
+Kwa kawaida kisakinishi huhitaji `sudo` mara moja, ili Copy Beyond Borders ifanye kazi chini ya akaunti yake yenyewe: kivinjari chako, michezo yako na kila programu nyingine unayoendesha haziwezi kusoma funguo zake, na mfumo huweka huduma ndani ya mazingira finyu yaliyotengwa. Usakinishaji bila root huruka hilo, kwa kompyuta ambayo huna `sudo`, kazini kwa mfano. Husawazisha kama mwanachama yeyote, lakini programu yoyote yako inaweza kunakili ufunguo wake na kujifanya yeye, kwa hiyo kamwe hawezi kuwa mzizi, msimamizi wala kitovu, hata ukiomba. Orodha ya vifaa huuweka alama "rootless". Steam Deck haihitaji hili: inatumia usakinishaji wa kawaida ([kusakinisha](install.md#steamos-steam-deck)).
 
 ## Aina mbili za kikundi
 
@@ -66,7 +66,7 @@ Watoa huduma wengi wa intaneti huweka nyumba nyuma ya anwani moja ya pamoja (car
 Kisambazaji hakina funguo na hakiwezi kusoma chochote: huona tu pakiti zilizosimbwa zinazoelekea kwenye kitovu chako. Kuna aina mbili:
 
 - **Chako mwenyewe**: `cbb forward` kwenye seva yoyote yenye anwani ya umma, seva pepe ya bei nafuu kwa mfano ([kuendesha seva zako mwenyewe](../admin/self-hosting.md)).
-- **Kisambazaji cha Clipboard Bridge** kwenye `cbb.tools`, kinachoendeshwa na mradi kwa kila mtu. Kinajaribiwa na bado hakijafunguliwa kwa wote; anwani na ufunguo wake vitakuwa kwenye ukurasa huu kikifunguliwa.
+- **Kisambazaji cha Copy Beyond Borders** kwenye `cbb.tools`, kinachoendeshwa na mradi kwa kila mtu. Kinajaribiwa na bado hakijafunguliwa kwa wote; anwani na ufunguo wake vitakuwa kwenye ukurasa huu kikifunguliwa.
 
 Vifaa hujaribu anwani ya kitovu chenyewe kwanza na kisambazaji mwisho.
 
@@ -100,4 +100,4 @@ Kikundi kinaweza kuwa na vitovu kadhaa: mzizi na kila msimamizi aliyeweka kitovu
 | Kisambazaji | hapana | hapana: huona anwani ambazo pakiti zilizosimbwa hutoka na zinazoelekea kwenye kitovu chako | chako, au cha mradi kwenye `cbb.tools` |
 | Relei pofu | hapana | ndiyo | chako (moja kwenye `cbb.tools` imepangwa) |
 
-Hakuna kingine kinachohusika: hakuna akaunti, hakuna wingu, hakuna telemetria. Kila mtu mwingine anayeweza kuona chochote, kuanzia Wi-Fi yako hadi ukaguzi wa masasisho, ameorodheshwa katika [faragha](privacy.md). Usawazishaji ukiwa mbali na nyumbani ukiwa umewashwa, huduma ya Clipboard Bridge kwenye kompyuta inaweza kufikia mtandao wa nyumbani tu na kitovu, kisambazaji na relei vya kikundi chenyewe.
+Hakuna kingine kinachohusika: hakuna akaunti, hakuna wingu, hakuna telemetria. Kila mtu mwingine anayeweza kuona chochote, kuanzia Wi-Fi yako hadi ukaguzi wa masasisho, ameorodheshwa katika [faragha](privacy.md). Usawazishaji ukiwa mbali na nyumbani ukiwa umewashwa, huduma ya Copy Beyond Borders kwenye kompyuta inaweza kufikia mtandao wa nyumbani tu na kitovu, kisambazaji na relei vya kikundi chenyewe.

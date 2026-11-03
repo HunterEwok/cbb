@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // cmdPasteOn has another member put a text where its focus is (design.md,

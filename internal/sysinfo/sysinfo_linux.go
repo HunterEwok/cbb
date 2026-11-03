@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/openwrt"
+	"github.com/HunterEwok/cbb/internal/openwrt"
 )
 
 func form() string {

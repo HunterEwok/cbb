@@ -7,7 +7,7 @@ import os
 import WatchConnectivity
 import WatchKit
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge.watch", category: "watch")
+private let log = Logger(subsystem: "tools.cbb.watch", category: "watch")
 
 /// The group as the phone last told it, and the away switch, which asks
 /// the phone; the watch's admin key, which the root phone certifies when
@@ -45,7 +45,7 @@ final class WatchModel: NSObject, ObservableObject {
         defer { acting = false }
         do {
             guard WCSession.default.isReachable else {
-                actionNote = String(localized: "Open Clipboard Bridge on the iPhone, then try again.")
+                actionNote = String(localized: "Open CBB on the iPhone, then try again.")
                 return
             }
             let ask = WatchState.Ask(action: action, device: device, name: name, watch: a.device)
@@ -109,7 +109,7 @@ final class WatchModel: NSObject, ObservableObject {
     func setAway(_ on: Bool) {
         let session = WCSession.default
         guard session.isReachable else {
-            note = String(localized: "Open Clipboard Bridge on the iPhone, then try again.")
+            note = String(localized: "Open CBB on the iPhone, then try again.")
             return
         }
         switching = true
