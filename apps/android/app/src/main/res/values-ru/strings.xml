@@ -76,6 +76,8 @@
     <string name="reason_record_proof">Записать, где устройство хранит ключ</string>
     <string name="reason_period">Обновить ключи группы для синхронизации вне дома</string>
     <string name="reason_restore">Восстановить группу ключом восстановления</string>
+    <string name="signature_of">Подпись %1$d из %2$d</string>
+    <string name="signature_n">Подпись %1$d</string>
     <string name="error_not_confirmed">Компьютер присоединился, но не подтвердил это. Проверьте cbb status на нём.</string>
     <string name="error_no_network">Подключите телефон к домашнему Wi-Fi и попробуйте снова.</string>
     <string name="error_timed_out">За пять минут код никто не отсканировал. Попробуйте снова.</string>

@@ -78,6 +78,7 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -577,30 +578,48 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * once for each signature it makes. A phone that is no admin has no
      * such key.
      */
-    private suspend fun caSigner(reason: Int, subtitle: String? = null): KeystoreSigner {
+    private suspend fun caSigner(reason: Int, subtitle: String? = null, prompts: Prompts = Prompts()): KeystoreSigner {
         if (!isAdmin) throw Failure(Failure.Kind.NOT_ADMIN)
-        return signer(signingAlias(synchronized(lock) { state }), reason, subtitle)
+        return signer(signingAlias(synchronized(lock) { state }), reason, subtitle, prompts)
     }
 
-    private suspend fun signer(alias: String, reason: Int, subtitle: String? = null): KeystoreSigner {
+    private suspend fun signer(alias: String, reason: Int, subtitle: String? = null, prompts: Prompts = Prompts()): KeystoreSigner {
         if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
-        return withContext(Dispatchers.IO) { authorized(alias, reason, subtitle) }
+        return withContext(Dispatchers.IO) { authorized(alias, reason, subtitle, prompts) }
     }
 
     /** The key under alias, made now when there is none, whose every signature asks with reason. */
-    private fun authorized(alias: String, reason: Int, subtitle: String? = null): KeystoreSigner =
-        Keys.loadOrCreateAuthorized(context, alias, authorize = prompter(reason, subtitle))
+    private fun authorized(alias: String, reason: Int, subtitle: String? = null, prompts: Prompts = Prompts()): KeystoreSigner =
+        Keys.loadOrCreateAuthorized(context, alias, authorize = prompter(reason, subtitle, prompts))
 
     /** A new root key for the group tagged tag, replacing one left from before, whose every signature asks with reason. */
-    private fun newRootKey(tag: String, reason: Int): KeystoreSigner {
+    private fun newRootKey(tag: String, reason: Int, prompts: Prompts = Prompts()): KeystoreSigner {
         Keys.create(context, Keys.ROOT, tag)
-        return authorized(Keys.ROOT, reason)
+        return authorized(Keys.ROOT, reason, prompts = prompts)
+    }
+
+    /**
+     * The prompts of one action, counted so that each says which it is
+     * ("Signature 2 of 5"): total is how many signatures the action makes
+     * (PhoneGroupTest's signaturesPerAction keeps the kit to them), null
+     * when that is not fixed, and then the second and later say their
+     * number alone.
+     */
+    private class Prompts(val total: Int? = null) {
+        val made = AtomicInteger(0)
     }
 
     /** Asks the user, on the activity open now, for one signature. */
-    private fun prompter(reason: Int, subtitle: String?): (Signature) -> Signature = { s ->
+    private fun prompter(reason: Int, subtitle: String?, prompts: Prompts): (Signature) -> Signature = { s ->
         val ui = activity ?: throw Failure(Failure.Kind.NO_SCREEN)
-        authenticator.authorize(ui, ui.getString(reason), subtitle, s)
+        val n = prompts.made.incrementAndGet()
+        val total = prompts.total
+        val which = when {
+            total != null && total > 1 && n <= total -> ui.getString(R.string.signature_of, n, total)
+            n > 1 -> ui.getString(R.string.signature_n, n)
+            else -> null
+        }
+        authenticator.authorize(ui, ui.getString(reason), listOfNotNull(subtitle, which).joinToString(" · ").ifEmpty { null }, s)
     }
 
     // Admitting
@@ -608,12 +627,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Admits the device whose QR code the user scanned. */
     suspend fun admit(code: JoinCode) {
         val existing = withContext(Dispatchers.IO) { copyOfState() }
-        // A new group gets a new root key; one left from before goes.
+        // A new group gets a new root key; one left from before goes. Making
+        // the group signs three times, admitting the computer twice.
+        val prompts = Prompts(if (existing == null) 5 else 2)
         val ca = if (existing == null) {
             if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
-            withContext(Dispatchers.IO) { newRootKey("", R.string.reason_add) }
+            withContext(Dispatchers.IO) { newRootKey("", R.string.reason_add, prompts) }
         } else {
-            caSigner(R.string.reason_add)
+            caSigner(R.string.reason_add, prompts = prompts)
         }
         val member = withContext(Dispatchers.IO) { memberSigner() }
         val name = deviceName
@@ -1425,7 +1446,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     suspend fun makeRecovery(): Core.RecoverySheet {
         if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
-        val root = caSigner(R.string.reason_make_recovery)
+        val root = caSigner(R.string.reason_make_recovery, prompts = Prompts(2))
         val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
         val made = withContext(Dispatchers.IO) { g.makeRecovery(root, Instant.now()) }
         withContext(Dispatchers.IO) { adopt(g) }
@@ -1594,11 +1615,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * [finishTakeOverIfDue] then makes this phone the root.
      */
     private suspend fun takeOver(id: String) {
-        val admin = signer(Keys.ADMIN, R.string.reason_take_over)
+        val prompts = Prompts()
+        val admin = signer(Keys.ADMIN, R.string.reason_take_over, prompts = prompts)
         val r = withContext(Dispatchers.IO) {
             val g = copyOfState() ?: return@withContext null
             // A root key left from a group this phone made before goes.
-            val root = newRootKey(g.tag, R.string.reason_take_over)
+            val root = newRootKey(g.tag, R.string.reason_take_over, prompts)
             val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
             val r = g.takeOver(id, admin, newRoot, Instant.now())
             adopt(g)
@@ -1615,10 +1637,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * computer that was the root stays in the group.
      */
     suspend fun takeHandedGroup() {
-        val admin = signer(Keys.ADMIN, R.string.reason_take_handed)
+        val prompts = Prompts()
+        val admin = signer(Keys.ADMIN, R.string.reason_take_handed, prompts = prompts)
         val r = withContext(Dispatchers.IO) {
             val g = copyOfState() ?: return@withContext null
-            val root = newRootKey(g.tag, R.string.reason_take_handed)
+            val root = newRootKey(g.tag, R.string.reason_take_handed, prompts)
             val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
             val r = g.takeHandedOver(admin, newRoot, Instant.now())
             adopt(g)

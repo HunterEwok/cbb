@@ -53,7 +53,7 @@ Tap a device to see its kind, system, version and role. On an admin phone you ca
 - **Rename** or **Remove** it; removing asks once, and then for your face, fingerprint or
   passcode. On Android each signature asks: adding the first computer asks five times (the
   group's own certificates, then the computer's), each further one twice, and each other
-  action once. When a computer's certificate needs renewing, or the group's keys for sync
+  action once; each prompt says which it is ("Signature 2 of 5"). When a computer's certificate needs renewing, or the group's keys for sync
   away from home, the app asks when you open it.
 - **Make it an admin**, for a computer: it can then add and remove devices with
   `sudo cbb pair` and `sudo cbb remove`. Its key is a file on the computer, unless it is a

@@ -886,7 +886,8 @@ All notable changes to cbb are documented in this file. The format follows
 - On Android the root and admin keys sign once per authentication: each signature asks for
   the fingerprint, the face or the screen lock in a prompt that carries it (BiometricPrompt
   with a CryptoObject), instead of for a short time after one. Adding the first
-  computer asks five times, each further one twice, every other action once. What the app
+  computer asks five times, each further one twice, every other action once, and each
+  prompt says which signature it is ("Signature 2 of 5"). What the app
   signed in the background meanwhile (computers' renewals, the root's record of
   what an attestation shows, the next period of the server credentials) now waits for the
   app to open and asks there. A fingerprint or face added later keeps the keys; on Android 10
