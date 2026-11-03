@@ -839,7 +839,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ### Changed
 - The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
   Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
-  installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the App Store and Google Play. The apps' identifiers
+  installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the stores. The apps' identifiers
   start with `tools.cbb` (the Android app and the watch `tools.cbb`, the iPhone app
   `tools.cbb`, the Mac app `tools.cbb.mac`), so the apps install anew.
 - What earlier versions left behind is gone, as nothing before 0.6 is read: the installers no

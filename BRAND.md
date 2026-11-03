@@ -46,8 +46,7 @@ To check a download:
 "Copy Beyond Borders", short "CBB", is the name of this project. The borders are the ones
 between your own devices, never a way around a network's blocks. The project claims no
 exclusive right to "CBB", which others use too, so the full name leads wherever the project
-is listed: "CBB: Copy Beyond Borders" in the App Store and Google Play, and "Copy Beyond
-Borders" alone in F-Droid and Flathub.
+is listed: "CBB: Copy Beyond Borders" in every store.
 
 ## What you may do without asking
 
