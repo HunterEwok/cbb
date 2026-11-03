@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: c2d39475bc20 -->
+<!-- source: 9b05c71a6bfc -->
 # 键盘与电视
 
 适合想往电视、平板、游戏机，或没有安装 Copy Beyond Borders 的电脑里输入长密码、链接或搜索词的人。群组中的一台设备以键盘或电视遥控器的身份把文本输入到那里，由你点一下触发，或在管理员发送远程粘贴时触发。
@@ -96,8 +96,8 @@ sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that
 
 ## 局限
 
-- 尚未在真实的电视、平板或蓝牙适配器上试过：测试是针对模拟的 BlueZ、模拟的 Android TV 和模拟的 Roku 运行的。
-- 手机应用目前还不能充当电视遥控器；Samsung 和 LG 电视以及 Apple TV 将随后支持（[路线图](../roadmap.md)，第 25 项）。
+- 在真实电视上只试过 Apple TV 4K，通过 `cbb remote` 输入文字；其余部分在测试中针对模拟的 BlueZ、Android TV、Apple TV 和 Roku 运行。
+- 手机应用目前还不能充当电视遥控器；Samsung 和 LG 电视将随后支持（[路线图](../roadmap.md)，第 25 项）。
 - 键盘一次最多输入 4,096 个字符。
 
 所有参数见[命令](../reference/cli.md)；电视使用的端口见[设备、端口与文件](../reference/devices.md#ports)；其内部运作方式见[应用规范](../apps.md#android-the-bluetooth-keyboard)。

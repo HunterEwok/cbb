@@ -143,6 +143,14 @@ func TestForgetsStaleBond(t *testing.T) {
 	if err := f.Disconnect(tv, "org.bluez.Reason.Remote"); err != nil {
 		t.Fatal(err)
 	}
+	// Another program on the bus that says the same is not BlueZ.
+	if err := f.Connect(t).Emit(tv, deviceIface+".Disconnected", reasonAuth, ""); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if got := f.Removed(); len(got) != 0 {
+		t.Fatalf("a signal from another program removed %v", got)
+	}
 	if err := f.Disconnect(tv, reasonAuth); err != nil {
 		t.Fatal(err)
 	}

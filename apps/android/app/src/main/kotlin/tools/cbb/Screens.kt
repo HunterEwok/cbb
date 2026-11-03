@@ -49,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -445,6 +446,9 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
         }
     }
     BackHandler { close() }
+    // The recovery key typed or pasted stays out of screenshots and the
+    // recent apps' preview.
+    if (restore) SecureWindow()
     Page(stringResource(if (restore) R.string.restore_title else R.string.add_device), close) {
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
@@ -1197,4 +1201,17 @@ private fun Notifications(notifier: Notifier) {
         }
     }
     Text(stringResource(R.string.notifications_body), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+}
+
+/** Keeps the activity's window out of screenshots and the recent apps' preview while shown. */
+@Composable
+internal fun SecureWindow() {
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        var c = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        val window = (c as? android.app.Activity)?.window
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
+    }
 }

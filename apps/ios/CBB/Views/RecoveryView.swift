@@ -89,6 +89,7 @@ struct RecoverySheetView: View {
     let made: Date
     let done: () -> Void
     @Environment(\.palette) private var palette
+    @Environment(\.scenePhase) private var phase
     @State private var pdf: URL?
     @State private var askingDone = false
     @State private var failure: String?
@@ -131,12 +132,29 @@ struct RecoverySheetView: View {
             }
         }
         .interactiveDismissDisabled()
-        .task {
-            do {
-                pdf = try RecoveryPage.pdf(sheet: sheet, made: made)
-            } catch {
-                failure = AppModel.describe(error, summary: String(localized: "Could not make the PDF.", bundle: .app))
+        // The app switcher's snapshot shows a blank page, not the key.
+        .overlay {
+            if phase != .active { AppBackground().ignoresSafeArea() }
+        }
+        .task { makePDF() }
+        // The PDF stays on disk only while the app is in front.
+        .onChange(of: phase) { _, now in
+            switch now {
+            case .background:
+                RecoveryPage.removePDF()
+                pdf = nil
+            case .active:
+                if pdf == nil { makePDF() }
+            default: break
             }
+        }
+    }
+
+    private func makePDF() {
+        do {
+            pdf = try RecoveryPage.pdf(sheet: sheet, made: made)
+        } catch {
+            failure = AppModel.describe(error, summary: String(localized: "Could not make the PDF.", bundle: .app))
         }
     }
 
@@ -153,7 +171,7 @@ struct RecoverySheetView: View {
 
     /// Forgets the key: the PDF goes, and the sheet with the view.
     private func close() {
-        if let pdf { try? FileManager.default.removeItem(at: pdf) }
+        RecoveryPage.removePDF()
         pdf = nil
         done()
     }
@@ -194,10 +212,17 @@ struct RecoveryPage: View {
             .joined(separator: "\n")
     }
 
-    /// The page as a PDF of A4 in the temporary folder, which the caller
-    /// deletes when the sheet closes.
+    /// Where the PDF is made: the temporary folder, one file.
+    static var pdfURL: URL { FileManager.default.temporaryDirectory.appendingPathComponent("CBB recovery key.pdf") }
+
+    /// Deletes the PDF: when the sheet closes, when the app goes to the
+    /// background, and at launch, for one an ended app left.
+    static func removePDF() { try? FileManager.default.removeItem(at: pdfURL) }
+
+    /// The page as a PDF of A4 in the temporary folder, which removePDF
+    /// deletes.
     @MainActor static func pdf(sheet: Core.RecoverySheet, made: Date) throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CBB recovery key.pdf")
+        let url = pdfURL
         try? FileManager.default.removeItem(at: url)
         let renderer = ImageRenderer(content: RecoveryPage(sheet: sheet, made: made).frame(width: 520))
         var box = CGRect(x: 0, y: 0, width: 595, height: 842)

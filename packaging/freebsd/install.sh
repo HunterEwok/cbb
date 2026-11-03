@@ -114,6 +114,20 @@ if ! "$bin" version >/dev/null 2>&1; then
 	exit 1
 fi
 
+# The account cbb gets the group's keys and the control socket. One that
+# an earlier install made says "CBB"; another, a person's or another
+# program's, is never taken over, nor a group cbb of others without it.
+if pw=$(pw usershow cbb 2>/dev/null); then
+	if [ "$(printf '%s\n' "$pw" | cut -d: -f8)" != CBB ]; then
+		echo "install.sh: an account named cbb exists here and is not this service's (its comment is not \"CBB\");" >&2
+		echo "it would get the group's keys. Rename or remove it, then run install.sh again." >&2
+		exit 1
+	fi
+elif gr=$(pw groupshow cbb 2>/dev/null) && [ -n "$(printf '%s\n' "$gr" | cut -d: -f4)" ]; then
+	echo "install.sh: a group named cbb exists here with members, and no service account;" >&2
+	echo "they would reach the service. Rename or remove the group, then run install.sh again." >&2
+	exit 1
+fi
 if ! pw groupshow cbb >/dev/null 2>&1; then
 	pw groupadd cbb
 fi

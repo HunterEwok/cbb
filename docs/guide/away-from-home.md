@@ -131,7 +131,8 @@ devices meet at a **blind relay** on a server of your own instead of a hub: the 
 clipboard but sees which devices talk, when and how much. See
 [running your own servers](../admin/self-hosting.md#a-blind-relay).
 
-Coming later: a blind relay at `cbb.tools` that any group can use.
+The project runs a blind relay at `cbb.tools` that any group can use: `sudo cbb global relay default`
+knows its address and key.
 
 ## Turning it off
 

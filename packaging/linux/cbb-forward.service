@@ -25,6 +25,12 @@ StateDirectoryMode=0700
 UMask=0077
 Restart=on-failure
 RestartSec=2s
+# What strangers make it hold is bounded per address, not in all
+# (docs/relay-budget.md, "XHTTP"): the collector works harder near the soft
+# limit, and past the hard one the service starts again rather than the
+# server running out of memory.
+Environment=GOMEMLIMIT=768MiB
+MemoryMax=1G
 
 # It needs no privileges: it listens on port 8764. For VLESS on port 443 a
 # drop-in sets CapabilityBoundingSet=CAP_NET_BIND_SERVICE,

@@ -807,7 +807,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         val joined = try {
             withTimeoutOrNull(JOIN_WINDOW_MS) {
-                closingOnCancel(stop) { accept(listener, stopped, code, info, cert) }
+                closingOnCancel(stop) { accept(listener, stopped, code, info, cert, admin) }
             }
         } finally {
             stop()
@@ -823,7 +823,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /** Takes connections until an admin phone admits this one; blocks. */
-    private fun accept(listener: TLSListener, stopped: AtomicBoolean, code: JoinCode, info: Pairing.Info, cert: ByteArray): PairingJoiner.Joined {
+    private fun accept(listener: TLSListener, stopped: AtomicBoolean, code: JoinCode, info: Pairing.Info, cert: ByteArray, admin: KeystoreSigner?): PairingJoiner.Joined {
         var wrong = 0
         while (true) {
             val t = try {
@@ -835,7 +835,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             try {
                 val leaf = t.peerCertificate ?: continue
                 val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
-                return PairingJoiner.accept(t, code.code, info, leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
+                return PairingJoiner.accept(t, code.code, proveAdmin(info, sid, admin), leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
             } catch (e: PairingJoiner.Failure) {
                 if (e.code == Pairing.ErrorCode.WRONG_CODE) {
                     wrong++
@@ -848,6 +848,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 t.close()
             }
         }
+    }
+
+    /**
+     * The description with the admin key's proof for the session sid
+     * (docs/protocol.md, section 6), signed in a prompt of its own; as is
+     * without an admin key, as on a TV.
+     */
+    private fun proveAdmin(info: Pairing.Info, sid: ByteArray, admin: KeystoreSigner?): Pairing.Info {
+        if (admin == null || info.adminKey == null) return info
+        if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
+        return info.proving(sid, authorized(Keys.ADMIN, R.string.reason_join))
     }
 
     /**
@@ -875,7 +886,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 try {
                     val leaf = t.peerCertificate ?: throw PairingJoiner.Failure("the computer sent no certificate")
                     val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
-                    PairingJoiner.join(t, code, info, leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
+                    PairingJoiner.join(t, code, proveAdmin(info, sid, admin), leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
                 } catch (e: PairingJoiner.Failure) {
                     // An admin computer that is not the root refuses a phone.
                     if (e.code == Pairing.ErrorCode.REFUSED) throw Failure(Failure.Kind.NEEDS_ROOT).apply { initCause(e) }

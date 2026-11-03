@@ -33,7 +33,7 @@ class TLSTest {
                 assertTrue(t.peerChain.isNotEmpty())
                 val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
                 t.use {
-                    PairingJoiner.accept(it, "112233", Pairing.Info("Pixel", "android", adminKey.publicKeyDER), it.peerChain[0], joinerCert, sid, now) {}
+                    PairingJoiner.accept(it, "112233", Pairing.Info("Pixel", "android", adminKey.publicKeyDER).proving(sid, adminKey), it.peerChain[0], joinerCert, sid, now) {}
                 } to sid
             }
             val t = TLSTransport.dial("127.0.0.1", listener.port, Pairing.ALPN, memberKey.keyPair.private, listOf(root.memberCert)) {

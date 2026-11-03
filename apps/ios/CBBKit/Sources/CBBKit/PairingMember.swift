@@ -119,6 +119,12 @@ public enum PairingMember {
             try? await t.writeFrame(Pairing.Frame(error: Pairing.ErrorCode.wrongCode.rawValue))
             throw Failure.refused(.wrongCode)
         }
+        // A phone proves it holds the admin key it offers, on this
+        // connection, before any admin CA is made for it.
+        if info.adminKey != nil, !info.provesAdminKey(sessionID: sessionID) {
+            try? await t.writeFrame(Pairing.Frame(error: Pairing.ErrorCode.refused.rawValue))
+            throw Failure.refused(.refused)
+        }
         if let invitation,
            !(await invitation.confirm(Request(device: device, info: info, fingerprint: Pairing.fingerprint(cert: joinerCert)))) {
             try? await t.writeFrame(Pairing.Frame(error: Pairing.ErrorCode.declined.rawValue))

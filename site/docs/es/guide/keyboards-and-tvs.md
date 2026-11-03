@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: c2d39475bc20 -->
+<!-- source: 9b05c71a6bfc -->
 # Teclados y televisores
 
 Para quien quiere escribir una contraseña larga, un enlace o una búsqueda en un televisor, una tableta, una consola o un ordenador que no tiene nada de Copy Beyond Borders. Un dispositivo de tu grupo escribe allí el texto como teclado o como mando a distancia del televisor, cuando tú lo pulsas o cuando un administrador envía un pegado remoto.
@@ -96,8 +96,8 @@ sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that
 
 ## Límites
 
-- Aún no se ha probado en televisores, tabletas ni adaptadores Bluetooth reales: las pruebas se ejecutan contra un BlueZ simulado, un Android TV simulado y un Roku simulado.
-- Las apps de los teléfonos todavía no pueden ser el mando de un televisor; los televisores Samsung y LG y el Apple TV vendrán después ([hoja de ruta](../roadmap.md), punto 25).
+- En un televisor real solo se ha probado con un Apple TV 4K, escribiendo con `cbb remote`; lo demás se prueba contra un BlueZ, un Android TV, un Apple TV y un Roku simulados.
+- Las apps de los teléfonos todavía no pueden ser el mando de un televisor; los televisores Samsung y LG vendrán después ([hoja de ruta](../roadmap.md), punto 25).
 - Un teclado escribe como máximo 4096 caracteres cada vez.
 
 Todos los parámetros están en [los comandos](../reference/cli.md); los puertos de los televisores, en [dispositivos, puertos y archivos](../reference/devices.md#ports); cómo funciona por dentro, en la [especificación de las apps](../apps.md#android-the-bluetooth-keyboard).

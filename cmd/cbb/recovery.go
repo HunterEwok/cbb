@@ -55,18 +55,18 @@ func cmdRecovery(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 	} else {
 		if terminal {
-			fmt.Fprintln(stderr, "Type the recovery key from the sheet, in groups of four, or paste the text of its QR code, then press Enter:")
+			fmt.Fprintln(stderr, "Type the recovery key from the sheet, in groups of four, or paste the text of its QR code, then press Enter (it does not show):")
 		}
-		line, err := bufio.NewReaderSize(io.LimitReader(stdin, maxSheetText+1), maxSheetText+1).ReadString('\n')
-		if err != nil && err != io.EOF {
+		// Without echo, so that the key stays off the screen and out of
+		// the terminal's scrollback.
+		line, err := readSecretLine(f, stdin, terminal, maxSheetText)
+		if terminal {
+			fmt.Fprintln(stderr)
+		}
+		if err != nil {
 			return fail(stderr, err)
 		}
-		text = strings.TrimSpace(line)
-		switch {
-		case len(line) > maxSheetText:
-			fmt.Fprintln(stderr, "cbb: that is too long for a recovery key")
-			return 2
-		case text == "":
+		if text = line; text == "" {
 			fmt.Fprintln(stderr, "cbb: no recovery key was typed")
 			return 2
 		}
@@ -83,7 +83,7 @@ func cmdRecovery(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	fmt.Fprintln(stdout, "Claimed the group with its recovery key. This device becomes the group's root when the waiting time ends (72 hours unless the root set another), unless the root phone cancels the claim; cbb status shows the time left.")
-	fmt.Fprintln(stdout, "Then a new phone joins it (cbb pair), and cbb handover gives that phone the group at once.")
+	fmt.Fprintln(stdout, "Then a new phone joins it (cbb pair -admin), and cbb handover gives that phone the group at once.")
 	return 0
 }
 

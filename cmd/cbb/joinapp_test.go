@@ -97,3 +97,34 @@ func waitForJoinFile(t *testing.T, path string) AppJoin {
 	t.Fatal("cbb wrote nothing into the file")
 	return AppJoin{}
 }
+
+// TestOpenAppFile checks that cbb pair -app, which runs as the
+// administrator, writes only over a regular file of the app's: never
+// through a symbolic link put in its place, nor into a folder.
+func TestOpenAppFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "join")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := openAppFile(file)
+	if err != nil {
+		t.Fatalf("the app's own file: %v", err)
+	}
+	f.Close()
+	if _, err := openAppFile(dir); err == nil {
+		t.Error("opened a folder")
+	}
+	other := filepath.Join(dir, "other")
+	if err := os.WriteFile(other, []byte("kept"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(other, link); err != nil {
+		t.Skipf("no symbolic links here: %v", err)
+	}
+	if f, err := openAppFile(link); err == nil {
+		f.Close()
+		t.Error("opened a symbolic link")
+	}
+}

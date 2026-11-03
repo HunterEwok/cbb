@@ -109,8 +109,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     the Apple account.
 - **28.** The blind relay: the open relay (`cbb relay -open`) with its limits, the choice in `cbb
     global relay` and in both phone apps, and the guide ([running your own
-    servers](admin/self-hosting.md)) are done. Next: the project's relay on `cbb.tools`
-    open to everyone, and AmneziaWG and VLESS on the relay.
+    servers](admin/self-hosting.md)) and the project's open relay on `cbb.tools` (`cbb global
+    relay default`) are done. Next: AmneziaWG and VLESS on the relay.
 - **29.** Secure updates: `cbb update`, automatic updates, the release passed through the group,
     the Android APK's own updates and the lite member's on Linux and OpenWrt are done
     ([design](design.md#secure-updates)); the project's root and release keys wait for the
@@ -640,6 +640,11 @@ The user picks one of three levels for the group, at its root:
    watched. A group of computers only, while they have no TPM or Secure Enclave support
    (D-44), works only at this level.
 
+- A computer that is the group's root counts as a key in a file, whatever its TPM or Secure
+  Enclave holds, since the group's CA key, which signs the records and the certificates, is
+  kept in its identity file; `cbb new` therefore starts its group at level 3. Next: make the
+  root's CA key in the TPM or the Secure Enclave, as the member and admin keys are, and
+  count such a root as hardware.
 - A device that shows signs of being broken into (a jailbreak or root, an unlocked
   bootloader, a Keystore in software, which attestation reports) counts as a key in a file,
   and the devices list marks it. A custom system whose bootloader is locked again with its
@@ -862,18 +867,22 @@ signature (apps/zxnext/README.md, "Install"):
 
 - The files for the Next are published on `cbb.tools` over plain HTTP, since NextZXOS's
   `.http` has no TLS: `CBB`, `CBB.DRV`, the Pi's `cbb` for ARMv6, and a list
-  with each file's size, CRC-32 and MD5 (`packaging/zxnext/site.sh`, the release's
-  `cbb-zxnext.tar.gz`).
+  with each file's size, CRC-32 and SHA-256 (`packaging/zxnext/site.sh`, the release's
+  `cbb-zxnext.tar.gz`). Each `CBB` carries the size and SHA-256 of the driver and the Pi's
+  `cbb` built with it (`apps/zxnext/pins.sh`) and installs only those (0.6).
 - One line fetches `.cbb`: `.http -h cbb.tools -u /zxnext -f CBB`, then `../CBB install` fetches
   the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
   list before it replaces the old one, a download that broke goes on from where it
   stopped, and a line shows the percentage, the kilobytes, the speed and the time left;
   SPACE stops it.
 - The Pi's `cbb` goes from the card to `/NextPi/nextpi` through the UART with the same line,
-  and the Pi checks its MD5 before it swaps the binary. `.cbb update` does the same for
-  newer files.
-- Next: the list signed with the release key, the Next checking the signature (Ed25519 on
-  the Z80 takes seconds for a list) and the Pi checking it before it runs a new `cbb`.
+  and the Pi checks its SHA-256 before it swaps the binary. `.cbb update` tells of a newer
+  `CBB`, which its user fetches as at the start.
+- `CBB` itself is as trustworthy as the network `.http` fetched it over; one taken from the
+  signed release and copied to the card is not. Next (0.7): `.cbb update` checks a newer
+  `CBB` and its files against the release's signed `release.json` through the `cbb` already
+  on the Pi, which checks releases for its own `cbb update`, so that an update needs no
+  trust in the network either.
 
 **Open questions, for the bench.**
 

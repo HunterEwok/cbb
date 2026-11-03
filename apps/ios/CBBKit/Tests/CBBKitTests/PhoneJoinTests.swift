@@ -21,12 +21,15 @@ final class PhoneJoinTests: XCTestCase {
 
     /// Runs one pairing: the admitting phone dials the listener, which
     /// answers with joinerCode (code when nil).
-    func pair(_ admitter: PhoneGroup, signer: CertificateSigner, _ l: Listener, info: Pairing.Info, code: String = "123456",
-              joinerCode: String? = nil, makeAdmin: Bool = true, now: Date? = nil)
+    /// With admin, the key info's adminKey names, the joiner proves it for
+    /// the session.
+    func pair(_ admitter: PhoneGroup, signer: CertificateSigner, _ l: Listener, info: Pairing.Info, admin: CertificateSigner? = nil,
+              code: String = "123456", joinerCode: String? = nil, makeAdmin: Bool = true, now: Date? = nil)
         async -> (member: Result<(PhoneGroup, PairingMember.Admitted), Error>, joiner: Result<PairingJoiner.Joined, Error>) {
         let now = now ?? t0
         let (m, j) = Pipe.pair()
         let sid = sid
+        let info = (try? admin.map { try info.proving(sessionID: sid, with: $0) }) ?? info
         let memberSide = Task { () async throws -> (PhoneGroup, PairingMember.Admitted) in
             var g = admitter
             let a = try await g.admit(over: m, code: code, joinerCert: l.cert, sessionID: sid, caSigner: signer, makeAdmin: makeAdmin, now: now)
@@ -53,7 +56,8 @@ final class PhoneJoinTests: XCTestCase {
 
         // The second phone joins with an admin key and gets its admin CA.
         let second = try Listener(), adminKey = SoftwareSigner()
-        let r = await pair(root, signer: rootKey, second, info: .init(name: "Second", os: "ios", adminKey: adminKey.publicKeyDER, seal: seal))
+        let r = await pair(root, signer: rootKey, second, info: .init(name: "Second", os: "ios", adminKey: adminKey.publicKeyDER, seal: seal),
+                           admin: adminKey)
         let joined = try r.joiner.get()
         let (rootAfter, admitted) = try r.member.get()
         root = rootAfter
@@ -135,7 +139,8 @@ final class PhoneJoinTests: XCTestCase {
         let rootKey = SoftwareSigner()
         let root = try PhoneGroup.create(caSigner: rootKey, memberKey: SoftwareSigner().publicKeyDER, now: t0)
         let l = try Listener()
-        let r = await pair(root, signer: rootKey, l, info: .init(name: "Third", os: "ios", adminKey: SoftwareSigner().publicKeyDER),
+        let third = SoftwareSigner()
+        let r = await pair(root, signer: rootKey, l, info: .init(name: "Third", os: "ios", adminKey: third.publicKeyDER), admin: third,
                            makeAdmin: false)
         let joined = try r.joiner.get()
         XCTAssertNil(joined.welcome.adminCA)
@@ -150,11 +155,24 @@ final class PhoneJoinTests: XCTestCase {
 
         // An admin that is not the root makes no admins.
         let adminKey = SoftwareSigner(), l2 = try Listener()
-        let r2 = await pair(root, signer: rootKey, l2, info: .init(name: "Admin", os: "ios", adminKey: adminKey.publicKeyDER))
+        let r2 = await pair(root, signer: rootKey, l2, info: .init(name: "Admin", os: "ios", adminKey: adminKey.publicKeyDER), admin: adminKey)
         let admin = PhoneGroup.joined(try r2.joiner.get())
         let l3 = try Listener()
-        let r3 = await pair(admin, signer: adminKey, l3, info: .init(name: "Fourth", os: "android", adminKey: SoftwareSigner().publicKeyDER))
+        let fourth = SoftwareSigner()
+        let r3 = await pair(admin, signer: adminKey, l3, info: .init(name: "Fourth", os: "android", adminKey: fourth.publicKeyDER), admin: fourth)
         XCTAssertNil(try r3.joiner.get().welcome.adminCA)
+    }
+
+    /// A phone that offers an admin key it does not prove is refused
+    /// before any admin CA is made.
+    func testAdminKeyWithoutProof() async throws {
+        let rootKey = SoftwareSigner()
+        let root = try PhoneGroup.create(caSigner: rootKey, memberKey: SoftwareSigner().publicKeyDER, now: t0)
+        var info = Pairing.Info(name: "Other", os: "ios", adminKey: SoftwareSigner().publicKeyDER)
+        info.adminProof = Data([1])
+        let r = await pair(root, signer: rootKey, try Listener(), info: info)
+        XCTAssertThrowsError(try r.member.get()) { XCTAssertEqual($0 as? PairingMember.Failure, .refused(.refused)) }
+        XCTAssertThrowsError(try r.joiner.get())
     }
 
     func testWrongCode() async throws {
@@ -219,8 +237,15 @@ final class PhoneJoinTests: XCTestCase {
     }
 
     func testInfo() throws {
-        let key = SoftwareSigner().publicKeyDER
-        XCTAssertTrue(Pairing.Info(name: "iPhone", os: "ios", adminKey: key).isValid)
+        let signer = SoftwareSigner(), key = signer.publicKeyDER
+        let proved = try Pairing.Info(name: "iPhone", os: "ios", adminKey: key).proving(sessionID: sid, with: signer)
+        XCTAssertTrue(proved.isValid)
+        XCTAssertFalse(Pairing.Info(name: "iPhone", os: "ios", adminKey: key).isValid, "an admin key comes with its proof")
+        XCTAssertTrue(proved.provesAdminKey(sessionID: sid))
+        XCTAssertFalse(proved.provesAdminKey(sessionID: Array(repeating: 0, count: 32)), "a proof for another session")
+        var other = proved
+        other.adminKey = SoftwareSigner().publicKeyDER
+        XCTAssertFalse(other.provesAdminKey(sessionID: sid), "a proof by another key")
         XCTAssertTrue(Pairing.Info(name: "iPhone", os: "ios").isValid)
         XCTAssertFalse(Pairing.Info(name: "pi", os: "linux", adminKey: key).isValid, "only a phone sends an admin key")
         XCTAssertFalse(Pairing.Info(name: "iPhone", os: "ios", adminKey: Data([1, 2, 3])).isValid)
@@ -231,7 +256,9 @@ final class PhoneJoinTests: XCTestCase {
         }
         XCTAssertFalse(Pairing.Info(name: "mac", os: "darwin").isValid)
         XCTAssertFalse(Pairing.Info(name: "pi", os: "none").isValid)
-        XCTAssertTrue(Pairing.Info(name: "Pixel", os: "android", adminKey: key).isValid, "an Android phone joins as a phone")
+        var pixel = proved
+        pixel.os = "android"
+        XCTAssertTrue(pixel.isValid, "an Android phone joins as a phone")
         XCTAssertTrue(Pairing.Info(name: "router", os: "linux", role: Pairing.Info.lite).isValid, "a lite member")
         XCTAssertFalse(Pairing.Info(name: "router", os: "linux", role: "full").isValid)
         // A computer's Info is encoded as before, without the admin key.
