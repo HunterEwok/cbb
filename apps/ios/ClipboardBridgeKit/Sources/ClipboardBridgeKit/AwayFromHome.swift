@@ -143,7 +143,10 @@ public actor AwayFromHome {
     private var tunnelTo: AwayState.Hub?
     /// The hub the phone reaches now, through the tunnel or at home.
     private var using: String?
-    /// Which of each hub's endpoints the next try takes.
+    /// Which of the endpoints the next try takes, for each hub and each
+    /// of its keys: the hub with its next key comes right after it in the
+    /// list, and one count for both would give each key only every other
+    /// endpoint.
     private var endpointOf: [String: Int] = [:]
     /// The connection to the hub in use, which a new offer closes.
     private var conn: ClosableTransport?
@@ -319,8 +322,9 @@ public actor AwayFromHome {
     /// the connection, or nil when it did not reach the hub.
     private func tryHub(_ s: AwayState, _ h: AwayState.Hub, up: Bool) async -> Duration? {
         status = .connecting
-        let n = endpointOf[h.device] ?? 0
         let offer = h.offer
+        let slot = h.device + ":" + offer.hubKey.base64EncodedString()
+        let n = endpointOf[slot] ?? 0
         let t: OpenTunnel
         if let open = tunnel, tunnelTo == h {
             t = open
@@ -350,7 +354,7 @@ public actor AwayFromHome {
             // iOS takes back the sockets of an app it suspends, the
             // tunnel's loopback port and UDP socket among them, and the
             // old tunnel would then refuse every dial.
-            endpointOf[h.device] = n + 1
+            endpointOf[slot] = n + 1
             if tunnel === t { closeTunnel() }
             return nil
         }

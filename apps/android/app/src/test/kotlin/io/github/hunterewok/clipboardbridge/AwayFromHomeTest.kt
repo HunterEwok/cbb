@@ -91,6 +91,7 @@ class AwayFromHomeTest {
         val endpoint: String,
         val obfuscation: String = "",
         val vless: String = "",
+        val hubKey: ByteArray = ByteArray(0),
     ) : OpenTunnel {
         val endpoints = CopyOnWriteArrayList(listOf(endpoint))
         @Volatile var closed = false
@@ -116,7 +117,7 @@ class AwayFromHomeTest {
             endpoint: String,
             obfuscation: String,
             vless: String,
-        ): OpenTunnel = FakeTunnel(40_000 + all.size, endpoint, obfuscation, vless).also {
+        ): OpenTunnel = FakeTunnel(40_000 + all.size, endpoint, obfuscation, vless, hubKey).also {
             all.add(it)
             started.add(it)
         }
@@ -312,6 +313,48 @@ class AwayFromHomeTest {
             assertEquals(pc, a.hub)
             // On the first hub there is no up check.
             assertNull(served.poll(300, TimeUnit.MILLISECONDS))
+        } finally {
+            a.stop()
+        }
+    }
+
+    /**
+     * A hub that offers its next key is tried with each key at each of its
+     * endpoints in turn: the key it serves with now may answer only at the
+     * second endpoint, as a hub at home does from away through its
+     * forwarder.
+     */
+    @Test
+    fun eachKeyTriesEachEndpoint() {
+        val next = ByteArray(32) { 9 }
+        val both = Member.TunnelOffer(offer.hubKey, offer.psk, offer.endpoints, nextKey = next)
+        val tunnels = FakeTunnels()
+        val served = LinkedBlockingQueue<String>()
+        val a = AwayFromHome(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            tunnels,
+            load = { AwayState(ByteArray(32) { 1 }).withOffer(hub, both) },
+            save = {},
+            atHome = { false },
+            dial = { port, _ ->
+                val t = tunnels.all.first { it.port == port }
+                if (!t.hubKey.contentEquals(both.hubKey) || t.endpoint != both.endpoints[1]) throw IOException("no answer")
+                Closing()
+            },
+            serve = { t, h ->
+                served.add(h)
+                (t as Closing).closed.poll(5, TimeUnit.SECONDS)
+            },
+            mayHost = { true },
+            order = { listOf(hub) },
+            firstWaitMS = 10,
+            maxWaitMS = 20,
+        )
+        a.start()
+        try {
+            // Only the key now at the second endpoint answers.
+            assertEquals(hub, served.poll(5, TimeUnit.SECONDS))
+            assertTrue(tunnels.all.any { it.hubKey.contentEquals(next) })
         } finally {
             a.stop()
         }
