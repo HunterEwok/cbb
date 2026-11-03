@@ -1698,9 +1698,9 @@ final class LiveGroup: GroupController {
     static let memberPort: UInt16 = 8764
 
     /// Sync away from home as Settings shows it; nil without a group.
-    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?)? {
+    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])? {
         guard let away else { return nil }
-        return (await away.isOn, await away.status, await away.lastError)
+        return (await away.isOn, await away.status, await away.lastError, await away.inUse, await away.hubs)
     }
 
     /// Turns sync away from home on or off, then connects again, so the

@@ -117,12 +117,15 @@ enum Control {
         /// The records let it be a hub: the root's own device or an admin
         /// with the hub power.
         var mayHub = false
+        /// One of the group's hubs, as the service knows: this Mac while it
+        /// is a hub, or a hub whose offer it keeps.
+        var hub = false
         /// Its sync mode, as its hello says; nil when it says none or is
         /// not connected.
         var mode: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, name, role, os, form, version, mac, admin, root, frozen, online, mode
+            case id, name, role, os, form, version, mac, admin, root, frozen, online, mode, hub
             case osVersion = "os_version"
             case lastSeenMS = "last_seen_ms"
             case isSelf = "self"
@@ -153,6 +156,7 @@ enum Control {
             lastSeenMS = try c.decodeIfPresent(Int64.self, forKey: .lastSeenMS) ?? 0
             isSelf = try c.decodeIfPresent(Bool.self, forKey: .isSelf) ?? false
             mayHub = try c.decodeIfPresent(Bool.self, forKey: .mayHub) ?? false
+            hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
             mode = try c.decodeIfPresent(String.self, forKey: .mode)
         }
     }

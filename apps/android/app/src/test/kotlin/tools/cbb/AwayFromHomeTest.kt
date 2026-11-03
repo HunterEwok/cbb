@@ -250,6 +250,7 @@ class AwayFromHomeTest {
         a.keep(pc, pcOffer)
         assertEquals(listOf(hub, pc), saved.get()?.hubs?.map { it.first })
         assertEquals(hub, a.hub)
+        assertEquals(listOf(hub, pc), a.hubs)
         // Passed on by the hub, without the hub field, in place of the earlier one.
         val passed = Member.TunnelOffer(pcOffer.hubKey, offer.psk, listOf("203.0.113.6:8764"))
         a.keep(hub, passed.with(passed.psk, pc))
@@ -304,6 +305,8 @@ class AwayFromHomeTest {
         try {
             assertEquals(hub, served.poll(5, TimeUnit.SECONDS))
             assertEquals(hub, a.hub)
+            assertEquals(hub, a.inUse)
+            assertEquals(listOf(pc, hub), a.hubs)
             pcUp.set(true)
             assertEquals(pc, served.poll(5, TimeUnit.SECONDS))
             assertEquals(pc, a.hub)

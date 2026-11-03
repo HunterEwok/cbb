@@ -107,6 +107,11 @@ they look, so both apps are built to the same plan.
    (docs/protocol.md, section 11, "Several hubs") with its forwarder, or the project's, and the
    computer becomes a hub of the group as well; it refuses while sync away from home is off
    there, which only its own user turns on.
+   With sync away from home on, the list marks the group's hubs whose offers the phone keeps
+   ("hub", or "hub in use" for the one it reaches now; this phone too while it is the hub), a
+   device's page says "The group's hub", and Settings, "Away from home", names the hub the
+   phone is connected to through the tunnel. The Mac app and the tray app say the same on a
+   device's page, from `hub` in the service's device list.
    On an admin phone, the page of a computer or a lite member also offers "Paste on it…"
    (docs/design.md, "Remote paste"): a text, typed or taken from the clipboard (on the iPhone
    through the system's Paste button, which asks nothing), pasted or typed key by key, with

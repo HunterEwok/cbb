@@ -113,6 +113,7 @@ private fun Summary(d: LiveGroup.Device) {
         }
         add(Line(stringResource(R.string.role), stringResource(roleTitle(d.role, d.rootless))))
         d.standing?.let { add(Line(stringResource(R.string.in_the_group), stringResource(it))) }
+        d.hub?.let { add(Line(stringResource(R.string.away_title), stringResource(if (it == LiveGroup.HubMark.IN_USE) R.string.group_hub_in_use else R.string.group_hub))) }
         d.mode?.let { m -> modeTitle(m)?.let { add(Line(stringResource(R.string.sync_mode), stringResource(it))) } }
     }
     Column(Modifier.fillMaxWidth().card()) {

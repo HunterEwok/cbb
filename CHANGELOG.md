@@ -19,6 +19,11 @@ All notable changes to cbb are documented in this file. The format follows
   A computer that is no admin yet becomes one first on the root phone; sync away from home must
   be on there already, since only its own user turns it on. The desktop apps also make their
   own computer a hub. `cbb status` lists `may_hub` for the devices the records let be hubs.
+- Every app marks the group's hubs: "hub" in the device list of both phones, and "The group's
+  hub" (or "in use now", for the one this device reaches) on a device's page in all four apps;
+  a phone's "Away from home" names the hub it is connected to. A device knows a hub by the
+  offer it keeps, so it marks them once sync away from home is on there. `cbb status` lists
+  `hub` for them.
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
   `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,

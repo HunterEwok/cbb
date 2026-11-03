@@ -502,6 +502,12 @@ func (w *window) admin(t *testing.T) {
 	if offers {
 		t.Error("a computer that may not be a hub offers it")
 	}
+	// A hub of the group says so on its page.
+	var page string
+	w.eval(`document.body.innerText`, &page)
+	if !strings.Contains(page, "The group's hub") {
+		t.Errorf("the hub's page does not say it is the hub:\n%s", page)
+	}
 	w.eval(`$click('.tile[data-id="mac"]')`, nil)
 	w.wait(`$q('[data-action="hub"]')`)
 	w.eval(`$click('[data-action="hub"]')`, nil)
@@ -603,7 +609,7 @@ func newFakeService(t *testing.T) *fakeService {
 			{ID: "ipad", Name: "iPad", Role: "phone", OS: "ios", Form: "tablet", Listed: true},
 			{ID: "tv", Name: "Living room TV", Role: "full", OS: "linux", Form: "tv", Online: true, Listed: true},
 			{ID: "nano", Name: "Nano", Role: "lite", Listed: true},
-			{ID: "srv", Name: "Home server", Role: "full", OS: "linux", Form: "server", Online: true, Listed: true},
+			{ID: "srv", Name: "Home server", Role: "full", OS: "linux", Form: "server", Online: true, Listed: true, Hub: true},
 			{ID: "gate", Name: "Router", Role: "full", OS: "linux", Form: "router", Listed: true},
 			{ID: "deck", Name: "Steam Deck", Role: "full", OS: "linux", Form: "console", Online: true, Listed: true},
 			{ID: "watch", Name: "Watch", Role: "watch", OS: "watchos", Listed: true},

@@ -1022,4 +1022,12 @@ func TestMakeHub(t *testing.T) {
 	if pid != pi.status(t).Device {
 		t.Errorf("the Mac's clients: %+v", tunnelState(t, mac).Members)
 	}
+	// Both list the Mac as the group's hub, and only the Mac.
+	for _, s := range []*testService{pi, mac} {
+		for _, d := range s.devices(t) {
+			if want := d.Name == "mac"; d.Hub != want {
+				t.Errorf("on %s, %s: hub %v", s.name, d.Name, d.Hub)
+			}
+		}
+	}
 }

@@ -166,6 +166,10 @@ struct DeviceDetailView: View {
                 Divider().overlay(palette.line)
                 row(Text("In the group"), Text(standing))
             }
+            if let mark = model.hubMark(d) {
+                Divider().overlay(palette.line)
+                row(Text("Away from home"), mark == .inUse ? Text("The group's hub, in use now") : Text("The group's hub"))
+            }
             if let mode = d.mode.flatMap(SyncMode.init(rawValue:)) {
                 Divider().overlay(palette.line)
                 row(Text("Sync mode"), Text(mode.title))

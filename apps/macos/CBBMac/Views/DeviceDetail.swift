@@ -119,6 +119,10 @@ struct DeviceDetail: View {
                 line
                 row(Text("In the group"), Text(standing))
             }
+            if d.hub {
+                line
+                row(Text("Away from home"), model.status?.away?.hubDevice == d.id ? Text("The group's hub, in use now") : Text("The group's hub"))
+            }
             if let mode = d.mode.flatMap(SyncMode.init(rawValue:)) {
                 line
                 row(Text("Sync mode"), Text(mode.title))

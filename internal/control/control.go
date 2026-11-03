@@ -452,6 +452,7 @@ type Device struct {
 	Self       bool  `json:"self,omitempty"`         // this device
 	Listed     bool  `json:"listed,omitempty"`       // it has a device record; a member that joined before the list existed may have none yet
 	MayHub     bool  `json:"may_hub,omitempty"`      // the records let it be a hub: the root's own device or an admin with the hub power
+	Hub        bool  `json:"hub,omitempty"`          // one of the group's hubs, as this device knows: itself while it is a hub, or a hub whose offer it keeps; Away.HubDevice says which one it uses
 }
 
 // Message is a header and its payload.

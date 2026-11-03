@@ -97,7 +97,7 @@ protocol GroupController: AnyObject {
     func refresh() async
     /// Sync away from home: whether it is on, where it stands and its last
     /// failure; nil without a group.
-    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?)?
+    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])?
     /// Turns sync away from home on or off.
     func setAwayFromHome(_ on: Bool) async throws
     /// The phone as the group's hub; nil on a phone that cannot be it.
@@ -151,7 +151,7 @@ extension GroupController {
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
     func runAction(_ id: String, name: String) async throws {}
     func actionsOff(_ id: String) async throws {}
-    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?)? { nil }
+    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])? { nil }
     func setAwayFromHome(_ on: Bool) async throws {}
     func hubStatus() async -> AppModel.Hub? { nil }
     func setPhoneHub(_ on: Bool) async throws {}
@@ -265,6 +265,28 @@ final class AppModel: ObservableObject {
         var status: AwayFromHome.Status
         /// The last failure while it is still trying, in words.
         var error: String?
+        /// The hub the phone reaches now, by device ID; nil while it reaches none.
+        var hub: String?
+        /// The group's hubs whose offers the phone keeps, highest first.
+        var hubs: [String] = []
+    }
+
+    /// Where a device stands among the group's hubs, as the device list and
+    /// its page show it.
+    enum HubMark: Equatable {
+        /// One of the group's hubs.
+        case hub
+        /// The hub this phone reaches now.
+        case inUse
+    }
+
+    /// Whether d is one of the group's hubs, as this phone knows: this phone
+    /// while it is the hub, or a hub whose offer it keeps; nil otherwise.
+    func hubMark(_ d: Computer) -> HubMark? {
+        if d.isSelf { return hub?.on == true ? .hub : nil }
+        guard let a = away, a.on else { return nil }
+        if a.hub == d.id, a.status == .connected || a.status == .atHome { return .inUse }
+        return a.hubs.contains(d.id) ? .hub : nil
     }
 
     @Published private(set) var away: Away?
@@ -667,7 +689,7 @@ final class AppModel: ObservableObject {
         if notifies { Notifier.shared.away(trying: a.on && failing != nil) }
         away = Away(on: a.on, status: a.status, error: failing.map {
             Self.describe($0, summary: String(localized: "The hub does not answer through the tunnel.", bundle: .app), log: false)
-        })
+        }, hub: a.hub, hubs: a.hubs)
     }
 
     private func refreshHub() async {

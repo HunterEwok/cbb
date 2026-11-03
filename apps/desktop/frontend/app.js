@@ -593,6 +593,7 @@ function renderDetail() {
   const standing = d.self ? (d.admin ? t("This computer · admin") : t("This computer"))
     : d.frozen ? t("frozen") : d.root ? t("root") : d.admin ? t("admin") : "";
   if (standing) lines.push([t("In the group"), standing]);
+  if (d.hub) lines.push([t("Away from home"), state.status?.away?.hub_device === d.id ? t("The group's hub, in use now") : t("The group's hub")]);
   if (d.mode) lines.push([t("Sync mode"), modeName(d.mode)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
   lines.push([t("Device ID"), d.id, true]);

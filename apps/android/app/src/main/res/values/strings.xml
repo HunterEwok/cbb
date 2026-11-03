@@ -172,6 +172,11 @@
     <string name="away_at_home">At home: syncing directly.</string>
     <string name="away_connecting">Connecting to the hub through the tunnel…</string>
     <string name="away_connected">Connected to the hub through the tunnel.</string>
+    <string name="away_connected_to">Connected to the hub %1$s through the tunnel.</string>
+    <string name="hub_mark">hub</string>
+    <string name="hub_in_use">hub in use</string>
+    <string name="group_hub">The group\'s hub</string>
+    <string name="group_hub_in_use">The group\'s hub, in use now</string>
     <string name="away_error">The hub does not answer through the tunnel.</string>
     <string name="error_details_switch">Show error details</string>
     <string name="error_details_body">Error messages show the error underneath them, to find out what failed. Tap the version seven times to see this switch.</string>

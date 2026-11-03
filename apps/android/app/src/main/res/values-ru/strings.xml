@@ -169,6 +169,11 @@
     <string name="away_at_home">Дома: синхронизация напрямую.</string>
     <string name="away_connecting">Подключение к хабу через туннель…</string>
     <string name="away_connected">Подключено к хабу через туннель.</string>
+    <string name="away_connected_to">Подключено к хабу %1$s через туннель.</string>
+    <string name="hub_mark">хаб</string>
+    <string name="hub_in_use">используемый хаб</string>
+    <string name="group_hub">Хаб группы</string>
+    <string name="group_hub_in_use">Хаб группы, используется сейчас</string>
     <string name="away_error">Хаб не отвечает через туннель.</string>
     <string name="error_details_switch">Показывать подробности ошибок</string>
     <string name="error_details_body">Под сообщением об ошибке показывается сама ошибка, чтобы понять, что не так. Этот переключатель появляется после семи нажатий на версию.</string>

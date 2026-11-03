@@ -251,6 +251,26 @@
         }
       }
     },
+    "The group's hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы"
+          }
+        }
+      }
+    },
+    "The group's hub, in use now": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы, используется сейчас"
+          }
+        }
+      }
+    },
     "Board": {
       "localizations": {
         "ru": {

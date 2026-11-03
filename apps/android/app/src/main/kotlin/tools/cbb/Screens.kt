@@ -780,7 +780,13 @@ private fun AwayFromHomeSection(model: AppModel, away: AppModel.Away) {
                 away.status == AwayFromHome.Status.CONNECTED -> R.string.away_connected
                 else -> R.string.away_waiting
             }
-            Text(stringResource(status), color = if (away.status == AwayFromHome.Status.CONNECTED) palette.accent else palette.textDim)
+            val inUse = model.devices.firstOrNull { it.hub == LiveGroup.HubMark.IN_USE }
+            val line = if (away.on && away.status == AwayFromHome.Status.CONNECTED && inUse != null) {
+                stringResource(R.string.away_connected_to, inUse.name)
+            } else {
+                stringResource(status)
+            }
+            Text(line, color = if (away.status == AwayFromHome.Status.CONNECTED) palette.accent else palette.textDim)
             away.error?.let { NoteText(it) }
             model.awayNote?.let { NoteText(it) }
             Text(stringResource(R.string.away_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)

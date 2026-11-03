@@ -217,6 +217,18 @@ public actor AwayFromHome {
         return using ?? Self.hubsToTry(order(), s).first?.device ?? s.hubs.first?.device
     }
 
+    /// The hub the phone reaches now, through the tunnel or at home; nil
+    /// while it reaches none.
+    public var inUse: String? { using }
+
+    /// The group's hubs whose offers the phone keeps, highest first, as the
+    /// screens list them; empty while it is off.
+    public var hubs: [String] {
+        guard let s = state else { return [] }
+        let o = order()
+        return s.hubs.map(\.device).filter { Self.rank(o, $0) < o.count }.sorted { Self.rank(o, $0) < Self.rank(o, $1) }
+    }
+
     /// Starts the loop that reaches a hub through the tunnel while the hubs
     /// are away.
     public func start() {

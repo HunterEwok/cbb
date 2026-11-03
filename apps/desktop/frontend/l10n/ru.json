@@ -142,6 +142,8 @@
   "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.": "Группа остановлена: устройства обмениваются только записями, без буфера обмена, пока корень группы не решит.",
   "The group sends no secrets until its root decides.": "Группа не пересылает секреты, пока её корень не решит.",
   "The group's root decides.": "Решает корень группы.",
+  "The group's hub": "Хаб группы",
+  "The group's hub, in use now": "Хаб группы, используется сейчас",
   "The service does not answer": "Служба не отвечает",
   "The sync mode is set.": "Режим синхронизации изменён.",
   "The tiles stay as they were: that change does not fit.": "Плитки остались как были: такое изменение не подходит.",

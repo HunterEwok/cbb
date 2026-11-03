@@ -328,7 +328,11 @@ struct SettingsView: View {
         switch away.status {
         case .atHome: return Text("At home: syncing directly.")
         case .connecting: return Text("Connecting to the hub through the tunnel…")
-        case .connected: return Text("Connected to the hub through the tunnel.")
+        case .connected:
+            if let name = away.hub.flatMap({ id in model.devices.first { $0.id == id }?.name }) {
+                return Text("Connected to the hub \(name) through the tunnel.")
+            }
+            return Text("Connected to the hub through the tunnel.")
         case .off, .waitingForHub: return Text("Waiting for the hub: open the app at home once, near a computer of the group.")
         }
     }

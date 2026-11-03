@@ -1564,6 +1564,56 @@
         }
       }
     },
+    "Connected to the hub %@ through the tunnel.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключено к хабу %@ через туннель."
+          }
+        }
+      }
+    },
+    "hub in use": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "используемый хаб"
+          }
+        }
+      }
+    },
+    "hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "хаб"
+          }
+        }
+      }
+    },
+    "The group's hub, in use now": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы, используется сейчас"
+          }
+        }
+      }
+    },
+    "The group's hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы"
+          }
+        }
+      }
+    },
     "Connecting to the device…": {
       "localizations": {
         "ru": {
