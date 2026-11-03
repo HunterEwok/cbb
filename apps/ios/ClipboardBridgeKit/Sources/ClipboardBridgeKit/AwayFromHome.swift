@@ -346,9 +346,12 @@ public actor AwayFromHome {
             c = try await dial(t.port, h.device)
         } catch {
             fail("the hub does not answer through the tunnel", error)
-            // The next of the hub's endpoints, in turn, on the same tunnel.
+            // The next of the hub's endpoints, in turn, on a new tunnel:
+            // iOS takes back the sockets of an app it suspends, the
+            // tunnel's loopback port and UDP socket among them, and the
+            // old tunnel would then refuse every dial.
             endpointOf[h.device] = n + 1
-            try? t.setEndpoint(offer.endpoints[(n + 1) % offer.endpoints.count])
+            if tunnel === t { closeTunnel() }
             return nil
         }
         guard state == s, tunnel === t, !Task.isCancelled else {

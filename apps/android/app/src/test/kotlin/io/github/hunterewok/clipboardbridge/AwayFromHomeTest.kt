@@ -104,6 +104,7 @@ class AwayFromHomeTest {
 
     private class FakeTunnels : Tunnels {
         val started = LinkedBlockingQueue<FakeTunnel>()
+        val all = CopyOnWriteArrayList<FakeTunnel>()
         override fun newKey() = ByteArray(32) { 7 }
         override fun publicKey(private: ByteArray) = private.map { (it + 1).toByte() }.toByteArray()
         override fun start(
@@ -115,7 +116,10 @@ class AwayFromHomeTest {
             endpoint: String,
             obfuscation: String,
             vless: String,
-        ): OpenTunnel = FakeTunnel(40_000 + started.size, endpoint, obfuscation, vless).also { started.add(it) }
+        ): OpenTunnel = FakeTunnel(40_000 + all.size, endpoint, obfuscation, vless).also {
+            all.add(it)
+            started.add(it)
+        }
     }
 
     private object NoTransport : FrameTransport {
@@ -190,9 +194,10 @@ class AwayFromHomeTest {
             assertEquals("", t.obfuscation)
             assertEquals("", t.vless)
             assertEquals(t.port to hub, dialed.poll(5, TimeUnit.SECONDS))
-            // No answer: the next endpoint, on the same tunnel.
-            eventually("the next endpoint") { t.endpoints.contains(offer.endpoints[1]) }
-            assertTrue(tunnels.started.isEmpty())
+            // No answer: the next endpoint, on a new tunnel.
+            val next = tunnels.started.poll(5, TimeUnit.SECONDS)!!
+            assertTrue(t.closed)
+            assertEquals(offer.endpoints[1], next.endpoint)
 
             answers.set(true)
             assertEquals(hub, served.poll(5, TimeUnit.SECONDS))
@@ -202,9 +207,10 @@ class AwayFromHomeTest {
             home.set(true)
             release.add(Unit)
             eventually("at home") { a.status == AwayFromHome.Status.AT_HOME }
-            assertTrue(t.closed)
+            assertTrue(tunnels.all.all { it.closed })
 
             // Away again: a new tunnel.
+            tunnels.started.clear()
             home.set(false)
             val t2 = tunnels.started.poll(5, TimeUnit.SECONDS)!!
             assertEquals(hub, served.poll(5, TimeUnit.SECONDS))

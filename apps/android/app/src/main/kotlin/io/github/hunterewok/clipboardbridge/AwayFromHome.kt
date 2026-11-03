@@ -496,9 +496,14 @@ class AwayFromHome(
             dial(t.port, hub)
         } catch (e: Exception) {
             fail("the hub does not answer through the tunnel", e)
-            // The next of the hub's endpoints, in turn, on the same tunnel.
-            synchronized(lock) { endpointOf[hub] = n + 1 }
-            runCatching { t.setEndpoint(offer.endpoints[(n + 1) % offer.endpoints.size]) }
+            // The next of the hub's endpoints, in turn, on a new tunnel: one
+            // whose sockets broke, as when the phone changed networks or the
+            // system took them back while the app slept, would refuse every
+            // dial after.
+            synchronized(lock) {
+                endpointOf[hub] = n + 1
+                if (tunnel === t) closeTunnelLocked()
+            }
             return null
         }
         synchronized(lock) { using = hub }

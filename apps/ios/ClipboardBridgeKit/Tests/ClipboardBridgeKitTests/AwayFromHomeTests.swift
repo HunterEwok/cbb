@@ -177,11 +177,12 @@ final class AwayFromHomeTests: XCTestCase {
         XCTAssertEqual(t.first, offer.endpoints[0])
         XCTAssertEqual(t.obfuscation, "")
         XCTAssertEqual(t.vless, "")
-        // No answer: the next endpoint, on the same tunnel.
+        // No answer: the next endpoint, on a new tunnel.
         let second = offer.endpoints[1]
-        try await eventually("the next endpoint") { t.endpoints.contains(second) }
+        try await eventually("the next endpoint") { tunnels.started.count >= 2 }
         XCTAssertEqual(dialed.current.first, t.port)
-        XCTAssertEqual(tunnels.started.count, 1)
+        XCTAssertTrue(t.closed)
+        XCTAssertEqual(tunnels.started[1].first, second)
 
         answers.set(true)
         try await eventually("served") { served.current == 1 }
@@ -192,17 +193,19 @@ final class AwayFromHomeTests: XCTestCase {
         home.set(true)
         release.set(1)
         try await eventually("at home") { await a.status == .atHome }
-        XCTAssertTrue(t.closed)
+        let served1 = tunnels.started.last!
+        XCTAssertTrue(served1.closed)
 
         // Away again: a new tunnel.
+        let before = tunnels.started.count
         home.set(false)
         try await eventually("a new tunnel served") { served.current == 2 }
-        XCTAssertEqual(tunnels.started.count, 2)
+        XCTAssertEqual(tunnels.started.count, before + 1)
 
         // Off: the tunnel closes and the state is forgotten.
         try await a.turnOff()
         release.set(2)
-        XCTAssertTrue(tunnels.started[1].closed)
+        XCTAssertTrue(tunnels.started.last!.closed)
         XCTAssertNil(saved.current)
         let gone = await a.publicKey
         XCTAssertNil(gone)

@@ -1056,6 +1056,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and credentials) give way to the `v2-*.json` vectors of the same cases.
 
 ### Fixed
+- Sync away from home on the phones starts a new tunnel when the hub does not answer through
+  the old one, instead of only moving it to the hub's next address: after the phone changed
+  networks, or iOS took back the sockets of the app while it was in the background, the old
+  tunnel refused every connection and the phone never reached the hub again.
 - `.cbb` on the ZX Spectrum Next (0.4.1) runs the ESP8266's UART at 19200 while the network
   runs, and puts it back at 115200 on `.cbb net off`: at 115200 a burst from the ESP, such as a
   phone's TLS hello under `.cbb pair`, overflowed the Next's receive buffer faster than the
