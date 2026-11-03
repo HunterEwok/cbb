@@ -880,18 +880,22 @@ signature (apps/zxnext/README.md, "Install"):
 
 - The files for the Next are published on `cbb.tools` over plain HTTP, since NextZXOS's
   `.http` has no TLS: `CBB`, `CBB.DRV`, the Pi's `cbb` for ARMv6, and a list
-  with each file's size, CRC-32 and MD5 (`packaging/zxnext/site.sh`, the release's
-  `cbb-zxnext.tar.gz`).
+  with each file's size, CRC-32 and SHA-256 (`packaging/zxnext/site.sh`, the release's
+  `cbb-zxnext.tar.gz`). Each `CBB` carries the size and SHA-256 of the driver and the Pi's
+  `cbb` built with it (`apps/zxnext/pins.sh`) and installs only those (0.6).
 - One line fetches `.cbb`: `.http -h cbb.tools -u /zxnext -f CBB`, then `../CBB install` fetches
   the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
   list before it replaces the old one, a download that broke goes on from where it
   stopped, and a line shows the percentage, the kilobytes, the speed and the time left;
   SPACE stops it.
 - The Pi's `cbb` goes from the card to `/NextPi/nextpi` through the UART with the same line,
-  and the Pi checks its MD5 before it swaps the binary. `.cbb update` does the same for
-  newer files.
-- Next: the list signed with the release key, the Next checking the signature (Ed25519 on
-  the Z80 takes seconds for a list) and the Pi checking it before it runs a new `cbb`.
+  and the Pi checks its SHA-256 before it swaps the binary. `.cbb update` tells of a newer
+  `CBB`, which its user fetches as at the start.
+- `CBB` itself is as trustworthy as the network `.http` fetched it over; one taken from the
+  signed release and copied to the card is not. Next (0.7): `.cbb update` checks a newer
+  `CBB` and its files against the release's signed `release.json` through the `cbb` already
+  on the Pi, which checks releases for its own `cbb update`, so that an update needs no
+  trust in the network either.
 
 **Open questions, for the bench.**
 
