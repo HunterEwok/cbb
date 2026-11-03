@@ -832,11 +832,11 @@ static void http_close(void)
 //
 //   rows 0-17, columns 0-13   the logo
 //   rows 0-2, from column 15  the name and the version
-//   rows 3-10                 a file's name and state, then its bar
+//   rows 4-10                 a file's name and state, then its bar
 //   rows 12-13                the file under way: kilobytes, speed
 //   rows 19-23                messages
 #define PANEL 15
-#define FILE_ROW 3
+#define FILE_ROW 4
 #define NOW_ROW 12
 #define MESSAGE_ROW 19
 #define BAR_CELLS 12
