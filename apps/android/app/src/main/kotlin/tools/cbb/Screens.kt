@@ -92,10 +92,10 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** The terms of the project's forwarder and relay, in the reader's language. */
 private const val PROJECT_TERMS = "https://cbb.tools/?p=terms.html"
-import kotlinx.coroutines.launch
 
 /** Picks the screen, and asks once for the local network, which finding the computers needs on Android 17. */
 @Composable
