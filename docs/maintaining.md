@@ -298,6 +298,27 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
 - `release-sign drill -version X.Y.Z DIR ROOTS.pem` signs DIR with throwaway keys in files,
   as CI does to test the installers, and for drills of the steps above.
 
+## Watching cbb.tools
+
+Updates, the revocation mirror, the forwarder and the relay all depend on `cbb.tools`, and a
+stopped timer there stops everyone's updates without a sound. The `monitor` workflow runs
+`go run ./tools/monitor` every six hours from GitHub and fails, which mails the maintainer,
+when:
+
+- `https://cbb.tools/` or `https://dl.cbb.tools/` does not answer over HTTPS, or a
+  certificate expires within 14 days (renew it with certbot on the server);
+- the forwarder's port (TCP 8764) or the project's relay's (TCP 8765) refuses a
+  connection; UDP cannot be checked from outside without a group's keys;
+- a signed file the devices fetch is close to its expiry: the channel's `keys.json` (21
+  days: `release-sign renew -new-keys`) and `stable.json` (10 days: the `cbb-channel` timer
+  stopped), the same two at `dl.cbb.tools`, and `attest/attest-status.json` (5 days: the
+  `attest-status` timer stopped).
+
+Before the first signed release these files are not served, which the check reports and
+passes; from v0.6.0 on the workflow runs it with `-require-files`. The steps to rebuild the
+server, where the backup of its configuration is and what to tell users are in the
+maintainer's private runbook, outside the repository.
+
 ## Homebrew
 
 The tap is the repository

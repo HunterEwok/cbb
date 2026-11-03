@@ -9,6 +9,9 @@ All notable changes to cbb are documented in this file. The format follows
 ### Added
 - `cbb global relay default` meets the group at the project's open relay on `cbb.tools:8765`,
   whose address and key cbb knows.
+- The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
+  their certificates, the forwarder's and the relay's ports, and the expiry of the signed files devices fetch
+  (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").
 - cbb for macOS is signed with the project's Developer ID and notarized by Apple, so that
   Gatekeeper opens it without a warning; it runs under the hardened runtime, and CI checks
   that every build still loads the Rust core there.
@@ -910,6 +913,8 @@ All notable changes to cbb are documented in this file. The format follows
   out of screenshots and the recent apps.
 - docs/protocol.md section 10 and the lost device guide describe the two takeover cases that
   only the old root ends in 0.6.
+- An Apple TV added without `-name` (`cbb remote add -appletv`) takes the name it announces on
+  the home network, the one in its Settings, instead of its address.
 - On Android the root and admin keys sign once per authentication: each signature asks for
   the fingerprint, the face or the screen lock in a prompt that carries it (BiometricPrompt
   with a CryptoObject), instead of for a short time after one. Adding the first

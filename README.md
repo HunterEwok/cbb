@@ -101,6 +101,7 @@ through tmux and `cbb copy` and `cbb paste`.
 | Releases signed with the project's own keys | built; waits for the project's root keys | |
 | `cbb update`, automatic updates, the Android APK updating itself | built; takes only signed releases, so it waits for the root keys too | not yet |
 | The project's forwarder and relay at `cbb.tools`, open to everyone | being tested | the forwarder carried a phone's sync to a Mac hub |
+| Keyboards and TV remotes (`cbb keyboard`, `cbb remote`, the Android phone as a Bluetooth keyboard) | built, CI against fake TVs and BlueZ | typing on an Apple TV 4K |
 | Console paste on a key press | planned | |
 | Homebrew (`hunterewok/tap`) | a formula with each release | |
 | Signed macOS `.pkg` with the Mac app, TestFlight | built; the release signs them with the Apple developer account | not yet run |

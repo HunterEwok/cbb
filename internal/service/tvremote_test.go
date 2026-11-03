@@ -4,6 +4,7 @@
 package service
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -166,6 +167,32 @@ func TestRemoteAppleTV(t *testing.T) {
 	tv.Forget()
 	if err := paste("x"); err == nil || !strings.Contains(err.Error(), "Lounge (Apple TV)") || !strings.Contains(err.Error(), "pair it again") {
 		t.Errorf("a reset TV: %v", err)
+	}
+}
+
+// TestRemoteAppleTVName: an Apple TV added without a name gets the one it
+// announces by mDNS, and its address when it announces none.
+func TestRemoteAppleTVName(t *testing.T) {
+	for _, announced := range []string{"Den TV", ""} {
+		tv := appletvtest.New(t)
+		defer func(f func(context.Context, string) string) { appleTVName = f }(appleTVName)
+		appleTVName = func(context.Context, string) string { return announced }
+		var h hub
+		deck := startService(t, &h, "deck")
+		if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "add", Address: tv.Addr(), Value: "appletv"}, ""); err != nil {
+			t.Fatal(err)
+		}
+		m, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "code", Code: tv.PIN()}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := announced
+		if want == "" {
+			want = tv.Addr()
+		}
+		if tvs := m.Status.TVs; len(tvs) != 1 || tvs[0].Name != want {
+			t.Errorf("announced %q: the TV is %+v, want the name %q", announced, tvs, want)
+		}
 	}
 }
 
