@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 6d2083e0e66e -->
+<!-- source: f031187fad1e -->
 # Inicio rápido
 
 Copy Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
@@ -43,7 +43,7 @@ En el ordenador:
 sudo cbb pair
 ```
 
-En Windows, ejecuta `cbb pair` en la terminal de administrador. Muestra un código QR.
+En Windows, ejecuta `cbb pair` en la terminal de administrador. Muestra un código QR. O, sin terminal, abre la app CBB en el ordenador (la app de la bandeja en Windows y Linux, la de la barra de menús en un Mac) y haz clic en **Join a phone's group**: pide la contraseña del administrador y muestra el mismo código.
 
 En la app, pulsa **Connect a new device** y escanea el código. La app crea la clave del grupo (te pide la huella, la cara o el código de desbloqueo) y añade el ordenador. Ese es el grupo.
 

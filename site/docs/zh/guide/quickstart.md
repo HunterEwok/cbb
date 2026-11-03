@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 6d2083e0e66e -->
+<!-- source: f031187fad1e -->
 # 快速入门
 
 Copy Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设备上复制，在另一台上粘贴。这些设备在你的家庭网络中组成一个**群组**。手机保管群组的密钥，并由它放行每台新设备，所以没有你的许可，谁也无法加入。
@@ -43,7 +43,7 @@ irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 sudo cbb pair
 ```
 
-在 Windows 上，请在管理员终端中运行 `cbb pair`。它会显示一个二维码。
+在 Windows 上，请在管理员终端中运行 `cbb pair`。它会显示一个二维码。也可以不用终端：在电脑上打开 CBB 应用（Windows 和 Linux 上的托盘应用，Mac 上的菜单栏应用），点击**Join a phone's group**：它会要求输入管理员密码，并显示同样的二维码。
 
 在应用中点按 **Connect a new device** 并扫描该二维码。应用会生成群组的密钥（会要求你验证指纹、面容或密码），并添加这台电脑。群组就建好了。
 

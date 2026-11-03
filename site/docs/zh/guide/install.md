@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1ce6c4f40f0 -->
+<!-- source: 95a9f0f2e940 -->
 # 安装
 
 Copy Beyond Borders 在每台电脑上作为一个小型后台服务运行，它的命令是 `cbb`。下面每种方式安装的都是同一个程序，选你喜欢的即可。
@@ -41,7 +41,10 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 ## Mac
 
-Apple 芯片或 Intel，在“终端”中，命令与 Linux 相同：
+Apple 芯片或 Intel，macOS 14 或更高版本：从[最新发布版](https://github.com/HunterEwok/cbb/releases/latest)下载
+`cbb-X.Y.Z.pkg` 并打开。它会安装菜单栏中的 CBB 应用和服务，两者都由本项目签名并经 Apple 检查。
+
+或者在“终端”中，不装应用，命令与 Linux 相同：
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
@@ -167,4 +170,4 @@ sudo sh /usr/local/share/cbb/uninstall.sh
 
 在 Windows 上：设置，应用，“CBB”，卸载。
 
-这会移除程序、服务以及安装程序添加的防火墙规则。设备的密钥会保留，所以再次安装可让它回到原来的群组。要连密钥一起删除，请加上 `--purge`（Windows 上是 `-Purge`，命令为 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`），然后在另一台设备上把这台设备从群组中移除（`sudo cbb remove NAME`，或在手机上操作）。
+这会移除程序、服务、安装程序添加的防火墙规则，以及 Mac 上由 `.pkg` 安装的应用。设备的密钥会保留，所以再次安装可让它回到原来的群组。要连密钥一起删除，请加上 `--purge`（Windows 上是 `-Purge`，命令为 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`），然后在另一台设备上把这台设备从群组中移除（`sudo cbb remove NAME`，或在手机上操作）。
