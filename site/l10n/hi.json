@@ -254,7 +254,7 @@
   "This site counts visits without cookies, and sets one cookie only when you pick a language: %s.": "यह साइट बिना कुकी के विज़िट गिनती है, और सिर्फ़ तब एक कुकी रखती है जब आप खुद भाषा चुनते हैं: %s।",
   "This website": "यह वेबसाइट",
   "Threat model": "ख़तरों का मॉडल",
-  "To report abuse of the servers, open %s; a vulnerability goes privately, as %s describes.": "सर्वरों के दुरुपयोग की शिकायत के लिए %s खोलें; कोई कमज़ोरी निजी तौर पर बताएँ, जैसा %s में लिखा है।",
+  "To report abuse of the servers, write to %s; a vulnerability goes privately, as %s describes.": "सर्वरों के दुरुपयोग की शिकायत के लिए %s पर लिखें; कोई कमज़ोरी निजी तौर पर बताएँ, जैसा %s में लिखा है।",
   "Troubleshooting": "समस्या सुलझाना",
   "Try it on your devices": "अपने डिवाइसों पर आज़माएँ",
   "Two ways to build your group": "समूह बनाने के दो तरीके",

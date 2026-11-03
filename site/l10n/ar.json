@@ -255,7 +255,7 @@
   "This site counts visits without cookies, and sets one cookie only when you pick a language: %s.": "يعدّ هذا الموقع الزيارات من دون ملفات تعريف الارتباط، ويضع ملفًا واحدًا فقط عندما تختار لغة بنفسك: %s.",
   "This website": "هذا الموقع",
   "Threat model": "نموذج التهديدات",
-  "To report abuse of the servers, open %s; a vulnerability goes privately, as %s describes.": "للإبلاغ عن إساءة استخدام الخوادم، افتح %s؛ أما الثغرة فيُبلَّغ عنها سرًّا كما يصف %s.",
+  "To report abuse of the servers, write to %s; a vulnerability goes privately, as %s describes.": "للإبلاغ عن إساءة استخدام الخوادم، اكتبوا إلى %s؛ أما الثغرة فيُبلَّغ عنها سرًّا كما يصف %s.",
   "Troubleshooting": "استكشاف الأخطاء وإصلاحها",
   "Try it on your devices": "جرّبه على أجهزتك",
   "Two ways to build your group": "طريقتان لبناء مجموعتك",

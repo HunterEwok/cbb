@@ -255,7 +255,7 @@
   "This site counts visits without cookies, and sets one cookie only when you pick a language: %s.": "האתר סופר ביקורים בלי עוגיות, ושומר עוגייה אחת רק כשאתם בוחרים שפה בעצמכם: %s.",
   "This website": "האתר הזה",
   "Threat model": "מודל איומים",
-  "To report abuse of the servers, open %s; a vulnerability goes privately, as %s describes.": "כדי לדווח על שימוש לרעה בשרתים, פתחו %s; על חולשה מדווחים באופן פרטי, כפי שמתואר ב-%s.",
+  "To report abuse of the servers, write to %s; a vulnerability goes privately, as %s describes.": "כדי לדווח על שימוש לרעה בשרתים, כתבו אל %s; על חולשה מדווחים באופן פרטי, כפי שמתואר ב-%s.",
   "Troubleshooting": "פתרון בעיות",
   "Try it on your devices": "נסו במכשירים שלכם",
   "Two ways to build your group": "שתי דרכים לבנות את הקבוצה",

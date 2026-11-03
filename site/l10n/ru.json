@@ -254,7 +254,7 @@
   "This site counts visits without cookies, and sets one cookie only when you pick a language: %s.": "Сайт считает посещения без cookies и ставит одну cookie, только когда вы сами выбираете язык: %s.",
   "This website": "Этот сайт",
   "Threat model": "Модель угроз",
-  "To report abuse of the servers, open %s; a vulnerability goes privately, as %s describes.": "Чтобы сообщить о злоупотреблении серверами, откройте %s; об уязвимости сообщайте приватно, как описано в %s.",
+  "To report abuse of the servers, write to %s; a vulnerability goes privately, as %s describes.": "Чтобы сообщить о злоупотреблении серверами, напишите на %s; об уязвимости сообщайте приватно, как описано в %s.",
   "Troubleshooting": "Решение проблем",
   "Try it on your devices": "Попробуйте на своих устройствах",
   "Two ways to build your group": "Два способа построить группу",

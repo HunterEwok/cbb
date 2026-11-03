@@ -255,7 +255,7 @@
   "This site counts visits without cookies, and sets one cookie only when you pick a language: %s.": "本站不用 cookie 统计访问，只在你自己选择语言时设置一个 cookie：%s。",
   "This website": "本网站",
   "Threat model": "威胁模型",
-  "To report abuse of the servers, open %s; a vulnerability goes privately, as %s describes.": "要举报对服务器的滥用，请提交 %s；漏洞请按照 %s 的说明私下报告。",
+  "To report abuse of the servers, write to %s; a vulnerability goes privately, as %s describes.": "要举报对服务器的滥用，请写信至 %s；漏洞请按照 %s 的说明私下报告。",
   "Troubleshooting": "故障排除",
   "Try it on your devices": "在你的设备上试试",
   "Two ways to build your group": "组建群组的两种方式",
