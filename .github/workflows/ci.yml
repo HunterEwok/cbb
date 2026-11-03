@@ -1583,7 +1583,9 @@ jobs:
           sh packaging/macos/sign.sh - "$app"
           for a in arm64 amd64; do
             CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-$a" ./cmd/cbb
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-$a"
+            # A build without the Rust core, which sign.sh's run would refuse;
+            # the build job checks that the release's runs signed.
+            codesign --force --options runtime --identifier tools.cbb.cli --sign - "$RUNNER_TEMP/cbb-$a"
           done
           lipo -create "$RUNNER_TEMP/cbb-arm64" "$RUNNER_TEMP/cbb-amd64" -output "$RUNNER_TEMP/cbb"
           sh packaging/macos/pkg.sh 0.0.1 "$RUNNER_TEMP/cbb" "$app" "$RUNNER_TEMP/cbb-0.0.1.pkg"
