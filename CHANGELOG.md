@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The mirror of the releases at `dl.cbb.tools`, which `cbb update`, the installers, the
+  Android app and the lite member fall back to when GitHub does not answer: `release-sign
+  mirror` on cbb.tools takes every hour the newest `keys.json` and `stable.json` that check
+  out, the release they name and the `min_from` of each, checks every file as a device does
+  before it serves it, and unpacks the ZX Spectrum Next's files of the newest checked
+  release for `.cbb install` (docs/maintaining.md, "The mirror").
 - The desktop apps show the QR code for joining a phone's group: on a computer in no group,
   **Join a phone's group** in the tray app (Windows, Linux) and the Mac app runs `cbb pair
   -app` as the administrator and shows the code, its text and the time left, without a

@@ -7,6 +7,7 @@
 //	release-sign publish -version 0.6.0 [-min-from 0.5.0] [-docker none] [-channel NAME=KEY.pem] [-forwarder ADDRESS=KEY.pem] [-no-publish]
 //	release-sign renew [-new-keys]
 //	release-sign extend -key file:channel-key.pem -out DIR      (on cbb.tools)
+//	release-sign mirror -out DIR [-from SRC,...] [-zxnext DIR] [-version X.Y.Z]... (on cbb.tools)
 //	release-sign take [-new URL] BRANCH-DIR                     (the channel workflow)
 //	release-sign due BRANCH-DIR                                 (the channel workflow)
 //	release-sign manifest -version 0.6.0 -channel stable [-min-from 0.5.0] [-docker IMAGE@sha256:...] DIR >release.body
@@ -24,7 +25,8 @@
 // throwaway keys in files and writes their roots to ROOTS.pem, for the
 // installers' tests and for drills. publish and renew write keys.json and
 // stable.json to the branch channel; extend renews stable.json with the
-// channel key, and take and due bring it into the branch.
+// channel key, and take and due bring it into the branch; mirror keeps
+// dl.cbb.tools and the ZX Spectrum Next's files on cbb.tools.
 // docs/maintaining.md, "Signed releases", has the whole flow.
 package main
 
@@ -61,7 +63,7 @@ func main() {
 	cmds := map[string]func([]string) error{
 		"manifest": manifest, "keys": keys, "channel": channel,
 		"sign": sign, "public": public, "verify": verify, "drill": drill,
-		"publish": publish, "renew": renew, "extend": extend, "take": take, "due": due,
+		"publish": publish, "renew": renew, "extend": extend, "take": take, "due": due, "mirror": mirror,
 	}
 	cmd, ok := cmds[os.Args[1]]
 	if !ok {
@@ -74,7 +76,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: release-sign publish|renew|extend|take|due|manifest|keys|channel|sign|public|verify|drill ... (see the comment in tools/release-sign/main.go)")
+	fmt.Fprintln(os.Stderr, "usage: release-sign publish|renew|extend|mirror|take|due|manifest|keys|channel|sign|public|verify|drill ... (see the comment in tools/release-sign/main.go)")
 	os.Exit(2)
 }
 

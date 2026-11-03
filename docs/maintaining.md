@@ -368,19 +368,60 @@ member for the Pi Zero from the `lite` job, and lays them out for cbb.tools
 of name, size, CRC-32 and MD5 for each, which `.cbb install` checks every download against.
 
 NextZXOS's `.http` and the ESP8266 have no TLS, so these two paths are served over plain HTTP
-on port 80, where the rest of the site redirects to HTTPS. Once, in the port-80 server of the
-live configuration (merge it by hand; that file has edits of its own):
+on port 80, where the rest of the site redirects to HTTPS (`site/deploy/nginx.conf`, the
+port-80 server of cbb.tools):
 
 ```nginx
-location = /zxnext { alias /srv/cbb.tools/www/zxnext/CBB; default_type application/octet-stream; }
-location /zxnext/ { root /srv/cbb.tools/www; default_type application/octet-stream; }
+location = /zxnext { alias /srv/cbb.tools/zxnext/CBB; default_type application/octet-stream; }
+location /zxnext/ { root /srv/cbb.tools; default_type application/octet-stream; }
 ```
 
 The first serves the dot command at `/zxnext`, which `.http -h cbb.tools -u /zxnext -f CBB`
 fetches. A `return 301` at the server's level runs before any location, so the redirect to
-HTTPS has to move into `location / { ... }`. For each release, unpack the archive into
-`/srv/cbb.tools/www/`. The checks guard against a damaged download, not against a changed one: a
-signed list that the Next and the Pi check is the next step (docs/roadmap.md, "Installing").
+HTTPS has to stay inside `location / { ... }`. The files are in `/srv/cbb.tools/zxnext`, outside
+`www`, so a deploy of the site leaves them alone, and nobody puts them there by hand:
+`cbb-mirror.timer` ("The mirror" below) unpacks them from the newest release that has them,
+once that release checks out under the pinned roots. The checks on the Next guard against a
+damaged download, not against a changed one: a signed list that the Next and the Pi check is
+the next step (docs/roadmap.md, "Installing").
+
+## The mirror
+
+`https://dl.cbb.tools/` mirrors the releases with the layout of docs/protocol.md, section 16,
+"Where the files are": `keys.json` and `stable.json` at its top, each release's files and its
+`release.json` under `vX.Y.Z/`. `cbb update`, the installers, the Android app and the lite
+member fall back to it when GitHub does not answer; they check every signature, so the
+mirror is not trusted. It runs on cbb.tools beside the site, on a name of its own.
+
+`release-sign mirror` keeps it, from an hourly systemd timer (`site/deploy/cbb-mirror.service`
+and `.timer`, as the user `cbb-mirror`, which holds no key). Each run takes the newest
+`keys.json` and `stable.json` that check out from the branch `channel`, from
+`/srv/cbb.tools/channel` (renewed there every week) and from the mirror itself, so it never
+goes back. Then it downloads the release `stable.json` names, and the `min_from` of each
+release in turn, checks each file against its `release.json` as a device does and only then
+moves the release into place, and writes the top files last. Releases once mirrored stay,
+since a device below a release's `min_from` needs the older one. A run with nothing new
+downloads only the two small files. With `-zxnext DIR` it unpacks the ZX Spectrum Next's
+files of the newest mirrored release that has `cbb-zxnext.tar.gz` into `DIR`, `LIST` last.
+
+A pre-release has no `stable.json`, so the timer does not take it; once, by hand, after
+`release-sign publish`: `sudo -u cbb-mirror release-sign mirror -out /srv/dl.cbb.tools
+-zxnext /srv/cbb.tools/zxnext -version 0.6.0-rc.1`.
+
+Setting it up, once, on cbb.tools:
+
+- [x] The DNS record `dl.cbb.tools`, A to the server's address, DNS only.
+- [ ] `release-sign` built from this version (`GOOS=linux GOARCH=amd64 go build
+  ./tools/release-sign`) at `/usr/local/bin/release-sign`, the user and its directories:
+  `useradd --system --no-create-home --shell /usr/sbin/nologin cbb-mirror`, then `install -d
+  -o cbb-mirror -g cbb-mirror -m 755 /srv/dl.cbb.tools /srv/cbb.tools/zxnext`.
+- [ ] The two servers of `dl.cbb.tools` and the two `/zxnext` locations from
+  `site/deploy/nginx.conf`, merged into the live configuration by hand; `nginx -t`, then
+  `systemctl reload nginx`, and nginx's ACME module gets the certificate.
+- [ ] `cbb-mirror.service` and `.timer` in `/etc/systemd/system`, `systemctl daemon-reload`,
+  `systemctl enable --now cbb-mirror.timer`. `systemctl start cbb-mirror` runs it at once,
+  and `journalctl -u cbb-mirror` says what it took. Until the first signed release it fails,
+  for want of a `keys.json`.
 
 ## Signing for Windows
 
