@@ -102,7 +102,10 @@ var (
 	// ErrAdminNotAllowed is a phone that offered an admin key to a window
 	// that makes no admins: only cbb pair -admin on the root opens one.
 	ErrAdminNotAllowed = errors.New("pair: the phone asked to be an admin, and this pairing window makes no admins; to make it one, run cbb pair -admin on the group's root")
-	ErrTaken           = errors.New("pair: a device with this device ID is in the group already; join with a new ID")
+	// ErrAdminProof is a phone whose admin key is not proven its own on
+	// this connection, or one the group knows already.
+	ErrAdminProof = errors.New("pair: the phone did not prove that it holds a new admin key")
+	ErrTaken      = errors.New("pair: a device with this device ID is in the group already; join with a new ID")
 )
 
 // spentError is an attempt that failed after the joiner sent its
@@ -202,6 +205,31 @@ type Info struct {
 	// admin CA the group's root computer issues it in the Welcome; only
 	// from a phone, and absent from one that makes none, as a TV.
 	AdminKey []byte `json:"admin_key,omitempty"`
+	// AdminProof proves that the phone holds the admin key: its ECDSA
+	// signature (SHA-256, DER) over AdminProofMessage of the session,
+	// which binds it to this TLS connection; it comes with AdminKey.
+	AdminProof []byte `json:"admin_proof,omitempty"`
+}
+
+// adminProofLabel starts what an admin proof signs.
+const adminProofLabel = "cbb pairing admin key\x00"
+
+// AdminProofMessage is what a joiner's admin key signs to prove it holds
+// the key: the label and sid, the TLS exporter's output of the pairing
+// connection.
+func AdminProofMessage(sid []byte) []byte {
+	return append([]byte(adminProofLabel), sid...)
+}
+
+// provesAdminKey reports whether the joiner's admin proof is its admin
+// key's signature for the session sid.
+func (i Info) provesAdminKey(sid []byte) bool {
+	pub, err := parseAdminKey(i.AdminKey)
+	if err != nil || len(i.AdminProof) == 0 {
+		return false
+	}
+	h := sha256.Sum256(AdminProofMessage(sid))
+	return ecdsa.VerifyASN1(pub, h[:], i.AdminProof)
 }
 
 // RoleLite is the Info role of a lite member.
@@ -243,6 +271,9 @@ func (i Info) check() error {
 		if _, err := parseAdminKey(i.AdminKey); err != nil {
 			return fmt.Errorf("pair: the phone's admin key: %w", err)
 		}
+	}
+	if (i.AdminProof == nil) != (i.AdminKey == nil) {
+		return errors.New("pair: an admin key comes with its proof")
 	}
 	if i.Seal != nil && seal.CheckPublicKey(i.Seal) != nil {
 		return errors.New("pair: the key for sealed messages is not one")

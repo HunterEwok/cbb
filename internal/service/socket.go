@@ -614,7 +614,7 @@ func (s *Service) openWindow(code string, admins bool) (*pair.Window, *group.Ide
 		end()
 		return nil, nil, nil, s.errNotAdmitter()
 	}
-	opened, err := pair.Open(id, code, pair.Options{Now: benchtime.Now, Records: s.pathRecords, ClaimTimes: s.claimTimes, Taken: s.idTaken, Admins: admins})
+	opened, err := pair.Open(id, code, pair.Options{Now: benchtime.Now, Records: s.pathRecords, ClaimTimes: s.claimTimes, Taken: s.idTaken, Admins: admins, KnownKey: s.keyKnown})
 	if err != nil {
 		end()
 		return nil, nil, nil, err
@@ -701,6 +701,26 @@ func (s *Service) createGroup() (*group.Identity, error) {
 		}
 	}
 	return id, nil
+}
+
+// keyKnown reports whether the records name the key hash h: a device's
+// key, an admin key or the recovery key.
+func (s *Service) keyKnown(h group.KeyHash) bool {
+	s.recMu.Lock()
+	defer s.recMu.Unlock()
+	if s.records == nil {
+		return false
+	}
+	st := s.records.State()
+	if st.Recovery != nil && *st.Recovery == h {
+		return true
+	}
+	for _, d := range st.Devices {
+		if d.Admin != nil && *d.Admin == h || slices.Contains(d.Keys, h) {
+			return true
+		}
+	}
+	return false
 }
 
 // windowResult returns how a window that closed ended, and logs it.

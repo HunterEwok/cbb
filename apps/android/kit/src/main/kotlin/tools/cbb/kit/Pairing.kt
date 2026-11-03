@@ -115,7 +115,20 @@ object Pairing {
         val role: String? = null,
         /** The joiner's public key for sealed messages, which the phone that admits it puts in its device record (docs/protocol.md, section 15). */
         val seal: ByteArray? = null,
+        /** The admin key's signature (ECDSA with SHA-256, DER) over adminProofMessage of this connection's session ID; it comes with adminKey. */
+        val adminProof: ByteArray? = null,
     ) {
+        /** This description with the admin key's proof for sessionID, signed by admin, the key adminKey names. */
+        fun proving(sessionID: ByteArray, admin: CertificateSigner): Info =
+            if (adminKey == null) this else copy(adminProof = admin.signature(adminProofMessage(sessionID)))
+
+        /** Whether adminProof is adminKey's signature for sessionID. */
+        fun provesAdminKey(sessionID: ByteArray): Boolean {
+            val k = adminKey ?: return false
+            val p = adminProof ?: return false
+            return verifySignature(k, adminProofMessage(sessionID), p)
+        }
+
         /**
          * Checks it as the member does: a known OS, a printable name of 1
          * to 64 bytes, a known role, and an admin key only from a phone, a
@@ -126,15 +139,16 @@ object Pairing {
                 if ((os !in OSES && !(os == "none" && role == LITE)) || name.isEmpty() || name.toByteArray().size > 64 || !printable(name)) return false
                 if (role != null && role != LITE) return false
                 if (seal != null && seal.size != SEAL_KEY_SIZE) return false
+                if ((adminKey == null) != (adminProof == null)) return false
                 val k = adminKey ?: return true
                 return isPhone(os) && p256PublicKey(k) != null
             }
 
-        fun encode(): ByteArray = Wire.encode(Wire.obj("name" to Wire.str(name), "os" to Wire.str(os), "admin_key" to Wire.bytes(adminKey), "role" to Wire.str(role), "seal" to Wire.bytes(seal)))
+        fun encode(): ByteArray = Wire.encode(Wire.obj("name" to Wire.str(name), "os" to Wire.str(os), "admin_key" to Wire.bytes(adminKey), "admin_proof" to Wire.bytes(adminProof), "role" to Wire.str(role), "seal" to Wire.bytes(seal)))
 
         override fun equals(other: Any?): Boolean =
             other is Info && name == other.name && os == other.os && adminKey.contentEqualsOrNull(other.adminKey) && role == other.role &&
-                seal.contentEqualsOrNull(other.seal)
+                seal.contentEqualsOrNull(other.seal) && adminProof.contentEqualsOrNull(other.adminProof)
 
         override fun hashCode(): Int = name.hashCode()
 
@@ -147,13 +161,16 @@ object Pairing {
             /** The size of a key for sealed messages (an X-Wing public key). */
             const val SEAL_KEY_SIZE = 1216
 
+            /** What the admin key signs to prove the phone holds it: the label, a zero byte and sessionID, the TLS exporter's output (docs/protocol.md, section 6). */
+            fun adminProofMessage(sessionID: ByteArray): ByteArray = "cbb pairing admin key".toByteArray() + byteArrayOf(0) + sessionID
+
             /** Whether a joiner's OS is a phone's, which joins as a phone and may become an admin. */
             fun isPhone(os: String): Boolean = os == "ios" || os == "android"
 
             fun decode(data: ByteArray): Info? {
                 val o = Wire.parse(data) ?: return null
                 return try {
-                    Info(o.optString("name") ?: return null, o.optString("os") ?: return null, o.optBytes("admin_key"), o.optString("role"), o.optBytes("seal"))
+                    Info(o.optString("name") ?: return null, o.optString("os") ?: return null, o.optBytes("admin_key"), o.optString("role"), o.optBytes("seal"), o.optBytes("admin_proof"))
                 } catch (e: WireTypeException) {
                     null
                 }

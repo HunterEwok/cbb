@@ -68,6 +68,7 @@
     <string name="qr_text">QR code text</string>
     <string name="connecting">Connecting to the device…</string>
     <string name="not_a_code">Not a CBB QR code.</string>
+    <string name="reason_join">Join the group as an admin</string>
     <string name="reason_add">Add a computer to your group</string>
     <string name="reason_remove">Remove a device from your group</string>
     <string name="reason_make_admin">Make a computer an admin</string>

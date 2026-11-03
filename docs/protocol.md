@@ -835,7 +835,7 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 | PRS (password) | the six ASCII digits of the code, or a remote invitation's secret (its raw bytes) |
 | CI (channel identifier) | `"cbb pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
 | sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-cbb-pair-v2`, empty context |
-| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER); a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits `ios` and `android` joiners as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, and, only on the group's root, `ios` and `android` joiners as phones ("A phone joins a computer's group" below) |
+| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits `ios` and `android` joiners as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, and, only on the group's root, `ios` and `android` joiners as phones ("A phone joins a computer's group" below) |
 | ADb (member) | JSON `{"device":"<member device ID>","group":"<group tag>"}` |
 | Ya, Yb | 32-byte X25519 u-coordinates |
 | Tags Ta, Tb | HMAC-SHA-512, 64 bytes |
@@ -843,7 +843,8 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 The AD bytes are used exactly as they travel in the `ad` field. The member MUST check ADa: `os`
 is `linux`, `windows` or `macos`, or `none` with `role` `lite` (an admin phone also takes
 `ios` and `android`); `name` is 1 to 64 bytes of
-printable UTF-8; `admin_key`, when present, comes with `ios` or `android` and is a P-256 key; `role`,
+printable UTF-8; `admin_key`, when present, comes with `ios` or `android` and is a P-256 key, and
+`admin_proof` comes with it; `role`,
 when present, is `lite`; `seal`, when present, comes from no phone and is 1216 bytes. A lite member (a Linux device without CA keys) gets
 no CA keys and is recorded with role `lite`. Go members
 take no `ios` joiner: only admin phones admit phones.
@@ -934,7 +935,11 @@ in `admin` with the powers of an admin, `takeover` among them (the table in sect
 signs what"). The user chooses that the window makes an admin, never the joiner: any other
 window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
 confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
-phone that offers no admin key, as a TV, joins any window as a member. This is how a new phone takes over a computer's group, as after `cbb recovery`:
+phone that offers no admin key, as a TV, joins any window as a member. Before it certifies an
+admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
+`sid` of this connection, so that a key the joiner does not hold, or a proof made for another
+connection, never becomes an admin; the root computer also refuses a key its records name already
+(a device's key, an admin key, the recovery key). Both answer `{"error": "refused"}`. This is how a new phone takes over a computer's group, as after `cbb recovery`:
 it joins, the root names its admin key in a `handover` record (`cbb handover`, section 10,
 "Handing the group over"), and its claim takes effect at once.
 

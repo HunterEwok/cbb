@@ -887,6 +887,11 @@ All notable changes to cbb are documented in this file. The format follows
   on the group's root, which first says what an admin may do; a plain `cbb pair` and an
   invitation refuse a phone that asks to be an admin, and the apps name the new command.
   The service logs an admission as an admin with its powers.
+- A phone that joins with an admin key proves it holds the key: the pairing's first frame
+  carries `admin_proof`, the key's signature over the connection's session ID, which the root
+  computer and an admin phone check before they make an admin CA (docs/protocol.md, section
+  6); the root computer also refuses an admin key its records name already. On Android the
+  proof asks for the fingerprint or the screen lock once more.
 - `cbb recovery` reads the recovery key without showing it, and takes the key's admin CA only
   as a root of the group issued it.
 - `cbb pair -app` opens the app's file once, refusing a link, and writes through that handle.

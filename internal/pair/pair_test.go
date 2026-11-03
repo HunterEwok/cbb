@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -625,6 +626,13 @@ type rawJoiner struct {
 
 func startRaw(t *testing.T, f *fixture, info Info, code string) (*rawJoiner, chan error) {
 	t.Helper()
+	return startRawProving(t, f, info, code, nil)
+}
+
+// startRawProving is startRaw for a phone whose admin key, when given,
+// signs the admin proof for this connection.
+func startRawProving(t *testing.T, f *fixture, info Info, code string, adminKey *ecdsa.PrivateKey) (*rawJoiner, chan error) {
+	t.Helper()
 	j, err := NewJoiner(Info{Name: "raw", OS: "linux"})
 	if err != nil {
 		t.Fatal(err)
@@ -644,6 +652,12 @@ func startRaw(t *testing.T, f *fixture, info Info, code string) (*rawJoiner, cha
 	ci, sid, err := binding(cs, cs.PeerCertificates[0].Raw, cfg.Certificates[0].Certificate[0])
 	if err != nil {
 		t.Fatal(err)
+	}
+	if adminKey != nil {
+		h := sha256.Sum256(AdminProofMessage(sid))
+		if info.AdminProof, err = ecdsa.SignASN1(rand.Reader, adminKey, h[:]); err != nil {
+			t.Fatal(err)
+		}
 	}
 	ad, _ := json.Marshal(info)
 	st, msg, err := cpace.Start(&cpace.Config{Role: cpace.Initiator, Password: []byte(code), ChannelID: ci, SessionID: sid, AD: ad})

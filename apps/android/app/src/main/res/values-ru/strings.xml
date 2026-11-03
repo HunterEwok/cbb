@@ -65,6 +65,7 @@
     <string name="qr_text">Текст QR-кода</string>
     <string name="connecting">Подключение к устройству…</string>
     <string name="not_a_code">Это не QR-код CBB.</string>
+    <string name="reason_join">Войти в группу как администратор</string>
     <string name="reason_add">Добавить компьютер в вашу группу</string>
     <string name="reason_remove">Удалить устройство из вашей группы</string>
     <string name="reason_make_admin">Сделать компьютер админом</string>
