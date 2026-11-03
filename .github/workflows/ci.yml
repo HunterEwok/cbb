@@ -1928,34 +1928,21 @@ jobs:
       - name: the lite member joins by the phone, syncs with Go members and takes their remote pastes
         working-directory: .
         run: CBB_LITE="$PWD/lite/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless' -v
-      - name: get.sh --lite installs the lite member, moves an old cbb-lite to it, and uninstall.sh removes it
+      - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         working-directory: .
         run: |
           rel="$RUNNER_TEMP/release"
           sh lite/packaging/archive.sh lite/target/release/cbb x86_64-unknown-linux-gnu amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
-          # The lite member as it was installed before the rename, with a file
-          # in its state for the move to keep.
-          sudo useradd --system --home-dir /var/lib/cbb-lite --shell /usr/sbin/nologin cbb-lite
-          sudo install -m 0755 lite/target/release/cbb /usr/local/bin/cbb-lite
-          sudo install -d -o cbb-lite -g cbb-lite -m 0700 /var/lib/cbb-lite
-          sudo touch /var/lib/cbb-lite/kept
-          printf '[Service]\nExecStart=/usr/local/bin/cbb-lite run\n' | sudo tee /etc/systemd/system/cbb-lite.service >/dev/null
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --lite --no-firewall | tee "$RUNNER_TEMP/get.out"
-          grep -q 'Renamed cbb-lite to cbb' "$RUNNER_TEMP/get.out"
           systemctl is-active clipboardbridge.service
           cbb version | grep -q 'lite member'
-          test "$(sudo stat -c %U /var/lib/clipboardbridge/kept)" = clipboardbridge
-          for f in /usr/local/bin/cbb-lite /etc/systemd/system/cbb-lite.service /var/lib/cbb-lite /etc/xdg/autostart/clipboardbridge-desktop.desktop /etc/systemd/user/clipboardbridge-agent.service; do
+          for f in /etc/xdg/autostart/clipboardbridge-desktop.desktop /etc/systemd/user/clipboardbridge-agent.service; do
             if [ -e "$f" ]; then
               echo "install.sh left $f" >&2
               exit 1
             fi
           done
-          if getent passwd cbb-lite; then
-            echo "install.sh left the user cbb-lite" >&2
-            exit 1
-          fi
           # Both exit 1, which pipefail would take for the grep's answer.
           for _ in $(seq 20); do
             out=$(sudo cbb status 2>&1) || true

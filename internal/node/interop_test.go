@@ -137,7 +137,7 @@ func TestMemberInteropVectors(t *testing.T) {
 	for _, raw := range []string{
 		`{"id":"fedcba9876543210fedcba9876543210","origin":"0123456789abcdef0123456789abcdef","time":"1.0","age_ms":0,"kind":"text","text":"x"}`,
 		`{"id":"fedcba9876543210fedcba9876543210","origin":"0123456789abcdef0123456789abcdef","via":"phone","time":"1.0","age_ms":0,"kind":"secret","text":""}`,
-		// The name of via phone before phones other than the iPhone.
+		// An old name of via phone, refused.
 		`{"id":"fedcba9876543210fedcba9876543210","origin":"0123456789abcdef0123456789abcdef","via":"iphone","time":"1.0","age_ms":0,"kind":"text","text":"x"}`,
 		`{"id":"fedcba9876543210fedcba9876543210","origin":"0123456789abcdef0123456789abcdef","time":"1.0","kind":"text","text":"no age"}`,
 		`{"id":"fedcba9876543210fedcba9876543210","origin":"0123456789abcdef0123456789abcdef","time":"1.0","age_ms":0,"kind":"text","text":""}`,

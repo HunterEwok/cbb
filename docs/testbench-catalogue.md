@@ -89,7 +89,6 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I23 | Our signed apk feed on OpenWrt: `apk add` from it, its key checked; the mips and mipsle builds boot and sync under QEMU (big-endian) | fleet | |
 | I24 | Windows binaries carry a valid Authenticode signature; `cbb update` checks it; SmartScreen lets the installer run | real | signing |
 | I25 | The installers' errors: a failed step names its exit status; `CBB_ERROR_DETAILS=1` shows every command and the full Windows error record | real | |
-| I26 | `get.sh --lite` moves an old `cbb-lite` install to `cbb` and keeps its group | real | |
 
 ## 2. Groups, pairing and roles (G)
 
@@ -253,7 +252,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | M3 | `cbb paste` in `own` and `send` prints the group's text | real | |
 | M4 | The mode survives a restart, reboot and update; the hello reports it; every devices list shows it | real, fleet | |
 | M5 | `cbb mode -on DEVICE` from the root computer, an admin computer, an admin phone: taken; from a member or a frozen admin: refused; to a stopped target: an error within 10 s and nothing changes; to a target not connected to the sender: passed on by a member [P34] | real, fleet | |
-| M6 | A new device starts in `own`; a device that joined before 0.5 shares | fleet | |
+| M6 | A new device starts in `own`; a device without a mode file shares | fleet | |
 | M7 | The phones' automatic paths follow the mode: Android's service writes only in a receiving mode and its accessibility service sends only in a sending mode; the iPhone writes the last 45 s only in a receiving mode | ui | |
 
 ## 7. Images, files and formatted text (O)

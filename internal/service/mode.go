@@ -19,8 +19,8 @@ import (
 )
 
 // modeFile holds the sync mode, in the state directory. A device that made
-// or joined its group gets one at once, with own; without it, the device
-// joined before sync modes existed and keeps sharing as it did.
+// or joined its group gets one at once, with own; without one, the device
+// shares.
 const modeFile = "mode"
 
 // loadMode reads the sync mode from dir.

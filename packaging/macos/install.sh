@@ -125,22 +125,6 @@ if "$bin" version | grep -q 'no pasteboard support'; then
 	exit 1
 fi
 
-# Up to 0.2.0 clipboardbridge was called clipbridge, and its protocol does
-# not reach this one: remove it, with its keys and user, so this Mac pairs
-# again.
-old=io.github.hunterewok.clipbridge
-if [ -e /usr/local/bin/clipbridge ] || [ -e "/Library/LaunchDaemons/$old.plist" ]; then
-	launchctl bootout "system/$old" 2>/dev/null || true
-	if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
-		launchctl bootout "gui/$(id -u "$SUDO_USER")/$old.agent" 2>/dev/null || true
-	fi
-	rm -f "/Library/LaunchDaemons/$old.plist" "/Library/LaunchAgents/$old.agent.plist" /usr/local/bin/clipbridge
-	rm -rf "/Library/Application Support/clipbridge" /Library/Logs/clipbridge
-	dscl . -delete /Users/_clipbridge 2>/dev/null || true
-	dscl . -delete /Groups/_clipbridge 2>/dev/null || true
-	echo "Removed clipbridge, an old name of CBB; pair this Mac again."
-fi
-
 name=_clipboardbridge
 if ! dscl . -read "/Groups/$name" >/dev/null 2>&1; then
 	# A free ID below 500, so the account stays hidden.

@@ -53,17 +53,13 @@ final class AwayFromHomeTests: XCTestCase {
         XCTAssertNil(AwayState.decode(Data("{".utf8)))
     }
 
-    /// The state of earlier versions kept one hub's offer and no preshared
-    /// key of the phone's own: it gets one.
+    /// The state of the first versions, one hub's offer and no preshared
+    /// key of the phone's own, is not read.
     func testReadsTheOneHubOfEarlierVersions() throws {
         let key = Data(repeating: 1, count: 32)
         let old = #"{"key":"\#(key.base64EncodedString())","hub":"\#(hub)","offer":\#(String(decoding: try JSONEncoder().encode(offer), as: UTF8.self))}"#
-        let s = try XCTUnwrap(AwayState.decode(Data(old.utf8)))
-        XCTAssertEqual(s.hubs.map(\.device), [hub])
-        XCTAssertEqual(s.offer(hub), offer)
-        XCTAssertEqual(s.psk.count, 32)
-        XCTAssertNotEqual(s.psk, offer.psk)
-        XCTAssertEqual(AwayState.decode(Data(#"{"key":"\#(key.base64EncodedString())"}"#.utf8))?.hubs, [])
+        XCTAssertNil(AwayState.decode(Data(old.utf8)))
+        XCTAssertNil(AwayState.decode(Data(#"{"key":"\#(key.base64EncodedString())"}"#.utf8)))
     }
 
     final class FakeTunnel: OpenTunnel, @unchecked Sendable {

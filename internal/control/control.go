@@ -432,7 +432,7 @@ type Device struct {
 	Name   string `json:"name,omitempty"`
 	Role   string `json:"role,omitempty"`
 	OS     string `json:"os,omitempty"`      // its operating system; "" when unknown
-	Store  string `json:"store,omitempty"`   // where its keys live: group.StoreFile, StoreHardware, StoreProven or StoreRootless; "" before 0.6
+	Store  string `json:"store,omitempty"`   // where its keys live: group.StoreFile, StoreHardware, StoreProven or StoreRootless; "" when the member does not say
 	SkewMS int64  `json:"skew_ms,omitempty"` // how far its clock is ahead of this one
 	// Form, OSVersion, Version and MAC are what its hello says about its
 	// device; "" when it says nothing or is not connected.

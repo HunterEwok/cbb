@@ -84,9 +84,7 @@ type versions struct {
 
 // A versionEntry is one period's newest credential: its version, the
 // hashed period key, when it was kept, as a counter, and when the last
-// credential it saw expires, in Unix milliseconds. An entry written by an
-// earlier version has no expiry; it is given the longest a period lasts from
-// when the file is read.
+// credential it saw expires, in Unix milliseconds.
 type versionEntry struct {
 	Version uint64 `json:"version"`
 	Key     string `json:"key"`
@@ -119,13 +117,8 @@ func newVersions(file string, key any) (*versions, error) {
 	if err := json.Unmarshal(data, &v.entries); err != nil {
 		return nil, err
 	}
-	legacy := v.now().Add(group.PeriodLifetime).UnixMilli()
-	for t, e := range v.entries {
+	for _, e := range v.entries {
 		v.seq = max(v.seq, e.Seq)
-		if e.Expires == 0 {
-			e.Expires = legacy
-			v.entries[t] = e
-		}
 	}
 	return v, nil
 }

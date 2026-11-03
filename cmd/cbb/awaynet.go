@@ -42,10 +42,6 @@ type grant struct {
 	// cgnat leaves 100.64.0.0/10 to the home network (CBB_HOME_CGNAT=1) in
 	// the Windows rule; on Linux the installer's own drop-in does it.
 	cgnat bool
-	// anywhere is a drop-in of a version before 0.4 that let the service
-	// reach every address; it never equals what the service asks for, so
-	// cbb global allow and the installer replace it.
-	anywhere bool
 }
 
 // equal reports whether two grants allow the same; without sync away from
@@ -54,9 +50,6 @@ func (g grant) equal(o grant) bool {
 	if !g.on || !o.on {
 		return g.on == o.on
 	}
-	if g.anywhere || o.anywhere {
-		return g.anywhere == o.anywhere
-	}
 	return g.hubPort == o.hubPort && g.cgnat == o.cgnat && slices.Equal(g.addrs, o.addrs)
 }
 
@@ -64,9 +57,6 @@ func (g grant) equal(o grant) bool {
 func (g grant) String() string {
 	if !g.on {
 		return "the home network only"
-	}
-	if g.anywhere {
-		return "every address on the internet (a limit an earlier version left)"
 	}
 	var parts []string
 	for _, a := range g.addrs {
@@ -197,7 +187,6 @@ func awayDropInText(g grant) string {
 // parseDropIn reads a grant back from the drop-in.
 func parseDropIn(text string) grant {
 	g := grant{on: true}
-	anyAddr := false
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
 		if v, ok := strings.CutPrefix(line, "# hub-port "); ok {
@@ -205,15 +194,12 @@ func parseDropIn(text string) grant {
 		}
 		if v, ok := strings.CutPrefix(line, "IPAddressAllow="); ok {
 			for _, f := range strings.Fields(v) {
-				anyAddr = anyAddr || f == "any"
 				if a, err := netip.ParseAddr(f); err == nil {
 					g.addrs = append(g.addrs, a)
 				}
 			}
 		}
 	}
-	// A hub's drop-in allows any address on purpose and says so.
-	g.anywhere = anyAddr && g.hubPort == 0
 	return g
 }
 

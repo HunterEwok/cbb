@@ -72,35 +72,24 @@ class AwayState(val key: ByteArray, val psk: ByteArray = newPSK(), val hubs: Lis
 
         fun newPSK(): ByteArray = ByteArray(32).also { random.nextBytes(it) }
 
-        /**
-         * The state in b, or null when it is not one this version wrote.
-         * Versions 1 to 3 kept one hub's offer and no preshared key of the
-         * phone's own: it gets one now.
-         */
+        /** The state in b, or null when it is not one this version wrote. */
         fun decode(b: ByteArray): AwayState? = try {
             DataInputStream(ByteArrayInputStream(b)).run {
                 val version = readByte().toInt()
-                if (version !in 1..VERSION) return null
+                if (version != VERSION) return null
                 val key = ByteArray(32).also { readFully(it) }
                 fun offer(): Pair<String, Member.TunnelOffer>? {
                     val hub = readUTF()
                     val hubKey = ByteArray(32).also { readFully(it) }
                     val psk = ByteArray(32).also { readFully(it) }
                     val endpoints = List(readUnsignedByte()) { readUTF() }
-                    // Version 1 had no obfuscation settings.
-                    val obfuscation = if (version == 1) "" else readUTF()
-                    // Nor had version 2 the way over VLESS.
-                    val vless = if (version <= 2) "" else readUTF()
-                    // Nor had version 4 the hub's next key.
-                    val next = if (version >= 5 && readBoolean()) ByteArray(32).also { readFully(it) } else null
+                    val obfuscation = readUTF()
+                    val vless = readUTF()
+                    val next = if (readBoolean()) ByteArray(32).also { readFully(it) } else null
                     val o = Member.TunnelOffer(
                         hubKey, psk, endpoints, obfuscation.takeIf { it.isNotEmpty() }, vless.takeIf { it.isNotEmpty() }, nextKey = next,
                     )
                     return if (o.isValid) hub to o else null
-                }
-                if (version < 4) {
-                    if (!readBoolean()) return AwayState(key)
-                    return AwayState(key, hubs = listOf(offer() ?: return null))
                 }
                 val psk = ByteArray(32).also { readFully(it) }
                 val hubs = List(readUnsignedByte()) { offer() ?: return null }

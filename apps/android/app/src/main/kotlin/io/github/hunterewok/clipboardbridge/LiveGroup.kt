@@ -185,9 +185,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * This phone's sync mode (docs/design.md, "Sync modes"), in the file
-     * mode beside the group's, as the computers keep it: own for a phone
-     * that makes or joins a group from now on, shared for one that joined
-     * before 0.5, which has no file.
+     * mode beside the group's, as the computers keep it; own when there is
+     * none.
      */
     private val modeFile = File(file.parentFile, "mode")
 
@@ -199,7 +198,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** The sync mode: own, shared, receive or send. */
     val syncMode: String
-        get() = runCatching { modeFile.readText().trim() }.getOrNull()?.takeIf { it in Member.MODES } ?: "shared"
+        get() = runCatching { modeFile.readText().trim() }.getOrNull()?.takeIf { it in Member.MODES } ?: "own"
 
     /** The IDs of the commands carried out, until they expire: the replay cache (docs/protocol.md, section 15). */
     private val commands = mutableMapOf<String, Long>()

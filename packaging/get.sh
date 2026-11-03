@@ -204,13 +204,6 @@ if [ "$lite" = yes ]; then
 	[ "$arch" = armv7 ] && arch=armv6
 	archive=clipboardbridge-lite-linux-$arch.tar.gz
 	dir=clipboardbridge-lite
-	case $version in
-	# Releases before 0.5 named the lite member's archive cbb-lite.
-	v0.[0-4].*)
-		archive=cbb-lite-linux-$arch.tar.gz
-		dir=cbb-lite
-		;;
-	esac
 fi
 
 # The project's release root keys (docs/protocol.md, section 16), which sign

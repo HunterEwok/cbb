@@ -17,7 +17,8 @@ import (
 //
 //   - a relative link in a Markdown file names a file or directory of the
 //     repository, and its #anchor, if any, a heading of that file;
-//   - the project's old name does not come back, outside the changelog;
+//   - the project's old names (clipbridge, Clipboard Bridge) do not come back,
+//     outside the changelog;
 //   - every command of cbb, the full and the lite member, is in docs/reference/cli.md,
 //     the lite member's in its section;
 //   - every subcommand of the full member that has flags of its own, and each
@@ -42,7 +43,7 @@ import (
 var (
 	mdLink    = regexp.MustCompile(`\]\(([^)\s]+)\)`)
 	mdHeading = regexp.MustCompile(`^#{1,6}\s+(.+?)\s*#*\s*$`)
-	oldName   = regexp.MustCompile(`(?i)\bclipbridge\b`)
+	oldName   = regexp.MustCompile(`(?i:\bclipbridge\b)|\bClipboard Bridge\b`)
 	goCommand = regexp.MustCompile(`(?m)^\s*case "([a-z]+)"`)
 	rsCommand = regexp.MustCompile(`(?m)^\s*"([a-z]+)" => cmd_`)
 	// envQuoted is a variable's name as a string in Go, Rust, Swift and
@@ -96,7 +97,7 @@ func checkDocs(name string, data []byte, files map[string][]byte) []string {
 			continue
 		}
 		if name != "CHANGELOG.md" && oldName.MatchString(line) {
-			problems = append(problems, fmt.Sprintf("%s:%d: the old name clipbridge; the project is clipboardbridge and its command cbb", name, i+1))
+			problems = append(problems, fmt.Sprintf("%s:%d: an old name; the project is Copy Beyond Borders (CBB) and its command cbb", name, i+1))
 		}
 		for _, m := range mdLink.FindAllStringSubmatch(line, -1) {
 			if p := checkLink(name, m[1], files); p != "" {

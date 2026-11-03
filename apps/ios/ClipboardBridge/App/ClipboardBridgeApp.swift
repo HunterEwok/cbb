@@ -9,7 +9,6 @@ struct ClipboardBridgeApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     init() {
-        Appearance.migrate()
         UNUserNotificationCenter.current().delegate = ForegroundNotifications.shared
         // Early, for a watch that asks while the app is not running.
         WatchLink.shared.start()

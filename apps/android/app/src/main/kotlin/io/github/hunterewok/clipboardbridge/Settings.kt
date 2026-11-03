@@ -60,26 +60,6 @@ class Settings(context: Context) {
         get() = Appearance.of(prefs.getString("appearance", null))
         set(v) = prefs.edit().putString("appearance", v.key).apply()
 
-    init {
-        migrateTheme()
-    }
-
-    /**
-     * Carries the one theme of earlier versions over to a colour and an
-     * appearance: Terminal, Midnight and Amber were dark, Light was
-     * Terminal's light one, Material You the wallpaper's colours.
-     */
-    private fun migrateTheme() {
-        val old = prefs.getString("theme", null) ?: return
-        val edit = prefs.edit().remove("theme")
-        when (old) {
-            "terminal", "midnight", "amber" -> edit.putString("color", old).putString("appearance", Appearance.DARK.key)
-            "light" -> edit.putString("appearance", Appearance.LIGHT.key)
-            ColorChoice.MATERIAL -> edit.putString("color", ColorChoice.MATERIAL)
-        }
-        edit.apply()
-    }
-
     /** Tiles or a list on a phone; on a big screen the orbit too, which it starts with. */
     var layout: DeviceLayout
         get() = DeviceLayout.of(prefs.getString("deviceLayout", null), DeviceLayout.TILES)

@@ -166,8 +166,7 @@ func TestVersionsBoundsAnEntrysLife(t *testing.T) {
 
 // TestVersionsWriteLeavesTheLock checks that keeping a credential does not
 // write the file, that the file follows within the delay and when the table
-// is flushed, that what was written is read back, and that a file from an
-// earlier version, with no expiry, is read.
+// is flushed, and that what was written is read back.
 func TestVersionsWriteLeavesTheLock(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "state.json")
 	v := testVersions(t, file)
@@ -211,17 +210,4 @@ func TestVersionsWriteLeavesTheLock(t *testing.T) {
 		t.Fatalf("the file holds %v", got)
 	}
 
-	// An entry from before the expiry was written is read and given one.
-	old := filepath.Join(t.TempDir(), "old.json")
-	if err := os.WriteFile(old, []byte(`{"aa":{"version":7,"key":"bb","seq":4}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	w, err := newVersions(old, k)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if e := w.entries["aa"]; e.Version != 7 || e.Seq != 4 || time.UnixMilli(e.Expires).Before(time.Now().Add(group.PeriodLifetime-time.Minute)) {
-		t.Fatalf("the old entry reads as %+v", e)
-	}
 }

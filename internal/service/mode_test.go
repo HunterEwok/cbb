@@ -68,7 +68,7 @@ func TestSyncModes(t *testing.T) {
 		}
 	}
 
-	// A device that joined before sync modes has no mode file and keeps sharing.
+	// A device without a mode file shares.
 	a.stop()
 	if err := os.Remove(filepath.Join(a.dir, modeFile)); err != nil {
 		t.Fatal(err)

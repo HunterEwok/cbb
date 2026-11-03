@@ -699,7 +699,7 @@ tile's menu on a right click, and Option with the arrow keys, Home or End moving
 focused tile in Arrange mode.
 
 **On the watches**: the phone sends its devices in the user's order, each with the name
-of its collection (`collection` in WatchState, absent from a phone before 0.6), and the
+of its collection (`collection` in WatchState), and the
 watch lists the devices in no collection under **Devices**, then a section for each
 collection. The watch does not change the arrangement.
 

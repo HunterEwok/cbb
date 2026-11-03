@@ -183,58 +183,6 @@ if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
 	exit 2
 fi
 
-# Up to 0.2.0 clipboardbridge was called clipbridge, and its protocol does
-# not reach this one: remove it, with its keys, user and firewall rules, so
-# this device pairs again.
-if [ -e /usr/local/bin/clipbridge ] || [ -e /etc/systemd/system/clipbridge.service ]; then
-	if [ -f /usr/local/share/clipbridge/uninstall.sh ]; then
-		sh /usr/local/share/clipbridge/uninstall.sh --purge >/dev/null
-	else
-		systemctl disable --now clipbridge.service >/dev/null 2>&1 || true
-		if command -v ufw >/dev/null 2>&1; then
-			old=$(ufw status numbered 2>/dev/null |
-				sed -n 's/^\[ *\([0-9][0-9]*\)\].*# clipbridge\( mDNS\)\{0,1\} *$/\1/p' | sort -rn)
-			for n in $old; do
-				ufw --force delete "$n" >/dev/null
-			done
-		fi
-		rm -f /etc/systemd/system/clipbridge.service /etc/xdg/autostart/clipbridge-desktop.desktop \
-			/etc/profile.d/clipbridge-console.sh /usr/lib/sysusers.d/clipbridge.conf /usr/local/bin/clipbridge
-		systemctl daemon-reload || true
-		rm -rf /usr/local/share/clipbridge /etc/clipbridge /var/lib/clipbridge
-	fi
-	if [ -f /etc/tmux.conf ]; then
-		grep -vxF 'source-file -q /usr/local/share/clipbridge/tmux.conf' /etc/tmux.conf >/etc/tmux.conf.old || true
-		cat /etc/tmux.conf.old >/etc/tmux.conf
-		rm -f /etc/tmux.conf.old
-	fi
-	userdel clipbridge 2>/dev/null || true
-	groupdel clipbridge 2>/dev/null || true
-	echo "Removed clipbridge, an old name of CBB; pair this device again."
-fi
-
-# The lite member was the command cbb-lite, with its own user and paths. Its
-# keys move to the shared paths for the lite member, which stays in its group.
-moved=no
-if [ -e /usr/local/bin/cbb-lite ] || [ -e /etc/systemd/system/cbb-lite.service ]; then
-	systemctl disable --now cbb-lite.service >/dev/null 2>&1 || true
-	rm -rf /etc/systemd/system/cbb-lite.service /etc/systemd/system/cbb-lite.service.d \
-		/usr/lib/sysusers.d/cbb-lite.conf /usr/local/bin/cbb-lite
-	systemctl daemon-reload || true
-	if [ "$kind" = lite ] && [ -d /var/lib/cbb-lite ] && [ ! -e /var/lib/clipboardbridge ]; then
-		mv /var/lib/cbb-lite /var/lib/clipboardbridge
-		moved=yes
-	fi
-	rm -rf /var/lib/cbb-lite
-	userdel cbb-lite 2>/dev/null || true
-	groupdel cbb-lite 2>/dev/null || true
-	if [ "$moved" = yes ]; then
-		echo "Renamed cbb-lite to cbb; this device stays in its group."
-	else
-		echo "Removed cbb-lite, as the lite member was called before; pair this device again."
-	fi
-fi
-
 install -d -m 0755 "${cbb%/*}"
 install -m 0755 "$bin" "$cbb"
 install -d -m 0755 "${sysusers%/*}"
@@ -506,9 +454,8 @@ if [ "$kind" = full ]; then
 		fi
 	done
 fi
-# A limit that cbb global wrote, perhaps by an earlier version (which let
-# the service reach every address), is brought in line with what the
-# service asks for now, once it answers.
+# A limit that cbb global wrote is brought in line with what the service
+# asks for now, once it answers.
 if [ "$kind" = full ] && [ -f /etc/systemd/system/clipboardbridge.service.d/away.conf ]; then
 	if ! "$cbb" global allow; then
 		echo "install.sh: cbb global allow failed; run sudo cbb global allow once the service runs." >&2

@@ -37,7 +37,11 @@ func TestCheckDocs(t *testing.T) {
 		},
 		{
 			name: "the old name", file: "docs/a.md", content: "Run clipbridge join.\n",
-			want: []string{"docs/a.md:1: the old name clipbridge"},
+			want: []string{"docs/a.md:1: an old name"},
+		},
+		{
+			name: "the other old name", file: "docs/a.md", content: "Install Clipboard Bridge.\n",
+			want: []string{"docs/a.md:1: an old name"},
 		},
 		{name: "the old name in the changelog", file: "CHANGELOG.md", content: "clipbridge is now clipboardbridge.\n"},
 		{name: "the old name in code", file: "docs/a.md", content: "```sh\nrm -rf /var/lib/clipbridge\n```\n"},

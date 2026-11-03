@@ -1151,7 +1151,7 @@ func (n *Node) result(from group.DeviceID, r *Result) {
 	n.mu.Unlock()
 	// A member that the command went to so that it passes it on answers
 	// only with the receiver's result; one that refuses the command for
-	// itself, such as a member before 0.6, is not the receiver.
+	// itself is not the receiver.
 	if ok && w.from[from] && (from == w.dev || r.By == w.dev) {
 		select {
 		case w.got <- *r:

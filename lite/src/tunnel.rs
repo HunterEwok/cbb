@@ -65,12 +65,9 @@ pub struct State {
     #[serde(with = "b64")]
     key: Vec<u8>,
     /// The preshared key every hub uses for this device (docs/protocol.md,
-    /// section 11, "Several hubs"); made on load for a state before it.
-    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    /// section 11, "Several hubs").
+    #[serde(with = "b64")]
     pub psk: Vec<u8>,
-    /// The hub's offer in a state before several hubs, read into `hubs`.
-    #[serde(default, skip_serializing)]
-    to_hub: Option<Hub>,
     /// The offers of the group's hubs, one per hub.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<Hub>,
@@ -100,7 +97,6 @@ impl State {
             group: group.to_string(),
             key: random_key()?,
             psk: random_key()?,
-            to_hub: None,
             hubs: vec![],
         })
     }
@@ -113,16 +109,12 @@ impl State {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(Error::with(format!("cannot read {}", path.display()), e)),
         };
-        let mut st: State = serde_json::from_slice(&data).context(format!("{} is damaged", path.display()))?;
+        let st: State = serde_json::from_slice(&data).context(format!("{} is damaged", path.display()))?;
         if st.key.len() != 32 {
             return Err(Error::msg(format!("{} is damaged: the key is not 32 bytes", path.display())));
         }
-        if let Some(h) = st.to_hub.take() {
-            st.hubs.insert(0, h);
-        }
         if st.psk.len() != 32 {
-            st.psk = random_key()?;
-            st.save(dir)?;
+            return Err(Error::msg(format!("{} is damaged: the preshared key is not 32 bytes", path.display())));
         }
         Ok(Some(st))
     }

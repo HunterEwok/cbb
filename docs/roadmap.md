@@ -668,7 +668,7 @@ The user picks one of three levels for the group, at its root:
     names the TPM for good, so the user is warned first.
   - `cbb.tools` fetches Google's list of revoked attestation keys once a day and serves it
     signed. No device asks Google, and no copy goes into the releases.
-  - Groups made before 0.6 are offered, never forced, a move of the root to a proven key.
+  - A group is offered, never forced, a move of the root to a proven key.
 - Found on the way:
   - Android keys made today carry no attestation challenge, so each phone makes a new key
     to be proven.
@@ -677,8 +677,8 @@ The user picks one of three levels for the group, at its root:
     the enclave's encrypted copy of it (checked on a Mac with macOS 27).
   - The Linux unit's `PrivateDevices=yes` hides `/dev/tpmrm0` and changes with the TPM
     work.
-- Groups made before 0.6 keep working; one whose root or admins hold keys in files shows a
-  warning and suggests moving the root to a phone.
+- A group whose root or admins hold keys in files shows a warning and suggests moving the
+  root to a phone.
 - The guide "Keys and attestation" (docs/guide) says all of this plainly.
 
 ## Device keys in hardware

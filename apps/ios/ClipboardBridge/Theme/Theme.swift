@@ -93,23 +93,6 @@ enum Appearance: String, CaseIterable, Identifiable {
         let pair = AccentChoice.pair(color)
         return (self.scheme ?? scheme) == .dark ? pair.dark : pair.light
     }
-
-    /// Carries the one theme of earlier versions over to a colour and an
-    /// appearance: Terminal, Midnight and Amber were dark, Light was
-    /// Terminal's light one.
-    static func migrate(_ defaults: UserDefaults = .standard) {
-        guard let old = defaults.string(forKey: "theme") else { return }
-        defaults.removeObject(forKey: "theme")
-        switch old {
-        case "terminal", "midnight", "amber":
-            defaults.set(old, forKey: AccentChoice.key)
-            defaults.set(Appearance.dark.rawValue, forKey: key)
-        case "light":
-            defaults.set(Appearance.light.rawValue, forKey: key)
-        default:
-            break
-        }
-    }
 }
 
 private struct PaletteKey: EnvironmentKey {

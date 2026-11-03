@@ -20,7 +20,7 @@ line here with every new function, and a case for it in the catalogue.
 | I.1 | `install.sh` on Linux | I1 |
 | I.2 | `install.sh` on macOS | I1 |
 | I.3 | `get.sh` (full member) | I1, I3 |
-| I.4 | `get.sh --lite` | I1, I26 |
+| I.4 | `get.sh --lite` | I1 |
 | I.5 | `install.ps1` on Windows | I1 |
 | I.6 | `get.ps1` on Windows | I1, I3 |
 | I.7 | winget, then `cbb install` | I1, I11 |
@@ -75,7 +75,6 @@ line here with every new function, and a case for it in the catalogue.
 | I.56 | mips and mipsle builds | I23 |
 | I.57 | Authenticode on Windows | I24 |
 | I.58 | `CBB_ERROR_DETAILS` and the installers' errors | I25 |
-| I.59 | Moving an old `cbb-lite` install | I26 |
 
 ## G. Groups, pairing and roles
 

@@ -278,16 +278,13 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(Set(Appearance.allCases.map { $0.palette("ocean", for: .dark).dark }), [true, false])
     }
 
+    /// The one theme setting of the first versions is not read: the
+    /// colour and the appearance stay unset.
     func testThemeMigration() {
         let d = freshDefaults()
         d.set("midnight", forKey: "theme")
-        Appearance.migrate(d)
-        XCTAssertEqual(d.string(forKey: AccentChoice.key), "midnight")
-        XCTAssertEqual(d.string(forKey: Appearance.key), "dark")
-        XCTAssertNil(d.string(forKey: "theme"))
-        d.set("light", forKey: "theme")
-        Appearance.migrate(d)
-        XCTAssertEqual(d.string(forKey: Appearance.key), "light")
+        XCTAssertNil(d.string(forKey: AccentChoice.key))
+        XCTAssertNil(d.string(forKey: Appearance.key))
     }
 
     /// A fresh defaults domain per test, removed after it.

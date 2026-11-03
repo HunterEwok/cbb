@@ -194,7 +194,6 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
             HorizontalDivider(color = palette.line)
             Action("★", stringResource(R.string.make_admin)) { promoting = true }
         }
-        // A phone or lite member from before 0.5 has no mode and refuses.
         if (d.isSelf || d.online) {
             HorizontalDivider(color = palette.line)
             Action("⇄", stringResource(R.string.sync_mode)) { choosingMode = true }

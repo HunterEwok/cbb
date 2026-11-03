@@ -391,7 +391,7 @@ fn kind_of(s: &str) -> Result<Kind> {
 fn via_of(s: &str) -> Result<Via> {
     match s {
         "" | "copy" => Ok(Via::Copy),
-        "phone" | "iphone" => Ok(Via::Phone),
+        "phone" => Ok(Via::Phone),
         "universal-clipboard" => Ok(Via::Universal),
         _ => Err(Error::msg(format!("unknown via {s:?}"))),
     }

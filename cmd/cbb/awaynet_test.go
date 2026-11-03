@@ -117,14 +117,9 @@ func TestAwayNet(t *testing.T) {
 	if _, err := os.Stat(awayDropIn); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the drop-in is still there: %v", err)
 	}
-	// An earlier version's drop-in let the service reach every address:
-	// it is no hub's, so it is told apart, and replaced.
+	// A drop-in that is not this grant's is replaced.
 	if err := os.WriteFile(awayDropIn, []byte("[Service]\nIPAddressAllow=any\n"), 0o644); err != nil {
 		t.Fatal(err)
-	}
-	stale := linuxLimit.granted()
-	if !stale.anywhere || stale.equal(grant{on: true}) || stale.equal(client) || !strings.Contains(stale.String(), "every address") {
-		t.Fatalf("an earlier version's drop-in read back as %+v (%s)", stale, stale)
 	}
 	if changed, _, err := setAwayNet(client); err != nil || !changed || !linuxLimit.granted().equal(client) {
 		t.Fatalf("replacing it: changed %v, %v", changed, err)

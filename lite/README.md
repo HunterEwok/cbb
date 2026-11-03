@@ -108,7 +108,7 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 
 `get.sh --lite` takes the release's static build for this architecture
 (`clipboardbridge-lite-linux-amd64.tar.gz`, `-arm64`, or `-armv6`, which also runs on
-ARMv7; releases before 0.5 called it `cbb-lite-linux-*`), checks it against `SHA256SUMS` and runs its `packaging/linux/install.sh`, the same installer as a full
+ARMv7), checks it against `SHA256SUMS` and runs its `packaging/linux/install.sh`, the same installer as a full
 member's: the program as `/usr/local/bin/cbb`, the `clipboardbridge` user and group, the
 service `clipboardbridge.service`, the tmux configuration, and, with your consent, mDNS and
 the member port from the home network in the firewall. `--port N`, `--console`, `--express`

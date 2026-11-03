@@ -138,7 +138,7 @@ func TestBadStateFiles(t *testing.T) {
 		"relay, no key":       `{"v":1,"key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","relay":{"endpoint":"198.51.100.9:8764","key":""}}`,
 		"obfuscation, no hub": `{"v":1,"key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","obfuscation":{"jc":4,"jmin":50,"jmax":200,"s1":20,"s2":30,"s3":20,"s4":20,"h1":"100-200","h2":"300-400","h3":"500-600","h4":"700-800","header_protection_key":"BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="}}`,
 		"obfuscation, bad":    `{"v":1,"key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","is_hub":true,"obfuscation":{"jc":4,"jmin":50,"jmax":200,"s1":20,"s2":30,"s3":20,"s4":20,"h1":"100-200","h2":"150-400","h3":"500-600","h4":"700-800","header_protection_key":"BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU="}}`,
-		"hub, bad device":     `{"v":1,"key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","to_hub":{"device":"x","key":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","psk":"AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="}}`,
+		"hub, bad device":     `{"v":1,"key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","hubs":[{"device":"x","key":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","psk":"AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="}]}`,
 	} {
 		dir := t.TempDir()
 		if err := os.WriteFile(filepath.Join(dir, StateFile), []byte(body), 0o600); err != nil {
@@ -304,8 +304,8 @@ func TestSetHub(t *testing.T) {
 	}
 }
 
-// TestLegacyHub checks that a state from before several hubs keeps its
-// hub's offer and gets a preshared key of its own.
+// TestLegacyHub checks that a state from before several hubs, with one
+// hub's offer and no preshared key of its own, is not read.
 func TestLegacyHub(t *testing.T) {
 	dir := t.TempDir()
 	hub, key := newDevice(t), newDevice(t).priv
@@ -314,16 +314,8 @@ func TestLegacyHub(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, StateFile), []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s, err := LoadState(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h := s.Hub(hub.id); h == nil || h.PresharedKey != hub.psk || s.PSK.IsZero() {
+	if s, err := LoadState(dir); err == nil {
 		t.Fatalf("loaded %+v", s)
-	}
-	again, err := LoadState(dir)
-	if err != nil || again.PSK != s.PSK {
-		t.Errorf("the preshared key it made was not saved: %v", err)
 	}
 }
 

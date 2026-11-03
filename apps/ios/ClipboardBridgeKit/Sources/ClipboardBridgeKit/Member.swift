@@ -54,10 +54,9 @@ public enum Member {
         case phone
         case universalClipboard = "universal-clipboard"
 
-        /// Also takes "iphone", the name before phones other than the iPhone.
         public init(from decoder: Decoder) throws {
             let s = try decoder.singleValueContainer().decode(String.self)
-            guard let via = Via(rawValue: s == "iphone" ? Via.phone.rawValue : s) else {
+            guard let via = Via(rawValue: s) else {
                 throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "unknown via \(s)"))
             }
             self = via
@@ -215,10 +214,10 @@ public enum Member {
         /// nil from a member without one, which shares.
         public var mode: String?
         /// Where the sender says its keys live: Records.file,
-        /// Records.hardware or Records.rootless; nil from a member before 0.6.
+        /// Records.hardware or Records.rootless; nil when it does not say.
         public var keyStore: String?
         /// The sender's quick actions that are on, for the buttons
-        /// (section 15); empty from a member before 0.6.
+        /// (section 15).
         public var actions: [String]
         /// Whether the sender serves the content of media events (section
         /// 4, "Content").

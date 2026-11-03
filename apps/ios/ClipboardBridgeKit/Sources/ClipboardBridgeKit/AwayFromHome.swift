@@ -48,30 +48,6 @@ public struct AwayState: Codable, Equatable, Sendable {
         return s
     }
 
-    enum CodingKeys: String, CodingKey { case key, psk, hubs, hub, offer }
-
-    /// Earlier versions kept one hub's offer, as hub and offer, and no
-    /// preshared key of the phone's own: it gets one now.
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        key = try c.decode(Data.self, forKey: .key)
-        psk = try c.decodeIfPresent(Data.self, forKey: .psk) ?? Self.newPSK()
-        if let hubs = try c.decodeIfPresent([Hub].self, forKey: .hubs) {
-            self.hubs = hubs
-        } else if let offer = try c.decodeIfPresent(Member.TunnelOffer.self, forKey: .offer) {
-            hubs = [Hub(device: try c.decode(String.self, forKey: .hub), offer: offer)]
-        } else {
-            hubs = []
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(key, forKey: .key)
-        try c.encode(psk, forKey: .psk)
-        try c.encode(hubs, forKey: .hubs)
-    }
-
     public func encoded() throws -> Data { try JSONEncoder().encode(self) }
 
     /// The state in data, or nil when it is not one this version wrote.

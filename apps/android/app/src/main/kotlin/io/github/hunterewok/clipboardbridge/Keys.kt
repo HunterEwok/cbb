@@ -75,8 +75,7 @@ object Keys {
     /**
      * What proves where the key under alias lives: the Keystore's chain
      * for it, leaf first, and the salt and group tag of its challenge. A
-     * key made before 0.6, or on a phone whose Keystore could not attest
-     * it, has none.
+     * key on a phone whose Keystore could not attest it has none.
      */
     class Evidence(val chain: List<ByteArray>, val salt: ByteArray, val groupTag: String)
 

@@ -565,7 +565,7 @@ and of the program.
 |-------|------|---------|
 | `id` | string | event ID, 32 lowercase hex characters |
 | `origin` | string | device ID of the member that made the event |
-| `via` | string | `copy` (copied on that member), `phone` (sent from a phone: the app, iPhone or Android, or the iPhone shortcut's button) or `universal-clipboard` (reached a Mac through Universal Clipboard). Omitted for `copy`; absent means `copy`. Receivers also take `iphone`, the name of `phone` before phones other than the iPhone |
+| `via` | string | `copy` (copied on that member), `phone` (sent from a phone: the app, iPhone or Android, or the iPhone shortcut's button) or `universal-clipboard` (reached a Mac through Universal Clipboard). Omitted for `copy`; absent means `copy`. |
 | `time` | string | hybrid timestamp `"<wall>.<logical>"` (section 5) |
 | `age_ms` | integer | milliseconds since the copy, as of the moment the frame is written |
 | `kind` | string | `text`, `secret` or `media` (images or files, from 0.6); always present |
@@ -1138,7 +1138,7 @@ Header fields (all omitted when empty):
 |-------|------|---------|
 | `op` | string | the operation |
 | `kind` | string | `text` (default), `secret`, or `media` for the images or files of a copy |
-| `via` | string | `copy` (default), `phone` or `universal-clipboard`; `iphone` is taken as `phone` |
+| `via` | string | `copy` (default), `phone` or `universal-clipboard` |
 | `seq` | integer | order of writes |
 | `ttl_ms` | integer | how long a written secret may stay in the clipboard |
 | `len` | integer | payload length |
@@ -2093,8 +2093,7 @@ and then syncs at home only ("Through the tunnel" below).
   rest of this section's state; on a Linux computer with a TPM the private key is sealed by
   it (`key_tpm` in place of `key`, section 17). The lite member keeps its own `tunnel.json` there: `v` (1),
   `group` (the group tag), `key` (its private key, base64), `psk` (the preshared key it chose)
-  and `hubs`, each hub's offer (`device`, `key`, `psk`, `endpoints`, `next`); it reads the single
-  `to_hub` of earlier versions into `hubs`. A device whose tunnel key sits in a file (every
+  and `hubs`, each hub's offer (`device`, `key`, `psk`, `endpoints`, `next`). A device whose tunnel key sits in a file (every
   one but a Linux computer with a TPM) MUST ask for the user's consent before it turns sync
   away from home on (`consent` in the request).
 - Each member's hello carries `tunnel_key`, its public key, and `tunnel_psk`, a preshared
@@ -3133,7 +3132,7 @@ under its `keys.json`.
 
 The device then MUST keep the highest `keys` and channel `seq` and version it has taken, and
 the `keys` `seq` under which it took its channel file, so that nobody can give it older files
-later; a version before 0.6 checks no signed files. A file it downloads MUST have the size and
+later. A file it downloads MUST have the size and
 SHA-256 that `release.json` lists, and a program inside an archive the SHA-256 that its
 `binaries` entry lists, before the device installs it. A device below `min_from` updates to `min_from` first.
 A release key that is lost or stolen is dropped from the next `keys.json`; a device that has
@@ -3235,9 +3234,9 @@ far.
   of hardware (`android-tee`, `android-strongbox`, or `tpm` for a TPM's proof), and `proof`, the hex SHA-256 of the
   attestation's leaf certificate. The signer writes what the device's hello said when it
   made the record, and a record that renames a device, or that makes it an admin, keeps its
-  `store`, `kind` and `proof`. A record without `store`, made before 0.6, or
+  `store`, `kind` and `proof`. A record without `store`, or
   with a value the reader does not know, counts as `hardware` for a `phone` and as `file`
-  for every other role, which is where those versions kept the keys. `cbb status` and the
+  for every other role. `cbb status` and the
   apps' device pages show it.
 - **Admins.** By default a device whose keys sit in a file does not become an admin: the
   root asks the user first, who allows it after a warning that whoever copies the file acts
@@ -3550,11 +3549,11 @@ frames (section 4, "Content"); `records`, `admin`, `phone_ca` (section 10); `tun
 | Name | Values | Section |
 |---|---|---|
 | Role (hello) | `full`, `lite`, `phone` | 4 |
-| Role (device record) | `full`, `lite`, `phone`, `shortcut`, `watch`; read as legacy: `linux` and `mac` (`full`), `iphone` (`shortcut`) | 10 |
+| Role (device record) | `full`, `lite`, `phone`, `shortcut`, `watch` | 10 |
 | System (`os`) | `linux`, `windows`, `macos`, `ios`, `android`, `watchos`, `wearos`, `none` | 4, 10 |
 | Device form | `laptop`, `desktop`, `phone`, `tablet`, `tv`, `board`, `server`, `router`, `console`, `watch`, `retro`, `other` | 4 |
 | Event `kind` | `text`, `secret`, `media` | 4 |
-| Event `via` | `copy`, `phone`, `universal-clipboard`; read as legacy: `iphone` (`phone`) | 4 |
+| Event `via` | `copy`, `phone`, `universal-clipboard` | 4 |
 | Media part `type` | `image/png`, `image/jpeg`, `text/html` | 4 |
 | Sync mode | `own`, `shared`, `receive`, `send` | 4, 15 |
 | Key store | `file`, `hardware`, `rootless`, `proven` (records only); proof kinds `android-tee`, `android-strongbox`, `tpm` | 17 |

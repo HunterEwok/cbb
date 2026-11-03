@@ -233,8 +233,7 @@ if (-not $service) {
 	New-Service -Name $name -BinaryPathName $binPath -DisplayName 'CBB' -StartupType Automatic `
 		-Description 'Shares the clipboard with the other devices at home.' | Out-Null
 }
-# The path and the display name (which installs before 0.5 set to
-# clipboardbridge) through CIM, as Windows PowerShell 5.1 drops the quotes inside
+# The path and the display name through CIM, as Windows PowerShell 5.1 drops the quotes inside
 # an argument that it passes to sc.exe.
 $change = Get-CimInstance -ClassName Win32_Service -Filter "Name='$name'" |
 	Invoke-CimMethod -MethodName Change -Arguments @{ PathName = $binPath; DisplayName = 'CBB' }
@@ -418,9 +417,8 @@ if (-not $rule -or -not $granted) {
 		-Direction Outbound -Action Block -Program $cbb -Service $name -RemoteAddress $outside -Profile Any `
 		-Description 'The CBB service reaches only the home network and its group''s servers; cbb global changes this rule.' | Out-Null
 }
-# Whatever the rule allowed before (another -HomeCgnat, an earlier version
-# that lifted it for cbb global on), cbb global allow writes it for what the
-# service asks for now, once the service answers.
+# Whatever the rule allowed before (another -HomeCgnat), cbb global allow
+# writes it for what the service asks for now, once the service answers.
 
 $step = 'starting the service'
 Start-Service -Name $name

@@ -1744,9 +1744,8 @@ final class LiveGroup: GroupController {
     /// The group's records for the node, which exchanges them with the
     /// computers.
     /// This phone's sync mode (docs/design.md, "Sync modes"), in the file
-    /// mode beside the group's, as the computers keep it: own for a phone
-    /// that makes or joins a group from now on, shared for one that joined
-    /// before 0.5, which has no file; and the replay cache of the commands
+    /// mode beside the group's, as the computers keep it, own when there is
+    /// none; and the replay cache of the commands
     /// it took (docs/protocol.md, section 15).
     final class ModeBox: @unchecked Sendable {
         private let lock = NSLock()
@@ -1764,7 +1763,7 @@ final class LiveGroup: GroupController {
         var mode: String {
             lock.withLock {
                 let m = (try? String(contentsOf: url, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
-                return m.flatMap { Member.modes.contains($0) ? $0 : nil } ?? "shared"
+                return m.flatMap { Member.modes.contains($0) ? $0 : nil } ?? "own"
             }
         }
 

@@ -842,6 +842,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
   installers; the full name in the docs, on the site and in the stores. The apps' identifiers
   start with `tools.cbb` (the Android app and the watch `tools.cbb`, the iPhone app
   `tools.cbb`, the Mac app `tools.cbb.mac`), so the apps install anew.
+- What earlier versions left behind is gone, as nothing before 0.6 is read: the installers no
+  longer remove `clipbridge` or move a `cbb-lite` install, `get.sh` no longer finds the lite
+  member's archives of 0.4 and earlier, members refuse the event `via` `iphone`, the tunnel
+  states of a single hub (`to_hub`, phones' state versions 1 to 4) and a forwarder's entries
+  without an expiry are not read, the phones no longer carry the old single theme over, and a
+  phone's missing sync mode file means `own`.
 - The lite member joins a group with `cbb pair`, as a full member in no group does, instead of
   `cbb join` (`cbb pair -code` for the code of a full member, `cbb next pair` for the ZX
   Spectrum Next); `cbb join` is gone. The Next's dot command is `.cbb pair` (0.4.0) and the

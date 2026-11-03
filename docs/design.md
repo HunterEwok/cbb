@@ -488,9 +488,7 @@ sync away from home, the admins, and remote paste.
   computer that is in no group creates it: the root CA and the iPhone CA. That computer is
   the group's root; any computer, a Mac included, may create a group.
 - **Root CA**: ECDSA P-256, valid 20 years, path length 1, so it certifies the admins' admin
-  CAs (path length 0) as well as members. Groups made before 0.4 had a group CA with path
-  length 0; from 0.6 on a computer leaves such a group ("Full members, admins and the
-  operating system").
+  CAs (path length 0) as well as members.
   Every member has its own P-256
   key and a certificate from the group CA, valid 2 years and renewed when less than 240 days
   remain. Its `NotBefore` is the CA's, and members check certificates with their own clock but
@@ -736,7 +734,7 @@ a **sync mode** instead, and a new device starts in its own:
 | Mode | Its copies go to the group | The group's copies reach its clipboard |
 |---|---|---|
 | **Own** (the default) | no | no; the group's text is still at hand on request (`cbb paste`, the app's button) |
-| **Shared** | yes | yes (what every member did before 0.5) |
+| **Shared** | yes | yes |
 | **Receive only** | no | yes; for a Pi or a kiosk that only shows what comes |
 | **Send only** | yes | no; for a work computer whose clipboard nobody else should change |
 
@@ -753,7 +751,7 @@ a **sync mode** instead, and a new device starts in its own:
 - Built: the mode on every member. A computer keeps it in the file `mode` in the service's
   state directory (`cbb mode`), as does the lite member (`sudo cbb mode`); the phones keep it
   in the app's storage and set it on their own page. A device that makes or joins a group
-  starts in own; one that joined before 0.5 has no mode and shares. Every member reports its
+  starts in own. Every member reports its
   mode in its hello, so the devices list shows it, and takes an admin's signed `mode` command
   (`cbb mode -on DEVICE`, an admin phone's device page, docs/protocol.md section 15), sent
   directly to a connected member. On a phone the mode decides what its own automatic paths
@@ -1681,18 +1679,11 @@ CAs, the Devices screen, making an admin, and the root record.
 
 ### Full members, admins and the operating system
 
-Decided on 2026-10-24 (D-50 to D-53) and built in 0.3 and 0.4, in the steps at the end of
-this section. It replaced Linux members holding the CA keys, the `linux` and `mac` roles and
-the Mac only dialing. No device of an earlier version needed to keep working with the new
-one: every device was updated first.
+Decided on 2026-10-24 (D-50 to D-53).
 
-**The operating system is not the role.** Before 0.3 the role in hellos and device records
-named a system (`linux`, `mac`), and a Windows PC took part as `linux`, so the group could
-not tell the two apart, and it got the CA keys because the pairing gave them to every
-`linux` joiner. Now each device states its operating system in `os`, in the pairing
-Info, in its hello and in its device record: `linux`, `windows`, `macos`, `ios`,
-`android`, `watchos`, `wearos`, or `none` for firmware without one (the ESP32); `macos` takes the place of the
-pairing Info's `darwin`. The `os` is shown, never trusted for anything else. The **role** says only what a device does in the group:
+**The operating system is not the role.** Each device states its operating system in `os`,
+in the pairing Info, in its hello and in its device record: `linux`, `windows`, `macos`, `ios`,
+`android`, `watchos`, `wearos`, or `none` for firmware without one (the ESP32). The `os` is shown, never trusted for anything else. The **role** says only what a device does in the group:
 
 | Role     | Devices                                     | What it does                                                    |
 |----------|---------------------------------------------|-----------------------------------------------------------------|
@@ -1701,10 +1692,7 @@ pairing Info's `darwin`. The `os` is shown, never trusted for anything else. The
 | `phone`  | a phone with the app                        | dials every member, never listens for members                   |
 | `shortcut` | an iPhone without the app: a shortcut's token, not a member (legacy, below) | uses the endpoints of the member that holds `clipboardbridge.local` |
 
-The `linux` and `mac` roles are gone: everything that set the Mac apart was a choice, not a
-limit of macOS, and the Mac is a full member like the others. The `iphone` role is now
-`shortcut`. Records of an earlier group that say `linux` or `mac` are read as `full`, and
-`iphone` as `shortcut`. A phone with the app, an iPhone or an Android phone, has its own
+The Mac is a full member like the others. A phone with the app, an iPhone or an Android phone, has its own
 key and member certificate and the role `phone`. `cbb status` and the Devices screens of the
 apps show each device's system (Linux, Windows, macOS, iOS, Android, or "device" for
 firmware) and mark the root and the admins. A device's record takes its `os` from the
@@ -1758,11 +1746,6 @@ in a phone group, without a new group:
   still never take over. A group whose root is gone and has no other admin must be made
   anew, so `cbb pair` suggests making a second admin.
 
-**Groups made before admin CAs.** A group made before this change has a group CA with path
-length 0, and every Linux and Windows member holds the keys of both CAs. Records of version 2
-have no upgrade from it, so a computer leaves such a group at its first start of 0.6, and the
-group is set up again to get a root.
-
 **The shortcut is a legacy way.** An iPhone without the app joins through a shortcut and a
 token (section "The iPhone button"), never with a key of its own. It stays for now, since
 the app is not yet in TestFlight (it runs on a real iPhone only when built with a developer's
@@ -1771,24 +1754,6 @@ is expected to use the app. Everything it needs comes with it: the iPhone CA, it
 admins, and the rule for who holds `clipboardbridge.local`. It is removed with all of these
 once the app runs on real iPhones through TestFlight (roadmap.md, item 17): the group is
 then simpler, with one kind of trust, and every key in it can be revoked by a record.
-
-**Order of work**, one pull request each; all of it is built:
-
-1. This decision.
-2. The `os` beside the role: `os` in the pairing Info (`windows` allowed), the hello and
-   device records; the roles `full`, `lite`, `phone` and `shortcut` in Go, the lite member and both
-   phone kits; `cbb status` (which takes in `cbb devices`) and the Devices screens show
-   the system and the root and admin marks; an admin re-signs a record whose `os` is
-   wrong.
-3. The Mac as a full member: the dialing rule above, listening like the others, holding
-   `clipboardbridge.local` by priority, with the battery guess and its setting; `cbb global hub`
-   says that nothing syncs away from home while the hub is off.
-4. New groups made by a computer with a root of path length 1: the CA keys on the creator
-   only, the admin key on every full member, `cbb admin`, the iPhone CA key for admins,
-   removing any device but the root by record, and replacing the iPhone CA when an admin
-   goes. A Mac can create a group and be an admin from here on.
-5. Taking over from a lost root computer (`cbb takeover`).
-6. `cbb upgrade` for groups made before (gone with records of version 2 in 0.6).
 
 ### Who may remove an admin
 

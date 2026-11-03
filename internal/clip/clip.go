@@ -138,7 +138,7 @@ func (v *Via) UnmarshalText(b []byte) error {
 	switch string(b) {
 	case "copy":
 		*v = Copy
-	case "phone", "iphone": // iphone: the name before phones other than the iPhone
+	case "phone":
 		*v = Phone
 	case "universal-clipboard":
 		*v = Universal

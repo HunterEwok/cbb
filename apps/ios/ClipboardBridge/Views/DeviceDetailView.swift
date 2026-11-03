@@ -207,7 +207,6 @@ struct DeviceDetailView: View {
                     Divider().overlay(palette.line)
                     action(Text("Make it an admin"), "person.badge.key") { promoting = true }
                 }
-                // A phone or lite member from before 0.5 has no mode and refuses.
                 if d.isSelf || d.online {
                     Divider().overlay(palette.line)
                     modeMenu(d)

@@ -115,8 +115,7 @@ object Member {
         UNIVERSAL_CLIPBOARD("universal-clipboard");
 
         companion object {
-            /** Also takes "iphone", the name before phones other than the iPhone. */
-            fun of(s: String): Via? = if (s == "iphone") PHONE else entries.firstOrNull { it.wire == s }
+            fun of(s: String): Via? = entries.firstOrNull { it.wire == s }
         }
     }
 
@@ -254,9 +253,9 @@ object Member {
         val device: DeviceInfo? = null,
         /** The sender's sync mode: "own", "shared", "receive" or "send"; null from a member without one, which shares. */
         val mode: String? = null,
-        /** Where the sender says its keys live: Records.FILE or Records.HARDWARE; null from a member before 0.6. */
+        /** Where the sender says its keys live: Records.FILE or Records.HARDWARE; null when it does not say. */
         val keyStore: String? = null,
-        /** The sender's quick actions that are on, for the buttons (section 15); empty from a member before 0.6. */
+        /** The sender's quick actions that are on, for the buttons (section 15). */
         val actions: List<String> = emptyList(),
         /** Whether the sender serves the content of media events (section 4, "Content"). */
         val media: Boolean = false,

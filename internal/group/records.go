@@ -81,9 +81,8 @@ const (
 )
 
 // StoreOf reads the store field of a device record of role. A record
-// without one, made before 0.6, or with a value this version does not
-// know, counts as a phone's in hardware and any other device's in a file,
-// as those versions kept them.
+// without one, or with a value this version does not know, counts as a
+// phone's in hardware and any other device's in a file.
 func StoreOf(store, role string) string {
 	switch store {
 	case StoreFile, StoreHardware, StoreProven, StoreRootless:

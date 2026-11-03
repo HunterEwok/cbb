@@ -63,7 +63,7 @@ class AwayFromHomeTest {
         assertNull(AwayState.decode(AwayState(key).withOffer(hub, Member.TunnelOffer(ByteArray(31), ByteArray(32))).encode()))
     }
 
-    /** Version 3 kept one hub's offer and no preshared key of the phone's own: it gets one. */
+    /** The state of version 3, one hub's offer and no preshared key of the phone's own, is not read. */
     @Test
     fun readsTheOneHubOfVersion3() {
         val out = java.io.ByteArrayOutputStream()
@@ -79,11 +79,7 @@ class AwayFromHomeTest {
             writeUTF("")
             writeUTF("")
         }
-        val s = AwayState.decode(out.toByteArray())!!
-        assertEquals(listOf(hub), s.hubs.map { it.first })
-        assertEquals(offer, s.offer(hub))
-        assertEquals(32, s.psk.size)
-        assertFalse(s.psk.contentEquals(offer.psk))
+        assertNull(AwayState.decode(out.toByteArray()))
     }
 
     private class FakeTunnel(
