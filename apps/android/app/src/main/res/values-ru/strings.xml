@@ -73,6 +73,12 @@
     <string name="reason_take_over">Забрать группу у потерянного телефона</string>
     <string name="reason_take_handed">Взять группу, которую компьютер передал этому телефону</string>
     <string name="reason_renew">Продлить сертификат этого телефона</string>
+    <string name="reason_renew_peer">Продлить сертификат устройства</string>
+    <string name="reason_record_proof">Записать, где устройство хранит ключ</string>
+    <string name="reason_period">Обновить ключи группы для синхронизации вне дома</string>
+    <string name="reason_restore">Восстановить группу ключом восстановления</string>
+    <string name="signature_of">Подпись %1$d из %2$d</string>
+    <string name="signature_n">Подпись %1$d</string>
     <string name="error_not_confirmed">Компьютер присоединился, но не подтвердил это. Проверьте cbb status на нём.</string>
     <string name="error_no_network">Подключите телефон к домашнему Wi-Fi и попробуйте снова.</string>
     <string name="error_timed_out">За пять минут код никто не отсканировал. Попробуйте снова.</string>
@@ -94,6 +100,8 @@
     <string name="error_join_computer">Не удалось войти в группу компьютера. Выполните на нём cbb pair -admin ещё раз.</string>
     <string name="error_no_screen_lock">Сначала включите блокировку экрана на телефоне: она нужна ключам группы.</string>
     <string name="error_not_authenticated">Отпечаток, лицо или блокировка экрана не подтверждены, поэтому ничего не изменилось.</string>
+    <string name="error_no_biometric">Сначала добавьте на телефоне отпечаток или лицо: на Android 10 они нужны ключам группы.</string>
+    <string name="error_old_key">Ключ группы на этом телефоне создан прежней версией приложения. Выйдите из группы на этом телефоне и настройте её заново.</string>
     <string name="error_generic">Что-то пошло не так. Попробуйте ещё раз.</string>
     <string name="about">О программе</string>
     <string name="version">Версия</string>

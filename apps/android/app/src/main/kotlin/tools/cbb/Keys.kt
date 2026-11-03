@@ -6,13 +6,16 @@ package tools.cbb
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.biometrics.BiometricManager
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
 import tools.cbb.kit.Attestation
 import tools.cbb.kit.CertificateSigner
 import tools.cbb.kit.PeriodKeys
+import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
@@ -20,6 +23,7 @@ import java.security.ProviderException
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The phone's keys in the Android Keystore, which never lets them out: in
@@ -29,9 +33,10 @@ import java.util.Base64
  *   unlock, so the phone syncs in the background.
  * - The root key (the group CA's, on the phone that made the group) and the
  *   admin key (a phone the root made an admin) sign certificates and
- *   records. They sign only for [AUTH_SECONDS] after the user passed the
- *   fingerprint, the face or the screen lock, as Face ID guards them on the
- *   iPhone.
+ *   records. Each of their signatures needs the fingerprint, the face or
+ *   the screen lock first, which the Keystore checks for that one
+ *   signature ([Authenticator]): a phone just unlocked, or code in the
+ *   app's process, signs nothing without the user.
  *
  * - The keys for the servers of each period (docs/protocol.md, section
  *   18), the server key and on the root the period key, sign in the
@@ -46,19 +51,21 @@ object Keys {
     const val ROOT = "cbb.ca"
     const val ADMIN = "cbb.admin"
 
-    /**
-     * How long one authentication lets the root and admin keys sign: one
-     * action's signatures, and the renewals right after, and little more, so
-     * that a phone left unlocked does not sign for long without asking. The
-     * Keystore keeps the window a key was made with: keys made by earlier
-     * versions keep theirs, and the app still asks within this one.
-     */
-    const val AUTH_SECONDS = 30
-
     private const val PROVIDER = "AndroidKeyStore"
 
     /** The phone has no screen lock, which the root and admin keys need. */
     class NoScreenLock : Exception("set a screen lock first: the group's keys need it")
+
+    /** Android 10 has no fingerprint or face enrolled, which its root and admin keys need. */
+    class NoBiometric : Exception("add a fingerprint or face first: on Android 10 the group's keys need one")
+
+    /**
+     * The root or admin key was made by an earlier version of the app, for
+     * a time after any authentication rather than for each signature; the
+     * Keystore keeps what a key was made with, so the phone sets the group
+     * up again.
+     */
+    class OldKey : Exception("this group key was made by an earlier version of the app")
 
     private fun store(): KeyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
 
@@ -71,6 +78,31 @@ object Keys {
     /** The signer of the key under alias, made now when there is none. */
     fun loadOrCreate(context: Context, alias: String, groupTag: String = ""): KeystoreSigner =
         load(alias) ?: create(context, alias, groupTag)
+
+    /**
+     * The signer of the root or admin key under alias, made now when there
+     * is none, whose every signature asks the user through authorize. A key
+     * made without authentication (a debug build on a phone without a
+     * screen lock) signs without asking. Throws OldKey for a key that an
+     * earlier version made.
+     */
+    fun loadOrCreateAuthorized(context: Context, alias: String, groupTag: String = "", authorize: (Signature) -> Signature): KeystoreSigner {
+        val k = loadOrCreate(context, alias, groupTag)
+        val info = info(k)
+        if (!info.isUserAuthenticationRequired) return k
+        if (isOld(info)) throw OldKey()
+        return KeystoreSigner(k.privateKey, k.publicKeyDER, authorize)
+    }
+
+    /** The signer of the key under alias, or null when there is none or an earlier version made it (OldKey). */
+    fun loadCurrent(alias: String): KeystoreSigner? = load(alias)?.takeUnless { isOld(info(it)) }
+
+    private fun info(k: KeystoreSigner): KeyInfo =
+        KeyFactory.getInstance(k.privateKey.algorithm, PROVIDER).getKeySpec(k.privateKey, KeyInfo::class.java)
+
+    /** A key for a time after any authentication; one for each signature has 0 (Android 11 on) or -1 (Android 10). */
+    private fun isOld(info: KeyInfo): Boolean =
+        info.isUserAuthenticationRequired && info.userAuthenticationValidityDurationSeconds > 0
 
     /**
      * What proves where the key under alias lives: the Keystore's chain
@@ -105,6 +137,7 @@ object Keys {
         val auth = alias != MEMBER
         if (auth && !context.getSystemService(KeyguardManager::class.java).isDeviceSecure && !isDebuggable(context)) throw NoScreenLock()
         val secure = auth && context.getSystemService(KeyguardManager::class.java).isDeviceSecure
+        if (secure && Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !hasBiometric(context)) throw NoBiometric()
         val member = if (alias == MEMBER) ByteArray(0) else loadOrCreate(context, MEMBER).publicKeyDER
         remove(alias)
         val salt = Attestation.newSalt()
@@ -146,16 +179,22 @@ object Keys {
         return KeystoreSigner(kp.private, kp.public.encoded)
     }
 
+    /**
+     * Makes the key sign once per authentication, through the prompt's
+     * CryptoObject. A fingerprint or face added later keeps the key: whoever
+     * adds one passed the screen lock, which the key takes anyway, and a
+     * group's root key lost that way would lose the group.
+     */
     @Suppress("DEPRECATION")
     private fun authenticate(b: KeyGenParameterSpec.Builder) {
         b.setUserAuthenticationRequired(true)
+        b.setInvalidatedByBiometricEnrollment(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            b.setUserAuthenticationParameters(
-                AUTH_SECONDS,
-                KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL,
-            )
+            b.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL)
         } else {
-            b.setUserAuthenticationValidityDurationSeconds(AUTH_SECONDS)
+            // Android 10: each signature after a fingerprint or face, the
+            // only authentication it binds to one operation.
+            b.setUserAuthenticationValidityDurationSeconds(-1)
         }
     }
 
@@ -185,18 +224,51 @@ object Keys {
         fun clear() = keep("")
     }
 
+    @Suppress("DEPRECATION")
+    private fun hasBiometric(context: Context): Boolean =
+        context.getSystemService(BiometricManager::class.java).canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS
+
     private fun isDebuggable(context: Context): Boolean =
         context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
 }
 
-/** A Keystore key as a CertificateSigner, and as the private key of the phone's TLS identity. */
-class KeystoreSigner(val privateKey: PrivateKey, override val publicKeyDER: ByteArray) : CertificateSigner {
-    override fun signature(data: ByteArray): ByteArray =
-        Signature.getInstance("SHA256withECDSA").run {
-            initSign(privateKey)
+/**
+ * A Keystore key as a CertificateSigner, and as the private key of the
+ * phone's TLS identity. With authorize, each signature first goes to the
+ * user (Keys.loadOrCreateAuthorized), who gives back the Signature that may
+ * sign.
+ */
+class KeystoreSigner(
+    val privateKey: PrivateKey,
+    override val publicKeyDER: ByteArray,
+    private val authorize: ((Signature) -> Signature)? = null,
+) : CertificateSigner {
+    override fun signature(data: ByteArray): ByteArray {
+        val s = Signature.getInstance("SHA256withECDSA").apply { initSign(privateKey) }
+        return (authorize?.invoke(s) ?: s).run {
             update(data)
             sign()
         }
+    }
+
+    /**
+     * A signer for one signature that asks the user now rather than when
+     * it signs: for a signature made where waiting for the user would hold
+     * others up.
+     */
+    fun once(): CertificateSigner {
+        val ready = Signature.getInstance("SHA256withECDSA").apply { initSign(privateKey) }.let { authorize?.invoke(it) ?: it }
+        val used = AtomicBoolean(false)
+        return object : CertificateSigner {
+            override val publicKeyDER = this@KeystoreSigner.publicKeyDER
+
+            override fun signature(data: ByteArray): ByteArray {
+                check(used.compareAndSet(false, true)) { "a signer for one signature signed twice" }
+                ready.update(data)
+                return ready.sign()
+            }
+        }
+    }
 
     /** An ECDSA signature, ASN.1 DER, of a SHA-256 digest: the member key signs the hub's TLS to its forwarder so (cbbtun's Signer). */
     fun signDigest(digest: ByteArray): ByteArray =

@@ -289,6 +289,19 @@ class MemberNode(
         }
     }
 
+    /**
+     * Sends a renewal to the connections whose peer presented leaf, the
+     * certificate it renews, as the hello's renew does when it answers at
+     * once (section 2).
+     */
+    fun sendCert(leaf: ByteArray, renewal: Renewal) = synchronized(lock) {
+        for (c in conns) {
+            if (c.peerRole != null && !c.recordsOnly && c.transport.peerChain.firstOrNull()?.contentEquals(leaf) == true) {
+                c.enqueue(Member.Message.Cert(renewal.cert, renewal.issuer))
+            }
+        }
+    }
+
     /** Sends a computer the admin CA the root issued for it. */
     fun sendAdminCA(adminCA: ByteArray, peer: String) = synchronized(lock) {
         for (c in conns) if (c.peer == peer && c.peerRole != null) c.enqueue(Member.Message.Admin(adminCA))
