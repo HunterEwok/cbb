@@ -827,63 +827,29 @@ static void http_close(void)
     }
 }
 
-// The install screen: the logo on the left (tools/icon), the files and
-// their bars on the right, the messages under them.
+// The install screen, on black: the logo on the left (tools/icon), the
+// files and their bars on the right, the messages under them.
 //
-//   rows 0-14, columns 0-11   the logo
-//   rows 0-1, from column 13  the name and the version
+//   rows 0-17, columns 0-13   the logo
+//   rows 0-1, from column 15  the name and the version
 //   rows 3-10                 a file's name and state, then its bar
-//   rows 12-14                the file being fetched: kilobytes, speed
-//   rows 16-23                messages
-#define PANEL 13
+//   rows 12-13                the file under way: kilobytes, speed
+//   rows 19-23                messages
+#define PANEL 15
 #define FILE_ROW 3
 #define NOW_ROW 12
-#define MESSAGE_ROW 16
-#define BAR_CELLS 14
+#define MESSAGE_ROW 19
+#define BAR_CELLS 12
 
-// The ULA palette's yellow, ink and paper, which the logo's brown takes
-// while the screen shows, and what they were.
-#define PAL_INK_YELLOW 6
-#define PAL_PAPER_YELLOW 22
-static uint8_t pal_ctl, pal_saved[4];
-
-// Selects the active ULA palette for writing, one entry at a time.
-static uint8_t palette_select(void)
+// The ROM's colour codes, for what .cbb prints meanwhile.
+static void colour(uint8_t ink)
 {
-    pal_ctl = ZXN_READ_REG(0x43);
-    // ULANext's indices differ: leave its palette as it is.
-    if (pal_ctl & 1) return 1;
-    ZXN_NEXTREGA(0x43, 0x80 | (pal_ctl & 2 ? 0x40 : 0) | (pal_ctl & 0x0F));
-    return 0;
-}
-
-static void palette_set(uint8_t index, uint16_t rgb9)
-{
-    ZXN_NEXTREGA(0x40, index);
-    ZXN_NEXTREGA(0x44, rgb9 >> 1);
-    ZXN_NEXTREGA(0x44, rgb9 & 1);
-}
-
-static void palette_brown(void)
-{
-    if (palette_select()) return;
-    ZXN_NEXTREGA(0x40, PAL_INK_YELLOW);
-    pal_saved[0] = ZXN_READ_REG(0x41);
-    pal_saved[1] = ZXN_READ_REG(0x44);
-    ZXN_NEXTREGA(0x40, PAL_PAPER_YELLOW);
-    pal_saved[2] = ZXN_READ_REG(0x41);
-    pal_saved[3] = ZXN_READ_REG(0x44);
-    palette_set(PAL_INK_YELLOW, LOGO_BROWN);
-    palette_set(PAL_PAPER_YELLOW, LOGO_BROWN);
-    ZXN_NEXTREGA(0x43, pal_ctl);
-}
-
-static void palette_restore(void)
-{
-    if (palette_select()) return;
-    palette_set(PAL_INK_YELLOW, (uint16_t)pal_saved[0] << 1 | (pal_saved[1] & 1));
-    palette_set(PAL_PAPER_YELLOW, (uint16_t)pal_saved[2] << 1 | (pal_saved[3] & 1));
-    ZXN_NEXTREGA(0x43, pal_ctl);
+    putchar(17); // PAPER
+    putchar(0);
+    putchar(16); // INK
+    putchar(ink);
+    putchar(19); // BRIGHT
+    putchar(1);
 }
 
 // Unpacks the logo (PackBits, tools/icon) into text[].
@@ -931,18 +897,19 @@ static void logo_draw(void)
     }
     for (y = 0; y < LOGO_ROWS; y++)
         for (x = 0; x < LOGO_COLS; x++) *zx_cxy2aaddr(x, y) = text[LOGO_ROWS * 8 * LOGO_COLS + y * LOGO_COLS + x];
-    zx_border(INK_WHITE);
+    zx_border(INK_BLACK);
 }
 
 static void screen_open(void)
 {
-    palette_brown();
-    zx_border(INK_WHITE);
-    zx_cls(PAPER_WHITE | INK_BLACK);
+    zx_border(INK_BLACK);
+    zx_cls(PAPER_BLACK | INK_WHITE | BRIGHT);
     logo_unpack();
     logo_draw();
+    colour(INK_YELLOW);
     at(0, PANEL);
     printf("clipboardbridge");
+    colour(INK_WHITE);
     at(1, PANEL);
     printf(VERSION ", " SITE);
     at(NOW_ROW + 2, PANEL);
@@ -950,21 +917,20 @@ static void screen_open(void)
     screen_row = MESSAGE_ROW;
 }
 
-// Leaves the screen: the palette back, and the print position under the
+// Leaves the screen: the print position under the
 // messages, from where the screen scrolls as usual.
 static void screen_close(void)
 {
-    zx_border(INK_WHITE);
-    palette_restore();
+    zx_border(INK_BLACK);
     at(screen_row > 23 ? 23 : screen_row, 0);
     screen_row = 0;
 }
 
-// Shows a file's state on its row: "up to date", "fetching" and so on.
+// Shows a file's state on its row: "current", "fetching" and so on.
 static void file_state(uint8_t row, const char *name, const char *state)
 {
     at(FILE_ROW + 2 * row, PANEL);
-    printf("%-8s %-10s", name, state);
+    printf("%-8s%-9s", name, state);
 }
 
 // Draws a file's bar in half cells with the percentage, and the numbers
@@ -979,18 +945,20 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
     char speed[8];
     SCR_CT = 255;
     at(FILE_ROW + 2 * row + 1, PANEL);
+    colour(INK_YELLOW);
     for (i = 0; i < BAR_CELLS; i++) {
         // The ROM's block graphics: 143 full, 138 the left half.
         putchar(halves >= 2 * i + 2 ? 143 : halves == 2 * i + 1 ? 138 : '-');
     }
+    colour(INK_WHITE);
     printf(" %3u%%", pct);
     at(NOW_ROW, PANEL);
-    printf("%5luK of %5luK  ", got >> 10, size >> 10);
+    printf("%5luK of %5luK", got >> 10, size >> 10);
     if (rate < 10240) sprintf(speed, "%u.%uK/s", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));
     else sprintf(speed, "%uK/s", (uint16_t)(rate >> 10));
     if (left > 5999) left = 5999;
     at(NOW_ROW + 1, PANEL);
-    printf("%-7s %2u:%02u left", speed, left / 60, left % 60);
+    printf("%-7s%2u:%02u left", speed, left / 60, left % 60);
 }
 
 // CRC-32 by a table of 16, half a byte at a time: the Pi's cbb is
@@ -1078,7 +1046,7 @@ static int fetch(struct item *it, uint8_t row)
         progress(row, got, it->size, start);
     }
     esx_f_close(fh);
-    zx_border(INK_WHITE);
+    zx_border(INK_BLACK);
     if (crc != it->crc) {
         file_state(row, it->name, "damaged");
         esx_f_unlink(it->part);
@@ -1253,7 +1221,7 @@ static int install_files(void)
                 continue;
             }
             if (strcmp(pimd5, it->md5) == 0) {
-                file_state(i, it->name, "up to date");
+                file_state(i, it->name, "current");
                 continue;
             }
             // On the card from a try that stopped later.
@@ -1262,7 +1230,7 @@ static int install_files(void)
                 continue;
             }
         } else if (up_to_date(it)) {
-            file_state(i, it->name, "up to date");
+            file_state(i, it->name, "current");
             continue;
         }
         err = fetch(it, i);
@@ -1274,7 +1242,7 @@ static int install_files(void)
     if (!pi_answers) {
         say("The Pi does not answer: its cbb comes with .cbb update later.");
     } else if (strcmp(pimd5, pi->md5) == 0) {
-        file_state(PI_ROW, "to Pi", "up to date");
+        file_state(PI_ROW, "to Pi", "current");
     } else {
         file_state(PI_ROW, "to Pi", "sending");
         if (to_pi(pi, PI_ROW)) return 1;
