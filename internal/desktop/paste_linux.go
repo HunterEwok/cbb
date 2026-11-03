@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/ei"
-	"github.com/HunterEwok/clipboardbridge/internal/uinput"
+	"github.com/HunterEwok/cbb/internal/ei"
+	"github.com/HunterEwok/cbb/internal/uinput"
 )
 
 func (p *portal) paste() error {

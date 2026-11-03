@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv/wire"
+	"github.com/HunterEwok/cbb/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/tvremote/appletv/wire"
 )
 
 // Port is the Companion protocol's usual port. The TV announces its own

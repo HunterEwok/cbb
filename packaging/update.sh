@@ -12,7 +12,7 @@
 # replaces by itself.
 update_method() {
 	case $1 in
-	*/Cellar/* | */linuxbrew/* | */homebrew/* | */opt/clipboardbridge/bin/*) echo brew ;;
+	*/Cellar/* | */linuxbrew/* | */homebrew/* | */opt/cbb/bin/*) echo brew ;;
 	*) echo "${CBB_INSTALL_METHOD:-get}" ;;
 	esac
 }
@@ -29,7 +29,7 @@ update_setup() {
 	upd_sudo='sudo '
 	[ "${CBB_ROOTLESS:-}" != 1 ] || upd_sudo=
 	if ! "$upd_cbb" update -installed-by "$upd_method"; then
-		echo "install.sh: could not record how Clipboard Bridge was installed; cbb update takes it as get.sh" >&2
+		echo "install.sh: could not record how CBB was installed; cbb update takes it as get.sh" >&2
 	fi
 	[ "$upd_method" = get ] || return 0
 	case $upd_auto in
@@ -42,7 +42,7 @@ update_setup() {
 	esac
 	if [ "$upd_auto" != on ] && [ "$upd_auto" != off ]; then
 		[ -z "${CBB_UPDATING:-}" ] || return 0
-		echo "Clipboard Bridge can check once a day for a release the project signed and install it;"
+		echo "CBB can check once a day for a release the project signed and install it;"
 		echo "the check tells GitHub this device's address, as any download does."
 		printf 'Update automatically? [y/N] '
 		if (: </dev/tty) 2>/dev/null; then

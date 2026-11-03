@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/piv/pivtest"
+	"github.com/HunterEwok/cbb/internal/piv/pivtest"
 )
 
 // newCard returns a card whose slot 84 holds a key and its certificate; the

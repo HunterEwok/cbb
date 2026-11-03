@@ -17,7 +17,7 @@ import (
 
 	"github.com/amnezia-vpn/amneziawg-go/device"
 
-	"github.com/HunterEwok/clipboardbridge/internal/third_party/netstack"
+	"github.com/HunterEwok/cbb/internal/third_party/netstack"
 )
 
 // A negative dial waits this long: several handshake attempts would be made

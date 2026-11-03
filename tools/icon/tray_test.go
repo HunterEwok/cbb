@@ -63,7 +63,7 @@ func TestTrayOutputs(t *testing.T) {
 			t.Errorf("entry %d is %d pixels, want %d", i, img.Bounds().Dx(), size)
 		}
 	}
-	if !bytes.Contains(out[desktopTray+"clipboardbridge-symbolic.svg"], []byte(symbolicFill)) {
+	if !bytes.Contains(out[desktopTray+"cbb-symbolic.svg"], []byte(symbolicFill)) {
 		t.Error("the symbolic icon is not in the symbolic colour")
 	}
 }

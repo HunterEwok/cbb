@@ -3,19 +3,19 @@
 # Copyright (C) 2026 HunterEwok
 
 # After apk installs or upgrades the package (feed.sh): the user and group
-# clipboardbridge, the state directory, and the service enabled and
+# cbb, the state directory, and the service enabled and
 # (re)started, as install.sh does for a script install.
 
 # OpenWrt's functions.sh reads unset variables, such as IPKG_INSTROOT.
 # shellcheck disable=SC1091
 . /lib/functions.sh
-gid=$(group_add_next clipboardbridge)
-if ! user_exists clipboardbridge; then
-	user_add clipboardbridge "" "$gid" "Clipboard Bridge" /var/run/clipboardbridge /bin/false
+gid=$(group_add_next cbb)
+if ! user_exists cbb; then
+	user_add cbb "" "$gid" "CBB" /var/run/cbb /bin/false
 fi
-mkdir -p /etc/clipboardbridge/state
-chmod 0700 /etc/clipboardbridge/state
-chown clipboardbridge:clipboardbridge /etc/clipboardbridge/state
+mkdir -p /etc/cbb/state
+chmod 0700 /etc/cbb/state
+chown cbb:cbb /etc/cbb/state
 
 # An image being built: the service starts at its first boot, after NTP.
 [ -z "$IPKG_INSTROOT" ] || exit 0
@@ -23,10 +23,10 @@ chown clipboardbridge:clipboardbridge /etc/clipboardbridge/state
 if ! /usr/bin/cbb version 2>/dev/null | grep -q "lite member"; then
 	/usr/bin/cbb update -installed-by package || true
 fi
-/etc/init.d/clipboardbridge enable
+/etc/init.d/cbb enable
 ubus call service list >/dev/null 2>&1 || exit 0
 # The router has set its clock long ago; the wait is for the next boot.
 mkdir -p /var/state
-touch /var/state/clipboardbridge.time
-/etc/init.d/clipboardbridge restart
+touch /var/state/cbb.time
+/etc/init.d/cbb restart
 exit 0

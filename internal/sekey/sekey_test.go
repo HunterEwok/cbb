@@ -30,9 +30,9 @@ func TestEnclave(t *testing.T) {
 	t.Logf("blob: %d bytes", len(k.Blob()))
 	sign := func(k *Key) {
 		t.Helper()
-		d256 := sha256.Sum256([]byte("clipboardbridge"))
-		d384 := sha512.Sum384([]byte("clipboardbridge"))
-		d512 := sha512.Sum512([]byte("clipboardbridge"))
+		d256 := sha256.Sum256([]byte("cbb"))
+		d384 := sha512.Sum384([]byte("cbb"))
+		d512 := sha512.Sum512([]byte("cbb"))
 		for _, c := range []struct {
 			d []byte
 			h crypto.Hash

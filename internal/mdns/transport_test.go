@@ -62,7 +62,7 @@ func TestSystemNetwork(t *testing.T) {
 
 // TestAvahi checks that avahi, the usual mDNS daemon on Linux, sees the
 // member while both share port 5353: it browses the service, resolves the
-// host name and, while the member holds it, clipboardbridge.local. It needs
+// host name and, while the member holds it, cbb.local. It needs
 // avahi-daemon running and the avahi tools, so it runs only when
 // CBB_TEST_AVAHI is set, for example in a container.
 func TestAvahi(t *testing.T) {
@@ -103,9 +103,9 @@ func TestAvahi(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
-	eventually("browse", []string{"avahi-browse", "-rtp", "_clipboardbridge._tcp"},
+	eventually("browse", []string{"avahi-browse", "-rtp", "_cbb._tcp"},
 		idA, "cb-"+idA+".local", ";4001;", "g=0123456789abcdef")
 	eventually("host name", []string{"avahi-resolve", "-4", "-n", "cb-" + idA + ".local"}, "cb-"+idA+".local")
 	r.SetHolder(true)
-	eventually("clipboardbridge.local", []string{"avahi-resolve", "-4", "-n", "clipboardbridge.local"}, "clipboardbridge.local\t")
+	eventually("cbb.local", []string{"avahi-resolve", "-4", "-n", "cbb.local"}, "cbb.local\t")
 }

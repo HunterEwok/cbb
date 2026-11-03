@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/invite"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/invite"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // An invitation to a hub that is not there (G15): forge

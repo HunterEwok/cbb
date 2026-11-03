@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // The generator of testdata/interop/strict-generated-*.json: from the tables

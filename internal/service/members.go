@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/mdns"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/uptime"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/mdns"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/uptime"
 )
 
 const (
@@ -140,7 +140,7 @@ type dialer struct {
 // ID dialed. The lite members (TXT r=lite) dial the full members, and the
 // phones dial everyone. A member's dialer takes its new addresses or port on
 // its next round. found also notes the holder priority each member
-// publishes (TXT h) and elects the holder of clipboardbridge.local again.
+// publishes (TXT h) and elects the holder of cbb.local again.
 func (s *Service) found(peers []mdns.Peer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -409,7 +409,7 @@ func (s *Service) keepUntil(ctx context.Context, id group.DeviceID, where string
 	}
 }
 
-// peersChanged elects the holder of clipboardbridge.local again (see
+// peersChanged elects the holder of cbb.local again (see
 // electLocked).
 func (s *Service) peersChanged() {
 	s.mu.Lock()
@@ -426,7 +426,7 @@ func (s *Service) peersChanged() {
 	s.renewAdminCAs(peers)
 }
 
-// electLocked elects the holder of clipboardbridge.local among this member
+// electLocked elects the holder of cbb.local among this member
 // and the full members it is connected to that discovery finds with a
 // holder priority: the lowest priority number, then the lowest device ID.
 // A member without the iPhone CA key, as in a group whose root is a phone,
@@ -448,7 +448,7 @@ func (s *Service) electLocked() {
 	if hold != s.holder {
 		s.holder = hold
 		s.responder.SetHolder(hold)
-		s.logf("cbb: holds clipboardbridge.local: %v", hold)
+		s.logf("cbb: holds cbb.local: %v", hold)
 	}
 }
 

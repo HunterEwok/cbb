@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/hlc"
+	"github.com/HunterEwok/cbb/internal/hlc"
 )
 
 func part(typ, path string, b string) Part {

@@ -16,8 +16,8 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/ei"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/ei"
 )
 
 // Remote paste on GNOME and KDE (design.md, "Remote paste"): their
@@ -80,7 +80,7 @@ func portalOn(conn *dbus.Conn, logf func(string, ...any)) *portal {
 	return &portal{logf: logf, state: dir, conn: conn}
 }
 
-// stateDir is the user's directory for clipboardbridge's own files.
+// stateDir is the user's directory for cbb's own files.
 func stateDir() (string, error) {
 	dir := os.Getenv("XDG_STATE_HOME")
 	if dir == "" {
@@ -90,7 +90,7 @@ func stateDir() (string, error) {
 		}
 		dir = filepath.Join(home, ".local", "state")
 	}
-	return filepath.Join(dir, "clipboardbridge"), nil
+	return filepath.Join(dir, "cbb"), nil
 }
 
 // ready returns once the session's keyboard is there, starting the
@@ -197,7 +197,7 @@ func (p *portal) session() (*ei.Keyboard, bool, error) {
 	if err := obj.Call(portalRemote+".ConnectToEIS", 0, session, map[string]dbus.Variant{}).Store(&fd); err != nil {
 		return nil, false, fmt.Errorf("ConnectToEIS: %w", err)
 	}
-	kbd, err := ei.Dial(int(fd), "Clipboard Bridge", 5*time.Second)
+	kbd, err := ei.Dial(int(fd), "CBB", 5*time.Second)
 	return kbd, false, err
 }
 

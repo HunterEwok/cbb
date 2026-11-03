@@ -4,14 +4,14 @@
 
 # Removes what install.sh installed on FreeBSD, as root:
 #
-#   sh /usr/local/share/clipboardbridge/uninstall.sh [--purge]
+#   sh /usr/local/share/cbb/uninstall.sh [--purge]
 #
 # It stops the service and removes the binary, the rc.d script and its
 # rc.conf line, the update's cron file and cbb update's folder, the settings
-# in /usr/local/etc/clipboardbridge and the firewall rules that install.sh
+# in /usr/local/etc/cbb and the firewall rules that install.sh
 # added, and only those. The device's keys
-# and group, in /var/db/clipboardbridge, stay for a reinstall unless
-# --purge; the clipboardbridge user and group stay too, since files may
+# and group, in /var/db/cbb, stay for a reinstall unless
+# --purge; the cbb user and group stay too, since files may
 # still belong to them.
 set -eu
 
@@ -41,27 +41,27 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-if [ -x /usr/local/etc/rc.d/clipboardbridge ]; then
-	service clipboardbridge onestop >/dev/null 2>&1 || true
+if [ -x /usr/local/etc/rc.d/cbb ]; then
+	service cbb onestop >/dev/null 2>&1 || true
 fi
-sysrc -q -x clipboardbridge_enable >/dev/null 2>&1 || true
-share=/usr/local/share/clipboardbridge
+sysrc -q -x cbb_enable >/dev/null 2>&1 || true
+share=/usr/local/share/cbb
 if [ -f "$share/firewall.sh" ]; then
 	sh "$share/firewall.sh" close
 	sh "$share/firewall.sh" hub-close
 fi
-rm -f /usr/local/etc/rc.d/clipboardbridge /usr/local/etc/rc.d/clipboardbridge.sh /usr/local/bin/cbb \
-	/usr/local/etc/xdg/autostart/clipboardbridge-desktop.desktop /usr/local/etc/cron.d/clipboardbridge-update
-rm -rf /var/db/clipboardbridge-update
+rm -f /usr/local/etc/rc.d/cbb /usr/local/etc/rc.d/cbb.sh /usr/local/bin/cbb \
+	/usr/local/etc/xdg/autostart/cbb-desktop.desktop /usr/local/etc/cron.d/cbb-update
+rm -rf /var/db/cbb-update
 # OPNsense: without the hook, the next filter reload drops the anchor.
-if [ -f /usr/local/etc/inc/plugins.inc.d/clipboardbridge.inc ]; then
-	rm -f /usr/local/etc/inc/plugins.inc.d/clipboardbridge.inc
+if [ -f /usr/local/etc/inc/plugins.inc.d/cbb.inc ]; then
+	rm -f /usr/local/etc/inc/plugins.inc.d/cbb.inc
 	configctl filter reload >/dev/null 2>&1 || true
 fi
-rm -rf "$share" /usr/local/etc/clipboardbridge /var/run/clipboardbridge
+rm -rf "$share" /usr/local/etc/cbb /var/run/cbb
 if [ "$purge" = yes ]; then
-	rm -rf /var/db/clipboardbridge
-	echo "Clipboard Bridge is removed, with this device's keys; it left its group."
+	rm -rf /var/db/cbb
+	echo "CBB is removed, with this device's keys; it left its group."
 else
-	echo "Clipboard Bridge is removed. Its keys stay in /var/db/clipboardbridge for a reinstall; --purge removes them."
+	echo "CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them."
 fi

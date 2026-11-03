@@ -34,7 +34,7 @@ import (
 
 const (
 	trayDrawings = "apps/design/icon/tray/"
-	macTray      = "apps/macos/ClipboardBridgeMac/Resources/Assets.xcassets/"
+	macTray      = "apps/macos/CBBMac/Resources/Assets.xcassets/"
 	desktopTray  = "apps/desktop/trayicon/"
 	// The drawings' canvas, in points.
 	trayCanvas = 18
@@ -73,7 +73,7 @@ func trayOutputs() (map[string][]byte, error) {
 		out[macTray+s.mac+".imageset/"+s.drawing+".svg"] = svg
 		out[macTray+s.mac+".imageset/Contents.json"] = imageSet(s.drawing + ".svg")
 		symbolic := strings.Replace(string(svg), `fill="#000"`, `fill="`+symbolicFill+`"`, 1)
-		linux := strings.Replace(s.drawing, "tray", "clipboardbridge", 1) + "-symbolic.svg"
+		linux := strings.Replace(s.drawing, "tray", "cbb", 1) + "-symbolic.svg"
 		out[desktopTray+linux] = []byte(symbolic)
 		for _, c := range []struct {
 			name string

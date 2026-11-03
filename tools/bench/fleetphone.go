@@ -33,7 +33,7 @@ type syncReply struct {
 }
 
 // shortcut plays the iPhone's shortcut from a fleet container: curl with
-// the iPhone CA that the profile carries, to clipboardbridge.local at the
+// the iPhone CA that the profile carries, to cbb.local at the
 // member's address.
 type shortcut struct {
 	phone *Device
@@ -44,7 +44,7 @@ type shortcut struct {
 
 // post sends JSON to path over HTTPS and decodes the reply into v.
 func (s *shortcut) post(ctx context.Context, path, token, body string, v any) error {
-	cmd := fmt.Sprintf("curl -sS --max-time 10 --cacert /tmp/cbb-ca.pem --resolve clipboardbridge.local:%s:%s -H 'Content-Type: application/json' --data-binary @- https://clipboardbridge.local:%s%s",
+	cmd := fmt.Sprintf("curl -sS --max-time 10 --cacert /tmp/cbb-ca.pem --resolve cbb.local:%s:%s -H 'Content-Type: application/json' --data-binary @- https://cbb.local:%s%s",
 		s.port, s.addr, s.port, path)
 	if token != "" {
 		cmd += " -H " + shellQuote("Authorization: Bearer "+token)
@@ -144,7 +144,7 @@ func phoneShortcut(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 		}
 		defer stop()
 		s.addr, s.port, code = addr, port, c
-		out, err := Run(ctx, s.phone, "curl -sS --max-time 10 http://"+addr+":"+port+"/clipboardbridge.mobileconfig", "")
+		out, err := Run(ctx, s.phone, "curl -sS --max-time 10 http://"+addr+":"+port+"/cbb.mobileconfig", "")
 		if err != nil {
 			return err
 		}
@@ -189,13 +189,13 @@ func phoneShortcut(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 		return
 	}
 	r.Do("fleet/X4-name-constraints", func() error {
-		// The iPhone CA vouches for clipboardbridge.local alone, and for
+		// The iPhone CA vouches for cbb.local alone, and for
 		// no IP address.
 		c, err := x509.ParseCertificate(ca)
 		switch {
 		case err != nil:
 			return err
-		case !c.PermittedDNSDomainsCritical || len(c.PermittedDNSDomains) != 1 || c.PermittedDNSDomains[0] != "clipboardbridge.local":
+		case !c.PermittedDNSDomainsCritical || len(c.PermittedDNSDomains) != 1 || c.PermittedDNSDomains[0] != "cbb.local":
 			return fmt.Errorf("the iPhone CA permits the names %q (critical %v)", c.PermittedDNSDomains, c.PermittedDNSDomainsCritical)
 		}
 		for _, ip := range []string{"192.168.1.1", "10.0.0.1", "fd00::1", "2001:db8::1"} {
@@ -211,7 +211,7 @@ func phoneShortcut(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 	})
 	r.Do("fleet/X1-closed", func() error {
 		return eventually(ctx, timeout, func() error {
-			out, _ := Run(ctx, s.phone, "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://"+s.addr+":"+s.port+"/clipboardbridge.mobileconfig", "")
+			out, _ := Run(ctx, s.phone, "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://"+s.addr+":"+s.port+"/cbb.mobileconfig", "")
 			if strings.TrimSpace(out) == "200" {
 				return errors.New("the profile is served with no pairing window open")
 			}
@@ -262,7 +262,7 @@ func phoneShortcut(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 	})
 	// K12: -new-token revokes every token given so far.
 	r.Do("fleet/K12-kept-hashed", func() error {
-		out, err := Run(ctx, hub, "grep -rlF "+shellQuote(strings.TrimPrefix(s.token, "cb1."))+" /var/lib/clipboardbridge || true", "")
+		out, err := Run(ctx, hub, "grep -rlF "+shellQuote(strings.TrimPrefix(s.token, "cb1."))+" /var/lib/cbb || true", "")
 		if err == nil && strings.TrimSpace(out) != "" {
 			err = fmt.Errorf("the token is kept as it is in %s", out)
 		}

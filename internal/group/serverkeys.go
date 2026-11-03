@@ -17,8 +17,8 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
 // ServerKeysFileName is the file next to the identity that keeps the

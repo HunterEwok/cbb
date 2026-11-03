@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
-	"github.com/HunterEwok/clipboardbridge/internal/vless/vlesstest"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
 // echo answers every UDP packet with itself, in the forwarder's place.

@@ -107,12 +107,12 @@ A computer far away can join the group with an invitation from the hub, once syn
 home works:
 
 ```sh
-sudo cbb invite        # on the hub: writes clipboardbridge.cbbinvite, valid for an hour
+sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
 ```
 
 Send the file to the new computer through a channel you trust, such as a messenger you use
 with yourself; it is a secret until it is used. There, run
-`sudo cbb pair -invite clipboardbridge.cbbinvite`. Both computers show the new one's key
+`sudo cbb pair -invite cbb.cbbinvite`. Both computers show the new one's key
 fingerprint; on the hub, type `yes` only if they match. Phones cannot join by invitation
 yet: add them at home.
 

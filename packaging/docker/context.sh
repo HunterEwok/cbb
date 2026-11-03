@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Lays out the build context of the clipboardbridge image in DIR: the
+# Lays out the build context of the cbb image in DIR: the
 # Dockerfile, the static cbb of each platform, named as the Dockerfile wants
 # them (cbb-amd64, cbb-arm64, cbb-armv7), and the few directories and files
 # the service needs in an image built from scratch, with LICENSE and, given
 # notices=FILE, a release archive's THIRD_PARTY_NOTICES in
-# /usr/share/doc/clipboardbridge.
+# /usr/share/doc/cbb.
 #
 #   sh packaging/docker/context.sh DIR amd64=path/to/cbb [arm64=path] [armv7=path] [notices=FILE]
 set -eu
@@ -20,7 +20,7 @@ dir=$1
 shift
 here=$(cd "$(dirname "$0")" && pwd)
 r=$dir/rootfs
-doc=$r/usr/share/doc/clipboardbridge
+doc=$r/usr/share/doc/cbb
 mkdir -p "$dir" "$doc"
 cp "$here/Dockerfile" "$dir/Dockerfile"
 cp "$here/../../LICENSE" "$doc/LICENSE"
@@ -43,10 +43,10 @@ for a in "$@"; do
 done
 
 # The service's user, 65532, owns its state and its sockets' directory.
-mkdir -p "$r/etc" "$r/run/clipboardbridge" "$r/var/lib/clipboardbridge" "$r/tmp"
-chmod 0750 "$r/run/clipboardbridge"
-chmod 0700 "$r/var/lib/clipboardbridge"
+mkdir -p "$r/etc" "$r/run/cbb" "$r/var/lib/cbb" "$r/tmp"
+chmod 0750 "$r/run/cbb"
+chmod 0700 "$r/var/lib/cbb"
 chmod 1777 "$r/tmp"
-printf 'clipboardbridge:x:65532:65532:clipboardbridge:/var/lib/clipboardbridge:/sbin/nologin\n' >"$r/etc/passwd"
-printf 'clipboardbridge:x:65532:\n' >"$r/etc/group"
+printf 'cbb:x:65532:65532:cbb:/var/lib/cbb:/sbin/nologin\n' >"$r/etc/passwd"
+printf 'cbb:x:65532:\n' >"$r/etc/group"
 printf 'PRETTY_NAME="Docker container"\nNAME=Docker\n' >"$r/etc/os-release"

@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The iPhone app's Xcode project, for XcodeGen: cd apps/ios && xcodegen generate.
-# The generated ClipboardBridge.xcodeproj and Info.plist are not committed.
-name: ClipboardBridge
+# The generated CBB.xcodeproj and Info.plist are not committed.
+name: CBB
 options:
-  bundleIdPrefix: io.github.hunterewok
+  bundleIdPrefix: tools.cbb
   deploymentTarget:
     iOS: "17.0"
   developmentLanguage: en
   createIntermediateGroups: true
 packages:
-  ClipboardBridgeKit:
-    path: ClipboardBridgeKit
+  CBBKit:
+    path: CBBKit
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -25,16 +25,16 @@ settings:
     # The app's bundle identifier; the extensions' and the watch's start with it.
     # device.sh sets another one for a build signed by a free Personal Team, so
     # that it never takes the identifiers the developer account will register.
-    CBB_BUNDLE_ID: io.github.hunterewok.clipboardbridge
+    CBB_BUNDLE_ID: tools.cbb
 targets:
-  ClipboardBridge:
+  CBB:
     type: application
     platform: iOS
     sources:
-      - ClipboardBridge
+      - CBB
       - Shared
     dependencies:
-      - package: ClipboardBridgeKit
+      - package: CBBKit
       # Share and the text selection menu's Share (docs/apps.md).
       - target: ShareExtension
       # The home-screen widget and the Control Center control.
@@ -47,7 +47,7 @@ targets:
         embed: false
       - sdk: libresolv.tbd
     info:
-      path: ClipboardBridge/Info.plist
+      path: CBB/Info.plist
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
@@ -60,19 +60,19 @@ targets:
         # Now and then iOS wakes the app for a moment to hear of the group's
         # events (BackgroundRefresh.swift).
         UIBackgroundModes: [fetch]
-        BGTaskSchedulerPermittedIdentifiers: [io.github.hunterewok.clipboardbridge.refresh]
+        BGTaskSchedulerPermittedIdentifiers: [tools.cbb.refresh]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
-        NSBonjourServices: [_clipboardbridge._tcp]
+        NSBonjourServices: [_cbb._tcp]
         # A dragged device tile (Views/Arrange.swift), which stays in the app.
         UTExportedTypeDeclarations:
-          - UTTypeIdentifier: io.github.hunterewok.clipboardbridge.tile
+          - UTTypeIdentifier: tools.cbb.tile
             UTTypeConformsTo: [public.data]
-        NSLocalNetworkUsageDescription: Clipboard Bridge finds your computers on the home network and keeps their clipboard in sync with this phone.
-        NSCameraUsageDescription: Clipboard Bridge scans the QR code a computer shows, to add it to your group.
-        NSFaceIDUsageDescription: Clipboard Bridge asks for Face ID before it signs with your group's key, to add or remove a device.
+        NSLocalNetworkUsageDescription: CBB finds your computers on the home network and keeps their clipboard in sync with this phone.
+        NSCameraUsageDescription: CBB scans the QR code a computer shows, to add it to your group.
+        NSFaceIDUsageDescription: CBB asks for Face ID before it signs with your group's key, to add or remove a device.
         # The recovery key on a YubiKey (App/YubiKeyNfc.swift): Core NFC selects its PIV application.
-        NFCReaderUsageDescription: Clipboard Bridge puts your group's recovery key on a YubiKey, and restores the group with it.
+        NFCReaderUsageDescription: CBB puts your group's recovery key on a YubiKey, and restores the group with it.
         com.apple.developer.nfc.readersession.iso7816.select-identifiers: [A000000308]
         # Files a computer copied, saved by the button, show in the Files app.
         UIFileSharingEnabled: true
@@ -92,7 +92,7 @@ targets:
         Debug:
           CODE_SIGN_ENTITLEMENTS: $(CBB_DEBUG_ENTITLEMENTS)
         Release:
-          CODE_SIGN_ENTITLEMENTS: ClipboardBridge/ClipboardBridge.entitlements
+          CODE_SIGN_ENTITLEMENTS: CBB/CBB.entitlements
   ShareExtension:
     type: app-extension
     platform: iOS
@@ -101,15 +101,15 @@ targets:
       - Shared/Shared.swift
       - Shared/Images.swift
     dependencies:
-      - package: ClipboardBridgeKit
+      - package: CBBKit
     info:
       path: ShareExtension/Info.plist
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ru]
-        NSBonjourServices: [_clipboardbridge._tcp]
-        NSLocalNetworkUsageDescription: Clipboard Bridge finds your computers on the home network to send them what you share.
+        NSBonjourServices: [_cbb._tcp]
+        NSLocalNetworkUsageDescription: CBB finds your computers on the home network to send them what you share.
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -136,7 +136,7 @@ targets:
       - Shared/OpenAndSyncIntent.swift
       # The Live Activity in the Dynamic Island, in the app's colours.
       - Shared/StatusActivity.swift
-      - ClipboardBridge/Theme
+      - CBB/Theme
     info:
       path: Widgets/Info.plist
       properties:
@@ -157,7 +157,7 @@ targets:
       - Watch
       - Shared/WatchState.swift
       # The phone's colours.
-      - ClipboardBridge/Theme
+      - CBB/Theme
     info:
       path: Watch/Info.plist
       properties:
@@ -172,39 +172,39 @@ targets:
         # Drawn by tools/icon.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_EMIT_LOC_STRINGS: YES
-  ClipboardBridgeTests:
+  CBBTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - ClipboardBridgeTests
+      - CBBTests
     dependencies:
-      - target: ClipboardBridge
+      - target: CBB
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
   # The screens driven as a person would, on the simulator (XCUITest).
-  ClipboardBridgeUITests:
+  CBBUITests:
     type: bundle.ui-testing
     platform: iOS
     sources:
-      - ClipboardBridgeUITests
+      - CBBUITests
       # The app's texts, to look up the Russian the screens show.
-      - path: ClipboardBridge/Resources/Localizable.xcstrings
+      - path: CBB/Resources/Localizable.xcstrings
         buildPhase: resources
     dependencies:
-      - target: ClipboardBridge
+      - target: CBB
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: ClipboardBridge
+        TEST_TARGET_NAME: CBB
         # The tests' own strings stay out of the app's catalog.
         SWIFT_EMIT_LOC_STRINGS: NO
 schemes:
-  ClipboardBridge:
+  CBB:
     build:
       targets:
-        ClipboardBridge: all
+        CBB: all
     test:
       targets:
-        - ClipboardBridgeTests
-        - ClipboardBridgeUITests
+        - CBBTests
+        - CBBUITests

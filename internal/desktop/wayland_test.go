@@ -17,7 +17,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/HunterEwok/clipboardbridge/internal/wl"
+	"github.com/HunterEwok/cbb/internal/wl"
 )
 
 // TestWayland runs against a real compositor with data-control, such as a
@@ -54,7 +54,7 @@ func TestWayland(t *testing.T) {
 	// The connector writes: other programs paste it, from the clipboard and
 	// from the primary selection, and the write does not come back as a
 	// change.
-	text := "written by clipboardbridge \u043f\u0440\u0438\u0432\u0435\u0442\nline two"
+	text := "written by cbb \u043f\u0440\u0438\u0432\u0435\u0442\nline two"
 	if err := w.Write(text, false); err != nil {
 		t.Fatal(err)
 	}

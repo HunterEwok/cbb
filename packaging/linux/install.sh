@@ -2,25 +2,25 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs clipboardbridge on a Linux machine with systemd:
+# Installs cbb on a Linux machine with systemd:
 #
 #   sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] path/to/cbb
 #
 # The full member's archive and the lite member's
-# (clipboardbridge-lite-linux-*) both carry this script, each with its own systemd unit beside it; cbb version
+# (cbb-lite-linux-*) both carry this script, each with its own systemd unit beside it; cbb version
 # tells the two apart. It installs the binary to /usr/local/bin, the service
 # user, the systemd unit, for the full member the desktop autostart entry and user unit,
 # the tray app when the archive has it and the machine has GTK 4 and WebKitGTK
 # 6.0 (with its autostart and menu entries), and the tmux configuration, adds the user
-# who ran sudo to the clipboardbridge group, and starts or restarts the service.
+# who ran sudo to the cbb group, and starts or restarts the service.
 # --console also starts tmux after a login on the text console and the
 # console helper for remote paste there. --uinput, for the
 # full member, adds the uinput helper, which presses the keys of a remote
 # paste on desktops without another way (GNOME and KDE without the portal's
 # dialog), and loads the uinput module at boot. --port moves
-# the member port from 8764 to N, kept in /etc/clipboardbridge/clipboardbridge.env
+# the member port from 8764 to N, kept in /etc/cbb/cbb.env
 # until the next --port; --port 8764 goes back. It finds the firewall, lists
-# the rules clipboardbridge needs (mDNS and its port from the home network)
+# the rules cbb needs (mDNS and its port from the home network)
 # and asks whether to add them (firewall.sh); the answer is kept for later
 # runs. --express (CBB_FIREWALL=express) adds them without asking and says
 # what it added, --no-firewall (CBB_FIREWALL=no) adds none and prints the
@@ -36,7 +36,7 @@
 # the user who runs it, without sudo (install-rootless.sh, D-79).
 #
 # On SteamOS, whose / is read-only and replaced by each system update, the
-# binary and the shared files go to /opt/clipboardbridge instead, which
+# binary and the shared files go to /opt/cbb instead, which
 # SteamOS keeps in /home, and a keep list in /etc/atomic-update.conf.d names
 # the files it writes in /etc, which SteamOS otherwise drops on an update.
 set -eu
@@ -147,18 +147,18 @@ if [ "$(sed -n 's/^ID=//p' "${CBB_OS_RELEASE:-/etc/os-release}" 2>/dev/null | tr
 	steamos=yes
 fi
 if [ "$steamos" = yes ]; then
-	cbb=/opt/clipboardbridge/bin/cbb
-	share=/opt/clipboardbridge/share
-	sysusers=/etc/sysusers.d/clipboardbridge.conf
+	cbb=/opt/cbb/bin/cbb
+	share=/opt/cbb/share
+	sysusers=/etc/sysusers.d/cbb.conf
 else
 	cbb=/usr/local/bin/cbb
-	share=/usr/local/share/clipboardbridge
-	sysusers=/usr/lib/sysusers.d/clipboardbridge.conf
+	share=/usr/local/share/cbb
+	sysusers=/usr/lib/sysusers.d/cbb.conf
 fi
 # place MODE FILE DEST installs FILE, a unit or a desktop entry, with the
 # paths of this system.
 place() {
-	sed -e "s|/usr/local/bin/cbb|$cbb|g" -e "s|/usr/local/share/clipboardbridge|$share|g" "$2" >"$3.new"
+	sed -e "s|/usr/local/bin/cbb|$cbb|g" -e "s|/usr/local/share/cbb|$share|g" "$2" >"$3.new"
 	chmod "$1" "$3.new"
 	mv "$3.new" "$3"
 }
@@ -183,58 +183,6 @@ if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
 	exit 2
 fi
 
-# Up to 0.2.0 clipboardbridge was called clipbridge, and its protocol does
-# not reach this one: remove it, with its keys, user and firewall rules, so
-# this device pairs again.
-if [ -e /usr/local/bin/clipbridge ] || [ -e /etc/systemd/system/clipbridge.service ]; then
-	if [ -f /usr/local/share/clipbridge/uninstall.sh ]; then
-		sh /usr/local/share/clipbridge/uninstall.sh --purge >/dev/null
-	else
-		systemctl disable --now clipbridge.service >/dev/null 2>&1 || true
-		if command -v ufw >/dev/null 2>&1; then
-			old=$(ufw status numbered 2>/dev/null |
-				sed -n 's/^\[ *\([0-9][0-9]*\)\].*# clipbridge\( mDNS\)\{0,1\} *$/\1/p' | sort -rn)
-			for n in $old; do
-				ufw --force delete "$n" >/dev/null
-			done
-		fi
-		rm -f /etc/systemd/system/clipbridge.service /etc/xdg/autostart/clipbridge-desktop.desktop \
-			/etc/profile.d/clipbridge-console.sh /usr/lib/sysusers.d/clipbridge.conf /usr/local/bin/clipbridge
-		systemctl daemon-reload || true
-		rm -rf /usr/local/share/clipbridge /etc/clipbridge /var/lib/clipbridge
-	fi
-	if [ -f /etc/tmux.conf ]; then
-		grep -vxF 'source-file -q /usr/local/share/clipbridge/tmux.conf' /etc/tmux.conf >/etc/tmux.conf.old || true
-		cat /etc/tmux.conf.old >/etc/tmux.conf
-		rm -f /etc/tmux.conf.old
-	fi
-	userdel clipbridge 2>/dev/null || true
-	groupdel clipbridge 2>/dev/null || true
-	echo "Removed clipbridge, as Clipboard Bridge was called before; pair this device again."
-fi
-
-# The lite member was the command cbb-lite, with its own user and paths. Its
-# keys move to the shared paths for the lite member, which stays in its group.
-moved=no
-if [ -e /usr/local/bin/cbb-lite ] || [ -e /etc/systemd/system/cbb-lite.service ]; then
-	systemctl disable --now cbb-lite.service >/dev/null 2>&1 || true
-	rm -rf /etc/systemd/system/cbb-lite.service /etc/systemd/system/cbb-lite.service.d \
-		/usr/lib/sysusers.d/cbb-lite.conf /usr/local/bin/cbb-lite
-	systemctl daemon-reload || true
-	if [ "$kind" = lite ] && [ -d /var/lib/cbb-lite ] && [ ! -e /var/lib/clipboardbridge ]; then
-		mv /var/lib/cbb-lite /var/lib/clipboardbridge
-		moved=yes
-	fi
-	rm -rf /var/lib/cbb-lite
-	userdel cbb-lite 2>/dev/null || true
-	groupdel cbb-lite 2>/dev/null || true
-	if [ "$moved" = yes ]; then
-		echo "Renamed cbb-lite to cbb; this device stays in its group."
-	else
-		echo "Removed cbb-lite, as the lite member was called before; pair this device again."
-	fi
-fi
-
 install -d -m 0755 "${cbb%/*}"
 install -m 0755 "$bin" "$cbb"
 install -d -m 0755 "${sysusers%/*}"
@@ -243,25 +191,22 @@ install -d -m 0755 "${sysusers%/*}"
 # named before. systemd-sysusers adds them again after an update.
 members=
 if [ "$steamos" = yes ]; then
-	members=$(sed -n 's/^m \([^ ]*\) clipboardbridge$/\1/p' "$sysusers" 2>/dev/null || true)
+	members=$(sed -n 's/^m \([^ ]*\) cbb$/\1/p' "$sysusers" 2>/dev/null || true)
 	if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
 		members="$members $SUDO_USER"
 	fi
 fi
 {
-	cat "$here/clipboardbridge.sysusers"
+	cat "$here/cbb.sysusers"
 	# shellcheck disable=SC2086 # one name per word
 	for m in $(printf '%s\n' $members | sort -u); do
-		echo "m $m clipboardbridge"
+		echo "m $m cbb"
 	done
 } >"$sysusers.new"
 chmod 0644 "$sysusers.new"
 mv "$sysusers.new" "$sysusers"
 systemd-sysusers "$sysusers"
-if [ "$moved" = yes ]; then
-	chown -R clipboardbridge:clipboardbridge /var/lib/clipboardbridge
-fi
-place 0644 "$here/clipboardbridge.service" /etc/systemd/system/clipboardbridge.service
+place 0644 "$here/cbb.service" /etc/systemd/system/cbb.service
 # Desktop sessions start the connector with the session; the lite member has
 # none.
 # Desktops with graphical-session.target start it as a user unit, which the
@@ -277,9 +222,9 @@ if [ "$kind" = full ]; then
 	made /etc/xdg/autostart
 	made /etc/systemd/user
 	install -d -m 0755 /etc/xdg/autostart /etc/systemd/user
-	place 0644 "$here/clipboardbridge-desktop.desktop" /etc/xdg/autostart/clipboardbridge-desktop.desktop
-	place 0644 "$here/clipboardbridge-agent.service" /etc/systemd/user/clipboardbridge-agent.service
-	systemctl --global enable clipboardbridge-agent.service >/dev/null 2>&1 || true
+	place 0644 "$here/cbb-desktop.desktop" /etc/xdg/autostart/cbb-desktop.desktop
+	place 0644 "$here/cbb-agent.service" /etc/systemd/user/cbb-agent.service
+	systemctl --global enable cbb-agent.service >/dev/null 2>&1 || true
 fi
 
 # The tray app, when the archive has it (amd64 and arm64) and this machine
@@ -294,44 +239,44 @@ if [ "$kind" = full ] && [ -f "$traybin" ]; then
 	else
 		install -m 0755 "$traybin" "${cbb%/*}/cbb-desktop"
 		install -d -m 0755 "$share"
-		install -m 0644 "$here/clipboardbridge.png" "$share/clipboardbridge.png"
+		install -m 0644 "$here/cbb.png" "$share/cbb.png"
 		made /etc/xdg/autostart
 		install -d -m 0755 /etc/xdg/autostart
-		place 0644 "$here/clipboardbridge-tray.desktop" /etc/xdg/autostart/clipboardbridge-tray.desktop
+		place 0644 "$here/cbb-tray.desktop" /etc/xdg/autostart/cbb-tray.desktop
 		# SteamOS replaces /usr with each update; its menu comes from the desktop.
 		if [ "$steamos" = no ]; then
 			made /usr/local/share/applications
 			install -d -m 0755 /usr/local/share/applications
-			place 0644 "$here/clipboardbridge.desktop" /usr/local/share/applications/clipboardbridge.desktop
+			place 0644 "$here/cbb.desktop" /usr/local/share/applications/cbb.desktop
 		fi
 	fi
 fi
 
-# tmux reads /etc/tmux.conf; source the clipboardbridge part from there once.
+# tmux reads /etc/tmux.conf; source the cbb part from there once.
 install -d -m 0755 "$share"
-install -m 0644 "$here/../tmux/clipboardbridge.conf" "$share/tmux.conf"
+install -m 0644 "$here/../tmux/cbb.conf" "$share/tmux.conf"
 line="source-file -q $share/tmux.conf"
 if ! grep -qsF "$line" /etc/tmux.conf; then
 	made /etc/tmux.conf
 	echo "$line" >>/etc/tmux.conf
 fi
 if [ "$console" = yes ]; then
-	install -m 0644 "$here/../tmux/clipboardbridge-console.sh" /etc/profile.d/clipboardbridge-console.sh
-	place 0644 "$here/clipboardbridge-console.service" /etc/systemd/system/clipboardbridge-console.service
+	install -m 0644 "$here/../tmux/cbb-console.sh" /etc/profile.d/cbb-console.sh
+	place 0644 "$here/cbb-console.service" /etc/systemd/system/cbb-console.service
 fi
 if [ "$uinput" = yes ]; then
 	if [ "$kind" != full ]; then
 		echo "install.sh: --uinput is for the full member, which runs the desktop connector" >&2
 		exit 2
 	fi
-	echo uinput >/etc/modules-load.d/clipboardbridge-uinput.conf
+	echo uinput >/etc/modules-load.d/cbb-uinput.conf
 	modprobe uinput 2>/dev/null || echo "install.sh: could not load the uinput module now; it loads at the next boot" >&2
-	place 0644 "$here/clipboardbridge-uinput.service" /etc/systemd/system/clipboardbridge-uinput.service
+	place 0644 "$here/cbb-uinput.service" /etc/systemd/system/cbb-uinput.service
 fi
 
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
-	usermod -a -G clipboardbridge "$SUDO_USER"
-	echo "Added $SUDO_USER to the clipboardbridge group; log in again to use cbb copy and paste."
+	usermod -a -G cbb "$SUDO_USER"
+	echo "Added $SUDO_USER to the cbb group; log in again to use cbb copy and paste."
 fi
 
 if [ "$steamos" = yes ]; then
@@ -339,38 +284,38 @@ if [ "$steamos" = yes ]; then
 	# its whole path.
 	install -d -m 0755 /etc/profile.d
 	# shellcheck disable=SC2016 # expanded by the login shell
-	echo 'case ":$PATH:" in *:/opt/clipboardbridge/bin:*) ;; *) PATH=$PATH:/opt/clipboardbridge/bin ;; esac' >/etc/profile.d/clipboardbridge-path.sh
-	chmod 0644 /etc/profile.d/clipboardbridge-path.sh
+	echo 'case ":$PATH:" in *:/opt/cbb/bin:*) ;; *) PATH=$PATH:/opt/cbb/bin ;; esac' >/etc/profile.d/cbb-path.sh
+	chmod 0644 /etc/profile.d/cbb-path.sh
 	# What SteamOS keeps of /etc across an update: its own list (the units
 	# in /etc/systemd/system and their links among them) and the drop-ins
 	# in /etc/atomic-update.conf.d, this one among them.
 	install -d -m 0755 /etc/atomic-update.conf.d
-	cat >/etc/atomic-update.conf.d/clipboardbridge.conf.new <<'EOF'
-# Written by clipboardbridge's install.sh: Clipboard Bridge's files in /etc,
+	cat >/etc/atomic-update.conf.d/cbb.conf.new <<'EOF'
+# Written by cbb's install.sh: CBB's files in /etc,
 # which SteamOS keeps across its updates. uninstall.sh removes it.
-/etc/clipboardbridge/**
-/etc/sysusers.d/clipboardbridge.conf
-/etc/systemd/system/clipboardbridge.service.d/**
-/etc/systemd/system/clipboardbridge-update.timer
-/etc/systemd/user/clipboardbridge-agent.service
-/etc/systemd/user/graphical-session.target.wants/clipboardbridge-agent.service
-/etc/xdg/autostart/clipboardbridge-desktop.desktop
-/etc/xdg/autostart/clipboardbridge-tray.desktop
-/etc/profile.d/clipboardbridge-path.sh
-/etc/profile.d/clipboardbridge-console.sh
-/etc/modules-load.d/clipboardbridge-uinput.conf
-/etc/polkit-1/rules.d/60-clipboardbridge.rules
-/etc/firewalld/services/clipboardbridge.xml
+/etc/cbb/**
+/etc/sysusers.d/cbb.conf
+/etc/systemd/system/cbb.service.d/**
+/etc/systemd/system/cbb-update.timer
+/etc/systemd/user/cbb-agent.service
+/etc/systemd/user/graphical-session.target.wants/cbb-agent.service
+/etc/xdg/autostart/cbb-desktop.desktop
+/etc/xdg/autostart/cbb-tray.desktop
+/etc/profile.d/cbb-path.sh
+/etc/profile.d/cbb-console.sh
+/etc/modules-load.d/cbb-uinput.conf
+/etc/polkit-1/rules.d/60-cbb.rules
+/etc/firewalld/services/cbb.xml
 /etc/tmux.conf
 EOF
-	chmod 0644 /etc/atomic-update.conf.d/clipboardbridge.conf.new
-	mv /etc/atomic-update.conf.d/clipboardbridge.conf.new /etc/atomic-update.conf.d/clipboardbridge.conf
+	chmod 0644 /etc/atomic-update.conf.d/cbb.conf.new
+	mv /etc/atomic-update.conf.d/cbb.conf.new /etc/atomic-update.conf.d/cbb.conf
 fi
 
 # The settings: the ones given, else the ones kept from before, else the
 # defaults (port 8764, 100.64.0.0/10 outside the home network).
-env=/etc/clipboardbridge/clipboardbridge.env
-install -d -m 0755 /etc/clipboardbridge
+env=/etc/cbb/cbb.env
+install -d -m 0755 /etc/cbb
 if [ -z "$port" ]; then
 	port=$(sed -n 's/^CBB_PORT=//p' "$env" 2>/dev/null | tail -n 1)
 fi
@@ -385,7 +330,7 @@ if [ "$port" = 8764 ] && [ "$cgnat" = 0 ] && [ -z "$interfaces" ]; then
 	rm -f "$env"
 else
 	{
-		echo "# Written by clipboardbridge's install.sh; change it with install.sh --port N and --home-cgnat on|off. A CBB_INTERFACES line is kept."
+		echo "# Written by cbb's install.sh; change it with install.sh --port N and --home-cgnat on|off. A CBB_INTERFACES line is kept."
 		if [ "$port" != 8764 ]; then
 			echo "CBB_PORT=$port"
 		fi
@@ -400,11 +345,11 @@ else
 fi
 # The unit allows the home network's addresses only; a home network on
 # 100.64.0.0/10 is added by a drop-in of its own, beside cbb global's.
-cgnatconf=/etc/systemd/system/clipboardbridge.service.d/cgnat.conf
+cgnatconf=/etc/systemd/system/cbb.service.d/cgnat.conf
 if [ "$cgnat" = 1 ]; then
 	install -d -m 0755 "${cgnatconf%/*}"
 	{
-		echo "# Written by clipboardbridge's install.sh --home-cgnat on: 100.64.0.0/10 is the home network here."
+		echo "# Written by cbb's install.sh --home-cgnat on: 100.64.0.0/10 is the home network here."
 		echo "[Service]"
 		echo "IPAddressAllow=100.64.0.0/10"
 	} >"$cgnatconf"
@@ -419,11 +364,11 @@ fi
 # sandbox hides the devices, so a drop-in lets the service open the kernel's
 # resource manager, which the group tss may use. CBB_TPM=off in the
 # environment file keeps new keys in the file.
-tpmconf=/etc/systemd/system/clipboardbridge.service.d/tpm.conf
+tpmconf=/etc/systemd/system/cbb.service.d/tpm.conf
 if [ "$kind" = full ] && [ -c /dev/tpmrm0 ] && getent group tss >/dev/null 2>&1; then
 	install -d -m 0755 "${tpmconf%/*}"
 	{
-		echo "# Written by clipboardbridge's install.sh: the member and admin keys live in the TPM."
+		echo "# Written by cbb's install.sh: the member and admin keys live in the TPM."
 		echo "[Service]"
 		echo "PrivateDevices=no"
 		echo "DevicePolicy=closed"
@@ -437,7 +382,7 @@ else
 	rmdir "${tpmconf%/*}" 2>/dev/null || true
 fi
 
-# A firewall drops what it does not allow, and clipboardbridge needs mDNS and its
+# A firewall drops what it does not allow, and cbb needs mDNS and its
 # port from the other devices at home: firewall.sh adds them with the user's
 # consent, after taking away what it opened before, so a changed port leaves
 # nothing open behind it.
@@ -453,24 +398,24 @@ yes) firewall=ask ;; # what get.sh passed before --express
 esac
 sh "$share/firewall.sh" setup "$firewall" "$port"
 if [ "$port" != 8764 ]; then
-	echo "Clipboard Bridge uses TCP port $port instead of 8764. If a firewall on the network"
+	echo "CBB uses TCP port $port instead of 8764. If a firewall on the network"
 	echo "limits incoming connections, allow TCP $port from the home network. The iPhone shortcut"
-	echo "works only with 8764; the Clipboard Bridge app takes any port."
+	echo "works only with 8764; the CBB app takes any port."
 fi
 
 systemctl daemon-reload
-systemctl enable clipboardbridge.service
+systemctl enable cbb.service
 # A binary that kept failing (an update that cbb update takes back) may have
 # hit systemd's start limit, which a restart does not lift.
-systemctl reset-failed clipboardbridge.service >/dev/null 2>&1 || true
-systemctl restart clipboardbridge.service # also takes a new binary on a reinstall
-if [ -f /etc/systemd/system/clipboardbridge-console.service ]; then
-	systemctl enable clipboardbridge-console.service
-	systemctl restart clipboardbridge-console.service
+systemctl reset-failed cbb.service >/dev/null 2>&1 || true
+systemctl restart cbb.service # also takes a new binary on a reinstall
+if [ -f /etc/systemd/system/cbb-console.service ]; then
+	systemctl enable cbb-console.service
+	systemctl restart cbb-console.service
 fi
-if [ -f /etc/systemd/system/clipboardbridge-uinput.service ]; then
-	systemctl enable clipboardbridge-uinput.service
-	systemctl restart clipboardbridge-uinput.service || echo "install.sh: the uinput helper did not start; see journalctl -u clipboardbridge-uinput" >&2
+if [ -f /etc/systemd/system/cbb-uinput.service ]; then
+	systemctl enable cbb-uinput.service
+	systemctl restart cbb-uinput.service || echo "install.sh: the uinput helper did not start; see journalctl -u cbb-uinput" >&2
 fi
 # answers waits up to 10 s until the service answers on its socket: in no
 # group cbb status says so, which is an answer too. A command right after
@@ -501,15 +446,14 @@ if [ "$kind" = full ]; then
 		user=$(stat -c %U "$dir") || continue
 		if systemctl --user -M "$user@" is-active -q graphical-session.target 2>/dev/null; then
 			systemctl --user -M "$user@" daemon-reload >/dev/null 2>&1 || true
-			systemctl --user -M "$user@" restart clipboardbridge-agent.service >/dev/null 2>&1 ||
+			systemctl --user -M "$user@" restart cbb-agent.service >/dev/null 2>&1 ||
 				echo "install.sh: the desktop agent of $user did not start again; it starts at their next login" >&2
 		fi
 	done
 fi
-# A limit that cbb global wrote, perhaps by an earlier version (which let
-# the service reach every address), is brought in line with what the
-# service asks for now, once it answers.
-if [ "$kind" = full ] && [ -f /etc/systemd/system/clipboardbridge.service.d/away.conf ]; then
+# A limit that cbb global wrote is brought in line with what the service
+# asks for now, once it answers.
+if [ "$kind" = full ] && [ -f /etc/systemd/system/cbb.service.d/away.conf ]; then
 	if ! "$cbb" global allow; then
 		echo "install.sh: cbb global allow failed; run sudo cbb global allow once the service runs." >&2
 	fi
@@ -518,14 +462,14 @@ fi
 # shellcheck source=packaging/update.sh
 . "$here/../update.sh"
 update_setup "$cbb" "$bin" "$auto"
-echo "Clipboard Bridge is running on TCP port $port. To remove it: sudo sh $share/uninstall.sh"
-# sudo looks for commands in its own PATH, without /opt/clipboardbridge/bin.
+echo "CBB is running on TCP port $port. To remove it: sudo sh $share/uninstall.sh"
+# sudo looks for commands in its own PATH, without /opt/cbb/bin.
 run=cbb
 if [ "$steamos" = yes ]; then
 	run=$cbb
 fi
 if [ "$kind" = lite ]; then
-	echo "Next: see lite/README.md; in short, sudo -u clipboardbridge $run pair here, and scan its QR code with the phone app."
+	echo "Next: see lite/README.md; in short, sudo -u cbb $run pair here, and scan its QR code with the phone app."
 else
-	echo "Next: run sudo $run pair and scan its QR code with the Clipboard Bridge app on your phone; without the app, see docs/guide/without-app.md."
+	echo "Next: run sudo $run pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."
 fi

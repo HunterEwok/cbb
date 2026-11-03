@@ -9,7 +9,7 @@ It is copied because Go does not allow importing another module's internal packa
 uses only the standard library.
 
 The code is under the BSD-style license in [LICENSE](LICENSE), not under the AGPL; each file
-keeps its original copyright notice. clipboardbridge release archives carry this notice.
+keeps its original copyright notice. cbb release archives carry this notice.
 
 To update it, copy the files of a newer version over these, record the version and checksum
 here, and run the tests.

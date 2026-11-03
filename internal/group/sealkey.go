@@ -10,10 +10,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/keyseal"
-	"github.com/HunterEwok/clipboardbridge/internal/seal"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/keyseal"
+	"github.com/HunterEwok/cbb/internal/seal"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
 // SealKeyFileName is the file next to the identity that keeps the device's

@@ -13,7 +13,7 @@ such as a reset, after `Close`, and panic on the closed channel. A separate `clo
 now ends `Read` and `WriteNotify` instead.
 
 The code is under the MIT license in [LICENSE](LICENSE), not under the AGPL; the file keeps
-its original copyright notice. clipboardbridge release archives carry this notice.
+its original copyright notice. cbb release archives carry this notice.
 
 To update it, copy `tun/netstack/tun.go` of a newer version over this one, apply the change
 again unless upstream fixed it, record the version and checksum here, and run the tests.

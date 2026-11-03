@@ -11,11 +11,11 @@ import (
 
 // DefaultSocket is where the service listens on Windows: in a directory of
 // its own under ProgramData, whose access list lets only the service,
-// administrators and the clipboardbridge group reach the socket.
-var DefaultSocket = filepath.Join(ProgramData(), "clipboardbridge", "run", "control.sock")
+// administrators and the cbb group reach the socket.
+var DefaultSocket = filepath.Join(ProgramData(), "cbb", "run", "control.sock")
 
 // Group is the local group whose members may use the control socket.
-const Group = "clipboardbridge"
+const Group = "cbb"
 
 // ProgramData returns the folder for data of all users, usually
 // C:\ProgramData. It is asked from the system rather than taken from the
@@ -31,7 +31,7 @@ func ProgramData() string {
 const permissionHint = "add your user to the " + Group + " group (install.ps1 adds the user who runs it) and sign in again"
 
 // startHint tells a user whose service is not running how to start it.
-const startHint = "start it with: Start-Service clipboardbridge, in a terminal opened as administrator"
+const startHint = "start it with: Start-Service cbb, in a terminal opened as administrator"
 
 // adminSocketName is the admin socket's place next to the control socket:
 // in a directory of its own, whose access list lets only the service and

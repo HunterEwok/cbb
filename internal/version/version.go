@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Package version reports which build of clipboardbridge is running.
+// Package version reports which build of cbb is running.
 package version
 
 import (
@@ -9,12 +9,12 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/benchtime"
+	"github.com/HunterEwok/cbb/internal/benchtime"
 )
 
 // Version is the release version. Release builds set it with
 //
-//	-ldflags "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v1.2.3"
+//	-ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v1.2.3"
 //
 // Other builds keep "dev", and String uses the module version that the Go
 // toolchain records instead: the tag of an installed release, or a
@@ -22,7 +22,7 @@ import (
 var Version = "dev"
 
 // String describes the build in one line, for example
-// "clipboardbridge v1.2.3 linux/arm/v6".
+// "cbb v1.2.3 linux/arm/v6".
 func String() string {
 	var mainVersion, goarm string
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -51,5 +51,5 @@ func describe(version, mainVersion, goos, goarch, goarm string) string {
 		level, _, _ := strings.Cut(goarm, ",")
 		platform += "/v" + level
 	}
-	return "clipboardbridge " + version + " " + platform
+	return "cbb " + version + " " + platform
 }

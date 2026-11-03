@@ -15,9 +15,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/keyseal"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/keyseal"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
 // StateFile holds a member's tunnel state, next to its identity.
@@ -229,7 +229,6 @@ type stateFile struct {
 	KeySE      json.RawMessage  `json:"key_se,omitempty"`
 	PSK        *Key             `json:"psk,omitempty"`
 	Group      string           `json:"group,omitempty"`
-	ToHub      *hubFile         `json:"to_hub,omitempty"` // read from a state before several hubs
 	Hubs       []hubFile        `json:"hubs,omitempty"`
 	IsHub      bool             `json:"is_hub,omitempty"`
 	Endpoints  []netip.AddrPort `json:"endpoints,omitempty"`
@@ -292,7 +291,7 @@ func NewState() (*State, error) {
 }
 
 // LoadState reads the state in dir. Without a state file it makes one with
-// a new key; a state from before several hubs gets its own preshared key.
+// a new key.
 func LoadState(dir string) (*State, error) {
 	data, err := os.ReadFile(filepath.Join(dir, StateFile))
 	if errors.Is(err, os.ErrNotExist) {
@@ -334,9 +333,6 @@ func LoadState(dir string) (*State, error) {
 			*k.key = *k.file
 		}
 	}
-	if f.ToHub != nil {
-		f.Hubs = append([]hubFile{*f.ToHub}, f.Hubs...)
-	}
 	for _, h := range f.Hubs {
 		s.Hubs = append(s.Hubs, HubLink(h))
 	}
@@ -352,16 +348,10 @@ func LoadState(dir string) (*State, error) {
 	if err := s.check(); err != nil {
 		return nil, fmt.Errorf("%s: %w", StateFile, err)
 	}
-	if f.PSK != nil {
-		s.PSK = *f.PSK
-	} else {
-		if s.PSK, err = NewPresharedKey(); err != nil {
-			return nil, err
-		}
-		if err := s.Save(dir); err != nil {
-			return nil, err
-		}
+	if f.PSK == nil {
+		return nil, fmt.Errorf("%s: no preshared key", StateFile)
 	}
+	s.PSK = *f.PSK
 	if s.sealed.blob == nil && KeySealer != nil {
 		// Seal a key from the file, when the device has the hardware.
 		if err := s.seal(); err != nil {

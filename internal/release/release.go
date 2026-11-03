@@ -28,8 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/core"
-	"github.com/HunterEwok/clipboardbridge/internal/strict"
+	"github.com/HunterEwok/cbb/internal/core"
+	"github.com/HunterEwok/cbb/internal/strict"
 )
 
 // The body types.

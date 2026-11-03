@@ -12,14 +12,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/roku"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/tvremote"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv"
+	"github.com/HunterEwok/cbb/internal/tvremote/appletv"
+	"github.com/HunterEwok/cbb/internal/tvremote/roku"
 )
 
 // The TVs' own remotes (docs/roadmap.md, item 25, way 2; internal/tvremote):
@@ -160,7 +160,7 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 		return nil
 	case tvremote.AppleTV:
 		s.endTVPairing()
-		p, err := appletv.Pair(ctx, host, "Clipboard Bridge "+s.cfg.Name)
+		p, err := appletv.Pair(ctx, host, "CBB "+s.cfg.Name)
 		if err != nil {
 			return tvError(tvremote.TV{Name: host, Kind: kind}, "pairing with", err)
 		}
@@ -174,7 +174,7 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 		return fmt.Errorf("the TV's kind is %s, %s or %s, not %q", tvremote.AndroidTV, tvremote.AppleTV, tvremote.Roku, kind)
 	}
 	if st.Client == nil {
-		c, err := androidtv.NewClient("Clipboard Bridge " + s.cfg.Name)
+		c, err := androidtv.NewClient("CBB " + s.cfg.Name)
 		if err != nil {
 			return err
 		}
@@ -184,7 +184,7 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 		}
 	}
 	s.endTVPairing()
-	p, err := androidtv.Pair(ctx, host, *st.Client, "Clipboard Bridge "+s.cfg.Name)
+	p, err := androidtv.Pair(ctx, host, *st.Client, "CBB "+s.cfg.Name)
 	if err != nil {
 		return tvError(tvremote.TV{Name: host, Kind: kind}, "pairing with", err)
 	}

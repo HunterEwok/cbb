@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // chainKey names a signer's chain in one test: each test starts its

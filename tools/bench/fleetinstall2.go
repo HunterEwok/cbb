@@ -13,17 +13,17 @@ import (
 )
 
 // hardeningMax is the highest overall exposure systemd-analyze security may
-// give clipboardbridge.service (I20): the score recorded when the unit was
+// give cbb.service (I20): the score recorded when the unit was
 // last made stricter. A change to the unit that raises it fails the case.
 const hardeningMax = 2.6
 
-var exposure = regexp.MustCompile(`Overall exposure level for clipboardbridge\.service: ([0-9.]+)`)
+var exposure = regexp.MustCompile(`Overall exposure level for cbb\.service: ([0-9.]+)`)
 
 // settingsOf is what an install again must keep on d (I5): the group, the
 // mode, the limits, the quick actions, remote paste and the keys.
 func settingsOf(ctx context.Context, d *Device) (string, error) {
 	var b strings.Builder
-	for _, c := range []string{"cbb mode", "cbb config", "cbb action", "cbb paste-receive", "sha256sum /var/lib/clipboardbridge/identity.json"} {
+	for _, c := range []string{"cbb mode", "cbb config", "cbb action", "cbb paste-receive", "sha256sum /var/lib/cbb/identity.json"} {
 		out, err := Run(ctx, d, c, "")
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", c, err)
@@ -75,7 +75,7 @@ func installedCases(ctx context.Context, r *Report, d *Device, archive string) {
 	})
 	const p = "fleet/I20-hardening/"
 	r.Do(p+"score", func() error {
-		out, err := Run(ctx, d, "systemd-analyze security --no-pager clipboardbridge.service", "")
+		out, err := Run(ctx, d, "systemd-analyze security --no-pager cbb.service", "")
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func installedCases(ctx context.Context, r *Report, d *Device, archive string) {
 	r.Do(p+"tpm-only", func() error {
 		// Without a TPM the sandbox gives the service no devices.
 		show := func() (string, error) {
-			return Run(ctx, d, "systemctl show -p PrivateDevices -p DevicePolicy -p DeviceAllow clipboardbridge", "")
+			return Run(ctx, d, "systemctl show -p PrivateDevices -p DevicePolicy -p DeviceAllow cbb", "")
 		}
 		out, err := show()
 		if err != nil {
@@ -135,7 +135,7 @@ func installedCases(ctx context.Context, r *Report, d *Device, archive string) {
 // ufwRules (S12): on a computer whose ufw is on, install.sh --express adds
 // exactly the rules docs/guide/install.md lists: TCP to the member port
 // and UDP 5353 from the home networks only, each with the comment
-// clipboardbridge; uninstall.sh takes away those and no other.
+// cbb; uninstall.sh takes away those and no other.
 func ufwRules(ctx context.Context, r *Report, f *Fleet, archive string) {
 	const p = "fleet/S12-firewall/"
 	var d *Device
@@ -213,8 +213,8 @@ func ufwRules(ctx context.Context, r *Report, f *Fleet, archive string) {
 		}
 		want := map[string]bool{}
 		for _, n := range nets {
-			want["8764/tcp from "+n+" # clipboardbridge"] = true
-			want["5353/udp from "+n+" # clipboardbridge mDNS"] = true
+			want["8764/tcp from "+n+" # cbb"] = true
+			want["5353/udp from "+n+" # cbb mDNS"] = true
 		}
 		in := map[string]bool{}
 		for _, l := range before {
@@ -223,7 +223,7 @@ func ufwRules(ctx context.Context, r *Report, f *Fleet, archive string) {
 		got := map[string]bool{}
 		for _, l := range after {
 			delete(in, l)
-			if strings.Contains(l, "# clipboardbridge") {
+			if strings.Contains(l, "# cbb") {
 				rule, ok := ufwRule(l)
 				if !ok || !want[rule] {
 					return fmt.Errorf("install.sh added a rule it does not list: %q (home networks here: %q)", l, nets)
@@ -242,7 +242,7 @@ func ufwRules(ctx context.Context, r *Report, f *Fleet, archive string) {
 		return nil
 	})
 	r.Do(p+"uninstall", func() error {
-		if _, err := RunFor(ctx, d, "sh /usr/local/share/clipboardbridge/uninstall.sh --purge", "", 2*time.Minute); err != nil {
+		if _, err := RunFor(ctx, d, "sh /usr/local/share/cbb/uninstall.sh --purge", "", 2*time.Minute); err != nil {
 			return err
 		}
 		after, err := numbered()
@@ -270,7 +270,7 @@ func ufwRules(ctx context.Context, r *Report, f *Fleet, archive string) {
 		}
 		n := 0
 		for _, l := range after {
-			if strings.Contains(l, "# clipboardbridge") {
+			if strings.Contains(l, "# cbb") {
 				if strings.Contains(l, "(v6)") || strings.Contains(l, "::") {
 					return fmt.Errorf("with IPV6=\"no\" install.sh added %q", l)
 				}
@@ -280,7 +280,7 @@ func ufwRules(ctx context.Context, r *Report, f *Fleet, archive string) {
 		if n == 0 {
 			return fmt.Errorf("with IPV6=\"no\" install.sh added no rule: %q", after)
 		}
-		_, err = RunFor(ctx, d, "sh /usr/local/share/clipboardbridge/uninstall.sh --purge", "", 2*time.Minute)
+		_, err = RunFor(ctx, d, "sh /usr/local/share/cbb/uninstall.sh --purge", "", 2*time.Minute)
 		return err
 	})
 }
@@ -338,7 +338,7 @@ func inviteGrant(ctx context.Context, r *Report, f *Fleet, archive string) {
 		return
 	}
 	dropIn := func() string {
-		out, _ := Run(ctx, d, "cat /etc/systemd/system/clipboardbridge.service.d/away.conf 2>/dev/null; true", "")
+		out, _ := Run(ctx, d, "cat /etc/systemd/system/cbb.service.d/away.conf 2>/dev/null; true", "")
 		return out
 	}
 	r.Do(p+"allowed-while-joining", func() error {

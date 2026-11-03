@@ -27,8 +27,8 @@ use crate::third_party::cpace;
 use crate::wire;
 
 /// The TLS exporter label that binds the exchange to the connection.
-pub const EXPORTER_LABEL: &[u8] = b"EXPERIMENTAL-clipboardbridge-pair-v2";
-const CHANNEL_PREFIX: &[u8] = b"clipboardbridge pair v2\x00";
+pub const EXPORTER_LABEL: &[u8] = b"EXPERIMENTAL-cbb-pair-v2";
+const CHANNEL_PREFIX: &[u8] = b"cbb pair v2\x00";
 /// The largest frame of the exchange.
 pub const MAX_FRAME: usize = 64 << 10;
 /// How many wrong codes a listening join takes.
@@ -393,7 +393,7 @@ pub fn channel_id(member_cert: &[u8], joiner_cert: &[u8]) -> Vec<u8> {
 
 /// The text of the join QR code, as Go's phone.JoinQR writes it.
 pub fn join_qr(code: &str, addrs: &[String], fingerprint: &str) -> String {
-    let mut text = format!("clipboardbridge://join?code={}", query_escape(code));
+    let mut text = format!("cbb://join?code={}", query_escape(code));
     for a in addrs {
         text.push_str(&format!("&addr={}", query_escape(a)));
     }
@@ -461,7 +461,7 @@ mod tests {
         );
         assert_eq!(
             text,
-            "clipboardbridge://join?code=246802&addr=192.168.1.20%3A8767&addr=%5Bfd00%3A%3A5%5D%3A8767&fp=qFnj7Uv%2BCE%2FWNnna2IEmMaLbkA6tHcKf0VijTRzekKA%3D"
+            "cbb://join?code=246802&addr=192.168.1.20%3A8767&addr=%5Bfd00%3A%3A5%5D%3A8767&fp=qFnj7Uv%2BCE%2FWNnna2IEmMaLbkA6tHcKf0VijTRzekKA%3D"
         );
     }
 

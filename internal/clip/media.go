@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/clipboardbridge/internal/jsonnum"
+	"github.com/HunterEwok/cbb/internal/jsonnum"
 )
 
 // Images and files (design.md, "Images and files"; docs/protocol.md,

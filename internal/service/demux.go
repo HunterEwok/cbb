@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-// The member port is clipboardbridge's only port. Its connections are told
+// The member port is cbb's only port. Its connections are told
 // apart by their first bytes: plain HTTP for the profile while an iPhone
 // pairing window is open, else TLS, where the ALPN protocol the client
 // offers picks pairing, the member protocol, or HTTPS for the iPhone

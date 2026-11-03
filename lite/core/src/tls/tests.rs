@@ -79,8 +79,8 @@ fn handshake_data_and_close() {
 
     // Both ends derive the same sid.
     let (mut a, mut b) = ([0u8; 32], [0u8; 32]);
-    cx.export(b"EXPERIMENTAL-clipboardbridge-pair-v2", &[], &mut a).unwrap();
-    sx.export(b"EXPERIMENTAL-clipboardbridge-pair-v2", &[], &mut b).unwrap();
+    cx.export(b"EXPERIMENTAL-cbb-pair-v2", &[], &mut a).unwrap();
+    sx.export(b"EXPERIMENTAL-cbb-pair-v2", &[], &mut b).unwrap();
     assert_eq!(a, b);
     assert_ne!(a, [0u8; 32]);
 
@@ -127,8 +127,7 @@ fn exporter_matches_rustls() {
         client.read_tls(&mut &buf[..]).unwrap();
         client.process_new_packets().unwrap();
     }
-    for (label, context, len) in
-        [(&b"EXPERIMENTAL-clipboardbridge-pair-v2"[..], &b""[..], 32), (b"another", b"with a context", 77)]
+    for (label, context, len) in [(&b"EXPERIMENTAL-cbb-pair-v2"[..], &b""[..], 32), (b"another", b"with a context", 77)]
     {
         let want = client.export_keying_material(vec![0u8; len], label, Some(context)).unwrap();
         assert_eq!(want, server.export_keying_material(vec![0u8; len], label, Some(context)).unwrap());

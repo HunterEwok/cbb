@@ -15,14 +15,14 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // listenControl listens on the control socket. Windows checks a client's
 // right to write the socket file when it connects, and the file takes its
 // access list from its directory, so the directory gets a protected list
 // first: full access for the system, administrators and the service's own
-// account, read and write for the clipboardbridge group. Nobody else can
+// account, read and write for the cbb group. Nobody else can
 // connect, and the list is in place before the socket exists. The admin
 // socket's directory lets in only the system, administrators and the
 // service's account.
@@ -191,7 +191,7 @@ func trustedSID(sd *windows.SECURITY_DESCRIPTOR) (bool, error) {
 // controlSDDL describes the access list of the socket's directory, which
 // its files inherit. A user's sign-in token lists only the groups the user
 // was in at sign-in, so the list also names each member of the
-// clipboardbridge group as the service finds it at start: a user that
+// cbb group as the service finds it at start: a user that
 // install.ps1 just added may connect before signing in again. Without the
 // group, as when the service runs by hand on a machine where nothing was
 // installed, only administrators and the service's account may connect.

@@ -159,7 +159,7 @@ func winPaste(ctx context.Context, r *Report, g *benchGroup, d *Device, timeout 
 	}
 	r.Do("desktop/T11-secret-not-logged/"+d.Name, func() error {
 		secret := cases[len(cases)-1].text
-		out, err := Run(ctx, d, `Get-Content -Raw -ErrorAction SilentlyContinue "$env:ProgramData\clipboardbridge\logs\service.log"; Get-Content -Raw -ErrorAction SilentlyContinue "$env:LOCALAPPDATA\clipboardbridge\agent.log"`, "")
+		out, err := Run(ctx, d, `Get-Content -Raw -ErrorAction SilentlyContinue "$env:ProgramData\cbb\logs\service.log"; Get-Content -Raw -ErrorAction SilentlyContinue "$env:LOCALAPPDATA\cbb\agent.log"`, "")
 		if err != nil {
 			return err
 		}
@@ -173,7 +173,7 @@ func winPaste(ctx context.Context, r *Report, g *benchGroup, d *Device, timeout 
 		if err != nil {
 			return err
 		}
-		raw, err := Run(ctx, d, `[IO.File]::ReadAllText("$env:ProgramData\clipboardbridge\state\pastes.json")`, "")
+		raw, err := Run(ctx, d, `[IO.File]::ReadAllText("$env:ProgramData\cbb\state\pastes.json")`, "")
 		if err != nil {
 			return err
 		}

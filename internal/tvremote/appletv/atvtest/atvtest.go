@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv/wire"
+	"github.com/HunterEwok/cbb/internal/tvremote/appletv/wire"
 )
 
 // id is the fake TV's pairing identifier.

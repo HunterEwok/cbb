@@ -30,7 +30,7 @@ Every device starts a run in no group; the bench never touches a group it did no
    the old container with its volume and starts one of the image built from CBB, the
    `linux` binary under test for the host's CPU, with `compose.home.yaml`.
 2. On the Linux member with a desktop, sign out and in again (or reboot), so the desktop
-   agent starts with the `clipboardbridge` group.
+   agent starts with the `cbb` group.
 3. `cbb version` shows the build under test; `cbb status` says "Not in a group" (the lite
    member: "in no group").
 
@@ -44,7 +44,7 @@ What `smoke` and `full` do first.
    run (mDNS does not cross subnets) and restarts its service.
 3. On the hub: `cbb new`.
 4. For each other device: on the hub `cbb pair` (shows a six-digit code and waits); on the
-   device `cbb pair -code [HUB:PORT]` (the lite member: `sudo -u clipboardbridge cbb pair -code
+   device `cbb pair -code [HUB:PORT]` (the lite member: `sudo -u cbb cbb pair -code
    HUB:PORT`), the code on standard input. The hub's `cbb pair` ends when the device joins.
 5. On every device, right after it made or joined the group: `cbb mode shared` (the lite
    member: `sudo cbb mode shared`), since a new device keeps its own clipboard (design.md,
@@ -67,7 +67,7 @@ What `smoke` and `full` do first.
 | Mac | `pbcopy` as the signed-in user | `pbpaste` |
 | Windows | the scheduled task `cbbbench-copy` (from `setup-windows.ps1`) puts a file on the clipboard inside the signed-in session | `cbbbench-paste` writes the clipboard to a file |
 | Lite member, away computer | `cbb copy` | `cbb paste` (or `cbb watch -0`) |
-| Container (`nas`) | `docker exec -i clipboardbridge cbb copy` on its host | `docker exec -i clipboardbridge cbb paste` |
+| Container (`nas`) | `docker exec -i cbb cbb copy` on its host | `docker exec -i cbb cbb paste` |
 | Android emulator | the app's UI through UI Automator over `adb` | the app's UI |
 
 Every text carries the run ID, the case ID and the sender, so a stale clipboard never passes.
@@ -85,9 +85,9 @@ Windows). It is checked again every second until the time runs out.
 For each error a case expects: the user message is short and says what to do; with
 `CBB_DEBUG=1` (the service's environment, or `CBB_DEBUG=1 cbb …`) the real error (type, code,
 underlying message) is shown under it; the log has the details in both modes (Linux and lite:
-`journalctl -u clipboardbridge`, the agent `journalctl --user`; macOS
-`/Library/Logs/clipboardbridge/service.log`; Windows `ProgramData\clipboardbridge\logs\service.log`
-and the agent's `LocalAppData\clipboardbridge\agent.log`).
+`journalctl -u cbb`, the agent `journalctl --user`; macOS
+`/Library/Logs/cbb/service.log`; Windows `ProgramData\cbb\logs\service.log`
+and the agent's `LocalAppData\cbb\agent.log`).
 
 ### R7. Capture traffic
 
@@ -223,9 +223,9 @@ refused by every member. Fail: any member follows the old root.
 1. On the root revoke a Linux member, the Windows member and the Mac in turn.
 Pass: the group stays, the others keep syncing, nobody pairs again.
 
-**L8. The holder of `clipboardbridge.local`.** Runs: manual.
+**L8. The holder of `cbb.local`.** Runs: manual.
 1. On the hub `cbb status` shows it holds the name; resolve it on another member
-   (`avahi-resolve -n clipboardbridge.local`, `Resolve-DnsName` on Windows).
+   (`avahi-resolve -n cbb.local`, `Resolve-DnsName` on Windows).
 2. Stop the hub's service.
 3. Within 30 s resolve again.
 Pass: another member with the iPhone key holds it and `cbb status` there says so. Fail: no one
@@ -286,7 +286,7 @@ or two connections.
 
 **P5. The lite member's options.** Runs: manual (`-peer` is auto in R2).
 1. `cbb service -peer HUB:8764`: it connects without mDNS.
-2. `-no-mdns`: it no longer announces itself (`avahi-browse -r _clipboardbridge._tcp` shows
+2. `-no-mdns`: it no longer announces itself (`avahi-browse -r _cbb._tcp` shows
    nothing for it) and still dials its peers.
 3. `-no-listen`: the member port is closed (`ss -ltn`), it dials and syncs.
 4. `cbb watch` prints each received text; `cbb watch -0` ends each with a zero byte.
@@ -300,7 +300,7 @@ Pass: members find each other on 8800; after step 3 the 8800 rule is gone and 87
 
 **P7. Homebrew on the Mac.** Runs: manual (blocked until the Mac's command line tools support
 the current macOS).
-1. `brew install hunterewok/tap/clipboardbridge`; `install.sh --in-place`.
+1. `brew install hunterewok/tap/cbb`; `install.sh --in-place`.
 2. Check the agent runs Homebrew's binary and the service a root-owned copy.
 3. `uninstall.sh`, then `brew uninstall`.
 Pass: sync works; nothing is left.
@@ -422,7 +422,7 @@ Pass: the report records whether the agent's reading asks the user; text keeps s
 3. Right after sign-in, before any X11 app started XWayland, repeat 1 and 2.
 Pass: each within the usual latency.
 
-**P25. The Mac holds `clipboardbridge.local`.** Runs: manual.
+**P25. The Mac holds `cbb.local`.** Runs: manual.
 1. Turn the other full members off, or `cbb holder never` on them.
 2. `cbb status` on the Mac; resolve the name on the Linux and Windows members.
 Pass: the Mac says it holds the name; both resolve it to the Mac.
@@ -465,7 +465,7 @@ text.
 2. Rename a device, freeze and unfreeze an admin computer, make a computer an admin, remove a
    device, turn sync away from home on and off: each after the password.
 3. Cancel the password prompt once.
-4. Stop the service (`sudo launchctl bootout system/io.github.hunterewok.clipboardbridge`) and
+4. Stop the service (`sudo launchctl bootout system/tools.cbb`) and
    look at the window with error details on and off; start it again.
 Pass: each action does what the same `cbb` command does; the cancelled prompt changes nothing
 and says nothing; the stopped service is explained, with the error underneath when details
@@ -476,7 +476,7 @@ Windows).
 1. Start `cbb-desktop`; find the tray item; open the window from it and by starting the app
    again.
 2. Do steps 1 to 4 of P31, with pkexec on Linux and UAC on Windows (stop the service with
-   `sudo systemctl stop clipboardbridge`, or `Stop-Service clipboardbridge`).
+   `sudo systemctl stop cbb`, or `Stop-Service cbb`).
 3. Set the system's language to Russian and start the app again.
 Pass: as P31; the tray item shows on each desktop (GNOME needs the AppIndicator extension);
 the texts are Russian.
@@ -493,7 +493,7 @@ logs once that there is no watch.
 1. On desktop `cbb mode own`; copy on desktop's desktop, then on win's.
 2. On desktop `cbb paste`; then `cbb mode receive` and copy on desktop and on win; then `cbb mode
    send` and do the same.
-3. Restart desktop's service (`sudo systemctl restart clipboardbridge`); `cbb mode` and `cbb
+3. Restart desktop's service (`sudo systemctl restart cbb`); `cbb mode` and `cbb
    status` on desktop, `cbb devices` on win.
 4. `cbb mode shared` on desktop.
 Pass: in own neither copy crosses, and `cbb paste` on desktop prints win's text; in receive only
@@ -594,8 +594,8 @@ written in mode `own`, or a copy over the hub's limit through its tunnel.
 
 **F1. Kill the service.** Runs: auto (`full`).
 1. On each member kill the service hard: Linux and lite `sudo systemctl kill -s KILL
-   Clipboard Bridge`; Windows `Stop-Process -Force` on the service's process; Mac `sudo launchctl
-   kill KILL system/io.github.hunterewok.clipboardbridge` (the bench's sudoers rule).
+   Copy Beyond Borders`; Windows `Stop-Process -Force` on the service's process; Mac `sudo launchctl
+   kill KILL system/tools.cbb` (the bench's sudoers rule).
 2. Within 30 s `cbb status` shows the same group.
 3. Copy a marker on another member; wait for it (twice the usual time).
 Pass: the service manager restarted it and it gets the marker.
@@ -717,18 +717,18 @@ Pass: no packet to any address but the hub and forwarder; nothing in clear.
 **S10. Secrets never reach a disk.** Runs: auto (`full`; Windows not yet).
 1. `copy -secret` a marker on each kind of member.
 2. On each, search the state directories and `/tmp` for it (`grep -r MARKER`); check swap is off
-   for the service on Linux (`systemctl show clipboardbridge -p MemorySwapMax` is 0).
+   for the service on Linux (`systemctl show cbb -p MemorySwapMax` is 0).
 3. After 65 s read every clipboard.
 Pass: no hit; swap off; gone.
 
 **S11. Local access.** Runs: auto (`full`, Linux, the lite member and the Mac); Windows manual.
-1. As a user outside the `clipboardbridge` group run `cbb status` and `cbb paste`, on Linux,
+1. As a user outside the `cbb` group run `cbb status` and `cbb paste`, on Linux,
    macOS and Windows.
 Pass: refused with a message that names the group; the admin socket refuses non-admins too.
 
 **S12. Installers' firewall.** Runs: manual (passed on the bench).
 1. After each install list the rules: `ufw status verbose`, `Get-NetFirewallRule -DisplayName
-   Clipboard Bridge*`, the macOS application firewall.
+   Copy Beyond Borders*`, the macOS application firewall.
 Pass: only the member port and mDNS from the local subnet; the tunnel port only on the hub.
 
 **S13. Two groups on one network.** Runs: manual.

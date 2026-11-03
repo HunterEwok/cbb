@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/openwrt"
-	"github.com/HunterEwok/clipboardbridge/internal/steamos"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/openwrt"
+	"github.com/HunterEwok/cbb/internal/steamos"
 )
 
 // A hub reached at its own address takes its clients on a UDP port from the
@@ -23,8 +23,8 @@ import (
 // internet, so it is asked for on its own. The port stays open while this
 // device is a hub reached at its own address, and cbb closes it when that
 // ends (another port, a forwarder, cbb global off). The rule cbb opened is
-// remembered by the system's way (Linux: /etc/clipboardbridge/firewall.hub
-// through firewall.sh; Windows: the rule clipboardbridge-hub); the Mac's
+// remembered by the system's way (Linux: /etc/cbb/firewall.hub
+// through firewall.sh; Windows: the rule cbb-hub); the Mac's
 // application firewall allows a listed program on every port already.
 type hubFirewall struct {
 	name     string                  // the firewall, for the messages
@@ -41,12 +41,12 @@ var hubFW = map[string]*hubFirewall{"linux": &linuxHubFW, "freebsd": &linuxHubFW
 // /usr/share on OpenWrt, which has no /usr/local, or /opt on SteamOS.
 var firewallScript = func() string {
 	if openwrt.Is() {
-		return "/usr/share/clipboardbridge/firewall.sh"
+		return "/usr/share/cbb/firewall.sh"
 	}
 	if steamos.Is() {
 		return steamos.Share + "/firewall.sh"
 	}
-	return "/usr/local/share/clipboardbridge/firewall.sh"
+	return "/usr/local/share/cbb/firewall.sh"
 }()
 
 func firewallSh(args ...string) (string, error) {
@@ -85,7 +85,7 @@ var linuxHubFW = hubFirewall{
 	},
 }
 
-const hubRule = "clipboardbridge-hub"
+const hubRule = "cbb-hub"
 
 var windowsHubFW = hubFirewall{
 	name:   "Windows Firewall",
@@ -112,13 +112,13 @@ var windowsHubFW = hubFirewall{
 }
 
 func windowsHubRule(port int) string {
-	return fmt.Sprintf("New-NetFirewallRule -Name '%s' -Group 'clipboardbridge' -DisplayName 'Clipboard Bridge hub (UDP %d)' -Direction Inbound -Action Allow -Protocol UDP -LocalPort %d -Program \"$env:ProgramFiles\\clipboardbridge\\cbb.exe\" -Profile Any", hubRule, port, port)
+	return fmt.Sprintf("New-NetFirewallRule -Name '%s' -Group 'cbb' -DisplayName 'CBB hub (UDP %d)' -Direction Inbound -Action Allow -Protocol UDP -LocalPort %d -Program \"$env:ProgramFiles\\cbb\\cbb.exe\" -Profile Any", hubRule, port, port)
 }
 
 func windowsHubScript(port int) string {
 	return "$ErrorActionPreference = 'Stop'\n" +
 		"Remove-NetFirewallRule -Name '" + hubRule + "' -ErrorAction SilentlyContinue\n" +
-		windowsHubRule(port) + " -Description 'The group''s devices away from home reach the Clipboard Bridge hub here, through its WireGuard tunnel.' | Out-Null\n"
+		windowsHubRule(port) + " -Description 'The group''s devices away from home reach the CBB hub here, through its WireGuard tunnel.' | Out-Null\n"
 }
 
 // hubPortFor is the UDP port a hub reached at its own address takes its
@@ -150,7 +150,7 @@ func syncHubPort(stdin io.Reader, stdout io.Writer, a *control.Away, mode string
 	if want == 0 || !hubFW.active() {
 		return
 	}
-	fmt.Fprintf(stdout, "Firewall: the hub's clients reach this device from the internet. Clipboard Bridge requires this rule:\n")
+	fmt.Fprintf(stdout, "Firewall: the hub's clients reach this device from the internet. CBB requires this rule:\n")
 	fmt.Fprintf(stdout, "  1. Allow incoming UDP %d from any address. Purpose: the group's WireGuard tunnel; it answers only the group's devices.\n", want)
 	yes := mode == "yes"
 	how := " (-firewall yes)"
@@ -159,7 +159,7 @@ func syncHubPort(stdin io.Reader, stdout io.Writer, a *control.Away, mode string
 		if !elevated() {
 			fmt.Fprintf(stdout, "Only %s can add it.\n", adminName)
 		} else {
-			fmt.Fprint(stdout, "With Yes, Clipboard Bridge adds it now and removes it when this device stops being the hub.\nAdd this rule now? [y/N] ")
+			fmt.Fprint(stdout, "With Yes, CBB adds it now and removes it when this device stops being the hub.\nAdd this rule now? [y/N] ")
 			line, err := readLine(stdin)
 			if err != nil {
 				fmt.Fprintln(stdout, "\nNo answer; taken as No.")
@@ -184,6 +184,6 @@ func syncHubPort(stdin io.Reader, stdout io.Writer, a *control.Away, mode string
 			fmt.Fprintln(stdout, c)
 		}
 	}
-	fmt.Fprintf(stdout, "To let Clipboard Bridge add it, run cbb global hub again with -firewall yes as %s.\n", adminName)
+	fmt.Fprintf(stdout, "To let CBB add it, run cbb global hub again with -firewall yes as %s.\n", adminName)
 	fmt.Fprintf(stdout, "A router in front of this device must forward UDP %d to it as well.\n", want)
 }

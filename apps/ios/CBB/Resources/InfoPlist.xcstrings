@@ -1,0 +1,49 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "CFBundleDisplayName": {
+      "shouldTranslate": false
+    },
+    "NSCameraUsageDescription": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB сканирует QR-код, который показывает компьютер, чтобы добавить его в вашу группу."
+          }
+        }
+      }
+    },
+    "NSFaceIDUsageDescription": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB спрашивает Face ID перед подписью ключом вашей группы: чтобы добавить или удалить устройство."
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB находит ваши компьютеры в домашней сети и синхронизирует их буфер обмена с этим телефоном."
+          }
+        }
+      }
+    },
+    "NFCReaderUsageDescription": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB записывает ключ восстановления вашей группы на YubiKey и восстанавливает группу с ним."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

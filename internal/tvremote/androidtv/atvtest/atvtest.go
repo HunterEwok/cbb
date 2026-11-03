@@ -24,8 +24,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/protowire"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv/wire"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv/wire"
 )
 
 // TV is the fake TV. Its ports are random; PairAddr and RemoteAddr name them.

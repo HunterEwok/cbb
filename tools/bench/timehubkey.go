@@ -23,7 +23,7 @@ type tunnelFile struct {
 
 func readTunnel(ctx context.Context, d *Device) (tunnelFile, error) {
 	var t tunnelFile
-	out, err := Run(ctx, d, "cat /var/lib/clipboardbridge/tunnel.json", "")
+	out, err := Run(ctx, d, "cat /var/lib/cbb/tunnel.json", "")
 	if err != nil {
 		return t, err
 	}

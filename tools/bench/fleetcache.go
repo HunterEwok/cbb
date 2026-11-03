@@ -17,7 +17,7 @@ const cacheKeep = 10 * time.Minute
 
 // cacheFiles lists the parts in d's content cache with their modes.
 func cacheFiles(ctx context.Context, d *Device) ([]string, error) {
-	out, err := Run(ctx, d, "find /var/lib/clipboardbridge/content -type f ! -name '*.part' -printf '%m %f\\n' 2>/dev/null; true", "")
+	out, err := Run(ctx, d, "find /var/lib/cbb/content -type f ! -name '*.part' -printf '%m %f\\n' 2>/dev/null; true", "")
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func fetchLimits(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 			return err
 		}
 		return eventually(ctx, 20*time.Second, func() error {
-			out, err := Run(ctx, holder, "find /var/lib/clipboardbridge/content -type f -size +1100k ! -name '*.part' -printf '%f\\n' | head -1", "")
+			out, err := Run(ctx, holder, "find /var/lib/cbb/content -type f -size +1100k ! -name '*.part' -printf '%f\\n' | head -1", "")
 			sum = strings.TrimSpace(out)
 			if err == nil && len(sum) != 64 {
 				err = fmt.Errorf("%s holds no part over 1 MiB", holder.Name)

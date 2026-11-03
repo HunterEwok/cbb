@@ -27,10 +27,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
-const archive = "clipboardbridge-linux-amd64.tar.gz"
+const archive = "cbb-linux-amd64.tar.gz"
 
 var now = time.UnixMilli(1_800_000_000_000)
 
@@ -122,7 +122,7 @@ func (f *fixture) publish(t *testing.T, version string, data []byte, progs []rel
 		t.Fatal(err)
 	}
 	if progs == nil {
-		progs = []release.Binary{{Name: "clipboardbridge/cbb", SHA256: sum([]byte("cbb " + version))}}
+		progs = []release.Binary{{Name: "cbb/cbb", SHA256: sum([]byte("cbb " + version))}}
 	}
 	at := now.UnixMilli() - 1000
 	keys, err := release.Sign(release.Keys{V: 1, Type: release.TypeKeys, Seq: f.keysSeq, TimeMS: at,
@@ -148,9 +148,9 @@ func (f *fixture) publish(t *testing.T, version string, data []byte, progs []rel
 
 func goodArchive(t *testing.T, version string) []byte {
 	return tarGz(t,
-		entry{name: "clipboardbridge/", typ: tar.TypeDir},
-		entry{name: "clipboardbridge/cbb", data: "cbb " + version},
-		entry{name: "clipboardbridge/packaging/linux/install.sh", data: "#!/bin/sh\n"})
+		entry{name: "cbb/", typ: tar.TypeDir},
+		entry{name: "cbb/cbb", data: "cbb " + version},
+		entry{name: "cbb/packaging/linux/install.sh", data: "#!/bin/sh\n"})
 }
 
 // system is the installed copy as the fakes see it.
@@ -303,19 +303,19 @@ func TestRefused(t *testing.T) {
 			os.WriteFile(filepath.Join(f.dir, archive), append(good(t), 0), 0o644)
 		}, release.Seen{}, "does not match the signed release.json"},
 		{"a program that release.json does not list", func(t *testing.T, f *fixture) {
-			f.publish(t, "0.6.1", good(t), []release.Binary{{Name: "clipboardbridge/cbb", SHA256: sum([]byte("other"))}}, time.Hour)
-		}, release.Seen{}, "clipboardbridge/cbb does not match"},
+			f.publish(t, "0.6.1", good(t), []release.Binary{{Name: "cbb/cbb", SHA256: sum([]byte("other"))}}, time.Hour)
+		}, release.Seen{}, "cbb/cbb does not match"},
 		{"a listed program missing", func(t *testing.T, f *fixture) {
-			f.publish(t, "0.6.1", good(t), []release.Binary{{Name: "clipboardbridge/cbb", SHA256: sum([]byte("cbb 0.6.1"))},
-				{Name: "clipboardbridge/cbb-helper", SHA256: sum(nil)}}, time.Hour)
+			f.publish(t, "0.6.1", good(t), []release.Binary{{Name: "cbb/cbb", SHA256: sum([]byte("cbb 0.6.1"))},
+				{Name: "cbb/cbb-helper", SHA256: sum(nil)}}, time.Hour)
 		}, release.Seen{}, "is missing"},
 		{"a link in the archive", func(t *testing.T, f *fixture) {
-			f.publish(t, "0.6.1", tarGz(t, entry{name: "clipboardbridge/cbb", data: "cbb 0.6.1"},
-				entry{name: "clipboardbridge/passwd", typ: tar.TypeSymlink}), nil, time.Hour)
+			f.publish(t, "0.6.1", tarGz(t, entry{name: "cbb/cbb", data: "cbb 0.6.1"},
+				entry{name: "cbb/passwd", typ: tar.TypeSymlink}), nil, time.Hour)
 		}, release.Seen{}, "not a plain file"},
 		{"a path out of the folder", func(t *testing.T, f *fixture) {
-			f.publish(t, "0.6.1", tarGz(t, entry{name: "clipboardbridge/cbb", data: "cbb 0.6.1"},
-				entry{name: "clipboardbridge/../../evil", data: "x"}), nil, time.Hour)
+			f.publish(t, "0.6.1", tarGz(t, entry{name: "cbb/cbb", data: "cbb 0.6.1"},
+				entry{name: "cbb/../../evil", data: "x"}), nil, time.Hour)
 		}, release.Seen{}, "holds the path"},
 		{"a bad signature", func(t *testing.T, f *fixture) {
 			f.publish(t, "0.6.1", good(t), nil, time.Hour)
@@ -486,9 +486,9 @@ func TestDetectMethod(t *testing.T) {
 	for _, c := range []struct{ recorded, exe, want string }{
 		{"", "/usr/local/bin/cbb", MethodGet},
 		{MethodPackage, "/usr/bin/cbb", MethodPackage},
-		{"", "/opt/homebrew/Cellar/clipboardbridge/0.6.0/bin/cbb", MethodBrew},
+		{"", "/opt/homebrew/Cellar/cbb/0.6.0/bin/cbb", MethodBrew},
 		{MethodGet, "/home/linuxbrew/.linuxbrew/bin/cbb", MethodBrew},
-		{"", `C:\Users\a\AppData\Local\Microsoft\WinGet\Packages\HunterEwok.clipboardbridge\clipboardbridge\cbb.exe`, MethodWinget},
+		{"", `C:\Users\a\AppData\Local\Microsoft\WinGet\Packages\HunterEwok.cbb\cbb\cbb.exe`, MethodWinget},
 	} {
 		if got := DetectMethod(c.recorded, filepath.FromSlash(c.exe)); got != c.want {
 			t.Errorf("%s %s: %s, want %s", c.recorded, c.exe, got, c.want)
@@ -501,8 +501,8 @@ func TestDetectMethod(t *testing.T) {
 }
 
 func TestInstallFailure(t *testing.T) {
-	out := "Stopping...\r\ninstall.ps1: starting the service failed: Service 'Clipboard Bridge' cannot be started.\r\nName : x\r\nat <ScriptBlock>, install.ps1: line 388\r\n"
-	if got := installFailure(out, "install.ps1"); got != "starting the service failed: Service 'Clipboard Bridge' cannot be started." {
+	out := "Stopping...\r\ninstall.ps1: starting the service failed: Service 'CBB' cannot be started.\r\nName : x\r\nat <ScriptBlock>, install.ps1: line 388\r\n"
+	if got := installFailure(out, "install.ps1"); got != "starting the service failed: Service 'CBB' cannot be started." {
 		t.Errorf("got %q", got)
 	}
 	if got := installFailure("a\nb\nc\nd\ne\nf\n", "install.sh"); got != "b\nc\nd\ne\nf" {

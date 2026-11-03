@@ -347,7 +347,7 @@ func describe(s string) string {
 }
 
 // liteDropIn is the bench's systemd drop-in for the lite member's service.
-const liteDropIn = "/etc/systemd/system/clipboardbridge.service.d/cbbbench.conf"
+const liteDropIn = "/etc/systemd/system/cbb.service.d/cbbbench.conf"
 
 // litePeer restarts the lite member's service with -peer addr, or without
 // the bench's drop-in when addr is "".
@@ -357,7 +357,7 @@ func litePeer(ctx context.Context, d *Device, addr string) error {
 		conf := "[Service]\nExecStart=\nExecStart=/usr/local/bin/cbb service -peer " + addr + "\n"
 		cmd = "sudo -n mkdir -p " + path.Dir(liteDropIn) + " && printf '" + conf + "' | sudo -n tee " + liteDropIn + " >/dev/null"
 	}
-	_, err := Run(ctx, d, cmd+" && sudo -n systemctl daemon-reload && sudo -n systemctl restart clipboardbridge", "")
+	_, err := Run(ctx, d, cmd+" && sudo -n systemctl daemon-reload && sudo -n systemctl restart cbb", "")
 	return err
 }
 
@@ -415,7 +415,7 @@ func pairOne(ctx context.Context, hub, d *Device) (string, error) {
 	if d.OS == "linux-lite" {
 		// The lite member joins as its service's user, which alone may
 		// write its keys (lite/README.md); the bench user has sudo.
-		join = "sudo -n -u clipboardbridge " + cbbCmd(d) + " pair -code"
+		join = "sudo -n -u cbb " + cbbCmd(d) + " pair -code"
 	}
 	if d.OS == "linux-lite" || addr != "" {
 		if addr == "" {

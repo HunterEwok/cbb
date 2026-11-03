@@ -20,13 +20,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/group/grouptest"
-	"github.com/HunterEwok/clipboardbridge/internal/hlc"
-	signed "github.com/HunterEwok/clipboardbridge/internal/release"
-	"github.com/HunterEwok/clipboardbridge/internal/testnet"
-	"github.com/HunterEwok/clipboardbridge/internal/uptime"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/group/grouptest"
+	"github.com/HunterEwok/cbb/internal/hlc"
+	signed "github.com/HunterEwok/cbb/internal/release"
+	"github.com/HunterEwok/cbb/internal/testnet"
+	"github.com/HunterEwok/cbb/internal/uptime"
 )
 
 func socketPair(t *testing.T) (net.Conn, net.Conn) { return testnet.SocketPair(t) }

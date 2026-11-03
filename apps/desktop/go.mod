@@ -1,11 +1,11 @@
-module github.com/HunterEwok/clipboardbridge/apps/desktop
+module github.com/HunterEwok/cbb/apps/desktop
 
 go 1.27.0
 
 toolchain go1.27.3
 
 require (
-	github.com/HunterEwok/clipboardbridge v0.0.0
+	github.com/HunterEwok/cbb v0.0.0
 	github.com/coder/websocket v1.8.15
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/wailsapp/wails/v3 v3.0.0-beta.34
@@ -21,4 +21,4 @@ require (
 )
 
 // The app speaks the service's control socket with the service's own code.
-replace github.com/HunterEwok/clipboardbridge => ../..
+replace github.com/HunterEwok/cbb => ../..

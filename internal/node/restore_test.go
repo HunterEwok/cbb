@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 func (r *recordStore) GroupCA() *x509.Certificate {
@@ -111,7 +111,7 @@ func TestRecordsOnlyHelloCarriesGroupCA(t *testing.T) {
 }
 
 // TestSwiftRestoresWithRecoveryKey runs the phone kit's restore against a
-// Go member over TLS: clipboardbridge-interop (the Swift tool, or the
+// Go member over TLS: cbb-interop (the Swift tool, or the
 // Kotlin kit's twin), named by CBB_SWIFT_INTEROP_TLS, reads the recovery
 // sheet's QR code, takes the records from the member, checks them, and
 // sends its claim on a second connection, which the member's records then
@@ -119,7 +119,7 @@ func TestRecordsOnlyHelloCarriesGroupCA(t *testing.T) {
 func TestSwiftRestoresWithRecoveryKey(t *testing.T) {
 	tool := os.Getenv("CBB_SWIFT_INTEROP_TLS")
 	if tool == "" {
-		t.Skip("CBB_SWIFT_INTEROP_TLS names no clipboardbridge-interop binary")
+		t.Skip("CBB_SWIFT_INTEROP_TLS names no cbb-interop binary")
 	}
 	server, st, key, ca := restoreFixture(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

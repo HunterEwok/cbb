@@ -1,0 +1,8 @@
+/etc/cbb/
+/etc/cbb-update/
+/etc/config/cbb
+/etc/init.d/cbb
+/etc/hotplug.d/ntp/50-cbb
+/etc/capabilities/cbb.json
+/usr/bin/cbb
+/usr/share/cbb/

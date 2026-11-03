@@ -16,12 +16,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // On Linux and Windows the installer lets the service reach only the home
 // network from outside the program: on Linux its systemd unit
-// (packaging/linux/clipboardbridge.service), on Windows an outbound rule of
+// (packaging/linux/cbb.service), on Windows an outbound rule of
 // Windows Firewall (packaging/windows/install.ps1). Sync away from home
 // reaches the group's own servers on the internet, its hub, forwarder and
 // relay, so cbb global lets the service reach those addresses and nothing
@@ -42,10 +42,6 @@ type grant struct {
 	// cgnat leaves 100.64.0.0/10 to the home network (CBB_HOME_CGNAT=1) in
 	// the Windows rule; on Linux the installer's own drop-in does it.
 	cgnat bool
-	// anywhere is a drop-in of a version before 0.4 that let the service
-	// reach every address; it never equals what the service asks for, so
-	// cbb global allow and the installer replace it.
-	anywhere bool
 }
 
 // equal reports whether two grants allow the same; without sync away from
@@ -54,9 +50,6 @@ func (g grant) equal(o grant) bool {
 	if !g.on || !o.on {
 		return g.on == o.on
 	}
-	if g.anywhere || o.anywhere {
-		return g.anywhere == o.anywhere
-	}
 	return g.hubPort == o.hubPort && g.cgnat == o.cgnat && slices.Equal(g.addrs, o.addrs)
 }
 
@@ -64,9 +57,6 @@ func (g grant) equal(o grant) bool {
 func (g grant) String() string {
 	if !g.on {
 		return "the home network only"
-	}
-	if g.anywhere {
-		return "every address on the internet (a limit an earlier version left)"
 	}
 	var parts []string
 	for _, a := range g.addrs {
@@ -161,8 +151,8 @@ func setAwayNet(g grant) (changed, restarted bool, err error) {
 // IPAddressAllow, and a restart, since systemd applies it when the service
 // starts.
 var (
-	serviceUnit = "/etc/systemd/system/clipboardbridge.service"
-	awayDropIn  = "/etc/systemd/system/clipboardbridge.service.d/away.conf"
+	serviceUnit = "/etc/systemd/system/cbb.service"
+	awayDropIn  = "/etc/systemd/system/cbb.service.d/away.conf"
 	systemctl   = func(args ...string) error { return runCmd("systemctl", args...) }
 )
 
@@ -197,7 +187,6 @@ func awayDropInText(g grant) string {
 // parseDropIn reads a grant back from the drop-in.
 func parseDropIn(text string) grant {
 	g := grant{on: true}
-	anyAddr := false
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
 		if v, ok := strings.CutPrefix(line, "# hub-port "); ok {
@@ -205,15 +194,12 @@ func parseDropIn(text string) grant {
 		}
 		if v, ok := strings.CutPrefix(line, "IPAddressAllow="); ok {
 			for _, f := range strings.Fields(v) {
-				anyAddr = anyAddr || f == "any"
 				if a, err := netip.ParseAddr(f); err == nil {
 					g.addrs = append(g.addrs, a)
 				}
 			}
 		}
 	}
-	// A hub's drop-in allows any address on purpose and says so.
-	g.anywhere = anyAddr && g.hubPort == 0
 	return g
 }
 
@@ -241,7 +227,7 @@ var linuxLimit = netLimit{
 		if err := systemctl("daemon-reload"); err != nil {
 			return err
 		}
-		return systemctl("restart", "clipboardbridge.service")
+		return systemctl("restart", "cbb.service")
 	},
 }
 
@@ -252,8 +238,8 @@ var linuxLimit = netLimit{
 // nothing restarts. What the rules allow is kept beside them in the
 // service's registry key (AwayAllow), so a reinstall keeps it.
 const (
-	firewallRule = "clipboardbridge-home-only"
-	serviceKey   = `HKLM:\SYSTEM\CurrentControlSet\Services\clipboardbridge`
+	firewallRule = "cbb-home-only"
+	serviceKey   = `HKLM:\SYSTEM\CurrentControlSet\Services\cbb`
 )
 
 var powershell = func(script string) (string, error) {
@@ -333,12 +319,12 @@ func windowsScript(g grant) string {
 	var b strings.Builder
 	b.WriteString("$ErrorActionPreference = 'Stop'\n")
 	fmt.Fprintf(&b, "$prog = (Get-NetFirewallRule -Name '%s' | Get-NetFirewallApplicationFilter).Program\n", firewallRule)
-	b.WriteString("Get-NetFirewallRule -Group 'clipboardbridge' | Where-Object { [string]$_.Direction -eq 'Outbound' } | Remove-NetFirewallRule\n")
-	common := "-Group 'clipboardbridge' -Direction Outbound -Action Block -Program $prog -Service 'clipboardbridge' -Profile Any"
+	b.WriteString("Get-NetFirewallRule -Group 'cbb' | Where-Object { [string]$_.Direction -eq 'Outbound' } | Remove-NetFirewallRule\n")
+	common := "-Group 'cbb' -Direction Outbound -Action Block -Program $prog -Service 'cbb' -Profile Any"
 	// PowerShell doubles a quote inside single quotes.
-	desc := "The Clipboard Bridge service reaches only the home network and its group''s servers; cbb global changes this rule."
+	desc := "The CBB service reaches only the home network and its group''s servers; cbb global changes this rule."
 	if g.hubPort == 0 {
-		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'clipboardbridge: only the home network' %s -RemoteAddress %s -Description '%s' | Out-Null\n",
+		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'cbb: only the home network' %s -RemoteAddress %s -Description '%s' | Out-Null\n",
 			firewallRule, common, block, desc)
 	} else {
 		var ports []string
@@ -348,9 +334,9 @@ func windowsScript(g grant) string {
 		if g.hubPort < 65535 {
 			ports = append(ports, fmt.Sprintf("%d-65535", g.hubPort+1))
 		}
-		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'clipboardbridge: only the home network' %s -Protocol TCP -RemoteAddress %s -Description '%s' | Out-Null\n",
+		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'cbb: only the home network' %s -Protocol TCP -RemoteAddress %s -Description '%s' | Out-Null\n",
 			firewallRule, common, block, desc)
-		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s-udp' -DisplayName 'clipboardbridge: only the home network, UDP but the hub''s port' %s -Protocol UDP -LocalPort %s -RemoteAddress %s -Description '%s' | Out-Null\n",
+		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s-udp' -DisplayName 'cbb: only the home network, UDP but the hub''s port' %s -Protocol UDP -LocalPort %s -RemoteAddress %s -Description '%s' | Out-Null\n",
 			firewallRule, common, quote(ports), block, desc)
 	}
 	if g.on {

@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b61def346d84 -->
+<!-- source: c2d39475bc20 -->
 # لوحات المفاتيح والتلفزيونات
 
-لمن يريد كتابة كلمة مرور طويلة أو رابط أو بحث في تلفزيون أو جهاز لوحي أو جهاز ألعاب أو حاسوب ليس عليه شيء من Clipboard Bridge. يكتب أحد أجهزة مجموعتك النص هناك بوصفه لوحة مفاتيح أو جهاز التحكم عن بُعد للتلفزيون، عند نقرتك أو حين يرسل مشرف لصقًا عن بُعد.
+لمن يريد كتابة كلمة مرور طويلة أو رابط أو بحث في تلفزيون أو جهاز لوحي أو جهاز ألعاب أو حاسوب ليس عليه شيء من Copy Beyond Borders. يكتب أحد أجهزة مجموعتك النص هناك بوصفه لوحة مفاتيح أو جهاز التحكم عن بُعد للتلفزيون، عند نقرتك أو حين يرسل مشرف لصقًا عن بُعد.
 
 ## اختر طريقة
 
@@ -36,7 +36,7 @@
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
+# add "CBB <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```

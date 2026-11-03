@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // Package tmuxpaste is the paste target in tmux (design.md, "Remote
-// paste"): cbb paste-helper tmux, which tmux starts from clipboardbridge's
+// paste"): cbb paste-helper tmux, which tmux starts from cbb's
 // tmux.conf, runs a connector with it and no clipboard. A paste goes to the
 // active pane of the client the user used last, as tmux's own paste-buffer
 // puts it there, bracketed when the program asked for it; typing sends the
@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 // Tmux pastes into a tmux server.
@@ -33,7 +33,7 @@ type Tmux struct {
 }
 
 // buffer is the paste buffer it loads, deleted by the paste.
-const buffer = "clipboardbridge-remote"
+const buffer = "cbb-remote"
 
 // Target names the target (connector.Target).
 func (t *Tmux) Target() string {

@@ -22,10 +22,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/core"
-	"github.com/HunterEwok/clipboardbridge/internal/strict"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/core"
+	"github.com/HunterEwok/cbb/internal/strict"
 )
 
 // RecordsFileName is the name of the records file in the state directory.
@@ -81,9 +81,8 @@ const (
 )
 
 // StoreOf reads the store field of a device record of role. A record
-// without one, made before 0.6, or with a value this version does not
-// know, counts as a phone's in hardware and any other device's in a file,
-// as those versions kept them.
+// without one, or with a value this version does not know, counts as a
+// phone's in hardware and any other device's in a file.
 func StoreOf(store, role string) string {
 	switch store {
 	case StoreFile, StoreHardware, StoreProven, StoreRootless:
@@ -934,9 +933,10 @@ func (s *Records) Next(signer KeyHash) (int64, *KeyHash) {
 	var seq int64
 	var prev KeyHash
 	// Of two records with one seq, which only a key that signed two
-	// histories has, the lower ID, so that every member gives the same.
+	// histories has, the lower ID, compared in base64 as the protocol
+	// sorts IDs, so that every member gives the same.
 	for _, p := range own {
-		if !dead(p) && (p.b.Seq > seq || p.b.Seq == seq && bytes.Compare(p.id[:], prev[:]) < 0) {
+		if !dead(p) && (p.b.Seq > seq || p.b.Seq == seq && p.id.String() < prev.String()) {
 			seq, prev = p.b.Seq, p.id
 		}
 	}

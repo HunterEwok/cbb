@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // recentCopy is how recent a computer's copy must be for the button to
@@ -103,12 +103,12 @@ func SyncHandler(g Group) http.Handler {
 		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
 		if err != nil || len(body) > maxBody {
-			fail("the text is too large; clipboardbridge carries up to 1 MiB")
+			fail("the text is too large; cbb carries up to 1 MiB")
 			return
 		}
 		var req syncRequest
 		if err := json.Unmarshal(body, &req); err != nil || req.V.String() != "1" {
-			fail("the shortcut is from another version of clipboardbridge; install it again")
+			fail("the shortcut is from another version of cbb; install it again")
 			return
 		}
 		rep, err := decide(g, req)
@@ -133,7 +133,7 @@ type JoinCode struct {
 const maxJoinAddrs = 4
 
 // JoinQR returns the text of the QR code that cbb pair shows: a URL,
-// clipboardbridge://join?code=123456&addr=192.168.1.20:40123&fp=…, which the
+// cbb://join?code=123456&addr=192.168.1.20:40123&fp=…, which the
 // shortcut and the phone apps read alike; later fields can be added without
 // breaking either.
 func JoinQR(jc JoinCode) string {
@@ -145,7 +145,7 @@ func JoinQR(jc JoinCode) string {
 		q.Set("fp", jc.Fingerprint)
 	}
 	// The code goes first, so a person reading the text sees it at once.
-	text := "clipboardbridge://join?code=" + url.QueryEscape(jc.Code)
+	text := "cbb://join?code=" + url.QueryEscape(jc.Code)
 	if len(q) > 0 {
 		text += "&" + q.Encode()
 	}
@@ -157,7 +157,7 @@ func JoinQR(jc JoinCode) string {
 // addresses are kept.
 func ParseJoinQR(s string) (JoinCode, bool) {
 	u, err := url.Parse(strings.TrimSpace(s))
-	if err != nil || !strings.EqualFold(u.Scheme, "clipboardbridge") || !strings.EqualFold(u.Host, "join") {
+	if err != nil || !strings.EqualFold(u.Scheme, "cbb") || !strings.EqualFold(u.Host, "join") {
 		return JoinCode{}, false
 	}
 	// Only percent escapes are decoded, never a + as a space, as the phone

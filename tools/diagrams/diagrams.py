@@ -319,7 +319,7 @@ def draw_design():
     # The system context (C4 level 1).
     d = D(1000, 420, "The system context: a group of devices, the user, the systems' clipboards, an optional forwarder or relay, and the release mirror")
     us = d.card(330, 50, 'user', 'The user', 'copies, pastes, pairs, admits, removes', w=310)
-    d.zone(10, 110, 640, 140, 'A Clipboard Bridge group: no central server')
+    d.zone(10, 110, 640, 140, 'A CBB group: no central server')
     d.card(120, 175, 'desktop', 'Computers', 'Linux, Mac, Windows', w=200, cls='key')
     d.card(330, 175, 'phone', 'Phones', 'iPhone, iPad, Android', w=200)
     d.card(540, 175, 'board', 'Lite, watches, TVs', 'small members', w=200)

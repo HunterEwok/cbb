@@ -31,8 +31,8 @@ import (
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/keyboard"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/keyboard"
 )
 
 // Settings are what the computer's user set for its keyboard: whether it
@@ -115,7 +115,7 @@ const (
 )
 
 // root is where the keyboard's objects live on the bus.
-const root = dbus.ObjectPath("/io/github/hunterewok/clipboardbridge/keyboard")
+const root = dbus.ObjectPath("/tools/cbb/keyboard")
 
 // appearanceKeyboard is the GAP appearance of a keyboard.
 const appearanceKeyboard = 0x03c1

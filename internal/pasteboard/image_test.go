@@ -11,7 +11,7 @@ import (
 	"image/png"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
+	"github.com/HunterEwok/cbb/internal/clip"
 )
 
 // TestImage writes images and reads them back: a PNG as it is, a JPEG as

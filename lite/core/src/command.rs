@@ -150,7 +150,7 @@ impl Command {
     /// time in 8 bytes, big-endian, after the context.
     fn aad(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        for f in ["clipboardbridge command v2", &self.kind, &self.group, &self.by, &self.to, &self.id] {
+        for f in ["cbb command v2", &self.kind, &self.group, &self.by, &self.to, &self.id] {
             out.extend_from_slice(&u32::try_from(f.len()).unwrap_or(u32::MAX).to_be_bytes());
             out.extend_from_slice(f.as_bytes());
         }

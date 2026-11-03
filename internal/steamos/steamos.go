@@ -4,7 +4,7 @@
 // Package steamos tells whether this program runs from the layout that
 // packaging/linux/install.sh uses on SteamOS. Its / is read-only and
 // replaced by each system update, so the binary and the shared files live
-// in /opt/clipboardbridge, which SteamOS keeps in /home, instead of
+// in /opt/cbb, which SteamOS keeps in /home, instead of
 // /usr/local.
 package steamos
 
@@ -17,7 +17,7 @@ import (
 
 const (
 	// Dir holds the binary (bin/cbb) and the shared files (share).
-	Dir = "/opt/clipboardbridge"
+	Dir = "/opt/cbb"
 	// Bin is the installed binary.
 	Bin = Dir + "/bin/cbb"
 	// Share holds the installer's firewall.sh, uninstall.sh and tmux.conf.

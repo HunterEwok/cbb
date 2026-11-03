@@ -18,7 +18,7 @@ struct SyncWidgets: WidgetBundle {
 
 struct SyncWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "io.github.hunterewok.clipboardbridge.sync", provider: SyncProvider()) { _ in
+        StaticConfiguration(kind: "tools.cbb.sync", provider: SyncProvider()) { _ in
             SyncWidgetView()
         }
         .configurationDisplayName("Sync clipboard")
@@ -60,12 +60,12 @@ struct SyncWidgetView: View {
 
 struct SyncControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "io.github.hunterewok.clipboardbridge.sync-control") {
+        StaticControlConfiguration(kind: "tools.cbb.sync-control") {
             ControlWidgetButton(action: OpenAndSyncIntent()) {
                 Label("Sync clipboard", systemImage: "arrow.up.arrow.down")
             }
         }
         .displayName("Sync clipboard")
-        .description("Opens Clipboard Bridge and syncs the clipboard with your computers.")
+        .description("Opens CBB and syncs the clipboard with your computers.")
     }
 }

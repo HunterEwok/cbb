@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Cryptography
 
-For engineers and security reviewers: every cryptographic primitive Clipboard Bridge uses,
+For engineers and security reviewers: every cryptographic primitive Copy Beyond Borders uses,
 with the library that provides it in each implementation, the key sizes, the lifetimes and
 where each key is kept. The wire format is normative in the [protocol](protocol.md); this
 page only lists. Why each choice was made is in the [design](design.md) and the
@@ -63,9 +63,9 @@ CPace exchange, so the four implementations cannot drift apart ([testing](testin
 |---|---|---|---|---|
 | Group root CA | ECDSA P-256 | the root phone, or `cbb new` on a computer | the phone's Secure Enclave or Keystore, signs only after Face ID, the fingerprint or the passcode; on a computer a file readable only by the service | the certificate 20 years |
 | Admin CA | ECDSA P-256 | each admin | a phone's Secure Enclave or Keystore, behind the user's face, fingerprint or passcode; on a computer the TPM on Linux when there is one, else a file | the certificate ends with the root's |
-| iPhone CA | ECDSA P-256 | the root | with the root and the admins | 20 years; name constraints to `clipboardbridge.local` |
+| iPhone CA | ECDSA P-256 | the root | with the root and the admins | 20 years; name constraints to `cbb.local` |
 | Member key | ECDSA P-256 | each device | the TPM on Linux when there is one, the Secure Enclave or Keystore on phones, else a file readable only by the service | the certificate 2 years, renewed 240 days before its end |
-| `clipboardbridge.local` server key | ECDSA P-256 | the root and each admin | as the iPhone CA | the certificate 397 days, renewed 60 days before its end |
+| `cbb.local` server key | ECDSA P-256 | the root and each admin | as the iPhone CA | the certificate 397 days, renewed 60 days before its end |
 | Tunnel key | X25519 | each device that syncs away from home | sealed in the TPM on Linux when there is one, else a file of the service; the phone's keychain or app storage | until the device leaves the group |
 | Preshared key | 32 random bytes | each tunnel client | as the tunnel key | as the tunnel key |
 | Server key | ECDSA P-256 | each hub | the TPM on Linux when there is one, else a file of the service | until the hub leaves; each credential it gets lasts a period of 35 days |

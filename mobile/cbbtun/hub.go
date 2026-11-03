@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/forward"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/invite"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/invite"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // guestGrace is how long a guest tunnel stays after its device was
@@ -213,7 +213,7 @@ func (h *Hub) Invite(groupTag, endpoints string, lifetime, guestPort int) (*Gues
 	return g, nil
 }
 
-// Text is the invitation's text, clipboardbridge://invite#…, as a file of
+// Text is the invitation's text, cbb://invite#…, as a file of
 // one line holds it.
 func (g *Guest) Text() string { return g.text }
 

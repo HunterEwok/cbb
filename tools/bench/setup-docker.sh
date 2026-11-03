@@ -19,17 +19,17 @@
 # as a crash would, since docker kill counts as stopping it by hand and its
 # restart policy would not start it again.
 #
-# up builds the image clipboardbridge:bench from CBB, a static cbb for this
+# up builds the image cbb:bench from CBB, a static cbb for this
 # host's CPU (CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./cmd/cbb on a
 # Pi), and runs it with packaging/docker/compose.home.yaml in ~/cbb-nas, so
-# the container is named clipboardbridge and holds no group.
+# the container is named cbb and holds no group.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 dir=$HOME/cbb-nas
 helper=/usr/local/sbin/cbbbench-kill-container
-image=clipboardbridge:bench
+image=cbb:bench
 
 usage() {
 	echo "usage: setup-docker.sh setup | up CBB | down | teardown [--group]" >&2
@@ -56,13 +56,13 @@ setup)
 	# PID Docker gives, and nothing else.
 	sudo tee "$helper" >/dev/null <<'HELPER'
 #!/bin/sh
-# Installed by tools/bench/setup-docker.sh: kills a clipboardbridge
+# Installed by tools/bench/setup-docker.sh: kills a cbb
 # container's process as a crash would, for the bench's F1.
 set -eu
 case ${1:-} in '' | *[!A-Za-z0-9_.-]*) echo "usage: cbbbench-kill-container NAME" >&2; exit 2 ;; esac
 case $(docker inspect -f '{{.Config.Image}}' "$1") in
-clipboardbridge:* | ghcr.io/hunterewok/clipboardbridge*) ;;
-*) echo "cbbbench-kill-container: $1 is not a clipboardbridge container" >&2; exit 1 ;;
+cbb:* | ghcr.io/hunterewok/cbb*) ;;
+*) echo "cbbbench-kill-container: $1 is not a cbb container" >&2; exit 1 ;;
 esac
 pid=$(docker inspect -f '{{.State.Pid}}' "$1")
 [ "$pid" -gt 0 ] || { echo "cbbbench-kill-container: $1 is not running" >&2; exit 1; }
@@ -94,7 +94,7 @@ up)
 	[ ! -f "$dir/compose.yaml" ] || compose down -v
 	sed "s#^\( *image:\).*#\1 $image#" "$repo/packaging/docker/compose.home.yaml" >"$dir/compose.yaml"
 	compose up -d
-	docker exec clipboardbridge cbb version
+	docker exec cbb cbb version
 	;;
 down)
 	[ $# -eq 1 ] || usage

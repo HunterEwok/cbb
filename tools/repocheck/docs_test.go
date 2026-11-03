@@ -35,14 +35,8 @@ func TestCheckDocs(t *testing.T) {
 			name: "a heading inside code", file: "docs/a.md", content: "[x](design.md#not-a-heading)\n",
 			want: []string{"has no heading for #not-a-heading"},
 		},
-		{
-			name: "the old name", file: "docs/a.md", content: "Run clipbridge join.\n",
-			want: []string{"docs/a.md:1: the old name clipbridge"},
-		},
-		{name: "the old name in the changelog", file: "CHANGELOG.md", content: "clipbridge is now clipboardbridge.\n"},
-		{name: "the old name in code", file: "docs/a.md", content: "```sh\nrm -rf /var/lib/clipbridge\n```\n"},
-		{name: "a translated page keeps its original's links", file: "site/docs/ru/guide/a.md", content: "[x](design.md#roadmap) [y](missing.md) clipbridge\n"},
-		{name: "not Markdown", file: "a.sh", content: "# [x](missing.md) clipbridge\n"},
+		{name: "a translated page keeps its original's links", file: "site/docs/ru/guide/a.md", content: "[x](design.md#roadmap) [y](missing.md)\n"},
+		{name: "not Markdown", file: "a.sh", content: "# [x](missing.md)\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -65,13 +59,42 @@ func TestCheckDocs(t *testing.T) {
 	}
 }
 
+// TestCheckOldName finds the old names in every spelling and in any file,
+// the changelog and code included, and leaves the new name alone.
+func TestCheckOldName(t *testing.T) {
+	short, long := "clip"+"bridge", "Clip"+"board "+"Bridge"
+	for _, c := range []struct {
+		file, content string
+		want          int
+	}{
+		{"docs/a.md", "Run " + short + " join.\n", 1},
+		{"docs/a.md", "Install " + long + ".\n", 1},
+		{"CHANGELOG.md", "x\n" + short + " is gone.\n", 1},
+		{"docs/a.md", "```sh\nrm -rf /var/lib/" + strings.ToLower(strings.ReplaceAll(long, " ", "")) + "\n```\n", 1},
+		{"a.go", "import \"github.com/HunterEwok/" + strings.ToLower(strings.ReplaceAll(long, " ", "")) + "/x\"\n", 1},
+		{"a.swift", "import " + strings.ReplaceAll(long, " ", "") + "Kit\n", 1},
+		{"a.kt", strings.ToLower(strings.ReplaceAll(long, " ", "_")) + "\n", 1},
+		{"docs/a.md", "Copy Beyond Borders, `cbb`, cbb.local, CBBKit and a clipboard.\n", 0},
+	} {
+		got := checkOldName(c.file, []byte(c.content))
+		if len(got) != c.want {
+			t.Errorf("checkOldName(%q, %q) = %q, want %d problems", c.file, c.content, got, c.want)
+		}
+		for _, p := range got {
+			if !strings.Contains(p, "an old name") {
+				t.Errorf("problem %q", p)
+			}
+		}
+	}
+}
+
 func TestSlug(t *testing.T) {
 	for heading, want := range map[string]string{
-		"Sync away from home (planned)":         "sync-away-from-home-planned",
-		"9. The phone as the root":              "9-the-phone-as-the-root",
-		"The holder of `clipboardbridge.local`": "the-holder-of-clipboardbridgelocal",
-		"Android: the clipboard without taps":   "android-the-clipboard-without-taps",
-		"Mac → Linux":                           "mac--linux",
+		"Sync away from home (planned)":       "sync-away-from-home-planned",
+		"9. The phone as the root":            "9-the-phone-as-the-root",
+		"The holder of `cbb.local`":           "the-holder-of-cbblocal",
+		"Android: the clipboard without taps": "android-the-clipboard-without-taps",
+		"Mac → Linux":                         "mac--linux",
 	} {
 		if got := slug(heading); got != want {
 			t.Errorf("slug(%q) = %q, want %q", heading, got, want)
@@ -197,11 +220,11 @@ func TestCheckOps(t *testing.T) {
 
 func TestCheckStyle(t *testing.T) {
 	files := map[string][]byte{
-		"docs/guide/a.md": []byte("Simply run it.\n`cbb simply` and [setup](easy.md) and \"clipboardbridge\"\n```\neasy clipboardbridge\n```\nInstall clipboardbridge.\nSee https://example.com/easy and /usr/share/clipboardbridge.\nIn `a\nclipboardbridge b` too.\n"),
+		"docs/guide/a.md": []byte("Simply run it.\n`cbb simply` and [setup](easy.md) and \"easy\"\n```\neasy\n```\nIt is easy.\nSee https://example.com/easy and /usr/share/easy.\nIn `a\neasy b` too.\n"),
 		"docs/design.md":  []byte("It cannot simply go inside it.\n"),
 	}
 	got := checkStyle(files)
-	want := []string{"docs/guide/a.md:1: \"Simply\"", "docs/guide/a.md:6: the product", "docs/guide/a.md:7: the product"}
+	want := []string{"docs/guide/a.md:1: \"Simply\"", "docs/guide/a.md:6: \"easy\"", "docs/guide/a.md:7: \"easy\""}
 	if len(got) != len(want) {
 		t.Fatalf("checkStyle() = %q, want %d problems", got, len(want))
 	}

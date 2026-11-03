@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-{{define "title"}}{{t "Code signing policy"}}: Clipboard Bridge{{end}}
-{{define "description"}}{{t "How the Windows programs of Clipboard Bridge are signed, who may approve a signature, and what the programs send."}}{{end}}
+{{define "title"}}{{t "Code signing policy"}}: Copy Beyond Borders{{end}}
+{{define "description"}}{{t "How the Windows programs of Copy Beyond Borders are signed, who may approve a signature, and what the programs send."}}{{end}}
 
 {{define "content"}}
 <section class="wrap page">
@@ -10,7 +10,7 @@
   <h2>{{t "What is signed"}}</h2>
   <ul>
     <li>{{t "The Windows programs of each release, %s and %s, are signed with the SignPath Foundation's certificate. The first release signed this way is the first after the Foundation accepts the project; until then they are not signed." (code "cbb.exe") (code "cbbw.exe")}}</li>
-    <li>{{t "Only what GitHub Actions builds from the release's tag in %s is signed, never a program built on someone's own computer." (link "https://github.com/HunterEwok/clipboardbridge" "HunterEwok/clipboardbridge")}}</li>
+    <li>{{t "Only what GitHub Actions builds from the release's tag in %s is signed, never a program built on someone's own computer." (link "https://github.com/HunterEwok/cbb" "HunterEwok/cbb")}}</li>
     <li>{{t "Every file of a release, signed or not, is listed in the release's checksums and has a build attestation: see %s." (link "download.html#check" (t "checking a download"))}}</li>
   </ul>
 
@@ -21,7 +21,7 @@
   </ul>
 
   <h2>{{t "Privacy"}}</h2>
-  <p>{{t "Clipboard Bridge sends what you copy only to the devices of your group. Anything else it sends, to whom, and how to turn it off, is in %s." (link "privacy.html#programs" (t "the privacy policy"))}}</p>
+  <p>{{t "Copy Beyond Borders sends what you copy only to the devices of your group. Anything else it sends, to whom, and how to turn it off, is in %s." (link "privacy.html#programs" (t "the privacy policy"))}}</p>
 
   <div class="final">
     <h2>{{t "Try it on your devices"}}</h2>

@@ -16,8 +16,8 @@ import (
 	"github.com/amnezia-vpn/amneziawg-go/conn"
 	"github.com/amnezia-vpn/amneziawg-go/device"
 
-	"github.com/HunterEwok/clipboardbridge/internal/third_party/netstack"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/third_party/netstack"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // The tunnel's cases (W19, W20, S3, S4, S5) play a client of the hub with a

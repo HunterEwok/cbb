@@ -31,8 +31,8 @@ turn sync away from home on.
 - **Only devices you control.** Every device in the group reads every copy that reaches
   it. Remove a device you give away before it leaves (`sudo cbb remove NAME`, or Remove in
   the app), and a lost one at once ([if a device is lost](../guide/lost-device.md)).
-- **Limit the `clipboardbridge` group.** On Linux, FreeBSD and macOS, members of the
-  system group `clipboardbridge` read and set the clipboard through the service; add only
+- **Limit the `cbb` group.** On Linux, FreeBSD and macOS, members of the
+  system group `cbb` read and set the clipboard through the service; add only
   the people who use that computer's desktop.
 - **Leave the service's sandbox as it is.** The systemd unit runs the service as its own
   user without capabilities (`NoNewPrivileges`, `ProtectSystem=strict`, restricted address

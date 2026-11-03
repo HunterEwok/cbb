@@ -15,28 +15,28 @@ import (
 // The labels of the launchd jobs in packaging/macos, which launchd puts in
 // XPC_SERVICE_NAME for the programs it starts.
 const (
-	serviceLabel = "io.github.hunterewok.clipboardbridge"
+	serviceLabel = "tools.cbb"
 	agentLabel   = serviceLabel + ".agent"
 )
 
 // serviceLog returns where the service logs: started by launchd, its own
-// log in /Library/Logs/clipboardbridge, moved to service.log.1 past 1 MiB as
+// log in /Library/Logs/cbb, moved to service.log.1 past 1 MiB as
 // on Windows; standard error follows the log, so that a crash lands in it
 // too. Started by hand, standard error.
 func serviceLog(stderr io.Writer) (io.Writer, func()) {
 	if os.Getenv("XPC_SERVICE_NAME") != serviceLabel {
 		return stderr, func() {}
 	}
-	l, err := openLogThen("/Library/Logs/clipboardbridge/service.log", toStderr)
+	l, err := openLogThen("/Library/Logs/cbb/service.log", toStderr)
 	if err != nil {
-		fmt.Fprintln(stderr, "clipboardbridge: the log:", err)
+		fmt.Fprintln(stderr, "cbb: the log:", err)
 		return stderr, func() {}
 	}
 	return l, func() { l.Close() }
 }
 
 // agentLog returns where the agent logs: started by launchd, which has no
-// file for it, ~/Library/Logs/clipboardbridge/agent.log, moved to
+// file for it, ~/Library/Logs/cbb/agent.log, moved to
 // agent.log.1 past 1 MiB; started by hand, standard error.
 func agentLog(stderr io.Writer) (io.Writer, func(), error) {
 	if os.Getenv("XPC_SERVICE_NAME") != agentLabel {
@@ -46,7 +46,7 @@ func agentLog(stderr io.Writer) (io.Writer, func(), error) {
 	if err != nil {
 		return stderr, func() {}, err
 	}
-	l, err := openLogThen(filepath.Join(home, "Library", "Logs", "clipboardbridge", "agent.log"), toStderr)
+	l, err := openLogThen(filepath.Join(home, "Library", "Logs", "cbb", "agent.log"), toStderr)
 	if err != nil {
 		return stderr, func() {}, err
 	}

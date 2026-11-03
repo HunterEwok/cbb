@@ -2,9 +2,9 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The paste targets without a clipboard (docs/design.md, "Remote paste"),
-//! as the full member's: cbb paste-helper tmux, which clipboardbridge's
+//! as the full member's: cbb paste-helper tmux, which cbb's
 //! tmux.conf starts in the background, and cbb paste-helper console, which
-//! the clipboardbridge-console unit runs as root. Each watches the service's
+//! the cbb-console unit runs as root. Each watches the service's
 //! control socket for the target it offers and answers every inject.
 
 use std::io::Write;
@@ -122,7 +122,7 @@ fn run_tmux(socket: &Path) -> Result<()> {
     let tmux_env = std::env::var("TMUX").unwrap_or_default();
     let sock = tmux_env.split(',').next().unwrap_or_default().to_string();
     if sock.is_empty() {
-        return Err(Error::msg("not inside tmux: start it from tmux, as clipboardbridge's tmux.conf does"));
+        return Err(Error::msg("not inside tmux: start it from tmux, as cbb's tmux.conf does"));
     }
     let Some(_lock) = lock_helper(&sock) else {
         return Ok(()); // this server has its helper
@@ -149,13 +149,13 @@ fn run_tmux(socket: &Path) -> Result<()> {
     serve(socket, &tm, &log)
 }
 
-/// The user's directory for clipboardbridge's own files, made if missing.
+/// The user's directory for cbb's own files, made if missing.
 fn state_dir() -> Option<PathBuf> {
     let base = match std::env::var_os("XDG_STATE_HOME") {
         Some(d) if !d.is_empty() => PathBuf::from(d),
         _ => PathBuf::from(std::env::var_os("HOME")?).join(".local").join("state"),
     };
-    let dir = base.join("clipboardbridge");
+    let dir = base.join("cbb");
     use std::os::unix::fs::DirBuilderExt;
     std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).ok()?;
     Some(dir)
@@ -172,7 +172,7 @@ fn lock_helper(sock: &str) -> Option<Option<std::fs::File>> {
     };
     // Named as the Go helper names it, so that the two see one lock.
     let sum = cbb_core::certs::sha256(sock.as_bytes());
-    let path = dir.join(format!("clipboardbridge-tmux-{}.lock", hex8(&sum)));
+    let path = dir.join(format!("cbb-tmux-{}.lock", hex8(&sum)));
     use std::os::unix::fs::OpenOptionsExt;
     use std::os::unix::io::AsRawFd;
     let Ok(f) = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).mode(0o600).open(path)
@@ -245,7 +245,7 @@ pub struct Tmux {
 }
 
 /// The paste buffer it loads, deleted by the paste.
-const BUFFER: &str = "clipboardbridge-remote";
+const BUFFER: &str = "cbb-remote";
 
 impl Target for Tmux {
     fn name(&self) -> &'static str {
@@ -371,7 +371,7 @@ fn quote(s: &str) -> String {
 fn run_console(socket: &Path) -> Result<()> {
     // SAFETY: geteuid has no preconditions.
     if unsafe { libc::geteuid() } != 0 {
-        return Err(Error::msg("the console helper runs as root, from the clipboardbridge-console unit"));
+        return Err(Error::msg("the console helper runs as root, from the cbb-console unit"));
     }
     let log = |s: &str| eprintln!("{s}");
     log("cbb: pasting into the active text console");

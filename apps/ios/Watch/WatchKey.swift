@@ -19,7 +19,7 @@ enum WatchKey {
         case keychain(OSStatus)
     }
 
-    private static let service = "io.github.hunterewok.clipboardbridge.watch"
+    private static let service = "tools.cbb.watch"
     /// The key the watch offered and the root has not certified yet, and
     /// the certified one.
     private static let pendingAccount = "admin-key-pending", adminAccount = "admin-key"

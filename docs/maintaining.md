@@ -121,7 +121,7 @@ environment secret**.
 - **mdns with avahi**: the mDNS tests on real sockets, beside avahi-daemon, in a Debian
   container;
 - **e2e**: the built binary as three members and an avahi resolver in Docker containers:
-  pairing, sync, the holder of `clipboardbridge.local` and its handover, a wrong code
+  pairing, sync, the holder of `cbb.local` and its handover, a wrong code
   ([tools/e2e/e2e.sh](../tools/e2e/e2e.sh));
 - **desktop clipboards**: the Wayland data-control client under a headless sway and the X11
   client under Xvfb, against wl-clipboard and xclip;
@@ -131,7 +131,7 @@ environment secret**.
   Homebrew on macOS;
 - **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on
   windows-latest;
-- **phone kit**: ClipboardBridgeKit's tests on Linux and macOS, and its cross tests with the Go
+- **phone kit**: CBBKit's tests on Linux and macOS, and its cross tests with the Go
   code (pairing over plain TCP on Linux; pairing and a member connection over TLS on macOS);
 - **iPhone app**: the Xcode project from XcodeGen, built and tested on an iPhone simulator
   without signing;
@@ -179,15 +179,15 @@ Rules for workflows:
   A tag `vX.Y.Z-rc.N` makes a pre-release, which `releases/latest` and so `get.sh` skip;
   it needs no pull request first: its notes take CHANGELOG's *Unreleased*, and the Android apps
   take the tag's version.
-- The archives are `clipboardbridge-<os>-<arch>.tar.gz` without the version, so that
-  `releases/latest/download/` has fixed names for `get.sh`; each holds `clipboardbridge/` with the
+- The archives are `cbb-<os>-<arch>.tar.gz` without the version, so that
+  `releases/latest/download/` has fixed names for `get.sh`; each holds `cbb/` with the
   binary, `LICENSE`, `THIRD_PARTY_NOTICES` (the licenses of the Go modules, the copied code
   and Go itself, written by `packaging/archive.sh`) and `packaging/`. The
-  `clipboardbridge-lite-linux-*` archives hold `clipboardbridge-lite/` in the same way (`lite/packaging/archive.sh`), with the crates'
+  `cbb-lite-linux-*` archives hold `cbb-lite/` in the same way (`lite/packaging/archive.sh`), with the crates'
   licenses (`lite/packaging/notices.sh`), the same Linux installer and the lite member's unit.
 - The iPhone shortcuts are the one exception: iOS imports only shortcuts signed with an
-  Apple ID, which needs a Mac. When `go run ./tools/shortcut` changes `clipboardbridge.plist` or
-  `clipboardbridge-add.plist`, sign each changed one (here `NAME`) on a Mac:
+  Apple ID, which needs a Mac. When `go run ./tools/shortcut` changes `cbb.plist` or
+  `cbb-add.plist`, sign each changed one (here `NAME`) on a Mac:
   `plutil -convert binary1 -o /tmp/NAME-unsigned.shortcut internal/phone/shortcut/NAME.plist`
   (`shortcuts sign` reads only the binary form) and
   `shortcuts sign --mode anyone --input /tmp/NAME-unsigned.shortcut --output internal/phone/shortcut/NAME.shortcut`,
@@ -213,7 +213,7 @@ Rules for workflows:
   CI's `packaging` and `Android app` jobs make them on every change, as the release does.
 - After the draft, the `docker` job builds the image of `packaging/docker` from the
   release's own Linux archives for amd64, arm64 and armv7, pushes it to
-  `ghcr.io/hunterewok/clipboardbridge` as `X.Y.Z` (and `latest`, but not for a pre-release),
+  `ghcr.io/hunterewok/cbb` as `X.Y.Z` (and `latest`, but not for a pre-release),
   attests it in the registry and adds its digest to the release notes. The first push makes
   the package private: once, in the package's settings on GitHub, make it public.
 
@@ -228,7 +228,7 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   into a free retired PIV slot (82 when `ykman piv keys info 82` finds no key), and nothing
   else on the key is reset or changed. `ykman piv keys generate --algorithm ECCP256
   --pin-policy ALWAYS --touch-policy ALWAYS 82 root-N.pem`, then `ykman piv certificates
-  generate --subject "CN=Clipboard Bridge release signing root N (2026)" 82 root-N.pem` so
+  generate --subject "CN=Copy Beyond Borders release signing root N (2026)" 82 root-N.pem` so
   the key can be read from the slot, and `ykman piv keys attest 82` with the `f9`
   certificate as proof that the key was made on the YubiKey.
   Their public keys go into `packaging/get.sh` (`release_roots`), `packaging/windows/get.ps1`
@@ -298,8 +298,8 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
 
 The tap is the repository
 [HunterEwok/homebrew-tap](https://github.com/HunterEwok/homebrew-tap),
-the one tap for all of the owner's formulae; Clipboard Bridge's is `Formula/clipboardbridge.rb`, and users install with
-`brew install hunterewok/tap/clipboardbridge`. After each release (not a
+the one tap for all of the owner's formulae; CBB's is `Formula/cbb.rb`, and users install with
+`brew install hunterewok/tap/cbb`. After each release (not a
 pre-release) is published, `.github/workflows/published.yml` checks its signed files and writes the formula with
 `packaging/homebrew/formula.sh` from the release's `SHA256SUMS` and pushes it to the tap's
 `main`. The formula installs the release archives as they are, so it needs no Apple signing,
@@ -327,7 +327,7 @@ fill the tap for a release made before, run `formula.sh` with that tag and its
 
 ## winget
 
-The package `HunterEwok.clipboardbridge` installs the release's zip for Windows as winget's
+The package `HunterEwok.cbb` installs the release's zip for Windows as winget's
 portable command `cbb`; `cbb install` then runs the installer from the same zip. For each
 release (not a pre-release) the `release` job of `.github/workflows/release.yml` writes its
 three manifest files with `packaging/winget/manifest.sh` from the release's `SHA256SUMS` and
@@ -339,7 +339,7 @@ request. winget takes a package only by a pull request to
 - [ ] For each release, on a Windows PC: unpack `winget-manifest.zip`, check it with
   `winget validate --manifest <folder>` and `winget install --manifest <folder>`, then submit
   it with `wingetcreate submit <folder>` (it asks for a GitHub token and opens the pull
-  request under `manifests/h/HunterEwok/clipboardbridge/<version>`).
+  request under `manifests/h/HunterEwok/cbb/<version>`).
 
 ## The OpenWrt feed
 
@@ -347,8 +347,8 @@ The release workflow's `openwrt-feed` job wraps each Linux archive in an apk pac
 OpenWrt 25.12 and later (`packaging/openwrt/feed.sh`, run in the pinned `alpine:3.23`
 image, whose apk has mkpkg and mkndx, which OpenWrt's leaves out), one feed per Go architecture, and signs each index
 with the feed's ECDSA P-256 key. It publishes them with the release as
-`openwrt-feed.tar.gz`: `<arch>/packages.adb`, `<arch>/clipboardbridge-<version>.apk` and
-the public key `clipboardbridge.pem`. CI's `openwrt` job builds a feed with a test key on
+`openwrt-feed.tar.gz`: `<arch>/packages.adb`, `<arch>/cbb-<version>.apk` and
+the public key `cbb.pem`. CI's `openwrt` job builds a feed with a test key on
 every pull request and installs and removes the package from it. Setting it up, once:
 
 - [ ] Make the key on any computer: `openssl ecparam -name prime256v1 -genkey -noout -out
@@ -421,7 +421,7 @@ is signed with a Developer ID and notarized, it updates with [Sparkle](https://s
 - [ ] Sparkle's own Ed25519 key, made with Sparkle's `generate_keys` on the maintainer's Mac
   and kept in its keychain; the public key goes into the app's `Info.plist`
   (`SUPublicEDKey`) in `apps/macos/project.yml`.
-- [ ] The release workflow builds, signs and notarizes `ClipboardBridge-X.Y.Z.zip`;
+- [ ] The release workflow builds, signs and notarizes `CBB-X.Y.Z.zip`;
   `release-sign manifest` lists it like the other files.
 - [ ] `appcast.xml` beside `stable.json`, with each version's EdDSA signature
   (`sign_update`), made when `stable.json` is signed, so both name the same release.
@@ -430,22 +430,22 @@ is signed with a Developer ID and notarized, it updates with [Sparkle](https://s
 
 ## Android signing key
 
-The release workflow builds `clipboardbridge-X.Y.Z.apk` and `clipboardbridge-fdroid-X.Y.Z.apk`
+The release workflow builds `cbb-X.Y.Z.apk` and `cbb-fdroid-X.Y.Z.apk`
 from the tag (version code `X*10000 + Y*100 + Z`, from `apps/android/version.properties`)
 and signs them with the project's release key, which lives in the environment **release**
 ("Release secrets" above) and, with a backup, on the maintainer's Mac. Android installs an update only when it is signed with the same
 key, so the key is made once and kept, with a backup, for good:
 
 ```sh
-keytool -genkeypair -v -keystore clipboardbridge-release.jks -alias clipboardbridge \
-  -keyalg EC -groupname secp256r1 -validity 36500 -dname "CN=clipboardbridge"
-base64 -i clipboardbridge-release.jks | pbcopy   # macOS; Linux: base64 -w0 clipboardbridge-release.jks
+keytool -genkeypair -v -keystore cbb-release.jks -alias cbb \
+  -keyalg EC -groupname secp256r1 -validity 36500 -dname "CN=cbb"
+base64 -i cbb-release.jks | pbcopy   # macOS; Linux: base64 -w0 cbb-release.jks
 ```
 
 The secrets: `CBB_ANDROID_KEYSTORE_BASE64` (the keystore, in base64),
-`CBB_ANDROID_KEYSTORE_PASSWORD`, `CBB_ANDROID_KEY_ALIAS` (`clipboardbridge`) and
+`CBB_ANDROID_KEYSTORE_PASSWORD`, `CBB_ANDROID_KEY_ALIAS` (`cbb`) and
 `CBB_ANDROID_KEY_PASSWORD` (the same as the keystore's for a PKCS12 keystore). Without them
-the release has no APK. F-Droid publishes our signed `clipboardbridge-fdroid-X.Y.Z.apk` once
+the release has no APK. F-Droid publishes our signed `cbb-fdroid-X.Y.Z.apk` once
 its own build of the tag matches it (below).
 
 To check the key without a release, run the release workflow by hand from `main` (Actions,
@@ -459,13 +459,13 @@ recipe in [fdroiddata](https://gitlab.com/fdroid/fdroiddata); `packaging/fdroid`
 recipe we submit. Once, for the first release with the fdroid flavor:
 
 - [ ] Fill in the recipe: `AllowedAPKSigningKeys`, the SHA-256 of the release key's
-  certificate (`apksigner verify --print-certs clipboardbridge-fdroid-X.Y.Z.apk`), and
+  certificate (`apksigner verify --print-certs cbb-fdroid-X.Y.Z.apk`), and
   `ndk`, the `cbb.ndk` of the tag.
 - [ ] Check that F-Droid's build reproduces ours: `fdroid build -v -l
-  io.github.hunterewok.clipboardbridge` in a clone of fdroiddata with the recipe, on
+  tools.cbb` in a clone of fdroiddata with the recipe, on
   F-Droid's buildserver image (`fdroid build` compares with `Binaries`).
 - [ ] Open the merge request to fdroiddata (GitLab account), with the recipe as
-  `metadata/io.github.hunterewok.clipboardbridge.yml`, and answer the reviewers.
+  `metadata/tools.cbb.yml`, and answer the reviewers.
 
 After that, each release's tag is picked up by F-Droid's update check
 (`UpdateCheckData` reads `apps/android/version.properties`), usually within days. When a

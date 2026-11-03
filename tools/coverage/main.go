@@ -38,7 +38,7 @@ import (
 	"strings"
 )
 
-const module = "github.com/HunterEwok/clipboardbridge/"
+const module = "github.com/HunterEwok/cbb/"
 
 // goParts are the parts measured from the Go profiles: a file counts in a
 // part when its path in the module matches the part's test.
@@ -86,7 +86,7 @@ var llvmParts = map[string]func(file string) bool{
 		return strings.Contains(f, "/lite/src/") && !strings.Contains(f, "/tests/")
 	},
 	"swift-kit": func(f string) bool {
-		return strings.Contains(f, "/ClipboardBridgeKit/Sources/")
+		return strings.Contains(f, "/CBBKit/Sources/")
 	},
 }
 

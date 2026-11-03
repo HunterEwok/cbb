@@ -14,7 +14,7 @@ import (
 	"image/png"
 	"math/bits"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
+	"github.com/HunterEwok/cbb/internal/clip"
 )
 
 // Windows keeps a bitmap on the clipboard as a DIB: a BITMAPINFOHEADER, or

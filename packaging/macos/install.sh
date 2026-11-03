@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs clipboardbridge on a Mac:
+# Installs cbb on a Mac:
 #
 #   sudo sh install.sh [--in-place] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] path/to/cbb
 #
-# It creates the hidden _clipboardbridge user and group, installs the binary to
+# It creates the hidden _cbb user and group, installs the binary to
 # /usr/local/bin, the service as a LaunchDaemon and the pasteboard agent as
 # a LaunchAgent, adds the user who ran sudo to the group, asks whether the
 # application firewall may let the service take connections, and starts or
@@ -18,7 +18,7 @@
 # after an upgrade restarts them on the new one. The service always runs a
 # copy that only root can change, since it holds the group's keys and a
 # Homebrew prefix belongs to the user. --port moves the member port from 8764
-# to N, kept in /etc/clipboardbridge/clipboardbridge.env as on Linux until the
+# to N, kept in /etc/cbb/cbb.env as on Linux until the
 # next --port; --port 8764 goes back. --home-cgnat on (or CBB_HOME_CGNAT=1)
 # counts 100.64.0.0/10, the carrier-grade NAT range, as the home network
 # too, kept in the same file; --home-cgnat off goes back. --auto-update
@@ -125,28 +125,12 @@ if "$bin" version | grep -q 'no pasteboard support'; then
 	exit 1
 fi
 
-# Up to 0.2.0 clipboardbridge was called clipbridge, and its protocol does
-# not reach this one: remove it, with its keys and user, so this Mac pairs
-# again.
-old=io.github.hunterewok.clipbridge
-if [ -e /usr/local/bin/clipbridge ] || [ -e "/Library/LaunchDaemons/$old.plist" ]; then
-	launchctl bootout "system/$old" 2>/dev/null || true
-	if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
-		launchctl bootout "gui/$(id -u "$SUDO_USER")/$old.agent" 2>/dev/null || true
-	fi
-	rm -f "/Library/LaunchDaemons/$old.plist" "/Library/LaunchAgents/$old.agent.plist" /usr/local/bin/clipbridge
-	rm -rf "/Library/Application Support/clipbridge" /Library/Logs/clipbridge
-	dscl . -delete /Users/_clipbridge 2>/dev/null || true
-	dscl . -delete /Groups/_clipbridge 2>/dev/null || true
-	echo "Removed clipbridge, as Clipboard Bridge was called before; pair this Mac again."
-fi
-
-name=_clipboardbridge
+name=_cbb
 if ! dscl . -read "/Groups/$name" >/dev/null 2>&1; then
 	# A free ID below 500, so the account stays hidden.
 	id=$(dscl . -list /Groups PrimaryGroupID | awk '{print $2}' | sort -n | awk 'BEGIN{n=300} $1==n{n++} END{print n}')
 	dscl . -create "/Groups/$name" PrimaryGroupID "$id"
-	dscl . -create "/Groups/$name" RealName "clipboardbridge"
+	dscl . -create "/Groups/$name" RealName "cbb"
 fi
 gid=$(dscl . -read "/Groups/$name" PrimaryGroupID | awk '{print $2}')
 if ! dscl . -read "/Users/$name" >/dev/null 2>&1; then
@@ -155,7 +139,7 @@ if ! dscl . -read "/Users/$name" >/dev/null 2>&1; then
 	dscl . -create "/Users/$name" PrimaryGroupID "$gid"
 	dscl . -create "/Users/$name" UserShell /usr/bin/false
 	dscl . -create "/Users/$name" NFSHomeDirectory /var/empty
-	dscl . -create "/Users/$name" RealName "Clipboard Bridge service"
+	dscl . -create "/Users/$name" RealName "CBB service"
 	dscl . -create "/Users/$name" IsHidden 1
 fi
 
@@ -184,18 +168,18 @@ else
 fi
 # The socket's directory: members of the group may reach the socket, and
 # only the service its state.
-install -d -o "$name" -g "$name" -m 0750 "/Library/Application Support/clipboardbridge"
-install -d -o "$name" -g "$name" -m 0700 "/Library/Application Support/clipboardbridge/state"
-install -d -o "$name" -g "$name" -m 0750 /Library/Logs/clipboardbridge
+install -d -o "$name" -g "$name" -m 0750 "/Library/Application Support/cbb"
+install -d -o "$name" -g "$name" -m 0700 "/Library/Application Support/cbb/state"
+install -d -o "$name" -g "$name" -m 0750 /Library/Logs/cbb
 # The service's own copy: a binary the user or another program can replace
 # would get the service's keys at its next start.
-service="/Library/Application Support/clipboardbridge/bin/cbb"
-install -d -o root -g wheel -m 0755 "/Library/Application Support/clipboardbridge/bin"
+service="/Library/Application Support/cbb/bin/cbb"
+install -d -o root -g wheel -m 0755 "/Library/Application Support/cbb/bin"
 install -o root -g wheel -m 0755 "$run" "$service.new"
 mv -f "$service.new" "$service"
 
-daemon=io.github.hunterewok.clipboardbridge
-agent=io.github.hunterewok.clipboardbridge.agent
+daemon=tools.cbb
+agent=tools.cbb.agent
 for p in "/Library/LaunchDaemons/$daemon.plist" "/Library/LaunchAgents/$agent.plist"; do
 	exe=$run
 	[ "$p" = "/Library/LaunchDaemons/$daemon.plist" ] && exe=$service
@@ -212,8 +196,8 @@ fi
 # The settings, in the file the service and cbb read as on Linux: the ones
 # given, else the ones kept from before, else the defaults (port 8764,
 # 100.64.0.0/10 outside the home network).
-env=/etc/clipboardbridge/clipboardbridge.env
-install -d -m 0755 /etc/clipboardbridge
+env=/etc/cbb/cbb.env
+install -d -m 0755 /etc/cbb
 if [ -z "$port" ]; then
 	port=$(sed -n 's/^CBB_PORT=//p' "$env" 2>/dev/null | tail -n 1)
 fi
@@ -228,7 +212,7 @@ if [ "$port" = 8764 ] && [ "$cgnat" = 0 ] && [ -z "$interfaces" ]; then
 	rm -f "$env"
 else
 	{
-		echo "# Written by clipboardbridge's install.sh; change it with install.sh --port N and --home-cgnat on|off. A CBB_INTERFACES line is kept."
+		echo "# Written by cbb's install.sh; change it with install.sh --port N and --home-cgnat on|off. A CBB_INTERFACES line is kept."
 		if [ "$port" != 8764 ]; then
 			echo "CBB_PORT=$port"
 		fi
@@ -251,8 +235,8 @@ fi
 # It is listed only with the user's consent, kept in firewall.answer, and
 # uninstall.sh takes the entry away.
 fw=/usr/libexec/ApplicationFirewall/socketfilterfw
-listed="/Library/Application Support/clipboardbridge/firewall"
-answer=/etc/clipboardbridge/firewall.answer
+listed="/Library/Application Support/cbb/firewall"
+answer=/etc/cbb/firewall.answer
 if [ -x "$fw" ]; then
 	# An installation from before the question listed the program without
 	# one: that counts as a Yes, kept from now on, so that an update never
@@ -269,10 +253,10 @@ if [ -x "$fw" ]; then
 	if "$fw" --getglobalstate 2>/dev/null | grep -q enabled; then
 		fwstate=on
 	fi
-	echo "Firewall: the macOS application firewall ($fwstate). Clipboard Bridge requires this rule:"
+	echo "Firewall: the macOS application firewall ($fwstate). CBB requires this rule:"
 	echo "  1. Allow incoming connections to $service. Purpose: connections from the group's devices"
 	echo "     on TCP $port and finding them on UDP 5353 (mDNS). The application firewall allows a"
-	echo "     program on every port and from every address; Clipboard Bridge itself accepts only"
+	echo "     program on every port and from every address; CBB itself accepts only"
 	echo "     the home network."
 	yes=$firewall
 	how=
@@ -286,7 +270,7 @@ if [ -x "$fw" ]; then
 		fi
 	fi
 	if [ "$yes" != yes ] && [ "$yes" != no ] && [ "$yes" != express ]; then
-		echo "With Yes, Clipboard Bridge adds this rule, keeps it current on every update and removes it on uninstall."
+		echo "With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall."
 		printf 'Add this rule now? [y/N] '
 		yes=
 		how=
@@ -310,20 +294,20 @@ if [ -x "$fw" ]; then
 		"$fw" --add "$service" >/dev/null
 		"$fw" --unblockapp "$service" >/dev/null
 		echo "$service" >"$listed"
-		echo "Added the rule above$how. Clipboard Bridge manages it from now on."
+		echo "Added the rule above$how. CBB manages it from now on."
 	else
-		echo "No firewall rule was added. Clipboard Bridge works only while the firewall allows the rule above."
+		echo "No firewall rule was added. CBB works only while the firewall allows the rule above."
 		echo "To add it by hand, run:"
 		echo "  sudo $fw --add \"$service\""
 		echo "  sudo $fw --unblockapp \"$service\""
-		echo "To let Clipboard Bridge add and manage it, run the installer again with --express."
+		echo "To let CBB add and manage it, run the installer again with --express."
 	fi
 fi
 
 # uninstall.sh stays where get.sh's download does not: beside the program,
 # as on Linux.
-install -d -m 0755 /usr/local/share/clipboardbridge
-install -m 0644 "$here/uninstall.sh" /usr/local/share/clipboardbridge/uninstall.sh
+install -d -m 0755 /usr/local/share/cbb
+install -m 0644 "$here/uninstall.sh" /usr/local/share/cbb/uninstall.sh
 
 # restart DOMAIN LABEL PLIST stops the job if it runs and starts it again.
 # bootout returns before launchd has let the job go, and a bootstrap in that
@@ -361,13 +345,13 @@ if [ -n "$user" ] && [ "$user" != root ]; then
 	restart "gui/$(id -u "$user")" "$agent" "/Library/LaunchAgents/$agent.plist"
 fi
 if [ "$port" != 8764 ]; then
-	echo "Clipboard Bridge uses TCP port $port instead of 8764. If a firewall on the network limits"
+	echo "CBB uses TCP port $port instead of 8764. If a firewall on the network limits"
 	echo "incoming connections, allow TCP $port from the home network. The iPhone shortcut works only"
-	echo "with 8764; the Clipboard Bridge app takes any port."
+	echo "with 8764; the CBB app takes any port."
 fi
 # An update of a device in a group keeps its group: no need to join.
-if [ -f "/Library/Application Support/clipboardbridge/state/identity.json" ]; then
-	echo "Clipboard Bridge is running on TCP port $port, in its group."
+if [ -f "/Library/Application Support/cbb/state/identity.json" ]; then
+	echo "CBB is running on TCP port $port, in its group."
 else
-	echo "Clipboard Bridge is running on TCP port $port. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new."
+	echo "CBB is running on TCP port $port. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new."
 fi

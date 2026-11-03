@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b61def346d84 -->
+<!-- source: c2d39475bc20 -->
 # कीबोर्ड और टीवी
 
-उन लोगों के लिए जो किसी टीवी, टैबलेट, कंसोल या ऐसे कंप्यूटर में लंबा पासवर्ड, कोई लिंक या खोज टाइप करना चाहते हैं जिसमें Clipboard Bridge का कुछ भी नहीं है। आपके समूह का एक डिवाइस वहाँ टेक्स्ट को कीबोर्ड या टीवी के रिमोट की तरह टाइप करता है, आपके टैप करने पर या जब कोई एडमिन रिमोट पेस्ट भेजता है।
+उन लोगों के लिए जो किसी टीवी, टैबलेट, कंसोल या ऐसे कंप्यूटर में लंबा पासवर्ड, कोई लिंक या खोज टाइप करना चाहते हैं जिसमें Copy Beyond Borders का कुछ भी नहीं है। आपके समूह का एक डिवाइस वहाँ टेक्स्ट को कीबोर्ड या टीवी के रिमोट की तरह टाइप करता है, आपके टैप करने पर या जब कोई एडमिन रिमोट पेस्ट भेजता है।
 
 ## एक तरीका चुनें
 
@@ -36,7 +36,7 @@ Xbox और Nintendo Switch केवल USB कीबोर्ड लेते 
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
+# add "CBB <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```

@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 65f0a956514b -->
+<!-- source: d10744fc3cc7 -->
 # Programu
 
-Clipboard Bridge ina programu za simu, saa na kompyuta za mezani. Programu za simu hushikilia kikundi; programu za kompyuta ni dirisha la kuangalia huduma ambayo tayari inaendeshwa kwenye kompyuta.
+Copy Beyond Borders ina programu za simu, saa na kompyuta za mezani. Programu za simu hushikilia kikundi; programu za kompyuta ni dirisha la kuangalia huduma ambayo tayari inaendeshwa kwenye kompyuta.
 
 | Programu | Mahali pa kuipata | Hali |
 |---|---|---|
-| Android | `clipboardbridge-X.Y.Z.apk` katika kila [toleo](https://github.com/HunterEwok/clipboardbridge/releases) | imejengwa na kujaribiwa katika CI, bado haijajaribiwa kwenye simu halisi |
-| Android bila Google | `clipboardbridge-fdroid-X.Y.Z.apk`, na F-Droid itakapokubaliwa: programu ile ile bila saa ya Wear OS | imejengwa na kujaribiwa katika CI |
+| Android | `cbb-X.Y.Z.apk` katika kila [toleo](https://github.com/HunterEwok/cbb/releases) | imejengwa na kujaribiwa katika CI, bado haijajaribiwa kwenye simu halisi |
+| Android bila Google | `cbb-fdroid-X.Y.Z.apk`, na F-Droid itakapokubaliwa: programu ile ile bila saa ya Wear OS | imejengwa na kujaribiwa katika CI |
 | iPhone na iPad | TestFlight, itakapofunguliwa | imejengwa na kujaribiwa katika CI; inaendeshwa kwenye iPhone ikijengwa kwa timu ya msanidi mwenyewe |
-| Wear OS | `clipboardbridge-wear-X.Y.Z.apk`, huwekwa kwenye saa kutoka kwenye kompyuta kwa `adb install` kupitia utatuzi usiotumia waya wa saa, hadi programu iwe kwenye Google Play | imejengwa |
+| Wear OS | `cbb-wear-X.Y.Z.apk`, huwekwa kwenye saa kutoka kwenye kompyuta kwa `adb install` kupitia utatuzi usiotumia waya wa saa, hadi programu iwe kwenye Google Play | imejengwa |
 | Apple Watch | pamoja na programu ya iPhone | imejengwa; inaendeshwa kwenye Apple Watch pamoja na programu ya iPhone |
 | Programu ya Mac | si ya kupakua bado: kwa sasa hujengwa kutoka `apps/macos` | imejengwa |
 | Programu ya trei ya Linux na Windows | katika kumbukumbu za Windows na Linux za kila toleo, husakinishwa pamoja na huduma | imejengwa; imeendeshwa kwenye mashine pepe ya Windows 11 |
@@ -18,17 +18,17 @@ Clipboard Bridge ina programu za simu, saa na kompyuta za mezani. Programu za si
 
 ### Anzisha kikundi
 
-1. [Sakinisha](install.md) Clipboard Bridge kwenye kompyuta na uendeshe `sudo cbb pair` hapo. Huonyesha msimbo wa QR.
+1. [Sakinisha](install.md) Copy Beyond Borders kwenye kompyuta na uendeshe `sudo cbb pair` hapo. Huonyesha msimbo wa QR.
 2. Fungua programu na ugonge **Connect a new device**, kisha changanua msimbo. Programu huunda ufunguo wa kikundi ndani ya chipu ya usalama ya simu (Secure Enclave kwenye iPhone, Keystore kwenye Android), huongeza kompyuta na kufungua Mwanzo.
-3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u clipboardbridge cbb pair` kwenye kifaa hicho huonyesha msimbo wake).
+3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u cbb cbb pair` kwenye kifaa hicho huonyesha msimbo wake).
 
 Kamera isipoweza kutumika: kwenye iPhone, andika tarakimu sita ambazo kompyuta inaonyesha; kwenye Android, bandika maandishi ya msimbo wa QR, ambayo `cbb pair` pia huyachapisha.
 
 ### Kila siku
 
 - **Mwanzo** huonyesha kila kifaa cha kikundi, kama vigae au orodha, na kitone kinachoonyesha kama kiko mtandaoni. Kitufe kikubwa hutuma kile ambacho simu inashikilia, au huleta nakala ya karibuni ya kompyuta kama ilifanywa muda mfupi uliopita.
-- **iPhone**: iOS huruhusu programu kutumia ubao wa kunakili ikiwa mbele tu, kwa hiyo iPhone husawazisha kwa ishara moja: kitendo cha "Sync clipboard" kwenye Back Tap au kitufe cha Action, kidhibiti cha Kituo cha Udhibiti, au wijeti ya skrini ya kwanza. Shiriki, Clipboard Bridge hutuma maandishi au kiungo mara moja.
-- **Android**: nakala kutoka kwenye kompyuta hufika zenyewe. Ili nakala za simu nazo zitumwe zenyewe, washa **Send my copies by themselves** (huduma ya ufikivu; programu hueleza inachosoma). Bila hiyo, mguso mmoja: kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, Send kwenye arifa, wijeti ya skrini ya kwanza, au Shiriki na uteuzi wa maandishi, Clipboard Bridge.
+- **iPhone**: iOS huruhusu programu kutumia ubao wa kunakili ikiwa mbele tu, kwa hiyo iPhone husawazisha kwa ishara moja: kitendo cha "Sync clipboard" kwenye Back Tap au kitufe cha Action, kidhibiti cha Kituo cha Udhibiti, au wijeti ya skrini ya kwanza. Shiriki, Copy Beyond Borders hutuma maandishi au kiungo mara moja.
+- **Android**: nakala kutoka kwenye kompyuta hufika zenyewe. Ili nakala za simu nazo zitumwe zenyewe, washa **Send my copies by themselves** (huduma ya ufikivu; programu hueleza inachosoma). Bila hiyo, mguso mmoja: kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, Send kwenye arifa, wijeti ya skrini ya kwanza, au Shiriki na uteuzi wa maandishi, Copy Beyond Borders.
 - **Arifa** husema kifaa kinapojiunga au kuondolewa, kinapokuwa msimamizi, au kitovu kisipojibu ukiwa mbali na nyumbani. Kila aina ina swichi yake kwenye Mipangilio.
 
 ### Vifaa
@@ -40,7 +40,7 @@ Gusa kifaa kuona aina yake, mfumo, toleo na jukumu. Kwenye simu ya msimamizi una
 
 ### Simu ya pili, na simu iliyopotea
 
-- **Simu ya pili**: kwenye simu hiyo gusa **I already use Clipboard Bridge on another phone**; huonyesha msimbo wa QR, ambao simu ya kwanza huuchanganua kwa **+**. Simu ya kwanza, mzizi, huifanya msimamizi, ili kupoteza simu moja kusipoteze chochote.
+- **Simu ya pili**: kwenye simu hiyo gusa **I already use Copy Beyond Borders on another phone**; huonyesha msimbo wa QR, ambao simu ya kwanza huuchanganua kwa **+**. Simu ya kwanza, mzizi, huifanya msimamizi, ili kupoteza simu moja kusipoteze chochote.
 - **Simu iliyopotea**: kwenye simu yako nyingine, iondoe kwenye orodha ya vifaa. Kompyuta hubaki kwenye kikundi; kama simu iliyopotea ilikuwa mzizi, simu nyingine huchukua kikundi katika hatua ile ile. Zaidi katika [kifaa kikipotea au kuibwa](lost-device.md).
 
 ### Mipangilio

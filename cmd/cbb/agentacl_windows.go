@@ -11,7 +11,7 @@ import (
 
 // letServiceQuery lets the service's account look up this agent's session
 // and user: it may query the process, and the process's token, whose access
-// list is its own. The service runs as NT SERVICE\clipboardbridge, which may not
+// list is its own. The service runs as NT SERVICE\cbb, which may not
 // open another user's process; without this it names the agent's user
 // nobody, and gives it no remote pastes and no quick actions.
 func letServiceQuery() error {

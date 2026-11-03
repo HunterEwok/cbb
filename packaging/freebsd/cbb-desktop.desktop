@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+[Desktop Entry]
+Type=Application
+Name=CBB
+Comment=Share this desktop's clipboard with the CBB group
+Exec=/usr/local/bin/cbb agent
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-phase=1

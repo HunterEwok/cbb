@@ -252,7 +252,7 @@ impl Console {
                 let name = line["pair".len()..].trim();
                 match board.join(if name.is_empty() { "Nano ESP32" } else { name }) {
                     Ok(text) => {
-                        println!("In the Clipboard Bridge app, tap \"Connect a new device\" and paste this:");
+                        println!("In the CBB app, tap \"Connect a new device\" and paste this:");
                         println!();
                         println!("{text}");
                         println!();

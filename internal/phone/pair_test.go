@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
+	"github.com/HunterEwok/cbb/internal/pair"
 )
 
 func postCode(t *testing.T, h http.Handler, code string) string {
@@ -126,7 +126,7 @@ func TestPagesAreSafe(t *testing.T) {
 func TestProfile(t *testing.T) {
 	ca := newCA(t)
 	p := string(Profile(ca))
-	for _, want := range []string{"com.apple.security.root", "io.github.hunterewok.clipboardbridge", "<key>PayloadRemovalDisallowed</key>"} {
+	for _, want := range []string{"com.apple.security.root", "tools.cbb", "<key>PayloadRemovalDisallowed</key>"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the profile lacks %q", want)
 		}
@@ -157,7 +157,7 @@ func TestProfile(t *testing.T) {
 	}
 	// The profile port serves it with the type iOS installs.
 	rec := httptest.NewRecorder()
-	ProfileHandler(ca).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/clipboardbridge.mobileconfig", nil))
+	ProfileHandler(ca).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cbb.mobileconfig", nil))
 	if rec.Header().Get("Content-Type") != "application/x-apple-aspen-config" || rec.Body.String() != p {
 		t.Errorf("profile response %d %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
@@ -178,7 +178,7 @@ func TestProfile(t *testing.T) {
 			t.Error("the page does not say where the shortcut is")
 		}
 		rec = httptest.NewRecorder()
-		ProfileHandler(ca).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/clipboardbridge.shortcut", nil))
+		ProfileHandler(ca).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cbb.shortcut", nil))
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("a missing shortcut: %d", rec.Code)
 		}
@@ -255,7 +255,7 @@ func TestShortcutFile(t *testing.T) {
 			t.Fatalf("not well-formed XML: %v", err)
 		}
 	}
-	for _, want := range []string{"https://clipboardbridge.local:8764/pair", "https://clipboardbridge.local:8764/sync", tokenPath, "unpaired", "to_iphone"} {
+	for _, want := range []string{"https://cbb.local:8764/pair", "https://cbb.local:8764/sync", tokenPath, "unpaired", "to_iphone"} {
 		if !bytes.Contains(got, []byte(want)) {
 			t.Errorf("the shortcut lacks %q", want)
 		}

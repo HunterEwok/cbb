@@ -70,11 +70,11 @@ func releaseBody(version, channel string) Release {
 	sum := strings.Repeat("ab", 32)
 	return Release{V: 1, Type: TypeRelease, Version: version, Channel: channel, TimeMS: nowMS - 1000, MinFrom: "0.4.0",
 		Files: []Asset{
-			{Name: "clipboardbridge_" + version + "_linux_amd64.tar.gz", Size: 1234, SHA256: sum,
+			{Name: "cbb_" + version + "_linux_amd64.tar.gz", Size: 1234, SHA256: sum,
 				Binaries: []Binary{{Name: "cbb", SHA256: strings.Repeat("cd", 32)}}},
 			{Name: "SHA256SUMS", Size: 100, SHA256: strings.Repeat("ef", 32)},
 		},
-		Docker: &Docker{Image: "ghcr.io/example/clipboardbridge", Digest: "sha256:" + sum},
+		Docker: &Docker{Image: "ghcr.io/example/cbb", Digest: "sha256:" + sum},
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // The image sets CBB_CONTAINER (packaging/docker/Dockerfile). A container

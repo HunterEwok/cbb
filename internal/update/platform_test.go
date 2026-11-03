@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // fakeService answers each status request on a control socket with the
@@ -54,9 +54,9 @@ func TestHealthy(t *testing.T) {
 	// The new version answers on the second ask.
 	fakeService(t, func(n int) string {
 		if n == 0 {
-			return "clipboardbridge v0.5.0 (linux/amd64)"
+			return "cbb v0.5.0 (linux/amd64)"
 		}
-		return "clipboardbridge v0.6.0 (linux/amd64)"
+		return "cbb v0.6.0 (linux/amd64)"
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -71,7 +71,7 @@ func TestHealthyGivesUp(t *testing.T) {
 		version string
 		want    string
 	}{
-		{"an older version", "clipboardbridge v0.6.0-rc.1 (linux/amd64)", "it runs clipboardbridge v0.6.0-rc.1"},
+		{"an older version", "cbb v0.6.0-rc.1 (linux/amd64)", "it runs cbb v0.6.0-rc.1"},
 		{"no status", "-", "sent no status"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -162,15 +162,15 @@ func TestArchiveName(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		ext = ".zip"
 	}
-	if !strings.HasPrefix(got, "clipboardbridge-"+runtime.GOOS+"-") || !strings.HasSuffix(got, ext) {
+	if !strings.HasPrefix(got, "cbb-"+runtime.GOOS+"-") || !strings.HasSuffix(got, ext) {
 		t.Errorf("ArchiveName() = %s", got)
 	}
 }
 
 func TestMethodCommands(t *testing.T) {
 	for _, c := range []struct{ method, want string }{
-		{MethodBrew, "brew upgrade clipboardbridge"},
-		{MethodWinget, "winget upgrade HunterEwok.clipboardbridge"},
+		{MethodBrew, "brew upgrade cbb"},
+		{MethodWinget, "winget upgrade HunterEwok.cbb"},
 		{MethodDocker, "docker compose pull"},
 		{MethodPackage, ""},
 	} {

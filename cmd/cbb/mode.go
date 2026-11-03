@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // cmdMode shows or changes this device's sync mode: what moves between its

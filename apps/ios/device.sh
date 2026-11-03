@@ -60,7 +60,7 @@ if [ -z "$team" ]; then
 fi
 lower=$(printf %s "$team" | tr '[:upper:]' '[:lower:]')
 # Not the release identifier: the developer account will register that one.
-bundle=${CBB_BUNDLE_ID:-dev.$lower.clipboardbridge}
+bundle=${CBB_BUNDLE_ID:-dev.$lower.cbb}
 
 # The paired devices from devicectl: "platform udid name tunnel" lines, the
 # tunnel "connected" when Xcode can reach the device now.
@@ -99,11 +99,11 @@ fi
 # Under /tmp, which macOS empties at a restart; .noindex keeps Spotlight
 # from listing the built app beside the installed one. CBB_DERIVED moves it.
 derived=${CBB_DERIVED:-/tmp/cbb-device.noindex}
-set -- -project ClipboardBridge.xcodeproj -configuration Debug -derivedDataPath "$derived" \
+set -- -project CBB.xcodeproj -configuration Debug -derivedDataPath "$derived" \
 	-allowProvisioningUpdates -allowProvisioningDeviceRegistration \
 	DEVELOPMENT_TEAM="$team" CODE_SIGN_STYLE=Automatic CBB_BUNDLE_ID="$bundle"
 if [ "${CBB_NFC:-0}" = 1 ]; then
-	set -- "$@" CBB_DEBUG_ENTITLEMENTS=ClipboardBridge/Nfc.entitlements
+	set -- "$@" CBB_DEBUG_ENTITLEMENTS=CBB/Nfc.entitlements
 fi
 
 # A free team's profile lists the devices it runs on, and only a build for a
@@ -122,12 +122,12 @@ if [ "$test" = 0 ] && [ -n "$watch" ]; then
 fi
 
 if [ "$test" = 1 ]; then
-	xcodebuild test -scheme ClipboardBridge -destination "id=$phone" "$@"
+	xcodebuild test -scheme CBB -destination "id=$phone" "$@"
 	exit
 fi
-xcodebuild build -scheme ClipboardBridge -destination "id=$phone" "$@"
+xcodebuild build -scheme CBB -destination "id=$phone" "$@"
 
-app=$derived/Build/Products/Debug-iphoneos/ClipboardBridge.app
+app=$derived/Build/Products/Debug-iphoneos/CBB.app
 xcrun devicectl device install app --device "$phone" "$app"
 if [ -n "$watch" ] && [ -d "$app/Watch/Watch.app" ]; then
 	xcrun devicectl device install app --device "$watch" "$app/Watch/Watch.app" ||

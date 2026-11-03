@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The protocol core of the clipboardbridge lite member (docs/protocol.md):
+//! The protocol core of the cbb lite member (docs/protocol.md):
 //! certificates and their checks, the signed records, the hybrid clock, the
 //! sync engine, the frames of the member protocol and the joiner's side of
 //! the pairing, and the format of the saved state for a board without a file

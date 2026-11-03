@@ -14,12 +14,12 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/blekeyboard"
-	"github.com/HunterEwok/clipboardbridge/internal/blekeyboard/bluetest"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/keyboard"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/blekeyboard"
+	"github.com/HunterEwok/cbb/internal/blekeyboard/bluetest"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/keyboard"
 )
 
 // TestKeyboard: cbb keyboard on a Linux computer, against a fake BlueZ:

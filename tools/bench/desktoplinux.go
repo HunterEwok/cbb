@@ -185,7 +185,7 @@ func keysHelper(ctx context.Context, r *Report, l *Device) {
 	p := "desktop/T15-keys-helper/" + l.Name
 	ask := func(user, line string) (string, error) {
 		py := `python3 -c 'import socket,sys
-s=socket.socket(socket.AF_UNIX); s.settimeout(5); s.connect("/run/clipboardbridge-keys/keys")
+s=socket.socket(socket.AF_UNIX); s.settimeout(5); s.connect("/run/cbb-keys/keys")
 s.sendall(sys.argv[1].encode()+b"\n"); print(s.makefile().readline().strip())' ` + shellQuote(line)
 		if user != "" {
 			py = "sudo -n -u " + user + " " + py
@@ -194,7 +194,7 @@ s.sendall(sys.argv[1].encode()+b"\n"); print(s.makefile().readline().strip())' `
 		return strings.TrimSpace(out), err
 	}
 	if r.Do(p+"/present", func() error {
-		out, err := Run(ctx, l, "test -S /run/clipboardbridge-keys/keys && echo yes || true", "")
+		out, err := Run(ctx, l, "test -S /run/cbb-keys/keys && echo yes || true", "")
 		if err == nil && strings.TrimSpace(out) != "yes" {
 			return Skipped("the keys helper is off on " + l.Name + " (cbb paste-helper uinput on)")
 		}
@@ -232,7 +232,7 @@ s.sendall(sys.argv[1].encode()+b"\n"); print(s.makefile().readline().strip())' `
 func consoleTmux(ctx context.Context, r *Report, l *Device) {
 	p := "desktop/H4-console/" + l.Name
 	r.Do(p, func() error {
-		out, err := Run(ctx, l, "test -f /etc/profile.d/clipboardbridge-console.sh && command -v tmux >/dev/null && command -v openvt >/dev/null && sudo -n true 2>/dev/null && echo yes || true", "")
+		out, err := Run(ctx, l, "test -f /etc/profile.d/cbb-console.sh && command -v tmux >/dev/null && command -v openvt >/dev/null && sudo -n true 2>/dev/null && echo yes || true", "")
 		if err != nil {
 			return err
 		}

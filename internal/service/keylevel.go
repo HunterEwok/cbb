@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // The group's key levels (docs/roadmap.md, "Key levels"): which keys may be

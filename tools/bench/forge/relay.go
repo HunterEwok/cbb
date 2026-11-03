@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/pair"
 )
 
 // A relay between two TLS sessions (G8, docs/protocol.md section 6): forge

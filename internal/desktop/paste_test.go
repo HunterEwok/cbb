@@ -14,9 +14,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/lockcheck"
-	"github.com/HunterEwok/clipboardbridge/internal/uinput"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/lockcheck"
+	"github.com/HunterEwok/cbb/internal/uinput"
 )
 
 // memBoard is a clipboard in memory that records what it held when the

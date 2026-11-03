@@ -12,10 +12,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/HunterEwok/clipboardbridge/internal/attest"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/attest"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
 // The attestation of a member key in the TPM (docs/protocol.md, section

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // Linked reports whether this build calls the Rust core, as the release

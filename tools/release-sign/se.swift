@@ -52,7 +52,7 @@ case "public":
 case "sign":
     let data = FileHandle.standardInput.readDataToEndOfFile()
     let context = LAContext()
-    context.localizedReason = "sign a clipboardbridge release"
+    context.localizedReason = "sign a cbb release"
     do {
         let sig = try load(path, context: context).signature(for: data)
         FileHandle.standardOutput.write(sig.derRepresentation)

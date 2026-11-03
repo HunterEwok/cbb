@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 const actionUsage = `usage: cbb action                       list this device's quick actions
@@ -188,7 +188,7 @@ func actionWarning(a control.Action) string {
 		actions.Reboot:   "reboot this computer, a minute after they ask",
 		actions.Shutdown: "shut this computer down, a minute after they ask",
 		actions.Cancel:   "cancel a reboot or shutdown that is pending",
-		actions.Restart:  "restart the Clipboard Bridge service here",
+		actions.Restart:  "restart the CBB service here",
 	}[a.Name]
 	if len(a.Command) > 0 {
 		what = "run " + strings.Join(a.Command, " ") + " as the user signed in here"
@@ -202,7 +202,7 @@ func actionWarning(a control.Action) string {
 	}
 	s := fmt.Sprintf("Turning %s on lets %s %s, from wherever they are in the group.\n", a.Name, who, what)
 	if rights := actions.Rights([]string{a.Name}); len(rights) > 0 {
-		s += "It gives the Clipboard Bridge service these rights, in a polkit rule, and no others:\n"
+		s += "It gives the CBB service these rights, in a polkit rule, and no others:\n"
 		for _, r := range rights {
 			s += "  " + r + "\n"
 		}

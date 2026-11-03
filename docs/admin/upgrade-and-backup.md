@@ -28,12 +28,6 @@ it puts the previous programs back when the new service does not report its vers
 a minute. A release that went back this way is skipped by the automatic updates; its log is
 `update.log` in the update folder of [installing](../guide/install.md#updating).
 
-### Groups made before 0.4
-
-A group whose computers all hold the group's key (made before 0.4) is not read from 0.6 on,
-as a group of 0.5 is not: each computer leaves it at its first start, keeps its settings, and
-the group is set up again (`cbb new` on one computer, `cbb pair` on the others).
-
 ## What to back up
 
 The group itself is not in any one place: every device keeps the records it needs, and the

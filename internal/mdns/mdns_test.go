@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/netguard"
 )
 
 // fakeLink is a network segment: multicast reaches every interface on it,
@@ -435,7 +435,7 @@ func TestHolder(t *testing.T) {
 	clock := newClock()
 	ra := start(t, a, idA, 4001, clock)
 	if m := ask(t, client, Port, q(PhoneName, dnsmessage.TypeA)); m != nil {
-		t.Fatalf("answered for clipboardbridge.local without holding it: %v", m)
+		t.Fatalf("answered for cbb.local without holding it: %v", m)
 	}
 	ra.r.SetHolder(true)
 	time.Sleep(3 * tick)
@@ -443,7 +443,7 @@ func TestHolder(t *testing.T) {
 	drain(client)
 	m := ask(t, client, Port, q(PhoneName, dnsmessage.TypeA))
 	if m == nil {
-		t.Fatal("no answer for clipboardbridge.local")
+		t.Fatal("no answer for cbb.local")
 	}
 	ans := m.Answers[0]
 	if a, ok := ans.Body.(*dnsmessage.AResource); !ok || netip.AddrFrom4(a.A) != netip.MustParseAddr("192.168.1.10") ||
@@ -462,12 +462,12 @@ func TestHolder(t *testing.T) {
 	if !waitFor(client, func(m *dnsmessage.Message) bool {
 		return len(m.Answers) > 0 && sameName(m.Answers[0].Header.Name, PhoneName) && m.Answers[0].Header.TTL == 0
 	}) {
-		t.Error("no goodbye for clipboardbridge.local")
+		t.Error("no goodbye for cbb.local")
 	}
 }
 
 func TestHolderGoodbyeOnStop(t *testing.T) {
-	// A holder that stops says goodbye for clipboardbridge.local, even when it
+	// A holder that stops says goodbye for cbb.local, even when it
 	// gave the name up just before and the change was not applied yet.
 	for _, release := range []bool{false, true} {
 		var l fakeLink
@@ -486,7 +486,7 @@ func TestHolderGoodbyeOnStop(t *testing.T) {
 				return sameName(r.Header.Name, PhoneName) && r.Header.TTL == 0
 			})
 		}) {
-			t.Errorf("release=%v: no goodbye for clipboardbridge.local on stop", release)
+			t.Errorf("release=%v: no goodbye for cbb.local on stop", release)
 		}
 	}
 }
@@ -586,7 +586,7 @@ func TestDottedNamesDoNotHideQuestions(t *testing.T) {
 	}
 	data = appendDottedPTR(data)
 	if m := askRaw(t, client, Port, data, PhoneName); m == nil {
-		t.Error("a dotted known answer hid the question for clipboardbridge.local")
+		t.Error("a dotted known answer hid the question for cbb.local")
 	}
 }
 
@@ -1030,7 +1030,7 @@ func TestReceivedRecordsAreChecked(t *testing.T) {
 	if p := c.peers("", t0); len(p) != 0 {
 		t.Errorf("a peer with a bad device ID: %+v", p)
 	}
-	// A huge TTL is capped at clipboardbridge's own lifetimes.
+	// A huge TTL is capped at cbb's own lifetimes.
 	good := newZone(idB, 4002, nil)
 	var gm dnsmessage.Message
 	for _, r := range good.all([]netip.Addr{netip.MustParseAddr("192.168.1.11"), netip.MustParseAddr("8.8.8.8")}) {

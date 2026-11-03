@@ -6,8 +6,8 @@
 package main
 
 import (
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/pasteboard"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/pasteboard"
 )
 
 // agentTarget is the agent's remote paste target: none on the Mac, where

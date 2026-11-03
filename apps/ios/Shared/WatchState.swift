@@ -13,12 +13,11 @@ struct WatchState: Codable, Equatable {
         var symbol: String
         var online: Bool
         /// What this watch may do to it, as PhoneGroup.WatchAction's raw
-        /// values; nil from a phone before 0.6.
+        /// values.
         var can: [String]?
         /// The quick actions it has on, while it is connected.
         var actions: [String]?
-        /// The name of the phone's collection it is in; nil in none, and
-        /// from a phone before 0.6.
+        /// The name of the phone's collection it is in; nil in none.
         var collection: String?
         /// The watch's own phone, which the phone lists first as every app
         /// lists the device it runs on; nil for the others.

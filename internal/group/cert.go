@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Package group holds the certificates and keys of a clipboardbridge group: the
+// Package group holds the certificates and keys of a cbb group: the
 // group CA, which certifies the members, the iPhone CA, which certifies the
-// clipboardbridge.local address for the iPhone, and this device's own identity.
+// cbb.local address for the iPhone, and this device's own identity.
 //
 // Every certificate uses ECDSA P-256. The CAs have a path length of 0, so
 // they sign only end certificates. The iPhone CA carries critical name
-// constraints: an iPhone that trusts it accepts it for clipboardbridge.local
+// constraints: an iPhone that trusts it accepts it for cbb.local
 // only, never for another site or an IP address.
 package group
 
@@ -26,11 +26,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/benchtime"
+	"github.com/HunterEwok/cbb/internal/benchtime"
 )
 
 // PhoneName is the DNS name the iPhone uses for the group.
-const PhoneName = "clipboardbridge.local"
+const PhoneName = "cbb.local"
 
 // Lifetimes of the certificates, and how long before its end a certificate
 // is renewed; the bench's time-scaled build runs them faster.
@@ -47,10 +47,10 @@ var (
 )
 
 const (
-	phoneCAName        = "clipboardbridge iPhone CA"
-	groupCAName        = "clipboardbridge group CA"
-	rootCAName         = "clipboardbridge group root"
-	notPermittedDomain = "clipboardbridge.invalid"
+	phoneCAName        = "cbb iPhone CA"
+	groupCAName        = "cbb group CA"
+	rootCAName         = "cbb group root"
+	notPermittedDomain = "cbb.invalid"
 )
 
 // A DeviceID identifies a device: 128 random bits as 32 lowercase hex
@@ -127,8 +127,8 @@ func NewRootCA(now time.Time) (*CA, error) {
 }
 
 // NewPhoneCA creates an iPhone CA. Its name constraints permit only the DNS
-// name clipboardbridge.local and its subdomains, and URI and e-mail names under
-// clipboardbridge.invalid, a domain that never exists; they exclude every IP
+// name cbb.local and its subdomains, and URI and e-mail names under
+// cbb.invalid, a domain that never exists; they exclude every IP
 // address. The constraints are critical, so a client that does not
 // understand them rejects the certificates instead of ignoring the limits.
 func NewPhoneCA(now time.Time) (*CA, error) {
@@ -180,7 +180,7 @@ func (ca *CA) IssueMember(id DeviceID, pub *ecdsa.PublicKey, now time.Time) (*x5
 }
 
 // IssuePhone certifies the public key of a member that serves the shortcut
-// for clipboardbridge.local, for 397 days.
+// for cbb.local, for 397 days.
 func (ca *CA) IssuePhone(pub *ecdsa.PublicKey, now time.Time) (*x509.Certificate, error) {
 	notBefore := maxTime(now.Add(-backdate), ca.Cert.NotBefore)
 	return ca.issue(&x509.Certificate{

@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/forward"
+	"github.com/HunterEwok/cbb/internal/forward"
 )
 
 // cmdForward runs a forwarder: a server that holds no keys and passes the

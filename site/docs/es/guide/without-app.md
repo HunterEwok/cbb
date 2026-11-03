@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 00a76d11e6c5 -->
+<!-- source: dbcf5e524e51 -->
 # Sin la app
 
 Un grupo no necesita la app del teléfono. Un ordenador puede sostener el grupo, y un iPhone sin la app se une con un atajo. Este es también el camino mientras la app del iPhone espera a TestFlight.
@@ -8,7 +8,7 @@ Un grupo no necesita la app del teléfono. Un ordenador puede sostener el grupo,
 
 ## 1. Crea el grupo en un ordenador
 
-[Instala](install.md) Clipboard Bridge en un ordenador que esté encendido a menudo: Linux, Windows, un Mac o FreeBSD. Sostiene el grupo y sirve el atajo del iPhone. Después:
+[Instala](install.md) Copy Beyond Borders en un ordenador que esté encendido a menudo: Linux, Windows, un Mac o FreeBSD. Sostiene el grupo y sirve el atajo del iPhone. Después:
 
 ```sh
 sudo cbb new
@@ -30,7 +30,7 @@ Después activa el uso compartido en cada ordenador, como en el [inicio rápido]
 
 ## 3. Añade un iPhone con el atajo
 
-En la raíz, o en un ordenador administrador que responda por `clipboardbridge.local` (`cbb status` dice si lo hace):
+En la raíz, o en un ordenador administrador que responda por `cbb.local` (`cbb status` dice si lo hace):
 
 ```sh
 sudo cbb pair -phone
@@ -39,8 +39,8 @@ sudo cbb pair -phone
 Imprime un código QR, el comienzo de una huella digital y un código de seis dígitos.
 
 1. Escanea el código QR con la cámara del iPhone y sigue la página: instala el perfil.
-2. Comprueba que la huella digital del perfil empieza por la impresa (Ajustes, General, VPN y gestión de dispositivos, «Clipboard Bridge», Más detalles), y luego activa la confianza total para él (Ajustes, General, Información, Ajustes de confianza de certificados).
-3. Añade el atajo «clipboardbridge» desde la misma página y ejecútalo una vez; te pide el código de seis dígitos.
+2. Comprueba que la huella digital del perfil empieza por la impresa (Ajustes, General, VPN y gestión de dispositivos, «CBB», Más detalles), y luego activa la confianza total para él (Ajustes, General, Información, Ajustes de confianza de certificados).
+3. Añade el atajo «cbb» desde la misma página y ejecútalo una vez; te pide el código de seis dígitos.
 4. Pon el atajo en el botón de acción, o en Tocar atrás (Ajustes, Accesibilidad, Tocar, Tocar atrás, Doble toque).
 
 Una sola pulsación elige entonces la dirección por sí misma: lo que se copió en un ordenador hace un momento llega al iPhone; si no, una copia nueva en el iPhone va a los ordenadores.

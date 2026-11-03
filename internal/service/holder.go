@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
 )
 
 // holderFile holds the holder setting, in the state directory; without it
@@ -19,7 +19,7 @@ import (
 const holderFile = "holder"
 
 // The holder settings: whether this member comes first, only as a fallback,
-// or never, when the members elect the holder of clipboardbridge.local.
+// or never, when the members elect the holder of cbb.local.
 // HolderAuto picks first or fallback by whether the machine has a battery.
 const (
 	HolderAuto     = "auto"
@@ -64,7 +64,7 @@ func saveHolder(dir, v string) error {
 	return atomicfile.Write(filepath.Join(dir, holderFile), []byte(v+"\n"), 0o600)
 }
 
-// priority returns this member's priority for clipboardbridge.local, or 0
+// priority returns this member's priority for cbb.local, or 0
 // if it never holds the name: only a member that serves the shortcut, with
 // the iPhone CA key, can hold it. A machine without a battery, which does
 // not sleep as a laptop does, comes first; the setting overrides the guess.

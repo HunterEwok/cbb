@@ -18,12 +18,12 @@ func TestDirs(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/data")
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
 	for got, want := range map[string]string{
-		StateDir():  "/home/u/.local/state/clipboardbridge",
-		UpdateDir(): "/home/u/.local/state/clipboardbridge-update",
-		ConfigDir(): "/home/u/.config/clipboardbridge",
-		ShareDir():  "/data/clipboardbridge",
+		StateDir():  "/home/u/.local/state/cbb",
+		UpdateDir(): "/home/u/.local/state/cbb-update",
+		ConfigDir(): "/home/u/.config/cbb",
+		ShareDir():  "/data/cbb",
 		UnitDir():   "/home/u/.config/systemd/user",
-		Socket():    "/run/user/1000/clipboardbridge/control.sock",
+		Socket():    "/run/user/1000/cbb/control.sock",
 	} {
 		if got != filepath.Clean(want) {
 			t.Errorf("got %s, want %s", got, want)

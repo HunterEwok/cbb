@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b61def346d84 -->
+<!-- source: c2d39475bc20 -->
 # 键盘与电视
 
-适合想往电视、平板、游戏机，或没有安装 Clipboard Bridge 的电脑里输入长密码、链接或搜索词的人。群组中的一台设备以键盘或电视遥控器的身份把文本输入到那里，由你点一下触发，或在管理员发送远程粘贴时触发。
+适合想往电视、平板、游戏机，或没有安装 Copy Beyond Borders 的电脑里输入长密码、链接或搜索词的人。群组中的一台设备以键盘或电视遥控器的身份把文本输入到那里，由你点一下触发，或在管理员发送远程粘贴时触发。
 
 ## 选一种方式
 
@@ -36,7 +36,7 @@ Xbox 和 Nintendo Switch 只接受 USB 键盘，所以它们要用 Nano ESP32。
 ```sh
 sudo cbb keyboard on -layout us    # registers the keyboard with BlueZ
 sudo cbb keyboard pair             # discoverable for two minutes
-# add "Clipboard Bridge <this computer's name>" on the device, in its Bluetooth settings
+# add "CBB <this computer's name>" on the device, in its Bluetooth settings
 cbb keyboard                       # shows whether it is connected
 echo 'the text' | sudo cbb keyboard type
 ```

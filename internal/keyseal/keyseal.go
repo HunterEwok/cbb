@@ -8,7 +8,7 @@
 // that seals them.
 package keyseal
 
-import "github.com/HunterEwok/clipboardbridge/internal/tpmkey"
+import "github.com/HunterEwok/cbb/internal/tpmkey"
 
 // A Blob is a sealed secret: exactly one of TPM and SE is set.
 type Blob struct {

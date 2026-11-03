@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/lockcheck"
+	"github.com/HunterEwok/cbb/internal/lockcheck"
 )
 
 // atScreen asks logind: the desktop and the actions go to the user of an

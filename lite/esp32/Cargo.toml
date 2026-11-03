@@ -2,7 +2,7 @@
 # Copyright (C) 2026 HunterEwok
 
 [package]
-name = "clipboardbridge-esp32"
+name = "cbb-esp32"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-only"
@@ -18,8 +18,8 @@ path = "src/main.rs"
 test = false
 
 [dependencies]
-clipboardbridge-core = { path = "../core", features = ["tls"] }
-clipboardbridge-embassy = { path = "../embassy", optional = true }
+cbb-core = { path = "../core", features = ["tls"] }
+cbb-embassy = { path = "../embassy", optional = true }
 esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "8a70d09fe0065d5387dac82e4fbe937e95e496e1", features = ["esp32s3"] }
 esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "8a70d09fe0065d5387dac82e4fbe937e95e496e1", features = ["esp32s3", "panic-handler", "println"] }
 esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "8a70d09fe0065d5387dac82e4fbe937e95e496e1", features = ["esp32s3"] }
@@ -53,7 +53,7 @@ xtensa-lx = { git = "https://github.com/esp-rs/esp-hal", rev = "8a70d09fe0065d53
 default = ["board"]
 board = [
   "esp-println/jtag-serial",
-  "dep:clipboardbridge-embassy",
+  "dep:cbb-embassy",
   "dep:esp-radio",
   "dep:esp-rtos",
   "dep:embassy-executor",

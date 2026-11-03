@@ -11,9 +11,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // writeDevices prints the devices list, with the clock of each connected
@@ -67,7 +67,7 @@ func writeDevices(w io.Writer, devs, peers []control.Device, newest string, now 
 		fmt.Fprintln(w, "* not in the devices list yet; the group's root adds it when they meet.")
 	}
 	if old {
-		fmt.Fprintf(w, "(old): below Clipboard Bridge %s, the newest release the group passed around; update it.\n", newest)
+		fmt.Fprintf(w, "(old): below CBB %s, the newest release the group passed around; update it.\n", newest)
 	}
 }
 

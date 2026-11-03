@@ -11,7 +11,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 // Board is a desktop clipboard that can be closed.

@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
 )
 
 // The renewals (K3): forge -target-state DIR ... cert:KIND[:SIGNER] sends

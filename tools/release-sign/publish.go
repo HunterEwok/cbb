@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // The steps of publish and renew reach GitHub through the gh command, ask
@@ -46,7 +46,7 @@ const keysMargin = 45 * 24 * time.Hour
 // the channel key on cbb.tools renews it every week after.
 const channelLife = 30 * 24 * time.Hour
 
-const defaultRepo = "HunterEwok/clipboardbridge"
+const defaultRepo = "HunterEwok/cbb"
 
 // channelBranch holds the current keys.json and channel file
 // (docs/protocol.md, section 16, "Where the files are").
@@ -57,7 +57,7 @@ const stableChannel = "stable"
 
 // The image the release workflow's docker job pushes; it adds the digest
 // to the draft's notes on a line of its own.
-var dockerRE = regexp.MustCompile(`(?m)^ghcr\.io/hunterewok/clipboardbridge@sha256:[0-9a-f]{64}\r?$`)
+var dockerRE = regexp.MustCompile(`(?m)^ghcr\.io/hunterewok/cbb@sha256:[0-9a-f]{64}\r?$`)
 
 // signing are the flags publish and renew share.
 type signing struct {
@@ -227,7 +227,7 @@ func publish(args []string) error {
 	step("%s is published; the published workflow updates the Homebrew tap", tag)
 	// The channel names the release only once it is public.
 	delete(files, "release.json")
-	return putChannel(s.repo, cur, files, "Clipboard Bridge "+tag)
+	return putChannel(s.repo, cur, files, "CBB "+tag)
 }
 
 // renew signs the channel file again with the release key, and keys.json
@@ -363,7 +363,7 @@ func putChannel(repo string, cur map[string]branchFile, files map[string]release
 // makeBranch makes the branch channel: one commit without a parent, with
 // its README.
 func makeBranch(repo string) error {
-	readme := "# The release channel\n\nThe current signed `keys.json` and `stable.json` of Clipboard Bridge's releases\n" +
+	readme := "# The release channel\n\nThe current signed `keys.json` and `stable.json` of CBB's releases\n" +
 		"(docs/protocol.md, section 16, on the main branch). `release-sign publish` writes them, and\n" +
 		"the channel workflow takes `stable.json` as cbb.tools renews it every week.\n"
 	call := func(v, body any, method, path string) error {

@@ -12,9 +12,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/forward"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // Keys are the relay's own keys: the TLS key of the registrations, which
@@ -44,7 +44,7 @@ func NewKeys() (Keys, error) {
 
 // wgBlock is the PEM type of the WireGuard key in the relay's key file. It
 // does not end in "PRIVATE KEY", so the TLS key's parser never takes it.
-const wgBlock = "CLIPBOARDBRIDGE WIREGUARD KEY"
+const wgBlock = "CBB WIREGUARD KEY"
 
 // LoadKeys reads the relay's keys from path, a PEM file, and makes them
 // first if the file does not exist. It is the one file the relay keeps:

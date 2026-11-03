@@ -6,17 +6,17 @@
 # group's keys and keeps nothing about the devices: no log names an
 # address, a group or a device, and on disk there is only its keys.
 [Unit]
-Description=Clipboard Bridge blind relay
-Documentation=https://github.com/HunterEwok/clipboardbridge/blob/main/docs/admin/self-hosting.md
+Description=CBB blind relay
+Documentation=https://github.com/HunterEwok/cbb/blob/main/docs/admin/self-hosting.md
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-# The groups to serve go in /etc/clipboardbridge/relay.env, as
+# The groups to serve go in /etc/cbb/relay.env, as
 # CBB_RELAY_FLAGS="-group TAG" (or "-open"); cbb relay takes no other setting.
 Environment=CBB_RELAY_FLAGS=
-EnvironmentFile=-/etc/clipboardbridge/relay.env
+EnvironmentFile=-/etc/cbb/relay.env
 ExecStart=/usr/local/bin/cbb relay $CBB_RELAY_FLAGS
 DynamicUser=yes
 StateDirectory=cbb-relay

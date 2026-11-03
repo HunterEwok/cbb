@@ -18,16 +18,16 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/lockcheck"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/lockcheck"
 )
 
 // Socket is where the helper listens. The connection is one line from the
 // desktop connector, "paste GRANT" (Shift+Insert) or "enter GRANT", GRANT
 // the grant of the service's inject, and one line back: "ok",
 // "refused REASON" or "error MESSAGE".
-const Socket = "/run/clipboardbridge-keys/keys"
+const Socket = "/run/cbb-keys/keys"
 
 // The keys of each request.
 var requests = map[string][]Key{

@@ -446,7 +446,7 @@ func rejoin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		return err
 	})
 	r.Do(p+"reset", func() error {
-		if _, err := Run(ctx, d, "rm -rf /var/lib/clipboardbridge/*", ""); err != nil {
+		if _, err := Run(ctx, d, "rm -rf /var/lib/cbb/*", ""); err != nil {
 			return err
 		}
 		if _, err := docker(ctx, "restart", "-t", "1", d.Container); err != nil {

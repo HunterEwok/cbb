@@ -12,15 +12,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
 )
 
 // modeFile holds the sync mode, in the state directory. A device that made
-// or joined its group gets one at once, with own; without it, the device
-// joined before sync modes existed and keeps sharing as it did.
+// or joined its group gets one at once, with own; without one, the device
+// shares.
 const modeFile = "mode"
 
 // loadMode reads the sync mode from dir.

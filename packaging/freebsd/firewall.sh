@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Opens and closes clipboardbridge's ports in FreeBSD's firewall, pf or ipfw:
+# Opens and closes cbb's ports in FreeBSD's firewall, pf or ipfw:
 #
 #   sh firewall.sh setup ask|express|no PORT   # install.sh runs it
 #   sh firewall.sh open PORT
@@ -14,32 +14,32 @@
 #   sh firewall.sh hub-port | hub-commands PORT
 #
 # The same commands as packaging/linux/firewall.sh, run as root. setup
-# lists the rules clipboardbridge needs and asks whether to add them,
+# lists the rules cbb needs and asks whether to add them,
 # unless the answer is given or kept from before.
 #
-# pf: the rules live in the anchor "clipboardbridge", loaded from
-# /usr/local/etc/clipboardbridge/pf.anchor. pf reads an anchor only where
+# pf: the rules live in the anchor "cbb", loaded from
+# /usr/local/etc/cbb/pf.anchor. pf reads an anchor only where
 # pf.conf names it, so with the user's consent open adds two marked lines at
 # the end of /etc/pf.conf, and close removes exactly those lines; nothing
 # else in pf.conf is touched. ipfw: rules added at run time in rule set 17,
 # numbers 10500 and up, which close deletes as a whole; ipfw forgets them on
 # a reboot, so the rc.d script runs reload. What open did is kept in
-# /usr/local/etc/clipboardbridge/firewall, the hub's port in firewall.hub.
+# /usr/local/etc/cbb/firewall, the hub's port in firewall.hub.
 #
 # OPNsense writes pf's whole ruleset at each filter reload, so pf.conf is
-# not used there: the plugin hook clipboardbridge.inc names the anchor in
+# not used there: the plugin hook cbb.inc names the anchor in
 # OPNsense's ruleset, and the rules go into the anchor as above. pfSense
 # gets the rules printed, to add in Firewall > Rules: it is unsupported.
 set -eu
 export LC_ALL=C
 
-etc=/usr/local/etc/clipboardbridge
+etc=/usr/local/etc/cbb
 state=$etc/firewall
 hubstate=$etc/firewall.hub
 answer=$etc/firewall.answer
 anchorfile=$etc/pf.anchor
 pfconf=${CBB_PF_CONF:-/etc/pf.conf}
-mark='# clipboardbridge: the rules in its anchor; firewall.sh close removes these lines'
+mark='# cbb: the rules in its anchor; firewall.sh close removes these lines'
 set17=17
 first=10500
 
@@ -79,7 +79,7 @@ nets() {
 	echo 10.0.0.0/8
 	echo 172.16.0.0/12
 	echo 192.168.0.0/16
-	if [ "$(sed -n 's/^CBB_HOME_CGNAT=//p' $etc/clipboardbridge.env 2>/dev/null | tail -n 1)" = 1 ]; then
+	if [ "$(sed -n 's/^CBB_HOME_CGNAT=//p' $etc/cbb.env 2>/dev/null | tail -n 1)" = 1 ]; then
 		echo 100.64.0.0/10
 	fi
 	echo fe80::/10
@@ -97,7 +97,7 @@ rules() {
 anchor() {
 	install -d -m 0755 $etc
 	{
-		echo "# Written by clipboardbridge's firewall.sh; it rewrites this file."
+		echo "# Written by cbb's firewall.sh; it rewrites this file."
 		echo "table <cbb_home> { $(nets | paste -sd' ' -) }"
 		if [ -n "$1" ]; then
 			echo "pass in quick proto tcp from <cbb_home> to port $1"
@@ -108,20 +108,20 @@ anchor() {
 		fi
 	} >"$anchorfile"
 	chmod 0644 "$anchorfile"
-	pfctl -a clipboardbridge -f "$anchorfile"
+	pfctl -a cbb -f "$anchorfile"
 }
 
 pf_lines() {
 	echo "$mark"
-	echo "anchor \"clipboardbridge\""
-	echo "load anchor \"clipboardbridge\" from \"$anchorfile\""
+	echo "anchor \"cbb\""
+	echo "load anchor \"cbb\" from \"$anchorfile\""
 }
 
 # pf_hook adds the lines that make pf read the anchor, once; on OPNsense
 # a filter reload runs the plugin hook, which names it.
 pf_hook() {
 	if [ "$(appliance)" = opnsense ]; then
-		pfctl -s rules 2>/dev/null | grep -q 'anchor "clipboardbridge"' || configctl filter reload >/dev/null
+		pfctl -s rules 2>/dev/null | grep -q 'anchor "cbb"' || configctl filter reload >/dev/null
 		return
 	fi
 	if ! grep -qxF "$mark" "$pfconf" 2>/dev/null; then
@@ -193,7 +193,7 @@ close() {
 	case $k in
 	pf | ipfw | opnsense)
 		apply_closed "$k"
-		echo "$k: removed the Clipboard Bridge rules."
+		echo "$k: removed the CBB rules."
 		;;
 	esac
 }
@@ -206,7 +206,7 @@ apply_closed() {
 	fi
 	case $1 in
 	pf | opnsense)
-		pfctl -a clipboardbridge -F rules 2>/dev/null || true
+		pfctl -a cbb -F rules 2>/dev/null || true
 		rm -f "$anchorfile"
 		pf_unhook
 		;;
@@ -303,7 +303,7 @@ ask() {
 }
 
 manual() {
-	echo "No firewall rules were added. Clipboard Bridge works only while the firewall allows the rules above."
+	echo "No firewall rules were added. CBB works only while the firewall allows the rules above."
 	echo "To add them by hand:"
 	commands "$1"
 }
@@ -317,11 +317,11 @@ setup() {
 		echo "If pf or ipfw is turned on later, run the installer again."
 		return
 	fi
-	echo "Firewall: $k (active). Clipboard Bridge requires these rules:"
+	echo "Firewall: $k (active). CBB requires these rules:"
 	rules "$port"
 	if [ "$k" = pfsense ]; then
 		close
-		echo "Clipboard Bridge does not change pfSense's rules, and runs there unsupported. Add them by hand:"
+		echo "CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:"
 		commands "$port"
 		return
 	fi
@@ -336,17 +336,17 @@ setup() {
 		yes | no) yes=$kept how=" (as answered before)" ;;
 		*)
 			if [ "$k" = opnsense ]; then
-				echo "With Yes, Clipboard Bridge keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both."
+				echo "With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both."
 			elif [ "$k" = pf ]; then
-				echo "With Yes, Clipboard Bridge keeps these rules in its own pf anchor and adds the lines that load it at the end of $pfconf; uninstalling removes both."
+				echo "With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of $pfconf; uninstalling removes both."
 			else
-				echo "With Yes, Clipboard Bridge adds these rules to ipfw's set $set17 at every start, and removes them on uninstall."
+				echo "With Yes, CBB adds these rules to ipfw's set $set17 at every start, and removes them on uninstall."
 			fi
 			if ask "Add these rules now?"; then
 				yes=yes
 			elif [ $? -eq 2 ]; then
 				manual "$k" "$port"
-				echo "To let Clipboard Bridge add and manage them, run the installer again with --express."
+				echo "To let CBB add and manage them, run the installer again with --express."
 				return
 			else
 				yes=no
@@ -359,11 +359,11 @@ setup() {
 	chmod 0644 "$answer"
 	if [ "$yes" = yes ]; then
 		open "$port"
-		echo "Added the rules above$how. Clipboard Bridge manages them from now on."
+		echo "Added the rules above$how. CBB manages them from now on."
 	else
 		close
 		manual "$k" "$port"
-		echo "To let Clipboard Bridge add and manage them, run the installer again with --express."
+		echo "To let CBB add and manage them, run the installer again with --express."
 	fi
 }
 

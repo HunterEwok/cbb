@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // cmdKeyboard shows or sets this computer as a Bluetooth keyboard, makes

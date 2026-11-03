@@ -119,7 +119,7 @@ func (f *Fleet) AddOn(ctx context.Context, net string, env ...string) (*Device, 
 func (f *Fleet) AddWith(ctx context.Context, net string, run []string, env ...string) (*Device, error) {
 	// sh stands in for the service manager: it starts the service again
 	// a second after it dies, as systemd's Restart= does.
-	d, err := f.container(ctx, net, run, env, "mkdir -p /run/clipboardbridge /var/lib/clipboardbridge; while :; do cbb service; sleep 1; done")
+	d, err := f.container(ctx, net, run, env, "mkdir -p /run/cbb /var/lib/cbb; while :; do cbb service; sleep 1; done")
 	if err != nil {
 		return nil, err
 	}

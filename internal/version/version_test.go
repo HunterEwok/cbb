@@ -17,47 +17,47 @@ func TestDescribe(t *testing.T) {
 		{
 			name:    "release build",
 			version: "v1.2.3", mainVersion: "(devel)", goos: "linux", goarch: "amd64",
-			want: "clipboardbridge v1.2.3 linux/amd64",
+			want: "cbb v1.2.3 linux/amd64",
 		},
 		{
 			name:    "release version wins over the module version",
 			version: "v1.2.3", mainVersion: "v1.2.4", goos: "linux", goarch: "amd64",
-			want: "clipboardbridge v1.2.3 linux/amd64",
+			want: "cbb v1.2.3 linux/amd64",
 		},
 		{
 			name:    "installed module",
 			version: "dev", mainVersion: "v1.2.3", goos: "darwin", goarch: "arm64",
-			want: "clipboardbridge v1.2.3 darwin/arm64",
+			want: "cbb v1.2.3 darwin/arm64",
 		},
 		{
 			name:    "checkout build",
 			version: "dev", mainVersion: "v0.0.0-20261021051425-b7a0077e1f2a+dirty", goos: "linux", goarch: "arm64",
-			want: "clipboardbridge v0.0.0-20261021051425-b7a0077e1f2a+dirty linux/arm64",
+			want: "cbb v0.0.0-20261021051425-b7a0077e1f2a+dirty linux/arm64",
 		},
 		{
 			name:    "no version information",
 			version: "dev", mainVersion: "(devel)", goos: "linux", goarch: "amd64",
-			want: "clipboardbridge dev linux/amd64",
+			want: "cbb dev linux/amd64",
 		},
 		{
 			name:    "empty module version",
 			version: "dev", goos: "linux", goarch: "amd64",
-			want: "clipboardbridge dev linux/amd64",
+			want: "cbb dev linux/amd64",
 		},
 		{
 			name:    "Raspberry Pi Zero W",
 			version: "v1.0.0", goos: "linux", goarch: "arm", goarm: "6",
-			want: "clipboardbridge v1.0.0 linux/arm/v6",
+			want: "cbb v1.0.0 linux/arm/v6",
 		},
 		{
 			name:    "ARM with a float mode",
 			version: "v1.0.0", goos: "linux", goarch: "arm", goarm: "7,softfloat",
-			want: "clipboardbridge v1.0.0 linux/arm/v7",
+			want: "cbb v1.0.0 linux/arm/v7",
 		},
 		{
 			name:    "GOARM is ignored on other architectures",
 			version: "v1.0.0", goos: "linux", goarch: "arm64", goarm: "7",
-			want: "clipboardbridge v1.0.0 linux/arm64",
+			want: "cbb v1.0.0 linux/arm64",
 		},
 	}
 	for _, tt := range tests {
@@ -72,8 +72,8 @@ func TestDescribe(t *testing.T) {
 
 func TestString(t *testing.T) {
 	got := String()
-	if !strings.HasPrefix(got, "clipboardbridge ") {
-		t.Errorf("String() = %q, want the prefix %q", got, "clipboardbridge ")
+	if !strings.HasPrefix(got, "cbb ") {
+		t.Errorf("String() = %q, want the prefix %q", got, "cbb ")
 	}
 	if strings.Count(got, " ") != 2 {
 		t.Errorf("String() = %q, want three words: name, version, platform", got)

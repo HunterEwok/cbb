@@ -89,7 +89,7 @@ EOF
 	cat >"/etc/systemd/system/$unit-net.service" <<EOF
 # Written by tools/bench/setup-netns.sh: the way out of the member $name.
 [Unit]
-Description=clipboardbridge bench: the way out of $name through $socks
+Description=cbb bench: the way out of $name through $socks
 After=network-online.target
 Wants=network-online.target
 
@@ -108,7 +108,7 @@ EOF
 	cat >"/etc/systemd/system/$unit.service" <<EOF
 # Written by tools/bench/setup-netns.sh: the member $name.
 [Unit]
-Description=clipboardbridge bench: the member $name in its namespace
+Description=cbb bench: the member $name in its namespace
 BindsTo=$unit-net.service
 After=$unit-net.service
 

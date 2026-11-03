@@ -1,0 +1,4179 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Admin keys": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи админов"
+          }
+        }
+      }
+    },
+    "Proven hardware only": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только доказанное железо"
+          }
+        }
+      }
+    },
+    "Keys in hardware": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи в железе"
+          }
+        }
+      }
+    },
+    "Keys in files too": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи и в файлах"
+          }
+        }
+      }
+    },
+    "Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Какие устройства могут быть админами и хабами группы. Ключи в железе никогда не покидают устройство, а ключ в файле может скопировать любой, кто получит файл. Уже назначенные админы остаются, пока вы их не удалите."
+          }
+        }
+      }
+    },
+    "Change which keys may be admins": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить, какие ключи могут быть у админов"
+          }
+        }
+      }
+    },
+    "Saved. Every device of the group follows it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранено. Все устройства группы следуют этой настройке."
+          }
+        }
+      }
+    },
+    "This phone's own key is not proven, so the group cannot ask for proven keys yet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ этого телефона не доказан, поэтому группа пока не может требовать доказанных ключей."
+          }
+        }
+      }
+    },
+    "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройка группы «Ключи админов» не позволяет ключам этого устройства быть админом. Измените её в Настройках, раздел «Ключи админов»."
+          }
+        }
+      }
+    },
+    "The group then lets keys in files be admins and hubs (Settings, Admin keys).": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда группа разрешит ключи в файлах для админов и хабов (Настройки, «Ключи админов»)."
+          }
+        }
+      }
+    },
+    "I have the group's recovery sheet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У меня есть лист восстановления группы"
+          }
+        }
+      }
+    },
+    "Restore the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Восстановить группу"
+          }
+        }
+      }
+    },
+    "Restore": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Восстановить"
+          }
+        }
+      }
+    },
+    "Restore the group with its recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Восстановить группу ключом восстановления"
+          }
+        }
+      }
+    },
+    "Point the camera at the QR code on the recovery sheet. Keep this phone on the network of a computer of the group. This phone becomes the group's root when the group's waiting time ends, unless the old phone cancels it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Наведите камеру на QR-код листа восстановления. Телефон должен быть в сети компьютера группы. Этот телефон станет корнем группы, когда истечёт время ожидания группы, если старый телефон не отменит заявку."
+          }
+        }
+      }
+    },
+    "Paste the text of the recovery sheet's QR code.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставьте текст QR-кода листа восстановления."
+          }
+        }
+      }
+    },
+    "This phone is in a group already. A recovery sheet restores a group on a phone without one.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон уже в группе. Лист восстановления восстанавливает группу на телефоне без группы."
+          }
+        }
+      }
+    },
+    "This is not the QR code of a recovery sheet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не QR-код листа восстановления."
+          }
+        }
+      }
+    },
+    "The claim is sent. This phone becomes the group's root when the waiting time ends; Home shows the time left.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заявка отправлена. Этот телефон станет корнем группы, когда истечёт время ожидания; на главном экране видно, сколько осталось."
+          }
+        }
+      }
+    },
+    "No computer of the group was found on this network. Turn one on and keep this phone on its network, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этой сети не найден ни один компьютер группы. Включите его, держите телефон в его сети и попробуйте снова."
+          }
+        }
+      }
+    },
+    "Scan the QR code of the recovery sheet: on a new phone the typed key is not enough. A computer of the group takes the typed key with cbb recovery.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отсканируйте QR-код листа восстановления: на новом телефоне введённого ключа недостаточно. Введённый ключ принимает компьютер группы через cbb recovery."
+          }
+        }
+      }
+    },
+    "The computers found on this network are of another group than the sheet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютеры в этой сети принадлежат другой группе, не той, что на листе."
+          }
+        }
+      }
+    },
+    "This is not the group's recovery key now: the root phone removed it or made a new one.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это больше не ключ восстановления группы: корневой телефон удалил его или сделал новый."
+          }
+        }
+      }
+    },
+    "The computer's answer does not fit the group's records.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ответ компьютера не сходится с записями группы."
+          }
+        }
+      }
+    },
+    "Take the group the computer handed to this phone": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Взять группу, которую компьютер передал этому телефону"
+          }
+        }
+      }
+    },
+    "The group is yours to take": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группу можно забрать"
+          }
+        }
+      }
+    },
+    "The computer that held the group handed it to this phone. Take it to make this phone the group's root; the computer stays in the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютер, который держал группу, передал её этому телефону. Возьмите её, чтобы этот телефон стал корнем группы; компьютер останется в группе."
+          }
+        }
+      }
+    },
+    "Take the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Взять группу"
+          }
+        }
+      }
+    },
+    "This phone is the group's root now. The other devices hear of it as soon as they connect.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Теперь этот телефон — корень группы. Остальные устройства узнают об этом, как только подключатся."
+          }
+        }
+      }
+    },
+    "My group was made on a computer": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Моя группа создана на компьютере"
+          }
+        }
+      }
+    },
+    "Join a computer's group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти в группу компьютера"
+          }
+        }
+      }
+    },
+    "On the computer that created the group, run cbb pair, then type the six-digit code it shows. Keep this phone on the same network.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На компьютере, который создал группу, выполните cbb pair и введите шестизначный код, который он покажет. Телефон должен быть в той же сети."
+          }
+        }
+      }
+    },
+    "Code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код"
+          }
+        }
+      }
+    },
+    "Join": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти"
+          }
+        }
+      }
+    },
+    "Looking for the computer…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ищу компьютер…"
+          }
+        }
+      }
+    },
+    "No computer is waiting for a phone. Run cbb pair on the computer that created the group, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ни один компьютер не ждёт телефон. Выполните cbb pair на компьютере, который создал группу, и попробуйте снова."
+          }
+        }
+      }
+    },
+    "Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сразу два компьютера ждут устройство. Закройте cbb pair на одном из них и попробуйте снова."
+          }
+        }
+      }
+    },
+    "This computer cannot add a phone. Run cbb pair on the computer that created the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот компьютер не может добавить телефон. Выполните cbb pair на компьютере, который создал группу."
+          }
+        }
+      }
+    },
+    "The code did not match. Check the code on the computer's screen and type it again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код не совпал. Проверьте код на экране компьютера и введите его снова."
+          }
+        }
+      }
+    },
+    "The computer's group could not be joined. Run cbb pair on it again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось войти в группу компьютера. Выполните на нём cbb pair ещё раз."
+          }
+        }
+      }
+    },
+    "The recovery key is removed. A sheet printed for it no longer works.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления удалён. Напечатанный для него лист больше не действует."
+          }
+        }
+      }
+    },
+    "Make a recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать ключ восстановления"
+          }
+        }
+      }
+    },
+    "Remove the recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить ключ восстановления"
+          }
+        }
+      }
+    },
+    "Made on %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделан %@."
+          }
+        }
+      }
+    },
+    "Make a new recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать новый ключ восстановления"
+          }
+        }
+      }
+    },
+    "None yet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока нет."
+          }
+        }
+      }
+    },
+    "Recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления"
+          }
+        }
+      }
+    },
+    "A sheet to print and keep away from your phones. If every phone with this group is lost, a computer of the group or a new phone takes the group back with it, after the group's wait.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лист, который печатают и хранят отдельно от телефонов. Если потеряны все телефоны этой группы, с ним компьютер группы или новый телефон вернёт группу после времени ожидания группы."
+          }
+        }
+      }
+    },
+    "Make a new recovery key?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать новый ключ восстановления?"
+          }
+        }
+      }
+    },
+    "Make a new one": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать новый"
+          }
+        }
+      }
+    },
+    "The sheet printed for the old key stops working.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лист, напечатанный для старого ключа, перестанет действовать."
+          }
+        }
+      }
+    },
+    "Remove the recovery key?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить ключ восстановления?"
+          }
+        }
+      }
+    },
+    "The sheet printed for it stops working. Without a recovery key, losing every phone with this group loses the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напечатанный для него лист перестанет действовать. Без ключа восстановления потеря всех телефонов этой группы означает потерю группы."
+          }
+        }
+      }
+    },
+    "Print this sheet or save it as a PDF now. It shows only this once.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напечатайте этот лист или сохраните его в PDF сейчас. Он показывается только один раз."
+          }
+        }
+      }
+    },
+    "Print": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напечатать"
+          }
+        }
+      }
+    },
+    "Save as PDF": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить в PDF"
+          }
+        }
+      }
+    },
+    "Did you keep the sheet?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы сохранили лист?"
+          }
+        }
+      }
+    },
+    "I kept it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранил"
+          }
+        }
+      }
+    },
+    "Back": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Назад"
+          }
+        }
+      }
+    },
+    "This phone forgets the key now. To get a sheet again, make a new recovery key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сейчас телефон забудет ключ. Чтобы получить лист снова, сделайте новый ключ восстановления."
+          }
+        }
+      }
+    },
+    "Could not make the PDF.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось сделать PDF."
+          }
+        }
+      }
+    },
+    "CBB recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления CBB"
+          }
+        }
+      }
+    },
+    "QR code of the recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-код ключа восстановления"
+          }
+        }
+      }
+    },
+    "Keep this sheet somewhere safe, away from your phones. Anyone who has it can take your group over, after the group's wait, unless the root phone cancels it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого он есть, может забрать вашу группу после времени ожидания группы, если корневой телефон это не отменит."
+          }
+        }
+      }
+    },
+    "To take the group back: on a new phone, choose Restore with a recovery key and scan the code; or on a computer of the group, run cbb recovery and type the key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чтобы вернуть группу: на новом телефоне выберите «Восстановить ключом восстановления» и отсканируйте код; или на компьютере группы запустите cbb recovery и введите ключ."
+          }
+        }
+      }
+    },
+    "Sent to %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправлено на %@."
+          }
+        }
+      }
+    },
+    "Ready to paste: “%@” from %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Можно вставлять: «%@» с %@."
+          }
+        }
+      }
+    },
+    "Ready to paste, from %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Можно вставлять, получено с %@."
+          }
+        }
+      }
+    },
+    "Ready to paste.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Можно вставлять."
+          }
+        }
+      }
+    },
+    "Connecting to the computers…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключаюсь к компьютерам…"
+          }
+        }
+      }
+    },
+    "Syncing…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизирую…"
+          }
+        }
+      }
+    },
+    "Void both histories" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить обе истории"
+          }
+        }
+      }
+    },
+    "Cancel the claim" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить заявку"
+          }
+        }
+      }
+    },
+    "Remove %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить %@"
+          }
+        }
+      }
+    },
+    "The group's root decides." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Решает корень группы."
+          }
+        }
+      }
+    },
+    "devices unknown here" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "устройства, неизвестные здесь"
+          }
+        }
+      }
+    },
+    "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Группа остановлена: устройства обмениваются только записями, без буфера обмена, пока корень группы не решит."
+          }
+        }
+      }
+    },
+    "The group sends no secrets until its root decides." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Группа не пересылает секреты, пока её корень не решит."
+          }
+        }
+      }
+    },
+    "%@ signed two histories with one key, as a stolen key or a restore from a backup would." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: две истории, подписанные одним ключом. Так бывает при краже ключа или после восстановления из резервной копии."
+          }
+        }
+      }
+    },
+    "Admins removed or froze each other without seeing it: %@. The root removes one of them." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Админы удалили или заморозили друг друга, не зная об этом: %@. Корень удаляет одного из них."
+          }
+        }
+      }
+    },
+    "Two claims to take the group over: %@." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Две заявки на передачу группы: %@."
+          }
+        }
+      }
+    },
+    "%@ claims the group, to take it over from its root." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ хочет забрать группу у корня."
+          }
+        }
+      }
+    },
+    "%@ claims the group, to take it over from its root: it takes effect in %@." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ хочет забрать группу у корня: это произойдёт через %2$@."
+          }
+        }
+      }
+    },
+    "%@ claims the group, and the group is stopped until its root decides." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ хочет забрать группу, и группа остановлена, пока корень не решит."
+          }
+        }
+      }
+    },
+    "The group holds %lld records of a later version: update the app to read them." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В группе есть записи более новой версии (%lld): обновите приложение, чтобы их прочитать."
+          }
+        }
+      }
+    },
+    "The claim is cancelled. The other devices hear of it as soon as they connect." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заявка отменена. Остальные устройства узнают об этом, как только подключатся."
+          }
+        }
+      }
+    },
+    "Both histories are void. The device signs its records again by itself." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обе истории отменены. Устройство само подпишет свои записи заново."
+          }
+        }
+      }
+    },
+    "Resolve a conflict in your group" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разрешить конфликт в группе"
+          }
+        }
+      }
+    },
+    "Arrange" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Упорядочить"
+          }
+        }
+      }
+    },
+    "New collection…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новая коллекция…"
+          }
+        }
+      }
+    },
+    "Move to collection" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В коллекцию"
+          }
+        }
+      }
+    },
+    "Take out of collection" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать из коллекции"
+          }
+        }
+      }
+    },
+    "Rename collection…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переименовать коллекцию…"
+          }
+        }
+      }
+    },
+    "Ungroup" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разгруппировать"
+          }
+        }
+      }
+    },
+    "Move to start" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В начало"
+          }
+        }
+      }
+    },
+    "Move to end" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В конец"
+          }
+        }
+      }
+    },
+    "Move earlier" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переместить раньше"
+          }
+        }
+      }
+    },
+    "Move later" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переместить позже"
+          }
+        }
+      }
+    },
+    "Drag devices here" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетащите сюда устройства"
+          }
+        }
+      }
+    },
+    "collection, %lld of %lld online, needs attention" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "коллекция, %lld из %lld в сети, требует внимания"
+          }
+        }
+      }
+    },
+    "collection, %lld of %lld online" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "коллекция, %lld из %lld в сети"
+          }
+        }
+      }
+    },
+    "Drag devices here, or add them with Move to collection in a device's menu." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетащите сюда устройства или добавьте их пунктом «В коллекцию» в меню устройства."
+          }
+        }
+      }
+    },
+    "Drag to arrange. Drop a device on a collection to put it in." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетаскивайте плитки, чтобы расставить их. Бросьте устройство на коллекцию, чтобы положить его туда."
+          }
+        }
+      }
+    },
+    "Collection name" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название коллекции"
+          }
+        }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранить"
+          }
+        }
+      }
+    },
+    "Rename collection" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переименовать коллекцию"
+          }
+        }
+      }
+    },
+    "New collection" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новая коллекция"
+          }
+        }
+      }
+    },
+    "The tiles stay as they were: that change does not fit." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Плитки остались как были: такое изменение не подходит."
+          }
+        }
+      }
+    },
+    "No devices match." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подходящих устройств нет."
+          }
+        }
+      }
+    },
+    "Done arranging" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закончить расстановку"
+          }
+        }
+      }
+    },
+    "Arrange devices" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Упорядочить устройства"
+          }
+        }
+      }
+    },
+    "Back to the group's order" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вернуть порядок группы"
+          }
+        }
+      }
+    },
+    "Search devices" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск устройств"
+          }
+        }
+      }
+    },
+    "Online" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В сети"
+          }
+        }
+      }
+    },
+    "Needs attention" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Требует внимания"
+          }
+        }
+      }
+    },
+    "Apple Watch" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Watch"
+          }
+        }
+      }
+    },
+    "Make the watch an admin" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделать часы админом"
+          }
+        }
+      }
+    },
+    "Open CBB on the watch, then try again." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Откройте CBB на часах и попробуйте снова."
+          }
+        }
+      }
+    },
+    "Saved in Files, On My iPhone, CBB.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранено в «Файлах»: «На iPhone», CBB."
+          }
+        }
+      }
+    },
+    "Could not get the image from the computers. Copy it there again, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось получить картинку с компьютеров. Скопируйте её там ещё раз и повторите."
+          }
+        }
+      }
+    },
+    "The iPhone is not connected to that device. Open CBB on the iPhone, then try again." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone не подключён к этому устройству. Откройте CBB на iPhone и попробуйте снова."
+          }
+        }
+      }
+    },
+    "The watch is an admin now. It can freeze an admin computer, remove a device that is no admin and turn things off." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь часы админ. Они могут заморозить компьютер-админ, удалить устройство, которое не админ, и выключать функции."
+          }
+        }
+      }
+    },
+    "The watch needs a passcode and wrist detection, and must be on your wrist. Turn them on in the Watch app on this iPhone." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Часам нужны код-пароль и распознавание запястья, и они должны быть на руке. Включите их в приложении Watch на этом iPhone."
+          }
+        }
+      }
+    },
+    "This image is larger than 100 MB, so it stays on the computer.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Картинка больше 100 МБ, поэтому она осталась на компьютере."
+          }
+        }
+      }
+    },
+    "%@ is an admin now.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ теперь админ."
+          }
+        }
+      }
+    },
+    "%@ joined the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ теперь в группе."
+          }
+        }
+      }
+    },
+    "%@ took the group over: it holds the group's root now.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ забрал группу себе: теперь он создатель группы."
+          }
+        }
+      }
+    },
+    "%@ was frozen: the others refuse it until an admin unfreezes it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ заморожен: остальные его не принимают, пока админ его не разморозит."
+          }
+        }
+      }
+    },
+    "%@ was removed from the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ больше не в группе: устройство удалено."
+          }
+        }
+      }
+    },
+    "%@ was unfrozen.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ разморожен."
+          }
+        }
+      }
+    },
+    "%lld of %lld online": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld из %lld в сети"
+          }
+        }
+      }
+    },
+    "A device became an admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство стало админом"
+          }
+        }
+      }
+    },
+    "A device joined or was removed": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство добавлено или удалено"
+          }
+        }
+      }
+    },
+    "A device was frozen or unfrozen": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство заморожено или разморожено"
+          }
+        }
+      }
+    },
+    "A name has 1 to 64 characters.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В имени от 1 до 64 символов."
+          }
+        }
+      }
+    },
+    "A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставка подходит большинству приложений, а набор по клавишам нужен тем, что вставку не принимают, и только до 4 КБ. Enter в терминале запускает команду, поэтому компьютер примет его, только если его пользователь это разрешил. Секрет не остаётся ни в журнале компьютера, ни в его буфере."
+          }
+        }
+      }
+    },
+    "A secret" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Секрет"
+          }
+        }
+      }
+    },
+    "About": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "О программе"
+          }
+        }
+      }
+    },
+    "Add": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить"
+          }
+        }
+      }
+    },
+    "Add a computer to your group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить компьютер в вашу группу"
+          }
+        }
+      }
+    },
+    "Add a device": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить устройство"
+          }
+        }
+      }
+    },
+    "Adding a computer is not ready yet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавление компьютера пока не готово."
+          }
+        }
+      }
+    },
+    "Adding a device…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавляю устройство…"
+          }
+        }
+      }
+    },
+    "Amber": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Янтарь"
+          }
+        }
+      }
+    },
+    "Another admin froze this computer, as one does with a stolen one: it changes nothing and the others refuse it. Unfreeze it only if it is in safe hands; otherwise remove it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Другой админ заморозил этот компьютер, как делают с украденным: он ничего не меняет, и остальные его не принимают. Размораживайте, только если он в надёжных руках, иначе удалите его."
+          }
+        }
+      }
+    },
+    "At home: syncing directly.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дома: синхронизация напрямую."
+          }
+        }
+      }
+    },
+    "Away from home": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вне дома"
+          }
+        }
+      }
+    },
+    "Away from home: through your hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вне дома: через ваш хаб"
+          }
+        }
+      }
+    },
+    "Board": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Плата"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отмена"
+          }
+        }
+      }
+    },
+    "CBB": {
+      "shouldTranslate": false
+    },
+    "Close": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрыть"
+          }
+        }
+      }
+    },
+    "Colour": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цвет"
+          }
+        }
+      }
+    },
+    "Computer": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютер"
+          }
+        }
+      }
+    },
+    "Connect a new device": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключить новое устройство"
+          }
+        }
+      }
+    },
+    "Connect this phone to your home Wi-Fi, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключите телефон к домашнему Wi-Fi и попробуйте снова."
+          }
+        }
+      }
+    },
+    "Connected to the hub through the tunnel.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключено к хабу через туннель."
+          }
+        }
+      }
+    },
+    "Connecting to the device…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключение к устройству…"
+          }
+        }
+      }
+    },
+    "Connecting to the hub through the tunnel…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключение к хабу через туннель…"
+          }
+        }
+      }
+    },
+    "Coral": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Коралл"
+          }
+        }
+      }
+    },
+    "Could not reach the computer. Is it on the same network as this phone, and does its firewall let CBB in?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось связаться с компьютером. Он в той же сети, что и телефон, и пропускает ли его файрвол CBB?"
+          }
+        }
+      }
+    },
+    "Could not read the clipboard, so it was left as it is. Allow pasting for CBB, or copy the text again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось прочитать буфер обмена, поэтому он оставлен как есть. Разрешите CBB вставку или скопируйте текст ещё раз."
+          }
+        }
+      }
+    },
+    "Dark": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тёмная"
+          }
+        }
+      }
+    },
+    "Device": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Готово"
+          }
+        }
+      }
+    },
+    "Error messages show the error underneath them, to find out what failed. Tap the version seven times to see this switch.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Под сообщением об ошибке показывается сама ошибка, чтобы понять, что не так. Этот переключатель появляется после семи нажатий на версию."
+          }
+        }
+      }
+    },
+    "Every device of the group shows the new name.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все устройства группы покажут новое имя."
+          }
+        }
+      }
+    },
+    "Full member": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Полный участник"
+          }
+        }
+      }
+    },
+    "This computer is installed without root, so any of its programs can read its keys. It can never be an admin.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот компьютер установлен без root, поэтому его ключи может прочитать любая его программа. Он никогда не станет админом."
+          }
+        }
+      }
+    },
+    "Full member, rootless": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Полный участник, rootless"
+          }
+        }
+      }
+    },
+    "Game console": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Игровая приставка"
+          }
+        }
+      }
+    },
+    "Graphite": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Графит"
+          }
+        }
+      }
+    },
+    "I already use CBB on another phone": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У меня уже есть CBB на другом телефоне"
+          }
+        }
+      }
+    },
+    "In the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В группе"
+          }
+        }
+      }
+    },
+    "It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключи хранятся в его железе и никогда его не покидают."
+          }
+        }
+      }
+    },
+    "It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключи лежат в файле на компьютере: кто скопирует этот файл, сможет действовать как админ, пока другой админ его не удалит. Делайте так только для компьютера, который надёжно защищён."
+          }
+        }
+      }
+    },
+    "It goes where %@'s keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текст попадёт туда, где фокус клавиатуры устройства %@, если его пользователь включил там удалённую вставку. Если поле пустое, «Вставить» отправит то, что в буфере обмена."
+          }
+        }
+      }
+    },
+    "It is an admin again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Он снова админ."
+          }
+        }
+      }
+    },
+    "It is an admin now: it adds and removes devices with cbb pair and cbb remove.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Теперь это админ: он добавляет и удаляет устройства командами cbb pair и cbb remove."
+          }
+        }
+      }
+    },
+    "It made its own secret key, which never leaves it and lets your devices recognise this phone. Now connect a device: tap Connect a new device and scan the QR code it shows.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Он создал свой секретный ключ: ключ никогда не покидает телефон, и по нему ваши устройства узнают этот телефон. Теперь подключите устройство: нажмите «Подключить новое устройство» и отсканируйте QR-код, который оно покажет."
+          }
+        }
+      }
+    },
+    "It made the group. This phone takes the group over with a new key, and the other devices follow it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон создал группу. Ваш телефон забирает группу себе с новым ключом, остальные устройства переходят за ним."
+          }
+        }
+      }
+    },
+    "It will no longer sync with your devices. To add it again, scan its QR code again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Он больше не будет синхронизироваться с вашими устройствами. Чтобы вернуть его, отсканируйте его QR-код снова."
+          }
+        }
+      }
+    },
+    "Its copies go to the group, and the group's come to it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Его копии уходят в группу, копии группы приходят к нему."
+          }
+        }
+      }
+    },
+    "Its copies go to the group; the group's do not come.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Его копии уходят в группу, копии группы не приходят."
+          }
+        }
+      }
+    },
+    "Its copies stay on it and the group's do not come; sending or fetching by hand still works.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Его копии остаются на нём, копии группы не приходят; отправить или забрать вручную по-прежнему можно."
+          }
+        }
+      }
+    },
+    "Join a group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти в группу"
+          }
+        }
+      }
+    },
+    "Language": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Язык"
+          }
+        }
+      }
+    },
+    "Laptop": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ноутбук"
+          }
+        }
+      }
+    },
+    "Light": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Светлая"
+          }
+        }
+      }
+    },
+    "Lime": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лайм"
+          }
+        }
+      }
+    },
+    "List": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Список"
+          }
+        }
+      }
+    },
+    "Lite member": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лёгкий участник"
+          }
+        }
+      }
+    },
+    "Lite member, rootless": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лёгкий участник, rootless"
+          }
+        }
+      }
+    },
+    "Lost a phone? Make a second phone an admin: on it, tap I already use CBB on another phone, then scan its code here with +.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Потеряли телефон? Сделайте второй телефон админом: на нём нажмите «У меня уже есть CBB на другом телефоне» и отсканируйте его код здесь через +."
+          }
+        }
+      }
+    },
+    "MAC address": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MAC-адрес"
+          }
+        }
+      }
+    },
+    "Make %@ an admin?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать %@ админом?"
+          }
+        }
+      }
+    },
+    "Make a computer an admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать компьютер админом"
+          }
+        }
+      }
+    },
+    "Make it an admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать админом"
+          }
+        }
+      }
+    },
+    "Menu": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Меню"
+          }
+        }
+      }
+    },
+    "Midnight": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Полночь"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Имя"
+          }
+        }
+      }
+    },
+    "No computers connected.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютеры не подключены."
+          }
+        }
+      }
+    },
+    "No phone scanned the code in five minutes. Try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "За пять минут код никто не отсканировал. Попробуйте снова."
+          }
+        }
+      }
+    },
+    "Not a CBB QR code.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не QR-код cbb."
+          }
+        }
+      }
+    },
+    "Nothing new to send or fetch.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нечего отправить или получить."
+          }
+        }
+      }
+    },
+    "Notifications": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уведомления"
+          }
+        }
+      }
+    },
+    "Ocean": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Океан"
+          }
+        }
+      }
+    },
+    "Off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключено"
+          }
+        }
+      }
+    },
+    "On a computer, run cbb pair and scan the code it shows.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На компьютере запустите cbb pair и отсканируйте код, который он покажет."
+          }
+        }
+      }
+    },
+    "On your other phone, tap + and scan this code. Keep this screen open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На другом телефоне нажмите + и отсканируйте этот код. Не закрывайте этот экран."
+          }
+        }
+      }
+    },
+    "One clipboard for this phone and your computers.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Один буфер обмена для этого телефона и ваших компьютеров."
+          }
+        }
+      }
+    },
+    "Only an admin phone can add or remove devices.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавлять и удалять устройства может только телефон-админ."
+          }
+        }
+      }
+    },
+    "Only an admin phone can do this.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это может только телефон-админ."
+          }
+        }
+      }
+    },
+    "Opens CBB and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывает CBB и отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
+          }
+        }
+      }
+    },
+    "Operating system": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Операционная система"
+          }
+        }
+      }
+    },
+    "Orbit": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Орбита"
+          }
+        }
+      }
+    },
+    "Paste" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставить"
+          }
+        }
+      }
+    },
+    "Paste on %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставить на %@"
+          }
+        }
+      }
+    },
+    "Paste on a device" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставить на устройстве"
+          }
+        }
+      }
+    },
+    "Paste on it…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставить на нём…"
+          }
+        }
+      }
+    },
+    "Paste the text of the QR code of cbb pair.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставьте текст QR-кода cbb pair."
+          }
+        }
+      }
+    },
+    "Pasted." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставлено."
+          }
+        }
+      }
+    },
+    "Phone": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон"
+          }
+        }
+      }
+    },
+    "Phone app": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложение на телефоне"
+          }
+        }
+      }
+    },
+    "Point the camera at the QR code of cbb pair, or at the one your other phone shows.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Наведите камеру на QR-код cbb pair или на код, который показывает ваш другой телефон."
+          }
+        }
+      }
+    },
+    "Press Enter after it" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажать Enter после него"
+          }
+        }
+      }
+    },
+    "QR code text": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текст QR-кода"
+          }
+        }
+      }
+    },
+    "QR code to join the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-код для входа в группу"
+          }
+        }
+      }
+    },
+    "Remove": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить"
+          }
+        }
+      }
+    },
+    "Remove %@?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить %@?"
+          }
+        }
+      }
+    },
+    "Remove a device from your group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить устройство из вашей группы"
+          }
+        }
+      }
+    },
+    "Removed. The other devices refuse it from now on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалено. Остальные устройства больше его не принимают."
+          }
+        }
+      }
+    },
+    "Rename": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовать"
+          }
+        }
+      }
+    },
+    "Rename %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовать %@"
+          }
+        }
+      }
+    },
+    "Rename a device": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовать устройство"
+          }
+        }
+      }
+    },
+    "Renamed. The other devices show the new name as soon as they hear of it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовано. Остальные устройства покажут новое имя, как только узнают о нём."
+          }
+        }
+      }
+    },
+    "Renew this phone's certificate": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Продлить сертификат этого телефона"
+          }
+        }
+      }
+    },
+    "Retro computer": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ретрокомпьютер"
+          }
+        }
+      }
+    },
+    "Role": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Роль"
+          }
+        }
+      }
+    },
+    "Rose": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Роза"
+          }
+        }
+      }
+    },
+    "Router": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Роутер"
+          }
+        }
+      }
+    },
+    "Ruby": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Рубин"
+          }
+        }
+      }
+    },
+    "Send or fetch": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить или получить"
+          }
+        }
+      }
+    },
+    "Sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправляет скопированное на этом телефоне на ваши компьютеры или получает то, что компьютер скопировал только что."
+          }
+        }
+      }
+    },
+    "Sent to the computers.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправлено на компьютеры."
+          }
+        }
+      }
+    },
+    "Server": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сервер"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки"
+          }
+        }
+      }
+    },
+    "Shortcut": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Быстрая команда"
+          }
+        }
+      }
+    },
+    "Show error details": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показывать подробности ошибок"
+          }
+        }
+      }
+    },
+    "Something went wrong. Try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Что-то пошло не так. Попробуйте ещё раз."
+          }
+        }
+      }
+    },
+    "Source code and license (AGPL-3.0)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Исходный код и лицензия (AGPL-3.0)"
+          }
+        }
+      }
+    },
+    "Sync away from home": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизировать вне дома"
+          }
+        }
+      }
+    },
+    "Sync clipboard": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизировать буфер обмена"
+          }
+        }
+      }
+    },
+    "System": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как в системе"
+          }
+        }
+      }
+    },
+    "Text" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текст"
+          }
+        }
+      }
+    },
+    "This computer keeps its keys in a file. Make it an admin first on its page, which warns what that means.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот компьютер хранит ключи в файле. Сначала сделайте его админом на его странице: там сказано, что это значит."
+          }
+        }
+      }
+    },
+    "This watch cannot keep a key in its Secure Enclave." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эти часы не могут хранить ключ в Secure Enclave."
+          }
+        }
+      }
+    },
+    "To give a new watch the key, remove this one from the devices first." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы дать ключ другим часам, сначала удалите эти из устройств."
+          }
+        }
+      }
+    },
+    "TV": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телевизор"
+          }
+        }
+      }
+    },
+    "Tablet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Планшет"
+          }
+        }
+      }
+    },
+    "Take the group over from the lost phone": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Забрать группу у потерянного телефона"
+          }
+        }
+      }
+    },
+    "Teal": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бирюза"
+          }
+        }
+      }
+    },
+    "Terminal": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Терминал"
+          }
+        }
+      }
+    },
+    "The app notifies of these while it runs. It hears of an event when it next syncs with the group." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приложение сообщает об этом, пока работает. О событии оно узнаёт при следующей синхронизации с группой."
+          }
+        }
+      }
+    },
+    "The app notifies of these while it runs, and a paired Apple Watch shows them too. It hears of an event when it next syncs with the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложение сообщает об этом, пока работает, и показывает это на связанных Apple Watch. О событии оно узнаёт при следующей синхронизации с группой."
+          }
+        }
+      }
+    },
+    "The clipboard holds no text.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В буфере обмена нет текста."
+          }
+        }
+      }
+    },
+    "The code did not match. Run cbb pair on the computer again and scan the new code.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код не совпал. Запустите cbb pair на компьютере ещё раз и отсканируйте новый код."
+          }
+        }
+      }
+    },
+    "The computer joined but did not confirm it. Check cbb status on it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютер присоединился, но не подтвердил это. Проверьте cbb status на нём."
+          }
+        }
+      }
+    },
+    "The computer refused. Run cbb pair on it again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютер отказал. Запустите на нём cbb pair ещё раз."
+          }
+        }
+      }
+    },
+    "The device is in the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство в группе."
+          }
+        }
+      }
+    },
+    "The device was not added.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство не добавлено."
+          }
+        }
+      }
+    },
+    "The group was taken over": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группу забрали себе"
+          }
+        }
+      }
+    },
+    "The hub does not answer away from home": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб не отвечает вне дома"
+          }
+        }
+      }
+    },
+    "The hub does not answer through the tunnel.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб не отвечает через туннель."
+          }
+        }
+      }
+    },
+    "The other phone's group could not be joined. Try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось войти в группу другого телефона. Попробуйте снова."
+          }
+        }
+      }
+    },
+    "The phone that made the group cannot be removed yet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон, создавший группу, пока нельзя удалить."
+          }
+        }
+      }
+    },
+    "Theme": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тема"
+          }
+        }
+      }
+    },
+    "This phone": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон"
+          }
+        }
+      }
+    },
+    "This phone is ready": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон готов"
+          }
+        }
+      }
+    },
+    "This phone · admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон · админ"
+          }
+        }
+      }
+    },
+    "Tiles": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Плитки"
+          }
+        }
+      }
+    },
+    "Too many wrong codes. Try again with a new code.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Слишком много неверных кодов. Попробуйте снова с новым кодом."
+          }
+        }
+      }
+    },
+    "Type": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тип"
+          }
+        }
+      }
+    },
+    "Type it key by key" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Набрать по клавишам"
+          }
+        }
+      }
+    },
+    "Unfreeze": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разморозить"
+          }
+        }
+      }
+    },
+    "Unfreeze %@?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разморозить %@?"
+          }
+        }
+      }
+    },
+    "Unfreeze an admin computer": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разморозить компьютер-админа"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Версия"
+          }
+        }
+      }
+    },
+    "View": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вид"
+          }
+        }
+      }
+    },
+    "Waiting for the hub: open the app at home once, near a computer of the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ждём хаб: один раз откройте приложение дома, рядом с компьютером группы."
+          }
+        }
+      }
+    },
+    "Watch": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Часы"
+          }
+        }
+      }
+    },
+    "When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля."
+          }
+        }
+      }
+    },
+    "admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "админ"
+          }
+        }
+      }
+    },
+    "frozen": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заморожен"
+          }
+        }
+      }
+    },
+    "hidden by the system": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "скрыт системой"
+          }
+        }
+      }
+    },
+    "offline": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не в сети"
+          }
+        }
+      }
+    },
+    "online": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "в сети"
+          }
+        }
+      }
+    },
+    "root": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "создатель группы"
+          }
+        }
+      }
+    },
+    "Sync mode": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Режим синхронизации"
+          }
+        }
+      }
+    },
+    "Own clipboard": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Свой буфер"
+          }
+        }
+      }
+    },
+    "Shared": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Общий"
+          }
+        }
+      }
+    },
+    "Receive only": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только приём"
+          }
+        }
+      }
+    },
+    "Send only": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только отправка"
+          }
+        }
+      }
+    },
+    "The sync mode is set.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Режим синхронизации изменён."
+          }
+        }
+      }
+    },
+    "Change a computer's sync mode": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить режим синхронизации компьютера"
+          }
+        }
+      }
+    },
+    "The computer refused: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютер отказался: %@"
+          }
+        }
+      }
+    },
+    "The computer is not connected to this phone. Try again when it shows online.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютер не подключён к этому телефону. Попробуйте снова, когда он будет в сети."
+          }
+        }
+      }
+    },
+    "The computer did not answer. It may run an older version of CBB.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютер не ответил. Возможно, на нём старая версия CBB."
+          }
+        }
+      }
+    },
+    "This phone is the group's hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон — хаб группы"
+          }
+        }
+      }
+    },
+    "Off: this phone is no hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключено: этот телефон не хаб."
+          }
+        }
+      }
+    },
+    "Waiting for the app: the hub works while the app is open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ждём приложение: хаб работает, пока приложение открыто."
+          }
+        }
+      }
+    },
+    "The group's copies come to it; its own stay on it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии группы приходят к нему, свои остаются на нём."
+          }
+        }
+      }
+    },
+    "The hub at home only: add a forwarder for sync away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб только дома: добавьте форвардер для синхронизации вне дома."
+          }
+        }
+      }
+    },
+    "Registering with the forwarder…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Регистрация на форвардере…"
+          }
+        }
+      }
+    },
+    "Registered with the forwarder: devices away from home reach this phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Зарегистрирован на форвардере: устройства вне дома видят этот телефон."
+          }
+        }
+      }
+    },
+    "The forwarder does not take this phone. Check its address and key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Форвардер не принимает этот телефон. Проверьте его адрес и ключ."
+          }
+        }
+      }
+    },
+    "On a home network: devices here connect to this phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Домашняя сеть: устройства здесь подключаются к этому телефону."
+          }
+        }
+      }
+    },
+    "This network is not one of the hub's home networks: devices here do not see this phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Эта сеть не входит в домашние сети хаба: устройства здесь не видят этот телефон."
+          }
+        }
+      }
+    },
+    "This is my home network": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это моя домашняя сеть"
+          }
+        }
+      }
+    },
+    "Forwarder address, such as 198.51.100.9:8764": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Адрес форвардера, например 198.51.100.9:8764"
+          }
+        }
+      }
+    },
+    "Forwarder key, 44 characters": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ форвардера, 44 символа"
+          }
+        }
+      }
+    },
+    "Save the forwarder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить форвардер"
+          }
+        }
+      }
+    },
+    "This phone as the hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон как хаб"
+          }
+        }
+      }
+    },
+    "While the app is open, this phone is the hub of a group without a computer: the other phones, TVs and lite members on the home network connect to it, and with a forwarder they reach it from afar too. The forwarder only passes encrypted packets; it learns the group's tag, this phone's tunnel key and the addresses, never what is copied. A computer that is always on is the better hub; until then this phone does it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока приложение открыто, этот телефон служит хабом группы без компьютера: к нему подключаются другие телефоны, телевизоры и лайт-участники в домашней сети, а с форвардером и издалека. Форвардер только передаёт зашифрованные пакеты: он узнаёт метку группы, ключ туннеля этого телефона и адреса, но никогда не видит, что копируется. Лучший хаб — компьютер, который всегда включён; пока его нет, хабом будет этот телефон."
+          }
+        }
+      }
+    },
+    "This phone is the hub: sync works while the app is open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон — хаб: синхронизация работает, пока приложение открыто."
+          }
+        }
+      }
+    },
+    "Give the forwarder's address with its port and its key, as cbb forward prints them, or leave both empty.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите адрес форвардера с портом и его ключ, как их выводит cbb forward, или оставьте оба поля пустыми."
+          }
+        }
+      }
+    },
+    "Invite a device from afar": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пригласить устройство издалека"
+          }
+        }
+      }
+    },
+    "For a device that is not on your network, such as a parent's computer: share the invitation file with its owner, who joins with cbb pair -invite. It works once, for an hour, while this app is open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для устройства не из вашей сети, например компьютера родителей: отправьте файл приглашения его владельцу, он подключится командой cbb pair -invite. Приглашение работает один раз, в течение часа, пока приложение открыто."
+          }
+        }
+      }
+    },
+    "Make an invitation": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создать приглашение"
+          }
+        }
+      }
+    },
+    "The invitation is open until %@. Share its file only with the person who joins: anyone who has it can ask to join.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приглашение действует до %@. Отправьте файл только тому, кто подключается: любой, у кого он есть, может попросить доступ."
+          }
+        }
+      }
+    },
+    "Share the invitation": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить приглашение"
+          }
+        }
+      }
+    },
+    "Cancel the invitation": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отменить приглашение"
+          }
+        }
+      }
+    },
+    "Admit %@?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять %@?"
+          }
+        }
+      }
+    },
+    "Admit": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять"
+          }
+        }
+      }
+    },
+    "Not this one": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не это"
+          }
+        }
+      }
+    },
+    "A device (%@) used the invitation. Admit it only if the device shows the same fingerprint:\n\n%@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство (%1$@) воспользовалось приглашением. Принимайте его, только если оно показывает такой же отпечаток:\n\n%2$@"
+          }
+        }
+      }
+    },
+    "The device joined the group; it appears in the list once it connects.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство вошло в группу; оно появится в списке, когда подключится."
+          }
+        }
+      }
+    },
+    "The invitation expired without being used.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Срок приглашения истёк, им никто не воспользовался."
+          }
+        }
+      }
+    },
+    "The invitation closed after three failed attempts. Make a new one.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приглашение закрыто после трёх неудачных попыток. Создайте новое."
+          }
+        }
+      }
+    },
+    "An invitation needs the hub registered with its forwarder. Check the forwarder above.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для приглашения хаб должен быть зарегистрирован у форвардера. Проверьте форвардер выше."
+          }
+        }
+      }
+    },
+    "%@ is always on. Make it the hub, so that sync away from home works while this app is closed?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ всегда включён. Сделать его хабом, чтобы синхронизация вне дома работала, пока приложение закрыто?"
+          }
+        }
+      }
+    },
+    "Make it the hub" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделать хабом"
+          }
+        }
+      }
+    },
+    "Save a forwarder above first: away from home, the devices reach the new hub through it." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сначала сохраните форвардер выше: вне дома устройства находят новый хаб через него."
+          }
+        }
+      }
+    },
+    "Reached from afar through the project's forwarder at cbb.tools. To use your own, enter its address and key." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Издалека хаб доступен через форвардер проекта на cbb.tools. Чтобы использовать свой, введите его адрес и ключ."
+          }
+        }
+      }
+    },
+    "To go back to the project's forwarder, empty both fields and save." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы вернуться к форвардеру проекта, очистите оба поля и сохраните."
+          }
+        }
+      }
+    },
+    "Keep this phone" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оставить телефон"
+          }
+        }
+      }
+    },
+    "Make %@ the hub" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделать хабом %@"
+          }
+        }
+      }
+    },
+    "Move the hub to a computer" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перенести хаб на компьютер"
+          }
+        }
+      }
+    },
+    "A computer that is always on keeps sync away from home working while this app is closed. The devices that reach this phone from afar move with it." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Компьютер, который всегда включён, держит синхронизацию вне дома, пока приложение закрыто. Устройства, которые подключаются к этому телефону издалека, переходят вместе с хабом."
+          }
+        }
+      }
+    },
+    "Make %@ the hub?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделать хабом %@?"
+          }
+        }
+      }
+    },
+    "Move the hub" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перенести хаб"
+          }
+        }
+      }
+    },
+    "The devices that reach this phone from afar move to %@, and this phone becomes its client. Sync away from home must be on there (cbb global on)." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Устройства, которые подключаются к этому телефону издалека, перейдут на %@, а телефон станет его клиентом. Там должна быть включена синхронизация вне дома (cbb global on)."
+          }
+        }
+      }
+    },
+    "The computer is the hub now; this phone reaches it from afar." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь хаб — компьютер; телефон подключается к нему издалека."
+          }
+        }
+      }
+    },
+    "The hub can move only while it runs with a forwarder." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб можно перенести, только пока он работает с форвардером."
+          }
+        }
+      }
+    },
+    "Relay address, such as 198.51.100.9:8764": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Адрес релея, например 198.51.100.9:8764"
+          }
+        }
+      }
+    },
+    "Relay key, 44 characters": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ релея, 44 символа"
+          }
+        }
+      }
+    },
+    "Leave the relay": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Покинуть релей"
+          }
+        }
+      }
+    },
+    "Meet at this relay": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встречаться на этом релее"
+          }
+        }
+      }
+    },
+    "Blind relay": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Слепой релей"
+          }
+        }
+      }
+    },
+    "For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while this app is open. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для группы без собственного хаба: устройства встречаются на релее, например запущенном командой cbb relay, пока приложение открыто. Буфер обмена остаётся зашифрованным между устройствами, но релей узнаёт, какие из них в сети, их адреса, и какие из них общаются друг с другом, когда и сколько. Чтобы перестать, оставьте оба поля пустыми."
+          }
+        }
+      }
+    },
+    "Meet at this relay?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встречаться на этом релее?"
+          }
+        }
+      }
+    },
+    "The clipboard stays encrypted end to end between the devices: the relay cannot read it or pose as a device. It does learn, while the devices use it, which devices of the group are online and their internet addresses, and which of them talk to each other, when and how much they send. A hub of the group's own lets none of this out. Use a relay you run yourself, or one whose operator you trust with this.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Буфер обмена остаётся зашифрованным от устройства до устройства: релей не может его прочитать или выдать себя за устройство. Но пока устройства им пользуются, он узнаёт, какие устройства группы в сети и их интернет-адреса, а также какие из них общаются друг с другом, когда и сколько передают. Собственный хаб группы ничего из этого не раскрывает. Используйте свой релей или тот, чьему владельцу вы это доверяете."
+          }
+        }
+      }
+    },
+    "Off: this phone meets nobody at a relay.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключено: этот телефон ни с кем не встречается на релее."
+          }
+        }
+      }
+    },
+    "Waiting for the app: the relay works while the app is open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидание приложения: релей работает, пока приложение открыто."
+          }
+        }
+      }
+    },
+    "Connecting to the relay…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключение к релею…"
+          }
+        }
+      }
+    },
+    "At the relay: no other device of the group is there now.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На релее: других устройств группы там сейчас нет."
+          }
+        }
+      }
+    },
+    "At the relay with %lld devices of the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На релее, устройств группы там: %lld."
+          }
+        }
+      }
+    },
+    "The relay does not take this phone. Check its address and key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Релей не принимает этот телефон. Проверьте его адрес и ключ."
+          }
+        }
+      }
+    },
+    "Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите адрес релея с портом и его ключ, как их выводит cbb relay, или оставьте оба поля пустыми."
+          }
+        }
+      }
+    },
+    "%@ %@?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@?"
+          }
+        }
+      }
+    },
+    "It happens a minute from now; until then, Cancel the reboot or shutdown stops it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это произойдёт через минуту; до тех пор её остановит «Отменить перезагрузку или выключение»."
+          }
+        }
+      }
+    },
+    "Turn off the quick actions on %@?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключить быстрые действия на %@?"
+          }
+        }
+      }
+    },
+    "Turn all off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключить все"
+          }
+        }
+      }
+    },
+    "No admin can run them there until its user turns them on again on the device itself.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ни один админ не сможет их там запустить, пока пользователь снова не включит их на самом устройстве."
+          }
+        }
+      }
+    },
+    "%@ has no quick action turned on. Its user turns them on there, with sudo cbb action enable.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На %@ не включено ни одного быстрого действия. Его пользователь включает их там командой sudo cbb action enable."
+          }
+        }
+      }
+    },
+    "The computer defines what each action does, and runs it only for the admins its user allowed.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Что делает каждое действие, задаёт сам компьютер, и выполняет он его только для тех админов, кому разрешил его пользователь."
+          }
+        }
+      }
+    },
+    "Quick actions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Быстрые действия"
+          }
+        }
+      }
+    },
+    "Lock the screen": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заблокировать экран"
+          }
+        }
+      }
+    },
+    "Sleep": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сон"
+          }
+        }
+      }
+    },
+    "Reboot": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перезагрузить"
+          }
+        }
+      }
+    },
+    "Shut down": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключить"
+          }
+        }
+      }
+    },
+    "Cancel the reboot or shutdown": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отменить перезагрузку или выключение"
+          }
+        }
+      }
+    },
+    "Restart CBB": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перезапустить CBB"
+          }
+        }
+      }
+    },
+    "Switch the keyboard's layout": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить раскладку клавиатуры"
+          }
+        }
+      }
+    },
+    "Done.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Готово."
+          }
+        }
+      }
+    },
+    "The quick actions are off there.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Быстрые действия там выключены."
+          }
+        }
+      }
+    },
+    "Run a quick action": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запустить быстрое действие"
+          }
+        }
+      }
+    },
+    "With a key of its own, the watch can freeze an admin computer, remove a device that is no admin, and turn remote paste, quick actions and sync away from home off. It needs a passcode and wrist detection. Open CBB on the watch first." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Со своим ключом часы могут заморозить компьютер-админ, удалить устройство, которое не админ, и выключить удалённую вставку, быстрые действия и синхронизацию вне дома. Нужны код-пароль и распознавание запястья. Сначала откройте CBB на часах."
+          }
+        }
+      }
+    },
+    "Put the recovery key on a YubiKey": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать ключ восстановления на YubiKey"
+          }
+        }
+      }
+    },
+    "Hold the YubiKey to the top of the phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложите YubiKey к верхней части телефона."
+          }
+        }
+      }
+    },
+    "The recovery key is on the YubiKey.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления записан на YubiKey."
+          }
+        }
+      }
+    },
+    "Hold the YubiKey with the recovery key to the top of the phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложите YubiKey с ключом восстановления к верхней части телефона."
+          }
+        }
+      }
+    },
+    "Looking for the group's computers…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ищем компьютеры группы…"
+          }
+        }
+      }
+    },
+    "Hold the YubiKey again to sign the claim.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложите YubiKey ещё раз, чтобы подписать заявку."
+          }
+        }
+      }
+    },
+    "The claim is signed.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заявка подписана."
+          }
+        }
+      }
+    },
+    "This is not a YubiKey. Hold the YubiKey to the phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не YubiKey. Приложите YubiKey к телефону."
+          }
+        }
+      }
+    },
+    "The YubiKey left too soon.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey убрали слишком рано."
+          }
+        }
+      }
+    },
+    "Stopped. The app says why.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановлено. Причина — в приложении."
+          }
+        }
+      }
+    },
+    "The recovery key is on the YubiKey. Keep it away from your phones; a sheet printed before no longer works.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления записан на YubiKey. Храните его вдали от телефонов; лист, напечатанный раньше, больше не действует."
+          }
+        }
+      }
+    },
+    "This phone is in a group already. A recovery key restores a group on a phone without one.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон уже в группе. Ключ восстановления восстанавливает группу на телефоне без группы."
+          }
+        }
+      }
+    },
+    "This is not a YubiKey with PIV, or PIV is turned off on it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не YubiKey с PIV, или PIV на нём выключен."
+          }
+        }
+      }
+    },
+    "Wrong PIN. Tries left before the YubiKey blocks it: %lld.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неверный PIN. Попыток до блокировки YubiKey: %lld."
+          }
+        }
+      }
+    },
+    "The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN YubiKey заблокирован. Разблокируйте его PUK-кодом в Yubico Authenticator и попробуйте снова."
+          }
+        }
+      }
+    },
+    "This YubiKey's management key is not the factory one, so the app cannot put a key on it. Use the printed sheet instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У этого YubiKey не заводской ключ управления, поэтому приложение не может записать на него ключ. Используйте напечатанный лист."
+          }
+        }
+      }
+    },
+    "This YubiKey is older than firmware 5.7, which the app needs to put a key on it. Use the printed sheet instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прошивка этого YubiKey старше 5.7, а приложению нужна 5.7 или новее, чтобы записать на него ключ. Используйте напечатанный лист."
+          }
+        }
+      }
+    },
+    "This YubiKey has no free slot for the key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом YubiKey нет свободного слота для ключа."
+          }
+        }
+      }
+    },
+    "This YubiKey holds no recovery key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом YubiKey нет ключа восстановления."
+          }
+        }
+      }
+    },
+    "The YubiKey did not answer as expected. Hold it still to the phone and try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey ответил не так, как ожидалось. Держите его неподвижно у телефона и попробуйте снова."
+          }
+        }
+      }
+    },
+    "This iPhone cannot read a YubiKey over NFC.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот iPhone не может прочитать YubiKey по NFC."
+          }
+        }
+      }
+    },
+    "No YubiKey was held to the phone. Try again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey не приложили к телефону. Попробуйте снова."
+          }
+        }
+      }
+    },
+    "Put the recovery key on a YubiKey?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать ключ восстановления на YubiKey?"
+          }
+        }
+      }
+    },
+    "Hold the YubiKey": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложить YubiKey"
+          }
+        }
+      }
+    },
+    "The YubiKey makes the key in a free slot, and it never leaves the YubiKey. Type the YubiKey's PIN, then hold the YubiKey to the top of the phone. It replaces the recovery key the group has.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey создаёт ключ в свободном слоте, и ключ никогда его не покидает. Введите PIN YubiKey, затем приложите YubiKey к верхней части телефона. Он заменит ключ восстановления, который есть у группы."
+          }
+        }
+      }
+    },
+    "Put it on a YubiKey": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать на YubiKey"
+          }
+        }
+      }
+    },
+    "YubiKey PIN": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN YubiKey"
+          }
+        }
+      }
+    },
+    "Use a YubiKey instead": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Использовать YubiKey"
+          }
+        }
+      }
+    },
+    "Restore with a YubiKey": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Восстановить с YubiKey"
+          }
+        }
+      }
+    },
+    "Type the YubiKey's PIN, then hold the YubiKey to the top of the phone: once for this phone's certificate and, once a computer of the group answered, again for the claim. Keep this phone on the network of a computer of the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите PIN YubiKey, затем приложите YubiKey к верхней части телефона: один раз для сертификата этого телефона и, когда ответит компьютер группы, ещё раз для заявки. Держите телефон в сети компьютера группы."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

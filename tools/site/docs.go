@@ -48,7 +48,7 @@ import (
 // the lines once the translations are brought up to date).
 
 // repoURL is where a file of the repository is shown on GitHub.
-const repoURL = "https://github.com/HunterEwok/clipboardbridge/blob/main/"
+const repoURL = "https://github.com/HunterEwok/cbb/blob/main/"
 
 // indexFile is the documentation's index; guideDir holds the pages for users.
 const (

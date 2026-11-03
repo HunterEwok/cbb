@@ -104,20 +104,20 @@ func archiveFor(d *Device, machine string) (string, error) {
 		if arch = openwrtArch(machine); arch == "" {
 			return "", fmt.Errorf("%s: no build for OpenWrt's architecture %q", d.Name, machine)
 		}
-		return "clipboardbridge-linux-" + arch + ".tar.gz", nil
+		return "cbb-linux-" + arch + ".tar.gz", nil
 	case "freebsd":
 		if arch != "amd64" && arch != "arm64" {
 			return "", fmt.Errorf("%s: no FreeBSD build for the CPU %q", d.Name, machine)
 		}
-		return "clipboardbridge-freebsd-" + arch + ".tar.gz", nil
+		return "cbb-freebsd-" + arch + ".tar.gz", nil
 	case "linux", "docker", "netns":
-		return "clipboardbridge-linux-" + arch + ".tar.gz", nil
+		return "cbb-linux-" + arch + ".tar.gz", nil
 	case "linux-lite":
-		return "clipboardbridge-lite-linux-" + arch + ".tar.gz", nil
+		return "cbb-lite-linux-" + arch + ".tar.gz", nil
 	case "darwin":
-		return "clipboardbridge-darwin-" + arch + ".tar.gz", nil
+		return "cbb-darwin-" + arch + ".tar.gz", nil
 	case "windows":
-		return "clipboardbridge-windows-" + arch + ".zip", nil
+		return "cbb-windows-" + arch + ".zip", nil
 	}
 	return "", fmt.Errorf("%s: the bench does not reset os %s yet", d.Name, d.OS)
 }
@@ -159,7 +159,7 @@ func resetDevice(ctx context.Context, r *Report, d *Device, b *Build, quick bool
 	switch d.OS {
 	case "linux", "linux-lite":
 		if quick {
-			_, err := Run(ctx, d, "sudo -n sh -c 'systemctl stop clipboardbridge && rm -rf /var/lib/clipboardbridge/* /etc/systemd/system/clipboardbridge.service.d && systemctl daemon-reload && systemctl start clipboardbridge'", "")
+			_, err := Run(ctx, d, "sudo -n sh -c 'systemctl stop cbb && rm -rf /var/lib/cbb/* /etc/systemd/system/cbb.service.d && systemctl daemon-reload && systemctl start cbb'", "")
 			if err != nil {
 				return noSudo(d, err)
 			}
@@ -172,7 +172,7 @@ func resetDevice(ctx context.Context, r *Report, d *Device, b *Build, quick bool
 		if err != nil {
 			return err
 		}
-		if _, err := RunFor(ctx, d, "[ ! -f /usr/local/share/clipboardbridge/uninstall.sh ] || sudo -n sh /usr/local/share/clipboardbridge/uninstall.sh --purge", "", 2*time.Minute); err != nil {
+		if _, err := RunFor(ctx, d, "[ ! -f /usr/local/share/cbb/uninstall.sh ] || sudo -n sh /usr/local/share/cbb/uninstall.sh --purge", "", 2*time.Minute); err != nil {
 			return noSudo(d, err)
 		}
 		r.Do("reset/"+d.Name+"/L10-clean", func() error { return uninstalled(ctx, d) })
@@ -213,7 +213,7 @@ func resetDevice(ctx context.Context, r *Report, d *Device, b *Build, quick bool
 		// build without the pasteboard (no cgo) exits there at once.
 		r.Do("reset/"+d.Name+"/agent", func() error {
 			return eventually(ctx, 15*time.Second, func() error {
-				out, err := Run(ctx, d, "launchctl print gui/$(id -u)/io.github.hunterewok.clipboardbridge.agent 2>&1 | grep -m1 -E '^\\s*state = '; true", "")
+				out, err := Run(ctx, d, "launchctl print gui/$(id -u)/tools.cbb.agent 2>&1 | grep -m1 -E '^\\s*state = '; true", "")
 				if err == nil && !strings.Contains(out, "running") {
 					err = fmt.Errorf("the pasteboard agent does not run in the session: %s", strings.TrimSpace(out))
 				}
@@ -277,7 +277,7 @@ func resetRouterOrBSD(ctx context.Context, r *Report, d *Device, b *Build, quick
 	if quick {
 		cmd := serviceCmd(d, "stop") + " && " + rootPrefix(d) + "rm -rf " + state + "/*"
 		if d.OS == "openwrt" {
-			cmd += " /etc/clipboardbridge/firewall.hub"
+			cmd += " /etc/cbb/firewall.hub"
 		}
 		_, err := Run(ctx, d, cmd+" && "+serviceCmd(d, "start"), "")
 		return noSudo(d, err)
@@ -313,9 +313,9 @@ func resetWindows(ctx context.Context, r *Report, d *Device, b *Build, quick boo
 	if quick {
 		// The keys and the group live in state; the folder keeps the
 		// access list that install.ps1 gave it.
-		_, err := RunFor(ctx, d, `Stop-Service clipboardbridge -Force
-Get-ChildItem (Join-Path $env:ProgramData 'clipboardbridge\state') -Force | Remove-Item -Recurse -Force
-Start-Service clipboardbridge`, "", 2*time.Minute)
+		_, err := RunFor(ctx, d, `Stop-Service cbb -Force
+Get-ChildItem (Join-Path $env:ProgramData 'cbb\state') -Force | Remove-Item -Recurse -Force
+Start-Service cbb`, "", 2*time.Minute)
 		return err
 	}
 	if d.Firewall != "yes" && d.Firewall != "no" {
@@ -325,7 +325,7 @@ Start-Service clipboardbridge`, "", 2*time.Minute)
 	if err != nil {
 		return err
 	}
-	if _, err := RunFor(ctx, d, `$u = Join-Path $env:ProgramFiles 'clipboardbridge\uninstall.ps1'
+	if _, err := RunFor(ctx, d, `$u = Join-Path $env:ProgramFiles 'cbb\uninstall.ps1'
 if (Test-Path $u) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $u -Purge -Details }`, "", 2*time.Minute); err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ if (Test-Path $u) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $u
 // behind: the files, the data with the keys, the service, the group, the
 // firewall rules, the sign-in and uninstaller entries and the PATH entry.
 func uninstalledWindows(ctx context.Context, d *Device) error {
-	out, err := Run(ctx, d, `$n = 'clipboardbridge'
+	out, err := Run(ctx, d, `$n = 'cbb'
 $left = @()
 foreach ($p in @((Join-Path $env:ProgramFiles $n), (Join-Path $env:ProgramData $n), "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$n")) { if (Test-Path $p) { $left += $p } }
 if (Get-Service $n -ErrorAction SilentlyContinue) { $left += 'the service' }
@@ -412,8 +412,8 @@ func stage(ctx context.Context, d *Device, b *Build) (string, error) {
 	if d.OS == "darwin" {
 		return dir, nil
 	}
-	// The archive holds one directory, clipboardbridge or
-	// clipboardbridge-lite.
+	// The archive holds one directory, cbb or
+	// cbb-lite.
 	out, err = Run(ctx, d, "ls -d "+dir+"/*/", "")
 	if err != nil {
 		return "", err
@@ -450,8 +450,8 @@ Get-ChildItem "` + winStateBase + `" -Directory | Sort-Object LastWriteTime -Des
 			return "", err
 		}
 	}
-	// The archive holds one directory, clipboardbridge.
-	out, err := Run(ctx, d, "(Join-Path \""+dir+"\" clipboardbridge | Resolve-Path).Path", "")
+	// The archive holds one directory, cbb.
+	out, err := Run(ctx, d, "(Join-Path \""+dir+"\" cbb | Resolve-Path).Path", "")
 	if err != nil {
 		return "", err
 	}
@@ -463,11 +463,11 @@ func uninstalled(ctx context.Context, d *Device) error {
 	check := "ls -d " + strings.Join(installedPaths(d), " ") + " 2>/dev/null; "
 	switch d.OS {
 	case "linux", "linux-lite":
-		check += "sudo -n ufw status 2>/dev/null | grep -i clipboardbridge; "
+		check += "sudo -n ufw status 2>/dev/null | grep -i cbb; "
 	case "openwrt":
-		check += "ls /etc/rc.d | grep clipboardbridge; grep -l clipboardbridge /etc/config/firewall; "
+		check += "ls /etc/rc.d | grep cbb; grep -l cbb /etc/config/firewall; "
 	case "freebsd":
-		check += "grep clipboardbridge /etc/rc.conf /etc/pf.conf 2>/dev/null; "
+		check += "grep cbb /etc/rc.conf /etc/pf.conf 2>/dev/null; "
 	}
 	out, err := Run(ctx, d, check+"true", "")
 	if err != nil {
@@ -502,9 +502,9 @@ func agentRuns(ctx context.Context, r *Report, d *Device) error {
 }
 
 // restartAgent starts the desktop agent in the signed-in session. The SSH
-// session has the clipboardbridge group that the installer gave the user.
+// session has the cbb group that the installer gave the user.
 func restartAgent(ctx context.Context, d *Device) error {
-	_, err := Run(ctx, d, `id -nG | grep -qw clipboardbridge || { echo "the user is not in the clipboardbridge group; sign in again" >&2; exit 1; }
+	_, err := Run(ctx, d, `id -nG | grep -qw cbb || { echo "the user is not in the cbb group; sign in again" >&2; exit 1; }
 pkill -x -u "$(id -u)" cbb; sleep 0.5
 env=$(systemctl --user show-environment | grep -E '^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|DBUS_SESSION_BUS_ADDRESS|XAUTHORITY|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP)=')
 echo "$env" | grep -q '^DISPLAY=\|^WAYLAND_DISPLAY=' || { echo "nobody is signed in on the desktop" >&2; exit 1; }

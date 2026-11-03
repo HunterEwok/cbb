@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 985320ae0bdc -->
+<!-- source: e1c2123fe696 -->
 # Вне дома
 
 Дома ваши устройства синхронизируются сами. Чтобы синхронизация продолжалась, когда ноутбук
@@ -110,12 +110,12 @@ AmneziaWG или спрятать его внутри VLESS: см. [Сети, б
 уже работает:
 
 ```sh
-sudo cbb invite        # on the hub: writes clipboardbridge.cbbinvite, valid for an hour
+sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
 ```
 
 Отправьте файл на новый компьютер по надёжному каналу, например через мессенджер, в котором вы
 пишете самому себе; пока приглашение не использовано, оно остаётся секретом. Там выполните
-`sudo cbb pair -invite clipboardbridge.cbbinvite`. Оба компьютера покажут отпечаток ключа
+`sudo cbb pair -invite cbb.cbbinvite`. Оба компьютера покажут отпечаток ключа
 нового; на хабе вводите `yes`, только если они совпадают. Телефоны пока не могут входить по
 приглашению: добавляйте их дома.
 

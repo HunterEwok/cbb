@@ -7,17 +7,17 @@
 # log names an address, a group or a device, and on disk there is only its
 # key and a table of hashed tags.
 [Unit]
-Description=Clipboard Bridge forwarder
-Documentation=https://github.com/HunterEwok/clipboardbridge/blob/main/docs/admin/self-hosting.md
+Description=CBB forwarder
+Documentation=https://github.com/HunterEwok/cbb/blob/main/docs/admin/self-hosting.md
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 # -vless-site, -vless-listen and the other flags of cbb forward go in
-# CBB_FORWARD_FLAGS in /etc/clipboardbridge/forward.env.
+# CBB_FORWARD_FLAGS in /etc/cbb/forward.env.
 Environment=CBB_FORWARD_FLAGS=
-EnvironmentFile=-/etc/clipboardbridge/forward.env
+EnvironmentFile=-/etc/cbb/forward.env
 ExecStart=/usr/local/bin/cbb forward $CBB_FORWARD_FLAGS
 DynamicUser=yes
 StateDirectory=cbb-forward

@@ -53,7 +53,7 @@ os = "docker"
 ssh = "user@controller.lan"
 roles = ["member"]
 # reset: setup-docker.sh in a checkout of the repository on the host.
-setup = "~/clipboardbridge/tools/bench/setup-docker.sh"
+setup = "~/cbb/tools/bench/setup-docker.sh"
 
 # A second member on the remote server, in a network namespace of its own:
 # its traffic goes out through a SOCKS5 proxy (here a VPN client's local

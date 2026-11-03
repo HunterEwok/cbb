@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var joinQRRE = regexp.MustCompile(`(clipboardbridge://join\?\S+)`)
+var joinQRRE = regexp.MustCompile(`(cbb://join\?\S+)`)
 
 // listens reports whether something on d's network takes a TCP connection
 // to addr.
@@ -84,7 +84,7 @@ func joinerListens(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 		}
 	}
 	scan := func(how, qr string) (string, error) {
-		out, err := RunFor(ctx, hub, fmt.Sprintf("cbbbench-forge -signer /var/lib/clipboardbridge %s", shellQuote("qr:"+how+":"+qr)), "", 2*time.Minute)
+		out, err := RunFor(ctx, hub, fmt.Sprintf("cbbbench-forge -signer /var/lib/cbb %s", shellQuote("qr:"+how+":"+qr)), "", 2*time.Minute)
 		fmt.Fprintf(r.out, "%s\n", strings.TrimSpace(out))
 		return out, err
 	}

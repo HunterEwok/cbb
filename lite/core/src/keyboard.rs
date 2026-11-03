@@ -414,7 +414,7 @@ mod tests {
         assert_eq!(
             got,
             want,
-            "{} is out of date: CBB_UPDATE_VECTORS=1 cargo test -p clipboardbridge-core keyboard",
+            "{} is out of date: CBB_UPDATE_VECTORS=1 cargo test -p cbb-core keyboard",
             path.display()
         );
     }

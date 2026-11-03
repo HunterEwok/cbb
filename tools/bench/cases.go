@@ -203,24 +203,24 @@ func asRoot(d *Device, cmd string) (string, bool) {
 func stateDir(ctx context.Context, d *Device) (string, error) {
 	switch d.OS {
 	case "linux", "linux-lite":
-		return "/var/lib/clipboardbridge", nil
+		return "/var/lib/cbb", nil
 	case "darwin":
-		return "/Library/Application Support/clipboardbridge/state", nil
+		return "/Library/Application Support/cbb/state", nil
 	case "openwrt":
-		return "/etc/clipboardbridge/state", nil
+		return "/etc/cbb/state", nil
 	case "freebsd":
-		return "/var/db/clipboardbridge", nil
+		return "/var/db/cbb", nil
 	case "netns":
 		return netnsDir(d) + "/state", nil
 	case "docker":
-		out, err := Run(ctx, d, "docker inspect -f '{{range .Mounts}}{{if eq .Destination \"/var/lib/clipboardbridge\"}}{{.Source}}{{end}}{{end}}' "+d.Container, "")
+		out, err := Run(ctx, d, "docker inspect -f '{{range .Mounts}}{{if eq .Destination \"/var/lib/cbb\"}}{{.Source}}{{end}}{{end}}' "+d.Container, "")
 		if err != nil {
 			return "", err
 		}
 		if dir := strings.TrimSpace(out); dir != "" {
 			return dir, nil
 		}
-		return "", errors.New("the container has no volume at /var/lib/clipboardbridge")
+		return "", errors.New("the container has no volume at /var/lib/cbb")
 	}
 	return "", Skipped("the bench does not read this device's state directory yet")
 }
@@ -244,7 +244,7 @@ func secretCopy(ctx context.Context, r *Report, g *benchGroup, timeout time.Dura
 		r.Do(prefix+d.Name+"/disk", func() error { return notOnDisk(ctx, d, g.run) })
 		if d.OS == "linux" || d.OS == "linux-lite" {
 			r.Do(prefix+d.Name+"/swap", func() error {
-				out, err := Run(ctx, d, "systemctl show clipboardbridge -p MemorySwapMax --value", "")
+				out, err := Run(ctx, d, "systemctl show cbb -p MemorySwapMax --value", "")
 				if err == nil && strings.TrimSpace(out) != "0" {
 					err = fmt.Errorf("the service may swap: MemorySwapMax is %q", strings.TrimSpace(out))
 				}
@@ -297,7 +297,7 @@ func notOnDisk(ctx context.Context, d *Device, run string) error {
 	return nil
 }
 
-// localAccess (S11): a user outside the clipboardbridge group cannot use
+// localAccess (S11): a user outside the cbb group cannot use
 // the service, and a member of the group cannot change the group without
 // root.
 func localAccess(ctx context.Context, r *Report, g *benchGroup) {
@@ -315,7 +315,7 @@ func localAccess(ctx context.Context, r *Report, g *benchGroup) {
 			var re *RunError
 			switch {
 			case err == nil:
-				return errors.New("a user outside the clipboardbridge group read the status")
+				return errors.New("a user outside the cbb group read the status")
 			case sudoRefused(err):
 				return noSudo(d, err)
 			case !errors.As(err, &re):
@@ -351,7 +351,7 @@ func logsClean(ctx context.Context, r *Report, g *benchGroup, since time.Time) {
 		case "linux", "linux-lite":
 			// The service's unit and the agent's process only: sudo logs
 			// the bench's own commands, which name the run.
-			logs = "{ sudo -n journalctl -u clipboardbridge --since @" + at + " --no-pager -o cat && { journalctl --user _COMM=cbb --since @" + at + " --no-pager -o cat 2>/dev/null || true; }; }"
+			logs = "{ sudo -n journalctl -u cbb --since @" + at + " --no-pager -o cat && { journalctl --user _COMM=cbb --since @" + at + " --no-pager -o cat 2>/dev/null || true; }; }"
 		case "darwin":
 			logs = "sudo -n " + macHelper + " logs"
 		case "netns":

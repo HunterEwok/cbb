@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // ignoredWhy returns why record id is listed as ignored, "" when it is not.

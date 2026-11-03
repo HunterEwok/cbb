@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/rootless"
+	"github.com/HunterEwok/cbb/internal/rootless"
 )
 
 // EnvFile is where the installer keeps the settings it was given, such as
@@ -23,12 +23,12 @@ var EnvFile = envFile()
 
 func envFile() string {
 	if rootless.Is() {
-		return filepath.Join(rootless.ConfigDir(), "clipboardbridge.env")
+		return filepath.Join(rootless.ConfigDir(), "cbb.env")
 	}
 	if runtime.GOOS == "freebsd" {
-		return "/usr/local/etc/clipboardbridge/clipboardbridge.env"
+		return "/usr/local/etc/cbb/cbb.env"
 	}
-	return "/etc/clipboardbridge/clipboardbridge.env"
+	return "/etc/cbb/cbb.env"
 }
 
 // Port returns the member port, which a listening join uses too: a

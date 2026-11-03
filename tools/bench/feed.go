@@ -106,7 +106,7 @@ func (fd *feed) build(ctx context.Context, version, goarch, name string) (string
 		return "", err
 	}
 	bin := filepath.Join(fd.dir, "cbb-"+version+"-"+goarch)
-	c := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags", "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v"+version, "-o", bin, "./cmd/cbb")
+	c := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags", "-X github.com/HunterEwok/cbb/internal/version.Version=v"+version, "-o", bin, "./cmd/cbb")
 	c.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+goarch)
 	if b, err := c.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("building cbb %s: %v: %s", version, err, b)

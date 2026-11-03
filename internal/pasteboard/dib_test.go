@@ -17,7 +17,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
+	"github.com/HunterEwok/cbb/internal/clip"
 )
 
 // testImage is 3 by 2 pixels with a transparent and a half-transparent one.

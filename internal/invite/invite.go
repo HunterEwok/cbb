@@ -18,15 +18,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/strict"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/strict"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // prefix starts an invitation's text: the URI of a QR code, and the one
 // line of a .cbbinvite file. The rest is a fragment, which a browser never
 // sends anywhere.
-const prefix = "clipboardbridge://invite#"
+const prefix = "cbb://invite#"
 
 // Ext is the file name extension of an invitation file.
 const Ext = ".cbbinvite"
@@ -153,7 +153,7 @@ func Parse(text string) (*Invitation, error) {
 	text = strings.Trim(text, " \t\r\n")
 	enc, ok := strings.CutPrefix(text, prefix)
 	if !ok {
-		return nil, refuse(NotInvitation, "this is not a clipboardbridge invitation")
+		return nil, refuse(NotInvitation, "this is not a cbb invitation")
 	}
 	// Go's decoder skips line breaks; the text has none.
 	data, err := base64.StdEncoding.Strict().DecodeString(enc)
@@ -171,7 +171,7 @@ func Parse(text string) (*Invitation, error) {
 		return nil, refuse(Damaged, "the invitation is damaged")
 	}
 	if version != 1 {
-		return nil, refuse(Version, fmt.Sprintf("an invitation of version %d; update clipboardbridge", version))
+		return nil, refuse(Version, fmt.Sprintf("an invitation of version %d; update cbb", version))
 	}
 	if err := strict.Check(data, "v", "g", "h", "hk", "ep", "k", "psk", "s", "exp"); err != nil {
 		return nil, refuse(Damaged, "the invitation is damaged")

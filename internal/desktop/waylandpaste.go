@@ -16,9 +16,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/lockcheck"
-	"github.com/HunterEwok/clipboardbridge/internal/wl"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/lockcheck"
+	"github.com/HunterEwok/cbb/internal/wl"
 )
 
 // Remote paste on Wayland (design.md, "Remote paste"): a virtual keyboard

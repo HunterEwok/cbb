@@ -16,7 +16,7 @@ import (
 // file system without extended attributes cannot hold it; the file is
 // kept unmarked then.
 func markDownload(path string) error {
-	v := fmt.Sprintf("0083;%x;Clipboard Bridge;", time.Now().Unix())
+	v := fmt.Sprintf("0083;%x;CBB;", time.Now().Unix())
 	if err := unix.Setxattr(path, "com.apple.quarantine", []byte(v), 0); err != nil && err != unix.ENOTSUP {
 		return err
 	}

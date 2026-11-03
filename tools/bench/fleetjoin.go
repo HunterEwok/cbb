@@ -47,7 +47,7 @@ func killedJoiner(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 		if id, err := deviceOf(ctx, joiner); err == nil && id != "" {
 			Run(ctx, hub, "cbb remove "+id, "yes\n")
 		}
-		if _, err := Run(ctx, joiner, "rm -rf /var/lib/clipboardbridge/*", ""); err != nil {
+		if _, err := Run(ctx, joiner, "rm -rf /var/lib/cbb/*", ""); err != nil {
 			return err
 		}
 		if err := signalService(ctx, joiner, "KILL"); err != nil {
@@ -73,7 +73,7 @@ func killedJoiner(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 		if err != nil {
 			return "", false, err
 		}
-		out, err := Run(ctx, joiner, "test -e /var/lib/clipboardbridge/identity.json && echo yes || echo no", "")
+		out, err := Run(ctx, joiner, "test -e /var/lib/cbb/identity.json && echo yes || echo no", "")
 		return tag, strings.TrimSpace(out) == "yes", err
 	}
 	want, _ := groupOf(ctx, hub)

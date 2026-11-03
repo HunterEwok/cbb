@@ -91,10 +91,10 @@ func memberCert(ctx context.Context, d *Device) (*x509.Certificate, error) {
 }
 
 // identityCerts reads a fleet member's member certificate and its
-// clipboardbridge.local certificate, nil if it serves no phone, from its
+// cbb.local certificate, nil if it serves no phone, from its
 // state.
 func identityCerts(ctx context.Context, d *Device) (member, phone *x509.Certificate, err error) {
-	out, err := Run(ctx, d, "cat /var/lib/clipboardbridge/identity.json", "")
+	out, err := Run(ctx, d, "cat /var/lib/cbb/identity.json", "")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -147,7 +147,7 @@ func renewal(ctx context.Context, r *Report, g *benchGroup, timeout time.Duratio
 			})
 		})
 	}
-	// K2: the root's clipboardbridge.local certificate lasts 397 scaled
+	// K2: the root's cbb.local certificate lasts 397 scaled
 	// days and is renewed when less than 60 remain.
 	r.Do("time/K2-local-cert", func() error {
 		_, c, err := identityCerts(ctx, g.hub)
@@ -160,7 +160,7 @@ func renewal(ctx context.Context, r *Report, g *benchGroup, timeout time.Duratio
 		return eventually(ctx, scaled(400*24*time.Hour), func() error {
 			_, n, err := identityCerts(ctx, g.hub)
 			if err == nil && !n.NotAfter.After(c.NotAfter) {
-				err = fmt.Errorf("%s still has its clipboardbridge.local certificate until %s", g.hub.Name, n.NotAfter.Format(time.TimeOnly))
+				err = fmt.Errorf("%s still has its cbb.local certificate until %s", g.hub.Name, n.NotAfter.Format(time.TimeOnly))
 			}
 			return err
 		})
@@ -184,7 +184,7 @@ func renewal(ctx context.Context, r *Report, g *benchGroup, timeout time.Duratio
 func periods(ctx context.Context, r *Report, g *benchGroup) {
 	const p = "time/W39-periods/"
 	sum := func(d *Device) (string, error) {
-		out, err := Run(ctx, d, "cat /var/lib/clipboardbridge/credentials.json", "")
+		out, err := Run(ctx, d, "cat /var/lib/cbb/credentials.json", "")
 		if err != nil {
 			return "", err
 		}
@@ -256,7 +256,7 @@ func lapse(ctx context.Context, r *Report, f *Fleet, g *benchGroup, timeout time
 		if _, err := Run(ctx, g.hub, "cbb remove "+id, ""); err != nil {
 			return err
 		}
-		if _, err := Run(ctx, m, "rm -rf /var/lib/clipboardbridge/*", ""); err != nil {
+		if _, err := Run(ctx, m, "rm -rf /var/lib/cbb/*", ""); err != nil {
 			return err
 		}
 		if _, err := docker(ctx, "restart", "-t", "1", m.Container); err != nil {

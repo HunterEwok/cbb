@@ -198,13 +198,13 @@ func hungService(ctx context.Context, r *Report, g *benchGroup, timeout time.Dur
 		r.Skip(prefix, "needs a Linux member")
 		return
 	}
-	cont := "systemctl kill -s CONT clipboardbridge"
+	cont := "systemctl kill -s CONT cbb"
 	cancel, err := revertAfter(ctx, d, "cbbbench-cont", 3*time.Minute, cont)
 	if r.Do(prefix+d.Name+"/stop", func() error {
 		if err != nil {
 			return err
 		}
-		_, err := Run(ctx, d, "sudo -n systemctl kill -s STOP clipboardbridge", "")
+		_, err := Run(ctx, d, "sudo -n systemctl kill -s STOP cbb", "")
 		return noSudo(d, err)
 	}) != nil {
 		if cancel != nil {
@@ -259,9 +259,9 @@ func hungService(ctx context.Context, r *Report, g *benchGroup, timeout time.Dur
 func stopCmd(d *Device) (stop, start string) {
 	switch d.OS {
 	case "linux", "linux-lite":
-		return "sudo -n systemctl stop clipboardbridge", "sudo -n systemctl start clipboardbridge"
+		return "sudo -n systemctl stop cbb", "sudo -n systemctl start cbb"
 	case "windows":
-		return "Stop-Service clipboardbridge", "Start-Service clipboardbridge"
+		return "Stop-Service cbb", "Start-Service cbb"
 	case "docker":
 		return "docker stop " + d.Container, "docker start " + d.Container
 	case "netns":
@@ -337,16 +337,16 @@ func damagedState(ctx context.Context, r *Report, g *benchGroup, timeout time.Du
 		r.Skip(prefix, "needs a Linux member")
 		return
 	}
-	const file = "/var/lib/clipboardbridge/identity.json"
+	const file = "/var/lib/cbb/identity.json"
 	const keep = file + ".cbbbench"
-	restore := "systemctl stop clipboardbridge; if [ -f " + keep + " ]; then mv -f " + keep + " " + file + "; fi; systemctl start clipboardbridge"
+	restore := "systemctl stop cbb; if [ -f " + keep + " ]; then mv -f " + keep + " " + file + "; fi; systemctl start cbb"
 	cancel, err := revertAfter(ctx, d, "cbbbench-state", 5*time.Minute, restore)
 	p := prefix + d.Name + "/"
 	if r.Do(p+"damage", func() error {
 		if err != nil {
 			return err
 		}
-		_, err := Run(ctx, d, "sudo -n sh -c "+shellQuote("systemctl stop clipboardbridge && cp -p "+file+" "+keep+" && truncate -s 40 "+file+" && systemctl start clipboardbridge"), "")
+		_, err := Run(ctx, d, "sudo -n sh -c "+shellQuote("systemctl stop cbb && cp -p "+file+" "+keep+" && truncate -s 40 "+file+" && systemctl start cbb"), "")
 		return noSudo(d, err)
 	}) != nil {
 		if cancel != nil {

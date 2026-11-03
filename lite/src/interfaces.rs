@@ -26,7 +26,7 @@ pub fn only() -> &'static [String] {
 }
 
 /// Where OpenWrt's init script writes the list.
-const OPENWRT_LIST: &str = "/var/run/clipboardbridge/interfaces";
+const OPENWRT_LIST: &str = "/var/run/cbb/interfaces";
 
 fn parse(v: &str) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();

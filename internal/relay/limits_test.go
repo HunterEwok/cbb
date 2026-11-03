@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/budget"
+	"github.com/HunterEwok/cbb/internal/budget"
 )
 
 // posing is a listener that gives each accepted connection the source

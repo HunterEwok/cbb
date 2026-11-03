@@ -21,7 +21,7 @@ use crate::node::Node;
 use crate::pair::home_address;
 use crate::uptime;
 
-const SERVICE: &str = "_clipboardbridge._tcp.local.";
+const SERVICE: &str = "_cbb._tcp.local.";
 const MAX_WAIT: Duration = Duration::from_secs(30);
 const STEADY: Duration = Duration::from_secs(30);
 /// At most this many connections may be in their TLS handshake at once.
@@ -237,7 +237,7 @@ fn phone(r: Option<&str>) -> bool {
     r.is_some_and(|v| v.eq_ignore_ascii_case("phone"))
 }
 
-/// The device ID in an instance name, <device ID>._clipboardbridge._tcp.local.
+/// The device ID in an instance name, <device ID>._cbb._tcp.local.
 fn instance_id(fullname: &str) -> Option<DeviceId> {
     let label = fullname.strip_suffix(SERVICE)?.strip_suffix('.')?;
     DeviceId::parse(label).ok()
@@ -263,8 +263,8 @@ mod tests {
     #[test]
     fn instance_names() {
         let id = "0123456789abcdef0123456789abcdef";
-        assert_eq!(instance_id(&format!("{id}._clipboardbridge._tcp.local.")).unwrap().as_str(), id);
-        assert!(instance_id("printer._clipboardbridge._tcp.local.").is_none());
+        assert_eq!(instance_id(&format!("{id}._cbb._tcp.local.")).unwrap().as_str(), id);
+        assert!(instance_id("printer._cbb._tcp.local.").is_none());
         assert!(instance_id(&format!("{id}._http._tcp.local.")).is_none());
     }
 

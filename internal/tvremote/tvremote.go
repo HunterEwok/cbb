@@ -21,11 +21,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/roku"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv"
+	"github.com/HunterEwok/cbb/internal/tvremote/appletv"
+	"github.com/HunterEwok/cbb/internal/tvremote/roku"
 )
 
 // The kinds of TV.
@@ -204,7 +204,7 @@ func Type(ctx context.Context, t TV, client *androidtv.Client, text string) erro
 }
 
 // RemoteName is how an Apple TV knows the remote while it is connected.
-const RemoteName = "Clipboard Bridge"
+const RemoteName = "CBB"
 
 // fieldWait is how long Type waits for an Android TV to say a text field
 // is open, which it does right after the remote starts.

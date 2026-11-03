@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e3f44a3e70d3 -->
+<!-- source: 895e2077a95e -->
 # Cómo funciona
 
-Esta página explica Clipboard Bridge con imágenes: quién forma parte de un grupo, cómo se encuentran los dispositivos en casa y todas las formas en que pueden seguir en contacto cuando están fuera. Las reglas exactas están en el [diseño](../design.md); no las necesitas para usarlo.
+Esta página explica Copy Beyond Borders con imágenes: quién forma parte de un grupo, cómo se encuentran los dispositivos en casa y todas las formas en que pueden seguir en contacto cuando están fuera. Las reglas exactas están en el [diseño](../design.md); no las necesitas para usarlo.
 
 ## El grupo
 
@@ -17,11 +17,11 @@ Tus dispositivos forman un **grupo**. Solo pertenecen a él los dispositivos que
 | **Miembro sin root** | un ordenador Linux instalado sin `sudo` | sincroniza como un miembro, pero nunca es la raíz, un administrador ni un hub ([más abajo](#rootless-members)) |
 | **Hub** | un ordenador administrador en casa, o un teléfono mientras su app está abierta, si quieres uno | permite que tus dispositivos sincronicen cuando están fuera de casa |
 
-La clave del teléfono se crea en su chip de seguridad (el Secure Enclave, el Keystore de Android) y nunca sale de él; cada uso pide tu cara, tu huella o tu código. Un ordenador guarda sus claves en archivos que solo lee Clipboard Bridge.
+La clave del teléfono se crea en su chip de seguridad (el Secure Enclave, el Keystore de Android) y nunca sale de él; cada uso pide tu cara, tu huella o tu código. Un ordenador guarda sus claves en archivos que solo lee Copy Beyond Borders.
 
 ### Miembros sin root
 
-Normalmente el instalador necesita `sudo` una vez, para que Clipboard Bridge se ejecute bajo una cuenta propia: tu navegador, tus juegos y cualquier otro programa que ejecutes no pueden leer sus claves, y el sistema mantiene el servicio en un entorno aislado muy estricto. Una instalación sin root se salta eso, para un ordenador donde no tienes `sudo`, en el trabajo por ejemplo. Sincroniza como cualquier miembro, pero cualquiera de tus programas podría copiar su clave y hacerse pasar por él, así que nunca puede ser la raíz, un administrador ni el hub, aunque lo pidas. La lista de dispositivos lo marca como «rootless». Una Steam Deck no lo necesita: usa la instalación normal ([instalación](install.md#steamos-steam-deck)).
+Normalmente el instalador necesita `sudo` una vez, para que Copy Beyond Borders se ejecute bajo una cuenta propia: tu navegador, tus juegos y cualquier otro programa que ejecutes no pueden leer sus claves, y el sistema mantiene el servicio en un entorno aislado muy estricto. Una instalación sin root se salta eso, para un ordenador donde no tienes `sudo`, en el trabajo por ejemplo. Sincroniza como cualquier miembro, pero cualquiera de tus programas podría copiar su clave y hacerse pasar por él, así que nunca puede ser la raíz, un administrador ni el hub, aunque lo pidas. La lista de dispositivos lo marca como «rootless». Una Steam Deck no lo necesita: usa la instalación normal ([instalación](install.md#steamos-steam-deck)).
 
 ## Dos tipos de grupo
 
@@ -66,7 +66,7 @@ Muchos proveedores de internet ponen los hogares tras una dirección compartida 
 El reenviador no guarda claves y no puede leer nada: solo ve paquetes cifrados que van a tu hub. Hay dos tipos:
 
 - **El tuyo**: `cbb forward` en cualquier servidor con dirección pública, por ejemplo un servidor virtual barato ([cómo ejecutar tus propios servidores](../admin/self-hosting.md)).
-- **El reenviador de Clipboard Bridge** en `cbb.tools`, mantenido por el proyecto para todo el mundo. Está en pruebas y aún no está abierto a todos; su dirección y su clave aparecerán en esta página cuando se abra.
+- **El reenviador de Copy Beyond Borders** en `cbb.tools`, mantenido por el proyecto para todo el mundo. Está en pruebas y aún no está abierto a todos; su dirección y su clave aparecerán en esta página cuando se abra.
 
 Los dispositivos prueban primero la dirección propia del hub y el reenviador en último lugar.
 
@@ -100,4 +100,4 @@ Un grupo puede tener varios hubs: la raíz y cada administrador que tenga un hub
 | Reenviador | no | no: ve las direcciones de las que vienen los paquetes cifrados y que van a tu hub | tuyo, o del proyecto en `cbb.tools` |
 | Relé ciego | no | sí | tuyo (está previsto uno en `cbb.tools`) |
 
-No interviene nada más: ni cuentas, ni nube, ni telemetría. Todos los demás que pueden ver algo, desde tu Wi-Fi hasta la comprobación de actualizaciones, están en [privacidad](privacy.md). Con la sincronización fuera de casa activada, el servicio de Clipboard Bridge de un ordenador solo puede llegar a la red doméstica y al hub, el reenviador y el relé del propio grupo.
+No interviene nada más: ni cuentas, ni nube, ni telemetría. Todos los demás que pueden ver algo, desde tu Wi-Fi hasta la comprobación de actualizaciones, están en [privacidad](privacy.md). Con la sincronización fuera de casa activada, el servicio de Copy Beyond Borders de un ordenador solo puede llegar a la red doméstica y al hub, el reenviador y el relé del propio grupo.

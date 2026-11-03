@@ -14,7 +14,7 @@ import (
 // certsOf reads d's member certificate and its group CA from its identity
 // file.
 func certsOf(ctx context.Context, d *Device) (cert, ca *x509.Certificate, err error) {
-	out, err := Run(ctx, d, "cat /var/lib/clipboardbridge/identity.json", "")
+	out, err := Run(ctx, d, "cat /var/lib/cbb/identity.json", "")
 	if err != nil {
 		return nil, nil, err
 	}

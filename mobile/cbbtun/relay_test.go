@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/relay"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/relay"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // fakeKit plays the kit for a relay: it echoes a line on each connection,

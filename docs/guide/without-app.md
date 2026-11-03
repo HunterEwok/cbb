@@ -9,7 +9,7 @@ TestFlight.
 
 ## 1. Make the group on a computer
 
-[Install](install.md) Clipboard Bridge on a computer that is often on: Linux, Windows, a
+[Install](install.md) Copy Beyond Borders on a computer that is often on: Linux, Windows, a
 Mac or FreeBSD. It holds the group and serves the iPhone shortcut. Then:
 
 ```sh
@@ -37,7 +37,7 @@ Then turn on sharing on each computer, as in the [quick start](quickstart.md#4-s
 
 ## 3. Add an iPhone with the shortcut
 
-On the root, or an admin computer that answers for `clipboardbridge.local` (`cbb status`
+On the root, or an admin computer that answers for `cbb.local` (`cbb status`
 says whether it does):
 
 ```sh
@@ -48,9 +48,9 @@ It prints a QR code, the start of a fingerprint and a six-digit code.
 
 1. Scan the QR code with the iPhone's camera and follow the page: install the profile.
 2. Check that the profile's fingerprint starts with the printed one (Settings, General,
-   VPN & Device Management, "Clipboard Bridge", More Details), then turn on full trust for it
+   VPN & Device Management, "CBB", More Details), then turn on full trust for it
    (Settings, General, About, Certificate Trust Settings).
-3. Add the shortcut "clipboardbridge" from the same page and run it once; it asks for the
+3. Add the shortcut "cbb" from the same page and run it once; it asks for the
    six-digit code.
 4. Put the shortcut on the Action button, or on Back Tap (Settings, Accessibility, Touch,
    Back Tap, Double Tap).

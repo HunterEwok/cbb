@@ -1,0 +1,55 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+#
+# PROVIDE: cbb
+# REQUIRE: NETWORKING ntpd
+# KEYWORD: shutdown
+#
+# The CBB service on FreeBSD; install.sh puts it in
+# /usr/local/etc/rc.d and sets cbb_enable=YES in rc.conf.
+# daemon(8) runs cbb service, which opens its mDNS sockets as root and then
+# runs as the user cbb (-user), starts it again 5 s after it
+# stops, and sends its output to syslog. It waits for ntpd,
+# whose ntpd_sync_on_start steps the clock first: certificates need the
+# right time.
+#
+# rc.subr reads the variables set here.
+# shellcheck disable=SC1091,SC2034
+
+. /etc/rc.subr
+
+name=cbb
+rcvar=cbb_enable
+load_rc_config $name
+
+: "${cbb_enable:=NO}"
+: "${cbb_user:=cbb}"
+: "${cbb_group:=cbb}"
+
+rundir=/var/run/${name}
+pidfile=${rundir}/daemon.pid
+procname=/usr/sbin/daemon
+command=/usr/sbin/daemon
+# cbb must start as root: a socket on port 5353 shares it with avahi or
+# another user's responder only when root opened it. So the user goes to
+# cbb -user and not to rc.subr, which would run daemon itself through su
+# as that user.
+run_user=${cbb_user}
+run_group=${cbb_group}
+unset cbb_user cbb_group
+command_args="-f -r -R 5 -S -T ${name} -P ${pidfile} /usr/local/bin/cbb service -user ${run_user} -state /var/db/${name} -socket ${rundir}/control.sock"
+cbb_umask=0007
+start_precmd=cbb_prestart
+
+cbb_prestart() {
+	install -d -o "${run_user}" -g "${run_group}" -m 0750 "${rundir}"
+	install -d -o "${run_user}" -g "${run_group}" -m 0700 /var/db/${name}
+	# ipfw forgets rules added at run time on a reboot; pf loads its anchor
+	# from pf.conf itself.
+	if [ -f /usr/local/share/cbb/firewall.sh ]; then
+		sh /usr/local/share/cbb/firewall.sh reload || true
+	fi
+}
+
+run_rc_command "$1"

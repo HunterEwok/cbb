@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 931b83ed0988 -->
+<!-- source: 62cc1d41168b -->
 # عندما لا يعمل شيء
 
-ابدأ بـ `cbb status` على الجهاز الذي يتصرف خطأً: يخبرك هل الخدمة تعمل، وفي أي مجموعة هو، وأي الأعضاء متصلون، وحالة المزامنة خارج المنزل. كل رسالة قصيرة؛ و`CBB_DEBUG=1 cbb status` (على Windows نفّذ أولًا `$env:CBB_DEBUG = "1"`) يعرض الخطأ الأساسي تحتها. سجل الخدمة فيه التفاصيل دائمًا: على Linux `journalctl -u clipboardbridge`، وسجل موصّل سطح المكتب في سجل الجلسة، `journalctl --user`؛ أما الأنظمة الأخرى ففي [الملفات والسجلات](../reference/devices.md#files-and-logs). ومفتاح التفاصيل لكل جزء، بما فيه التطبيقات والمثبّتات، في [رسائل الخطأ وتفاصيلها](../reference/errors.md).
+ابدأ بـ `cbb status` على الجهاز الذي يتصرف خطأً: يخبرك هل الخدمة تعمل، وفي أي مجموعة هو، وأي الأعضاء متصلون، وحالة المزامنة خارج المنزل. كل رسالة قصيرة؛ و`CBB_DEBUG=1 cbb status` (على Windows نفّذ أولًا `$env:CBB_DEBUG = "1"`) يعرض الخطأ الأساسي تحتها. سجل الخدمة فيه التفاصيل دائمًا: على Linux `journalctl -u cbb`، وسجل موصّل سطح المكتب في سجل الجلسة، `journalctl --user`؛ أما الأنظمة الأخرى ففي [الملفات والسجلات](../reference/devices.md#files-and-logs). ومفتاح التفاصيل لكل جزء، بما فيه التطبيقات والمثبّتات، في [رسائل الخطأ وتفاصيلها](../reference/errors.md).
 
 ## الأوامر
 
-**"the Clipboard Bridge service is not running"**: شغّلها (`sudo systemctl start clipboardbridge` على Linux؛ `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` على Mac؛ `Start-Service clipboardbridge` على Windows) وانظر في سجلها.
+**"the CBB service is not running"**: شغّلها (`sudo systemctl start cbb` على Linux؛ `sudo launchctl kickstart -k system/tools.cbb` على Mac؛ `Start-Service cbb` على Windows) وانظر في سجلها.
 
-**"permission denied" على مقبس التحكم، بعد التثبيت مباشرة**: أضافك المثبّت إلى المجموعة `clipboardbridge`، ولا تُحتسب المجموعة إلا من تسجيل الدخول التالي. سجّل الخروج ثم الدخول (على Windows افتح نافذة طرفية جديدة)؛ وإلى ذلك الحين يعمل `sudo cbb ...`.
+**"permission denied" على مقبس التحكم، بعد التثبيت مباشرة**: أضافك المثبّت إلى المجموعة `cbb`، ولا تُحتسب المجموعة إلا من تسجيل الدخول التالي. سجّل الخروج ثم الدخول (على Windows افتح نافذة طرفية جديدة)؛ وإلى ذلك الحين يعمل `sudo cbb ...`.
 
 ## الأجهزة لا ترى بعضها
 
@@ -21,17 +21,17 @@
 
 - **"wrong code"**: تسمح كل نافذة اقتران بثلاث محاولات؛ شغّل `cbb pair` مرة أخرى للحصول على رمز جديد.
 - **الهاتف لا يصل إلى الحاسوب بعد مسح رمز QR الخاص به**: يجب أن يكون الهاتف والحاسوب على الشبكة نفسها، وأن يكون منفذ الحاسوب مفتوحًا (أعلاه). على iOS اسمح للتطبيق بالشبكة المحلية (الإعدادات، الخصوصية والأمان، الشبكة المحلية).
-- **الاختصار لا يصل إلى `clipboardbridge.local`**: لا يقدّمه إلا حاسوب الجذر وحواسيب المشرفين في المجموعة، وعلى المنفذ 8764 فقط؛ ويجب أن يكون واحد منها على الأقل مشغَّلًا (`cbb status` على كل حاسوب يخبرك هل يستجيب). تحقق من أن ملف التعريف مثبَّت وموثوق به ثقة كاملة ([بدون التطبيق](without-app.md#3-add-an-iphone-with-the-shortcut)).
+- **الاختصار لا يصل إلى `cbb.local`**: لا يقدّمه إلا حاسوب الجذر وحواسيب المشرفين في المجموعة، وعلى المنفذ 8764 فقط؛ ويجب أن يكون واحد منها على الأقل مشغَّلًا (`cbb status` على كل حاسوب يخبرك هل يستجيب). تحقق من أن ملف التعريف مثبَّت وموثوق به ثقة كاملة ([بدون التطبيق](without-app.md#3-add-an-iphone-with-the-shortcut)).
 
 ## المزامنة خارج المنزل
 
 `cbb global` على الجهاز وعلى المحور يخبرك بما هو خطأ. الأسباب المعتادة: الموجّه لا يمرّر منفذ UDP الخاص بالمحور إلى المحور، أو جدار حماية المحور يُسقطه، أو العنوان المعطى لـ `cbb global hub` ليس العنوان الذي يصل إليه الإنترنت. الجهاز الذي لم يلتقِ المحور في المنزل منذ تفعيل المزامنة خارج المنزل، أو منذ غيّر المحور إعداداته (`-obfuscate`، `-vless`)، لا يعرف كيف يصل إليه: أحضره إلى المنزل مرة واحدة. الشبكة التي تحجب شبكات VPN تحتاج إلى [AmneziaWG أو VLESS](blocked-networks.md). ومع `CBB_DEBUG=1` في بيئة الخدمة يعرض السجل أيضًا مصافحات WireGuard. على Linux:
 
 ```sh
-sudo systemctl edit clipboardbridge     # add the two lines below, save
+sudo systemctl edit cbb     # add the two lines below, save
 # [Service]
 # Environment=CBB_DEBUG=1
-sudo systemctl restart clipboardbridge
+sudo systemctl restart cbb
 ```
 
 ## Android
@@ -41,4 +41,4 @@ sudo systemctl restart clipboardbridge
 
 ## ما زالت المشكلة قائمة
 
-افتح [بلاغًا](https://github.com/HunterEwok/clipboardbridge/issues) مع ناتج `CBB_DEBUG=1 cbb status` والجزء ذي الصلة من السجل والأنظمة المعنية. احذف كل ما نسخته مما هو خاص. أما مشكلات الأمان فتُرسل إلى [SECURITY.md](../../SECURITY.md) بدلًا من ذلك.
+افتح [بلاغًا](https://github.com/HunterEwok/cbb/issues) مع ناتج `CBB_DEBUG=1 cbb status` والجزء ذي الصلة من السجل والأنظمة المعنية. احذف كل ما نسخته مما هو خاص. أما مشكلات الأمان فتُرسل إلى [SECURITY.md](../../SECURITY.md) بدلًا من ذلك.

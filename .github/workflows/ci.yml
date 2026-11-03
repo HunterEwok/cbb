@@ -308,7 +308,7 @@ jobs:
       - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
         run: |
           sh lite/wasm/build.sh
-          sh lite/packaging/notices.sh wasm32-unknown-unknown clipboardbridge-wasm >"$RUNNER_TEMP/core-notices"
+          sh lite/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
       - name: go build, with the core as at a release
         run: |
           overlay=$GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json
@@ -327,25 +327,25 @@ jobs:
           if [ -n "$GOARM" ]; then name=armv$GOARM; fi
           if [ "$GOOS" = windows ]; then
             CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$RUNNER_TEMP/cbb.exe" "$GOOS" "$name" "$RUNNER_TEMP/dist"
-            unzip -Z1 "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.zip" >"$RUNNER_TEMP/list"
+            unzip -Z1 "$RUNNER_TEMP/dist/cbb-$GOOS-$name.zip" >"$RUNNER_TEMP/list"
             for f in cbb.exe cbbw.exe cbb-desktop.exe packaging/windows/install.ps1 packaging/windows/uninstall.ps1; do
-              grep -qx "clipboardbridge/$f" "$RUNNER_TEMP/list"
+              grep -qx "cbb/$f" "$RUNNER_TEMP/list"
             done
             file "$RUNNER_TEMP/cbb.exe" | grep -q '(console)'
             file "$RUNNER_TEMP/cbbw.exe" | grep -q '(GUI)'
             file "$RUNNER_TEMP/cbb-desktop.exe" | grep -q '(GUI)'
           else
             CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$RUNNER_TEMP/cbb" "$GOOS" "$name" "$RUNNER_TEMP/dist"
-            tar -tzf "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.tar.gz" | grep -qx "clipboardbridge/cbb"
+            tar -tzf "$RUNNER_TEMP/dist/cbb-$GOOS-$name.tar.gz" | grep -qx "cbb/cbb"
             # The notices name the core's crates too.
-            tar -xzOf "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.tar.gz" clipboardbridge/THIRD_PARTY_NOTICES | grep -q '^chacha20poly1305 '
+            tar -xzOf "$RUNNER_TEMP/dist/cbb-$GOOS-$name.tar.gz" cbb/THIRD_PARTY_NOTICES | grep -q '^chacha20poly1305 '
           fi
       - name: keep the Windows archive for the installer test
         if: matrix.goos == 'windows' && matrix.goarch == 'amd64'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: clipboardbridge-windows-amd64.zip
-          path: ${{ runner.temp }}/dist/clipboardbridge-windows-amd64.zip
+          name: cbb-windows-amd64.zip
+          path: ${{ runner.temp }}/dist/cbb-windows-amd64.zip
           if-no-files-found: error
           retention-days: 1
       - name: the agent has the pasteboard
@@ -419,51 +419,51 @@ jobs:
             # The installer, the rc.d script and pf's anchor on the real system.
             go build -trimpath -o /tmp/cbb ./cmd/cbb
             sh packaging/freebsd/install.sh --no-firewall /tmp/cbb
-            service clipboardbridge status
-            test -f /usr/local/etc/xdg/autostart/clipboardbridge-desktop.desktop
+            service cbb status
+            test -f /usr/local/etc/xdg/autostart/cbb-desktop.desktop
             # cbb opens its mDNS sockets as root, then runs as its user.
             sleep 2
             failed() {
               echo "$1" >&2
               ps -axwwo user,pid,ppid,command | grep '[c]bb' || true
-              grep clipboardbridge /var/log/messages | tail -n 40 || true
+              grep cbb /var/log/messages | tail -n 40 || true
               exit 1
             }
             # By the command's name: the full command lines include this
             # script's own shell, which names cbb service too.
-            ps -ax -o user= -o comm= | grep -Eq '^clipboardbridge +cbb$' || failed "cbb service does not run as clipboardbridge"
+            ps -ax -o user= -o comm= | grep -Eq '^cbb +cbb$' || failed "cbb service does not run as cbb"
             if ps -ax -o user= -o comm= | grep -Eq '^root +cbb$'; then failed "cbb service runs as root"; fi
             cbb status 2>&1 | grep -Eq 'in a group|no group' || failed "cbb status got no answer"
             kldload -n pf
             touch /etc/pf.conf
             pfctl -e
-            sh /usr/local/share/clipboardbridge/firewall.sh open 8764
-            pfctl -a clipboardbridge -s rules | grep -q 'port = 8764'
-            sh /usr/local/share/clipboardbridge/firewall.sh hub-open 51820
-            pfctl -a clipboardbridge -s rules | grep -q 'port = 51820'
-            sh /usr/local/share/clipboardbridge/firewall.sh hub-close
-            sh /usr/local/share/clipboardbridge/uninstall.sh --purge
-            if grep -q clipboardbridge /etc/pf.conf; then exit 1; fi
-            if pfctl -a clipboardbridge -s rules 2>/dev/null | grep -q pass; then exit 1; fi
-            if [ -e /usr/local/bin/cbb ] || [ -e /var/db/clipboardbridge ]; then exit 1; fi
-            if [ -e /usr/local/etc/xdg/autostart/clipboardbridge-desktop.desktop ]; then exit 1; fi
+            sh /usr/local/share/cbb/firewall.sh open 8764
+            pfctl -a cbb -s rules | grep -q 'port = 8764'
+            sh /usr/local/share/cbb/firewall.sh hub-open 51820
+            pfctl -a cbb -s rules | grep -q 'port = 51820'
+            sh /usr/local/share/cbb/firewall.sh hub-close
+            sh /usr/local/share/cbb/uninstall.sh --purge
+            if grep -q cbb /etc/pf.conf; then exit 1; fi
+            if pfctl -a cbb -s rules 2>/dev/null | grep -q pass; then exit 1; fi
+            if [ -e /usr/local/bin/cbb ] || [ -e /var/db/cbb ]; then exit 1; fi
+            if [ -e /usr/local/etc/xdg/autostart/cbb-desktop.desktop ]; then exit 1; fi
             # OPNsense, played by its version file and a configctl that loads a
             # ruleset naming the anchor, as the plugin hook makes OPNsense's.
             mkdir -p /usr/local/opnsense/version
             touch /usr/local/opnsense/version/core
-            printf '#!/bin/sh\nprintf "anchor \\"clipboardbridge\\"\\npass all\\n" | pfctl -f -\n' >/usr/local/sbin/configctl
+            printf '#!/bin/sh\nprintf "anchor \\"cbb\\"\\npass all\\n" | pfctl -f -\n' >/usr/local/sbin/configctl
             chmod 0755 /usr/local/sbin/configctl
             cp /etc/pf.conf /tmp/pf.conf.before
             sh packaging/freebsd/install.sh --express /tmp/cbb
-            test -f /usr/local/etc/inc/plugins.inc.d/clipboardbridge.inc
-            test ! -e /usr/local/etc/xdg/autostart/clipboardbridge-desktop.desktop
-            test "$(sh /usr/local/share/clipboardbridge/firewall.sh kind)" = opnsense
-            pfctl -s rules | grep -q 'anchor "clipboardbridge"'
-            pfctl -a clipboardbridge -s rules | grep -q 'port = 8764'
+            test -f /usr/local/etc/inc/plugins.inc.d/cbb.inc
+            test ! -e /usr/local/etc/xdg/autostart/cbb-desktop.desktop
+            test "$(sh /usr/local/share/cbb/firewall.sh kind)" = opnsense
+            pfctl -s rules | grep -q 'anchor "cbb"'
+            pfctl -a cbb -s rules | grep -q 'port = 8764'
             cmp /etc/pf.conf /tmp/pf.conf.before
-            sh /usr/local/share/clipboardbridge/uninstall.sh --purge
-            test ! -e /usr/local/etc/inc/plugins.inc.d/clipboardbridge.inc
-            if pfctl -a clipboardbridge -s rules 2>/dev/null | grep -q pass; then exit 1; fi
+            sh /usr/local/share/cbb/uninstall.sh --purge
+            test ! -e /usr/local/etc/inc/plugins.inc.d/cbb.inc
+            if pfctl -a cbb -s rules 2>/dev/null | grep -q pass; then exit 1; fi
             cmp /etc/pf.conf /tmp/pf.conf.before
             rm -rf /usr/local/opnsense /usr/local/sbin/configctl
             # pfSense: nothing is changed, the rules to add are printed.
@@ -546,17 +546,23 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/old"
           cd "$RUNNER_TEMP/old"
-          gh release download --repo "$GITHUB_REPOSITORY" --pattern clipboardbridge-linux-amd64.tar.gz --pattern SHA256SUMS
+          # The archives took the project's short name in 0.6, so the last release's
+          # are found by their ending; the lite member's are left out.
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern '*-linux-amd64.tar.gz' --pattern SHA256SUMS
           sha256sum -c --ignore-missing SHA256SUMS
-          tar -xzf clipboardbridge-linux-amd64.tar.gz
-          clipboardbridge/cbb version
+          for a in *-linux-amd64.tar.gz; do
+            case $a in *-lite-*) ;; *) tar -xzf "$a" ;; esac
+          done
+          mkdir member
+          mv "$(find . -mindepth 2 -maxdepth 2 -type f -name cbb -not -path './member/*')" member/cbb
+          member/cbb version
       - name: the build under test, as the release after it
         run: |
-          old=$("$RUNNER_TEMP/old/clipboardbridge/cbb" version | sed -n 's/^clipboardbridge v\([0-9][0-9.]*\).*/\1/p')
+          old=$("$RUNNER_TEMP/old/member/cbb" version | sed -n 's/^[a-z]* v\([0-9][0-9.]*\).*/\1/p')
           new="${old%.*}.$((${old##*.} + 1))"
-          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v$new" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$new" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
       - name: members of the release update one at a time and keep syncing (tools/e2e/upgrade.sh)
-        run: sh tools/e2e/upgrade.sh "$RUNNER_TEMP/old/clipboardbridge/cbb" "$RUNNER_TEMP/cbb"
+        run: sh tools/e2e/upgrade.sh "$RUNNER_TEMP/old/member/cbb" "$RUNNER_TEMP/cbb"
 
   avahi:
     name: mdns with avahi
@@ -662,7 +668,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/clipboardbridge packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/clipboardbridge.init packaging/openwrt/clipboardbridge.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/clipboardbridge-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
@@ -672,10 +678,10 @@ jobs:
           mkdir -p "$out"
           go run ./tools/sbom go -o "$out/sbom-go.cdx.json" -version v0.0.0 "$RUNNER_TEMP/sbom-cbb"
           go run ./tools/sbom cargo -o "$out/sbom-lite.cdx.json" -version v0.0.0 -manifest lite/Cargo.toml \
-            -package clipboardbridge-lite -target x86_64-unknown-linux-musl,mips-unknown-linux-musl
+            -package cbb-lite -target x86_64-unknown-linux-musl,mips-unknown-linux-musl
           go run ./tools/sbom cargo -o "$out/sbom-phone-core.cdx.json" -version v0.0.0 -manifest lite/Cargo.toml \
-            -package clipboardbridge-ffi -target aarch64-apple-ios,aarch64-linux-android
-          go run ./tools/sbom swift -o "$out/sbom-ios-kit.cdx.json" -version v0.0.0 apps/ios/ClipboardBridgeKit/Package.resolved
+            -package cbb-ffi -target aarch64-apple-ios,aarch64-linux-android
+          go run ./tools/sbom swift -o "$out/sbom-ios-kit.cdx.json" -version v0.0.0 apps/ios/CBBKit/Package.resolved
           for f in "$out"/*.cdx.json; do
             jq -e '.bomFormat == "CycloneDX" and (.components | length > 0)' "$f" >/dev/null
           done
@@ -686,10 +692,10 @@ jobs:
         run: |
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           sudo install -m 0755 "$RUNNER_TEMP/cbb" /usr/local/bin/cbb
-          sudo systemd-sysusers "$PWD/packaging/linux/clipboardbridge.sysusers"
-          systemd-analyze verify packaging/linux/clipboardbridge.service
-          systemd-analyze security --offline=true packaging/linux/clipboardbridge.service --threshold=30 # 3.0 on the scale it prints
-          systemd-analyze verify lite/packaging/clipboardbridge.service
+          sudo systemd-sysusers "$PWD/packaging/linux/cbb.sysusers"
+          systemd-analyze verify packaging/linux/cbb.service
+          systemd-analyze security --offline=true packaging/linux/cbb.service --threshold=30 # 3.0 on the scale it prints
+          systemd-analyze verify lite/packaging/cbb.service
           for u in cbb-forward cbb-relay; do
             systemd-analyze verify "packaging/linux/$u.service"
             systemd-analyze security --offline=true "packaging/linux/$u.service" --threshold=20
@@ -702,12 +708,12 @@ jobs:
         run: |
           sums="$RUNNER_TEMP/SHA256SUMS"
           for n in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64; do
-            printf '%s  clipboardbridge-%s.tar.gz\n' "$(printf %s "$n" | sha256sum | cut -d' ' -f1)" "$n"
+            printf '%s  cbb-%s.tar.gz\n' "$(printf %s "$n" | sha256sum | cut -d' ' -f1)" "$n"
           done >"$sums"
-          sh packaging/homebrew/formula.sh v1.2.3 "$sums" >"$RUNNER_TEMP/clipboardbridge.rb"
-          ruby -c "$RUNNER_TEMP/clipboardbridge.rb"
-          grep -qF "$(printf darwin-arm64 | sha256sum | cut -d' ' -f1)" "$RUNNER_TEMP/clipboardbridge.rb"
-          grep -qF 'releases/download/v1.2.3/clipboardbridge-linux-arm64.tar.gz' "$RUNNER_TEMP/clipboardbridge.rb"
+          sh packaging/homebrew/formula.sh v1.2.3 "$sums" >"$RUNNER_TEMP/cbb.rb"
+          ruby -c "$RUNNER_TEMP/cbb.rb"
+          grep -qF "$(printf darwin-arm64 | sha256sum | cut -d' ' -f1)" "$RUNNER_TEMP/cbb.rb"
+          grep -qF 'releases/download/v1.2.3/cbb-linux-arm64.tar.gz' "$RUNNER_TEMP/cbb.rb"
           sed -i /linux-arm64/d "$sums"
           if sh packaging/homebrew/formula.sh v1.2.3 "$sums" >/dev/null; then
             echo "formula.sh wrote a formula without a checksum" >&2
@@ -717,14 +723,14 @@ jobs:
         run: |
           sums="$RUNNER_TEMP/SHA256SUMS"
           for n in amd64 arm64; do
-            printf '%s  clipboardbridge-windows-%s.zip\n' "$(printf %s "$n" | sha256sum | cut -d' ' -f1)" "$n"
+            printf '%s  cbb-windows-%s.zip\n' "$(printf %s "$n" | sha256sum | cut -d' ' -f1)" "$n"
           done >"$sums"
           out="$RUNNER_TEMP/winget"
           sh packaging/winget/manifest.sh v1.2.3 "$sums" "$out"
           for f in "$out"/*.yaml; do ruby -ryaml -e 'YAML.safe_load(File.read(ARGV[0]))' "$f"; done
           test "$(find "$out" -type f | wc -l)" -eq 3
-          grep -qF "$(printf arm64 | sha256sum | cut -d' ' -f1 | tr a-f A-F)" "$out/HunterEwok.clipboardbridge.installer.yaml"
-          grep -qF 'releases/download/v1.2.3/clipboardbridge-windows-amd64.zip' "$out/HunterEwok.clipboardbridge.installer.yaml"
+          grep -qF "$(printf arm64 | sha256sum | cut -d' ' -f1 | tr a-f A-F)" "$out/HunterEwok.cbb.installer.yaml"
+          grep -qF 'releases/download/v1.2.3/cbb-windows-amd64.zip' "$out/HunterEwok.cbb.installer.yaml"
           sed -i /arm64/d "$sums"
           if sh packaging/winget/manifest.sh v1.2.3 "$sums" "$RUNNER_TEMP/winget2"; then
             echo "manifest.sh wrote a manifest without a checksum" >&2
@@ -733,7 +739,7 @@ jobs:
       - name: desktop entry
         run: |
           sudo apt-get install -y -qq desktop-file-utils >/dev/null
-          desktop-file-validate packaging/linux/clipboardbridge-desktop.desktop
+          desktop-file-validate packaging/linux/cbb-desktop.desktop
       - name: get.sh installs a release archive and refuses a changed one
         run: |
           # The archive as the release workflow makes it.
@@ -741,10 +747,10 @@ jobs:
           sh packaging/archive.sh "$RUNNER_TEMP/cbb" linux amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall
-          systemctl is-active clipboardbridge.service
+          systemctl is-active cbb.service
           for _ in $(seq 20); do sudo cbb status && break; sleep 0.5; done
           sudo cbb status | grep -q 'Not in a group'
-          echo tampered >>"$rel/clipboardbridge-linux-amd64.tar.gz"
+          echo tampered >>"$rel/cbb-linux-amd64.tar.gz"
           if sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall; then
             echo "get.sh installed an archive that does not match SHA256SUMS" >&2
             exit 1
@@ -768,11 +774,11 @@ jobs:
             fi
           }
           # The archive and SHA256SUMS changed together after signing.
-          cp "$rel/clipboardbridge-linux-amd64.tar.gz" "$RUNNER_TEMP/good.tar.gz"
-          echo tampered >>"$rel/clipboardbridge-linux-amd64.tar.gz"
+          cp "$rel/cbb-linux-amd64.tar.gz" "$RUNNER_TEMP/good.tar.gz"
+          echo tampered >>"$rel/cbb-linux-amd64.tar.gz"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           refused "an archive that release.json does not list"
-          cp "$RUNNER_TEMP/good.tar.gz" "$rel/clipboardbridge-linux-amd64.tar.gz"
+          cp "$RUNNER_TEMP/good.tar.gz" "$rel/cbb-linux-amd64.tar.gz"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           # A release of another channel that stable.json names.
           go run ./tools/release-sign drill -version 0.6.0 -release-channel beta "$rel" "$RUNNER_TEMP/roots.pem"
@@ -795,7 +801,7 @@ jobs:
           CBB_VERIFY=skip sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "Not checked" >/dev/null
       - name: cbb update installs a newer signed release, puts the old one back, and sets the timer
         run: |
-          version() { CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v$1" -o "$2" ./cmd/cbb; }
+          version() { CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2" ./cmd/cbb; }
           mkdir -p "$RUNNER_TEMP/v060" "$RUNNER_TEMP/v061"
           version 0.6.0 "$RUNNER_TEMP/v060/cbb"
           version 0.6.1 "$RUNNER_TEMP/v061/cbb"
@@ -820,7 +826,7 @@ jobs:
           cat >"$RUNNER_TEMP/v062/cbb" <<'EOF'
           #!/bin/sh
           case $1 in
-          version) echo "clipboardbridge v0.6.2 linux/amd64" ;;
+          version) echo "cbb v0.6.2 linux/amd64" ;;
           service) exit 1 ;;
           esac
           EOF
@@ -835,47 +841,47 @@ jobs:
           grep -q '0.6.1 is back' "$RUNNER_TEMP/err"
           cbb version | grep -q ' v0.6.1 '
           sudo cbb status | grep -q 'Not in a group'
-          sudo grep -q '"0.6.2"' /var/lib/clipboardbridge-update/update.json
+          sudo grep -q '"0.6.2"' /var/lib/cbb-update/update.json
           # The timer.
           sudo cbb update -auto on
-          systemctl is-enabled -q clipboardbridge-update.timer
-          systemctl cat clipboardbridge-update.service | grep -qx 'ExecStart=/usr/local/bin/cbb update -timer'
+          systemctl is-enabled -q cbb-update.timer
+          systemctl cat cbb-update.service | grep -qx 'ExecStart=/usr/local/bin/cbb update -timer'
           sudo cbb update -auto off
-          test ! -e /etc/systemd/system/clipboardbridge-update.timer
+          test ! -e /etc/systemd/system/cbb-update.timer
           sudo cbb update -auto on
-          sudo sh /usr/local/share/clipboardbridge/uninstall.sh --purge
-          test ! -e /etc/systemd/system/clipboardbridge-update.timer
-          test ! -e /var/lib/clipboardbridge-update
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          test ! -e /etc/systemd/system/cbb-update.timer
+          test ! -e /var/lib/cbb-update
       - name: install.sh keeps a port, and uninstall.sh removes it all
         run: |
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh --port 9000 "$RUNNER_TEMP/cbb" | grep 'TCP port 9000' >/dev/null
-          grep -qx 'CBB_PORT=9000' /etc/clipboardbridge/clipboardbridge.env
+          grep -qx 'CBB_PORT=9000' /etc/cbb/cbb.env
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" | grep 'TCP port 9000' >/dev/null
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh --console --uinput --port 8764 "$RUNNER_TEMP/cbb" | grep 'TCP port 8764' >/dev/null
-          systemctl is-enabled -q clipboardbridge-console.service
-          systemctl is-enabled -q clipboardbridge-uinput.service
-          grep -qx uinput /etc/modules-load.d/clipboardbridge-uinput.conf
+          systemctl is-enabled -q cbb-console.service
+          systemctl is-enabled -q cbb-uinput.service
+          grep -qx uinput /etc/modules-load.d/cbb-uinput.conf
           # The helper holds its keyboard and listens for the desktop connectors.
-          for _ in $(seq 1 50); do [ -S /run/clipboardbridge-keys/keys ] && break; sleep 0.2; done
-          test -S /run/clipboardbridge-keys/keys || { journalctl -u clipboardbridge-uinput --no-pager; exit 1; }
-          test ! -e /etc/clipboardbridge/clipboardbridge.env
+          for _ in $(seq 1 50); do [ -S /run/cbb-keys/keys ] && break; sleep 0.2; done
+          test -S /run/cbb-keys/keys || { journalctl -u cbb-uinput --no-pager; exit 1; }
+          test ! -e /etc/cbb/cbb.env
           # A CBB_INTERFACES line set by hand survives the next install.
           dev=$(ip route show default | awk '{print $5; exit}')
-          echo "CBB_INTERFACES=$dev" | sudo tee /etc/clipboardbridge/clipboardbridge.env >/dev/null
+          echo "CBB_INTERFACES=$dev" | sudo tee /etc/cbb/cbb.env >/dev/null
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" | grep 'TCP port 8764' >/dev/null
-          grep -qx "CBB_INTERFACES=$dev" /etc/clipboardbridge/clipboardbridge.env
+          grep -qx "CBB_INTERFACES=$dev" /etc/cbb/cbb.env
           # The desktop agent's user unit, enabled for every user's graphical session.
-          test -L /etc/systemd/user/graphical-session.target.wants/clipboardbridge-agent.service
-          sudo sh /usr/local/share/clipboardbridge/uninstall.sh --purge
-          for f in /usr/local/bin/cbb /etc/systemd/system/clipboardbridge.service /etc/systemd/system/clipboardbridge-console.service /usr/local/share/clipboardbridge /etc/clipboardbridge /var/lib/clipboardbridge /var/lib/clipboardbridge-update \
-            /etc/systemd/system/clipboardbridge-uinput.service /etc/modules-load.d/clipboardbridge-uinput.conf /run/clipboardbridge-keys \
-            /etc/systemd/user/clipboardbridge-agent.service /etc/systemd/user/graphical-session.target.wants/clipboardbridge-agent.service; do
+          test -L /etc/systemd/user/graphical-session.target.wants/cbb-agent.service
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          for f in /usr/local/bin/cbb /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service /usr/local/share/cbb /etc/cbb /var/lib/cbb /var/lib/cbb-update \
+            /etc/systemd/system/cbb-uinput.service /etc/modules-load.d/cbb-uinput.conf /run/cbb-keys \
+            /etc/systemd/user/cbb-agent.service /etc/systemd/user/graphical-session.target.wants/cbb-agent.service; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1
             fi
           done
-          if grep -q clipboardbridge /etc/tmux.conf; then
+          if grep -q cbb /etc/tmux.conf; then
             echo "uninstall.sh left the tmux line" >&2
             exit 1
           fi
@@ -883,36 +889,36 @@ jobs:
         run: |
           printf 'NAME="SteamOS"\nID=steamos\n' >"$RUNNER_TEMP/os-release"
           sudo CBB_OS_RELEASE="$RUNNER_TEMP/os-release" CBB_FIREWALL=no sh packaging/linux/install.sh --auto-update off "$RUNNER_TEMP/cbb" | tee "$RUNNER_TEMP/out"
-          grep -q 'sudo /opt/clipboardbridge/bin/cbb pair' "$RUNNER_TEMP/out"
-          test -x /opt/clipboardbridge/bin/cbb
+          grep -q 'sudo /opt/cbb/bin/cbb pair' "$RUNNER_TEMP/out"
+          test -x /opt/cbb/bin/cbb
           test ! -e /usr/local/bin/cbb
-          test ! -e /usr/lib/sysusers.d/clipboardbridge.conf
-          grep -qx "m $USER clipboardbridge" /etc/sysusers.d/clipboardbridge.conf
-          systemctl is-active -q clipboardbridge.service
-          systemctl cat clipboardbridge.service | grep -qx 'ExecStart=/opt/clipboardbridge/bin/cbb service'
-          grep -qx 'ExecStart=/opt/clipboardbridge/bin/cbb agent' /etc/systemd/user/clipboardbridge-agent.service
-          grep -qx 'Exec=/opt/clipboardbridge/bin/cbb agent' /etc/xdg/autostart/clipboardbridge-desktop.desktop
-          grep -qxF 'source-file -q /opt/clipboardbridge/share/tmux.conf' /etc/tmux.conf
-          grep -qx '/etc/sysusers.d/clipboardbridge.conf' /etc/atomic-update.conf.d/clipboardbridge.conf
-          sudo /opt/clipboardbridge/bin/cbb status | grep -q 'Not in a group'
+          test ! -e /usr/lib/sysusers.d/cbb.conf
+          grep -qx "m $USER cbb" /etc/sysusers.d/cbb.conf
+          systemctl is-active -q cbb.service
+          systemctl cat cbb.service | grep -qx 'ExecStart=/opt/cbb/bin/cbb service'
+          grep -qx 'ExecStart=/opt/cbb/bin/cbb agent' /etc/systemd/user/cbb-agent.service
+          grep -qx 'Exec=/opt/cbb/bin/cbb agent' /etc/xdg/autostart/cbb-desktop.desktop
+          grep -qxF 'source-file -q /opt/cbb/share/tmux.conf' /etc/tmux.conf
+          grep -qx '/etc/sysusers.d/cbb.conf' /etc/atomic-update.conf.d/cbb.conf
+          sudo /opt/cbb/bin/cbb status | grep -q 'Not in a group'
           # cbb update's folder and timer follow the program to /opt.
-          sudo /opt/clipboardbridge/bin/cbb update -auto on
-          systemctl cat clipboardbridge-update.service | grep -qx 'ExecStart=/opt/clipboardbridge/bin/cbb update -timer'
-          sudo test -d /opt/clipboardbridge-update
-          test ! -e /var/lib/clipboardbridge-update
+          sudo /opt/cbb/bin/cbb update -auto on
+          systemctl cat cbb-update.service | grep -qx 'ExecStart=/opt/cbb/bin/cbb update -timer'
+          sudo test -d /opt/cbb-update
+          test ! -e /var/lib/cbb-update
           # A second run keeps the group's members.
           sudo CBB_OS_RELEASE="$RUNNER_TEMP/os-release" CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" >/dev/null
-          test "$(grep -c "^m $USER clipboardbridge$" /etc/sysusers.d/clipboardbridge.conf)" = 1
-          sudo sh /opt/clipboardbridge/share/uninstall.sh --purge
-          for f in /opt/clipboardbridge /opt/clipboardbridge-update /etc/sysusers.d/clipboardbridge.conf /etc/atomic-update.conf.d/clipboardbridge.conf \
-            /etc/profile.d/clipboardbridge-path.sh /etc/systemd/system/clipboardbridge.service /etc/systemd/system/clipboardbridge-update.timer \
-            /etc/systemd/user/clipboardbridge-agent.service /etc/xdg/autostart/clipboardbridge-desktop.desktop /etc/clipboardbridge /var/lib/clipboardbridge; do
+          test "$(grep -c "^m $USER cbb$" /etc/sysusers.d/cbb.conf)" = 1
+          sudo sh /opt/cbb/share/uninstall.sh --purge
+          for f in /opt/cbb /opt/cbb-update /etc/sysusers.d/cbb.conf /etc/atomic-update.conf.d/cbb.conf \
+            /etc/profile.d/cbb-path.sh /etc/systemd/system/cbb.service /etc/systemd/system/cbb-update.timer \
+            /etc/systemd/user/cbb-agent.service /etc/xdg/autostart/cbb-desktop.desktop /etc/cbb /var/lib/cbb; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1
             fi
           done
-          if grep -q clipboardbridge /etc/tmux.conf; then
+          if grep -q cbb /etc/tmux.conf; then
             echo "uninstall.sh left the tmux line" >&2
             exit 1
           fi
@@ -923,8 +929,8 @@ jobs:
           export XDG_RUNTIME_DIR
           for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/bus" ] && break; sleep 0.2; done
           sh packaging/linux/install.sh --rootless --auto-update off "$RUNNER_TEMP/cbb"
-          systemctl --user is-active -q clipboardbridge.service
-          test -S "$XDG_RUNTIME_DIR/clipboardbridge/control.sock"
+          systemctl --user is-active -q cbb.service
+          test -S "$XDG_RUNTIME_DIR/cbb/control.sock"
           test ! -e /usr/local/bin/cbb
           ~/.local/bin/cbb status | grep -q 'Not in a group'
           if ~/.local/bin/cbb new 2>"$RUNNER_TEMP/err"; then
@@ -932,9 +938,9 @@ jobs:
             exit 1
           fi
           grep -q 'without root' "$RUNNER_TEMP/err"
-          sh ~/.local/share/clipboardbridge/uninstall.sh --purge
-          for f in ~/.local/bin/cbb ~/.config/systemd/user/clipboardbridge.service ~/.config/systemd/user/clipboardbridge-agent.service \
-            ~/.config/autostart/clipboardbridge-desktop.desktop ~/.local/share/clipboardbridge ~/.local/state/clipboardbridge ~/.local/state/clipboardbridge-update; do
+          sh ~/.local/share/cbb/uninstall.sh --purge
+          for f in ~/.local/bin/cbb ~/.config/systemd/user/cbb.service ~/.config/systemd/user/cbb-agent.service \
+            ~/.config/autostart/cbb-desktop.desktop ~/.local/share/cbb ~/.local/state/cbb ~/.local/state/cbb-update; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1
@@ -964,34 +970,34 @@ jobs:
           # The archive as the release workflow makes it; the formula wants the
           # other three too, so they are copies of it.
           rel="$RUNNER_TEMP/release"
-          go build -trimpath -ldflags "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v0.0.1" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+          go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.0.1" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           sh packaging/archive.sh "$RUNNER_TEMP/cbb" darwin arm64 "$rel"
           for n in darwin-amd64 linux-amd64 linux-arm64; do
-            cp "$rel/clipboardbridge-darwin-arm64.tar.gz" "$rel/clipboardbridge-$n.tar.gz"
+            cp "$rel/cbb-darwin-arm64.tar.gz" "$rel/cbb-$n.tar.gz"
           done
           (cd "$rel" && shasum -a 256 -- *.tar.gz >SHA256SUMS)
           brew tap-new --no-git local/test
           # Homebrew from 5.2 on loads formulas only from taps one trusts;
           # earlier ones have no brew trust.
           if brew trust --help >/dev/null 2>&1; then brew trust local/test; fi
-          formula="$(brew --repository local/test)/Formula/clipboardbridge.rb"
+          formula="$(brew --repository local/test)/Formula/cbb.rb"
           sh packaging/homebrew/formula.sh v0.0.1 "$rel/SHA256SUMS" "file://$rel" >"$formula"
           cat "$formula"
-          brew audit --strict local/test/clipboardbridge
-          brew install local/test/clipboardbridge
-          brew test local/test/clipboardbridge
+          brew audit --strict local/test/cbb
+          brew install local/test/cbb
+          brew test local/test/cbb
           "$(brew --prefix)/bin/cbb" version | grep -q v0.0.1
       - name: install.sh --in-place runs a root-owned copy of Homebrew's binary, and uninstall.sh removes it all
         run: |
-          opt="$(brew --prefix)/opt/clipboardbridge"
-          share="$opt/share/clipboardbridge/packaging/macos"
-          daemon=io.github.hunterewok.clipboardbridge
+          opt="$(brew --prefix)/opt/cbb"
+          share="$opt/share/cbb/packaging/macos"
+          daemon=tools.cbb
           sudo sh "$share/install.sh" --express --in-place "$opt/bin/cbb" | tee "$RUNNER_TEMP/install.out"
           grep -q 'express installation' "$RUNNER_TEMP/install.out"
-          grep -qx yes /etc/clipboardbridge/firewall.answer
+          grep -qx yes /etc/cbb/firewall.answer
           # The service, which holds the group's keys, runs a root-owned copy, never the
           # binary Homebrew's user may replace; the agent runs Homebrew's.
-          service="/Library/Application Support/clipboardbridge/bin/cbb"
+          service="/Library/Application Support/cbb/bin/cbb"
           grep -qF "<string>$service</string>" "/Library/LaunchDaemons/$daemon.plist"
           if grep -qF "<string>$opt/bin/cbb</string>" "/Library/LaunchDaemons/$daemon.plist"; then
             echo "the service runs Homebrew's binary" >&2
@@ -1012,7 +1018,7 @@ jobs:
           for _ in $(seq 20); do sudo "$opt/bin/cbb" status && break; sleep 0.5; done
           sudo sh "$share/uninstall.sh" --purge
           for f in "/Library/LaunchDaemons/$daemon.plist" "/Library/LaunchAgents/$daemon.agent.plist" \
-            "/Library/Application Support/clipboardbridge" /Library/Logs/clipboardbridge; do
+            "/Library/Application Support/cbb" /Library/Logs/cbb; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1
@@ -1026,11 +1032,11 @@ jobs:
             echo "uninstall.sh left the firewall entry" >&2
             exit 1
           fi
-          brew uninstall clipboardbridge
+          brew uninstall cbb
       - name: get.sh installs a release archive on a Mac and refuses a changed one
         run: |
           rel="$RUNNER_TEMP/release"
-          daemon=io.github.hunterewok.clipboardbridge
+          daemon=tools.cbb
           (cd "$rel" && shasum -a 256 -- *.tar.gz >SHA256SUMS)
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall
           for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
@@ -1038,25 +1044,25 @@ jobs:
           # --port moves the member port, and a reinstall without it keeps it.
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall --port 9000 | tee "$RUNNER_TEMP/get.out"
           grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
-          grep -qx 'CBB_PORT=9000' /etc/clipboardbridge/clipboardbridge.env
+          grep -qx 'CBB_PORT=9000' /etc/cbb/cbb.env
           # The member port listens once the Mac is in a group.
           for _ in $(seq 20); do sudo /usr/local/bin/cbb status >/dev/null && break; sleep 0.5; done
           sudo /usr/local/bin/cbb new
           for _ in $(seq 60); do sudo lsof -nP -iTCP:9000 -sTCP:LISTEN && break; sleep 0.5; done
           if ! sudo lsof -nP -iTCP:9000 -sTCP:LISTEN | grep -q cbb; then
             echo "the member port does not listen in 30 s; the service's log:" >&2
-            sudo cat /Library/Logs/clipboardbridge/service.log >&2 || true
+            sudo cat /Library/Logs/cbb/service.log >&2 || true
             exit 1
           fi
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall | tee "$RUNNER_TEMP/get.out"
           grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
-          echo tampered >>"$rel/clipboardbridge-darwin-arm64.tar.gz"
+          echo tampered >>"$rel/cbb-darwin-arm64.tar.gz"
           if sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall; then
             echo "get.sh installed an archive that does not match SHA256SUMS" >&2
             exit 1
           fi
-          sudo sh /usr/local/share/clipboardbridge/uninstall.sh --purge
-          for f in /usr/local/bin/cbb /usr/local/share/clipboardbridge /etc/clipboardbridge "/Library/LaunchDaemons/$daemon.plist"; do
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          for f in /usr/local/bin/cbb /usr/local/share/cbb /etc/cbb "/Library/LaunchDaemons/$daemon.plist"; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1
@@ -1078,7 +1084,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: clipboardbridge-windows-amd64.zip
+          name: cbb-windows-amd64.zip
           path: ${{ runner.temp }}/release
       - name: PSScriptAnalyzer
         run: |
@@ -1097,25 +1103,25 @@ jobs:
           CBB_FIREWALL: express
         run: |
           $rel = $env:CBB_RELEASE_DIR
-          $zip = Join-Path $rel 'clipboardbridge-windows-amd64.zip'
-          "$((Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower())  clipboardbridge-windows-amd64.zip" | Set-Content (Join-Path $rel 'SHA256SUMS')
+          $zip = Join-Path $rel 'cbb-windows-amd64.zip'
+          "$((Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower())  cbb-windows-amd64.zip" | Set-Content (Join-Path $rel 'SHA256SUMS')
           # A junction where the data folder goes is moved aside, never followed.
-          $data = Join-Path $env:ProgramData 'clipboardbridge'
+          $data = Join-Path $env:ProgramData 'cbb'
           $elsewhere = Join-Path $env:RUNNER_TEMP 'elsewhere'
           New-Item -ItemType Directory -Force (Join-Path $elsewhere 'run\kept') | Out-Null
           Set-Content (Join-Path $elsewhere 'kept.txt') 'x'
           New-Item -ItemType Junction -Path $data -Target $elsewhere | Out-Null
           Get-Content packaging/windows/get.ps1 -Raw | Invoke-Expression
-          if ((Get-Service clipboardbridge).Status -ne 'Running') { throw 'the service does not run' }
+          if ((Get-Service cbb).Status -ne 'Running') { throw 'the service does not run' }
           if (-not (Test-Path (Join-Path $elsewhere 'kept.txt')) -or -not (Test-Path (Join-Path $elsewhere 'run\kept'))) { throw 'install.ps1 went into the junction' }
           if ((Get-Item -LiteralPath $data -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'the data folder is still the junction' }
-          if (-not (Get-ChildItem $env:ProgramData -Filter 'clipboardbridge.untrusted-*' -Force)) { throw 'install.ps1 did not move the junction aside' }
-          $cbb = "$env:ProgramFiles\clipboardbridge\cbb.exe"
+          if (-not (Get-ChildItem $env:ProgramData -Filter 'cbb.untrusted-*' -Force)) { throw 'install.ps1 did not move the junction aside' }
+          $cbb = "$env:ProgramFiles\cbb\cbb.exe"
           # The tray app, with its sign-in entry and Start menu shortcut.
-          if (-not (Test-Path "$env:ProgramFiles\clipboardbridge\cbb-desktop.exe")) { throw 'no tray app' }
-          $trayRun = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'clipboardbridge tray').'clipboardbridge tray'
+          if (-not (Test-Path "$env:ProgramFiles\cbb\cbb-desktop.exe")) { throw 'no tray app' }
+          $trayRun = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'cbb tray').'cbb tray'
           if ($trayRun -notmatch 'cbb-desktop\.exe"$') { throw "the tray app's sign-in entry: $trayRun" }
-          if (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Clipboard Bridge.lnk")) { throw 'no Start menu shortcut' }
+          if (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\CBB.lnk")) { throw 'no Start menu shortcut' }
           $status = & $cbb status | Out-String
           if ($status -notmatch 'Not in a group') { throw "cbb status: $status" }
           $before = (Get-Item $cbb).LastWriteTimeUtc
@@ -1138,9 +1144,9 @@ jobs:
           try {
             $rel = Join-Path $env:RUNNER_TEMP 'signed'
             New-Item -ItemType Directory $rel | Out-Null
-            $zip = Join-Path $rel 'clipboardbridge-windows-amd64.zip'
-            Copy-Item (Join-Path $env:RUNNER_TEMP 'release\clipboardbridge-windows-amd64.zip') $zip
-            "$((Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower())  clipboardbridge-windows-amd64.zip" | Set-Content (Join-Path $rel 'SHA256SUMS')
+            $zip = Join-Path $rel 'cbb-windows-amd64.zip'
+            Copy-Item (Join-Path $env:RUNNER_TEMP 'release\cbb-windows-amd64.zip') $zip
+            "$((Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower())  cbb-windows-amd64.zip" | Set-Content (Join-Path $rel 'SHA256SUMS')
             $roots = Join-Path $env:RUNNER_TEMP 'roots.pem'
             # Through cmd: Windows PowerShell stops on a native program's stderr (go's "downloading").
             # stable.json signed by a channel key, as cbb.tools renews it.
@@ -1187,24 +1193,24 @@ jobs:
         env:
           CBB_ERROR_DETAILS: "1"
         run: |
-          Expand-Archive "$env:RUNNER_TEMP\release\clipboardbridge-windows-amd64.zip" "$env:RUNNER_TEMP\unpacked"
-          $install = "$env:RUNNER_TEMP\unpacked\clipboardbridge\packaging\windows\install.ps1"
-          function ports { @(Get-NetFirewallRule -Group clipboardbridge -Direction Inbound -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'clipboardbridge-hub' } | Get-NetFirewallPortFilter | ForEach-Object { "$($_.Protocol) $($_.LocalPort)" }) | Sort-Object }
+          Expand-Archive "$env:RUNNER_TEMP\release\cbb-windows-amd64.zip" "$env:RUNNER_TEMP\unpacked"
+          $install = "$env:RUNNER_TEMP\unpacked\cbb\packaging\windows\install.ps1"
+          function ports { @(Get-NetFirewallRule -Group cbb -Direction Inbound -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'cbb-hub' } | Get-NetFirewallPortFilter | ForEach-Object { "$($_.Protocol) $($_.LocalPort)" }) | Sort-Object }
           function check($want) {
             $got = (ports) -join ', '
             if ($got -ne $want) { throw "firewall rules: $got, want $want" }
           }
-          $svcKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\clipboardbridge'
+          $svcKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\cbb'
           # An update without a console over an installation from before the question, which
           # added its rules and kept no answer: the rules count as a Yes and stay, at the new port.
           Remove-ItemProperty $svcKey -Name FirewallAnswer -ErrorAction SilentlyContinue
           # cbb install runs the installer beside it, as after winget.
-          & "$env:RUNNER_TEMP\unpacked\clipboardbridge\cbb.exe" install -Port 9000
+          & "$env:RUNNER_TEMP\unpacked\cbb\cbb.exe" install -Port 9000
           if ($LASTEXITCODE -ne 0) { exit 1 }
           check 'TCP 9000, UDP 5353'
           if ((Get-ItemProperty $svcKey -Name FirewallAnswer).FirewallAnswer -ne 'yes') { throw 'the earlier rules were not kept as a Yes' }
           # Without a console and without rules nobody answers, which adds none and keeps no answer.
-          Get-NetFirewallRule -Group clipboardbridge -Direction Inbound | Where-Object { $_.Name -ne 'clipboardbridge-hub' } | Remove-NetFirewallRule
+          Get-NetFirewallRule -Group cbb -Direction Inbound | Where-Object { $_.Name -ne 'cbb-hub' } | Remove-NetFirewallRule
           Remove-ItemProperty $svcKey -Name FirewallAnswer
           powershell -NoProfile -ExecutionPolicy Bypass -File $install
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -1216,24 +1222,24 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File $install
           if ($LASTEXITCODE -ne 0) { exit 1 }
           check 'TCP 9000, UDP 5353'
-          $svcEnv = (Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\clipboardbridge).Environment
+          $svcEnv = (Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\cbb).Environment
           if ($svcEnv -ne 'CBB_PORT=9000') { throw "the service environment: $svcEnv" }
           function homeOnly($want) {
-            $r = Get-NetFirewallRule -Name clipboardbridge-home-only -ErrorAction SilentlyContinue
+            $r = Get-NetFirewallRule -Name cbb-home-only -ErrorAction SilentlyContinue
             $got = if ($r) { "$($r.Direction) $($r.Action) $($r.Enabled)" } else { 'none' }
             if ($got -ne $want) { throw "the outbound rule: $got, want $want" }
           }
           homeOnly 'Outbound Block True'
-          $filter = Get-NetFirewallRule -Name clipboardbridge-home-only | Get-NetFirewallAddressFilter
+          $filter = Get-NetFirewallRule -Name cbb-home-only | Get-NetFirewallAddressFilter
           if ($filter.RemoteAddress -contains '192.168.0.0/16' -or $filter.RemoteAddress.Count -ne 9) { throw "the outbound rule's addresses: $($filter.RemoteAddress -join ', ')" }
           # cbb global lets the service reach the group's servers and nothing else beyond the
           # home network, a reinstall keeps that, and cbb global off takes it back.
           function blocked($rule) { @((Get-NetFirewallRule -Name $rule | Get-NetFirewallAddressFilter).RemoteAddress) }
           function awayAllow($want) {
-            $got = [string](Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\clipboardbridge -Name AwayAllow -ErrorAction SilentlyContinue).AwayAllow
+            $got = [string](Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\cbb -Name AwayAllow -ErrorAction SilentlyContinue).AwayAllow
             if ($got -ne $want) { throw "AwayAllow: '$got', want '$want'" }
           }
-          $cbb = "$env:ProgramFiles\clipboardbridge\cbb.exe"
+          $cbb = "$env:ProgramFiles\cbb\cbb.exe"
           & $cbb new
           if ($LASTEXITCODE -ne 0) { throw 'cbb new failed' }
           'yes' | & $cbb global on
@@ -1241,52 +1247,52 @@ jobs:
           # No hub yet: on, and still nothing beyond the home network.
           awayAllow 'on'
           homeOnly 'Outbound Block True'
-          if ((blocked clipboardbridge-home-only).Count -ne 9) { throw "with no servers: $(blocked clipboardbridge-home-only)" }
+          if ((blocked cbb-home-only).Count -ne 9) { throw "with no servers: $(blocked cbb-home-only)" }
           & $cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key "$('A' * 43)="
           if ($LASTEXITCODE -ne 0) { throw 'cbb global hub -forwarder failed' }
           awayAllow 'on 198.51.100.9'
-          $b = blocked clipboardbridge-home-only
+          $b = blocked cbb-home-only
           if ($b.Count -ne 10 -or $b -notcontains '172.32.0.0-192.167.255.255' -or $b -notcontains '198.51.100.10-223.255.255.255') { throw "with the forwarder: $($b -join ', ')" }
           # -HomeCgnat on makes 100.64.0.0/10 home: in the service's environment, the inbound
           # rules and the outbound rule, which the installer has cbb global allow write again.
           powershell -NoProfile -ExecutionPolicy Bypass -File $install -HomeCgnat on
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          $svcEnv = @((Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\clipboardbridge).Environment)
+          $svcEnv = @((Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\cbb).Environment)
           if ($svcEnv -notcontains 'CBB_HOME_CGNAT=1' -or $svcEnv -notcontains 'CBB_PORT=9000') { throw "the service environment: $svcEnv" }
           awayAllow 'on 198.51.100.9 cgnat'
-          $b = blocked clipboardbridge-home-only
+          $b = blocked cbb-home-only
           if ($b.Count -ne 11 -or $b -notcontains '11.0.0.0-100.63.255.255' -or $b -notcontains '100.128.0.0-126.255.255.255') { throw "with -HomeCgnat on: $($b -join ', ')" }
-          $in = @(Get-NetFirewallRule -Group clipboardbridge -Direction Inbound | Get-NetFirewallAddressFilter | ForEach-Object { $_.RemoteAddress })
+          $in = @(Get-NetFirewallRule -Group cbb -Direction Inbound | Get-NetFirewallAddressFilter | ForEach-Object { $_.RemoteAddress })
           if (-not ($in -match '^100\.64\.0\.0')) { throw "the inbound rules' addresses: $($in -join ', ')" }
           powershell -NoProfile -ExecutionPolicy Bypass -File $install -HomeCgnat off
           if ($LASTEXITCODE -ne 0) { exit 1 }
           awayAllow 'on 198.51.100.9'
-          if ((blocked clipboardbridge-home-only).Count -ne 10) { throw "after -HomeCgnat off: $(blocked clipboardbridge-home-only)" }
+          if ((blocked cbb-home-only).Count -ne 10) { throw "after -HomeCgnat off: $(blocked cbb-home-only)" }
           # A hub at its own address answers its clients anywhere on its UDP port only.
           # Without a console nobody answers, and the hub's port stays closed.
           & $cbb global hub 203.0.113.7:8764
           if ($LASTEXITCODE -ne 0) { throw 'cbb global hub failed' }
-          if (Get-NetFirewallRule -Name clipboardbridge-hub -ErrorAction SilentlyContinue) { throw 'the hub''s port was opened without an answer' }
+          if (Get-NetFirewallRule -Name cbb-hub -ErrorAction SilentlyContinue) { throw 'the hub''s port was opened without an answer' }
           & $cbb global hub -firewall yes 203.0.113.7:8764
           if ($LASTEXITCODE -ne 0) { throw 'cbb global hub -firewall yes failed' }
-          $hp = Get-NetFirewallRule -Name clipboardbridge-hub | Get-NetFirewallPortFilter
+          $hp = Get-NetFirewallRule -Name cbb-hub | Get-NetFirewallPortFilter
           if ("$($hp.Protocol) $($hp.LocalPort)" -ne 'UDP 8764') { throw "the hub's port rule: $($hp.Protocol) $($hp.LocalPort)" }
           awayAllow 'on hub-port:8764'
-          $udp = Get-NetFirewallRule -Name clipboardbridge-home-only-udp | Get-NetFirewallPortFilter
+          $udp = Get-NetFirewallRule -Name cbb-home-only-udp | Get-NetFirewallPortFilter
           if ("$($udp.Protocol) $($udp.LocalPort -join ',')" -ne 'UDP 1-8763,8765-65535') { throw "the UDP rule: $($udp.Protocol) $($udp.LocalPort)" }
-          if ((Get-NetFirewallRule -Name clipboardbridge-home-only | Get-NetFirewallPortFilter).Protocol -ne 'TCP') { throw 'the hub''s rule does not block TCP' }
+          if ((Get-NetFirewallRule -Name cbb-home-only | Get-NetFirewallPortFilter).Protocol -ne 'TCP') { throw 'the hub''s rule does not block TCP' }
           powershell -NoProfile -ExecutionPolicy Bypass -File $install -Port 8764 -NoFirewall
           if ($LASTEXITCODE -ne 0) { exit 1 }
           check ''
           awayAllow 'on hub-port:8764'
-          if (-not (Get-NetFirewallRule -Name clipboardbridge-home-only-udp -ErrorAction SilentlyContinue)) { throw 'a reinstall dropped the hub''s UDP rule' }
-          if (-not (Get-NetFirewallRule -Name clipboardbridge-hub -ErrorAction SilentlyContinue)) { throw 'a reinstall dropped the hub''s port' }
+          if (-not (Get-NetFirewallRule -Name cbb-home-only-udp -ErrorAction SilentlyContinue)) { throw 'a reinstall dropped the hub''s UDP rule' }
+          if (-not (Get-NetFirewallRule -Name cbb-hub -ErrorAction SilentlyContinue)) { throw 'a reinstall dropped the hub''s port' }
           & $cbb global off
           if ($LASTEXITCODE -ne 0) { throw 'cbb global off failed' }
           awayAllow ''
-          if (Get-NetFirewallRule -Name clipboardbridge-hub -ErrorAction SilentlyContinue) { throw 'cbb global off left the hub''s port open' }
+          if (Get-NetFirewallRule -Name cbb-hub -ErrorAction SilentlyContinue) { throw 'cbb global off left the hub''s port open' }
           homeOnly 'Outbound Block True'
-          if ((blocked clipboardbridge-home-only).Count -ne 9 -or (Get-NetFirewallRule -Name clipboardbridge-home-only-udp -ErrorAction SilentlyContinue)) { throw 'cbb global off left the servers' }
+          if ((blocked cbb-home-only).Count -ne 9 -or (Get-NetFirewallRule -Name cbb-home-only-udp -ErrorAction SilentlyContinue)) { throw 'cbb global off left the servers' }
           # The answer -NoFirewall gave is kept, until -Express.
           powershell -NoProfile -ExecutionPolicy Bypass -File $install
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -1295,26 +1301,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           check 'TCP 8764, UDP 5353'
           # Only the service, the system and administrators reach the keys.
-          $acl = (Get-Acl "$env:ProgramData\clipboardbridge\state").Access | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique
-          $want = @('BUILTIN\Administrators', 'NT AUTHORITY\SYSTEM', 'NT SERVICE\clipboardbridge')
+          $acl = (Get-Acl "$env:ProgramData\cbb\state").Access | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique
+          $want = @('BUILTIN\Administrators', 'NT AUTHORITY\SYSTEM', 'NT SERVICE\cbb')
           if (Compare-Object $acl $want) { throw "the state folder's access list: $($acl -join ', ')" }
-          & "$env:ProgramFiles\clipboardbridge\cbb.exe" status
+          & "$env:ProgramFiles\cbb\cbb.exe" status
           if ($LASTEXITCODE -ne 0) { throw 'cbb status failed after the reinstalls' }
-          Get-Content "$env:ProgramData\clipboardbridge\logs\service.log"
+          Get-Content "$env:ProgramData\cbb\logs\service.log"
 
-          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          if (Get-Service clipboardbridge -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the service' }
-          if (Get-NetFirewallRule -Group clipboardbridge -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left firewall rules' }
-          foreach ($p in @("$env:ProgramFiles\clipboardbridge", "$env:ProgramData\clipboardbridge",
-              'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\clipboardbridge')) {
+          if (Get-Service cbb -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the service' }
+          if (Get-NetFirewallRule -Group cbb -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left firewall rules' }
+          foreach ($p in @("$env:ProgramFiles\cbb", "$env:ProgramData\cbb",
+              'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\cbb')) {
             if (Test-Path $p) { throw "uninstall.ps1 left $p" }
           }
-          if (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name clipboardbridge -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the sign-in entry' }
-          if (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'clipboardbridge tray' -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the tray app''s sign-in entry' }
-          if (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Clipboard Bridge.lnk") { throw 'uninstall.ps1 left the Start menu shortcut' }
-          if ([Environment]::GetEnvironmentVariable('Path', 'Machine') -match 'clipboardbridge') { throw 'uninstall.ps1 left the PATH entry' }
-          net.exe localgroup clipboardbridge 2>&1 | Out-Null
+          if (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name cbb -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the sign-in entry' }
+          if (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'cbb tray' -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the tray app''s sign-in entry' }
+          if (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\CBB.lnk") { throw 'uninstall.ps1 left the Start menu shortcut' }
+          if ([Environment]::GetEnvironmentVariable('Path', 'Machine') -match 'cbb') { throw 'uninstall.ps1 left the PATH entry' }
+          net.exe localgroup cbb 2>&1 | Out-Null
           if ($LASTEXITCODE -eq 0) { throw 'uninstall.ps1 -Purge left the group' }
           $global:LASTEXITCODE = 0
       - name: cbb update installs a newer signed release from a copy of itself, and sets the task
@@ -1322,9 +1328,9 @@ jobs:
           CBB_ERROR_DETAILS: "1"
         run: |
           function build($v) {
-            $dir = Join-Path $env:RUNNER_TEMP "v$v\clipboardbridge"
+            $dir = Join-Path $env:RUNNER_TEMP "v$v\cbb"
             New-Item -ItemType Directory -Force "$dir\packaging" | Out-Null
-            $ld = "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v$v"
+            $ld = "-X github.com/HunterEwok/cbb/internal/version.Version=v$v"
             go build -trimpath -ldflags $ld -o "$dir\cbb.exe" ./cmd/cbb
             if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
             go build -trimpath -ldflags "$ld -H=windowsgui" -o "$dir\cbbw.exe" ./cmd/cbb
@@ -1336,36 +1342,36 @@ jobs:
           $new = build '0.6.1'
           powershell -NoProfile -ExecutionPolicy Bypass -File "$old\packaging\windows\install.ps1" -AutoUpdate off -NoFirewall
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          $cbb = "$env:ProgramFiles\clipboardbridge\cbb.exe"
+          $cbb = "$env:ProgramFiles\cbb\cbb.exe"
           if ((& $cbb update -auto | Out-String).Trim() -ne 'off') { throw 'install.ps1 -AutoUpdate off was not kept' }
           $rel = Join-Path $env:RUNNER_TEMP 'update'
           New-Item -ItemType Directory $rel | Out-Null
-          Compress-Archive -Path $new -DestinationPath "$rel\clipboardbridge-windows-amd64.zip"
+          Compress-Archive -Path $new -DestinationPath "$rel\cbb-windows-amd64.zip"
           go run ./tools/release-sign drill -version 0.6.1 $rel "$env:RUNNER_TEMP\update.pem"
           if ($LASTEXITCODE -ne 0) { throw 'release-sign drill failed' }
           $env:CBB_RELEASE_DIR = $rel
           $env:CBB_RELEASE_ROOTS = "$env:RUNNER_TEMP\update.pem"
           $out = & $cbb update -check | Out-String
           if ($out -notmatch '0\.6\.1 is available') { throw "cbb update -check: $out" }
-          # It runs from a copy, since install.ps1 stops every cbb in Program Files\clipboardbridge.
+          # It runs from a copy, since install.ps1 stops every cbb in Program Files\cbb.
           & $cbb update
           if ($LASTEXITCODE -ne 0) { throw 'cbb update failed' }
           $v = & $cbb version | Out-String
           if ($v -notmatch ' v0\.6\.1 ') { throw "after the update: $v" }
-          if ((Get-Service clipboardbridge).Status -ne 'Running') { throw 'the service does not run' }
+          if ((Get-Service cbb).Status -ne 'Running') { throw 'the service does not run' }
           $out = & $cbb update | Out-String
           if ($out -notmatch 'newest release') { throw "a second cbb update: $out" }
           & $cbb update -auto on
           if ($LASTEXITCODE -ne 0) { throw 'cbb update -auto on failed' }
-          $task = Get-ScheduledTask -TaskName 'clipboardbridge update'
+          $task = Get-ScheduledTask -TaskName 'cbb update'
           if ($task.Principal.UserId -ne 'SYSTEM' -or $task.Actions[0].Execute -notmatch 'cbbw\.exe$') { throw "the task: $($task.Principal.UserId) $($task.Actions[0].Execute)" }
           & $cbb update -auto off
-          if (Get-ScheduledTask -TaskName 'clipboardbridge update' -ErrorAction SilentlyContinue) { throw 'cbb update -auto off left the task' }
+          if (Get-ScheduledTask -TaskName 'cbb update' -ErrorAction SilentlyContinue) { throw 'cbb update -auto off left the task' }
           & $cbb update -auto on
-          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          if (Get-ScheduledTask -TaskName 'clipboardbridge update' -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the task' }
-          if (Test-Path "$env:ProgramFiles\clipboardbridge-update") { throw 'uninstall.ps1 left cbb update''s folder' }
+          if (Get-ScheduledTask -TaskName 'cbb update' -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the task' }
+          if (Test-Path "$env:ProgramFiles\cbb-update") { throw 'uninstall.ps1 left cbb update''s folder' }
 
   kit:
     name: phone kit (${{ matrix.os }})
@@ -1388,10 +1394,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir interop-out
-          docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/ClipboardBridgeKit -e CBB_INTEROP_OUT=/src/interop-out swift:6.2-noble sh -euc '
+          docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/CBBKit -e CBB_INTEROP_OUT=/src/interop-out swift:6.2-noble sh -euc '
             swift test -Xlinker -L/core
-            swift build -c release --product clipboardbridge-interop --static-swift-stdlib -Xlinker -L/core
-            cp "$(swift build -c release --show-bin-path)/clipboardbridge-interop" /src/clipboardbridge-interop'
+            swift build -c release --product cbb-interop --static-swift-stdlib -Xlinker -L/core
+            cp "$(swift build -c release --show-bin-path)/cbb-interop" /src/cbb-interop'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: runner.os == 'Linux'
         with:
@@ -1400,7 +1406,7 @@ jobs:
       - name: the Swift phone admits the Go joiner, and Go reads its member frames
         if: runner.os == 'Linux'
         run: |
-          CBB_SWIFT_INTEROP="$PWD/clipboardbridge-interop" go test ./internal/pair -run TestSwiftMemberAdmitsGoJoiner -v
+          CBB_SWIFT_INTEROP="$PWD/cbb-interop" go test ./internal/pair -run TestSwiftMemberAdmitsGoJoiner -v
           # swift test just wrote testdata/interop/swift-member.json, and to
           # interop-out the records it signed, a certificate it renewed and
           # what an admin phone makes.
@@ -1408,12 +1414,12 @@ jobs:
           CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
       - name: swift test
         if: runner.os == 'macOS'
-        working-directory: apps/ios/ClipboardBridgeKit
+        working-directory: apps/ios/CBBKit
         run: |
           swift test --enable-code-coverage -Xlinker -L"$RUNNER_TEMP/core"
           cp "$(swift test --show-codecov-path)" "$GITHUB_WORKSPACE/coverage-swift-kit.json"
-          swift build --product clipboardbridge-interop -Xlinker -L"$RUNNER_TEMP/core"
-          cp "$(swift build --show-bin-path)/clipboardbridge-interop" "$GITHUB_WORKSPACE/clipboardbridge-interop"
+          swift build --product cbb-interop -Xlinker -L"$RUNNER_TEMP/core"
+          cp "$(swift build --show-bin-path)/cbb-interop" "$GITHUB_WORKSPACE/cbb-interop"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: runner.os == 'macOS'
         with:
@@ -1428,8 +1434,8 @@ jobs:
           security default-keychain -s ci.keychain
           security unlock-keychain -p ci ci.keychain
           security set-keychain-settings ci.keychain
-          CBB_SWIFT_INTEROP_TLS="$PWD/clipboardbridge-interop" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
-          CBB_SWIFT_INTEROP_TLS="$PWD/clipboardbridge-interop" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
+          CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
+          CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: runner.os == 'macOS'
         with:
@@ -1494,7 +1500,7 @@ jobs:
               for second in $(seq 300); do kill -0 "$boot" 2>/dev/null || break; sleep 1; done
               kill "$boot" 2>/dev/null || true
               wait "$boot" || true
-              xcodebuild test-without-building -project ClipboardBridge.xcodeproj -scheme ClipboardBridge -destination "id=$1" \
+              xcodebuild test-without-building -project CBB.xcodeproj -scheme CBB -destination "id=$1" \
                 "${sign[@]}" >"$log" 2>&1 &
               pid=$!
               killed=
@@ -1533,7 +1539,7 @@ jobs:
             return 1
           }
           # Built once, then tested on one simulator at a time.
-          xcodebuild build-for-testing -project ClipboardBridge.xcodeproj -scheme ClipboardBridge -destination "id=$iphone" \
+          xcodebuild build-for-testing -project CBB.xcodeproj -scheme CBB -destination "id=$iphone" \
             "${sign[@]}" | tail -n 50
           test_on "$iphone"
           test_on "$ipad"
@@ -1556,7 +1562,7 @@ jobs:
         working-directory: apps/macos
         run: |
           set -o pipefail
-          xcodebuild test -project ClipboardBridgeMac.xcodeproj -scheme ClipboardBridgeMac -destination 'platform=macOS' \
+          xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= | tail -n 200
 
   trayapp:
@@ -1637,9 +1643,9 @@ jobs:
           go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           cp apps/desktop/cbb-desktop "$RUNNER_TEMP/cbb-desktop"
           sh packaging/archive.sh "$RUNNER_TEMP/cbb" linux amd64 "$RUNNER_TEMP/dist"
-          tar -tzf "$RUNNER_TEMP/dist/clipboardbridge-linux-amd64.tar.gz" >"$RUNNER_TEMP/list"
-          for f in cbb cbb-desktop packaging/linux/clipboardbridge.png packaging/linux/clipboardbridge.desktop packaging/linux/clipboardbridge-tray.desktop; do
-            grep -qx "clipboardbridge/$f" "$RUNNER_TEMP/list"
+          tar -tzf "$RUNNER_TEMP/dist/cbb-linux-amd64.tar.gz" >"$RUNNER_TEMP/list"
+          for f in cbb cbb-desktop packaging/linux/cbb.png packaging/linux/cbb.desktop packaging/linux/cbb-tray.desktop; do
+            grep -qx "cbb/$f" "$RUNNER_TEMP/list"
           done
           # This runner has GTK 4 and WebKitGTK, which install.sh looks for.
           ! ldd "$RUNNER_TEMP/cbb-desktop" | grep 'not found'
@@ -1670,11 +1676,11 @@ jobs:
       - name: Go reads what the Kotlin kit signed
         run: CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
       - name: Go pairs and syncs with the Kotlin kit over TLS
-        # The Kotlin twin of clipboardbridge-interop plays the phone; Conscrypt
+        # The Kotlin twin of cbb-interop plays the phone; Conscrypt
         # gives it TLS 1.3 on Linux as on Android.
         run: |
           (cd apps/android && ./gradlew --no-daemon -p kit interopScript)
-          tool="$PWD/apps/android/kit/build/interop/clipboardbridge-interop"
+          tool="$PWD/apps/android/kit/build/interop/cbb-interop"
           CBB_SWIFT_INTEROP="$tool" go test ./internal/pair -run 'TestSwiftMemberAdmitsGoJoiner$' -v
           CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
           CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
@@ -1780,7 +1786,7 @@ jobs:
           find "$results" -type f 2>/dev/null | head -50
           find "$results" -name '*.xml' -exec cat {} + 2>/dev/null | head -400
           # logcat waits for a device that never came up; the timeout ends that.
-          timeout 30 "$ANDROID_HOME/platform-tools/adb" logcat -d -s TestRunner:* AndroidRuntime:* clipboardbridge:* GoLog:* System.err:* || true
+          timeout 30 "$ANDROID_HOME/platform-tools/adb" logcat -d -s TestRunner:* AndroidRuntime:* cbb:* GoLog:* System.err:* || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -1819,7 +1825,7 @@ jobs:
             --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
           cargo install --locked cargo-ndk@4.1.2
       - name: build twice and compare
-        run: sh one/packaging/fdroid/reproduce.sh "$PWD/one" "$RUNNER_TEMP/elsewhere/clipboardbridge"
+        run: sh one/packaging/fdroid/reproduce.sh "$PWD/one" "$RUNNER_TEMP/elsewhere/cbb"
 
   litemips:
     name: lite member for MIPS (no tunnel)
@@ -1882,7 +1888,7 @@ jobs:
       - name: cargo clippy
         run: |
           cargo clippy --locked --workspace --all-targets -- -D warnings
-          cargo clippy --locked -p clipboardbridge-embassy --features host --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
       - name: cargo test (the interop vectors in testdata/interop too), with coverage
@@ -1895,7 +1901,7 @@ jobs:
       - name: cargo build
         run: |
           cargo build --locked --release
-          cargo build --locked --release -p clipboardbridge-embassy --features host
+          cargo build --locked --release -p cbb-embassy --features host
       - name: cargo build for the Raspberry Pi
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
@@ -1911,7 +1917,7 @@ jobs:
       - name: Go calls the Rust core through cgo and gets each vector's state
         working-directory: .
         run: |
-          (cd lite && cargo build --locked --release -p clipboardbridge-ffi)
+          (cd lite && cargo build --locked --release -p cbb-ffi)
           go test -race -tags cbbcore ./internal/core -v
       - name: Go reads commands, server credentials and release files through the Rust core, and takes the same bodies
         working-directory: .
@@ -1922,40 +1928,27 @@ jobs:
           rustup target add wasm32-unknown-unknown
           # From lite/, so cargo reads lite/.cargo/config.toml, which picks
           # getrandom's custom backend for this target.
-          (cd lite && cargo clippy --locked -p clipboardbridge-wasm --target wasm32-unknown-unknown -- -D warnings)
+          (cd lite && cargo clippy --locked -p cbb-wasm --target wasm32-unknown-unknown -- -D warnings)
           sh lite/wasm/build.sh
           go test -race -overlay lite/target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
       - name: the lite member joins by the phone, syncs with Go members and takes their remote pastes
         working-directory: .
         run: CBB_LITE="$PWD/lite/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless' -v
-      - name: get.sh --lite installs the lite member, moves an old cbb-lite to it, and uninstall.sh removes it
+      - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         working-directory: .
         run: |
           rel="$RUNNER_TEMP/release"
           sh lite/packaging/archive.sh lite/target/release/cbb x86_64-unknown-linux-gnu amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
-          # The lite member as it was installed before the rename, with a file
-          # in its state for the move to keep.
-          sudo useradd --system --home-dir /var/lib/cbb-lite --shell /usr/sbin/nologin cbb-lite
-          sudo install -m 0755 lite/target/release/cbb /usr/local/bin/cbb-lite
-          sudo install -d -o cbb-lite -g cbb-lite -m 0700 /var/lib/cbb-lite
-          sudo touch /var/lib/cbb-lite/kept
-          printf '[Service]\nExecStart=/usr/local/bin/cbb-lite run\n' | sudo tee /etc/systemd/system/cbb-lite.service >/dev/null
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --lite --no-firewall | tee "$RUNNER_TEMP/get.out"
-          grep -q 'Renamed cbb-lite to cbb' "$RUNNER_TEMP/get.out"
-          systemctl is-active clipboardbridge.service
+          systemctl is-active cbb.service
           cbb version | grep -q 'lite member'
-          test "$(sudo stat -c %U /var/lib/clipboardbridge/kept)" = clipboardbridge
-          for f in /usr/local/bin/cbb-lite /etc/systemd/system/cbb-lite.service /var/lib/cbb-lite /etc/xdg/autostart/clipboardbridge-desktop.desktop /etc/systemd/user/clipboardbridge-agent.service; do
+          for f in /etc/xdg/autostart/cbb-desktop.desktop /etc/systemd/user/cbb-agent.service; do
             if [ -e "$f" ]; then
               echo "install.sh left $f" >&2
               exit 1
             fi
           done
-          if getent passwd cbb-lite; then
-            echo "install.sh left the user cbb-lite" >&2
-            exit 1
-          fi
           # Both exit 1, which pipefail would take for the grep's answer.
           for _ in $(seq 20); do
             out=$(sudo cbb status 2>&1) || true
@@ -1971,8 +1964,8 @@ jobs:
             echo "install.sh put the full member over the lite member" >&2
             exit 1
           fi
-          sudo sh /usr/local/share/clipboardbridge/uninstall.sh --purge
-          for f in /usr/local/bin/cbb /etc/systemd/system/clipboardbridge.service /usr/local/share/clipboardbridge /etc/clipboardbridge /var/lib/clipboardbridge; do
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          for f in /usr/local/bin/cbb /etc/systemd/system/cbb.service /usr/local/share/cbb /etc/cbb /var/lib/cbb; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1
@@ -1984,14 +1977,14 @@ jobs:
           rel="$RUNNER_TEMP/release"
           rm -rf "$RUNNER_TEMP/lite-rootless"
           mkdir -p "$RUNNER_TEMP/lite-rootless"
-          tar -xzf "$rel/clipboardbridge-lite-linux-amd64.tar.gz" -C "$RUNNER_TEMP/lite-rootless"
+          tar -xzf "$rel/cbb-lite-linux-amd64.tar.gz" -C "$RUNNER_TEMP/lite-rootless"
           sudo loginctl enable-linger "$USER"
           XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export XDG_RUNTIME_DIR
           for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/bus" ] && break; sleep 0.2; done
-          sh "$RUNNER_TEMP/lite-rootless/clipboardbridge-lite/packaging/linux/install.sh" --rootless --auto-update off "$RUNNER_TEMP/lite-rootless/clipboardbridge-lite/cbb"
-          systemctl --user is-active -q clipboardbridge.service
-          test -S "$XDG_RUNTIME_DIR/clipboardbridge/control.sock"
+          sh "$RUNNER_TEMP/lite-rootless/cbb-lite/packaging/linux/install.sh" --rootless --auto-update off "$RUNNER_TEMP/lite-rootless/cbb-lite/cbb"
+          systemctl --user is-active -q cbb.service
+          test -S "$XDG_RUNTIME_DIR/cbb/control.sock"
           test ! -e /usr/local/bin/cbb
           ~/.local/bin/cbb version | grep -q 'lite member'
           out=$(~/.local/bin/cbb status 2>&1) || true
@@ -2001,8 +1994,8 @@ jobs:
             exit 1
           fi
           grep -q 'without root' "$RUNNER_TEMP/err"
-          sh ~/.local/share/clipboardbridge/uninstall.sh --purge
-          for f in ~/.local/bin/cbb ~/.config/systemd/user/clipboardbridge.service ~/.local/share/clipboardbridge ~/.local/state/clipboardbridge; do
+          sh ~/.local/share/cbb/uninstall.sh --purge
+          for f in ~/.local/bin/cbb ~/.config/systemd/user/cbb.service ~/.local/share/cbb ~/.local/state/cbb; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1
@@ -2049,16 +2042,16 @@ jobs:
           cat "$RUNNER_TEMP/err"
           grep -q '0.6.1 is back' "$RUNNER_TEMP/err"
           cbb version | grep -q '^cbb 0.6.1 '
-          systemctl is-active -q clipboardbridge.service
-          sudo grep -q '"0.6.2"' /var/lib/clipboardbridge-update/update.json
+          systemctl is-active -q cbb.service
+          sudo grep -q '"0.6.2"' /var/lib/cbb-update/update.json
           sudo cbb update -auto on
-          systemctl cat clipboardbridge-update.service | grep -qx 'ExecStart=/usr/local/bin/cbb update -timer'
+          systemctl cat cbb-update.service | grep -qx 'ExecStart=/usr/local/bin/cbb update -timer'
           sudo cbb update -auto off
-          test ! -e /etc/systemd/system/clipboardbridge-update.timer
+          test ! -e /etc/systemd/system/cbb-update.timer
           sudo cbb update -auto on
-          sudo sh /usr/local/share/clipboardbridge/uninstall.sh --purge
-          test ! -e /etc/systemd/system/clipboardbridge-update.timer
-          test ! -e /var/lib/clipboardbridge-update
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          test ! -e /etc/systemd/system/cbb-update.timer
+          test ! -e /var/lib/cbb-update
       - name: the ESP32's network code joins by the phone on Linux, over a TAP interface
         working-directory: .
         run: |
@@ -2068,12 +2061,12 @@ jobs:
           CBB_ESP32_ON_LINUX="$PWD/lite/target/release/esp32-on-linux" go test -race ./internal/service -run TestEmbassyJoiner -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: clipboardbridge-lite-linux-arm64
+          name: cbb-lite-linux-arm64
           path: lite/target/aarch64-unknown-linux-gnu/release/cbb
           retention-days: 14
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: clipboardbridge-lite-linux-armv6
+          name: cbb-lite-linux-armv6
           path: lite/target/arm-unknown-linux-musleabihf/release/cbb
           retention-days: 14
 
@@ -2108,9 +2101,9 @@ jobs:
           rustup default stable
       - name: the core with TLS without an operating system, RISC-V (the ESP32-C6)
         run: |
-          cargo clippy --locked -p clipboardbridge-core --features tls --target riscv32imac-unknown-none-elf -- -D warnings
-          cargo build --locked -p clipboardbridge-core --release --target riscv32imac-unknown-none-elf
-          cargo build --locked -p clipboardbridge-core --features tls --release --target riscv32imac-unknown-none-elf
+          cargo clippy --locked -p cbb-core --features tls --target riscv32imac-unknown-none-elf -- -D warnings
+          cargo build --locked -p cbb-core --release --target riscv32imac-unknown-none-elf
+          cargo build --locked -p cbb-core --features tls --release --target riscv32imac-unknown-none-elf
       - name: the Rust toolchain for Xtensa
         working-directory: ${{ runner.temp }}
         run: |
@@ -2125,7 +2118,7 @@ jobs:
           ./rust-src-nightly/install.sh --destdir="$RUNNER_TEMP/esp" --prefix= --disable-ldconfig
           rustup toolchain link esp "$RUNNER_TEMP/esp"
       - name: the core with TLS without an operating system, Xtensa (the ESP32-S3)
-        run: cargo +esp build --locked -Zbuild-std=core,alloc -p clipboardbridge-core --features tls --release --target xtensa-esp32s3-none-elf
+        run: cargo +esp build --locked -Zbuild-std=core,alloc -p cbb-core --features tls --release --target xtensa-esp32s3-none-elf
       - name: the firmware for the Arduino Nano ESP32
         working-directory: lite/esp32
         run: |
@@ -2359,13 +2352,13 @@ jobs:
         run: |
           ctx="$RUNNER_TEMP/image"
           sh packaging/docker/context.sh "$ctx" amd64="$RUNNER_TEMP/cbb-amd64" arm64="$RUNNER_TEMP/cbb-arm64" armv7="$RUNNER_TEMP/cbb-armv7"
-          docker build -t clipboardbridge:ci "$ctx"
+          docker build -t cbb:ci "$ctx"
           for p in linux/arm64 linux/arm/v7; do
-            docker build --platform "$p" -t "clipboardbridge:ci-$(echo "$p" | tr / -)" "$ctx"
+            docker build --platform "$p" -t "cbb:ci-$(echo "$p" | tr / -)" "$ctx"
           done
           for f in packaging/docker/compose.*.yaml; do docker compose -f "$f" config -q; done
       - name: two containers pair and sync, and a forwarder starts
-        run: sh tools/e2e/docker.sh clipboardbridge:ci
+        run: sh tools/e2e/docker.sh cbb:ci
 
   website:
     name: website
