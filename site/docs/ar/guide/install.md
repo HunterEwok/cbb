@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1ce6c4f40f0 -->
+<!-- source: 95a9f0f2e940 -->
 # التثبيت
 
 يعمل Copy Beyond Borders كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.
@@ -41,7 +41,11 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 ## Mac
 
-Apple silicon أو Intel، في Terminal، والأمر نفسه كما في Linux:
+Apple silicon أو Intel، macOS 14 أو أحدث: نزّل `cbb-X.Y.Z.pkg` من
+[أحدث إصدار](https://github.com/HunterEwok/cbb/releases/latest) وافتحه. يثبّت تطبيق CBB في شريط
+القوائم والخدمة، وكلاهما موقّع من المشروع وفحصته Apple.
+
+أو في Terminal، بلا التطبيق، والأمر نفسه كما في Linux:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
@@ -167,4 +171,4 @@ sudo sh /usr/local/share/cbb/uninstall.sh
 
 على Windows: الإعدادات، التطبيقات، «CBB»، إلغاء التثبيت.
 
-يزيل هذا البرنامج والخدمة وقواعد جدار الحماية التي أضافها المثبّت. وتبقى مفاتيح الجهاز، فيعيده التثبيت من جديد إلى مجموعته. ولحذفها أيضًا أضف `--purge` (`-Purge` على Windows، مع `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`)، ثم أزل الجهاز من المجموعة من جهاز آخر (`sudo cbb remove NAME`، أو على الهاتف).
+يزيل هذا البرنامج والخدمة وقواعد جدار الحماية التي أضافها المثبّت، وعلى Mac التطبيق الذي ثبّته `.pkg`. وتبقى مفاتيح الجهاز، فيعيده التثبيت من جديد إلى مجموعته. ولحذفها أيضًا أضف `--purge` (`-Purge` على Windows، مع `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`)، ثم أزل الجهاز من المجموعة من جهاز آخر (`sudo cbb remove NAME`، أو على الهاتف).

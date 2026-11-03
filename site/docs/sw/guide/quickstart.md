@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 6d2083e0e66e -->
+<!-- source: f031187fad1e -->
 # Kuanza haraka
 
 Copy Beyond Borders huipa simu yako na kompyuta zako ubao mmoja wa kunakili: unanakili kwenye kimoja na kubandika kwenye kingine. Vifaa huunda **kikundi** kwenye mtandao wako wa nyumbani. Simu hushikilia ufunguo wa kikundi na kuruhusu kila kifaa kipya kuingia, kwa hiyo hakuna anayeweza kujiunga bila wewe.
@@ -43,7 +43,7 @@ Kwenye kompyuta:
 sudo cbb pair
 ```
 
-Kwenye Windows, endesha `cbb pair` kwenye terminal ya msimamizi. Huonyesha msimbo wa QR.
+Kwenye Windows, endesha `cbb pair` kwenye terminal ya msimamizi. Huonyesha msimbo wa QR. Au, bila terminal, fungua programu ya CBB kwenye kompyuta (programu ya trei kwenye Windows na Linux, ya upau wa menyu kwenye Mac) na ubofye **Join a phone's group**: huomba nenosiri la msimamizi na huonyesha msimbo ule ule.
 
 Kwenye programu, gusa **Connect a new device** na uchanganue msimbo. Programu huunda ufunguo wa kikundi (huomba alama ya kidole, uso au nambari ya siri) na kuongeza kompyuta. Hicho ndicho kikundi.
 
