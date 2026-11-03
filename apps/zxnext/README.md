@@ -62,9 +62,9 @@ neither `.http` nor the ESP has TLS: the checks find a damaged download, not a c
 until the list is signed (docs/roadmap.md, "Installing").
 
 Over an earlier installation: `.cbb install` asks for `.cbb net off` first while the network
-runs, and replaces only the files that differ. A `CBB.DRV` already installed keeps running
-from memory, so when the file is new it says to `.uninstall /cbb/CBB.DRV` and `.install` it
-again. On the Pi it stops the old `cbb service`, so the next `.cbb net on` starts the new
+runs, and replaces only the files that differ. It installs `CBB.DRV` itself, and a driver
+already installed, which runs from memory, it uninstalls and installs again when the file is
+new. On the Pi it stops the old `cbb service`, so the next `.cbb net on` starts the new
 one, and an old `cbb` that is the program itself, not the start script, is kept as
 `cbb.old`. A `CBB` in `C:/DOT` that differs from the new one is reported, not touched:
 `.cbb` runs that one, `../CBB` in `/cbb` the new one.
@@ -150,8 +150,7 @@ frames, bytes taken; 2 on or off, and turning it on starts the counts again, as 
 dropped frame; 6 the last 64 bytes from the Pi, which `.cbb -d net` shows). Its id, 124, is not
 assigned by NextZXOS's maintainers yet.
 
-To use it, put `CBB` and `CBB.DRV` in `/cbb` (`.cbb install` does), install the driver once after
-each start (`.install /cbb/CBB.DRV`), join the ESP to the Wi-Fi network as NextZXOS's own
+To use it, put `CBB` and `CBB.DRV` in `/cbb` (`.cbb install` does), join the ESP to the Wi-Fi network as NextZXOS's own
 tools do, and run:
 
 ```
@@ -159,7 +158,10 @@ tools do, and run:
 ```
 
 NextBASIC ends a statement at a colon, so each setting with one goes in quotes; the quotes
-do not reach the Pi. It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
+do not reach the Pi. After a reset or a power cycle, which drop installed drivers, `.cbb net on` installs
+`/cbb/CBB.DRV` again by itself: a dot command cannot run `.install`, so it does what
+`.install` does through the driver API (M_DRVAPI with driver 0, and IDE_BANK for the 8K
+bank); `.install /cbb/CBB.DRV` still works too. It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
 keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
 member at home, `-serve` the ESP's port for the phones and the lite member's own,
 `-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's

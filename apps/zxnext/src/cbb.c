@@ -9,6 +9,7 @@
 #include <arch/zxn.h>
 #include <arch/zxn/esxdos.h>
 #include <errno.h>
+#include <intrinsic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -103,6 +104,94 @@ static uint8_t driver(uint8_t function, uint16_t de)
 static uint8_t net_on(void)
 {
     return driver(DRV_STATE, 0) == 0 && drv.de != 0;
+}
+
+// Installing the driver as .install does, since a dot command cannot run
+// another (M_EXECCMD): the driver API's calls for .install and .uninstall
+// (M_DRVAPI with driver 0) and IDE_BANK for its 8K ZX bank. CBB.DRV holds
+// the header, the 512 bytes and one bank with two patches, where its id
+// goes (drv/drv.asm); anything else is left to .install.
+#define DRV_FILE "/cbb/CBB.DRV"
+#define NDRV_ID (DRIVER_ID | 0x80)
+#define DRVAPI_INSTALL 1
+#define DRVAPI_UNINSTALL 2
+#define DRVAPI_IMAGE 4
+#define NO_BANK 0xFF
+
+static uint8_t drv_code[512];
+static uint16_t drv_patch[2];
+
+static uint8_t drvapi(uint8_t function, uint16_t de, void *hl)
+{
+    drv.call.driver = 0;
+    drv.call.function = function;
+    drv.de = de;
+    drv.hl = (uint16_t)hl;
+    return esx_m_drvapi(&drv) != 0;
+}
+
+// Reads CBB.DRV: its 512 bytes into drv_code, its bank into text[] (the
+// size in *size), the patch offsets into drv_patch; 0 if it is one.
+static uint8_t drv_read(uint16_t *size)
+{
+    uint8_t fh, h[8], bad = 1;
+    errno = 0;
+    fh = esx_f_open(DRV_FILE, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) return 1;
+    if (esx_f_read(fh, h, 8) == 8 && memcmp(h, "NDRV", 4) == 0 && h[4] == NDRV_ID && h[5] == 0 && h[6] == 0 &&
+        h[7] == 1 && esx_f_read(fh, drv_code, 512) == 512 && esx_f_read(fh, h, 3) == 3 && h[0] == 2) {
+        *size = h[1] | (uint16_t)h[2] << 8;
+        if (*size <= MAX_TEXT && esx_f_read(fh, text, *size) == *size && esx_f_read(fh, drv_patch, 4) == 4 &&
+            drv_patch[0] < 512 && drv_patch[1] < 512) {
+            bad = 0;
+        }
+    }
+    esx_f_close(fh);
+    return bad;
+}
+
+// The bank of the driver installed, read from its image where CBB.DRV on
+// the card says the id went; NO_BANK if it cannot tell.
+static uint8_t drv_bank(void)
+{
+    uint16_t size;
+    if (drv_read(&size)) return NO_BANK;
+    if (drvapi(DRVAPI_IMAGE, DRIVER_ID, drv_code)) return NO_BANK;
+    return drv_code[drv_patch[0]];
+}
+
+// Installs CBB.DRV from the card; 0 when it runs.
+static uint8_t drv_install(void)
+{
+    uint16_t size;
+    uint8_t bank, mmu3;
+    if (drv_read(&size)) return 1;
+    bank = esx_ide_bank_alloc(ESX_BANKTYPE_RAM);
+    if (bank == NO_BANK) return 2;
+    // The bank in at $6000 for a moment: BASIC's memory, which this
+    // command does not use (its own is at $2000 and from $8000).
+    intrinsic_di();
+    mmu3 = ZXN_READ_MMU3();
+    ZXN_WRITE_MMU3(bank);
+    memset((void *)0x6000, 0, 8192);
+    memcpy((void *)0x6000, text, size);
+    ZXN_WRITE_MMU3(mmu3);
+    intrinsic_ei();
+    drv_code[drv_patch[0]] = bank;
+    drv_code[drv_patch[1]] = bank;
+    if (drvapi(DRVAPI_INSTALL, NDRV_ID, drv_code)) {
+        esx_ide_bank_free(ESX_BANKTYPE_RAM, bank);
+        return 3;
+    }
+    return 0;
+}
+
+// Uninstalls the driver and frees its bank; 0 when done.
+static uint8_t drv_uninstall(uint8_t bank)
+{
+    if (drvapi(DRVAPI_UNINSTALL, DRIVER_ID, 0)) return 1;
+    if (bank != NO_BANK) esx_ide_bank_free(ESX_BANKTYPE_RAM, bank);
+    return 0;
 }
 
 // Types a command for the lite member at NextPi's shell.
@@ -414,8 +503,9 @@ static int net_start(int argc, char **argv)
 {
     int i;
     uint16_t n = 0;
-    if (driver(DRV_STATE, 0)) {
-        return fail("the driver is not installed: .install /cbb/CBB.DRV", "M_DRVAPI 124 failed");
+    // After a reset the driver is gone: install it from the card.
+    if (driver(DRV_STATE, 0) && (drv_install() || driver(DRV_STATE, 0))) {
+        return fail("cannot install the driver: .install /cbb/CBB.DRV", DRV_FILE);
     }
     if (drv.de) return fail("the network runs already", 0);
     if (argc) {
@@ -1004,10 +1094,13 @@ static int install(void)
 {
     static char pimd5[33];
     struct item *pi = &items[ITEMS - 1];
-    uint8_t i, pi_answers, drv_new = 0;
+    uint8_t i, pi_answers, drv_new = 0, drv_on, old_bank = NO_BANK;
     uint32_t size;
     int err = 0;
     if (net_on()) return fail("the network runs; stop it first with .cbb net off", 0);
+    // The bank of a driver installed now, while the card has its file.
+    drv_on = driver(DRV_STATE, 0) == 0;
+    if (drv_on) old_bank = drv_bank();
     crc_init();
     draw_logo();
     printf("clipboardbridge " VERSION "\n\n");
@@ -1047,12 +1140,24 @@ static int install(void)
         esx_f_unlink(pi->card);
         printf("The Pi's cbb is installed;\n.cbb net on starts it.\n");
     }
-    // A driver installed earlier runs from memory until it is
-    // uninstalled; the card's new file takes its place only then.
-    if (driver(DRV_STATE, 0) != 0) {
-        printf("Next: .install /cbb/CBB.DRV\n(again after each reset)\n");
-    } else if (drv_new) {
-        printf("CBB.DRV is new: .uninstall\n/cbb/CBB.DRV, then .install\n/cbb/CBB.DRV\n");
+    // A driver installed earlier runs from memory: a new one takes its
+    // place, with its bank. Without one, the driver is installed now (and
+    // .cbb net on does it after a reset).
+    if (drv_on && drv_new) {
+        if (old_bank == NO_BANK || drv_uninstall(old_bank)) {
+            printf("CBB.DRV is new: .uninstall\n/cbb/CBB.DRV, then .install\n/cbb/CBB.DRV\n");
+        } else {
+            drv_on = 0;
+        }
+    }
+    if (!drv_on) {
+        i = drv_install();
+        if (i) {
+            printf("cbb: cannot install CBB.DRV\n");
+            if (debug) printf("  (step %u)\n", i);
+        } else {
+            printf("CBB.DRV is installed.\n");
+        }
     }
     // An older .cbb in C:/DOT runs as .cbb before this one.
     if (file_crc(DOT_CBB, &size) != items[0].crc && size) {
