@@ -233,9 +233,9 @@ group there.
 The devices then meet at the relay whenever they are not on one network. Both must be
 online at once, since the relay stores nothing. It speaks plain WireGuard only.
 
-Planned ([roadmap](../roadmap.md), item 28): the project's relay at `cbb.tools` for groups
-that do not want to run their own, and AmneziaWG and VLESS on the relay, as on the
-forwarder.
+Groups that do not want to run their own can use the project's open relay at `cbb.tools:8765`:
+`sudo cbb global relay default` knows its address and key. Planned ([roadmap](../roadmap.md),
+item 28): AmneziaWG and VLESS on the relay, as on the forwarder.
 
 ## What the server keeps
 

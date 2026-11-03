@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1c2123fe696 -->
+<!-- source: 7915e50ceb6f -->
 # Fuera de casa
 
 En casa, tus dispositivos se sincronizan solos. Para seguir sincronizando cuando un portátil o un teléfono está en otro sitio, un ordenador de casa se convierte en el **hub** del grupo, y los dispositivos que viajan llegan a él por el túnel cifrado del propio grupo. Las imágenes de cada caso están en [Cómo funciona](how-it-works.md#away-from-home-the-hub).
@@ -81,7 +81,7 @@ Otras formas de unirse desde lejos, por SSH o con tu propia VPN, están en [Sin 
 
 Un teléfono puede ser el hub mientras su app está abierta (Ajustes, **This phone as the hub**). O los dispositivos se encuentran en un **relé ciego** de tu propio servidor en lugar de un hub: los ordenadores con `cbb global relay`, los teléfonos en **Blind relay** de Ajustes. El relé no puede leer el portapapeles, pero ve qué dispositivos se comunican, cuándo y cuánto. Consulta [cómo ejecutar tus propios servidores](../admin/self-hosting.md#a-blind-relay).
 
-Más adelante: un relé ciego en `cbb.tools` que cualquier grupo podrá usar.
+El proyecto mantiene un relé ciego en `cbb.tools` que cualquier grupo puede usar: `sudo cbb global relay default` conoce su dirección y su clave.
 
 ## Desactivarlo
 

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1c2123fe696 -->
+<!-- source: 7915e50ceb6f -->
 # 离家使用
 
 在家时，你的设备会自动同步。要让笔记本或手机在别处也能继续同步，需要让家里的一台电脑成为群组的**中枢**，外出的设备通过群组自己的加密隧道连接到它。各种情形的图示见[工作原理](how-it-works.md#away-from-home-the-hub)。
@@ -81,7 +81,7 @@ sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
 
 手机在应用打开期间可以当中枢（设置，**This phone as the hub**）。或者，让设备在你自己服务器上的**盲中继**碰面，而不用中枢：电脑使用 `cbb global relay`，手机在设置的 **Blind relay** 下设置。中继无法读取剪贴板，但能看到哪些设备在通信、何时通信以及通信量。参见[运行自己的服务器](../admin/self-hosting.md#a-blind-relay)。
 
-以后将提供：`cbb.tools` 上任何群组都能使用的盲中继。
+项目在 `cbb.tools` 运行一个任何群组都能使用的盲中继：`sudo cbb global relay default` 知道它的地址和密钥。
 
 ## 关闭
 

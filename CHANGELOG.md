@@ -7,6 +7,8 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- `cbb global relay default` meets the group at the project's open relay on `cbb.tools:8765`,
+  whose address and key cbb knows.
 - The desktop apps show the QR code for joining a phone's group: on a computer in no group,
   **Join a phone's group** in the tray app (Windows, Linux) and the Mac app runs `cbb pair
   -app` as the administrator and shows the code, its text and the time left, without a
@@ -1700,6 +1702,8 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Added
 
+- `cbb global relay default` meets the group at the project's open relay on `cbb.tools:8765`,
+  whose address and key cbb knows.
 - The bench's `phone` suite: the Android app on an emulator in a group with members of the
   fleet, driven by instrumented tests (`apps/android/app/src/androidTest`) through a helper
   that runs cbb on the members: the phone makes its own group, admits computers, syncs both

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1c2123fe696 -->
+<!-- source: 7915e50ceb6f -->
 # Mbali na nyumbani
 
 Nyumbani vifaa vyako husawazisha vyenyewe. Ili kuendelea kusawazisha laptopu au simu inapokuwa mahali pengine, kompyuta moja nyumbani huwa **kitovu** cha kikundi, na vifaa vinavyosafiri hukifikia kupitia handaki lililosimbwa la kikundi chenyewe. Picha za kila hali ziko katika [Jinsi inavyofanya kazi](how-it-works.md#away-from-home-the-hub).
@@ -81,7 +81,7 @@ Njia nyingine za kujiunga ukiwa mbali, kupitia SSH au VPN yako mwenyewe, ziko ka
 
 Simu inaweza kuwa kitovu wakati programu yake imefunguliwa (Mipangilio, **This phone as the hub**). Au vifaa hukutana kwenye **relei pofu** kwenye seva yako mwenyewe badala ya kitovu: kompyuta kwa `cbb global relay`, simu chini ya **Blind relay** kwenye Mipangilio. Relei haiwezi kusoma ubao wa kunakili lakini huona ni vifaa vipi vinavyozungumza, lini na kwa kiasi gani. Tazama [kuendesha seva zako mwenyewe](../admin/self-hosting.md#a-blind-relay).
 
-Baadaye: relei pofu kwenye `cbb.tools` ambayo kikundi chochote kitaweza kuitumia.
+Mradi unaendesha relei pofu kwenye `cbb.tools` ambayo kikundi chochote kinaweza kuitumia: `sudo cbb global relay default` inajua anwani na ufunguo wake.
 
 ## Kuzima
 

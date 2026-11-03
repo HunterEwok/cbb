@@ -109,8 +109,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     the Apple account.
 - **28.** The blind relay: the open relay (`cbb relay -open`) with its limits, the choice in `cbb
     global relay` and in both phone apps, and the guide ([running your own
-    servers](admin/self-hosting.md)) are done. Next: the project's relay on `cbb.tools`
-    open to everyone, and AmneziaWG and VLESS on the relay.
+    servers](admin/self-hosting.md)) and the project's open relay on `cbb.tools` (`cbb global
+    relay default`) are done. Next: AmneziaWG and VLESS on the relay.
 - **29.** Secure updates: `cbb update`, automatic updates, the release passed through the group,
     the Android APK's own updates and the lite member's on Linux and OpenWrt are done
     ([design](design.md#secure-updates)); the project's root and release keys wait for the
