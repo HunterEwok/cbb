@@ -883,6 +883,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- Android's automatic sending ("Send my copies by themselves") leaves a copy marked sensitive
+  (`android.content.extra.IS_SENSITIVE`, as password managers and the app's received secrets
+  mark it) on the phone, as the computers leave the password managers' marks; the button still
+  sends it.
 - The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
   Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
   installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the stores. The apps' identifiers

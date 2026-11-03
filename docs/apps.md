@@ -408,7 +408,10 @@ page of Settings:
    system's clipboard overlay that appears after each copy.
 2. It then shows a 1-pixel accessibility overlay window that takes the focus for a moment,
    reads the clipboard, sends the text to the group and goes away. The service reads no
-   screen content beyond what tells it that a copy happened, and the app says so.
+   screen content beyond what tells it that a copy happened, and the app says so. A copy
+   marked sensitive (`android.content.extra.IS_SENSITIVE`, as password managers and this
+   app's received secrets mark it) stays on the phone, as the computers leave the password
+   managers' marks; the button still sends it when the user taps it.
 3. Android 12 and later show "CBB pasted from your clipboard" each time; that
    is the system's notice and cannot be turned off.
 

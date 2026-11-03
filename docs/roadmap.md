@@ -376,11 +376,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     one.
 - **53.** **Planned for 0.6, before the launch.** What a sceptical reader checks first,
     found by reading the project as one would (2026-11-02):
-    - Android's automatic sending skips a copy that carries
+    - Done in 0.6: Android's automatic sending skips a copy that carries
       `android.content.extra.IS_SENSITIVE`, as the computers skip the password managers'
-      marks; today only received secrets get the flag. Until then the README's "Items that
-      password managers mark as secret are not synced automatically" holds on computers
-      only.
+      marks.
     - No "end to end" for the clipboard: every device of the group, the hub included,
       reads what is copied and passes it on, over mutual TLS 1.3; no server can read it.
       The guides (privacy, how it works) and the README say exactly that; only sealed
