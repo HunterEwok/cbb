@@ -999,3 +999,25 @@ the blind relay (item 28), and a second hub (D-65) covers the hours the first is
 Found on the way and worth fixing anyway: the phones' member key is kept with the keychain's
 "when unlocked" accessibility, so nothing in the background can use it while the phone is
 locked.
+
+**Looked at again on 2026-11-03, with Android and the user's own VPN.** The finding stands,
+and one point weighs more than the rest: today's tunnel (`mobile/cbbtun`) is an app's own
+traffic, so it runs beside any VPN the user has on, and CBB's packets simply go inside that
+VPN. A packet tunnel on the iPhone or a `VpnService` on Android would take the phone's one
+VPN slot: turning on one's own VPN would stop sync away from home, and the other way round.
+
+- **Android needs none of it.** The app's foreground service (`connectedDevice`) already
+  keeps its connections and the tunnel in the background, which an iPhone app cannot do.
+  `VpnService` would add the VPN key icon, the "allow a VPN connection" prompt and the slot
+  conflict, and gain nothing; `addAllowedApplication` narrows what it carries, not the slot.
+- **The iPhone without a VPN.** Background app refresh stays (a few seconds now and then,
+  docs/apps.md). Push notifications, now that the Apple developer account exists, are the
+  real way: a member or the hub asks the project's server to push (the APNs keys stay on
+  the server), and a Notification Service Extension, woken by a visible notification for up
+  to about 30 seconds with about 24 MiB, opens a small copy sealed to the phone (a push
+  carries 4 KiB) or shows that a copy waits. Silent pushes are throttled by iOS and only
+  help now and then. This belongs with the notifications work after TestFlight.
+- **An optional mode.** A packet tunnel offered only as an opt-in "keep the hub on in the
+  background" for people with no VPN of their own still meets guideline 5.4 (an
+  organization's account), TN3120 and the memory limit above; it is not planned. Should
+  the project register as an organization later, this is the one case to look at again.
