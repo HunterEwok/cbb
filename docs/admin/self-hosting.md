@@ -134,10 +134,21 @@ sudo systemctl restart cbb-forward
 sudo journalctl -u cbb-forward | grep XHTTP     # the path the web server passes
 ```
 
-Then give that path to the web server, in the site's `server` block for TCP 443 (nginx):
+Then give that path to the web server (nginx): the limits in the `http` block, the location
+in the site's `server` block for TCP 443:
 
 ```nginx
+limit_req_zone $binary_remote_addr zone=cbb_vless_addr:10m rate=150r/s;
+limit_conn_zone $binary_remote_addr zone=cbb_vless_conn:10m;
+limit_conn_zone $server_name zone=cbb_vless_all:1m;
+
 location /PATH-FROM-THE-LOG {
+    client_max_body_size 32k;
+    limit_req zone=cbb_vless_addr burst=300 nodelay;
+    limit_conn cbb_vless_conn 16;
+    limit_conn cbb_vless_all 1024;
+    limit_req_status 429;
+    limit_conn_status 429;
     proxy_pass http://127.0.0.1:3276;
     proxy_http_version 1.1;
     proxy_buffering off;
@@ -150,6 +161,9 @@ location /PATH-FROM-THE-LOG {
 }
 ```
 
+- The limits bound what strangers, who need no VLESS user to send uploads, make the
+  forwarder hold ([the servers' budget](../relay-budget.md#xhttp)); the clients' uploads are
+  never larger than 32 KiB.
 - The path is made at random once and kept in the forwarder's key file; `-vless-path /PATH`
   sets one of your own (a slash and 8 to 64 letters, digits, `-` or `_`). It keeps scanners
   off the forwarder; the groups' security does not rely on it.

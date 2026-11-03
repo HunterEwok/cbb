@@ -2313,7 +2313,9 @@ carries:
   XHTTP's `packet-up` mode (plain HTTP requests, which any web server and proxy passes) on
   `path`, with `server_name` as the host, over TLS with the fingerprint of Chrome, ALPN `h2`
   and `http/1.1`, and the site's certificate checked against the public CAs for
-  `server_name`. The forwarder passes every UDP packet that comes over VLESS to its own UDP
+  `server_name`. Each upload carries at most 32 KiB, and the forwarder refuses a larger one
+  and keeps at most 8 uploads of a session that no client has opened
+  ([relay-budget.md](relay-budget.md#xhttp)). The forwarder passes every UDP packet that comes over VLESS to its own UDP
   port, so the packets are forwarded as in section 13; VLESS carries nothing else.
 - A receiver MUST refuse settings that do not have this form, or a `transport` it does not
   know, and not start the tunnel; it never falls back to plain WireGuard.

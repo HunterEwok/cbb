@@ -186,6 +186,12 @@ P=/PATH-FROM-THE-LOG
 echo "\"~^$P(/|\$)\" 1;" | sudo tee /etc/nginx/cbb-vless-path.conf
 sudo tee /etc/nginx/cbb-vless-location.conf <<EOF
 location $P {
+    client_max_body_size 32k;
+    limit_req zone=cbb_vless_addr burst=300 nodelay;
+    limit_conn cbb_vless_conn 16;
+    limit_conn cbb_vless_all 1024;
+    limit_req_status 429;
+    limit_conn_status 429;
     proxy_pass http://cbb_vless;
     proxy_http_version 1.1;
     proxy_buffering off;
@@ -198,6 +204,12 @@ location $P {
 EOF
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+The limits keep what a stranger makes the forwarder hold small (docs/relay-budget.md,
+"XHTTP"); `client_max_body_size` matches the forwarder's largest upload, 32 KiB. On a server
+set up before them, add the five `limit_` lines and `client_max_body_size` to the location in
+`/etc/nginx/cbb-vless-location.conf`, and the zones from `deploy/nginx.conf` to the site's
+configuration.
 
 The path stays open while the site is closed; the http block's `access_log off` keeps it out
 of the log.

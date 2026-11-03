@@ -1151,6 +1151,12 @@ All notable changes to cbb are documented in this file. The format follows
 - When the root signed two own device records at the same time, the phones take the one
   with the greater record ID as its own device, as the computers and the lite member do, so
   every member agrees which device holds the root and whether it is a phone or a computer.
+- VLESS over XHTTP takes uploads of at most 32 KiB and keeps at most 8 of a session until
+  its client opens it, and the site's nginx location limits the requests of each address
+  (docs/relay-budget.md, "XHTTP"; site/README.md and docs/admin/self-hosting.md give the
+  lines). The forwarder's unit sets `GOMEMLIMIT` and `MemoryMax`.
+- `cbb next link` drops an ESP block that names no link of its own or is longer than the
+  ESP sends.
 
 ### Removed
 
