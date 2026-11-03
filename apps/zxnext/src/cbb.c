@@ -900,9 +900,41 @@ static void logo_draw(void)
     zx_border(INK_BLACK);
 }
 
+// The logo's own colours, in the Next's palette while the screen shows: the
+// ULA's entries (ink 0-7, bright ink 8-15, paper 16-23, bright paper 24-31)
+// that it uses and nothing else on the screen does, each with its 9-bit
+// colour RRRGGGBB,B (tools/icon, zx.go). The old ones come back after.
+#define PALETTE_COLOURS 2
+static const uint8_t palette_new[PALETTE_COLOURS][3] = {
+    {2, 0x8C, 1}, // red ink: the board's brown, 4,3,1
+    {6, 0xD5, 1}, // yellow ink: the clip's tan, 6,5,3
+};
+static uint8_t palette_old[PALETTE_COLOURS][2];
+
+// Puts the logo's colours in the ULA palette that shows (restore 0), or
+// the old ones back (restore 1).
+static void palette(uint8_t restore)
+{
+    uint8_t control = ZXN_READ_REG(0x43), i;
+    // No stepping on after a write; the ULA's first or second palette,
+    // whichever shows.
+    ZXN_WRITE_REG(0x43, (control & 0x0F) | 0x80 | (control & 0x02 ? 0x40 : 0));
+    for (i = 0; i < PALETTE_COLOURS; i++) {
+        ZXN_WRITE_REG(0x40, palette_new[i][0]);
+        if (!restore) {
+            palette_old[i][0] = ZXN_READ_REG(0x41);
+            palette_old[i][1] = ZXN_READ_REG(0x44);
+        }
+        ZXN_WRITE_REG(0x44, restore ? palette_old[i][0] : palette_new[i][1]);
+        ZXN_WRITE_REG(0x44, restore ? palette_old[i][1] & 1 : palette_new[i][2]);
+    }
+    ZXN_WRITE_REG(0x43, control);
+}
+
 static void screen_open(void)
 {
     zx_border(INK_BLACK);
+    palette(0);
     zx_cls(PAPER_BLACK | INK_WHITE | BRIGHT);
     logo_unpack();
     logo_draw();
@@ -924,6 +956,7 @@ static void screen_open(void)
 static void screen_close(void)
 {
     zx_border(INK_BLACK);
+    palette(1);
     at(screen_row > 23 ? 23 : screen_row, 0);
     screen_row = 0;
 }
