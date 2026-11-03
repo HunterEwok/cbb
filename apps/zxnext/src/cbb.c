@@ -832,12 +832,15 @@ static void http_close(void)
 //
 //   rows 0-17, columns 0-13   the logo
 //   rows 0-2, from column 15  the name and the version
-//   rows 4-10                 a file's name and state, then its bar
-//   rows 12-13                the file under way: kilobytes, speed
+//   rows 4-11                 a file's name and state, then its bar, in
+//                             the stripes' colours: red, yellow, green, cyan
+//   rows 12-13                all of it, its bar in the four stripes
+//   rows 15-16                the file under way: kilobytes, speed
 //   rows 19-23                messages
 #define PANEL 15
 #define FILE_ROW 4
-#define NOW_ROW 12
+#define TOTAL_ROW 12
+#define NOW_ROW 15
 #define MESSAGE_ROW 19
 #define BAR_CELLS 12
 
@@ -900,6 +903,10 @@ static void logo_draw(void)
     zx_border(INK_BLACK);
 }
 
+// palette() runs from the dot command's own 8K, as MAIN has no room left;
+// the 8K keeps the rest for the stack.
+#pragma codeseg code_dot
+
 // The logo's own colours, in the Next's palette while the screen shows: the
 // ULA's entries (ink 0-7, bright ink 8-15, paper 16-23, bright paper 24-31)
 // that it uses and nothing else on the screen does, each with its 9-bit
@@ -933,8 +940,14 @@ static void palette(uint8_t restore)
     ZXN_WRITE_REG(0x43, control);
 }
 
+#pragma codeseg code_compiler
+
+// The border's colour before the screen, which the ROM keeps in BORDCR.
+static uint8_t border_old;
+
 static void screen_open(void)
 {
+    border_old = (*(uint8_t *)23624 >> 3) & 7;
     zx_border(INK_BLACK);
     palette(0);
     zx_cls(PAPER_BLACK | INK_WHITE | BRIGHT);
@@ -953,15 +966,16 @@ static void screen_open(void)
     screen_row = MESSAGE_ROW;
 }
 
-// Leaves the screen: the print position under the
-// messages, from where the screen scrolls as usual.
+// Leaves the screen: the border and the palette as they were, the print
+// position under the messages, from where the screen scrolls as usual.
 static void screen_close(void)
 {
-    zx_border(INK_BLACK);
+    zx_border(border_old);
     palette(1);
     at(screen_row > 23 ? 23 : screen_row, 0);
     screen_row = 0;
 }
+
 
 // Shows a file's state on its row: "current", "fetching" and so on.
 static void file_state(uint8_t row, const char *name, const char *state)
@@ -970,25 +984,43 @@ static void file_state(uint8_t row, const char *name, const char *state)
     printf("%-8s%-9s", name, state);
 }
 
-// Draws a file's bar in half cells with the percentage, and the numbers
-// of the one under way.
-static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
+// The bytes of the whole install, and those of the files done.
+static uint32_t total_size, total_done;
+
+// The bars' colours, the Next's stripes, a row each; the total's bar has
+// all four, a quarter each.
+static const uint8_t bar_ink[4] = {INK_RED, INK_YELLOW, INK_GREEN, INK_CYAN};
+
+// Draws a bar in half cells at a screen row, with the percentage.
+static void bar(uint8_t screen_row, uint8_t pct, uint8_t ink)
 {
-    uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50;
-    uint32_t rate = secs ? got / secs : 0;
-    uint16_t left = rate ? (uint16_t)((size - got) / rate) : 0;
-    uint8_t pct = size ? (uint8_t)(got * 100 / size) : 100;
     uint8_t halves = (uint8_t)((uint16_t)pct * (BAR_CELLS * 2) / 100), i;
-    char speed[8];
-    SCR_CT = 255;
-    at(FILE_ROW + 2 * row + 1, PANEL);
-    colour(INK_YELLOW);
+    at(screen_row, PANEL);
     for (i = 0; i < BAR_CELLS; i++) {
+        colour(ink < 8 ? ink : bar_ink[i / (BAR_CELLS / 4)]);
         // The ROM's block graphics: 143 full, 138 the left half.
         putchar(halves >= 2 * i + 2 ? 143 : halves == 2 * i + 1 ? 138 : '-');
     }
     colour(INK_WHITE);
     printf(" %3u%%", pct);
+}
+
+static uint8_t percent(uint32_t got, uint32_t size)
+{
+    // The files are a few megabytes: got * 100 stays in 32 bits.
+    return size && got < size ? (uint8_t)(got * 100 / size) : 100;
+}
+
+// Draws a file's bar and the total's, and the numbers of the one under way.
+static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
+{
+    uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50;
+    uint32_t rate = secs ? got / secs : 0;
+    uint16_t left = rate ? (uint16_t)((size - got) / rate) : 0;
+    char speed[8];
+    SCR_CT = 255;
+    bar(FILE_ROW + 2 * row + 1, percent(got, size), bar_ink[row & 3]);
+    bar(TOTAL_ROW + 1, percent(total_done + got, total_size), 0xFF);
     at(NOW_ROW, PANEL);
     printf("%5luK of %5luK", got >> 10, size >> 10);
     if (rate < 10240) sprintf(speed, "%u.%uK/s", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));
@@ -1079,11 +1111,9 @@ static int fetch(struct item *it, uint8_t row)
         }
         crc = crc_add(crc, text, n);
         got += n;
-        zx_border((uint8_t)(got >> 12) & 7);
         progress(row, got, it->size, start);
     }
     esx_f_close(fh);
-    zx_border(INK_BLACK);
     if (crc != it->crc) {
         file_state(row, it->name, "damaged");
         esx_f_unlink(it->part);
@@ -1234,7 +1264,7 @@ static int install_files(void)
 {
     static char pimd5[33];
     struct item *pi = &items[ITEMS - 1];
-    uint8_t i, pi_answers, drv_new = 0, drv_on, old_bank = NO_BANK;
+    uint8_t i, pi_answers, drv_new = 0, drv_on, old_bank = NO_BANK, need[ITEMS] = {0};
     uint32_t size;
     int err = 0;
     // The bank of a driver installed now, while the card has its file.
@@ -1243,6 +1273,7 @@ static int install_files(void)
     esx_f_mkdir("/cbb");
     for (i = 0; i < ITEMS; i++) file_state(i, items[i].name, "");
     file_state(PI_ROW, "to Pi", "");
+    file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "total", "");
     pi_answers = !pi_md5(pimd5);
     if (http_open()) {
         http_close();
@@ -1250,27 +1281,32 @@ static int install_files(void)
         return fail("cannot reach " SITE "; is the ESP on Wi-Fi?", line);
     }
     err = read_list();
+    // What is to do, first, for the total: the files to fetch, then the
+    // Pi's cbb to send.
+    total_size = total_done = 0;
     for (i = 0; i < ITEMS && !err; i++) {
         struct item *it = &items[i];
+        const char *state = "current";
         if (it == pi) {
-            if (!pi_answers) {
-                file_state(i, it->name, "no Pi");
-                continue;
-            }
-            if (strcmp(pimd5, it->md5) == 0) {
-                file_state(i, it->name, "current");
-                continue;
-            }
+            if (!pi_answers) state = "no Pi";
+            else if (strcmp(pimd5, it->md5) == 0) state = "current";
             // On the card from a try that stopped later.
-            if (up_to_date(it)) {
-                file_state(i, it->name, "fetched");
-                continue;
-            }
-        } else if (up_to_date(it)) {
-            file_state(i, it->name, "current");
-            continue;
+            else if (up_to_date(it)) state = "fetched";
+            else state = 0;
+            if (pi_answers && strcmp(pimd5, it->md5)) total_size += it->size;
+        } else if (!up_to_date(it)) {
+            state = 0;
         }
-        err = fetch(it, i);
+        if (state) file_state(i, it->name, state);
+        else {
+            need[i] = 1;
+            total_size += it->size;
+        }
+    }
+    for (i = 0; i < ITEMS && !err; i++) {
+        if (!need[i]) continue;
+        err = fetch(&items[i], i);
+        total_done += items[i].size;
         if (i == 1) drv_new = 1;
     }
     http_close();
@@ -1283,6 +1319,8 @@ static int install_files(void)
     } else {
         file_state(PI_ROW, "to Pi", "sending");
         if (to_pi(pi, PI_ROW)) return 1;
+        total_done += pi->size;
+        bar(TOTAL_ROW + 1, 100, 0xFF);
         // The card keeps no copy of the Pi's program.
         esx_f_unlink(pi->card);
         file_state(PI_ROW, "to Pi", "installed");
