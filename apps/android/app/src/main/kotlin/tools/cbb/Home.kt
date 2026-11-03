@@ -101,6 +101,7 @@ internal fun HomeScreen(model: AppModel) {
     LaunchedEffect(Unit) {
         model.group.renewOwnCertificate()
         model.group.finishTakeOverIfDue()
+        model.group.signDue()
     }
     BackgroundSync()
     val wide = LocalConfiguration.current.screenWidthDp >= 720

@@ -1127,6 +1127,8 @@ class AppModel(private val app: Context) {
             is PhoneGroup.Rootless -> R.string.error_rootless
             is PairingJoiner.Failure -> R.string.error_join
             is Keys.NoScreenLock -> R.string.error_no_screen_lock
+            is Keys.NoBiometric -> R.string.error_no_biometric
+            is Keys.OldKey -> R.string.error_old_key
             is Authenticator.Cancelled -> R.string.error_not_authenticated
             is TLSTransport.Failure, is java.io.IOException -> R.string.error_unreachable
             else -> R.string.error_generic

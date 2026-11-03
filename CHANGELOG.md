@@ -902,6 +902,16 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- On Android the root and admin keys sign once per authentication: each signature asks for
+  the fingerprint, the face or the screen lock in a prompt that carries it (BiometricPrompt
+  with a CryptoObject), instead of for a short time after one. Adding the first
+  computer asks five times, each further one twice, every other action once, and each
+  prompt says which signature it is ("Signature 2 of 5"). What the app
+  signed in the background meanwhile (computers' renewals, the root's record of
+  what an attestation shows, the next period of the server credentials) now waits for the
+  app to open and asks there. A fingerprint or face added later keeps the keys; on Android 10
+  they need one. Keys made by earlier builds are refused with a message to set the group up
+  again.
 - The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
   Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
   installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the stores. The apps' identifiers

@@ -75,6 +75,12 @@
     <string name="reason_take_over">Take the group over from the lost phone</string>
     <string name="reason_take_handed">Take the group the computer handed to this phone</string>
     <string name="reason_renew">Renew this phone\'s certificate</string>
+    <string name="reason_renew_peer">Renew a device\'s certificate</string>
+    <string name="reason_record_proof">Record where a device keeps its key</string>
+    <string name="reason_period">Renew the group\'s keys for sync away from home</string>
+    <string name="reason_restore">Restore your group with the recovery key</string>
+    <string name="signature_of">Signature %1$d of %2$d</string>
+    <string name="signature_n">Signature %1$d</string>
     <string name="error_not_confirmed">The computer joined but did not confirm it. Check cbb status on it.</string>
     <string name="error_no_network">Connect this phone to your home Wi-Fi, then try again.</string>
     <string name="error_timed_out">No phone scanned the code in five minutes. Try again.</string>
@@ -96,6 +102,8 @@
     <string name="error_join_computer">The computer\'s group could not be joined. Run cbb pair on it again.</string>
     <string name="error_no_screen_lock">Set a screen lock on this phone first: the group\'s keys need it.</string>
     <string name="error_not_authenticated">The fingerprint, face or screen lock was not confirmed, so nothing changed.</string>
+    <string name="error_no_biometric">Add a fingerprint or face on this phone first: on Android 10 the group\'s keys need one.</string>
+    <string name="error_old_key">This phone\'s group key was made by an earlier version of the app. Leave the group on this phone and set it up again.</string>
     <string name="error_generic">Something went wrong. Try again.</string>
     <string name="about">About</string>
     <string name="version">Version</string>

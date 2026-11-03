@@ -1345,7 +1345,10 @@ iPhone CA as well (section 10, "Admins").
 - **Renewal and revocation.** The admin phones renew certificates with `cert` messages, as
   an admin computer does (CBBKit's
   `GroupCertificates.renewal` and `MemberNode`'s `renew`; the app also renews its own
-  certificate at start). Revocation and the devices list are section 10, and a second admin
+  certificate at start). The Android app's root and admin keys sign only right after the
+  user's authentication, one signature each, so it notes a peer that is due and sends its
+  `cert` message on the peer's connection once the user confirms it, the next time the app
+  is open (`MemberNode.sendCert`). Revocation and the devices list are section 10, and a second admin
   phone is the way back when a phone is lost.
 
 ## 10. Admin CAs, device records and revocation

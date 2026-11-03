@@ -1944,7 +1944,8 @@ such as the hub, cannot forge or change it.
 - Control characters other than newline and tab, escape sequences and invalid UTF-8 are
   removed. At most 4 KiB when typing and 1 MiB when pasting.
 - A phone signs with its key in the Secure Enclave or the Android Keystore, behind Face ID
-  or the fingerprint, one prompt for a few minutes of pastes.
+  or the fingerprint: on an iPhone one prompt for a few minutes of pastes, on Android one
+  for each paste, since the Keystore checks the prompt for each signature.
 - The target shows a notification ("Pasted from iPhone", with the sender's name; the ESP32 blinks its LED)
   and keeps a log of the last 100 pastes: sender, time, length and result, never the text.
 - At most one paste a second and 30 a minute from one sender.
