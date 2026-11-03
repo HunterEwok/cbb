@@ -195,6 +195,11 @@ class EngineTest {
         var m: Member.Message
         do m = Member.decode(b.read(Member.length(b.read(4)))) while (m !is Member.Message.Admin)
         assertEquals(Member.Message.Admin(byteArrayOf(8)), m)
+        // A renewal signed later, once the user allowed it, goes to the connection that presented the leaf only.
+        phone.sendCert(byteArrayOf(2), MemberNode.Renewal(byteArrayOf(5)))
+        phone.sendCert(byteArrayOf(1), MemberNode.Renewal(byteArrayOf(6), byteArrayOf(7)))
+        do m = Member.decode(b.read(Member.length(b.read(4)))) while (m !is Member.Message.Cert)
+        assertEquals(Member.Message.Cert(byteArrayOf(6), byteArrayOf(7)), m)
         phone.closeAll()
         task.join()
         assertIs<Member.Message.Hello>(got.first())

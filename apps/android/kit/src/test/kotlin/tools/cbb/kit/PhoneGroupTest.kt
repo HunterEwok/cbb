@@ -135,6 +135,36 @@ class PhoneGroupTest {
         assertNotNull(root.records.refused(listOf(joined.welcome.cert)))
     }
 
+    /** A signer that counts its signatures. */
+    private class Counting : CertificateSigner {
+        private val key = SoftwareSigner()
+        var made = 0
+        override val publicKeyDER get() = key.publicKeyDER
+        override fun signature(data: ByteArray): ByteArray = key.signature(data).also { made++ }
+    }
+
+    /**
+     * How many signatures each action makes: on Android each asks the user,
+     * and the app's prompts say "Signature 2 of 5" by these counts
+     * (LiveGroup's Prompts), so a change here changes them too.
+     */
+    @Test
+    fun signaturesPerAction() {
+        val root = Counting()
+        val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, t0)
+        assertEquals(3, root.made, "making a group")
+        for (i in 1..2) {
+            root.made = 0
+            val (m, j) = pair(g, root, Listener(), Pairing.Info("pi", "linux"))
+            j.getOrThrow()
+            m.getOrThrow()
+            assertEquals(2, root.made, "admitting a computer")
+        }
+        root.made = 0
+        g.makeRecovery(root, t0)
+        assertEquals(2, root.made, "making the recovery key")
+    }
+
     @Test
     fun phoneWithoutAdmin() {
         val rootKey = SoftwareSigner()
