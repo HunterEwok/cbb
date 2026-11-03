@@ -451,9 +451,7 @@ func TestAwayThroughForwarder(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Put back after the services stop, which their cleanups do.
-		w, n := dialWindow, dialWindows
-		t.Cleanup(func() { dead.Close(); dialWindow, dialWindows, udpBlocked = w, n, nil })
-		dialWindow = 5 * time.Second
+		t.Cleanup(func() { dead.Close(); udpBlocked = nil })
 		udpBlocked = func(eps []netip.AddrPort) []netip.AddrPort {
 			out := make([]netip.AddrPort, len(eps))
 			for i := range out {
@@ -542,7 +540,10 @@ func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool) {
 	deck.stop()
 	h.hide(deckID)
 	deck = restartService(t, &h, deck)
-	waitUpTo(t, 30*time.Second, "the deck reaches the hub through the forwarder", func() bool {
+	// Without UDP the deck waits out a window on each endpoint before
+	// VLESS, which under the race detector on a slow runner takes a
+	// while as well.
+	waitUpTo(t, 90*time.Second, "the deck reaches the hub through the forwarder", func() bool {
 		st := deck.status(t)
 		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == piID
 	})
