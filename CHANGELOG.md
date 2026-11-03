@@ -894,7 +894,9 @@ All notable changes to cbb are documented in this file. The format follows
   (`cbb-linux-amd64.tar.gz` and the others), the Homebrew formula and the OpenWrt package
   `cbb`, the protocol's names (`_cbb._tcp`, `cbb.local`, the ALPN protocols, the `cbb://` links
   and QR codes, the signature labels), the Swift package `CBBKit` and the Kotlin package
-  `tools.cbb`. An install of 0.5 is not moved: remove it with its own uninstaller.
+  `tools.cbb`. An install of 0.5 is not moved: remove it with its own uninstaller, with
+  `--purge`, before installing 0.6, since that uninstaller also removes `/usr/local/bin/cbb`;
+  then remove its service account and its polkit rule in `/etc/polkit-1` by hand.
 - What earlier versions left behind is gone, as nothing before 0.6 is read: the installers no
   longer remove or move installs under earlier names, `get.sh` no longer finds the lite
   member's archives of 0.4 and earlier, members refuse the event `via` `iphone`, the tunnel
@@ -1157,6 +1159,18 @@ All notable changes to cbb are documented in this file. The format follows
   lines). The forwarder's unit sets `GOMEMLIMIT` and `MemoryMax`.
 - `cbb next link` drops an ESP block that names no link of its own or is longer than the
   ESP sends.
+- A computer that is the group's root says its keys are in a file, whatever its TPM or
+  Secure Enclave holds, since its group CA key is a file; `cbb new` starts its group at the
+  level files, `cbb keys hardware` is refused there, and `cbb new` says why this
+  computer's own key went to a file when its TPM failed (docs/guide/keys.md).
+- `install.sh` on Linux and FreeBSD refuses an existing account or group named `cbb` that an
+  earlier install did not make. `uninstall.sh` removes the quick actions' polkit rule, and
+  with `--purge` the service's account too.
+- The keyboard's host list takes the signal that a host forgot its pairing only from BlueZ.
+- The tray app on Linux uses godbus 5.1.0, as the service does, in place of the 5.2.2 that
+  Wails asks for.
+- On Windows, an image written to the clipboard frees its decoded pixels before the PNG is
+  made, so the memory it takes stays within the count of the image budget.
 
 ### Removed
 

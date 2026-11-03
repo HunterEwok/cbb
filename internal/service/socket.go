@@ -460,6 +460,9 @@ func (s *Service) status() *control.Status {
 	}
 	st.Device, st.Group = string(s.id.ID), group.Tag(s.id.GroupCA.Cert)
 	st.CertEndsMS = s.id.Cert.NotAfter.UnixMilli()
+	if !s.cfg.Rootless && group.KeyStoreOf(s.id.Key) == group.StoreFile {
+		st.KeyProblem = group.WhyNotHardware()
+	}
 	st.Mode = s.eng.Mode().String()
 	skews := s.eng.Skews()
 	for _, p := range s.nd.Peers() {
@@ -692,8 +695,9 @@ func (s *Service) createGroup() (*group.Identity, error) {
 		return nil, fmt.Errorf("creating the group: %w", err)
 	}
 	s.logf("cbb: created a new group %s", group.Tag(id.GroupCA.Cert))
-	// A root whose key is in a file does not pass the level hardware
-	// itself, so its group starts at the level files.
+	// A root whose keys are in a file does not pass the level hardware
+	// itself, so its group starts at the level files; a computer's group
+	// CA key is always a file for now (docs/roadmap.md, "Key levels").
 	if s.keyStore(id) == group.StoreFile {
 		if _, err := s.setKeyLevel(LevelFiles); err != nil {
 			s.logf("cbb: setting the new group's key level: %v", err)

@@ -328,9 +328,12 @@ func cmdNew(args []string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Created the group %s; this computer is its root.\n", m.Status.Group)
-	// Until the service keeps its keys in the TPM or the Secure Enclave
-	// (docs/protocol.md, section 17), the root key is a file.
+	// Until the service keeps the group's CA key in the TPM or the Secure
+	// Enclave (docs/roadmap.md, "Key levels"), the root key is a file.
 	fmt.Fprintln(stdout, "Its root key is a file here: guard this computer, since whoever copies the file can act as the group's root. A group made on a phone keeps its root key in the phone's hardware.")
+	if m.Status.KeyProblem != "" {
+		fmt.Fprintf(stdout, "This computer's own key is in a file too, although it has a TPM: %s.\n", m.Status.KeyProblem)
+	}
 	if m.Status.KeyLevel == "files" {
 		fmt.Fprintln(stdout, "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).")
 	}

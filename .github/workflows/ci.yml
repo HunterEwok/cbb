@@ -885,6 +885,19 @@ jobs:
             echo "uninstall.sh left the tmux line" >&2
             exit 1
           fi
+          if getent passwd cbb || getent group cbb; then
+            echo "uninstall.sh --purge left the account cbb" >&2
+            exit 1
+          fi
+          # An account cbb that is not the service's is never taken over.
+          sudo useradd -M -c "someone else" cbb
+          if sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" 2>"$RUNNER_TEMP/err"; then
+            echo "install.sh took over another account named cbb" >&2
+            exit 1
+          fi
+          grep -q 'not this service' "$RUNNER_TEMP/err"
+          test ! -e /usr/local/bin/cbb
+          sudo userdel cbb
       - name: install.sh on SteamOS puts it in /opt with a keep list, and uninstall.sh removes it all
         run: |
           printf 'NAME="SteamOS"\nID=steamos\n' >"$RUNNER_TEMP/os-release"

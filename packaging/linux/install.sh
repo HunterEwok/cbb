@@ -183,6 +183,22 @@ if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
 	exit 2
 fi
 
+# The account cbb gets the group's keys, the quick actions' polkit rights
+# and the control socket. One that an earlier install made says "cbb
+# service" (cbb.sysusers); another, a person's or another program's, is
+# never taken over, nor a group cbb of others without that account.
+if pw=$(getent passwd cbb); then
+	if [ "$(printf '%s\n' "$pw" | cut -d: -f5)" != "cbb service" ]; then
+		echo "install.sh: an account named cbb exists here and is not this service's (its comment is not \"cbb service\");" >&2
+		echo "it would get the group's keys. Rename or remove it, then run install.sh again." >&2
+		exit 1
+	fi
+elif gr=$(getent group cbb) && [ -n "$(printf '%s\n' "$gr" | cut -d: -f4)" ]; then
+	echo "install.sh: a group named cbb exists here with members ($(printf '%s\n' "$gr" | cut -d: -f4)), and no service account;" >&2
+	echo "they would reach the service. Rename or remove the group, then run install.sh again." >&2
+	exit 1
+fi
+
 install -d -m 0755 "${cbb%/*}"
 install -m 0755 "$bin" "$cbb"
 install -d -m 0755 "${sysusers%/*}"

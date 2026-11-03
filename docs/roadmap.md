@@ -653,6 +653,11 @@ The user picks one of three levels for the group, at its root:
    watched. A group of computers only, while they have no TPM or Secure Enclave support
    (D-44), works only at this level.
 
+- A computer that is the group's root counts as a key in a file, whatever its TPM or Secure
+  Enclave holds, since the group's CA key, which signs the records and the certificates, is
+  kept in its identity file; `cbb new` therefore starts its group at level 3. Next: make the
+  root's CA key in the TPM or the Secure Enclave, as the member and admin keys are, and
+  count such a root as hardware.
 - A device that shows signs of being broken into (a jailbreak or root, an unlocked
   bootloader, a Keystore in software, which attestation reports) counts as a key in a file,
   and the devices list marks it. A custom system whose bootloader is locked again with its

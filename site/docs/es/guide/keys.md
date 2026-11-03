@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1972e378f0c2 -->
+<!-- source: 045abbe26fef -->
 # Claves y atestación
 
 Cada dispositivo de un grupo tiene claves: una demuestra a los demás quién es, y las claves de la raíz y de los administradores añaden y quitan dispositivos. El lugar donde un dispositivo guarda sus claves decide lo que se lleva un ladrón con él. Esta página dice dónde guarda las suyas cada tipo de dispositivo, cómo puede comprobarlo el grupo y qué nivel de rigor elegir. Las reglas exactas están en el [protocolo](../protocol.md), sección 17.
@@ -22,6 +22,7 @@ Un dispositivo puede decir que su clave está en hardware, pero un programa modi
 - **Un teléfono con el gestor de arranque desbloqueado, o con un sistema firmado con su propia clave** (GrapheneOS y similares) guarda su clave en hardware, pero la comprobación no puede dar fe del sistema que la rodea. Cuenta como hardware, no como demostrado.
 - **Teléfonos revocados.** Google publica una lista de teléfonos cuyas claves de atestación se filtraron. Un servidor del proyecto, `cbb.tools`, la copia una vez al día y firma la copia. La raíz del grupo obtiene esa copia, así que tus dispositivos nunca preguntan a Google. Un teléfono de la lista baja de demostrado a hardware.
 - **Los ordenadores Linux con TPM** guardan en él sus claves de miembro y de administrador, así que las claves cuentan como hardware. Un TPM cuyo fabricante escribió su certificado en el chip (los chips de Infineon, ST y Nuvoton, como las placas TPM de la Raspberry Pi) lo demuestra a la raíz del grupo, que entonces registra el ordenador como **demostrado**; no se pregunta nada al fabricante. Los TPM de firmware de Intel y AMD suelen guardar su certificado en el servidor del fabricante, así que siguen siendo hardware. Los **dispositivos Apple** (App Attest) todavía no demuestran sus claves.
+- **Un ordenador que creó el grupo**, su raíz, cuenta igualmente como claves en un archivo: la clave raíz del grupo, que firma todo lo que el grupo decide, es por ahora un archivo en un ordenador. Ese grupo empieza en el nivel «archivos permitidos» (abajo); un grupo creado en un teléfono guarda su clave raíz en el hardware del teléfono.
 
 ## Los tres niveles
 

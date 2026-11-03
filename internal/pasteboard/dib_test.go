@@ -337,6 +337,13 @@ func TestImageBytesCoverDecoding(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkImageBytes(t, "gray JPEG", clip.TypeJPEG, b.Bytes())
+	// Large enough that a plane left out of the count is more than the
+	// readers' other buffers.
+	b.Reset()
+	if err := jpeg.Encode(&b, image.NewGray(image.Rect(0, 0, 640, 480)), nil); err != nil {
+		t.Fatal(err)
+	}
+	checkImageBytes(t, "large gray JPEG", clip.TypeJPEG, b.Bytes())
 	// image/jpeg keeps every block's coefficients of a progressive JPEG, and
 	// converts the planes of an unusual layout or of four components.
 	files, err := filepath.Glob("testdata/*.jpg")

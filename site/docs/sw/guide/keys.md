@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1972e378f0c2 -->
+<!-- source: 045abbe26fef -->
 # Funguo na uthibitisho
 
 Kila kifaa katika kikundi kina funguo: kimoja huthibitisha kwa vingine kifaa ni nani, na funguo za mzizi na wasimamizi huongeza na kuondoa vifaa. Mahali kifaa kinapoweka funguo zake huamua mwizi anapata nini pamoja na kifaa. Ukurasa huu unasema kila aina ya kifaa huziweka wapi, kikundi kinawezaje kukagua, na kiwango gani cha ukali cha kuchagua. Kanuni kamili ziko katika [itifaki](../protocol.md), sehemu ya 17.
@@ -22,6 +22,7 @@ Kifaa kinaweza kusema ufunguo wake uko kwenye maunzi, lakini programu iliyorekeb
 - **Simu yenye bootloader iliyofunguliwa, au mfumo uliosainiwa kwa ufunguo wake mwenyewe** (GrapheneOS na kadhalika) huweka ufunguo wake kwenye maunzi, lakini ukaguzi hauwezi kudhamini mfumo unaouzunguka. Huhesabiwa kama maunzi, si imethibitishwa.
 - **Simu zilizofutwa.** Google huchapisha orodha ya simu ambazo funguo zao za uthibitisho zilivuja. Seva ya mradi, `cbb.tools`, huinakili mara moja kwa siku na kusaini nakala. Mzizi wa kikundi hupakua nakala hiyo, kwa hiyo vifaa vyako havimuulizi Google kamwe. Simu iliyo kwenye orodha hushuka kutoka imethibitishwa hadi maunzi.
 - **Kompyuta za Linux zenye TPM** huweka ndani yake funguo za mwanachama na msimamizi, kwa hiyo funguo huhesabiwa kama maunzi. TPM ambayo mtengenezaji wake aliandika cheti chake ndani ya chipu (chipu za Infineon, ST na Nuvoton, kama bodi za TPM za Raspberry Pi) huthibitisha hilo kwa mzizi wa kikundi, ambao kisha hurekodi kompyuta kuwa **imethibitishwa**; mtengenezaji haulizwi chochote. TPM za firmware za Intel na AMD mara nyingi huweka cheti chao kwenye seva ya mtengenezaji, kwa hiyo hubaki maunzi. **Vifaa vya Apple** (App Attest) bado havithibitishi funguo zao.
+- **Kompyuta iliyounda kikundi**, yaani mzizi wake, bado huhesabiwa kama funguo kwenye faili: ufunguo wa mzizi wa kikundi, unaosaini kila kitu ambacho kikundi huamua, kwa sasa ni faili kwenye kompyuta. Kikundi kama hicho huanza katika kiwango cha "faili zinaruhusiwa" (hapa chini); kikundi kilichoundwa kwenye simu huweka ufunguo wake wa mzizi kwenye maunzi ya simu.
 
 ## Viwango vitatu
 

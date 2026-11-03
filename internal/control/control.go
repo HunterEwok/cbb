@@ -245,6 +245,9 @@ type Status struct {
 	// KeyLevel is the group's key level: which keys may be its root, an
 	// admin or a hub (proven, hardware or files).
 	KeyLevel string `json:"key_level,omitempty"`
+	// KeyProblem says why this device's own key is in a file although the
+	// machine has a TPM it may use; empty when nothing failed.
+	KeyProblem string `json:"key_problem,omitempty"`
 	// Removed says that the group's records revoke this device: its
 	// members refuse it until it pairs again.
 	Removed bool `json:"removed,omitempty"`
