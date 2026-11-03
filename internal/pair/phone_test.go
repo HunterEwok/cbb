@@ -31,9 +31,14 @@ func phoneInfo(t *testing.T) (Info, *ecdsa.PrivateKey) {
 // TestPhoneJoinsTheRoot checks that a phone joins a computer's group
 // through its root (docs/protocol.md, section 6, "A phone joins a
 // computer's group"): the Welcome carries an admin CA under the root for
-// the admin key the phone offered, and the result names it.
+// the admin key the phone offered, and the result names it, when the
+// window was opened to make admins (cbb pair -admin).
 func TestPhoneJoinsTheRoot(t *testing.T) {
-	f := newFixture(t)
+	root, err := group.Create(t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := fixtureWith(t, root, true)
 	info, key := phoneInfo(t)
 	r, served := startRaw(t, f, info, f.code)
 	last := r.confirm()
@@ -63,6 +68,25 @@ func TestPhoneJoinsTheRoot(t *testing.T) {
 	}
 	writeFrame(r.tc, &frame{OK: true})
 	<-served
+}
+
+// TestPhoneAdminNeedsTheWindow checks that a plain window of the root
+// refuses a phone that offers an admin key: the code alone makes no admin.
+func TestPhoneAdminNeedsTheWindow(t *testing.T) {
+	f := newFixture(t)
+	info, _ := phoneInfo(t)
+	r, served := startRaw(t, f, info, f.code)
+	if last := r.confirm(); last.Welcome != nil || last.Error != "refused" {
+		t.Errorf("a plain window's answer to a phone with an admin key: %+v", last)
+	}
+	if err := <-served; !errors.Is(err, ErrAdminNotAllowed) {
+		t.Errorf("Serve: %v", err)
+	}
+	// Only the root opens a window that makes admins.
+	admin, _ := computerAdmin(t)
+	if _, err := Open(admin, NewCode(), Options{Admins: true}); !errors.Is(err, ErrPhoneNeedsRoot) {
+		t.Errorf("an admin computer opened a window for admins: %v", err)
+	}
 }
 
 // TestPhoneNeedsTheRoot checks that an admin computer refuses a phone:

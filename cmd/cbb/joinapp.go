@@ -33,13 +33,11 @@ var appFilePoll = time.Second
 // to cancel. The file must exist already and be a regular file, so that cbb,
 // which runs as the administrator, only ever writes over the app's own.
 func joinForApp(path string, stdout, stderr io.Writer) int {
-	fi, err := os.Lstat(path)
+	f, err := openAppFile(path)
 	if err != nil {
 		return fail(stderr, err)
 	}
-	if !fi.Mode().IsRegular() {
-		return fail(stderr, fmt.Errorf("%s is not a regular file", path))
-	}
+	defer f.Close()
 	c, text, expires, err := listenForPhone()
 	if err != nil {
 		return fail(stderr, err)
@@ -53,11 +51,10 @@ func joinForApp(path string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
-	if err != nil {
-		return fail(stderr, err)
+	err = f.Truncate(0)
+	if err == nil {
+		_, err = f.Write(append(data, '\n'))
 	}
-	_, err = f.Write(append(data, '\n'))
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -88,4 +85,28 @@ func joinForApp(path string, stdout, stderr io.Writer) int {
 			}
 		}
 	}
+}
+
+// openAppFile opens the app's file for writing once, at the start, and
+// keeps the handle: a regular file, the one the path named when cbb looked,
+// and never one a link that was put in its place since leads to, since cbb
+// runs as the administrator and the file's folder may be the user's.
+func openAppFile(path string) (*os.File, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|noFollow, 0)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(fi, opened) {
+		f.Close()
+		return nil, fmt.Errorf("%s changed while cbb opened it", path)
+	}
+	return f, nil
 }

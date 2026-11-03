@@ -98,8 +98,11 @@ var (
 	ErrDeclined  = errors.New("pair: the admin did not confirm the device")
 	// ErrPhoneNeedsRoot is a phone that tried to join through an admin
 	// computer: only the group's root admits a phone.
-	ErrPhoneNeedsRoot = errors.New("pair: a phone joins a computer's group only through the group's root (cbb pair there)")
-	ErrTaken          = errors.New("pair: a device with this device ID is in the group already; join with a new ID")
+	ErrPhoneNeedsRoot = errors.New("pair: a phone joins a computer's group only through the group's root (cbb pair -admin there)")
+	// ErrAdminNotAllowed is a phone that offered an admin key to a window
+	// that makes no admins: only cbb pair -admin on the root opens one.
+	ErrAdminNotAllowed = errors.New("pair: the phone asked to be an admin, and this pairing window makes no admins; to make it one, run cbb pair -admin on the group's root")
+	ErrTaken           = errors.New("pair: a device with this device ID is in the group already; join with a new ID")
 )
 
 // spentError is an attempt that failed after the joiner sent its

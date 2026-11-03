@@ -926,13 +926,15 @@ plus the browse time.
 ### A phone joins a computer's group
 
 A phone joins a group that a computer created through the group's root, as a computer joins
-(the joiner dials, above): `cbb pair` on the root opens a window, and the phone finds it by mDNS
-(`p=1`) and takes the six-digit code the user types. Its ADa says `ios` or `android` and carries
-`admin_key`; the root's Welcome then carries `admin_ca` for that key, and the root signs the
-phone's `device` record with role `phone` that names the admin key in `admin` with the powers of
-an admin, `takeover` among them. An admin computer that is not the root refuses a phone after the
-key confirmation, with `{"error": "refused"}`. A phone that offers no admin key, as a TV, joins
-as a member. This is how a new phone takes over a computer's group, as after `cbb recovery`:
+(the joiner dials, above): `cbb pair -admin` on the root opens a window that may make admins,
+and the phone finds it by mDNS (`p=1`) and takes the six-digit code the user types. Its ADa says
+`ios` or `android` and carries `admin_key`; the root's Welcome then carries `admin_ca` for that
+key, and the root signs the phone's `device` record with role `phone` that names the admin key
+in `admin` with the powers of an admin, `takeover` among them (the table in section 10, "Who
+signs what"). The user chooses that the window makes an admin, never the joiner: any other
+window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
+confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
+phone that offers no admin key, as a TV, joins any window as a member. This is how a new phone takes over a computer's group, as after `cbb recovery`:
 it joins, the root names its admin key in a `handover` record (`cbb handover`, section 10,
 "Handing the group over"), and its claim takes effect at once.
 
@@ -1179,6 +1181,7 @@ Header fields (all omitted when empty):
 | `value` | string | `config`: the setting's new value; `remote add`: the TV's kind, `androidtv` (the default), `appletv` or `roku`; `remote pastes`: `on` or `off` |
 | `detail` | string | with `error`: the underlying error, which the client shows with error details on (`CBB_DEBUG=1`) |
 | `new_token` | bool | `pair-phone`: revoke every shortcut's token first |
+| `admins` | bool | `pair`, on the group's root: the window may make a phone with the app an admin (`cbb pair -admin`) |
 | `forwarder`, `forwarder_key` | strings | `away hub`: the forwarder's address and its key, 44 characters of base64 |
 | `relay`, `relay_key` | strings | `away relay`: the relay's address and its key; needs `consent` |
 | `obfuscate` | bool | `away hub`: speak AmneziaWG instead of plain WireGuard (section 11) |
@@ -1584,7 +1587,8 @@ write:
 
 | Admin | `powers` | `commands` |
 |-------|----------|-----------|
-| a phone | all eight | all |
+| a phone, admitted by a phone | all eight | all |
+| a phone, admitted by a root computer (`cbb pair -admin`) | `admit`, `renew`, `remove`, `freeze`, `hub`, `takeover` | all |
 | a computer | `admit`, `renew`, `remove`, `freeze`, `hub`, and `takeover` when the root is a computer | all |
 | a watch | `remove`, `freeze` | `paste-off`, `actions-off`, `away-off`, `action` |
 
@@ -1846,6 +1850,18 @@ it, a second claim or a removal of the claimant stops the group instead of choos
 once a new root removes it, nothing it signs counts under that root. What it can do without
 the root, by pretending it had not seen a record or by removing the claimant under its old
 admin CA, is stop the group: never take it.
+
+**Known limits in 0.6.** Two cases are accepted for 0.6; the apps and `cbb status` show a
+stop:
+
+- A removed admin that signs a claim pretending not to have seen another claim, or a removal
+  the old root signs late, after a new root that had not seen the removed admin's claim took
+  over, leaves the group with one root and a full stop. Nobody is removed by it, but the
+  taker's takeover is undone, and the new root's `resolve` does not end the stop: only the
+  old root's does. When the old root is lost too, the group is set up again.
+- A removal that the old root signs after a handover took effect is cut: it does not count,
+  and the removed admin stays until the new root removes it: after a handover, remove on the
+  new root.
 
 #### The recovery key
 

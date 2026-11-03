@@ -161,6 +161,7 @@ type Header struct {
 	Addrs        []string `json:"addrs,omitempty"`       // where a listening join waits, for its QR code
 	Listen       bool     `json:"listen,omitempty"`      // join: wait for a member to dial this device
 	NewToken     bool     `json:"new_token,omitempty"`   // pair-phone: revoke every shortcut's token first
+	Admins       bool     `json:"admins,omitempty"`      // pair: the window may make a phone an admin (on the root)
 	Name         string   `json:"name,omitempty"`        // a device name
 	NewName      string   `json:"new_name,omitempty"`    // rename: the device's new name
 	Device       string   `json:"device,omitempty"`      // mode: the device, by name or ID, whose mode an admin sets, this device if empty; away move: the new hub

@@ -26,7 +26,7 @@
     <string name="join_tv_hint">Телевизор входит в группу вашего телефона: он показывает QR-код, а телефон его сканирует.</string>
     <string name="join_computer">Моя группа создана на компьютере</string>
     <string name="join_computer_title">Войти в группу компьютера</string>
-    <string name="join_computer_hint">На компьютере, который создал группу, выполните cbb pair и введите шестизначный код, который он покажет. Телефон должен быть в той же сети.</string>
+    <string name="join_computer_hint">На компьютере, который создал группу, выполните cbb pair -admin и введите шестизначный код, который он покажет. Телефон должен быть в той же сети.</string>
     <string name="join_computer_code">Код</string>
     <string name="join_computer_go">Войти</string>
     <string name="join_computer_searching">Ищу компьютер…</string>
@@ -86,11 +86,11 @@
     <string name="error_wrong_code">Код не совпал. Запустите cbb pair на компьютере ещё раз и отсканируйте новый код.</string>
     <string name="error_refused">Компьютер отказал. Запустите на нём cbb pair ещё раз.</string>
     <string name="error_join">Не удалось войти в группу другого телефона. Попробуйте снова.</string>
-    <string name="error_no_window">Ни один компьютер не ждёт телефон. Выполните cbb pair на компьютере, который создал группу, и попробуйте снова.</string>
+    <string name="error_no_window">Ни один компьютер не ждёт телефон. Выполните cbb pair -admin на компьютере, который создал группу, и попробуйте снова.</string>
     <string name="error_two_windows">Сразу два компьютера ждут устройство. Закройте cbb pair на одном из них и попробуйте снова.</string>
-    <string name="error_needs_root">Этот компьютер не может добавить телефон. Выполните cbb pair на компьютере, который создал группу.</string>
+    <string name="error_needs_root">Этот компьютер не открыл окно для телефона. Выполните cbb pair -admin на компьютере, который создал группу.</string>
     <string name="error_join_wrong_code">Код не совпал. Проверьте код на экране компьютера и введите его снова.</string>
-    <string name="error_join_computer">Не удалось войти в группу компьютера. Выполните на нём cbb pair ещё раз.</string>
+    <string name="error_join_computer">Не удалось войти в группу компьютера. Выполните на нём cbb pair -admin ещё раз.</string>
     <string name="error_no_screen_lock">Сначала включите блокировку экрана на телефоне: она нужна ключам группы.</string>
     <string name="error_not_authenticated">Отпечаток, лицо или блокировка экрана не подтверждены, поэтому ничего не изменилось.</string>
     <string name="error_generic">Что-то пошло не так. Попробуйте ещё раз.</string>

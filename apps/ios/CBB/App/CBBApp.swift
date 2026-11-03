@@ -12,6 +12,8 @@ struct CBBApp: App {
         UNUserNotificationCenter.current().delegate = ForegroundNotifications.shared
         // Early, for a watch that asks while the app is not running.
         WatchLink.shared.start()
+        // A recovery sheet's PDF that an ended app left behind.
+        RecoveryPage.removePDF()
     }
 
     @Environment(\.scenePhase) private var scenePhase

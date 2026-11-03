@@ -883,6 +883,18 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- A phone with the app joins a computer's group as an admin only through `cbb pair -admin`
+  on the group's root, which first says what an admin may do; a plain `cbb pair` and an
+  invitation refuse a phone that asks to be an admin, and the apps name the new command.
+  The service logs an admission as an admin with its powers.
+- `cbb recovery` reads the recovery key without showing it, and takes the key's admin CA only
+  as a root of the group issued it.
+- `cbb pair -app` opens the app's file once, refusing a link, and writes through that handle.
+- The iPhone app deletes the recovery sheet's PDF when it goes to the background and at
+  launch, and hides the sheet in the app switcher; the Android app keeps the restore screen
+  out of screenshots and the recent apps.
+- docs/protocol.md section 10 and the lost device guide describe the two takeover cases that
+  only the old root ends in 0.6.
 - The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
   Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
   installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the stores. The apps' identifiers

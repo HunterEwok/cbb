@@ -80,9 +80,15 @@ func newFixture(t *testing.T) *fixture {
 
 func fixtureFor(t *testing.T, admin *group.Identity) *fixture {
 	t.Helper()
+	return fixtureWith(t, admin, false)
+}
+
+// fixtureWith opens the window with Options.Admins set to admins.
+func fixtureWith(t *testing.T, admin *group.Identity, admins bool) *fixture {
+	t.Helper()
 	clk := &clock{up: time.Hour}
 	code := NewCode()
-	w, err := Open(admin, code, Options{Now: func() time.Time { return t0 }, Uptime: clk.uptime, AfterFunc: clk.afterFunc})
+	w, err := Open(admin, code, Options{Now: func() time.Time { return t0 }, Uptime: clk.uptime, AfterFunc: clk.afterFunc, Admins: admins})
 	if err != nil {
 		t.Fatal(err)
 	}

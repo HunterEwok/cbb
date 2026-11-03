@@ -48,6 +48,10 @@ type Options struct {
 	// the admin's answer, and should stop when ctx ends.
 	Confirm     func(ctx context.Context, r Request) error
 	ConfirmWait time.Duration
+	// Admins lets the window make a phone that offers an admin key an
+	// admin (cbb pair -admin), on the group's root only; any other window
+	// refuses such a phone, so that the code alone never makes an admin.
+	Admins bool
 
 	Now       func() time.Time                        // for the certificates; time.Now if nil
 	Uptime    func() time.Duration                    // for the window's lifetime; uptime.Now if nil
@@ -64,6 +68,7 @@ type Window struct {
 	taken   func(group.DeviceID) bool
 	confirm func(context.Context, Request) error
 	wait    time.Duration // how long confirm may take
+	admins  bool          // makes a phone that offers an admin key an admin
 	now     func() time.Time
 	uptime  func() time.Duration
 
@@ -109,6 +114,9 @@ func Open(admin *group.Identity, code string, opt Options) (*Window, error) {
 	if ca, _ := admin.Signer(); ca == nil {
 		return nil, errors.New("pair: only an admin can admit devices: the computer that created the group, or a member its root made an admin")
 	}
+	if opt.Admins && !admin.IsRoot() {
+		return nil, ErrPhoneNeedsRoot
+	}
 	switch {
 	case opt.Secret != nil && len(opt.Secret) < MinSecret:
 		return nil, errors.New("pair: the secret is too short")
@@ -133,7 +141,7 @@ func Open(admin *group.Identity, code string, opt Options) (*Window, error) {
 	if opt.AfterFunc == nil {
 		opt.AfterFunc = func(d time.Duration, f func()) func() bool { return time.AfterFunc(d, f).Stop }
 	}
-	w := &Window{admin: admin, code: []byte(code), records: opt.Records, claims: opt.ClaimTimes, taken: opt.Taken, confirm: opt.Confirm, wait: opt.ConfirmWait,
+	w := &Window{admin: admin, code: []byte(code), records: opt.Records, claims: opt.ClaimTimes, taken: opt.Taken, confirm: opt.Confirm, wait: opt.ConfirmWait, admins: opt.Admins,
 		now: opt.Now, uptime: opt.Uptime, expires: opt.Uptime() + lifetime, done: make(chan struct{})}
 	stop := opt.AfterFunc(lifetime, w.expire)
 	w.mu.Lock()
@@ -506,6 +514,12 @@ func (w *Window) serve(ctx context.Context, conn *tls.Conn, memberFirst bool) (r
 	if info.Phone() && !w.admin.IsRoot() {
 		writeFrame(conn, &frame{Error: "refused"})
 		return nil, true, ErrPhoneNeedsRoot
+	}
+	// The code alone makes no admin: only a window that the user opened
+	// for one (cbb pair -admin) certifies an admin key.
+	if info.AdminKey != nil && !w.admins {
+		writeFrame(conn, &frame{Error: "refused"})
+		return nil, true, ErrAdminNotAllowed
 	}
 	// The joiner knows the code. Certify the key it proved it holds in the
 	// TLS handshake.

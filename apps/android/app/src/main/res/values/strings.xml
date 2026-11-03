@@ -29,7 +29,7 @@
     <string name="join_tv_hint">This TV joins the group of your phone: it shows a QR code, and the phone scans it.</string>
     <string name="join_computer">My group was made on a computer</string>
     <string name="join_computer_title">Join a computer\'s group</string>
-    <string name="join_computer_hint">On the computer that created the group, run cbb pair, then type the six-digit code it shows. Keep this phone on the same network.</string>
+    <string name="join_computer_hint">On the computer that created the group, run cbb pair -admin, then type the six-digit code it shows. Keep this phone on the same network.</string>
     <string name="join_computer_code">Code</string>
     <string name="join_computer_go">Join</string>
     <string name="join_computer_searching">Looking for the computer…</string>
@@ -89,11 +89,11 @@
     <string name="error_wrong_code">The code did not match. Run cbb pair on the computer again and scan the new code.</string>
     <string name="error_refused">The computer refused. Run cbb pair on it again.</string>
     <string name="error_join">The other phone\'s group could not be joined. Try again.</string>
-    <string name="error_no_window">No computer is waiting for a phone. Run cbb pair on the computer that created the group, then try again.</string>
+    <string name="error_no_window">No computer is waiting for a phone. Run cbb pair -admin on the computer that created the group, then try again.</string>
     <string name="error_two_windows">Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.</string>
-    <string name="error_needs_root">This computer cannot add a phone. Run cbb pair on the computer that created the group.</string>
+    <string name="error_needs_root">This computer did not open its window for a phone. Run cbb pair -admin on the computer that created the group.</string>
     <string name="error_join_wrong_code">The code did not match. Check the code on the computer\'s screen and type it again.</string>
-    <string name="error_join_computer">The computer\'s group could not be joined. Run cbb pair on it again.</string>
+    <string name="error_join_computer">The computer\'s group could not be joined. Run cbb pair -admin on it again.</string>
     <string name="error_no_screen_lock">Set a screen lock on this phone first: the group\'s keys need it.</string>
     <string name="error_not_authenticated">The fingerprint, face or screen lock was not confirmed, so nothing changed.</string>
     <string name="error_generic">Something went wrong. Try again.</string>
