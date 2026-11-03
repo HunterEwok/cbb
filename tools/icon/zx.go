@@ -124,9 +124,9 @@ func zxDraw() zxShapes {
 			s.board[i] = s.boardDist[i] < 0
 			// The page on the cells' grid, the clip's cells cut out of it.
 			s.page[i] = x >= 16 && x < 96 && y >= 32 && y < 128 && !(x >= 24 && x < 88 && y < 40)
-			s.bar[i] = fy >= 15 && fy < 39.5 && math.Abs(fx-56.5) < zxClipWidth(fy)
-			s.tab[i] = fy < 17 && (math.Hypot(fx-56.5, fy-10.5) < 9 ||
-				fy >= 10.5 && math.Abs(fx-56.5) < 9+(fy-10.5)*0.5)
+			in := fy >= 1 && fy < 39.5 && math.Abs(fx-56.5) < zxClipWidth(fy)
+			s.bar[i] = in && fy >= 16
+			s.tab[i] = in && fy < 16
 			hole := math.Hypot(fx-56.5, fy-10.5) < 3.8
 			s.clip[i] = (s.bar[i] || s.tab[i]) && !hole
 		}
@@ -242,13 +242,21 @@ func zxPercentile(sorted []float64, p float64) float64 {
 	return sorted[i] + (at-float64(i))*(sorted[i+1]-sorted[i])
 }
 
-// zxClipWidth is half the clip's width at fy: narrow at its top, widening
-// in a curve to its lip, the corners rounded.
+// zxClipWidth is half the clip's width at fy, as on the icon: the round
+// hump, its neck, the shoulders falling in a smooth S to the bar, and the
+// bar widening a little to its lip, the lip's corners rounded.
 func zxClipWidth(fy float64) float64 {
-	t := (fy - 15) / 24.5
-	w := 21 + 11*math.Pow(math.Max(0, t), 1.6)
-	w -= math.Max(0, 17-fy)*1.2 + math.Max(0, fy-37)*1.5
-	return w
+	switch {
+	case fy < 10.5:
+		d := 10.5 - fy
+		return math.Sqrt(math.Max(0, 9.5*9.5-d*d))
+	case fy < 16:
+		return 9.5 + (fy-10.5)*0.3
+	case fy < 26:
+		t := (fy - 16) / 10
+		return 11.15 + 18.85*t*t*(3-2*t)
+	}
+	return 30 + 2*(fy-26)/13.5 - math.Max(0, fy-37.5)*1.5
 }
 
 // zxClipLight is the clip's light, as on the icon: a polished bar, round
@@ -266,7 +274,7 @@ func zxClipLight(s zxShapes, x, y int) float64 {
 	prof := math.Max(0, math.Min(1, math.Cos((u-0.33)*2.9)))
 	v := math.Max(0, math.Min(1, (fy-16)/20))
 	f := 0.12 + 0.88*math.Pow(prof, 1.3)*(1-0.35*v)
-	if fy < 19 {
+	if fy < 23 {
 		f += 0.2
 	}
 	if fy >= 36 {
@@ -325,9 +333,10 @@ func zxLogoOutput() (map[string][]byte, error) {
 						on = s.page[i] && px[i].ink > 0.45
 					case zxClip:
 						on = s.clip[i] && !s.clipEdge[i] && zxClipLight(s, x, y) > th
-						// The board in the clip's cells, in the clip's colour: the clash.
+						// The board in the clip's cells, in the clip's colour (the clash),
+						// thinner as the clip's colour is lighter.
 						if !s.clip[i] && s.board[i] && !s.page[i] && !s.clipEdge[i] {
-							on = lo+(hi-lo)*light[i] > th && !zxNextTo(s.clip, x, y)
+							on = 0.6*(lo+(hi-lo)*light[i]) > th && !zxNextTo(s.clip, x, y)
 						}
 					case zxBoard:
 						on = s.board[i] && !s.page[i] && !s.clip[i] && lo+(hi-lo)*light[i] > th
