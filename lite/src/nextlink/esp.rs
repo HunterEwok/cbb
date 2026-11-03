@@ -12,8 +12,13 @@ use std::collections::VecDeque;
 
 /// The ESP's connections are numbered 0 to 4.
 pub const LINKS: u8 = 5;
-/// The most bytes one AT+CIPSEND takes.
-const SEND_MAX: usize = 2048;
+/// The most bytes of a stream in one AT+CIPSEND. The connections take
+/// turns a block each, and at the 19200 baud of `.cbb net` a block takes a
+/// quarter of a second, so one connection's burst never holds back
+/// another's few bytes for long: the members' pings come through in time.
+const SEND_MAX: usize = 512;
+/// The most bytes one AT+CIPSEND takes (a datagram goes whole).
+const DATAGRAM_MAX: usize = 2048;
 
 /// What happened on the ESP.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +83,14 @@ pub struct Esp {
     events: Vec<Event>,
     ready: bool,
     serve: Option<u16>,
+    /// The blocks waiting to be sent, by connection; one AT+CIPSEND each.
+    sends: [VecDeque<Vec<u8>>; LINKS as usize],
+    /// The connection whose block goes next, if it has one.
+    turn: u8,
+    /// Counts the ESP's answers, so a wait is timed from the last one.
+    answers: u64,
+    /// The dial in flight found its slot still open.
+    already: bool,
 }
 
 impl Default for Esp {
@@ -99,13 +112,30 @@ impl Esp {
             events: Vec::new(),
             ready: false,
             serve: None,
+            sends: Default::default(),
+            turn: 0,
+            answers: 0,
+            already: false,
         };
         e.start();
         e
     }
 
     fn start(&mut self) {
-        self.queue.clear();
+        // What was still to do is lost: a dial waiting for its turn fails,
+        // and so does a connection whose bytes did not all go out, as its
+        // stream would go on with a gap.
+        for cmd in std::mem::take(&mut self.queue) {
+            if let Cmd::Dial { id, .. } = cmd {
+                self.events.push(Event::Failed(id, "the ESP started again".into()));
+            }
+        }
+        for (id, q) in self.sends.iter_mut().enumerate() {
+            if !q.is_empty() {
+                q.clear();
+                self.events.push(Event::Failed(id as u8, "the ESP started again".into()));
+            }
+        }
         self.current = None;
         self.wait = Wait::None;
         self.ready = false;
@@ -146,13 +176,29 @@ impl Esp {
         self.next();
     }
 
-    /// Sends bytes on a connection, in blocks the ESP takes; one Sent
-    /// follows each block.
+    /// Sends bytes of a stream on a connection, in blocks of at most
+    /// SEND_MAX, the last one filled up first; one Sent follows each block.
     pub fn send(&mut self, id: u8, data: &[u8]) {
         assert!(id < LINKS);
-        for chunk in data.chunks(SEND_MAX) {
-            self.queue.push_back(Cmd::Send { id, data: chunk.to_vec() });
+        let q = &mut self.sends[id as usize];
+        let mut data = data;
+        if let Some(last) = q.back_mut() {
+            let n = (SEND_MAX.saturating_sub(last.len())).min(data.len());
+            last.extend_from_slice(&data[..n]);
+            data = &data[n..];
         }
+        q.extend(data.chunks(SEND_MAX).map(<[u8]>::to_vec));
+        self.next();
+    }
+
+    /// Sends a datagram on a connection, whole, in one block (one that is
+    /// too long for the ESP is dropped, as UDP may); one Sent follows.
+    pub fn send_datagram(&mut self, id: u8, data: &[u8]) {
+        assert!(id < LINKS);
+        if data.is_empty() || data.len() > DATAGRAM_MAX {
+            return;
+        }
+        self.sends[id as usize].push_back(data.to_vec());
         self.next();
     }
 
@@ -183,9 +229,21 @@ impl Esp {
         self.start();
     }
 
+    /// Whether a dial waits for the ESP's answer.
+    pub fn dialing(&self) -> bool {
+        matches!(self.current, Some(Cmd::Dial { .. }))
+    }
+
     /// Whether a command waits for the ESP's answer.
     pub fn busy(&self) -> bool {
         self.wait != Wait::None
+    }
+
+    /// How many answers (a prompt, OK, SEND OK, an error) the ESP has
+    /// given: while commands follow each other, the link times only the
+    /// wait for the next answer, not the whole busy stretch.
+    pub fn answers(&self) -> u64 {
+        self.answers
     }
 
     /// Takes bytes from the ESP.
@@ -216,6 +274,7 @@ impl Esp {
                 self.out.extend_from_slice(data);
             }
             self.wait = Wait::SendOk;
+            self.answers += 1;
             return true;
         }
         let Some(end) = self.buf.windows(2).position(|w| w == b"\r\n") else {
@@ -255,7 +314,11 @@ impl Esp {
         if let Some((id, what)) = link_line(line) {
             match what {
                 "CONNECT" => self.events.push(Event::Connected(id)),
-                "CLOSED" => self.events.push(Event::Closed(id)),
+                "CLOSED" => {
+                    // What waited for it cannot go out any more.
+                    self.sends[id as usize].clear();
+                    self.events.push(Event::Closed(id));
+                }
                 // CONNECT FAIL: the ERROR after it ends the dial.
                 _ => {}
             }
@@ -268,7 +331,10 @@ impl Esp {
                 }
                 self.start();
             }
-            "OK" | "ALREADY CONNECTED" | "no change" if self.wait == Wait::Answer => self.done(),
+            // A dial of a slot the ESP still holds from before; its OK or
+            // ERROR follows.
+            "ALREADY CONNECTED" if self.wait == Wait::Answer => self.already = true,
+            "OK" | "no change" if self.wait == Wait::Answer => self.done(),
             "OK" if self.wait == Wait::Prompt => {} // AT+CIPSEND's OK before its prompt
             "SEND OK" if self.wait == Wait::SendOk => {
                 if let Some(Cmd::Send { id, .. }) = self.current {
@@ -281,7 +347,31 @@ impl Esp {
         }
     }
 
+    /// A dial that found its slot still open (a restart of the link or of
+    /// the setup): UDP goes on in it, while a TCP stream from before cannot
+    /// carry a new one, so it closes and the dial fails, to be tried again.
+    fn already_open(&mut self) -> bool {
+        if !std::mem::take(&mut self.already) {
+            return false;
+        }
+        let Some(Cmd::Dial { id, line }) = self.current.take() else { return false };
+        self.answers += 1;
+        if line.contains("\"UDP\"") {
+            self.events.push(Event::Connected(id));
+        } else {
+            self.events.push(Event::Failed(id, "the ESP's connection was still open".into()));
+            self.queue.push_front(Cmd::Close(id));
+        }
+        self.wait = Wait::None;
+        self.next();
+        true
+    }
+
     fn done(&mut self) {
+        if self.already_open() {
+            return;
+        }
+        self.answers += 1;
         if matches!(self.current, Some(Cmd::Mux)) {
             self.ready = true;
             self.events.push(Event::Ready);
@@ -292,11 +382,23 @@ impl Esp {
     }
 
     fn failed(&mut self, why: &str) {
+        if self.already_open() {
+            return;
+        }
+        self.answers += 1;
         match self.current.take() {
+            // Connections are open (`link is builded`), so several were
+            // taken before: after a restart of the link or of the setup
+            // with the ESP's connections still up.
+            Some(Cmd::Mux) => {
+                self.ready = true;
+                self.events.push(Event::Ready);
+            }
             Some(Cmd::Dial { id, .. }) => self.events.push(Event::Failed(id, why.into())),
             Some(Cmd::Send { id, .. }) => {
                 // The bytes were lost: the connection cannot go on.
                 self.queue.retain(|c| cmd_id(c) != Some(id));
+                self.sends[id as usize].clear();
                 self.queue.push_front(Cmd::Close(id));
             }
             // Already closed (ERROR to a close): no Closed came, so say it.
@@ -308,11 +410,20 @@ impl Esp {
         self.next();
     }
 
+    /// The next command: the setup, dials and closes first, except a close
+    /// whose connection still has blocks to send; else the next block, the
+    /// connections taking turns.
     fn next(&mut self) {
         if self.wait != Wait::None {
             return;
         }
-        let Some(cmd) = self.queue.pop_front() else {
+        let first = match self.queue.front() {
+            Some(Cmd::Close(id)) => self.sends[*id as usize].is_empty(),
+            Some(_) => true,
+            None => false,
+        };
+        let cmd = if first { self.queue.pop_front() } else { self.block().or_else(|| self.queue.pop_front()) };
+        let Some(cmd) = cmd else {
             return;
         };
         let (line, wait) = match &cmd {
@@ -329,6 +440,24 @@ impl Esp {
         self.out.extend_from_slice(b"\r\n");
         self.current = Some(cmd);
         self.wait = wait;
+        self.already = false;
+    }
+}
+
+impl Esp {
+    /// The next connection's block, after the one whose turn it was.
+    fn block(&mut self) -> Option<Cmd> {
+        if !self.ready {
+            return None;
+        }
+        for i in 0..LINKS {
+            let id = (self.turn + i) % LINKS;
+            if let Some(data) = self.sends[id as usize].pop_front() {
+                self.turn = (id + 1) % LINKS;
+                return Some(Cmd::Send { id, data });
+            }
+        }
+        None
     }
 }
 
@@ -475,5 +604,118 @@ mod tests {
         assert_eq!(e.take_output().len(), SEND_MAX);
         e.input(b"\r\nSEND OK\r\n");
         assert_eq!(e.take_output(), b"AT+CIPSEND=0,1\r\n");
+    }
+
+    /// Sends the block in flight: its prompt, then SEND OK.
+    fn sent(e: &mut Esp) -> (String, usize) {
+        let cmd = String::from_utf8_lossy(&e.take_output()).to_string();
+        e.input(b"OK\r\n>");
+        let n = e.take_output().len();
+        e.input(b"\r\nSEND OK\r\n");
+        (cmd, n)
+    }
+
+    #[test]
+    fn connections_take_turns() {
+        let mut e = ready();
+        e.send(0, &vec![1u8; 3 * SEND_MAX]);
+        e.send(2, b"ping");
+        assert_eq!(sent(&mut e), (format!("AT+CIPSEND=0,{SEND_MAX}\r\n"), SEND_MAX));
+        // The ping goes before the rest of the burst.
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=2,4\r\n".to_string(), 4));
+        assert_eq!(sent(&mut e).0, format!("AT+CIPSEND=0,{SEND_MAX}\r\n"));
+        assert_eq!(sent(&mut e).0, format!("AT+CIPSEND=0,{SEND_MAX}\r\n"));
+        assert!(e.take_output().is_empty());
+    }
+
+    #[test]
+    fn small_writes_share_a_block() {
+        let mut e = ready();
+        e.send(1, b"a");
+        // The first goes out at once; the next two wait together.
+        e.send(1, b"bc");
+        e.send(1, b"de");
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=1,1\r\n".to_string(), 1));
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=1,4\r\n".to_string(), 4));
+    }
+
+    #[test]
+    fn datagrams_stay_whole() {
+        let mut e = ready();
+        e.send_datagram(4, &[9u8; 1400]);
+        e.send_datagram(4, &[8u8; 3]);
+        e.send_datagram(4, &vec![7u8; DATAGRAM_MAX + 1]);
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=4,1400\r\n".to_string(), 1400));
+        assert_eq!(sent(&mut e), ("AT+CIPSEND=4,3\r\n".to_string(), 3));
+        assert!(e.take_output().is_empty());
+    }
+
+    #[test]
+    fn close_waits_for_the_data() {
+        let mut e = ready();
+        e.send(0, &vec![1u8; SEND_MAX + 1]);
+        e.close(0);
+        assert_eq!(sent(&mut e).1, SEND_MAX);
+        assert_eq!(sent(&mut e).1, 1);
+        assert_eq!(e.take_output(), b"AT+CIPCLOSE=0\r\n");
+    }
+
+    #[test]
+    fn closed_drops_the_waiting_blocks() {
+        let mut e = ready();
+        e.send(0, &vec![1u8; 2 * SEND_MAX]);
+        e.input(b"0,CLOSED\r\n");
+        assert_eq!(sent(&mut e).1, SEND_MAX); // the one in flight
+        assert!(e.take_output().is_empty());
+    }
+
+    #[test]
+    fn mux_with_links_open_is_ready() {
+        let mut e = Esp::new();
+        talk(&mut e, "AT\r\n", b"OK\r\n");
+        talk(&mut e, "ATE0\r\n", b"OK\r\n");
+        talk(&mut e, "AT+CIPMUX=1\r\n", b"link is builded\r\n\r\nERROR\r\n");
+        assert!(e.ready());
+        assert_eq!(e.take_events(), vec![Event::Ready]);
+    }
+
+    #[test]
+    fn answers_count() {
+        let mut e = ready();
+        let before = e.answers();
+        e.send(0, b"x");
+        sent(&mut e);
+        assert_eq!(e.answers(), before + 2); // the prompt and SEND OK
+    }
+
+    #[test]
+    fn a_slot_still_open() {
+        let mut e = ready();
+        e.dial_udp(4, "hub.example", 51820, 8770);
+        talk(&mut e, "AT+CIPSTART=4,\"UDP\",\"hub.example\",51820,8770,0\r\n", b"ALREADY CONNECTED\r\n\r\nERROR\r\n");
+        assert_eq!(e.take_events(), vec![Event::Connected(4)]);
+        assert!(!e.busy());
+        e.dial_tcp(3, "10.0.0.1", 8764);
+        talk(&mut e, "AT+CIPSTART=3,\"TCP\",\"10.0.0.1\",8764\r\n", b"ALREADY CONNECTED\r\n\r\nERROR\r\n");
+        assert_eq!(e.take_events(), vec![Event::Failed(3, "the ESP's connection was still open".into())]);
+        assert_eq!(e.take_output(), b"AT+CIPCLOSE=3\r\n");
+    }
+
+    #[test]
+    fn a_restart_fails_what_waited() {
+        let mut e = ready();
+        e.dial_tcp(3, "10.0.0.1", 8764);
+        e.dial_udp(4, "hub.example", 51820, 8770);
+        e.send(0, b"lost");
+        e.timeout();
+        assert_eq!(
+            e.take_events(),
+            vec![
+                Event::Failed(3, "the ESP did not answer".into()),
+                Event::Failed(4, "the ESP started again".into()),
+                Event::Failed(0, "the ESP started again".into()),
+            ]
+        );
+        assert!(!e.dialing());
     }
 }

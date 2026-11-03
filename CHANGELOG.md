@@ -1122,6 +1122,41 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `cbb next link` on the Next's Pi starts the lite member's service when none runs, pointed at
+  its ports, once the Next's clock has set the Pi's: NextPi starts nothing at boot, and after the
+  Next was switched off the Pi stayed out of the group until the service was started by hand.
+- `cbb next link` dials `-to` at most every ten minutes while the hub answers through its
+  tunnel: away from home each dial of the unreachable `-to` held the ESP for its whole try, and
+  the tunnel's member connection, silent meanwhile, timed out and connected again.
+- `.cbb` (0.4.2) takes the ESP8266 out of a transparent connection before it gives up on it:
+  after a `.pibridge` whose connection ended, `.cbb net on` said the ESP did not answer AT
+  until the Next was switched off and on.
+- Sync away from home on the phones tries each of the hub's keys at each of its addresses: a
+  hub that offered its next key besides the one it serves with, at two addresses (at home and
+  at its forwarder), was tried with its key now only at home and through the forwarder only
+  with the next key, so a phone away from home never reached it. The phones also start a new
+  tunnel when the hub does not answer through the old one, whose sockets iOS may have taken
+  back while the app was in the background.
+- `.cbb` on the ZX Spectrum Next (0.4.1) runs the ESP8266's UART at 19200 while the network
+  runs, and puts it back at 115200 on `.cbb net off`: at 115200 a burst from the ESP, such as a
+  phone's TLS hello under `.cbb pair`, overflowed the Next's receive buffer faster than the
+  driver hands the Pi its bytes, and the phone's pairing timed out.
+- `.pibridge` (0.4.3) refuses to start while `CBB.DRV` runs the network: the driver took the
+  ESP's bytes before the bridge saw them, and an update through the bridge stopped at its first
+  block.
+- `cbb next link` lets the ESP's connections take turns, a block of at most 512 bytes each,
+  instead of sending in the order the bytes came: a burst to the phone held back the lite
+  member's pings to the computer it dials for so long that the computer closed the connection.
+  A datagram of `-udp` goes in one block, whole.
+- `cbb next link` times each wait for the ESP's answer on its own: it timed a whole stretch of
+  busy traffic, took more than 10 seconds of it for a silent ESP and set it up again, and after
+  that took the ESP's refusal of `AT+CIPMUX=1` while connections were open as not ready, so it
+  dialed nothing more.
+- `cbb next link` waits longer between dials of a `-to` it cannot reach (5 s, doubling to a
+  minute), and gives a dial 30 seconds: away from home each dial of the home address held the
+  ESP for seconds, and the tunnel's datagrams waited behind it. A restart of the ESP's setup now
+  fails what waited for it, the tunnel's dial included, instead of leaving it waiting for good,
+  and a dial of a slot the ESP still holds goes on for UDP and starts again for TCP.
 
 - The Rust core, and so the phones and the lite member, took no checkpoint record over 8 KiB,
   while Go took them up to 64 KiB as protocol.md says; it takes them now.

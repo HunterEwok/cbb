@@ -31,7 +31,7 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
         Some("pair") => crate::join(g, &args[1..], true),
         // The link answers in frames, not in a status line.
         Some("link") => {
-            return match crate::nextlink::link::run(&g.socket, &args[1..]) {
+            return match crate::nextlink::link::run(g, &args[1..]) {
                 Ok(()) => 0,
                 Err(e) => {
                     eprintln!("cbb: {}", e.for_user());

@@ -67,11 +67,13 @@ final class AwayFromHomeTests: XCTestCase {
         let first: String
         let obfuscation: String
         let vless: String
+        let hubKey: Data
         private let lock = NSLock()
         private var _endpoints: [String]
         private var _closed = false
-        init(port: UInt16, endpoint: String, obfuscation: String = "", vless: String = "") {
+        init(port: UInt16, endpoint: String, obfuscation: String = "", vless: String = "", hubKey: Data = Data()) {
             (self.port, self.first, self.obfuscation, self.vless, self._endpoints) = (port, endpoint, obfuscation, vless, [endpoint])
+            self.hubKey = hubKey
         }
         var endpoints: [String] { lock.withLock { _endpoints } }
         var closed: Bool { lock.withLock { _closed } }
@@ -88,7 +90,8 @@ final class AwayFromHomeTests: XCTestCase {
         func start(privateKey: Data, psk: Data, hubKey: Data, device: String, hub: String, endpoint: String,
                    obfuscation: String, vless: String) throws -> OpenTunnel {
             lock.withLock {
-                let t = FakeTunnel(port: UInt16(40_000 + _started.count), endpoint: endpoint, obfuscation: obfuscation, vless: vless)
+                let t = FakeTunnel(port: UInt16(40_000 + _started.count), endpoint: endpoint, obfuscation: obfuscation, vless: vless,
+                                   hubKey: hubKey)
                 _started.append(t)
                 return t
             }
@@ -173,11 +176,12 @@ final class AwayFromHomeTests: XCTestCase {
         XCTAssertEqual(t.first, offer.endpoints[0])
         XCTAssertEqual(t.obfuscation, "")
         XCTAssertEqual(t.vless, "")
-        // No answer: the next endpoint, on the same tunnel.
+        // No answer: the next endpoint, on a new tunnel.
         let second = offer.endpoints[1]
-        try await eventually("the next endpoint") { t.endpoints.contains(second) }
+        try await eventually("the next endpoint") { tunnels.started.count >= 2 }
         XCTAssertEqual(dialed.current.first, t.port)
-        XCTAssertEqual(tunnels.started.count, 1)
+        XCTAssertTrue(t.closed)
+        XCTAssertEqual(tunnels.started[1].first, second)
 
         answers.set(true)
         try await eventually("served") { served.current == 1 }
@@ -188,17 +192,19 @@ final class AwayFromHomeTests: XCTestCase {
         home.set(true)
         release.set(1)
         try await eventually("at home") { await a.status == .atHome }
-        XCTAssertTrue(t.closed)
+        let served1 = tunnels.started.last!
+        XCTAssertTrue(served1.closed)
 
         // Away again: a new tunnel.
+        let before = tunnels.started.count
         home.set(false)
         try await eventually("a new tunnel served") { served.current == 2 }
-        XCTAssertEqual(tunnels.started.count, 2)
+        XCTAssertEqual(tunnels.started.count, before + 1)
 
         // Off: the tunnel closes and the state is forgotten.
         try await a.turnOff()
         release.set(2)
-        XCTAssertTrue(tunnels.started[1].closed)
+        XCTAssertTrue(tunnels.started.last!.closed)
         XCTAssertNil(saved.current)
         let gone = await a.publicKey
         XCTAssertNil(gone)
@@ -231,6 +237,37 @@ final class AwayFromHomeTests: XCTestCase {
         XCTAssertEqual(tunnels.started[1].first, "198.51.100.9:8764")
         await a.stop()
         try await eventually("stopped") { await a.status == .off }
+    }
+
+    /// A hub that offers its next key is tried with each key at each of
+    /// its endpoints in turn: the key it serves with now may answer only at
+    /// the second endpoint, as a hub at home does from away through its
+    /// forwarder.
+    func testEachKeyTriesEachEndpoint() async throws {
+        let tunnels = FakeTunnels()
+        let served = Box(0)
+        let next = Data(repeating: 9, count: 32)
+        let both = Member.TunnelOffer(hubKey: offer.hubKey, psk: offer.psk, endpoints: offer.endpoints, nextKey: next)
+        let a = AwayFromHome(
+            device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", tunnels: tunnels,
+            state: AwayState(key: Data(repeating: 1, count: 32)).with(hub, offer: both), save: { _ in },
+            atHome: { _ in false },
+            dial: { port, _ in
+                guard let t = tunnels.started.first(where: { $0.port == port }),
+                      t.hubKey == both.hubKey, t.first == both.endpoints[1] else { throw POSIXError(.ECONNREFUSED) }
+                return Pipe()
+            },
+            serve: { _, _ in
+                served.update { $0 += 1 }
+                try await Task.sleep(for: .seconds(60))
+            },
+            mayHost: { _ in true }, order: { [self.hub] },
+            firstWait: Self.short.first, maxWait: Self.short.max, homeCheck: Self.short.home)
+        await a.start()
+        // Only the key now at the second endpoint answers.
+        try await eventually("served") { served.current == 1 }
+        XCTAssertTrue(tunnels.started.contains { $0.hubKey == next })
+        await a.stop()
     }
 
     /// Every hub's offer is kept, its own or passed on by another hub, and

@@ -259,7 +259,11 @@ class AwayFromHome(
     /** The hub the phone reaches now, through the tunnel or at home. */
     private var using: String? = null
 
-    /** Which of each hub's endpoints the next try takes. */
+    /**
+     * Which of the endpoints the next try takes, for each hub and each of
+     * its keys: the hub with its next key comes right after it in the list,
+     * and one count for both would give each key only every other endpoint.
+     */
     private val endpointOf = mutableMapOf<String, Int>()
     private var thread: Thread? = null
     private var stopped = false
@@ -448,7 +452,8 @@ class AwayFromHome(
      */
     private fun tryHub(s: AwayState, hub: String, offer: Member.TunnelOffer, up: Boolean): Long? {
         status = Status.CONNECTING
-        val n = synchronized(lock) { endpointOf[hub] ?: 0 }
+        val slot = hub + ":" + java.util.Base64.getEncoder().encodeToString(offer.hubKey)
+        val n = synchronized(lock) { endpointOf[slot] ?: 0 }
         val endpoint = offer.endpoints[n % offer.endpoints.size]
         val open = synchronized(lock) {
             if (tunnelTo == (hub to offer)) {
@@ -485,9 +490,14 @@ class AwayFromHome(
             dial(t.port, hub)
         } catch (e: Exception) {
             fail("the hub does not answer through the tunnel", e)
-            // The next of the hub's endpoints, in turn, on the same tunnel.
-            synchronized(lock) { endpointOf[hub] = n + 1 }
-            runCatching { t.setEndpoint(offer.endpoints[(n + 1) % offer.endpoints.size]) }
+            // The next of the hub's endpoints, in turn, on a new tunnel: one
+            // whose sockets broke, as when the phone changed networks or the
+            // system took them back while the app slept, would refuse every
+            // dial after.
+            synchronized(lock) {
+                endpointOf[slot] = n + 1
+                if (tunnel === t) closeTunnelLocked()
+            }
             return null
         }
         synchronized(lock) { using = hub }
