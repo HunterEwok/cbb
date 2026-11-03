@@ -375,7 +375,7 @@ func (s *Service) screenUsers(ws []*watcher, secret bool) (kept []*watcher, why 
 			why = "this device cannot tell which user is at its screen, so it takes no secret pastes; send it as a paste or a typed text"
 		default:
 			if why == "" {
-				why = "the paste targets here run as users who are not at the screen"
+				why = "the paste targets here run as users who are not at the screen (" + w.peer.where() + ")"
 			}
 		}
 	}

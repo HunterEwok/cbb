@@ -1134,6 +1134,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A remote paste to Windows was refused with "not at the screen" though the agent ran in the
+  session at the console: the service, as NT SERVICE\cbb, may not list the sessions, and now
+  asks for the console's session first. A refusal names the target's session, or what the
+  system did not tell about its user.
 - `cbb pair` draws its QR code in the console that Windows PowerShell 5.1 and cmd open in:
   it turns on the console's escape sequences, which only Windows Terminal had on, so the
   code came out as `←[97;107m▀` text. Its note on a firewall in the way names Windows
