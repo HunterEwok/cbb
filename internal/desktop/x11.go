@@ -17,8 +17,10 @@ import (
 	"time"
 
 	"github.com/jezek/xgb"
+	"github.com/jezek/xgb/screensaver"
 	"github.com/jezek/xgb/xfixes"
 	"github.com/jezek/xgb/xproto"
+	"github.com/jezek/xgb/xtest"
 
 	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/connector"
@@ -107,6 +109,45 @@ var x11Atoms = []string{"CLIPBOARD", "PRIMARY", "TARGETS", "UTF8_STRING", "STRIN
 	"text/plain", "INCR", "ATOM", "TIMESTAMP", secretType, "CBB_SELECTION", "MULTIPLE", clip.TypePNG, clip.TypeJPEG,
 	clip.TypeHTML, uriListType, gnomeFilesType, portalFilesType}
 
+// An xgb extension's Init writes the package-wide tables of its events and
+// errors, which the reader of every connection reads as events come in: an
+// Init while any connection takes events is a fatal concurrent map access.
+// So each extension's Init runs once in the process, on the first connection
+// before it asks for events (OpenX11 starts all three the members use); later
+// ones only learn the extension's opcode, which is all Init sets on a
+// connection.
+var x11Ext struct {
+	sync.Mutex
+	done map[string]bool
+}
+
+// initExt makes the extension name usable on x, through init the first time.
+func initExt(x *xgb.Conn, name string, init func(*xgb.Conn) error) error {
+	x11Ext.Lock()
+	defer x11Ext.Unlock()
+	if !x11Ext.done[name] {
+		if err := init(x); err != nil {
+			return err
+		}
+		if x11Ext.done == nil {
+			x11Ext.done = map[string]bool{}
+		}
+		x11Ext.done[name] = true
+		return nil
+	}
+	reply, err := xproto.QueryExtension(x, uint16(len(name)), name).Reply()
+	if err != nil {
+		return err
+	}
+	if !reply.Present {
+		return fmt.Errorf("the X server has no extension %s", name)
+	}
+	x.ExtLock.Lock()
+	x.Extensions[name] = reply.MajorOpcode
+	x.ExtLock.Unlock()
+	return nil
+}
+
 // OpenX11 connects to the X server in $DISPLAY.
 func OpenX11(logf func(string, ...any)) (*X11, error) {
 	xgb.Logger = log.New(io.Discard, "", 0) // its notes about missing authority files are noise
@@ -114,7 +155,12 @@ func OpenX11(logf func(string, ...any)) (*X11, error) {
 	if err != nil {
 		return nil, fmt.Errorf("x11: %w", err)
 	}
-	if err := xfixes.Init(x); err != nil {
+	// Before any events: remote paste and the lock check use these later,
+	// when this connection's reader is busy. A server without them only
+	// refuses those.
+	_ = initExt(x, "XTEST", xtest.Init)
+	_ = initExt(x, "MIT-SCREEN-SAVER", screensaver.Init)
+	if err := initExt(x, "XFIXES", xfixes.Init); err != nil {
 		x.Close()
 		return nil, fmt.Errorf("x11: the server has no XFixes: %w", err)
 	}
