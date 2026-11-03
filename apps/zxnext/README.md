@@ -125,7 +125,10 @@ do not reach the Pi. It types `cbb next link` with these settings at NextPi's sh
 keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
 member at home, `-serve` the ESP's port for the phones and the lite member's own,
 `-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's
-ESP8266"). The lite member (`cbb service -peer 127.0.0.1:8769`) has to run on the Pi as well.
+ESP8266"). While the network runs, the ESP's UART is at 19200 (`AT+UART_CUR`, not kept in its
+flash): the driver hands the Pi 2400 of its bytes a second, and the ESP has no flow control, so
+at its stock 115200 a burst would overflow the Next's 512-byte buffer; `.cbb net off` puts it
+back at 115200. The lite member (`cbb service -peer 127.0.0.1:8769`) has to run on the Pi as well.
 While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
 `pair` ask for `.cbb net off` first.
 

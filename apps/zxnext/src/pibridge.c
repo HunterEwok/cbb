@@ -25,7 +25,7 @@
 #include "frame.h"
 #include "link.h"
 
-#define VERSION "0.4.2"
+#define VERSION "0.4.3"
 // Rings for each direction: the UARTs' own buffers are small, so the Z80
 // takes in what arrives at once and passes it on as the other side has
 // room, one byte at a time, without waiting on either.
@@ -496,6 +496,18 @@ static void nextreg_set(uint8_t reg, uint8_t value)
 
 static uint8_t speed; // the CPU speed it found, restored at the end
 
+// Whether CBB.DRV (id 124, function 3) has the network on: it would take
+// the ESP's bytes before the bridge sees them.
+static uint8_t net_on(void)
+{
+    static struct esx_drvapi drv;
+    drv.call.driver = 124;
+    drv.call.function = 3;
+    drv.de = 0;
+    drv.hl = 0;
+    return esx_m_drvapi(&drv) == 0 && drv.de != 0;
+}
+
 static int run(int argc, char **argv)
 {
     uint8_t i = 1;
@@ -522,6 +534,7 @@ static int run(int argc, char **argv)
         return 1;
     }
 
+    if (net_on()) return fail("the network runs through the ESP; stop it first with .cbb net off", "CBB.DRV is on");
     speed = nextreg_get(NR_CPU_SPEED) & 3;
     nextreg_set(NR_CPU_SPEED, 3); // 28 MHz while it runs
     link_open();            // the Pi's UART, at NextPi's speed
