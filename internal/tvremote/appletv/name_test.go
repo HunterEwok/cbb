@@ -35,7 +35,7 @@ func TestInstance(t *testing.T) {
 		want       string
 	}{
 		{"Living Room._companion-link._tcp.local.", false, "Living Room"},
-		{"Гостиная._companion-link._tcp.local.", true, "Гостиная"},
+		{"Den \u00e9t\u00e9._companion-link._tcp.local.", true, "Den \u00e9t\u00e9"},
 		{"_companion-link._tcp.local.", false, ""},
 		{"Kitchen._airplay._tcp.local.", false, ""},
 	} {

@@ -7,6 +7,9 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
+  their certificates, the forwarder's port, and the expiry of the signed files devices fetch
+  (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").
 - The desktop apps show the QR code for joining a phone's group: on a computer in no group,
   **Join a phone's group** in the tray app (Windows, Linux) and the Mac app runs `cbb pair
   -app` as the administrator and shows the code, its text and the time left, without a

@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Watches the project's servers from outside (docs/maintaining.md,
+# "Watching cbb.tools"): the websites and their certificates, the
+# forwarder's and the relay's ports, and the expiry of the signed files
+# that devices fetch. A failed run mails the maintainer, as GitHub does for
+# a scheduled workflow; nothing is written anywhere.
+name: monitor
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the servers
+        # Until the first signed release (v0.6.0) the signed files are not
+        # served yet; from then on add -require-files. The relay's port
+        # 8765 joins the list once the project's relay runs.
+        run: go run ./tools/monitor -ports cbb.tools:8764
