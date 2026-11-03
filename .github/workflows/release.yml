@@ -368,18 +368,18 @@ jobs:
           echo "$Z88DK_SHA256  z88dk.tgz" | sha256sum -c -
           tar xzf z88dk.tgz
           cd z88dk && ./build.sh -k -p zxn
-      - name: the dot command and the driver
-        working-directory: apps/zxnext
-        run: |
-          export PATH="$RUNNER_TEMP/z88dk/bin:$PATH" ZCCCFG="$RUNNER_TEMP/z88dk/lib/config"
-          make
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: cbb-lite-linux-armv6.tar.gz
           path: ${{ runner.temp }}/lite
-      - name: the files for cbb.tools
+      - name: the dot command and the driver, with the SHA-256 of the Pi's cbb
+        working-directory: apps/zxnext
         run: |
           tar -xzf "$RUNNER_TEMP/lite/cbb-lite-linux-armv6.tar.gz" -C "$RUNNER_TEMP/lite"
+          export PATH="$RUNNER_TEMP/z88dk/bin:$PATH" ZCCCFG="$RUNNER_TEMP/z88dk/lib/config"
+          make PI_CBB="$RUNNER_TEMP/lite/cbb-lite/cbb"
+      - name: the files for cbb.tools
+        run: |
           sh packaging/zxnext/site.sh apps/zxnext/build "$RUNNER_TEMP/lite/cbb-lite/cbb" "$RUNNER_TEMP/site"
           mkdir -p "$RUNNER_TEMP/dist"
           tar -czf "$RUNNER_TEMP/dist/cbb-zxnext.tar.gz" -C "$RUNNER_TEMP/site" zxnext

@@ -1151,6 +1151,12 @@ All notable changes to cbb are documented in this file. The format follows
 - When the root signed two own device records at the same time, the phones take the one
   with the greater record ID as its own device, as the computers and the lite member do, so
   every member agrees which device holds the root and whether it is a phone or a computer.
+- `.cbb install` on the ZX Spectrum Next installs only the `CBB.DRV` and the Pi's `cbb` that
+  its `CBB` was built with: `CBB` carries their size and SHA-256, the Next checks the driver,
+  and the Pi checks its `cbb` with `sha256sum`. The site's `LIST` now gives SHA-256 instead of
+  MD5, and `.cbb update` only tells of a newer `CBB`, which is fetched as at the start. A
+  `CBB` copied from the signed release needs no trust in the network
+  (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
 
