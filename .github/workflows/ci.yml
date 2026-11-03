@@ -558,7 +558,7 @@ jobs:
           member/cbb version
       - name: the build under test, as the release after it
         run: |
-          old=$("$RUNNER_TEMP/old/member/cbb" version | sed -n 's/^cbb v\([0-9][0-9.]*\).*/\1/p')
+          old=$("$RUNNER_TEMP/old/member/cbb" version | sed -n 's/^[a-z]* v\([0-9][0-9.]*\).*/\1/p')
           new="${old%.*}.$((${old##*.} + 1))"
           CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$new" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
       - name: members of the release update one at a time and keep syncing (tools/e2e/upgrade.sh)
