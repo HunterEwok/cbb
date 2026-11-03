@@ -13,8 +13,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   SPACE to stop and a resumed download, checks each file against the site's list (size and
   CRC-32, MD5 on the Pi), and copies the Pi's `cbb` over the UART to `/NextPi/nextpi`. Each
   release carries the files for the site as `clipboardbridge-zxnext.tar.gz`
-  (`packaging/zxnext/site.sh`). It draws the logo (from the tray glyph, by `tools/icon`) and a
-  progress bar, and installs `CBB.DRV` itself through the driver API, as `.install` does;
+  (`packaging/zxnext/site.sh`). It fills the screen while it works: the logo on the left (made
+  for the ULA's colours by `tools/icon`, drawn as a screen loads from tape), each file's state
+  and progress bar on the right, the messages under them; and installs `CBB.DRV` itself through the driver API, as `.install` does;
   `.cbb net on` does the same after a reset, so `.install` is no longer needed. Not yet run
   on a real Next.
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs

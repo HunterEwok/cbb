@@ -52,7 +52,6 @@ var (
 	trayPath      = regexp.MustCompile(` d="([^"]*)"`)
 	// Adwaita's foreground, the colour symbolic icons are drawn in.
 	symbolicFill = "#2e3436"
-	zxBlack      = color.NRGBA{0, 0, 0, 0}
 )
 
 // trayOutputs returns every file made from the tray drawings, by path.

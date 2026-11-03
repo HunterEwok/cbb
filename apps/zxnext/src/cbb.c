@@ -60,12 +60,44 @@ static void usage(void)
            ".cbb -d ...        show error details\n");
 }
 
+// While .cbb install's screen shows, messages go to its lower rows
+// (screen_row), one under the other, never scrolling the logo away.
+static uint8_t screen_row;
+
+static void at(uint8_t row, uint8_t col)
+{
+    putchar(22); // the ROM's AT
+    putchar(row);
+    putchar(col);
+}
+
+// Puts the print position on the next message row for a text of len
+// characters.
+static void message_at(uint16_t len)
+{
+    if (!screen_row) return;
+    if (screen_row > 22) screen_row = 22;
+    at(screen_row, 0);
+    screen_row += (uint8_t)(len / 32 + 1);
+}
+
 // Shows a short message, and in debug mode the cause under it.
 static int fail(const char *msg, const char *detail)
 {
+    message_at(strlen(msg) + 5);
     printf("cbb: %s\n", msg);
-    if (debug && detail && *detail) printf("  (%s)\n", detail);
+    if (debug && detail && *detail) {
+        message_at(strlen(detail) + 4);
+        printf("  (%s)\n", detail);
+    }
     return 1;
+}
+
+// Shows a line of .cbb install.
+static void say(const char *msg)
+{
+    message_at(strlen(msg));
+    printf("%s\n", msg);
 }
 
 static int link_fail(uint8_t err)
@@ -795,37 +827,149 @@ static void http_close(void)
     }
 }
 
-// The logo, from tools/icon: at the top in the middle, 6 pixel rows down,
-// so that the key's cells (blue) and the clipboard's (yellow, the icon's
-// gold) never share an 8 by 8 cell, which holds two colours only.
-#define LOGO_X 13
-#define LOGO_DY 6
+// The install screen: the logo on the left (tools/icon), the files and
+// their bars on the right, the messages under them.
+//
+//   rows 0-14, columns 0-11   the logo
+//   rows 0-1, from column 13  the name and the version
+//   rows 3-10                 a file's name and state, then its bar
+//   rows 12-14                the file being fetched: kilobytes, speed
+//   rows 16-23                messages
+#define PANEL 13
+#define FILE_ROW 3
+#define NOW_ROW 12
+#define MESSAGE_ROW 16
+#define BAR_CELLS 14
 
-static void draw_logo(void)
+// The ULA palette's yellow, ink and paper, which the logo's brown takes
+// while the screen shows, and what they were.
+#define PAL_INK_YELLOW 6
+#define PAL_PAPER_YELLOW 22
+static uint8_t pal_ctl, pal_saved[4];
+
+// Selects the active ULA palette for writing, one entry at a time.
+static uint8_t palette_select(void)
 {
-    uint8_t x, y;
-    zx_border(INK_WHITE);
-    zx_cls(PAPER_WHITE | INK_BLACK);
-    for (y = 0; y < LOGO_SIZE; y++)
-        for (x = 0; x < LOGO_SIZE / 8; x++) *zx_pxy2saddr(LOGO_X * 8 + x * 8, y + LOGO_DY) = logo[y * (LOGO_SIZE / 8) + x];
-    for (y = 0; y < (LOGO_SIZE + LOGO_DY + 7) / 8; y++)
-        for (x = 0; x < LOGO_SIZE / 8; x++)
-            *zx_cxy2aaddr(LOGO_X + x, y) = PAPER_WHITE | ((x == 2 || x == 3) && y >= 3 && y <= 5 ? INK_BLUE : INK_YELLOW);
-    // The ROM's print position: AT 8,0, under the logo.
-    putchar(22);
-    putchar(8);
-    putchar(0);
+    pal_ctl = ZXN_READ_REG(0x43);
+    // ULANext's indices differ: leave its palette as it is.
+    if (pal_ctl & 1) return 1;
+    ZXN_NEXTREGA(0x43, 0x80 | (pal_ctl & 2 ? 0x40 : 0) | (pal_ctl & 0x0F));
+    return 0;
 }
 
-// The progress line: a bar of 7 cells in half steps, the percentage, the
-// kilobytes so far, the speed and the time left, 31 characters, which
-// fit the 32 columns; each call goes back over the last with the ROM's
-// cursor-left code (8), since CR starts a new line on the Spectrum.
-#define BAR_CELLS 7
-#define PROGRESS_LEN 31
-static uint8_t progress_shown;
+static void palette_set(uint8_t index, uint16_t rgb9)
+{
+    ZXN_NEXTREGA(0x40, index);
+    ZXN_NEXTREGA(0x44, rgb9 >> 1);
+    ZXN_NEXTREGA(0x44, rgb9 & 1);
+}
 
-static void progress(uint32_t got, uint32_t size, uint16_t start)
+static void palette_brown(void)
+{
+    if (palette_select()) return;
+    ZXN_NEXTREGA(0x40, PAL_INK_YELLOW);
+    pal_saved[0] = ZXN_READ_REG(0x41);
+    pal_saved[1] = ZXN_READ_REG(0x44);
+    ZXN_NEXTREGA(0x40, PAL_PAPER_YELLOW);
+    pal_saved[2] = ZXN_READ_REG(0x41);
+    pal_saved[3] = ZXN_READ_REG(0x44);
+    palette_set(PAL_INK_YELLOW, LOGO_BROWN);
+    palette_set(PAL_PAPER_YELLOW, LOGO_BROWN);
+    ZXN_NEXTREGA(0x43, pal_ctl);
+}
+
+static void palette_restore(void)
+{
+    if (palette_select()) return;
+    palette_set(PAL_INK_YELLOW, (uint16_t)pal_saved[0] << 1 | (pal_saved[1] & 1));
+    palette_set(PAL_PAPER_YELLOW, (uint16_t)pal_saved[2] << 1 | (pal_saved[3] & 1));
+    ZXN_NEXTREGA(0x43, pal_ctl);
+}
+
+// Unpacks the logo (PackBits, tools/icon) into text[].
+static void logo_unpack(void)
+{
+    const uint8_t *p = logo_packed;
+    uint8_t *out = text, n;
+    while (out < text + LOGO_BYTES) {
+        n = *p++;
+        if (n < 128) {
+            memcpy(out, p, n + 1);
+            p += n + 1;
+            out += n + 1;
+        } else {
+            memset(out, *p++, 257 - n);
+            out += 257 - n;
+        }
+    }
+}
+
+// Draws the logo as a screen loads from tape: the pixel rows in the
+// screen's own order (each third, the first row of every cell, then the
+// second, ...), in black on white with the border striped, then the
+// colours at once.
+static void logo_draw(void)
+{
+    uint8_t third, line, cell, x, y, border = INK_BLUE;
+    uint16_t frame;
+    for (third = 0; third < 3; third++) {
+        for (line = 0; line < 8; line++) {
+            for (cell = 0; cell < 8; cell++) {
+                y = third * 64 + cell * 8 + line;
+                if (y >= LOGO_ROWS * 8) continue;
+                for (x = 0; x < LOGO_COLS; x++) *zx_pxy2saddr(x * 8, y) = text[y * LOGO_COLS + x];
+            }
+            // A frame for each row of cells' line, with stripes.
+            frame = FRAMES_LO;
+            while (FRAMES_LO == frame) {
+                border ^= INK_BLUE ^ INK_YELLOW;
+                zx_border(border);
+                for (x = 0; x < 40; x++) {
+                }
+            }
+        }
+    }
+    for (y = 0; y < LOGO_ROWS; y++)
+        for (x = 0; x < LOGO_COLS; x++) *zx_cxy2aaddr(x, y) = text[LOGO_ROWS * 8 * LOGO_COLS + y * LOGO_COLS + x];
+    zx_border(INK_WHITE);
+}
+
+static void screen_open(void)
+{
+    palette_brown();
+    zx_border(INK_WHITE);
+    zx_cls(PAPER_WHITE | INK_BLACK);
+    logo_unpack();
+    logo_draw();
+    at(0, PANEL);
+    printf("clipboardbridge");
+    at(1, PANEL);
+    printf(VERSION ", " SITE);
+    at(NOW_ROW + 2, PANEL);
+    printf("SPACE stops");
+    screen_row = MESSAGE_ROW;
+}
+
+// Leaves the screen: the palette back, and the print position under the
+// messages, from where the screen scrolls as usual.
+static void screen_close(void)
+{
+    zx_border(INK_WHITE);
+    palette_restore();
+    at(screen_row > 23 ? 23 : screen_row, 0);
+    screen_row = 0;
+}
+
+// Shows a file's state on its row: "up to date", "fetching" and so on.
+static void file_state(uint8_t row, const char *name, const char *state)
+{
+    at(FILE_ROW + 2 * row, PANEL);
+    printf("%-8s %-10s", name, state);
+}
+
+// Draws a file's bar in half cells with the percentage, and the numbers
+// of the one under way.
+static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 {
     uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50;
     uint32_t rate = secs ? got / secs : 0;
@@ -834,47 +978,37 @@ static void progress(uint32_t got, uint32_t size, uint16_t start)
     uint8_t halves = (uint8_t)((uint16_t)pct * (BAR_CELLS * 2) / 100), i;
     char speed[8];
     SCR_CT = 255;
-    if (progress_shown)
-        for (i = 0; i < PROGRESS_LEN; i++) putchar(8);
+    at(FILE_ROW + 2 * row + 1, PANEL);
     for (i = 0; i < BAR_CELLS; i++) {
         // The ROM's block graphics: 143 full, 138 the left half.
         putchar(halves >= 2 * i + 2 ? 143 : halves == 2 * i + 1 ? 138 : '-');
     }
+    printf(" %3u%%", pct);
+    at(NOW_ROW, PANEL);
+    printf("%5luK of %5luK  ", got >> 10, size >> 10);
     if (rate < 10240) sprintf(speed, "%u.%uK/s", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));
     else sprintf(speed, "%uK/s", (uint16_t)(rate >> 10));
     if (left > 5999) left = 5999;
-    printf(" %3u%% %4luK %6s %2u:%02u", pct, got >> 10, speed, left / 60, left % 60);
-    progress_shown = 1;
+    at(NOW_ROW + 1, PANEL);
+    printf("%-7s %2u:%02u left", speed, left / 60, left % 60);
 }
 
-// Ends the progress line.
-static void progress_end(void)
-{
-    if (progress_shown) printf("\n");
-    progress_shown = 0;
-    zx_border(INK_WHITE);
-}
-
-// CRC-32 by a table: the Pi's cbb is megabytes, and frame.c's bit by bit
-// takes minutes for it.
-static uint32_t crc_table[256];
-
-static void crc_init(void)
-{
-    uint16_t i;
-    uint8_t k;
-    uint32_t c;
-    for (i = 0; i < 256; i++) {
-        c = i;
-        for (k = 0; k < 8; k++) c = c & 1 ? (c >> 1) ^ 0xEDB88320UL : c >> 1;
-        crc_table[i] = c;
-    }
-}
+// CRC-32 by a table of 16, half a byte at a time: the Pi's cbb is
+// megabytes, and frame.c's bit by bit takes minutes for it, while a table
+// of 256 would take a kilobyte that .cbb does not have.
+static const uint32_t crc_table[16] = {
+    0x00000000UL, 0x1DB71064UL, 0x3B6E20C8UL, 0x26D930ACUL, 0x76DC4190UL, 0x6B6B51F4UL, 0x4DB26158UL, 0x5005713CUL,
+    0xEDB88320UL, 0xF00F9344UL, 0xD6D6A3E8UL, 0xCB61B38CUL, 0x9B64C2B0UL, 0x86D3D2D4UL, 0xA00AE278UL, 0xBDBDF21CUL,
+};
 
 static uint32_t crc_add(uint32_t crc, const uint8_t *p, uint16_t n)
 {
     crc = ~crc;
-    while (n--) crc = crc_table[(uint8_t)crc ^ *p++] ^ (crc >> 8);
+    while (n--) {
+        crc ^= *p++;
+        crc = crc_table[(uint8_t)crc & 15] ^ (crc >> 4);
+        crc = crc_table[(uint8_t)crc & 15] ^ (crc >> 4);
+    }
     return ~crc;
 }
 
@@ -898,7 +1032,7 @@ static uint32_t file_crc(const char *path, uint32_t *size)
 
 // Fetches one item to its .PRT file, going on from what an earlier try
 // left there, and puts it in place once it matches the list; 0 when done.
-static int fetch(struct item *it)
+static int fetch(struct item *it, uint8_t row)
 {
     uint8_t fh, err, tries = 0;
     uint16_t n, start = FRAMES_LO;
@@ -913,22 +1047,20 @@ static int fetch(struct item *it)
     fh = esx_f_open(it->part, ESX_MODE_W | ESX_MODE_OPEN_CREAT);
     if (errno) return fail("cannot write to /cbb", it->part);
     esx_f_seek(fh, got, ESX_SEEK_SET);
-    printf("%s, %luK", it->name, (it->size + 1023) >> 10);
-    if (got) printf(", from %luK", got >> 10);
-    printf(":\n");
+    file_state(row, it->name, got ? "goes on" : "fetching");
     while (got < it->size) {
         n = it->size - got > CHUNK ? CHUNK : (uint16_t)(it->size - got);
         err = http_range(it->name, got, n);
         if (err == LINK_BREAK) {
             esx_f_close(fh);
-            progress_end();
+            file_state(row, it->name, "stopped");
             return fail("stopped; .cbb install goes on from here", 0);
         }
         if (err) {
             // The server may have closed the connection: open it again.
             if (++tries > 5) {
                 esx_f_close(fh);
-                progress_end();
+                file_state(row, it->name, "broke off");
                 return fail("the download broke off; .cbb install goes on from here", line);
             }
             http_close();
@@ -938,22 +1070,23 @@ static int fetch(struct item *it)
         tries = 0;
         if (esx_f_write(fh, text, n) != n) {
             esx_f_close(fh);
-            progress_end();
             return fail("cannot write to the card", it->part);
         }
         crc = crc_add(crc, text, n);
         got += n;
         zx_border((uint8_t)(got >> 12) & 7);
-        progress(got, it->size, start);
+        progress(row, got, it->size, start);
     }
     esx_f_close(fh);
-    progress_end();
+    zx_border(INK_WHITE);
     if (crc != it->crc) {
+        file_state(row, it->name, "damaged");
         esx_f_unlink(it->part);
         return fail("the file arrived damaged; run .cbb install again", it->name);
     }
     esx_f_unlink(it->card);
     if (esx_f_rename(it->part, it->card)) return fail("cannot put the file in place", it->card);
+    file_state(row, it->name, "fetched");
     return 0;
 }
 
@@ -1032,7 +1165,7 @@ static uint8_t pi_md5(char *md5)
 // UART: the shell reads exactly its size, then checks its MD5 before it
 // takes the place of the old one. The wrapper that NextPi's shell runs is
 // written unless there is one.
-static int to_pi(struct item *it)
+static int to_pi(struct item *it, uint8_t row)
 {
     uint8_t fh, err;
     uint16_t n, start = FRAMES_LO;
@@ -1058,10 +1191,9 @@ static int to_pi(struct item *it)
         uint16_t i;
         for (i = 0; i < n; i++) link_send(text[i]);
         sent += n;
-        progress(sent, it->size, start);
+        progress(row, sent, it->size, start);
     }
     esx_f_close(fh);
-    progress_end();
     link_prompt();
     sprintf(line,
             "cd " PI_DIR " && [ \"$(md5sum <cbb.new | cut -c1-32)\" = %s ] && chmod 755 cbb.new && "
@@ -1089,24 +1221,24 @@ static int to_pi(struct item *it)
 }
 
 // .cbb install and .cbb update: the Next's files to /cbb, the Pi's cbb
-// through the card to the Pi; each only when the list has another.
-static int install(void)
+// through the card to the Pi; each only when the list has another. The
+// rows of the screen: CBB, CBB.DRV, the Pi's cbb fetched, then sent.
+#define PI_ROW (ITEMS)
+
+static int install_files(void)
 {
     static char pimd5[33];
     struct item *pi = &items[ITEMS - 1];
     uint8_t i, pi_answers, drv_new = 0, drv_on, old_bank = NO_BANK;
     uint32_t size;
     int err = 0;
-    if (net_on()) return fail("the network runs; stop it first with .cbb net off", 0);
     // The bank of a driver installed now, while the card has its file.
     drv_on = driver(DRV_STATE, 0) == 0;
     if (drv_on) old_bank = drv_bank();
-    crc_init();
-    draw_logo();
-    printf("clipboardbridge " VERSION "\n\n");
     esx_f_mkdir("/cbb");
+    for (i = 0; i < ITEMS; i++) file_state(i, items[i].name, "");
+    file_state(PI_ROW, "to Pi", "");
     pi_answers = !pi_md5(pimd5);
-    printf("From " SITE "; SPACE stops,\nand .cbb install goes on.\n\n");
     if (http_open()) {
         http_close();
         link_use(LINK_PI);
@@ -1116,36 +1248,46 @@ static int install(void)
     for (i = 0; i < ITEMS && !err; i++) {
         struct item *it = &items[i];
         if (it == pi) {
-            if (!pi_answers || strcmp(pimd5, it->md5) == 0) continue;
+            if (!pi_answers) {
+                file_state(i, it->name, "no Pi");
+                continue;
+            }
+            if (strcmp(pimd5, it->md5) == 0) {
+                file_state(i, it->name, "up to date");
+                continue;
+            }
+            // On the card from a try that stopped later.
+            if (up_to_date(it)) {
+                file_state(i, it->name, "fetched");
+                continue;
+            }
         } else if (up_to_date(it)) {
-            printf("%-8s up to date\n", it->name);
+            file_state(i, it->name, "up to date");
             continue;
         }
-        // The Pi's cbb may be on the card from a try that stopped later.
-        if (it == pi && up_to_date(it)) continue;
-        err = fetch(it);
+        err = fetch(it, i);
         if (i == 1) drv_new = 1;
     }
     http_close();
     link_use(LINK_PI);
     if (err) return 1;
     if (!pi_answers) {
-        printf("The Pi does not answer: its cbb\ncomes with .cbb update later.\n");
+        say("The Pi does not answer: its cbb comes with .cbb update later.");
     } else if (strcmp(pimd5, pi->md5) == 0) {
-        printf("%-8s up to date (Pi)\n", pi->name);
+        file_state(PI_ROW, "to Pi", "up to date");
     } else {
-        printf("The Pi's cbb, %luK, to the Pi:\n", (pi->size + 1023) >> 10);
-        if (to_pi(pi)) return 1;
+        file_state(PI_ROW, "to Pi", "sending");
+        if (to_pi(pi, PI_ROW)) return 1;
         // The card keeps no copy of the Pi's program.
         esx_f_unlink(pi->card);
-        printf("The Pi's cbb is installed;\n.cbb net on starts it.\n");
+        file_state(PI_ROW, "to Pi", "installed");
     }
     // A driver installed earlier runs from memory: a new one takes its
     // place, with its bank. Without one, the driver is installed now (and
     // .cbb net on does it after a reset).
     if (drv_on && drv_new) {
         if (old_bank == NO_BANK || drv_uninstall(old_bank)) {
-            printf("CBB.DRV is new: .uninstall\n/cbb/CBB.DRV, then .install\n/cbb/CBB.DRV\n");
+            say("CBB.DRV is new: .uninstall /cbb/CBB.DRV, then .install /cbb/CBB.DRV");
         } else {
             drv_on = 0;
         }
@@ -1153,18 +1295,28 @@ static int install(void)
     if (!drv_on) {
         i = drv_install();
         if (i) {
-            printf("cbb: cannot install CBB.DRV\n");
-            if (debug) printf("  (step %u)\n", i);
+            sprintf(line, "step %u", i);
+            fail("cannot install CBB.DRV; try .install /cbb/CBB.DRV", line);
         } else {
-            printf("CBB.DRV is installed.\n");
+            say("CBB.DRV is installed.");
         }
     }
     // An older .cbb in C:/DOT runs as .cbb before this one.
     if (file_crc(DOT_CBB, &size) != items[0].crc && size) {
-        printf("C:/DOT/CBB is another .cbb;\n.cbb runs it, ../CBB the new\none: replace or delete it.\n");
+        say("C:/DOT/CBB is another .cbb: .cbb runs it, ../CBB the new one. Replace or delete it.");
     }
-    printf("Done.\n");
+    say("Done.");
     return 0;
+}
+
+static int install(void)
+{
+    int err;
+    if (net_on()) return fail("the network runs; stop it first with .cbb net off", 0);
+    screen_open();
+    err = install_files();
+    screen_close();
+    return err;
 }
 
 static int run(int argc, char **argv)
