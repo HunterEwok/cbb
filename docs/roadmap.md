@@ -885,21 +885,23 @@ the other members use are short. `cbb next link` starts the service when none ru
 NextPi starts nothing of ours at boot. Not yet: a phone on a mobile network through the
 forwarder to the hub, with the Next behind it.
 
-**Installing.** Today the files are copied to the card by hand and `cbb` reaches the Pi
-through `.pibridge`. The plan, agreed with the owner:
+**Installing.** `.cbb install` (0.5.0) does what was agreed with the owner, except the
+signature (apps/zxnext/README.md, "Install"):
 
 - The files for the Next are published on `cbb.tools` over plain HTTP, since NextZXOS's
   `.http` has no TLS: `CBB`, `CBB.DRV`, `PIBRIDGE`, the Pi's `cbb` for ARMv6, and a list
-  with each file's size and CRC-32, signed with the release key so the Pi can check its
-  `cbb` before it runs it.
+  with each file's size, CRC-32 and MD5 (`packaging/zxnext/site.sh`, the release's
+  `clipboardbridge-zxnext.tar.gz`).
 - One line fetches `.cbb`: `.http -h cbb.tools -u /n -f CBB`, then `../CBB install` fetches
   the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
   list before it replaces the old one, a download that broke goes on from where it
-  stopped, and a bar shows the percentage, the kilobytes, the speed and the time left;
+  stopped, and a line shows the percentage, the kilobytes, the speed and the time left;
   SPACE stops it.
-- The Pi's `cbb` goes from the card to `/NextPi/nextpi` through the UART with the same bar,
-  and the Pi checks the signature before it swaps the binary. `../CBB update` does the
-  same for newer files.
+- The Pi's `cbb` goes from the card to `/NextPi/nextpi` through the UART with the same line,
+  and the Pi checks its MD5 before it swaps the binary. `.cbb update` does the same for
+  newer files.
+- Next: the list signed with the release key, the Next checking the signature (Ed25519 on
+  the Z80 takes seconds for a list) and the Pi checking it before it runs a new `cbb`.
 
 **Open questions, for the bench.**
 

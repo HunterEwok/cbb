@@ -45,7 +45,7 @@ for f in $files; do
 	apps/macos/*) macos=true ;;
 	apps/desktop/*) desktop=true ;;
 	apps/android/*) android=true ;;
-	apps/zxnext/*) zxnext=true ;;
+	apps/zxnext/* | packaging/zxnext/*) zxnext=true ;;
 	site/* | docs/* | *.md | LICENSE) site=true ;;
 	.github/*) ;; # other workflows, templates and settings: no job of ci.yml reads them
 	*) all=true ;;

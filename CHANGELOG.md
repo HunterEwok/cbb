@@ -7,6 +7,13 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
+  `.http -h cbb.tools -u /n -f CBB`, `../CBB install` fetches `CBB.DRV`, `PIBRIDGE` and the
+  Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,
+  SPACE to stop and a resumed download, checks each file against the site's list (size and
+  CRC-32, MD5 on the Pi), and copies the Pi's `cbb` over the UART to `/NextPi/nextpi`. Each
+  release carries the files for the site as `clipboardbridge-zxnext.tar.gz`
+  (`packaging/zxnext/site.sh`). Not yet run on a real Next.
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own
