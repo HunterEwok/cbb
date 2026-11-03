@@ -22,6 +22,8 @@ class HubOnPhoneTest {
 
     private class FakeHub(val memberPort: Int, var held: String) : HubTunnel {
         var registered: List<String>? = null
+        var obfuscation = ""
+        var vlessID = ""
         var shown = ""
         var report = "{}"
         @Volatile var closed = false
@@ -30,9 +32,10 @@ class HubOnPhoneTest {
             held = json
         }
 
-        override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String) {
+        override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String) {
             registered = listOf(endpoint, pin, chain)
             shown = records
+            this.vlessID = vlessID
         }
 
         override fun setRecords(records: String) {
@@ -63,8 +66,17 @@ class HubOnPhoneTest {
         val started = CopyOnWriteArrayList<FakeHub>()
         override fun newKey(): ByteArray = ByteArray(32) { 7 }
         override fun publicKey(private: ByteArray): ByteArray = ByteArray(32) { 8 }
-        override fun start(private: ByteArray, device: String, memberPort: Int, clients: String): HubTunnel =
-            FakeHub(memberPort, clients).also { started.add(it) }
+        var made = 0
+        override fun start(private: ByteArray, device: String, memberPort: Int, obfuscation: String, clients: String): HubTunnel =
+            FakeHub(memberPort, clients).also {
+                it.obfuscation = obfuscation
+                started.add(it)
+            }
+        override fun newObfuscation(): String {
+            made++
+            return OBFUSCATION
+        }
+        override fun newVLESSID(): String = VLESS_ID
     }
 
     private fun group(records: List<Member.Record> = emptyList()) = HubOnPhone.Group(4242, listOf(ByteArray(3) { 1 }), { it }, records)
@@ -215,6 +227,51 @@ class HubOnPhoneTest {
         assertEquals(listOf(tv), HubOnPhone(phone, FakeTunnels(), load = { saved }, save = {}).clients)
     }
 
+    /**
+     * The tunnel hides as the user chose: the AmneziaWG settings go to the
+     * tunnel and into the offers and stay while it stays on; VLESS waits for
+     * the forwarder's way there before it offers anything.
+     */
+    @Test
+    fun disguise() {
+        val tunnels = FakeTunnels()
+        var saved: HubState? = null
+        val h = HubOnPhone(phone, tunnels, load = { null }, save = { saved = it })
+        h.turnOn(null)
+        h.setForwarder(HubState.Forwarder("203.0.113.9:8764", pin))
+        assertEquals(HubOnPhone.Disguise.PLAIN, h.disguise)
+        h.setDisguise(HubOnPhone.Disguise.OBFUSCATE)
+        h.setDisguise(HubOnPhone.Disguise.OBFUSCATE)
+        assertEquals(HubOnPhone.Disguise.OBFUSCATE, h.disguise)
+        assertEquals(1, tunnels.made)
+        assertEquals(OBFUSCATION, saved?.obfuscation)
+        assertEquals(saved, HubState.decode(saved!!.encode()))
+        assertEquals(OBFUSCATION, h.offer(pc, ByteArray(32) { 2 })?.obfuscation)
+        h.start(group())
+        val t = tunnels.started.last()
+        assertEquals(OBFUSCATION, t.obfuscation)
+        assertEquals("", t.vlessID)
+
+        h.setDisguise(HubOnPhone.Disguise.VLESS)
+        assertTrue(t.closed)
+        assertNull(saved?.obfuscation)
+        assertEquals(VLESS_ID, saved?.vlessID)
+        assertEquals(VLESS_ID, HubState.decode(saved!!.encode())?.vlessID)
+        assertNull(h.offer(pc, ByteArray(32) { 2 }))
+        h.start(group())
+        val v = tunnels.started.last()
+        assertEquals("", v.obfuscation)
+        assertEquals(VLESS_ID, v.vlessID)
+        v.report = """{"registered":true,"vless":{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=","short_id":"ab","server_name":"www.example.com","id":"$VLESS_ID"}}"""
+        assertEquals(HubOnPhone.Status.REGISTERED, h.status(paused = false).first)
+        assertTrue(h.offer(pc, ByteArray(32) { 2 })?.vless?.contains("203.0.113.9:443") == true)
+
+        h.setDisguise(HubOnPhone.Disguise.PLAIN)
+        assertEquals(HubOnPhone.Disguise.PLAIN, h.disguise)
+        assertNull(saved?.vlessID)
+        assertNull(h.offer(pc, ByteArray(32) { 2 })?.vless)
+    }
+
     @Test
     fun remembersAFewHomes() {
         var saved: HubState? = null
@@ -226,5 +283,10 @@ class HubOnPhoneTest {
         assertTrue(h.isHome("home ${HubState.MAX_HOMES + 2}"))
         h.setBackground(true)
         assertTrue(h.background)
+    }
+
+    private companion object {
+        const val OBFUSCATION = """{"jc":4,"jmin":50,"jmax":300,"s1":20,"s2":30,"s3":17,"s4":18,"h1":"5-100","h2":"200-300","h3":"400-500","h4":"600-700","header_protection_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}"""
+        const val VLESS_ID = "00000000-0000-4000-8000-000000000000"
     }
 }

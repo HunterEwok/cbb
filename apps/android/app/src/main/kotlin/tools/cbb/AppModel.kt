@@ -165,6 +165,8 @@ class AppModel(private val app: Context) {
         val background: Boolean = false,
         val home: Boolean = false,
         val clients: Int = 0,
+        /** How its tunnel hides. */
+        val disguise: HubOnPhone.Disguise = HubOnPhone.Disguise.PLAIN,
         /** The connected computers the hub can move to: admins, or computers the root can make admins; by ID, with their names. */
         val computers: List<Pair<String, String>> = emptyList(),
         /** The computer that is always on which the app suggests as the hub, unless the user chose to keep the phone. */
@@ -490,6 +492,7 @@ class AppModel(private val app: Context) {
                         emptyList()
                     },
                     suggested = group.suggestedHub?.takeIf { h.isOn && !settings.keepsPhoneHub }?.let { it.id to it.name },
+                    disguise = h.disguise,
                 )
             }
         }
@@ -570,6 +573,9 @@ class AppModel(private val app: Context) {
         if (pin.isNotBlank() && !HubState.validPin(pin.trim())) throw IllegalArgumentException("not a pin")
         group.setForwarder(address, pin)
     }
+
+    /** Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS. */
+    suspend fun setHubDisguise(d: HubOnPhone.Disguise) = hubChange { group.setHubDisguise(d) }
 
     /** Lets the hub run in the background, at the battery's cost. */
     suspend fun setHubInBackground(on: Boolean) = hubChange { group.setHubInBackground(on) }

@@ -228,6 +228,41 @@ final class MacModel: ObservableObject {
         let args = d.isSelf ? ["global", "hub", "-firewall", "no"] : ["global", "hub", "-on", d.id]
         await admin(args, done: String(localized: "It is a hub now."))
     }
+    /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
+    enum HubTunnel: String, CaseIterable, Identifiable {
+        case plain, obfuscate, vless
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .plain: "WireGuard"
+            case .obfuscate: "AmneziaWG"
+            case .vless: "VLESS"
+            }
+        }
+    }
+
+    /// How this Mac's tunnel hides while it is a hub.
+    var hubTunnel: HubTunnel {
+        guard let a = status?.away else { return .plain }
+        return a.vless == true ? .vless : a.obfuscated == true ? .obfuscate : .plain
+    }
+
+    /// Sets how this hub's tunnel hides and, with forwarder, its forwarder
+    /// ("default" for the project's), keeping its addresses and port.
+    func setHub(_ tunnel: HubTunnel, forwarder: String? = nil, key: String? = nil) async {
+        var args = ["global", "hub", "-keep", "-firewall", "no"]
+        switch tunnel {
+        case .plain: break
+        case .obfuscate: args.append("-obfuscate")
+        case .vless: args.append("-vless")
+        }
+        if let forwarder, !forwarder.isEmpty {
+            args += ["-forwarder", forwarder]
+            if let key, !key.isEmpty { args += ["-forwarder-key", key] }
+        }
+        await admin(args, done: String(localized: "The hub's settings are saved."))
+    }
+
     /// On the group's root: voids both histories of every key that signed two.
     func resolve() async {
         await admin(["resolve"], done: String(localized: "Both histories are void. The device signs its records again by itself."))

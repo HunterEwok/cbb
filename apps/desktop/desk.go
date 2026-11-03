@@ -302,6 +302,26 @@ func (d *Desk) MakeHub(id string) {
 	d.admin(args, false, "It is a hub now.")
 }
 
+// SetHub sets how this hub's tunnel hides (plain, obfuscate for
+// AmneziaWG, vless) and, when fwd is given, its forwarder ("default" for
+// the project's), keeping its addresses and port: cbb global hub -keep.
+func (d *Desk) SetHub(tunnel, fwd, key string) {
+	args := []string{"global", "hub", "-keep", "-firewall", "no"}
+	switch tunnel {
+	case "obfuscate":
+		args = append(args, "-obfuscate")
+	case "vless":
+		args = append(args, "-vless")
+	}
+	if fwd != "" {
+		args = append(args, "-forwarder", fwd)
+		if key != "" {
+			args = append(args, "-forwarder-key", key)
+		}
+	}
+	d.admin(args, false, "The hub's settings are saved.")
+}
+
 // Resolve, on the group's root, voids both histories of every key that
 // signed two, as cbb resolve does as the administrator.
 func (d *Desk) Resolve() {

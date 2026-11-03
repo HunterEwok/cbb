@@ -60,7 +60,7 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       cbb global off [-yes]          turn it off here and forget its keys\n" +
 		"       cbb global off -on DEVICE      on an admin: turn it off on another device, whose own user\n" +
 		"                                      turns it on again\n" +
-		"       cbb global hub [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder default|address:port -forwarder-key KEY [-vless]] [address:port...]\n" +
+		"       cbb global hub [-keep] [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder default|address:port -forwarder-key KEY] [-vless] [address:port...]\n" +
 		"                                      make this device the group's hub, reached at these addresses\n" +
 		"                                      or through the forwarder (without addresses, the project's at\n" +
 		"                                      " + forward.ProjectHost + "); -obfuscate for networks that block WireGuard,\n" +
@@ -161,7 +161,12 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		obfuscate := fs.Bool("obfuscate", false, "speak AmneziaWG, which hides that the packets are WireGuard, for networks that block it")
 		vlessOnly := fs.Bool("vless", false, "the clients reach the forwarder only over VLESS, which looks like HTTPS to a well-known site")
 		on := fs.String("on", "", "on an admin: make the device DEVICE, an admin computer with sync away from home on, a hub of the group")
+		keep := fs.Bool("keep", false, "on a hub: keep its addresses, port and forwarder where none are given, changing only how its tunnel hides (-obfuscate, -vless)")
 		if fs.Parse(args[1:]) != nil {
+			return 2
+		}
+		if *on != "" && *keep {
+			fmt.Fprintln(stderr, "cbb: -keep changes this hub's own settings; -on makes another device a hub")
 			return 2
 		}
 		if *on != "" && (*port != 0 || *obfuscate || *vlessOnly || firewall != "ask") {
@@ -179,7 +184,7 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		// A hub without addresses of its own is reached through the
 		// project's forwarder, whose address and key cbb knows.
-		if fs.NArg() == 0 && *fwd == "" && *fwdKey == "" {
+		if fs.NArg() == 0 && *fwd == "" && *fwdKey == "" && !*keep {
 			*fwd = forward.ProjectKey
 		}
 		if err := projectForwarder(fwd, fwdKey); err != nil {
@@ -191,7 +196,7 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 				return fail(stderr, err)
 			}
 		}
-		h.Port, h.Addrs, h.Forwarder, h.ForwarderKey, h.Obfuscate, h.VLESS = *port, fs.Args(), *fwd, *fwdKey, *obfuscate, *vlessOnly
+		h.Port, h.Addrs, h.Forwarder, h.ForwarderKey, h.Obfuscate, h.VLESS, h.Keep = *port, fs.Args(), *fwd, *fwdKey, *obfuscate, *vlessOnly, *keep
 		if *on != "" {
 			h.Device = *on
 		}

@@ -1390,7 +1390,7 @@ final class LiveGroup: GroupController {
         guard let hub, state?.isAdmin == true else { return nil }
         let (status, error) = hub.status(paused: !foreground)
         var h = AppModel.Hub(on: hub.isOn, status: status, error: error, forwarder: hub.forwarder,
-                             home: hub.isHome(network), clients: hub.clients.count)
+                             home: hub.isHome(network), clients: hub.clients.count, disguise: hub.disguise)
         // The computers show without a forwarder too, so that the user sees
         // where the hub can go; Settings asks for the forwarder first.
         if hub.isOn {
@@ -1517,6 +1517,14 @@ final class LiveGroup: GroupController {
         } else {
             try hub.turnOff()
         }
+        await restartSync()
+    }
+
+    /// Sets how the hub's tunnel hides, then connects again, so that the
+    /// clients at home get the new offer.
+    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {
+        guard let hub, state?.isAdmin == true else { return }
+        try hub.setDisguise(d)
         await restartSync()
     }
 

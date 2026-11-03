@@ -517,6 +517,38 @@ func (w *window) admin(t *testing.T) {
 	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-on", "mac"}}) {
 		t.Errorf("make it a hub ran %q", r)
 	}
+
+	// On this computer, a hub, the tunnel's disguise and the forwarder
+	// change and keep the rest.
+	w.svc.mu.Lock()
+	w.svc.status.Away = &control.Away{Hub: true, Forwarder: &control.Forwarder{Endpoint: "198.51.100.20:8764", Registered: true}}
+	w.svc.mu.Unlock()
+	defer func() {
+		w.svc.mu.Lock()
+		w.svc.status.Away = nil
+		w.svc.mu.Unlock()
+	}()
+	w.eval(`$click('.tile[data-id="self"]')`, nil)
+	w.wait(`$q('[data-tunnel="obfuscate"]') && $q('[data-tunnel="plain"]').getAttribute("aria-checked") === "true"`)
+	w.eval(`$click('[data-tunnel="obfuscate"]')`, nil)
+	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("next time they meet this hub at home")`)
+	w.eval(`$click("#confirm-ok")`, nil)
+	w.wait(`$q("#message").textContent === "The hub's settings are saved."`)
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-obfuscate"}}) {
+		t.Errorf("the disguise ran %q", r)
+	}
+	w.wait(`$q('[data-action="forwarder"]') && !$q('[data-action="forwarder"]').disabled`)
+	w.eval(`$click('[data-action="forwarder"]')`, nil)
+	w.wait(`$q("#confirm").open && !$q("#confirm-input").hidden`)
+	w.eval(`$q("#confirm-input").value = " 203.0.113.9:8764   KEY "; $click("#confirm-ok")`, nil)
+	var r [][]string
+	for deadline := time.Now().Add(10 * time.Second); len(r) == 0 && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+		r = ran()
+	}
+	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-forwarder", "203.0.113.9:8764", "-forwarder-key", "KEY"}}) {
+		t.Errorf("the forwarder ran %q", r)
+	}
 }
 
 // joinPhone joins a phone's group from a computer in none: the window shows

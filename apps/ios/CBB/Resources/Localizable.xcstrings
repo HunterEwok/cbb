@@ -3264,6 +3264,56 @@
         }
       }
     },
+    "How the hub's tunnel hides": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как хаб маскирует туннель"
+          }
+        }
+      }
+    },
+    "For networks that block WireGuard. VLESS needs a forwarder that takes it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для сетей, где блокируют WireGuard. Для VLESS нужен форвардер, который его принимает."
+          }
+        }
+      }
+    },
+    "Change how the hub's tunnel hides?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить маскировку туннеля хаба?"
+          }
+        }
+      }
+    },
+    "Change": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить"
+          }
+        }
+      }
+    },
+    "Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
+          }
+        }
+      }
+    },
     "This phone as the hub": {
       "localizations": {
         "ru": {

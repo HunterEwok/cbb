@@ -106,6 +106,8 @@ protocol GroupController: AnyObject {
     func setPhoneHub(_ on: Bool) async throws
     /// Sets the hub's forwarder; both empty for the project's.
     func setForwarder(address: String, pin: String) async throws
+    /// Sets how the hub's tunnel hides.
+    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws
     /// Remembers the network the phone is on as a home network of the hub.
     func addHomeNetwork() async throws
     /// Tells the group whether the app is in front, where the hub works.
@@ -156,6 +158,7 @@ extension GroupController {
     func hubStatus() async -> AppModel.Hub? { nil }
     func setPhoneHub(_ on: Bool) async throws {}
     func setForwarder(address: String, pin: String) async throws {}
+    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {}
     func addHomeNetwork() async throws {}
     func setForeground(_ on: Bool) {}
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
@@ -304,6 +307,8 @@ final class AppModel: ObservableObject {
         var forwarder: HubState.Forwarder?
         var home = false
         var clients = 0
+        /// How its tunnel hides.
+        var disguise = HubOnPhone.Disguise.plain
         /// The connected computers the hub can move to: admins, or
         /// computers the root can make admins.
         var computers: [Target] = []
@@ -757,6 +762,9 @@ final class AppModel: ObservableObject {
         devices = group.devices
         await refreshHub()
     }
+
+    /// Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
+    func setHubDisguise(_ d: HubOnPhone.Disguise) async { await hubChange { try await self.group.setHubDisguise(d) } }
 
     /// Keeps this phone as the hub: the app no longer suggests a computer.
     func keepPhoneHub() async {

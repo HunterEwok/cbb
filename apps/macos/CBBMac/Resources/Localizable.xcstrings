@@ -251,6 +251,136 @@
         }
       }
     },
+    "How the hub's tunnel hides": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как хаб маскирует туннель"
+          }
+        }
+      }
+    },
+    "Forwarder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Форвардер"
+          }
+        }
+      }
+    },
+    "none": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нет"
+          }
+        }
+      }
+    },
+    "Change the forwarder…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить форвардер…"
+          }
+        }
+      }
+    },
+    "Change the forwarder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить форвардер"
+          }
+        }
+      }
+    },
+    "Change how the hub's tunnel hides?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить маскировку туннеля хаба?"
+          }
+        }
+      }
+    },
+    "Change": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить"
+          }
+        }
+      }
+    },
+    "Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда ваши устройства будут доходить до хаба только через VLESS к его форвардеру, а форвардер должен принимать VLESS. Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
+          }
+        }
+      }
+    },
+    "Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
+          }
+        }
+      }
+    },
+    "The key cbb forward prints": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ, который печатает cbb forward"
+          }
+        }
+      }
+    },
+    "The project's forwarder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Форвардер проекта"
+          }
+        }
+      }
+    },
+    "Your own forwarder's address and key, as cbb forward prints them, or the project's forwarder at cbb.tools.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Адрес и ключ своего форвардера, как их печатает cbb forward, или форвардер проекта на cbb.tools."
+          }
+        }
+      }
+    },
+    "The hub's settings are saved.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки хаба сохранены."
+          }
+        }
+      }
+    },
     "The group's hub": {
       "localizations": {
         "ru": {

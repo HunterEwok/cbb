@@ -241,3 +241,26 @@ func TestBadArguments(t *testing.T) {
 		t.Error("PublicKey(nil) succeeded")
 	}
 }
+
+// TestNewObfuscation makes settings StartHub takes and a VLESS ID Register
+// takes.
+func TestNewObfuscation(t *testing.T) {
+	text, err := NewObfuscation()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var o tunnel.Obfuscation
+	if err := json.Unmarshal([]byte(text), &o); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.Check(); err != nil {
+		t.Fatal(err)
+	}
+	id, err := NewVLESSID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tunnel.CheckVLESSID(id); err != nil {
+		t.Fatal(err)
+	}
+}

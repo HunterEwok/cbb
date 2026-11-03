@@ -134,6 +134,11 @@ func TestGlobalCommand(t *testing.T) {
 				return m.Name == "hub" && m.Device == "desk" && m.Forwarder == "" && strings.Join(m.Addrs, ",") == "203.0.113.8:8764"
 			})},
 		{name: "hub elsewhere takes none of this hub's settings", args: []string{"global", "hub", "-on", "desk", "-obfuscate"}, code: 2, stderr: "-on takes only"},
+		{name: "hub keeps its settings", args: []string{"global", "hub", "-keep", "-obfuscate"},
+			check: sent(control.OpAway, func(m *control.Message) bool {
+				return m.Name == "hub" && m.Keep && m.Obfuscate && m.Forwarder == "" && len(m.Addrs) == 0
+			})},
+		{name: "-keep is for this hub", args: []string{"global", "hub", "-on", "desk", "-keep"}, code: 2, stderr: "-keep changes this hub"},
 		{name: "hub with a strange firewall", args: []string{"global", "hub", "-firewall", "maybe", "a:1"}, code: 2},
 		{name: "move", args: []string{"global", "move", "desk", "203.0.113.8:8764"},
 			check: sent(control.OpAway, func(m *control.Message) bool {

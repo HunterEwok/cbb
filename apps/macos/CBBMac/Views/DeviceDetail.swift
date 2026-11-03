@@ -17,6 +17,10 @@ struct DeviceDetail: View {
     @State private var hubbing = false
     @State private var renaming = false
     @State private var newName = ""
+    @State private var tunnelTo: MacModel.HubTunnel?
+    @State private var changingForwarder = false
+    @State private var forwarderAddress = ""
+    @State private var forwarderKey = ""
 
     private var device: Control.Device? { model.devices.first { $0.id == id } }
 
@@ -27,6 +31,7 @@ struct DeviceDetail: View {
                     header(d)
                     summary(d)
                     actions(d)
+                    hubSettings(d)
                 }
                 .padding(Tokens.spacingLarge)
             }
@@ -138,6 +143,56 @@ struct DeviceDetail: View {
     }
 
     private var line: some View { Divider().overlay(palette.line) }
+
+    /// This Mac's own settings as a hub: how its tunnel hides and its
+    /// forwarder, kept apart from its addresses and port (cbb global hub
+    /// -keep).
+    @ViewBuilder private func hubSettings(_ d: Control.Device) -> some View {
+        if d.isSelf, let away = model.status?.away, away.hub == true {
+            VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
+                Text("How the hub's tunnel hides").font(.footnote).foregroundStyle(palette.textDim)
+                Picker(selection: Binding(get: { model.hubTunnel }, set: { if $0 != model.hubTunnel { tunnelTo = $0 } })) {
+                    ForEach(MacModel.HubTunnel.allCases) { Text(verbatim: $0.title).tag($0) }
+                } label: { EmptyView() }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                line
+                row(Text("Forwarder"), away.forwarder.map { Text(verbatim: $0.endpoint).monospaced() } ?? Text("none"))
+                action("arrow.triangle.swap", "Change the forwarder…") {
+                    (forwarderAddress, forwarderKey) = ("", "")
+                    changingForwarder = true
+                }
+            }
+            .padding(Tokens.spacingMedium)
+            .glassTile(cornerRadius: Tokens.radiusCard)
+            .disabled(model.busy)
+            .confirmationDialog(Text("Change how the hub's tunnel hides?"), isPresented: Binding(get: { tunnelTo != nil }, set: { if !$0 { tunnelTo = nil } })) {
+                Button {
+                    if let t = tunnelTo { Task { await model.setHub(t) } }
+                } label: { Text("Change") }
+            } message: {
+                if tunnelTo == .vless {
+                    Text("Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
+                } else {
+                    Text("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
+                }
+            }
+            .alert(Text("Change the forwarder"), isPresented: $changingForwarder) {
+                TextField(text: $forwarderAddress) { Text(verbatim: "203.0.113.9:8764") }
+                TextField(text: $forwarderKey) { Text("The key cbb forward prints") }
+                Button {
+                    Task { await model.setHub(model.hubTunnel, forwarder: forwarderAddress.trimmingCharacters(in: .whitespaces), key: forwarderKey.trimmingCharacters(in: .whitespaces)) }
+                } label: { Text("Save") }
+                    .disabled(forwarderAddress.trimmingCharacters(in: .whitespaces).isEmpty || forwarderKey.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button {
+                    Task { await model.setHub(model.hubTunnel, forwarder: "default") }
+                } label: { Text("The project's forwarder") }
+                Button(role: .cancel) {} label: { Text("Cancel") }
+            } message: {
+                Text("Your own forwarder's address and key, as cbb forward prints them, or the project's forwarder at cbb.tools.")
+            }
+        }
+    }
 
     private func row(_ label: Text, _ value: Text) -> some View {
         HStack {

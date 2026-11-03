@@ -147,7 +147,11 @@ they look, so both apps are built to the same plan.
    stands (at home only without a forwarder, registering, registered, or why the forwarder
    refuses it, with the error underneath when details are on); whether the network the
    phone is on is one of the hub's home networks, with "This is my home network" when it
-   is not; the forwarder's address and key, as `cbb forward` prints them; and on Android
+   is not; the forwarder's address and key, as `cbb forward` prints them; how the hub's
+   tunnel hides (WireGuard, AmneziaWG, or VLESS to a forwarder that takes it: the phone makes
+   the AmneziaWG settings or the VLESS user ID with cbbtun's `NewObfuscation` and
+   `NewVLESSID` and keeps them while that choice stays, and the clients get them the next
+   time they meet the hub at home); and on Android
    "Keep the hub running in the background", which lets the foreground service keep it.
    While the phone is the hub, the switch for its own sync away from home is hidden: a hub
    is nobody's client. Home says "This phone is the hub: sync works while the app is open".
@@ -316,7 +320,9 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   the `ShowErrorDetails` default either way).
 - What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from
   home, "Make it a hub" for this Mac or, on an admin, for another admin computer (`cbb global
-  hub -on`), the sync mode of this Mac or, on an admin, of another computer: `cbb mode -on`) goes only through the admin socket, which only root reaches, so the app runs
+  hub -on`), and on this Mac while it is a hub how its tunnel hides (WireGuard, AmneziaWG,
+  VLESS) and its forwarder (`cbb global hub -keep`, the tray app's page of this computer
+  the same), the sync mode of this Mac or, on an admin, of another computer: `cbb mode -on`) goes only through the admin socket, which only root reaches, so the app runs
   `cbb` with administrator privileges (`Admin`, `do shell script … with administrator
   privileges`): macOS asks for the password, as `sudo cbb` does in Terminal. With error
   details on, `CBB_DEBUG=1` makes cbb name the error underneath.

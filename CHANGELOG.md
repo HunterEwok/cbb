@@ -24,6 +24,13 @@ All notable changes to cbb are documented in this file. The format follows
   a phone's "Away from home" names the hub it is connected to. A device knows a hub by the
   offer it keeps, so it marks them once sync away from home is on there. `cbb status` lists
   `hub` for them.
+- **How the hub's tunnel hides** in every app that can be a hub: WireGuard, AmneziaWG or VLESS,
+  and its forwarder (the project's at cbb.tools or your own), on this computer's page in the
+  tray app and the Mac app and under "This phone as the hub" on both phones. The computers
+  run `cbb global hub -keep`, new: it keeps the hub's addresses, port and forwarder where the
+  command gives none. A phone hub makes its AmneziaWG settings and VLESS user ID with the new
+  `NewObfuscation` and `NewVLESSID` of `mobile/cbbtun`, keeps them in its state, starts its
+  tunnel with them and registers with its forwarder over VLESS when asked.
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
   `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,

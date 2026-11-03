@@ -962,6 +962,22 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                 )
                 val changed = address != (own?.endpoint ?: "") || pin != (own?.pin ?: "")
                 AccentButton(stringResource(R.string.hub_forwarder_save), enabled = changed && !busy, onClick = { act { model.setForwarder(address, pin) } })
+                Text(stringResource(R.string.hub_disguise), fontWeight = FontWeight.SemiBold)
+                var disguiseTo by remember { mutableStateOf<HubOnPhone.Disguise?>(null) }
+                for (d in HubOnPhone.Disguise.entries) {
+                    Choice(disguiseName(d), hub.disguise == d) { if (!busy && d != hub.disguise) disguiseTo = d }
+                }
+                Text(stringResource(R.string.hub_disguise_body), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+                disguiseTo?.let { d ->
+                    Confirm(
+                        stringResource(R.string.hub_disguise_title), stringResource(R.string.hub_disguise_confirm), stringResource(R.string.hub_disguise_change),
+                        dismiss = { disguiseTo = null },
+                        confirm = {
+                            disguiseTo = null
+                            act { model.setHubDisguise(d) }
+                        },
+                    )
+                }
                 Row(
                     Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = !busy) { act { model.setHubInBackground(!hub.background) } },
                     verticalAlignment = Alignment.CenterVertically,
@@ -976,6 +992,13 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
             Text(stringResource(R.string.hub_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
         }
     }
+}
+
+/** The names of the ways the hub's tunnel hides, the protocols' own. */
+private fun disguiseName(d: HubOnPhone.Disguise) = when (d) {
+    HubOnPhone.Disguise.PLAIN -> "WireGuard"
+    HubOnPhone.Disguise.OBFUSCATE -> "AmneziaWG"
+    HubOnPhone.Disguise.VLESS -> "VLESS"
 }
 
 /**

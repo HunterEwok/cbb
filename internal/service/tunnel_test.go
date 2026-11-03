@@ -394,6 +394,14 @@ func TestAwayObfuscated(t *testing.T) {
 	if again := tunnelState(t, pi).Obfuscation; !again.Equal(obf) {
 		t.Error("setting the hub again made new obfuscation settings")
 	}
+	// The apps' switch sets only how the tunnel hides and keeps the rest.
+	keep := control.Header{Op: control.OpAway, Name: "hub", Keep: true, Obfuscate: true}
+	if _, err := pi.do(t, keep, ""); err != nil {
+		t.Fatal(err)
+	}
+	if st := tunnelState(t, pi); !st.Obfuscation.Equal(obf) || st.ListenPort != port || len(st.Endpoints) != 1 || st.Endpoints[0].Port() != uint16(port) || st.Forwarder != nil {
+		t.Errorf("-keep changed the hub: port %d, endpoints %v, forwarder %+v", st.ListenPort, st.Endpoints, st.Forwarder)
+	}
 	piID := pi.status(t).Device
 	waitFor(t, "the deck keeps the hub's offer with its settings", func() bool {
 		a := deck.status(t).Away
@@ -415,6 +423,17 @@ func TestAwayObfuscated(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "hidden on the way" })
+
+	keep.Obfuscate = false
+	if _, err := pi.do(t, keep, ""); err != nil {
+		t.Fatal(err)
+	}
+	if st := tunnelState(t, pi); st.Obfuscation != nil || st.ListenPort != port || len(st.Endpoints) != 1 {
+		t.Errorf("-keep without -obfuscate: obfuscation %+v, port %d, endpoints %v", st.Obfuscation, st.ListenPort, st.Endpoints)
+	}
+	if _, err := deck.do(t, keep, ""); err == nil {
+		t.Error("-keep made a device that is no hub one")
+	}
 }
 
 // TestAwayThroughForwarder makes the pi a hub that only a forwarder

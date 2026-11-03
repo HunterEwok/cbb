@@ -346,6 +346,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         refreshHub()
     }
 
+    /** Sets how the hub's tunnel hides, then connects again, so that the clients at home get the new offer; on the caller's IO thread. */
+    fun setHubDisguise(d: HubOnPhone.Disguise) {
+        val h = phoneHub ?: return
+        h.setDisguise(d)
+        restartSync()
+    }
+
     /** Lets the hub run in the foreground service while the app is in the background. */
     fun setHubInBackground(on: Boolean) {
         phoneHub?.setBackground(on)

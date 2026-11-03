@@ -89,11 +89,23 @@ enum Control {
         var through: Bool?
         var error: String?
         var detail: String?
+        /// On the hub: its tunnel speaks AmneziaWG.
+        var obfuscated: Bool?
+        /// On the hub: its clients come only over VLESS to its forwarder.
+        var vless: Bool?
+        /// On the hub: its forwarder; nil without one.
+        var forwarder: Forwarder?
 
         enum CodingKeys: String, CodingKey {
-            case hub, through, error, detail
+            case hub, through, error, detail, obfuscated, vless, forwarder
             case hubDevice = "hub_device"
         }
+    }
+
+    /// A hub's registration on its forwarder.
+    struct Forwarder: Codable, Equatable {
+        var endpoint: String
+        var registered: Bool?
     }
 
     /// A device of the group, as cbb status lists them.

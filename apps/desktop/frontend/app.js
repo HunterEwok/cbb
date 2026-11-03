@@ -163,6 +163,23 @@ const modeName = (m) => ({ own: t("Own clipboard"), shared: t("Shared"), receive
 
 // modeButtons is a row of the four modes; id names the device, "" this
 // computer.
+// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
+const tunnels = ["plain", "obfuscate", "vless"];
+const tunnelName = (m) => ({ plain: "WireGuard", obfuscate: "AmneziaWG", vless: "VLESS" })[m];
+const hubTunnel = (a) => a?.vless ? "vless" : a?.obfuscated ? "obfuscate" : "plain";
+
+// The hub's own settings, on this computer's page while it is a hub.
+function hubCard(d) {
+  const a = state.status?.away;
+  if (!d.self || !a?.hub) return "";
+  const cur = hubTunnel(a);
+  const fwd = a.forwarder ? a.forwarder.endpoint : t("none");
+  return `<div class="card"><div class="dim small">${esc(t("How the hub's tunnel hides"))}</div><div class="segmented">` +
+    tunnels.map((m) => `<button type="button" data-tunnel="${m}" aria-checked="${m === cur}" ${state.busy ? "disabled" : ""}>${esc(tunnelName(m))}</button>`).join("") +
+    `</div><div class="line"><span class="dim">${esc(t("Forwarder"))}</span><span class="value mono">${esc(fwd)}</span></div>` +
+    `<div class="actions"><button data-action="forwarder" ${state.busy ? "disabled" : ""}>${esc(t("Change the forwarder…"))}</button></div></div>`;
+}
+
 function modeButtons(current, id) {
   return modes.map((m) => `<button type="button" data-mode="${m}" data-mode-for="${esc(id)}" aria-checked="${m === current}" ` +
     `${state.busy ? "disabled" : ""}>${esc(modeName(m))}</button>`).join("");
@@ -618,6 +635,7 @@ function renderDetail() {
     // lite members have no modes yet and refuse.
     (me?.admin && !d.self && d.online && d.role === "full"
       ? `<div class="card"><div class="dim small">${esc(t("Sync mode"))}</div><div class="segmented">${modeButtons(d.mode, d.id)}</div></div>` : "") +
+    hubCard(d) +
     (me?.admin
       ? `<div class="card actions">${actions.map(([a, label, danger]) => `<button data-action="${a}"${danger ? ' class="danger"' : ""} ${state.busy ? "disabled" : ""}>${esc(label)}</button>`).join("")}</div>`
       : `<p class="dim small">${esc(t("This computer is no admin of the group: the phone or an admin computer adds and removes devices."))}</p>`);
@@ -672,6 +690,17 @@ async function deviceAction(action) {
         ? t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
         : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on."), t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id);
       break;
+    case "forwarder": {
+      const text = await ask(t("Change the forwarder"), t("Your own forwarder's address and key, as cbb forward prints them, with a space between; leave it empty for the project's forwarder at cbb.tools."), t("Save"), "");
+      if (text === null) break;
+      const [addr, key, extra] = text.trim().split(/\s+/).filter(Boolean);
+      if (extra || (addr && !key)) {
+        $("message").textContent = t("Give the forwarder's address and its key, such as 203.0.113.9:8764 and the key cbb forward prints.");
+        break;
+      }
+      await act("SetHub", hubTunnel(state.status?.away), addr ?? "default", key ?? "");
+      break;
+    }
     case "freeze":
       if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);
       break;
@@ -789,6 +818,14 @@ document.addEventListener("click", async (e) => {
   if (el.dataset.mode) {
     await act("SetMode", el.dataset.modeFor, el.dataset.mode);
     return renderSettings();
+  }
+  if (el.dataset.tunnel) {
+    if (el.dataset.tunnel === hubTunnel(state.status?.away)) return;
+    const text = el.dataset.tunnel === "vless"
+      ? t("Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
+      : t("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.");
+    if (await ask(t("Change how the hub's tunnel hides?"), text, t("Change"))) await act("SetHub", el.dataset.tunnel, "", "");
+    return;
   }
   if (el.dataset.id) {
     selected = el.dataset.id;
