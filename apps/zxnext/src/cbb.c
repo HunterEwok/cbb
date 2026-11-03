@@ -1287,8 +1287,13 @@ static int install_files(void)
     drv_on = driver(DRV_STATE, 0) == 0;
     if (drv_on) old_bank = drv_bank();
     esx_f_mkdir("/cbb");
-    for (i = 0; i < ITEMS; i++) file_state(i, items[i].label, "");
+    // Every bar shows from the start, empty, in its colour.
+    for (i = 0; i < ITEMS; i++) {
+        file_state(i, items[i].label, "");
+        bar(FILE_ROW + 2 * i + 1, 0, bar_ink[i]);
+    }
     file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "TOTAL", "");
+    bar(TOTAL_ROW + 1, 0, 0xFF);
     pi_answers = !pi_md5(pimd5);
     if (http_open()) {
         http_close();
@@ -1312,8 +1317,10 @@ static int install_files(void)
         } else if (!up_to_date(it)) {
             state = 0;
         }
-        if (state) file_state(i, it->label, state);
-        else {
+        if (state) {
+            file_state(i, it->label, state);
+            if (it != pi || pi_answers) bar(FILE_ROW + 2 * i + 1, 100, bar_ink[i]);
+        } else {
             need[i] = 1;
             total_size += it->size;
         }
