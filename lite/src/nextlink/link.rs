@@ -10,7 +10,9 @@
 //! and the Z80 see only ciphertext. The Next's clock, which the driver sends
 //! at the start, sets the Pi's, which has none of its own. It is the
 //! service's paste target `next` too: a remote paste goes to the driver in
-//! key frames, which it types into the program in front.
+//! key frames, which it types into the program in front. NextPi starts
+//! nothing of ours at boot, so the link starts the service when none runs,
+//! pointed at its own ports.
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
@@ -40,6 +42,16 @@ const DIAL_TIMEOUT: Duration = Duration::from_secs(30);
 /// the ESP dials it does nothing else, so a peer it cannot reach (away from
 /// home) would hold back the tunnel's datagrams.
 const DIAL_BACKOFF: (Duration, Duration) = (Duration::from_secs(5), Duration::from_secs(60));
+/// The longest of those waits while the tunnel's hub answers: the member is
+/// away from home, where -to is not reached, and each dial would silence
+/// the tunnel's member connection for as long as the ESP tries, which on
+/// a link this slow its peers count as a broken connection.
+const DIAL_BACKOFF_AWAY: Duration = Duration::from_secs(600);
+/// How recent an answer from the tunnel's hub counts as away from home.
+const AWAY_ANSWER: Duration = Duration::from_secs(120);
+/// How long the link waits for the Next's clock before it starts the
+/// service without it.
+const SERVICE_WAIT: Duration = Duration::from_secs(10);
 /// How far the Pi's clock may be off before the Next's sets it.
 const CLOCK_SLACK: i64 = 2;
 /// The ESP's connection that carries the datagrams of `-udp`: the last, as
@@ -75,6 +87,8 @@ pub struct Udp {
     esp_port: u16,
     /// Where the last datagram came from, which the answers go to.
     peer: Option<SocketAddr>,
+    /// When the hub last answered through the ESP.
+    answered: Option<Instant>,
     state: UdpState,
     queue: VecDeque<Vec<u8>>,
 }
@@ -88,7 +102,7 @@ enum UdpState {
 
 impl Udp {
     pub fn new(sock: UdpSocket, target: (String, u16), esp_port: u16) -> Udp {
-        Udp { sock, target, esp_port, peer: None, state: UdpState::Down, queue: VecDeque::new() }
+        Udp { sock, target, esp_port, peer: None, answered: None, state: UdpState::Down, queue: VecDeque::new() }
     }
 }
 
@@ -293,7 +307,7 @@ impl<W: Write> Link<W> {
 
     /// Handles an event of the ESP's UDP connection; false when the event
     /// is not one.
-    fn udp_event(&mut self, ev: &Event) -> bool {
+    fn udp_event(&mut self, ev: &Event, now: Instant) -> bool {
         let Some(u) = self.udp.as_mut() else { return false };
         match ev {
             Event::Connected(UDP_ID) if u.state == UdpState::Dialing => {
@@ -303,6 +317,7 @@ impl<W: Write> Link<W> {
                 }
             }
             Event::Data(UDP_ID, d) if u.state == UdpState::Up => {
+                u.answered = Some(now);
                 if let Some(p) = u.peer {
                     u.sock.send_to(d, p).ok();
                 }
@@ -359,7 +374,7 @@ impl<W: Write> Link<W> {
             self.busy_since = None;
         }
         for ev in self.esp.take_events() {
-            if self.udp_event(&ev) {
+            if self.udp_event(&ev, now) {
                 continue;
             }
             match ev {
@@ -388,7 +403,12 @@ impl<W: Write> Link<W> {
                 Event::Failed(id, why) => {
                     if self.conns[id as usize].as_ref().is_some_and(|c| !c.up) {
                         // A dial of -to.
-                        self.dial_wait = (self.dial_wait * 2).clamp(DIAL_BACKOFF.0, DIAL_BACKOFF.1);
+                        let away = self
+                            .udp
+                            .as_ref()
+                            .and_then(|u| u.answered)
+                            .is_some_and(|t| now.duration_since(t) < AWAY_ANSWER);
+                        self.dial_wait = next_dial_wait(self.dial_wait, away);
                         self.dial_after = Some(now + self.dial_wait);
                         (self.log)(&format!(
                             "cannot reach {}:{}: {why}; trying again in {}s",
@@ -553,7 +573,8 @@ impl crate::pastehelper::Target for NextKeys {
 
 /// Runs the link on standard input and output until the driver quits or
 /// the UART closes; it takes remote pastes through the service at socket.
-pub fn run(socket: &Path, args: &[String]) -> Result<()> {
+pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
+    let socket: &Path = &g.socket;
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
     let mut trace = false;
     let mut udp = None;
@@ -606,6 +627,7 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
         }
         None => None,
     };
+    let udp_port = udp.as_ref().map(|u| u.2);
     let _raw = crate::next::RawTerminal::new(1, true);
     // Tells .cbb net on that the link runs and the UART is raw, so it may
     // turn the driver on: before that the shell's echo and its flow control
@@ -674,6 +696,9 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     if let Some((a, b)) = serve {
         link.serve(a, b);
     }
+    // The service starts once the Pi's clock is right, for its
+    // certificates' dates, or after SERVICE_WAIT without the Next's.
+    let mut service_at = Some(Instant::now() + SERVICE_WAIT);
     while !link.quit {
         let now = Instant::now();
         match rx.recv_timeout(Duration::from_millis(200)) {
@@ -681,8 +706,17 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
             Err(mpsc::RecvTimeoutError::Timeout) => link.tick(now),
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
-        if let Some(secs) = link.clock.take() {
+        let clock = link.clock.take();
+        if let Some(secs) = clock {
             set_clock(secs, &mut *link.log);
+        }
+        if service_at.is_some_and(|at| clock.is_some() || now >= at) {
+            service_at = None;
+            match start_service(g, port, udp_port, log_path.as_deref()) {
+                Ok(true) => (link.log)("started the service"),
+                Ok(false) => {}
+                Err(e) => (link.log)(&format!("cannot start the service: {}", e.for_user())),
+            }
         }
         for (id, use_, mut s) in std::mem::take(&mut link.readers) {
             let tx = tx.clone();
@@ -707,10 +741,76 @@ pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// The wait after a failed dial of -to that follows wait; away is whether
+/// the tunnel's hub answered lately.
+fn next_dial_wait(wait: Duration, away: bool) -> Duration {
+    (wait * 2).clamp(DIAL_BACKOFF.0, if away { DIAL_BACKOFF_AWAY } else { DIAL_BACKOFF.1 })
+}
+
+/// Starts `cbb service` when none answers at the control socket, dialling
+/// the link's port for the peer and, with `-udp`, its tunnel through the
+/// link's UDP port; it outlives the link, and logs where the link does.
+/// Tells whether it started one.
+fn start_service(g: &crate::Global, port: u16, udp: Option<u16>, log: Option<&str>) -> Result<bool> {
+    if std::os::unix::net::UnixStream::connect(&g.socket).is_ok() {
+        return Ok(false);
+    }
+    let mut cmd = std::process::Command::new(std::env::current_exe().context("cannot find this program")?);
+    cmd.arg("-state").arg(&g.state).arg("-socket").arg(&g.socket);
+    cmd.args(service_args(port, udp));
+    let out = match log {
+        Some(p) => std::process::Stdio::from(
+            std::fs::OpenOptions::new().create(true).append(true).open(p).context("cannot open the log")?,
+        ),
+        None => std::process::Stdio::null(),
+    };
+    cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(out);
+    // Its own process group, so the end of the link and its shell's
+    // signals leave it running.
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    cmd.spawn().context("cannot run cbb service")?;
+    Ok(true)
+}
+
+/// The arguments of the service the link starts.
+fn service_args(port: u16, udp: Option<u16>) -> Vec<String> {
+    let mut a = vec!["service".to_string(), "-peer".into(), format!("127.0.0.1:{port}")];
+    if let Some(u) = udp {
+        a.extend(["-tunnel-via".into(), format!("127.0.0.1:{u}")]);
+    }
+    a
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::nextlink::frame::{Frame, encode};
+
+    #[test]
+    fn away_the_home_peer_is_dialled_rarely() {
+        let mut w = Duration::ZERO;
+        let mut home = Vec::new();
+        for _ in 0..6 {
+            w = next_dial_wait(w, false);
+            home.push(w.as_secs());
+        }
+        assert_eq!(home, [5, 10, 20, 40, 60, 60]);
+        for _ in 0..6 {
+            w = next_dial_wait(w, true);
+        }
+        assert_eq!(w, DIAL_BACKOFF_AWAY);
+        // Back home the wait comes down to the home one.
+        assert_eq!(next_dial_wait(w, false), DIAL_BACKOFF.1);
+    }
+
+    #[test]
+    fn the_service_dials_the_links_ports() {
+        assert_eq!(service_args(8769, None), ["service", "-peer", "127.0.0.1:8769"]);
+        assert_eq!(
+            service_args(8769, Some(8770)),
+            ["service", "-peer", "127.0.0.1:8769", "-tunnel-via", "127.0.0.1:8770"]
+        );
+    }
 
     /// The driver's side of the wire, with the ESP behind it.
     struct Next {

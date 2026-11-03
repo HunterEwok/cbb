@@ -1056,6 +1056,12 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and credentials) give way to the `v2-*.json` vectors of the same cases.
 
 ### Fixed
+- `cbb next link` on the Next's Pi starts the lite member's service when none runs, pointed at
+  its ports, once the Next's clock has set the Pi's: NextPi starts nothing at boot, and after the
+  Next was switched off the Pi stayed out of the group until the service was started by hand.
+- `cbb next link` dials `-to` at most every ten minutes while the hub answers through its
+  tunnel: away from home each dial of the unreachable `-to` held the ESP for its whole try, and
+  the tunnel's member connection, silent meanwhile, timed out and connected again.
 - `.cbb` (0.4.2) takes the ESP8266 out of a transparent connection before it gives up on it:
   after a `.pibridge` whose connection ended, `.cbb net on` said the ESP did not answer AT
   until the Next was switched off and on.
