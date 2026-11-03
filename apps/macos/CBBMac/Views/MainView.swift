@@ -50,6 +50,9 @@ struct MainView: View {
                     Notice(symbol: "exclamationmark.triangle", title: "The service does not answer", text: Text(verbatim: problem))
                 } else if model.status == nil {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if model.status?.removed == true {
+                    // The service keeps a removed Mac's group: joining again needs its keys gone first.
+                    Notice(symbol: "person.3", title: "This Mac was removed from the group", text: Text("Its members refuse it. To join a group again, remove CBB with its keys (sudo sh /usr/local/share/cbb/uninstall.sh --purge), install it again and join."))
                 } else if !model.inGroup {
                     Notice(symbol: "person.3", title: "This Mac is in no group yet", text: Text("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new.")) {
                         Button { Task { await model.joinPhone() } } label: { Text("Join a phone's group") }

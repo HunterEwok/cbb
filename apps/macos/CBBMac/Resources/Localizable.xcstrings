@@ -1850,6 +1850,26 @@
           }
         }
       }
+    },
+    "This Mac was removed from the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот Mac удалён из группы"
+          }
+        }
+      }
+    },
+    "Its members refuse it. To join a group again, remove CBB with its keys (sudo sh /usr/local/share/cbb/uninstall.sh --purge), install it again and join.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Участники группы его не принимают. Чтобы снова войти в группу, удалите CBB вместе с ключами (sudo sh /usr/local/share/cbb/uninstall.sh --purge), установите заново и войдите."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

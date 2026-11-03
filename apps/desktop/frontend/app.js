@@ -197,6 +197,10 @@ function render() {
   box.classList.toggle("fixed", inGroup && others.length > 0 && s.settings.layout === "orbit");
   if (s.problem) {
     box.innerHTML = `<div class="notice"><div class="big">⚠</div><h2>${esc(t("The service does not answer"))}</h2><p class="dim">${esc(s.problem)}</p></div>`;
+  } else if (s.status?.removed) {
+    // The service keeps a removed computer's group: joining again needs its keys gone first.
+    box.innerHTML = `<div class="notice"><div class="big">⧉</div><h2>${esc(t("This computer was removed from the group"))}</h2>` +
+      `<p class="dim">${esc(t("Its members refuse it. To join a group again, remove CBB with its keys (uninstall --purge), install it again and join."))}</p></div>`;
   } else if (!inGroup) {
     box.innerHTML = `<div class="notice"><div class="big">⧉</div><h2>${esc(t("This computer is in no group yet"))}</h2>` +
       `<p class="dim">${esc(t("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new."))}</p>` +
