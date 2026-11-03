@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 func sample(t *testing.T) *Invitation {
@@ -34,7 +34,7 @@ func sample(t *testing.T) *Invitation {
 func TestRoundTrip(t *testing.T) {
 	in := sample(t)
 	text := in.String()
-	if !strings.HasPrefix(text, "clipboardbridge://invite#") || len(text) > 600 {
+	if !strings.HasPrefix(text, "cbb://invite#") || len(text) > 600 {
 		t.Errorf("text %q (%d bytes)", text, len(text))
 	}
 	got, err := Parse("\n " + text + "\r\n")
@@ -81,7 +81,7 @@ func TestParseRefuses(t *testing.T) {
 	noKey.GuestPSK = tunnel.Key{}
 	text := in.String()
 	for name, s := range map[string]string{
-		"not an invitation": "clipboardbridge://join?code=123456",
+		"not an invitation": "cbb://join?code=123456",
 		"damaged":           text[:len(text)-5],
 		"short secret":      short.String(),
 		"no address":        noAddr.String(),

@@ -28,9 +28,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // ErrBoardGone is the error a Board returns when its display connection is

@@ -8,8 +8,8 @@
 #
 #   sh lite/packaging/notices.sh TARGET [PACKAGE] >THIRD_PARTY_NOTICES
 #
-# PACKAGE is clipboardbridge-lite by default; the Go release archives take
-# clipboardbridge-wasm, the Rust core the service runs.
+# PACKAGE is cbb-lite by default; the Go release archives take
+# cbb-wasm, the Rust core the service runs.
 #
 # Each crate of the normal dependency graph (not build or dev dependencies)
 # appears with its name, version and license expression, followed by its
@@ -22,14 +22,14 @@ if [ $# -lt 1 ] || [ $# -gt 2 ]; then
 	exit 2
 fi
 target=$1
-package=${2:-clipboardbridge-lite}
+package=${2:-cbb-lite}
 cd "$(dirname "$0")/.."
 
 meta=$(mktemp)
 trap 'rm -f "$meta"' EXIT
 cargo metadata --locked --format-version 1 >"$meta"
 
-if [ "$package" = clipboardbridge-lite ]; then
+if [ "$package" = cbb-lite ]; then
 	echo "The lite member of CBB is free software under the GNU Affero General"
 	echo "Public License v3.0 only (LICENSE). It is built with the crates below, under"
 	echo "their own licenses."

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Package update updates an installed clipboardbridge to the newest signed
+// Package update updates an installed cbb to the newest signed
 // release (docs/design.md, "Secure updates"): it fetches the release files
 // of docs/protocol.md, section 16, checks them with internal/release,
 // downloads the archive for this system and checks it and the programs in
@@ -29,8 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // The install methods the installers record. Only an installation from

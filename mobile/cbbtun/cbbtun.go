@@ -25,8 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
-	"github.com/HunterEwok/clipboardbridge/internal/vless"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless"
 )
 
 // dialTimeout bounds one connection through the tunnel to the hub.

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // hubs signs a hubs record by signer naming the devices by name, at time

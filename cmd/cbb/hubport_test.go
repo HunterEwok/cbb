@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // The hub's port opens only with consent and closes when the hub moves.

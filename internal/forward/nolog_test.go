@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // TestNoLogs checks that a forwarder logs no address while a hub registers

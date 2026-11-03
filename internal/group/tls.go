@@ -14,11 +14,11 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/benchtime"
+	"github.com/HunterEwok/cbb/internal/benchtime"
 )
 
 // MemberProtocol is the ALPN protocol of connections between members.
-const MemberProtocol = "clipboardbridge/2"
+const MemberProtocol = "cbb/2"
 
 // TLSOptions adjust the TLS configuration of member connections.
 type TLSOptions struct {
@@ -86,7 +86,7 @@ func (id *Identity) ClientTLS(peer DeviceID, opt TLSOptions) *tls.Config {
 }
 
 // PhoneTLS returns the TLS configuration for the iPhone port, with the
-// clipboardbridge.local certificate. It returns nil on a device without one.
+// cbb.local certificate. It returns nil on a device without one.
 func (id *Identity) PhoneTLS() *tls.Config {
 	cert := id.PhoneCertificate()
 	if cert == nil {
@@ -98,7 +98,7 @@ func (id *Identity) PhoneTLS() *tls.Config {
 	}
 }
 
-// PhoneCertificate returns the clipboardbridge.local certificate with its CA, for
+// PhoneCertificate returns the cbb.local certificate with its CA, for
 // the iPhone port, or nil on a device without one.
 func (id *Identity) PhoneCertificate() *tls.Certificate {
 	if id.Phone == nil {
@@ -206,7 +206,7 @@ func (id *Identity) verifyClock(opt TLSOptions) func() time.Time {
 // ServerCertificateName is the subject of the certificate a device
 // registers with on a server when it has the group's credentials: it names
 // no device and no group.
-const ServerCertificateName = "clipboardbridge server"
+const ServerCertificateName = "cbb server"
 
 // ServerCertificate returns the certificate a device registers with on a
 // forwarder or a relay when it has the group's credentials

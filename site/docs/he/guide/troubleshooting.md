@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5174e28a6a9e -->
+<!-- source: 62cc1d41168b -->
 # כשמשהו לא עובד
 
-התחל ב-`cbb status` במכשיר שמתנהג לא כשורה: הוא אומר אם השירות רץ, באיזו קבוצה הוא נמצא, אילו חברים מחוברים ומה מצב הסנכרון מחוץ לבית. כל הודעה קצרה; ‏`CBB_DEBUG=1 cbb status` (ב-Windows קודם `$env:CBB_DEBUG = "1"`) מציג את השגיאה הבסיסית מתחתיה. ביומן השירות תמיד יש את הפרטים: ב-Linux `journalctl -u clipboardbridge`, וזה של מחבר שולחן העבודה נמצא ביומן ההפעלה, `journalctl --user`; שאר המערכות ב[קבצים ויומנים](../reference/devices.md#files-and-logs). מתג הפרטים של כל חלק, כולל האפליקציות והמתקינים, נמצא ב[הודעות שגיאה ופרטים](../reference/errors.md).
+התחל ב-`cbb status` במכשיר שמתנהג לא כשורה: הוא אומר אם השירות רץ, באיזו קבוצה הוא נמצא, אילו חברים מחוברים ומה מצב הסנכרון מחוץ לבית. כל הודעה קצרה; ‏`CBB_DEBUG=1 cbb status` (ב-Windows קודם `$env:CBB_DEBUG = "1"`) מציג את השגיאה הבסיסית מתחתיה. ביומן השירות תמיד יש את הפרטים: ב-Linux `journalctl -u cbb`, וזה של מחבר שולחן העבודה נמצא ביומן ההפעלה, `journalctl --user`; שאר המערכות ב[קבצים ויומנים](../reference/devices.md#files-and-logs). מתג הפרטים של כל חלק, כולל האפליקציות והמתקינים, נמצא ב[הודעות שגיאה ופרטים](../reference/errors.md).
 
 ## פקודות
 
-**"the CBB service is not running"**: הפעל אותו (‏`sudo systemctl start clipboardbridge` ב-Linux; ‏`sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` ב-Mac; ‏`Start-Service clipboardbridge` ב-Windows) ועיין ביומן שלו.
+**"the CBB service is not running"**: הפעל אותו (‏`sudo systemctl start cbb` ב-Linux; ‏`sudo launchctl kickstart -k system/tools.cbb` ב-Mac; ‏`Start-Service cbb` ב-Windows) ועיין ביומן שלו.
 
-**"permission denied" על שקע הבקרה, מיד אחרי ההתקנה**: המתקין הוסיף אותך לקבוצה `clipboardbridge`, וקבוצה נחשבת רק מההתחברות הבאה. התנתק והתחבר שוב (ב-Windows, פתח מסוף חדש); עד אז `sudo cbb ...` עובד.
+**"permission denied" על שקע הבקרה, מיד אחרי ההתקנה**: המתקין הוסיף אותך לקבוצה `cbb`, וקבוצה נחשבת רק מההתחברות הבאה. התנתק והתחבר שוב (ב-Windows, פתח מסוף חדש); עד אז `sudo cbb ...` עובד.
 
 ## המכשירים לא רואים זה את זה
 
@@ -21,17 +21,17 @@
 
 - **"wrong code"**: כל חלון התאמה מאפשר שלושה ניסיונות; הרץ `cbb pair` שוב לקוד חדש.
 - **הטלפון לא מגיע למחשב אחרי סריקת קוד ה-QR שלו**: הטלפון והמחשב חייבים להיות באותה רשת, והיציאה של המחשב חייבת להיות פתוחה (למעלה). ב-iOS, אפשר לאפליקציה גישה לרשת המקומית (הגדרות, פרטיות ואבטחה, רשת מקומית).
-- **קיצור הדרך לא מגיע ל-`clipboardbridge.local`**: רק מחשבי השורש והמנהלים של הקבוצה מגישים אותו, ורק ביציאה 8764; לפחות אחד חייב להיות דלוק (‏`cbb status` בכל מחשב אומר אם הוא עונה). בדוק שהפרופיל מותקן ובאמון מלא ([בלי האפליקציה](without-app.md#3-add-an-iphone-with-the-shortcut)).
+- **קיצור הדרך לא מגיע ל-`cbb.local`**: רק מחשבי השורש והמנהלים של הקבוצה מגישים אותו, ורק ביציאה 8764; לפחות אחד חייב להיות דלוק (‏`cbb status` בכל מחשב אומר אם הוא עונה). בדוק שהפרופיל מותקן ובאמון מלא ([בלי האפליקציה](without-app.md#3-add-an-iphone-with-the-shortcut)).
 
 ## סנכרון מחוץ לבית
 
 ‏`cbb global` במכשיר וברכזת אומר מה לא בסדר. הסיבות הרגילות: הראוטר לא מעביר את יציאת ה-UDP של הרכזת אל הרכזת, חומת האש של הרכזת זורקת אותה, או שהכתובת שניתנה ל-`cbb global hub` אינה זו שהאינטרנט מגיע אליה. מכשיר שלא פגש את הרכזת בבית מאז שהופעל הסנכרון מחוץ לבית, או מאז שהרכזת שינתה את ההגדרות שלה (‏`-obfuscate`, ‏`-vless`), לא יודע איך להגיע אליה: הבא אותו הביתה פעם אחת. רשת שחוסמת VPN צריכה [AmneziaWG או VLESS](blocked-networks.md). עם `CBB_DEBUG=1` בסביבת השירות היומן מציג גם את לחיצות היד של WireGuard. ב-Linux:
 
 ```sh
-sudo systemctl edit clipboardbridge     # add the two lines below, save
+sudo systemctl edit cbb     # add the two lines below, save
 # [Service]
 # Environment=CBB_DEBUG=1
-sudo systemctl restart clipboardbridge
+sudo systemctl restart cbb
 ```
 
 ## Android
@@ -41,4 +41,4 @@ sudo systemctl restart clipboardbridge
 
 ## עדיין תקוע
 
-פתח [issue](https://github.com/HunterEwok/clipboardbridge/issues) עם הפלט של `CBB_DEBUG=1 cbb status`, החלק הרלוונטי מהיומן והמערכות המעורבות. הסר כל דבר פרטי שהעתקת. בעיות אבטחה שייכות במקום זאת ל-[SECURITY.md](../../SECURITY.md).
+פתח [issue](https://github.com/HunterEwok/cbb/issues) עם הפלט של `CBB_DEBUG=1 cbb status`, החלק הרלוונטי מהיומן והמערכות המעורבות. הסר כל דבר פרטי שהעתקת. בעיות אבטחה שייכות במקום זאת ל-[SECURITY.md](../../SECURITY.md).

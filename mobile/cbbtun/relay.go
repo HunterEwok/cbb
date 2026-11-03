@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/relay"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/relay"
 )
 
 // RelayEvents is how the kit takes part in the phone's link to a blind

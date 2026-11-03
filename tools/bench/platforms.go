@@ -14,11 +14,11 @@ import "strings"
 func serviceCmd(d *Device, action string) string {
 	switch d.OS {
 	case "linux", "linux-lite":
-		return "sudo -n systemctl " + action + " clipboardbridge"
+		return "sudo -n systemctl " + action + " cbb"
 	case "openwrt":
-		return "/etc/init.d/clipboardbridge " + action
+		return "/etc/init.d/cbb " + action
 	case "freebsd":
-		return "sudo -n service clipboardbridge " + action
+		return "sudo -n service cbb " + action
 	case "netns":
 		return "sudo -n systemctl " + action + " " + netnsUnit(d)
 	}
@@ -94,23 +94,23 @@ func openwrtArch(distribArch string) string {
 func installedPaths(d *Device) []string {
 	switch d.OS {
 	case "openwrt":
-		return []string{"/usr/bin/cbb", "/usr/share/clipboardbridge", "/etc/clipboardbridge", "/etc/config/clipboardbridge",
-			"/etc/init.d/clipboardbridge", "/etc/hotplug.d/ntp/50-clipboardbridge", "/lib/upgrade/keep.d/clipboardbridge"}
+		return []string{"/usr/bin/cbb", "/usr/share/cbb", "/etc/cbb", "/etc/config/cbb",
+			"/etc/init.d/cbb", "/etc/hotplug.d/ntp/50-cbb", "/lib/upgrade/keep.d/cbb"}
 	case "freebsd":
-		return []string{"/usr/local/bin/cbb", "/usr/local/share/clipboardbridge", "/usr/local/etc/clipboardbridge",
-			"/usr/local/etc/rc.d/clipboardbridge", "/var/db/clipboardbridge"}
+		return []string{"/usr/local/bin/cbb", "/usr/local/share/cbb", "/usr/local/etc/cbb",
+			"/usr/local/etc/rc.d/cbb", "/var/db/cbb"}
 	}
-	return []string{"/var/lib/clipboardbridge", "/etc/clipboardbridge", "/usr/local/bin/cbb", "/usr/local/share/clipboardbridge",
-		"/etc/systemd/system/clipboardbridge.service", "/etc/systemd/system/clipboardbridge.service.d",
-		"/etc/xdg/autostart/clipboardbridge-desktop.desktop"}
+	return []string{"/var/lib/cbb", "/etc/cbb", "/usr/local/bin/cbb", "/usr/local/share/cbb",
+		"/etc/systemd/system/cbb.service", "/etc/systemd/system/cbb.service.d",
+		"/etc/xdg/autostart/cbb-desktop.desktop"}
 }
 
 // uninstallScript is where the installer put uninstall.sh.
 func uninstallScript(d *Device) string {
 	if d.OS == "openwrt" {
-		return "/usr/share/clipboardbridge/uninstall.sh"
+		return "/usr/share/cbb/uninstall.sh"
 	}
-	return "/usr/local/share/clipboardbridge/uninstall.sh"
+	return "/usr/local/share/cbb/uninstall.sh"
 }
 
 // coarseDate reports whether the device's date prints whole seconds only.

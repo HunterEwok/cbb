@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // watchRecord is the root's record of a watch whose admin CA is w: the
@@ -18,7 +18,7 @@ import (
 func watchRecord(t *testing.T, root *CA, w *CA, name string) Record {
 	t.Helper()
 	key := KeyHashOf(w.Cert)
-	dev := DeviceID(strings.TrimPrefix(w.Cert.Subject.CommonName, "clipboardbridge admin "))
+	dev := DeviceID(strings.TrimPrefix(w.Cert.Subject.CommonName, "cbb admin "))
 	r, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(root.Cert), TimeMS: nextTime(), Device: string(dev), Name: name, Role: RoleWatch, OS: OSWatchOS, Key: &key, Admin: &key,
 		Powers: []string{authority.PowerFreeze, authority.PowerRemove}, Commands: []string{CommandAction, CommandActionsOff, CommandAwayOff, CommandPasteOff}, Store: StoreHardware}, root.Key)
 	if err != nil {

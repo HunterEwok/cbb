@@ -16,7 +16,7 @@ import (
 func footprint(ctx context.Context, d *Device) (string, error) {
 	return Run(ctx, d, `find /etc /usr/local /var/lib -xdev -path /var/lib/systemd -prune -o -print 2>/dev/null | sort
 echo '--- rules'; nft -s list ruleset 2>/dev/null; iptables-save 2>/dev/null | grep -v '^#' | sed 's/ \[[0-9:]*\]$//'
-echo '--- units'; systemctl list-unit-files --no-legend 'clipboardbridge*' 2>/dev/null; true`, "")
+echo '--- units'; systemctl list-unit-files --no-legend 'cbb*' 2>/dev/null; true`, "")
 }
 
 // footprintDiff says which lines a and b do not share, at most a few.
@@ -48,7 +48,7 @@ func footprintDiff(a, b string) string {
 // certificates), which an uninstall without --purge, an upgrade and a
 // downgrade keep.
 func stateFiles(ctx context.Context, d *Device) (string, error) {
-	return Run(ctx, d, "sha256sum /var/lib/clipboardbridge/identity.json", "")
+	return Run(ctx, d, "sha256sum /var/lib/cbb/identity.json", "")
 }
 
 // installers (I2, I4, I6, I7): install.sh's options on a computer with
@@ -149,7 +149,7 @@ func installers(ctx context.Context, r *Report, f *Fleet, builds map[string]stri
 		if err := listens("8800"); err != nil {
 			return err
 		}
-		if out, err := Run(ctx, d, "cat /etc/clipboardbridge/clipboardbridge.env", ""); err != nil || !strings.Contains(out, "CBB_PORT=8800") {
+		if out, err := Run(ctx, d, "cat /etc/cbb/cbb.env", ""); err != nil || !strings.Contains(out, "CBB_PORT=8800") {
 			return fmt.Errorf("the port is not kept: %q %v", out, err)
 		}
 		// A run without --port keeps it; --port 8764 moves it back.
@@ -175,7 +175,7 @@ func installers(ctx context.Context, r *Report, f *Fleet, builds map[string]stri
 		if strings.TrimSpace(keys) == "" {
 			return fmt.Errorf("found no key files in the state to compare")
 		}
-		if _, err := RunFor(ctx, d, "sh /usr/local/share/clipboardbridge/uninstall.sh", "", 2*time.Minute); err != nil {
+		if _, err := RunFor(ctx, d, "sh /usr/local/share/cbb/uninstall.sh", "", 2*time.Minute); err != nil {
 			return err
 		}
 		left, err := footprint(ctx, d)
@@ -184,7 +184,7 @@ func installers(ctx context.Context, r *Report, f *Fleet, builds map[string]stri
 		}
 		var other []string
 		for _, l := range strings.Split(footprintDiff(clean, left), "\n") {
-			if l != "" && !strings.HasPrefix(l, "+/var/lib/clipboardbridge") {
+			if l != "" && !strings.HasPrefix(l, "+/var/lib/cbb") {
 				other = append(other, l)
 			}
 		}
@@ -200,7 +200,7 @@ func installers(ctx context.Context, r *Report, f *Fleet, builds map[string]stri
 		if _, err := installArchive(ctx, d, builds["0.6.0"], "--express --auto-update off"); err != nil {
 			return err
 		}
-		if _, err := RunFor(ctx, d, "sh /usr/local/share/clipboardbridge/uninstall.sh --purge", "", 2*time.Minute); err != nil {
+		if _, err := RunFor(ctx, d, "sh /usr/local/share/cbb/uninstall.sh --purge", "", 2*time.Minute); err != nil {
 			return err
 		}
 		left, err := footprint(ctx, d)

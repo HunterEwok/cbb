@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# The service's own user and group. Members of the group may use the control
+# socket: cbb copy, paste and the desktop connector.
+u cbb - "cbb service" /var/lib/cbb

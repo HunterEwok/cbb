@@ -35,7 +35,7 @@ const (
 )
 
 // Report is the keyboard's input report, under blekeyboard's root.
-const Report = dbus.ObjectPath("/io/github/hunterewok/clipboardbridge/keyboard/hid/report")
+const Report = dbus.ObjectPath("/tools/cbb/keyboard/hid/report")
 
 // A BlueZ is the fake bluetoothd.
 type BlueZ struct {

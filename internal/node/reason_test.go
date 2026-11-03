@@ -11,8 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 func TestCleanReason(t *testing.T) {

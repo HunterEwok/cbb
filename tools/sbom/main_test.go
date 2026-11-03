@@ -72,7 +72,7 @@ func TestPurlEscapes(t *testing.T) {
 func TestGoModules(t *testing.T) {
 	info := &debug.BuildInfo{
 		GoVersion: "go1.27.3",
-		Main:      debug.Module{Path: "github.com/HunterEwok/clipboardbridge"},
+		Main:      debug.Module{Path: "github.com/HunterEwok/cbb"},
 		Deps: []*debug.Module{
 			{Path: "golang.org/x/sys", Version: "v0.49.0", Sum: "h1:abc="},
 			{Path: "example.com/old", Version: "v1.0.0", Replace: &debug.Module{Path: "example.com/new", Version: "v1.1.0"}},

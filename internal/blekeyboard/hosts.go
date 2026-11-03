@@ -13,7 +13,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
 )
 
 // A host that forgot the keyboard (reset, or "Forget" on its side) cannot

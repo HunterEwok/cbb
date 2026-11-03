@@ -4,14 +4,14 @@
 
 # Removes what install.sh installed on OpenWrt, as root:
 #
-#   sh /usr/share/clipboardbridge/uninstall.sh [--purge]
+#   sh /usr/share/cbb/uninstall.sh [--purge]
 #
 # It stops the service, whose firewall rules go with it, and removes the
 # binary, the init script, the NTP hook, the capability file, the keep list,
-# the settings in /etc/config/clipboardbridge, the update's cron line and
+# the settings in /etc/config/cbb, the update's cron line and
 # cbb update's folder. The device's keys and
-# group, in /etc/clipboardbridge, stay for a reinstall unless --purge; the
-# clipboardbridge user and group stay too.
+# group, in /etc/cbb, stay for a reinstall unless --purge; the
+# cbb user and group stay too.
 set -eu
 
 if [ "${CBB_ERROR_DETAILS:-}" = 1 ]; then
@@ -39,23 +39,23 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-if [ -x /etc/init.d/clipboardbridge ]; then
-	/etc/init.d/clipboardbridge stop || true
-	/etc/init.d/clipboardbridge disable || true
+if [ -x /etc/init.d/cbb ]; then
+	/etc/init.d/cbb stop || true
+	/etc/init.d/cbb disable || true
 fi
-rm -f /etc/clipboardbridge/firewall.hub
+rm -f /etc/cbb/firewall.hub
 /etc/init.d/firewall reload >/dev/null 2>&1 || true
-rm -f /etc/init.d/clipboardbridge /etc/hotplug.d/ntp/50-clipboardbridge /lib/upgrade/keep.d/clipboardbridge \
-	/etc/capabilities/clipboardbridge.json /etc/config/clipboardbridge /usr/bin/cbb /var/state/clipboardbridge.time
-rm -rf /usr/share/clipboardbridge /var/run/clipboardbridge /etc/clipboardbridge-update /tmp/clipboardbridge-update
-if grep -q '# clipboardbridge-update$' /etc/crontabs/root 2>/dev/null; then
-	grep -v '# clipboardbridge-update$' /etc/crontabs/root >/etc/crontabs/root.new || true
+rm -f /etc/init.d/cbb /etc/hotplug.d/ntp/50-cbb /lib/upgrade/keep.d/cbb \
+	/etc/capabilities/cbb.json /etc/config/cbb /usr/bin/cbb /var/state/cbb.time
+rm -rf /usr/share/cbb /var/run/cbb /etc/cbb-update /tmp/cbb-update
+if grep -q '# cbb-update$' /etc/crontabs/root 2>/dev/null; then
+	grep -v '# cbb-update$' /etc/crontabs/root >/etc/crontabs/root.new || true
 	mv -f /etc/crontabs/root.new /etc/crontabs/root
 	/etc/init.d/cron restart >/dev/null 2>&1 || true
 fi
 if [ "$purge" = yes ]; then
-	rm -rf /etc/clipboardbridge
+	rm -rf /etc/cbb
 	echo "CBB is removed, with this device's keys; it left its group."
 else
-	echo "CBB is removed. Its keys stay in /etc/clipboardbridge for a reinstall; --purge removes them."
+	echo "CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them."
 fi

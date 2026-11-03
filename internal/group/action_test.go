@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 func TestValidActionName(t *testing.T) {

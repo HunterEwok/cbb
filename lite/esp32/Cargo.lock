@@ -286,7 +286,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "clipboardbridge-core"
+name = "cbb-core"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
@@ -308,21 +308,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "clipboardbridge-embassy"
+name = "cbb-embassy"
 version = "0.1.0"
 dependencies = [
- "clipboardbridge-core",
+ "cbb-core",
  "embassy-net",
  "embassy-time",
  "embedded-io-async 0.7.0",
 ]
 
 [[package]]
-name = "clipboardbridge-esp32"
+name = "cbb-esp32"
 version = "0.1.0"
 dependencies = [
- "clipboardbridge-core",
- "clipboardbridge-embassy",
+ "cbb-core",
+ "cbb-embassy",
  "embassy-executor",
  "embassy-futures",
  "embassy-net",

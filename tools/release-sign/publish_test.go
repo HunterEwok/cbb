@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // fakeGitHub plays the gh commands publish and renew run: each release's
@@ -88,7 +88,7 @@ func (g *fakeGitHub) run(args ...string) ([]byte, error) {
 			return nil, errors.New("release not found")
 		}
 		return json.Marshal(map[string]any{"isDraft": draft,
-			"body": "notes\n\n```\nghcr.io/hunterewok/clipboardbridge@sha256:" + strings.Repeat("ab", 32) + "\n```\n"})
+			"body": "notes\n\n```\nghcr.io/hunterewok/cbb@sha256:" + strings.Repeat("ab", 32) + "\n```\n"})
 	case args[0] == "release" && args[1] == "download":
 		if _, ok := g.drafts[args[2]]; !ok {
 			return nil, errors.New("release not found")

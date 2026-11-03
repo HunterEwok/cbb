@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // releaseSigner signs releases under a root of its own, as
@@ -71,7 +71,7 @@ func (s *releaseSigner) signArchive(t *testing.T, version string, seq uint64, da
 		t.Fatal(err)
 	}
 	rel, err := release.Sign(release.Release{V: 1, Type: release.TypeRelease, Version: version, Channel: "stable", TimeMS: at,
-		Files: []release.Asset{{Name: "clipboardbridge-linux-amd64.tar.gz", Size: int64(len(data)), SHA256: hexSum(data)}}}, s.key)
+		Files: []release.Asset{{Name: "cbb-linux-amd64.tar.gz", Size: int64(len(data)), SHA256: hexSum(data)}}}, s.key)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 69c597a7b5db -->
+<!-- source: 6d2083e0e66e -->
 # Быстрый старт
 
 Copy Beyond Borders даёт телефону и компьютерам один общий буфер обмена: скопировали на одном,
@@ -20,8 +20,8 @@ Copy Beyond Borders даёт телефону и компьютерам один
 
 ## 1. Поставьте приложение на телефон
 
-- **Android** 10 и новее: скачайте `clipboardbridge-X.Y.Z.apk` со страницы
-  [последнего релиза](https://github.com/HunterEwok/clipboardbridge/releases/latest) прямо
+- **Android** 10 и новее: скачайте `cbb-X.Y.Z.apk` со страницы
+  [последнего релиза](https://github.com/HunterEwok/cbb/releases/latest) прямо
   на телефоне и откройте его; когда Android спросит, разрешите браузеру устанавливать
   приложения.
 - **iPhone**: приложение выйдет в TestFlight, который пока не открыт. До тех пор iPhone
@@ -36,13 +36,13 @@ Copy Beyond Borders даёт телефону и компьютерам один
 В **Linux** или на **Mac**, в терминале:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 В **Windows** 10 или 11, в PowerShell, открытом через «Запуск от имени администратора»:
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 Установщик проверяет загрузку, запускает Copy Beyond Borders и задаёт два вопроса: открыть ли

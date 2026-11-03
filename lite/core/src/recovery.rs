@@ -7,7 +7,7 @@
 //! in Crockford's base32 with a check group, for a person to type into a
 //! computer of the group, which has the admin CA in the records.
 //!
-//! The QR code is `clipboardbridge://recover?g=<group>&k=<key>&c=<admin CA>`
+//! The QR code is `cbb://recover?g=<group>&k=<key>&c=<admin CA>`
 //! with k and c in base64url without padding; the text is the key's 32
 //! bytes as 52 characters and 4 check characters, in groups of four joined
 //! by hyphens.
@@ -24,7 +24,7 @@ use p256::pkcs8::{EncodePrivateKey as _, EncodePublicKey as _};
 use crate::certs::{Cert, sha256};
 
 /// The start of the QR code's text.
-pub const PREFIX: &str = "clipboardbridge://recover?";
+pub const PREFIX: &str = "cbb://recover?";
 /// Crockford's base32 alphabet.
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /// The key's characters in the text: 256 bits in groups of 5, the last 4 bits zero.
@@ -32,7 +32,7 @@ const KEY_CHARS: usize = 52;
 /// The check characters after the key: the first 20 bits of the check hash.
 const CHECK_CHARS: usize = 4;
 /// What the check hash covers before the key.
-const CHECK_CONTEXT: &[u8] = b"clipboardbridge recovery";
+const CHECK_CONTEXT: &[u8] = b"cbb recovery";
 /// The longest admin CA a QR code may carry.
 pub const MAX_CERT: usize = 2048;
 /// The longest text read: the QR code with the longest admin CA, with room to spare.
@@ -75,7 +75,7 @@ impl Reason {
     /// A sentence for the user.
     pub fn message(self) -> &'static str {
         match self {
-            Reason::NotSheet => "this is not a clipboardbridge recovery sheet",
+            Reason::NotSheet => "this is not a cbb recovery sheet",
             Reason::Damaged => "the recovery key is damaged",
             Reason::Check => "a character of the recovery key is mistyped; check each group of four",
             Reason::Key => "the recovery key is not a valid key",

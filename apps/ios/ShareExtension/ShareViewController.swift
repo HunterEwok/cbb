@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import ClipboardBridgeKit
+import CBBKit
 import os
 import SwiftUI
 import UIKit

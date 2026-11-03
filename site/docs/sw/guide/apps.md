@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: fab5414079e4 -->
+<!-- source: d10744fc3cc7 -->
 # Programu
 
 Copy Beyond Borders ina programu za simu, saa na kompyuta za mezani. Programu za simu hushikilia kikundi; programu za kompyuta ni dirisha la kuangalia huduma ambayo tayari inaendeshwa kwenye kompyuta.
 
 | Programu | Mahali pa kuipata | Hali |
 |---|---|---|
-| Android | `clipboardbridge-X.Y.Z.apk` katika kila [toleo](https://github.com/HunterEwok/clipboardbridge/releases) | imejengwa na kujaribiwa katika CI, bado haijajaribiwa kwenye simu halisi |
-| Android bila Google | `clipboardbridge-fdroid-X.Y.Z.apk`, na F-Droid itakapokubaliwa: programu ile ile bila saa ya Wear OS | imejengwa na kujaribiwa katika CI |
+| Android | `cbb-X.Y.Z.apk` katika kila [toleo](https://github.com/HunterEwok/cbb/releases) | imejengwa na kujaribiwa katika CI, bado haijajaribiwa kwenye simu halisi |
+| Android bila Google | `cbb-fdroid-X.Y.Z.apk`, na F-Droid itakapokubaliwa: programu ile ile bila saa ya Wear OS | imejengwa na kujaribiwa katika CI |
 | iPhone na iPad | TestFlight, itakapofunguliwa | imejengwa na kujaribiwa katika CI; inaendeshwa kwenye iPhone ikijengwa kwa timu ya msanidi mwenyewe |
-| Wear OS | `clipboardbridge-wear-X.Y.Z.apk`, huwekwa kwenye saa kutoka kwenye kompyuta kwa `adb install` kupitia utatuzi usiotumia waya wa saa, hadi programu iwe kwenye Google Play | imejengwa |
+| Wear OS | `cbb-wear-X.Y.Z.apk`, huwekwa kwenye saa kutoka kwenye kompyuta kwa `adb install` kupitia utatuzi usiotumia waya wa saa, hadi programu iwe kwenye Google Play | imejengwa |
 | Apple Watch | pamoja na programu ya iPhone | imejengwa; inaendeshwa kwenye Apple Watch pamoja na programu ya iPhone |
 | Programu ya Mac | si ya kupakua bado: kwa sasa hujengwa kutoka `apps/macos` | imejengwa |
 | Programu ya trei ya Linux na Windows | katika kumbukumbu za Windows na Linux za kila toleo, husakinishwa pamoja na huduma | imejengwa; imeendeshwa kwenye mashine pepe ya Windows 11 |
@@ -20,7 +20,7 @@ Copy Beyond Borders ina programu za simu, saa na kompyuta za mezani. Programu za
 
 1. [Sakinisha](install.md) Copy Beyond Borders kwenye kompyuta na uendeshe `sudo cbb pair` hapo. Huonyesha msimbo wa QR.
 2. Fungua programu na ugonge **Connect a new device**, kisha changanua msimbo. Programu huunda ufunguo wa kikundi ndani ya chipu ya usalama ya simu (Secure Enclave kwenye iPhone, Keystore kwenye Android), huongeza kompyuta na kufungua Mwanzo.
-3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u clipboardbridge cbb pair` kwenye kifaa hicho huonyesha msimbo wake).
+3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u cbb cbb pair` kwenye kifaa hicho huonyesha msimbo wake).
 
 Kamera isipoweza kutumika: kwenye iPhone, andika tarakimu sita ambazo kompyuta inaonyesha; kwenye Android, bandika maandishi ya msimbo wa QR, ambayo `cbb pair` pia huyachapisha.
 

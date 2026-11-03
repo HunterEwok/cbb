@@ -18,7 +18,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 type fakeKeys struct {

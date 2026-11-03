@@ -64,7 +64,7 @@ func isDeviceID(s string) bool {
 	return len(s) == 32 && strings.Trim(s, "0123456789abcdef") == ""
 }
 
-// relevant reports whether a record concerns clipboardbridge members: the
+// relevant reports whether a record concerns cbb members: the
 // service's PTR records, SRV and TXT records of its instances, and the
 // addresses of member host names.
 func relevant(name string, r dnsmessage.Resource) bool {
@@ -82,7 +82,7 @@ func relevant(name string, r dnsmessage.Resource) bool {
 }
 
 // maxTTL is the longest lifetime a received record keeps: the one
-// clipboardbridge itself gives its records of that type, so a record from a
+// cbb itself gives its records of that type, so a record from a
 // device that is gone expires in time.
 func maxTTL(r dnsmessage.Resource) uint32 {
 	switch r.Body.(type) {

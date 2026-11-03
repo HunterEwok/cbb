@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: fab5414079e4 -->
+<!-- source: d10744fc3cc7 -->
 # האפליקציות
 
 ל-Copy Beyond Borders יש אפליקציות לטלפונים, לשעונים ולמחשבים שולחניים. אפליקציות הטלפון מחזיקות את הקבוצה; אפליקציות המחשב הן חלון אל השירות שכבר רץ במחשב.
 
 | אפליקציה | איפה משיגים | מצב |
 |---|---|---|
-| Android | ‏`clipboardbridge-X.Y.Z.apk` בכל [גרסה](https://github.com/HunterEwok/clipboardbridge/releases) | נבנתה ונבדקה ב-CI, עדיין לא בטלפון אמיתי |
-| Android בלי Google | ‏`clipboardbridge-fdroid-X.Y.Z.apk`, ו-F-Droid כשתתקבל: אותה אפליקציה בלי שעון Wear OS | נבנתה ונבדקה ב-CI |
+| Android | ‏`cbb-X.Y.Z.apk` בכל [גרסה](https://github.com/HunterEwok/cbb/releases) | נבנתה ונבדקה ב-CI, עדיין לא בטלפון אמיתי |
+| Android בלי Google | ‏`cbb-fdroid-X.Y.Z.apk`, ו-F-Droid כשתתקבל: אותה אפליקציה בלי שעון Wear OS | נבנתה ונבדקה ב-CI |
 | iPhone ו-iPad | ‏TestFlight, כשייפתח | נבנתה ונבדקה ב-CI; רצה על iPhone כשנבנית עם הצוות של מפתח |
-| Wear OS | ‏`clipboardbridge-wear-X.Y.Z.apk`, מותקן בשעון ממחשב באמצעות `adb install` דרך ניפוי השגיאות האלחוטי של השעון, עד שהאפליקציה תהיה ב-Google Play | נבנתה |
+| Wear OS | ‏`cbb-wear-X.Y.Z.apk`, מותקן בשעון ממחשב באמצעות `adb install` דרך ניפוי השגיאות האלחוטי של השעון, עד שהאפליקציה תהיה ב-Google Play | נבנתה |
 | Apple Watch | עם אפליקציית ה-iPhone | נבנתה; רצה על Apple Watch עם אפליקציית ה-iPhone |
 | אפליקציית Mac | עדיין לא להורדה: בינתיים נבנית מ-`apps/macos` | נבנתה |
 | אפליקציית המגש ל-Linux ול-Windows | בארכיוני Windows ו-Linux של כל גרסה, מותקנת עם השירות | נבנתה; הורצה במכונה וירטואלית של Windows 11 |
@@ -20,7 +20,7 @@
 
 1. [התקינו](install.md) את Copy Beyond Borders במחשב והריצו שם `sudo cbb pair`. הוא מציג קוד QR.
 2. פתחו את האפליקציה והקישו על **Connect a new device**, ואז סרקו את הקוד. האפליקציה יוצרת את מפתח הקבוצה בשבב האבטחה של הטלפון (ה-Secure Enclave ב-iPhone, ה-Keystore ב-Android), מוסיפה את המחשב ופותחת את מסך הבית.
-3. הוסיפו כל מחשב נוסף באמצעות **+** במסך הבית. חבר קל מצטרף באותה דרך (‏`sudo -u clipboardbridge cbb pair` עליו מציג את הקוד שלו).
+3. הוסיפו כל מחשב נוסף באמצעות **+** במסך הבית. חבר קל מצטרף באותה דרך (‏`sudo -u cbb cbb pair` עליו מציג את הקוד שלו).
 
 כשאי אפשר להשתמש במצלמה: ב-iPhone, הקלידו את ששת הספרות שהמחשב מציג; ב-Android, הדביקו את הטקסט של קוד ה-QR, ש-`cbb pair` מדפיס גם הוא.
 

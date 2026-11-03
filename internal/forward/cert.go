@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
 )
 
 // NewCert makes a forwarder's key and its self-signed certificate. Hubs pin
@@ -30,7 +30,7 @@ func NewCert() (tls.Certificate, error) {
 	}
 	now := time.Now()
 	tmpl := &x509.Certificate{
-		Subject:   pkix.Name{CommonName: "clipboardbridge forwarder"},
+		Subject:   pkix.Name{CommonName: "cbb forwarder"},
 		NotBefore: now.Add(-time.Hour),
 		NotAfter:  now.AddDate(100, 0, 0),
 		KeyUsage:  x509.KeyUsageDigitalSignature,
@@ -82,7 +82,7 @@ func LoadCert(path string) (tls.Certificate, error) {
 
 // realityBlock is the PEM type of the forwarder's REALITY key in its key
 // file, next to its own key and certificate.
-const realityBlock = "CLIPBOARDBRIDGE REALITY KEY"
+const realityBlock = "CBB REALITY KEY"
 
 // LoadRealityKey reads the forwarder's REALITY key, X25519, for VLESS from
 // its key file at path, and adds a new one to the file if it has none.

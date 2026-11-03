@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
 )
 
 // Quick actions (design.md, "Quick actions"; docs/protocol.md, section

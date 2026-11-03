@@ -27,7 +27,7 @@ CBB_VERDICTS_OUT="$out/go-release.txt" go test ./internal/release -run '^TestVer
 # --rerun: Gradle does not see the corpus change between runs.
 (cd apps/android && CBB_VERDICTS_OUT="$out/kotlin.txt" ./gradlew --no-daemon -q -p kit test --tests '*.VerdictTest' --rerun)
 sh lite/ffi/bind.sh host "$out/core"
-docker run --rm -v "$root:/src" -v "$out:/out" -w /src/apps/ios/ClipboardBridgeKit \
+docker run --rm -v "$root:/src" -v "$out:/out" -w /src/apps/ios/CBBKit \
 	-e CBB_VERDICTS=/out/corpus.jsonl -e CBB_VERDICTS_OUT=/out/swift.txt swift:6.2-noble \
 	swift test -Xlinker -L/out/core --filter VerdictTests
 

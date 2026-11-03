@@ -53,12 +53,12 @@ others ([the firewall](../guide/install.md#the-firewall)).
 
 | System | Keys and state | Settings | Log |
 |---|---|---|---|
-| Linux | `/var/lib/clipboardbridge` | `/etc/clipboardbridge` | `journalctl -u clipboardbridge`; the desktop connector in `journalctl --user` |
-| FreeBSD, OPNsense | `/var/db/clipboardbridge` | `/usr/local/etc/clipboardbridge` | syslog, `/var/log/messages` |
-| OpenWrt | `/etc/clipboardbridge/state`, kept by sysupgrade | `/etc/config/clipboardbridge` | `logread -e clipboardbridge` |
-| Mac | `/Library/Application Support/clipboardbridge/state` | `/etc/clipboardbridge` | `/Library/Logs/clipboardbridge/service.log`, the agent's `~/Library/Logs/clipboardbridge/agent.log` |
-| Windows | `ProgramData\clipboardbridge\state` | the service's registry key ([settings](config.md#settings-files)) | `ProgramData\clipboardbridge\logs\service.log`, the agent's `LocalAppData\clipboardbridge\agent.log` |
-| Lite member | `/var/lib/clipboardbridge`; on OpenWrt `/etc/clipboardbridge/state` | `/etc/clipboardbridge` | `journalctl -u clipboardbridge`; on OpenWrt `logread -e clipboardbridge` |
+| Linux | `/var/lib/cbb` | `/etc/cbb` | `journalctl -u cbb`; the desktop connector in `journalctl --user` |
+| FreeBSD, OPNsense | `/var/db/cbb` | `/usr/local/etc/cbb` | syslog, `/var/log/messages` |
+| OpenWrt | `/etc/cbb/state`, kept by sysupgrade | `/etc/config/cbb` | `logread -e cbb` |
+| Mac | `/Library/Application Support/cbb/state` | `/etc/cbb` | `/Library/Logs/cbb/service.log`, the agent's `~/Library/Logs/cbb/agent.log` |
+| Windows | `ProgramData\cbb\state` | the service's registry key ([settings](config.md#settings-files)) | `ProgramData\cbb\logs\service.log`, the agent's `LocalAppData\cbb\agent.log` |
+| Lite member | `/var/lib/cbb`; on OpenWrt `/etc/cbb/state` | `/etc/cbb` | `journalctl -u cbb`; on OpenWrt `logread -e cbb` |
 
 Keep the keys out of unencrypted backups, and encrypt the disk (LUKS, FileVault,
 BitLocker): whoever copies them can act as that device until you remove it from the group.

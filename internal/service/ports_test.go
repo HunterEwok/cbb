@@ -21,7 +21,7 @@ func TestPorts(t *testing.T) {
 		t.Errorf("default: %d %v", p, err)
 	}
 	// The file, as install.sh writes it; the last line wins.
-	EnvFile = filepath.Join(dir, "clipboardbridge.env")
+	EnvFile = filepath.Join(dir, "cbb.env")
 	os.WriteFile(EnvFile, []byte("# written by install.sh\nCBB_PORT=9000\nOTHER=1\nCBB_PORT=\"9100\"\n"), 0o644)
 	if p, err := Port(); err != nil || p != 9100 {
 		t.Errorf("from the file: %d %v", p, err)
@@ -47,7 +47,7 @@ func TestHomeCGNAT(t *testing.T) {
 	if on, err := HomeCGNAT(); err != nil || on {
 		t.Errorf("default: %v %v", on, err)
 	}
-	EnvFile = filepath.Join(dir, "clipboardbridge.env")
+	EnvFile = filepath.Join(dir, "cbb.env")
 	os.WriteFile(EnvFile, []byte("CBB_PORT=9000\nCBB_HOME_CGNAT=1\n"), 0o644)
 	if on, err := HomeCGNAT(); err != nil || !on {
 		t.Errorf("from the file: %v %v", on, err)

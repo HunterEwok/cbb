@@ -10,7 +10,7 @@ protocol of [docs/protocol.md](../docs/protocol.md), but unlike a full member it
   publishes itself in mDNS
   and listens on the member port, TCP 8764, so that phones and other lite members
   dial it: a phone syncs with it directly, with no computer on;
-- never holds `clipboardbridge.local` or serves the shortcut, the Apple Shortcuts action an
+- never holds `cbb.local` or serves the shortcut, the Apple Shortcuts action an
   iPhone without the app uses (a phone with the app, iPhone or Android, needs neither);
 - has no desktop clipboard of its own: other programs use `copy`, `paste` and `watch`.
 
@@ -56,14 +56,14 @@ The core alone, with its TLS, for a RISC-V microcontroller such as the ESP32-C6
 backend):
 
 ```sh
-cargo build -p clipboardbridge-core --features tls --release --target riscv32imac-unknown-none-elf
+cargo build -p cbb-core --features tls --release --target riscv32imac-unknown-none-elf
 ```
 
 For the ESP32-S3 (Xtensa) with Espressif's Rust toolchain (`espup install`, or the
 `esp32` job in `.github/workflows/ci.yml`, which fetches the same toolchain directly):
 
 ```sh
-cargo +esp build -Zbuild-std=core,alloc -p clipboardbridge-core --features tls --release \
+cargo +esp build -Zbuild-std=core,alloc -p cbb-core --features tls --release \
   --target xtensa-esp32s3-none-elf
 ```
 
@@ -84,12 +84,12 @@ rustup target add arm-unknown-linux-musleabihf
 cargo build --release --target arm-unknown-linux-musleabihf
 ```
 
-CI builds both for every pull request: the `clipboardbridge-lite-linux-arm64` and
-`clipboardbridge-lite-linux-armv6` artifacts of the `lite member (Rust)` job. A release builds static musl binaries for x86-64,
+CI builds both for every pull request: the `cbb-lite-linux-arm64` and
+`cbb-lite-linux-armv6` artifacts of the `lite member (Rust)` job. A release builds static musl binaries for x86-64,
 ARM64 and ARMv6 with Rust's own linker (`.cargo/config.toml`), each in an archive
 (`packaging/archive.sh`) with `THIRD_PARTY_NOTICES`, the licenses of the crates it is built
 from (`packaging/notices.sh`), and the installer of the full member's Linux archive with the
-lite member's own systemd unit (`packaging/clipboardbridge.service`).
+lite member's own systemd unit (`packaging/cbb.service`).
 
 The e2e test runs the lite member among Go members: it joins through the phone's QR code,
 gets no CA keys and syncs both ways.
@@ -103,37 +103,36 @@ cd .. && CBB_LITE=$PWD/lite/target/release/cbb go test ./internal/service -run T
 On the device, with systemd (Raspberry Pi OS, Debian, Ubuntu):
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --lite
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --lite
 ```
 
 `get.sh --lite` takes the release's static build for this architecture
-(`clipboardbridge-lite-linux-amd64.tar.gz`, `-arm64`, or `-armv6`, which also runs on
+(`cbb-lite-linux-amd64.tar.gz`, `-arm64`, or `-armv6`, which also runs on
 ARMv7), checks it against `SHA256SUMS` and runs its `packaging/linux/install.sh`, the same installer as a full
-member's: the program as `/usr/local/bin/cbb`, the `clipboardbridge` user and group, the
-service `clipboardbridge.service`, the tmux configuration, and, with your consent, mDNS and
+member's: the program as `/usr/local/bin/cbb`, the `cbb` user and group, the
+service `cbb.service`, the tmux configuration, and, with your consent, mDNS and
 the member port from the home network in the firewall. `--port N`, `--console`, `--express`
 and `--no-firewall` work as for a full member ([the command reference](../docs/reference/cli.md#installers)).
 Running it again updates. It refuses to replace a full member, whose keys the lite member
-cannot use, and moves an install from before the rename (`cbb-lite`, its own user and
-paths) to the new names, keeping the device in its group. Without curl, or for a binary you
+cannot use. Without curl, or for a binary you
 built, unpack the archive (or make one with `sh packaging/archive.sh`) and run
-`sudo sh clipboardbridge-lite/packaging/linux/install.sh clipboardbridge-lite/cbb`. To remove it:
-`sudo sh /usr/local/share/clipboardbridge/uninstall.sh` (`--purge` also deletes the keys).
+`sudo sh cbb-lite/packaging/linux/install.sh cbb-lite/cbb`. To remove it:
+`sudo sh /usr/local/share/cbb/uninstall.sh` (`--purge` also deletes the keys).
 
 The service waits until the device joins a group. Join as the service's user, so that it
 can read its keys:
 
 ```sh
-sudo -u clipboardbridge cbb pair -name pi
+sudo -u cbb cbb pair -name pi
 ```
 
 It shows a QR code: in the Copy Beyond Borders app (iPhone or Android) tap "Connect a new device"
-(or, on an iPhone with the shortcut, run "clipboardbridge: add a computer") and scan it. The phone reaches the device on
+(or, on an iPhone with the shortcut, run "cbb: add a computer") and scan it. The phone reaches the device on
 TCP port 8764 (`-port` to change it), while it joins and afterwards to sync. In a group
 without a phone, run `cbb pair` on the group's root or an admin and
-`sudo -u clipboardbridge cbb pair -code <that member>:8764` here, then type the code.
+`sudo -u cbb cbb pair -code <that member>:8764` here, then type the code.
 
-The installer adds the user who ran `sudo` to the `clipboardbridge` group, for the control
+The installer adds the user who ran `sudo` to the `cbb` group, for the control
 socket without `sudo`:
 
 ```sh
@@ -152,7 +151,7 @@ whether there is one; `sudo cbb update -auto on|off` checks once a day (a system
 cron on OpenWrt), as the installer asks once (`--auto-update on|off`).
 
 Without mDNS on the network, name the full members in a drop-in
-(`sudo systemctl edit clipboardbridge`): `ExecStart=` and then
+(`sudo systemctl edit cbb`): `ExecStart=` and then
 `ExecStart=/usr/local/bin/cbb service -peer 192.168.0.10:8764 -peer ...`. `service -no-listen`
 turns the member port off (the device then only dials the computers).
 
@@ -162,20 +161,20 @@ On a Linux computer where you have no `sudo`, install it for your own user inste
 ([D-79](../docs/decisions.md), "Rootless installs" in [docs/design.md](../docs/design.md)):
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh -s -- --lite --rootless
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --lite --rootless
 cbb pair -name pi              # as yourself, without sudo -u
 ```
 
-It runs as your own systemd user service (`systemctl --user status clipboardbridge`), with the
-program in `~/.local/bin`, the keys in `~/.local/state/clipboardbridge` and the control socket
-in `$XDG_RUNTIME_DIR/clipboardbridge`, and its hello and device record say `rootless`. Since
+It runs as your own systemd user service (`systemctl --user status cbb`), with the
+program in `~/.local/bin`, the keys in `~/.local/state/cbb` and the control socket
+in `$XDG_RUNTIME_DIR/cbb`, and its hello and device record say `rootless`. Since
 every program you run can read its keys, the system install stays the advice: a rootless
 lite member has no firewall rules, no text console target (`paste-receive on -console`
 refuses) and no `reboot` or `cancel-shutdown` action (they need a polkit rule; `restart`
 stays), and it starts at boot only when an administrator once runs
 `sudo loginctl enable-linger YOUR-USER`. The commands above that take `sudo` take none here.
 For copy and paste in tmux, add the line the installer prints to `~/.tmux.conf`. To remove
-it: `sh ~/.local/share/clipboardbridge/uninstall.sh` (`--purge` also deletes the keys).
+it: `sh ~/.local/share/cbb/uninstall.sh` (`--purge` also deletes the keys).
 OpenWrt has no user services, so a router takes the normal install.
 
 ### OpenWrt
@@ -184,14 +183,14 @@ On a router with OpenWrt 25.12 or later (ARM64, ARMv7, x86-64, MIPS or MIPSel; o
 member syncs only at home for now, without sync away from home), as root:
 
 ```sh
-uclient-fetch -qO - https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh -s -- --lite
-su -s /bin/sh clipboardbridge -c 'cbb pair -name router'
+uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --lite
+su -s /bin/sh cbb -c 'cbb pair -name router'
 ```
 
 It installs OpenWrt's procd service, the same as a full member's
 ([installing](../docs/guide/install.md#openwrt)), which runs `cbb service` as the user
-`clipboardbridge`. The keys live in `/etc/clipboardbridge/state`, the control socket is
-`/var/run/clipboardbridge/control.sock`. The member port, mDNS and the QR code's addresses
+`cbb`. The keys live in `/etc/cbb/state`, the control socket is
+`/var/run/cbb/control.sock`. The member port, mDNS and the QR code's addresses
 use only the devices of the `lan` zone, which the service gets as `CBB_INTERFACES`; the same
 variable limits the lite member on any Linux.
 
@@ -210,7 +209,7 @@ WireGuard to the hub's UDP port, with the member TLS inside, so the clipboard st
 end to end. At home it sends nothing to the hub's outside addresses. A hub that hides its
 tunnel (`-obfuscate` or `-vless`, for networks that block WireGuard) is refused, since the lite
 member speaks plain WireGuard only, and the device syncs at home only. The keys are in
-`/var/lib/clipboardbridge/tunnel.json`, a file, so the warning asks you to protect the disk
+`/var/lib/cbb/tunnel.json`, a file, so the warning asks you to protect the disk
 or memory card.
 
 ### Remote paste
@@ -225,11 +224,11 @@ sudo cbb paste-receive off
 An admin phone's "Paste on it…", or `cbb paste --on` on an admin computer, puts a text where
 this device's keyboard focus is, as on a full Linux member: into the tmux pane in use, through
 the helper that CBB's `tmux.conf` starts in each tmux server, or, with
-`-console`, into the active text console, through the `clipboardbridge-console` unit that
+`-console`, into the active text console, through the `cbb-console` unit that
 `--console` installs. The device's own user turns it on, never an admin; a text with a line
 break needs `-enter`, since tmux and the console would run it; a locked tmux client or console,
 a login prompt or a console without a logged-in user refuse. The last 100 pastes, never their
-text, are in `/var/lib/clipboardbridge/pastes.json`.
+text, are in `/var/lib/cbb/pastes.json`.
 
 ### Quick actions
 
@@ -248,9 +247,9 @@ minute after the admin asks, which `cancel-shutdown` stops, and `restart`, which
 service. Each is off until the device's own user turns it on; `-by root,phone,computer,watch`
 limits it to those kinds of admins, and a reboot takes only admins whose keys are in hardware
 unless `-any-key`. Turning `reboot` on writes a polkit rule that lets the service's user ask
-logind for a reboot and nothing else (`/etc/polkit-1/rules.d/60-clipboardbridge.rules`), so
+logind for a reboot and nothing else (`/etc/polkit-1/rules.d/60-cbb.rules`), so
 the device needs polkit (`polkitd`); `shutdown -r +1` runs it. Any admin turns the actions
-off from afar. The last 100 are in `/var/lib/clipboardbridge/actions-log.json`.
+off from afar. The last 100 are in `/var/lib/cbb/actions-log.json`.
 
 ## ZX Spectrum Next
 

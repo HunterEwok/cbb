@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/remotepaste"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/remotepaste"
 )
 
 func TestRemotePaste(t *testing.T) {

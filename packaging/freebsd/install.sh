@@ -2,21 +2,21 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs clipboardbridge on FreeBSD, as root:
+# Installs cbb on FreeBSD, as root:
 #
 #   sh install.sh [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] path/to/cbb
 #
 # It installs the binary to /usr/local/bin, makes the user and group
-# clipboardbridge (pw), the rc.d script, which runs the service through
+# cbb (pw), the rc.d script, which runs the service through
 # daemon(8), and enables it in rc.conf, adds the user who ran sudo or doas
 # to the group, and starts or restarts the service. The keys live in
-# /var/db/clipboardbridge, the settings in /usr/local/etc/clipboardbridge;
+# /var/db/cbb, the settings in /usr/local/etc/cbb;
 # desktop sessions start the clipboard agent from XDG autostart.
 # --port, --home-cgnat, --auto-update, --express and --no-firewall work as
 # in the Linux installer; the firewall is pf or ipfw (firewall.sh). On OPNsense it also
-# installs the plugin hook clipboardbridge.inc, which names the service's pf
+# installs the plugin hook cbb.inc, which names the service's pf
 # anchor in OPNsense's ruleset and shows the service in its pages; on
-# pfSense, unsupported, it prints the rules and adds clipboardbridge.sh,
+# pfSense, unsupported, it prints the rules and adds cbb.sh,
 # since pfSense starts only rc.d scripts named so. uninstall.sh removes it
 # all again.
 set -eu
@@ -114,24 +114,24 @@ if ! "$bin" version >/dev/null 2>&1; then
 	exit 1
 fi
 
-if ! pw groupshow clipboardbridge >/dev/null 2>&1; then
-	pw groupadd clipboardbridge
+if ! pw groupshow cbb >/dev/null 2>&1; then
+	pw groupadd cbb
 fi
-if ! pw usershow clipboardbridge >/dev/null 2>&1; then
-	pw useradd clipboardbridge -g clipboardbridge -d /nonexistent -s /usr/sbin/nologin -c "CBB"
+if ! pw usershow cbb >/dev/null 2>&1; then
+	pw useradd cbb -g cbb -d /nonexistent -s /usr/sbin/nologin -c "CBB"
 fi
 install -m 0755 "$bin" /usr/local/bin/cbb
-install -d -m 0755 /usr/local/etc/rc.d /usr/local/share/clipboardbridge /usr/local/etc/clipboardbridge
-install -m 0555 "$here/clipboardbridge" /usr/local/etc/rc.d/clipboardbridge
-install -d -o clipboardbridge -g clipboardbridge -m 0700 /var/db/clipboardbridge
+install -d -m 0755 /usr/local/etc/rc.d /usr/local/share/cbb /usr/local/etc/cbb
+install -m 0555 "$here/cbb" /usr/local/etc/rc.d/cbb
+install -d -o cbb -g cbb -m 0700 /var/db/cbb
 
 user=${SUDO_USER:-${DOAS_USER:-}}
 if [ -n "$user" ] && [ "$user" != root ]; then
-	pw groupmod clipboardbridge -m "$user"
-	echo "Added $user to the clipboardbridge group; log in again to use cbb copy and paste."
+	pw groupmod cbb -m "$user"
+	echo "Added $user to the cbb group; log in again to use cbb copy and paste."
 fi
 
-env=/usr/local/etc/clipboardbridge/clipboardbridge.env
+env=/usr/local/etc/cbb/cbb.env
 if [ -z "$port" ]; then
 	port=$(sed -n 's/^CBB_PORT=//p' "$env" 2>/dev/null | tail -n 1)
 fi
@@ -146,7 +146,7 @@ if [ "$port" = 8764 ] && [ "$cgnat" = 0 ] && [ -z "$interfaces" ]; then
 	rm -f "$env"
 else
 	{
-		echo "# Written by clipboardbridge's install.sh; change it with install.sh --port N and --home-cgnat on|off. A CBB_INTERFACES line is kept."
+		echo "# Written by cbb's install.sh; change it with install.sh --port N and --home-cgnat on|off. A CBB_INTERFACES line is kept."
 		if [ "$port" != 8764 ]; then
 			echo "CBB_PORT=$port"
 		fi
@@ -164,32 +164,32 @@ appliance=
 if [ -f /usr/local/opnsense/version/core ]; then
 	appliance=opnsense
 	install -d -m 0755 /usr/local/etc/inc/plugins.inc.d
-	install -m 0644 "$here/clipboardbridge.inc" /usr/local/etc/inc/plugins.inc.d/clipboardbridge.inc
+	install -m 0644 "$here/cbb.inc" /usr/local/etc/inc/plugins.inc.d/cbb.inc
 elif grep -qi pfsense /etc/platform 2>/dev/null; then
 	appliance=pfsense
-	cat >/usr/local/etc/rc.d/clipboardbridge.sh <<'EOF'
+	cat >/usr/local/etc/rc.d/cbb.sh <<'EOF'
 #!/bin/sh
-# Written by clipboardbridge's install.sh: pfSense starts only rc.d scripts named *.sh.
-exec /usr/sbin/service clipboardbridge "one${1:-start}"
+# Written by cbb's install.sh: pfSense starts only rc.d scripts named *.sh.
+exec /usr/sbin/service cbb "one${1:-start}"
 EOF
-	chmod 0555 /usr/local/etc/rc.d/clipboardbridge.sh
+	chmod 0555 /usr/local/etc/rc.d/cbb.sh
 fi
-install -m 0644 "$here/firewall.sh" /usr/local/share/clipboardbridge/firewall.sh
-install -m 0644 "$here/uninstall.sh" /usr/local/share/clipboardbridge/uninstall.sh
+install -m 0644 "$here/firewall.sh" /usr/local/share/cbb/firewall.sh
+install -m 0644 "$here/uninstall.sh" /usr/local/share/cbb/uninstall.sh
 # Desktop sessions (KDE, GNOME, Xfce and others that read XDG autostart)
 # start the clipboard agent, cbb agent, at login; a firewall has none.
 if [ -z "$appliance" ]; then
 	install -d -m 0755 /usr/local/etc/xdg/autostart
-	install -m 0644 "$here/clipboardbridge-desktop.desktop" /usr/local/etc/xdg/autostart/clipboardbridge-desktop.desktop
+	install -m 0644 "$here/cbb-desktop.desktop" /usr/local/etc/xdg/autostart/cbb-desktop.desktop
 fi
-sh /usr/local/share/clipboardbridge/firewall.sh setup "$firewall" "$port"
+sh /usr/local/share/cbb/firewall.sh setup "$firewall" "$port"
 if [ "$port" != 8764 ]; then
 	echo "CBB uses TCP port $port instead of 8764. The iPhone shortcut works only"
 	echo "with 8764; the CBB app takes any port."
 fi
 
-sysrc -q clipboardbridge_enable=YES >/dev/null
-service clipboardbridge restart >/dev/null 2>&1 || service clipboardbridge start
+sysrc -q cbb_enable=YES >/dev/null
+service cbb restart >/dev/null 2>&1 || service cbb start
 
 answers() { # cbb
 	i=0
@@ -207,7 +207,7 @@ answers /usr/local/bin/cbb || true
 # shellcheck source=packaging/update.sh
 . "$here/../update.sh"
 update_setup /usr/local/bin/cbb "$bin" "$auto"
-echo "CBB is running on TCP port $port. To remove it: sh /usr/local/share/clipboardbridge/uninstall.sh"
+echo "CBB is running on TCP port $port. To remove it: sh /usr/local/share/cbb/uninstall.sh"
 case $appliance in
 opnsense) echo "OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload." ;;
 pfsense) echo "pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one." ;;

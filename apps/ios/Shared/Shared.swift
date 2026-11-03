@@ -21,11 +21,11 @@ enum Shared {
     /// write there, else in the app's own Application Support.
     static var groupFile: URL {
         if let c = container,
-           (try? FileManager.default.createDirectory(at: c.appendingPathComponent("clipboardbridge"), withIntermediateDirectories: true)) != nil {
-            return c.appendingPathComponent("clipboardbridge/group.json")
+           (try? FileManager.default.createDirectory(at: c.appendingPathComponent("cbb"), withIntermediateDirectories: true)) != nil {
+            return c.appendingPathComponent("cbb/group.json")
         }
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("clipboardbridge/group.json")
+            .appendingPathComponent("cbb/group.json")
     }
 
     /// The settings the app and the extension share: the app group's, or

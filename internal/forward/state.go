@@ -18,13 +18,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/budget"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/budget"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // stateLabel names the key that hashes what the state table keeps.
-const stateLabel = "clipboardbridge forwarder state"
+const stateLabel = "cbb forwarder state"
 
 // writeDelay is how long a change waits for others before the table is
 // written: the file lags the table by at most this.

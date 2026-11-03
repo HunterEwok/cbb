@@ -9,8 +9,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/lockcheck"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/lockcheck"
 )
 
 // keyboard presses a paste's keys where the board's own way cannot: the

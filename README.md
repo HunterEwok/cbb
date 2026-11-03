@@ -12,18 +12,18 @@ accounts. Its short name is CBB and its command is `cbb`.
 ## Get started
 
 1. Install the app on your phone (Android: the APK in the
-   [latest release](https://github.com/HunterEwok/clipboardbridge/releases/latest); iPhone:
+   [latest release](https://github.com/HunterEwok/cbb/releases/latest); iPhone:
    TestFlight, coming).
 2. Install Copy Beyond Borders on a computer:
 
    ```sh
    # Linux and Mac
-   curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
    ```
 
    ```powershell
    # Windows 10 or 11, in an administrator PowerShell
-   irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+   irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
    ```
 
 3. Run `sudo cbb pair` on the computer and scan its QR code in the app.
@@ -131,7 +131,7 @@ Copy Beyond Borders is free software, licensed under the
 One author holds all the rights, so a commercial license without the AGPL's obligations is
 also available, for example to build the lite member (`lite/`) into routers and other
 devices. To ask for one, open an issue with the **Commercial license** form on
-[GitHub](https://github.com/HunterEwok/clipboardbridge/issues/new/choose).
+[GitHub](https://github.com/HunterEwok/cbb/issues/new/choose).
 
 Which builds are official, what others may do with the icon and the name, and the other
 projects with similar names: [BRAND.md](BRAND.md). The text of the protocol,

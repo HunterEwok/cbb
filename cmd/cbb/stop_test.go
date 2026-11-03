@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // TestStopLines checks what cbb status says when the records stop the

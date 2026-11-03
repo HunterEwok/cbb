@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // maxSheetText bounds what cbb recovery reads: the QR code's text with its

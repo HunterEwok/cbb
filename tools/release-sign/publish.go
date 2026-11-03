@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // The steps of publish and renew reach GitHub through the gh command, ask
@@ -46,7 +46,7 @@ const keysMargin = 45 * 24 * time.Hour
 // the channel key on cbb.tools renews it every week after.
 const channelLife = 30 * 24 * time.Hour
 
-const defaultRepo = "HunterEwok/clipboardbridge"
+const defaultRepo = "HunterEwok/cbb"
 
 // channelBranch holds the current keys.json and channel file
 // (docs/protocol.md, section 16, "Where the files are").
@@ -57,7 +57,7 @@ const stableChannel = "stable"
 
 // The image the release workflow's docker job pushes; it adds the digest
 // to the draft's notes on a line of its own.
-var dockerRE = regexp.MustCompile(`(?m)^ghcr\.io/hunterewok/clipboardbridge@sha256:[0-9a-f]{64}\r?$`)
+var dockerRE = regexp.MustCompile(`(?m)^ghcr\.io/hunterewok/cbb@sha256:[0-9a-f]{64}\r?$`)
 
 // signing are the flags publish and renew share.
 type signing struct {

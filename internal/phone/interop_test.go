@@ -26,13 +26,13 @@ func TestJoinQRInteropVectors(t *testing.T) {
 	texts := []string{
 		JoinQR(full),
 		JoinQR(JoinCode{Code: "012345"}),
-		" CLIPBOARDBRIDGE://JOIN?code=111111&x=1\n",
-		"clipboardbridge://join?code=3&addr=a:1&addr=b:1&addr=c:1&addr=d:1&addr=e:1&addr=10.0.0.2",
-		"clipboardbridge://join",
-		"clipboardbridge://pair?code=123456",
-		"clipboardbridge-join:123456",
+		" CBB://JOIN?code=111111&x=1\n",
+		"cbb://join?code=3&addr=a:1&addr=b:1&addr=c:1&addr=d:1&addr=e:1&addr=10.0.0.2",
+		"cbb://join",
+		"cbb://pair?code=123456",
+		"cbb-join:123456",
 		"https://join/?code=1",
-		"clipboardbridge://join?code=246802&fp=ab+c/d=",
+		"cbb://join?code=246802&fp=ab+c/d=",
 	}
 	var vs []joinQRVector
 	for _, text := range texts {

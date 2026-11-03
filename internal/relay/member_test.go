@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // TestAsk checks the wait for the relay to join a dial or an answer: the

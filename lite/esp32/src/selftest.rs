@@ -66,8 +66,8 @@ pub fn run() -> Result<()> {
         return Err(Error::msg("the message did not arrive"));
     }
     let (mut a, mut b) = ([0u8; 32], [0u8; 32]);
-    cx.export(b"EXPORTER-clipboardbridge-test", b"", &mut a)?;
-    sx.export(b"EXPORTER-clipboardbridge-test", b"", &mut b)?;
+    cx.export(b"EXPORTER-cbb-test", b"", &mut a)?;
+    sx.export(b"EXPORTER-cbb-test", b"", &mut b)?;
     if a != b {
         return Err(Error::msg("the two ends export different keys"));
     }

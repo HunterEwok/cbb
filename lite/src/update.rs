@@ -45,12 +45,12 @@ pub const ROOTS: &[&[u8]] = &[
     ],
 ];
 pub const CHANNEL: &str = "stable";
-const GITHUB: &str = "https://github.com/HunterEwok/clipboardbridge/releases";
+const GITHUB: &str = "https://github.com/HunterEwok/cbb/releases";
 pub const MIRROR: &str = "https://dl.cbb.tools";
 /// Where GitHub keeps the current keys.json and channel file: the branch
 /// channel, since a published release takes no new files and these are
 /// signed again while it is current (docs/protocol.md, section 16).
-const CHANNEL_FILES: &str = "https://raw.githubusercontent.com/HunterEwok/clipboardbridge/channel";
+const CHANNEL_FILES: &str = "https://raw.githubusercontent.com/HunterEwok/cbb/channel";
 const MAX_MANIFEST: u64 = 1 << 20;
 const MAX_ARCHIVE: u64 = 256 << 20;
 pub const HEALTH: Duration = Duration::from_secs(60);
@@ -91,9 +91,9 @@ pub fn paths() -> (PathBuf, PathBuf) {
         let d = crate::rootless::update_dir();
         (d.clone(), d)
     } else if crate::openwrt() {
-        (PathBuf::from("/etc/clipboardbridge-update"), PathBuf::from("/tmp/clipboardbridge-update"))
+        (PathBuf::from("/etc/cbb-update"), PathBuf::from("/tmp/cbb-update"))
     } else {
-        (PathBuf::from("/var/lib/clipboardbridge-update"), PathBuf::from("/var/lib/clipboardbridge-update"))
+        (PathBuf::from("/var/lib/cbb-update"), PathBuf::from("/var/lib/cbb-update"))
     }
 }
 
@@ -138,7 +138,7 @@ pub fn archive_name() -> Option<String> {
         "mips" => "mips",
         _ => return None,
     };
-    Some(format!("clipboardbridge-lite-linux-{arch}.tar.gz"))
+    Some(format!("cbb-lite-linux-{arch}.tar.gz"))
 }
 
 /// Where the release files come from: a server, or a folder for tests.
@@ -545,7 +545,7 @@ pub fn wait_healthy(status: &dyn Fn() -> Result<String>, version: &str, within: 
             // Not the hint to start the service: the previous version goes
             // back in and starts. The cause stays for -debug.
             Err(e) => e.context(format!(
-                "it does not answer; {} -u clipboardbridge (logread on OpenWrt) tells why",
+                "it does not answer; {} -u cbb (logread on OpenWrt) tells why",
                 crate::rootless::journalctl()
             )),
         };
@@ -585,10 +585,10 @@ pub fn read_roots(path: &Path) -> Result<Vec<Vec<u8>>> {
     Ok(roots)
 }
 
-const SYSTEMD_SERVICE: &str = "/etc/systemd/system/clipboardbridge-update.service";
-const SYSTEMD_TIMER: &str = "/etc/systemd/system/clipboardbridge-update.timer";
+const SYSTEMD_SERVICE: &str = "/etc/systemd/system/cbb-update.service";
+const SYSTEMD_TIMER: &str = "/etc/systemd/system/cbb-update.timer";
 const CRON_OPENWRT: &str = "/etc/crontabs/root";
-const CRON_MARK: &str = "# clipboardbridge-update";
+const CRON_MARK: &str = "# cbb-update";
 
 /// Adds the daily timer that runs exe update -timer, or removes it: a
 /// systemd timer, or cron on OpenWrt, as the full member's.
@@ -600,7 +600,7 @@ pub fn set_timer(on: bool, exe: &Path) -> Result<()> {
     let user = crate::rootless::is();
     let (service_file, timer_file) = if user {
         let d = crate::rootless::unit_dir();
-        (d.join("clipboardbridge-update.service"), d.join("clipboardbridge-update.timer"))
+        (d.join("cbb-update.service"), d.join("cbb-update.timer"))
     } else {
         (PathBuf::from(SYSTEMD_SERVICE), PathBuf::from(SYSTEMD_TIMER))
     };
@@ -621,7 +621,7 @@ pub fn set_timer(on: bool, exe: &Path) -> Result<()> {
         }
     };
     if !on {
-        let _ = systemctl(&["disable", "--now", "clipboardbridge-update.timer"]).output();
+        let _ = systemctl(&["disable", "--now", "cbb-update.timer"]).output();
         for p in [&timer_file, &service_file] {
             match fs::remove_file(p) {
                 Err(e) if e.kind() != ErrorKind::NotFound => {
@@ -647,7 +647,7 @@ pub fn set_timer(on: bool, exe: &Path) -> Result<()> {
     write_atomic(&service_file, service.as_bytes(), 0o644)?;
     write_atomic(&timer_file, timer.as_bytes(), 0o644)?;
     run(&["daemon-reload"])?;
-    run(&["enable", "--now", "clipboardbridge-update.timer"])
+    run(&["enable", "--now", "cbb-update.timer"])
 }
 
 fn cron_timer(on: bool, exe: &Path) -> Result<()> {
@@ -686,7 +686,7 @@ mod tests {
     use std::cell::RefCell;
 
     const NOW: i64 = 1_800_000_000_000;
-    const ARCHIVE: &str = "clipboardbridge-lite-linux-test.tar.gz";
+    const ARCHIVE: &str = "cbb-lite-linux-test.tar.gz";
 
     fn key(n: u8) -> SigningKey {
         SigningKey::from_slice(&[n; 32]).unwrap()
@@ -722,16 +722,16 @@ mod tests {
     fn publish(dir: &Path, version: &str, seq: u64, prog: Option<&str>) {
         let tree = dir.join("tree");
         let _ = fs::remove_dir_all(&tree);
-        fs::create_dir_all(tree.join("clipboardbridge-lite/packaging/linux")).unwrap();
+        fs::create_dir_all(tree.join("cbb-lite/packaging/linux")).unwrap();
         let body = format!("cbb {version}");
-        fs::write(tree.join("clipboardbridge-lite/cbb"), &body).unwrap();
-        fs::write(tree.join("clipboardbridge-lite/packaging/linux/install.sh"), "#!/bin/sh\n").unwrap();
+        fs::write(tree.join("cbb-lite/cbb"), &body).unwrap();
+        fs::write(tree.join("cbb-lite/packaging/linux/install.sh"), "#!/bin/sh\n").unwrap();
         let st = Command::new("tar")
             .arg("-czf")
             .arg(dir.join(ARCHIVE))
             .arg("-C")
             .arg(&tree)
-            .arg("clipboardbridge-lite")
+            .arg("cbb-lite")
             .status()
             .unwrap();
         assert!(st.success());
@@ -746,7 +746,7 @@ mod tests {
         let r = sign(
             serde_json::json!({"v": 1, "type": "release", "version": version, "channel": CHANNEL, "time_ms": at,
                 "files": [{"name": ARCHIVE, "size": data.len(), "sha256": hex(&sha256(&data)),
-                    "binaries": [{"name": "clipboardbridge-lite/cbb",
+                    "binaries": [{"name": "cbb-lite/cbb",
                         "sha256": prog.map(String::from).unwrap_or_else(|| hex(&sha256(body.as_bytes())))}]}]}),
             &rel,
         );

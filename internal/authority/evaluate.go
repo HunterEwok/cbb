@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/HunterEwok/clipboardbridge/internal/strict"
+	"github.com/HunterEwok/cbb/internal/strict"
 )
 
 // Input is what the evaluation takes (docs/protocol.md, section 10, "The state").

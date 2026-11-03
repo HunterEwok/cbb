@@ -6,7 +6,7 @@
 // <name>.shortcut next to it:
 //
 //	go run ./tools/shortcut
-//	n=clipboardbridge
+//	n=cbb
 //	plutil -convert binary1 -o /tmp/$n.shortcut internal/phone/shortcut/$n.plist
 //	shortcuts sign --mode anyone --input /tmp/$n.shortcut --output internal/phone/shortcut/$n.shortcut
 //
@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/HunterEwok/clipboardbridge/internal/phone"
+	"github.com/HunterEwok/cbb/internal/phone"
 )
 
 func main() {

@@ -5,7 +5,7 @@
 
 // Package consolepaste is the paste target on the Linux text console
 // (design.md, "Remote paste"): cbb paste-helper console, which the
-// clipboardbridge-console unit runs as root with CAP_SYS_ADMIN alone,
+// cbb-console unit runs as root with CAP_SYS_ADMIN alone,
 // puts the text into the input of the active virtual console with
 // TIOCSTI, as if typed there. That works also where the kernel turns
 // unprivileged TIOCSTI off (dev.tty.legacy_tiocsti = 0).
@@ -24,8 +24,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/lockcheck"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/lockcheck"
 )
 
 // Console pastes into the active virtual console.

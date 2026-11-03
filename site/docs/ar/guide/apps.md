@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: fab5414079e4 -->
+<!-- source: d10744fc3cc7 -->
 # التطبيقات
 
 لدى Copy Beyond Borders تطبيقات للهواتف والساعات وأسطح المكتب. تحمل تطبيقات الهاتف المجموعة؛ أما تطبيقات سطح المكتب فهي نافذة على الخدمة التي تعمل أصلًا على الحاسوب.
 
 | التطبيق | من أين تحصل عليه | الحالة |
 |---|---|---|
-| Android | `clipboardbridge-X.Y.Z.apk` في كل [إصدار](https://github.com/HunterEwok/clipboardbridge/releases) | مبني ومختبَر في CI، ولم يُجرَّب بعد على هاتف حقيقي |
-| Android من دون Google | `clipboardbridge-fdroid-X.Y.Z.apk`، وF-Droid بعد قبوله: التطبيق نفسه من دون ساعة Wear OS | مبني ومختبَر في CI |
+| Android | `cbb-X.Y.Z.apk` في كل [إصدار](https://github.com/HunterEwok/cbb/releases) | مبني ومختبَر في CI، ولم يُجرَّب بعد على هاتف حقيقي |
+| Android من دون Google | `cbb-fdroid-X.Y.Z.apk`، وF-Droid بعد قبوله: التطبيق نفسه من دون ساعة Wear OS | مبني ومختبَر في CI |
 | iPhone وiPad | TestFlight، عندما يُفتح | مبني ومختبَر في CI؛ يعمل على iPhone إذا بُني بفريق المطوّر الخاص |
-| Wear OS | `clipboardbridge-wear-X.Y.Z.apk`، يُثبَّت على الساعة من حاسوب بالأمر `adb install` عبر التصحيح اللاسلكي للساعة، إلى أن يصبح التطبيق على Google Play | مبني |
+| Wear OS | `cbb-wear-X.Y.Z.apk`، يُثبَّت على الساعة من حاسوب بالأمر `adb install` عبر التصحيح اللاسلكي للساعة، إلى أن يصبح التطبيق على Google Play | مبني |
 | Apple Watch | مع تطبيق iPhone | مبني؛ يعمل على Apple Watch مع تطبيق iPhone |
 | تطبيق Mac | ليس للتنزيل بعد: يُبنى حاليًا من `apps/macos` | مبني |
 | تطبيق شريط المهام لـ Linux وWindows | في أرشيفات Windows وLinux لكل إصدار، ويُثبَّت مع الخدمة | مبني؛ جُرّب في آلة افتراضية بنظام Windows 11 |
@@ -20,7 +20,7 @@
 
 1. [ثبّت](install.md) Copy Beyond Borders على حاسوب وشغّل `sudo cbb pair` هناك. سيعرض رمز QR.
 2. افتح التطبيق واضغط **Connect a new device**، ثم امسح الرمز. ينشئ التطبيق مفتاح المجموعة في شريحة الأمان بالهاتف (Secure Enclave في iPhone، وKeystore في Android)، ويضيف الحاسوب، ويفتح الصفحة الرئيسية.
-3. أضف كل حاسوب آخر بـ **+** في الصفحة الرئيسية. وينضم العضو الخفيف بالطريقة نفسها (يعرض الأمر `sudo -u clipboardbridge cbb pair` عليه رمزه).
+3. أضف كل حاسوب آخر بـ **+** في الصفحة الرئيسية. وينضم العضو الخفيف بالطريقة نفسها (يعرض الأمر `sudo -u cbb cbb pair` عليه رمزه).
 
 حين تتعذر الكاميرا: على iPhone اكتب الأرقام الستة التي يعرضها الحاسوب؛ وعلى Android الصق نص رمز QR الذي يطبعه `cbb pair` أيضًا.
 

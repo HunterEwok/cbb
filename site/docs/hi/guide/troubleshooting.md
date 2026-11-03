@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5174e28a6a9e -->
+<!-- source: 62cc1d41168b -->
 # जब कुछ काम न करे
 
-उस डिवाइस पर `cbb status` से शुरू करें जो गड़बड़ कर रहा है: वह बताता है कि सेवा चल रही है या नहीं, वह किस समूह में है, कौन-से सदस्य जुड़े हैं और घर से बाहर सिंक की स्थिति क्या है। हर संदेश छोटा है; `CBB_DEBUG=1 cbb status` (Windows पर पहले `$env:CBB_DEBUG = "1"`) उसके नीचे असली त्रुटि दिखाता है। सेवा के लॉग में हमेशा ब्योरा होता है: Linux पर `journalctl -u clipboardbridge`, और डेस्कटॉप कनेक्टर का लॉग सत्र की जर्नल में, `journalctl --user`; बाकी सिस्टम [फ़ाइलें और लॉग](../reference/devices.md#files-and-logs) में हैं। ऐप और इंस्टॉलर समेत हर हिस्से का ब्योरा-स्विच [त्रुटि संदेश और ब्योरा](../reference/errors.md) में है।
+उस डिवाइस पर `cbb status` से शुरू करें जो गड़बड़ कर रहा है: वह बताता है कि सेवा चल रही है या नहीं, वह किस समूह में है, कौन-से सदस्य जुड़े हैं और घर से बाहर सिंक की स्थिति क्या है। हर संदेश छोटा है; `CBB_DEBUG=1 cbb status` (Windows पर पहले `$env:CBB_DEBUG = "1"`) उसके नीचे असली त्रुटि दिखाता है। सेवा के लॉग में हमेशा ब्योरा होता है: Linux पर `journalctl -u cbb`, और डेस्कटॉप कनेक्टर का लॉग सत्र की जर्नल में, `journalctl --user`; बाकी सिस्टम [फ़ाइलें और लॉग](../reference/devices.md#files-and-logs) में हैं। ऐप और इंस्टॉलर समेत हर हिस्से का ब्योरा-स्विच [त्रुटि संदेश और ब्योरा](../reference/errors.md) में है।
 
 ## कमांड
 
-**"the CBB service is not running"**: इसे शुरू करें (Linux पर `sudo systemctl start clipboardbridge`; Mac पर `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`; Windows पर `Start-Service clipboardbridge`) और इसका लॉग देखें।
+**"the CBB service is not running"**: इसे शुरू करें (Linux पर `sudo systemctl start cbb`; Mac पर `sudo launchctl kickstart -k system/tools.cbb`; Windows पर `Start-Service cbb`) और इसका लॉग देखें।
 
-**इंस्टॉल के तुरंत बाद कंट्रोल सॉकेट पर "permission denied"**: इंस्टॉलर ने आपको `clipboardbridge` समूह में जोड़ा है, और समूह अगले लॉगिन से ही गिना जाता है। लॉग आउट करके दोबारा लॉग इन करें (Windows पर नया टर्मिनल खोलें); तब तक `sudo cbb ...` काम करता है।
+**इंस्टॉल के तुरंत बाद कंट्रोल सॉकेट पर "permission denied"**: इंस्टॉलर ने आपको `cbb` समूह में जोड़ा है, और समूह अगले लॉगिन से ही गिना जाता है। लॉग आउट करके दोबारा लॉग इन करें (Windows पर नया टर्मिनल खोलें); तब तक `sudo cbb ...` काम करता है।
 
 ## डिवाइस एक-दूसरे को नहीं देखते
 
@@ -21,17 +21,17 @@
 
 - **"wrong code"**: हर पेयरिंग विंडो में तीन कोशिशें मिलती हैं; नए कोड के लिए `cbb pair` दोबारा चलाएँ।
 - **QR कोड स्कैन करने के बाद फ़ोन कंप्यूटर तक नहीं पहुँचता**: फ़ोन और कंप्यूटर एक ही नेटवर्क पर होने चाहिए, और कंप्यूटर का पोर्ट खुला होना चाहिए (ऊपर देखें)। iOS पर ऐप को लोकल नेटवर्क की अनुमति दें (सेटिंग्स, गोपनीयता और सुरक्षा, लोकल नेटवर्क)।
-- **शॉर्टकट `clipboardbridge.local` तक नहीं पहुँचता**: इसे केवल समूह के रूट और एडमिन कंप्यूटर परोसते हैं, और केवल पोर्ट 8764 पर; कम से कम एक चालू होना चाहिए (हर कंप्यूटर पर `cbb status` बताता है कि वह जवाब देता है या नहीं)। जाँचें कि प्रोफ़ाइल इंस्टॉल है और उस पर पूरा भरोसा है ([ऐप के बिना](without-app.md#3-add-an-iphone-with-the-shortcut))।
+- **शॉर्टकट `cbb.local` तक नहीं पहुँचता**: इसे केवल समूह के रूट और एडमिन कंप्यूटर परोसते हैं, और केवल पोर्ट 8764 पर; कम से कम एक चालू होना चाहिए (हर कंप्यूटर पर `cbb status` बताता है कि वह जवाब देता है या नहीं)। जाँचें कि प्रोफ़ाइल इंस्टॉल है और उस पर पूरा भरोसा है ([ऐप के बिना](without-app.md#3-add-an-iphone-with-the-shortcut))।
 
 ## घर से बाहर सिंक
 
 डिवाइस पर और हब पर `cbb global` बताता है कि क्या गड़बड़ है। आम कारण: राउटर हब का UDP पोर्ट हब तक आगे नहीं भेजता, हब का फ़ायरवॉल उसे गिरा देता है, या `cbb global hub` को दिया गया पता वह नहीं है जहाँ इंटरनेट पहुँचता है। जो डिवाइस घर आने के बाद, जबसे घर से बाहर सिंक चालू हुआ या जबसे हब ने अपनी सेटिंग्स (`-obfuscate`, `-vless`) बदलीं, हब से नहीं मिला, उसे नहीं पता कि उस तक कैसे पहुँचना है: उसे एक बार घर लाएँ। जो नेटवर्क VPN रोकता है उसके लिए [AmneziaWG या VLESS](blocked-networks.md) चाहिए। सेवा के परिवेश में `CBB_DEBUG=1` होने पर लॉग WireGuard के हैंडशेक भी दिखाता है। Linux पर:
 
 ```sh
-sudo systemctl edit clipboardbridge     # add the two lines below, save
+sudo systemctl edit cbb     # add the two lines below, save
 # [Service]
 # Environment=CBB_DEBUG=1
-sudo systemctl restart clipboardbridge
+sudo systemctl restart cbb
 ```
 
 ## Android
@@ -41,4 +41,4 @@ sudo systemctl restart clipboardbridge
 
 ## फिर भी अटके हैं
 
-`CBB_DEBUG=1 cbb status` के आउटपुट, लॉग के संबंधित हिस्से और शामिल सिस्टमों के साथ एक [issue](https://github.com/HunterEwok/clipboardbridge/issues) खोलें। जो भी निजी चीज़ आपने कॉपी की थी उसे हटा दें। सुरक्षा संबंधी समस्याएँ इसकी जगह [SECURITY.md](../../SECURITY.md) पर जाती हैं।
+`CBB_DEBUG=1 cbb status` के आउटपुट, लॉग के संबंधित हिस्से और शामिल सिस्टमों के साथ एक [issue](https://github.com/HunterEwok/cbb/issues) खोलें। जो भी निजी चीज़ आपने कॉपी की थी उसे हटा दें। सुरक्षा संबंधी समस्याएँ इसकी जगह [SECURITY.md](../../SECURITY.md) पर जाती हैं।

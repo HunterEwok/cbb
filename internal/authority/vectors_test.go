@@ -17,7 +17,7 @@ import (
 	"testing/cryptotest"
 	"testing/synctest"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 var update = flag.Bool("update", false, "write testdata/interop/v2-records.json and v2-flood.json")

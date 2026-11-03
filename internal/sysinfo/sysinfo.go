@@ -10,7 +10,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // Device describes this computer, with version as its own version. A field

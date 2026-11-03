@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv/atvtest"
-	appletvtest "github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv/atvtest"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv/atvtest"
+	appletvtest "github.com/HunterEwok/cbb/internal/tvremote/appletv/atvtest"
 )
 
 // TestRemote: cbb remote against a fake Android TV and a fake Roku:

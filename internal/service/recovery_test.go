@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/piv"
-	"github.com/HunterEwok/clipboardbridge/internal/piv/pivtest"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/piv"
+	"github.com/HunterEwok/cbb/internal/piv/pivtest"
 )
 
 // addRecovery gives the group of the stopped root its recovery key, as a

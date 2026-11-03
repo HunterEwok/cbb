@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // fakeService answers every request on a control socket with answer and
@@ -289,7 +289,7 @@ func TestPairWithThePhone(t *testing.T) {
 		t.Errorf("pair sent %+v", m.Header)
 	}
 	if !strings.Contains(stdout.String(), "Connect a new device") || !strings.Contains(stdout.String(), "\x1b[") ||
-		!strings.Contains(stdout.String(), "paste this into the app: clipboardbridge://") ||
+		!strings.Contains(stdout.String(), "paste this into the app: cbb://") ||
 		!strings.Contains(stdout.String(), "Joined the group") {
 		t.Errorf("pair printed:\n%s", stdout.String())
 	}

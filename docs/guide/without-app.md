@@ -37,7 +37,7 @@ Then turn on sharing on each computer, as in the [quick start](quickstart.md#4-s
 
 ## 3. Add an iPhone with the shortcut
 
-On the root, or an admin computer that answers for `clipboardbridge.local` (`cbb status`
+On the root, or an admin computer that answers for `cbb.local` (`cbb status`
 says whether it does):
 
 ```sh
@@ -50,7 +50,7 @@ It prints a QR code, the start of a fingerprint and a six-digit code.
 2. Check that the profile's fingerprint starts with the printed one (Settings, General,
    VPN & Device Management, "CBB", More Details), then turn on full trust for it
    (Settings, General, About, Certificate Trust Settings).
-3. Add the shortcut "clipboardbridge" from the same page and run it once; it asks for the
+3. Add the shortcut "cbb" from the same page and run it once; it asks for the
    six-digit code.
 4. Put the shortcut on the Action button, or on Back Tap (Settings, Accessibility, Touch,
    Back Tap, Double Tap).

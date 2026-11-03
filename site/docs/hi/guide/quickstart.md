@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 69c597a7b5db -->
+<!-- source: 6d2083e0e66e -->
 # त्वरित शुरुआत
 
 Copy Beyond Borders आपके फ़ोन और कंप्यूटरों को एक ही क्लिपबोर्ड देता है: एक पर कॉपी करें, दूसरे पर पेस्ट करें। डिवाइस आपके घर के नेटवर्क पर एक **समूह** बनाते हैं। फ़ोन समूह की कुंजी रखता है और हर नए डिवाइस को अंदर आने देता है, इसलिए आपके बिना कोई शामिल नहीं हो सकता।
@@ -12,7 +12,7 @@ Copy Beyond Borders आपके फ़ोन और कंप्यूटरो
 
 ## 1. फ़ोन पर ऐप इंस्टॉल करें
 
-- **Android** 10 या नया: फ़ोन पर ही [नवीनतम रिलीज़](https://github.com/HunterEwok/clipboardbridge/releases/latest) से `clipboardbridge-X.Y.Z.apk` डाउनलोड करके खोलें; जब Android पूछे, तो ब्राउज़र को ऐप इंस्टॉल करने दें।
+- **Android** 10 या नया: फ़ोन पर ही [नवीनतम रिलीज़](https://github.com/HunterEwok/cbb/releases/latest) से `cbb-X.Y.Z.apk` डाउनलोड करके खोलें; जब Android पूछे, तो ब्राउज़र को ऐप इंस्टॉल करने दें।
 - **iPhone**: ऐप TestFlight के ज़रिए आएगा, जो अभी खुला नहीं है। तब तक iPhone शॉर्टकट इस्तेमाल करता है और समूह को कंप्यूटर संभालता है: देखें [ऐप के बिना](without-app.md)।
 
 ऐप खोलें। पहला कंप्यूटर आप चरण 3 में जोड़ेंगे।
@@ -24,13 +24,13 @@ Copy Beyond Borders आपके फ़ोन और कंप्यूटरो
 **Linux** या **Mac** पर, टर्मिनल में:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 **Windows** 10 या 11 पर, "Run as administrator" से खोली गई PowerShell में:
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 इंस्टॉलर डाउनलोड की जाँच करता है, Copy Beyond Borders चालू करता है और दो सवाल पूछता है: उसके लिए फ़ायरवॉल खोलना है या नहीं (`y` लिखें), और खुद को अपने आप अपडेट करना है या नहीं (यहाँ भी `y` अच्छा जवाब है)। फिर एक बार लॉग आउट करके दोबारा लॉग इन करें, या Windows पर नया टर्मिनल खोलें। Homebrew, winget, Docker और ब्योरे [इंस्टॉल करना](install.md) में हैं।

@@ -13,7 +13,7 @@ func TestDescribeHolders(t *testing.T) {
 root     mdns-repeat 812  3   udp4   *:5353                *:*
 avahi    avahi-daem 900   14  udp4   *:5353                *:*
 avahi    avahi-daem 900   15  udp6   *:5353                *:*
-clipboardbridge cbb 77    9   udp4   *:5353                *:*
+cbb cbb 77    9   udp4   *:5353                *:*
 `
 	got := describeHolders(out, 77)
 	if !strings.Contains(got, "mdns-repeat (user root), avahi-daem (user avahi),") || strings.Contains(got, "cbb (user") {

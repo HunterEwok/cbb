@@ -27,7 +27,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // The window's tests (docs/testbench-catalogue.md, A5, A8, A9, A15, A16,

@@ -148,7 +148,7 @@ details. No log, in either error mode, holds clipboard text, a code or a key.
 
 Scan each target's ports from the network and, where obtained, from inside a tunnel. Confirm
 the installers opened only the member port (and mDNS) to the local subnet and the tunnel port
-only on the hub. Confirm the control socket refuses a user outside the `clipboardbridge` group.
+only on the hub. Confirm the control socket refuses a user outside the `cbb` group.
 Confirm the state directories hold only keys and certificates with owner-only permissions and
 no clipboard text at rest. Fuzz the open ports for crashes and leaks.
 

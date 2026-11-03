@@ -69,7 +69,7 @@ func quickActions(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 	})
 	// Q2: enabling writes the polkit rule for what is on, disabling takes
 	// it back.
-	const rule = "/etc/polkit-1/rules.d/60-clipboardbridge.rules"
+	const rule = "/etc/polkit-1/rules.d/60-cbb.rules"
 	r.Do("fleet/Q2-polkit", func() error {
 		if err := succeeds(ctx, t, "cbb action enable reboot -yes", "", "reboot: on"); err != nil {
 			return err

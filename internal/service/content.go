@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/clip"
 )
 
 // The content of images and files (design.md, "Images and files",

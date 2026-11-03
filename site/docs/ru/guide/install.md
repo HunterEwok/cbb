@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 01c5a8544c91 -->
+<!-- source: e1ce6c4f40f0 -->
 # Установка
 
 Copy Beyond Borders работает как небольшая фоновая служба на каждом компьютере. Его команда —
@@ -11,7 +11,7 @@ Copy Beyond Borders работает как небольшая фоновая с
 Raspberry Pi, сервер, Steam Deck.
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 Затем один раз выйдите из системы и войдите снова, чтобы ваш пользователь мог запускать `cbb`
@@ -38,7 +38,7 @@ Raspberry Pi Zero, подойдёт более лёгкий [лёгкий уча
 своего пользователя, без `sudo`:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh -s -- --rootless
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
 Он работает как ваша собственная фоновая служба, пока вы вошли в систему, и синхронизируется
@@ -47,7 +47,7 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 группы, администратором или хабом ([как это работает](how-it-works.md#rootless-members)), и у
 него нет правил брандмауэра, TPM, `--console` и `--uinput`. Чтобы он продолжал работать после
 выхода из системы, администратор один раз выполняет `sudo loginctl enable-linger YOUR-USER`.
-Чтобы удалить: `sh ~/.local/share/clipboardbridge/uninstall.sh`. Лёгкий участник тоже
+Чтобы удалить: `sh ~/.local/share/cbb/uninstall.sh`. Лёгкий участник тоже
 устанавливается так, с `--lite --rootless`
 ([лёгкий участник](../../lite/README.md#without-sudo-rootless)).
 
@@ -56,32 +56,32 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 Переключитесь в режим рабочего стола, откройте Konsole, один раз задайте пользователю `deck`
 пароль, если его нет (`passwd`), и выполните ту же команду. SteamOS заменяет свои системные
 файлы при каждом обновлении, поэтому установщик кладёт Copy Beyond Borders в
-`/opt/clipboardbridge` вместо `/usr/local` и сообщает SteamOS, какие из его файлов в `/etc`
-сохранять (`/etc/atomic-update.conf.d/clipboardbridge.conf`). Программа остаётся установленной
+`/opt/cbb` вместо `/usr/local` и сообщает SteamOS, какие из его файлов в `/etc`
+сохранять (`/etc/atomic-update.conf.d/cbb.conf`). Программа остаётся установленной
 и в своей группе после обновлений SteamOS.
 
 - `cbb` попадает в путь нового Konsole после того, как вы выйдете из системы и войдёте снова.
   `sudo` там не ищет, поэтому командам, которым он нужен, нужен полный путь:
-  `sudo /opt/clipboardbridge/bin/cbb pair`.
+  `sudo /opt/cbb/bin/cbb pair`.
 - В режиме рабочего стола буфер обмена синхронизируется, как на любом рабочем столе KDE Plasma.
 - В игровом режиме буфера обмена рабочего стола нет, поэтому там ничего не синхронизируется;
   служба продолжает работать и нагоняет в режиме рабочего стола.
-- Чтобы удалить: `sudo sh /opt/clipboardbridge/share/uninstall.sh`.
+- Чтобы удалить: `sudo sh /opt/cbb/share/uninstall.sh`.
 
 ## Mac
 
 Apple silicon или Intel, в Терминале, та же команда, что и в Linux:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 Или через Homebrew, который заодно обновляет программу. После каждого `brew upgrade`
 выполняйте вторую строку заново:
 
 ```sh
-brew install hunterewok/tap/clipboardbridge
-sudo sh "$(brew --prefix)/opt/clipboardbridge/share/clipboardbridge/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/clipboardbridge/bin/cbb"
+brew install hunterewok/tap/cbb
+sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
 ```
 
 ## Windows
@@ -90,7 +90,7 @@ Windows 10 (1809 или новее) или 11, x86-64 или ARM64, в PowerShel
 имени администратора»:
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 Установщик позволяет пользователю, вошедшему за экраном, использовать `cbb` (в новом
@@ -103,7 +103,7 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 Через winget, когда пакет появится в репозитории winget:
 
 ```powershell
-winget install HunterEwok.clipboardbridge
+winget install HunterEwok.cbb
 cbb install           # in the administrator terminal; again after each winget upgrade
 ```
 
@@ -113,11 +113,11 @@ cbb install           # in the administrator terminal; again after each winget u
 больше, либо eMMC; 256 МБ ОЗУ), от имени root по SSH:
 
 ```sh
-uclient-fetch -qO - https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh
+uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
 Установщик ставит `cbb` как службу, которая работает только в зоне `lan` и никогда не отвечает
-в `wan`. Ключи лежат в `/etc/clipboardbridge`, который sysupgrade сохраняет; после
+в `wan`. Ключи лежат в `/etc/cbb`, который sysupgrade сохраняет; после
 sysupgrade с вашим участием (ASU, owut) выполните команду снова. Другая зона, например сеть
 для IoT, брандмауэр и проверки описаны в разделе
 [роутеры и FreeBSD](../admin/routers.md#openwrt).
@@ -129,26 +129,26 @@ sysupgrade с вашим участием (ASU, owut) выполните ком�
 второй строке:
 
 ```sh
-uclient-fetch -qO /etc/apk/keys/clipboardbridge.pem https://cbb.tools/openwrt/clipboardbridge.pem
+uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
 echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
-apk update && apk add clipboardbridge
+apk update && apk add cbb
 ```
 
-`apk del clipboardbridge` удаляет программу и оставляет ключи в `/etc/clipboardbridge`.
+`apk del cbb` удаляет программу и оставляет ключи в `/etc/cbb`.
 
 ## FreeBSD
 
 FreeBSD 15, amd64 или arm64, от имени root (через `sudo` или `doas`):
 
 ```sh
-fetch -qo - https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh
+fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
 Установщик ставит `cbb`, сценарий rc.d, который запускает службу через daemon(8), и добавляет
-в rc.conf строку `clipboardbridge_enable="YES"`. Ключи лежат в `/var/db/clipboardbridge`.
+в rc.conf строку `cbb_enable="YES"`. Ключи лежат в `/var/db/cbb`.
 
 В OPNsense тот же установщик добавляет ещё и хук плагина: служба появляется в System >
-Diagnostics > Services, а её правила брандмауэра (в якоре pf `clipboardbridge`) сохраняются при
+Diagnostics > Services, а её правила брандмауэра (в якоре pf `cbb`) сохраняются при
 каждой перезагрузке фильтра. Пока служба работает, выключите повторитель mDNS (Services > mDNS
 Repeater): обоим нужен UDP-порт 5353, а служба сама отвечает на mDNS на каждом домашнем
 интерфейсе. pfSense не поддерживается: установщик там тоже запускается, но не добавляет
@@ -170,9 +170,9 @@ XTEST в X11 и через виртуальную клавиатуру на ра
 вы держите.
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/HunterEwok/clipboardbridge/main/packaging/docker/compose.home.yaml
+curl -fsSLO https://raw.githubusercontent.com/HunterEwok/cbb/main/packaging/docker/compose.home.yaml
 docker compose -f compose.home.yaml up -d
-docker compose -f compose.home.yaml exec clipboardbridge cbb pair
+docker compose -f compose.home.yaml exec cbb cbb pair
 ```
 
 ## Брандмауэр
@@ -222,10 +222,10 @@ SYSTEM в Windows, cron в OpenWrt и FreeBSD. Каждая проверка с�
 этого устройства и то, что оно использует Copy Beyond Borders, как при любой загрузке; о группе
 не отправляется ничего. `sudo cbb update -mirror https://...` берёт обновления с другого
 зеркала, которому доверять не нужно, поскольку подписи проверяются. Журнал таймера —
-`update.log` в `/var/lib/clipboardbridge-update` (Linux), `/etc/clipboardbridge-update`
-(OpenWrt), `/var/db/clipboardbridge-update` (FreeBSD),
-`/Library/Application Support/clipboardbridge-update` (Mac) или
-`C:\Program Files\clipboardbridge-update` (Windows).
+`update.log` в `/var/lib/cbb-update` (Linux), `/etc/cbb-update`
+(OpenWrt), `/var/db/cbb-update` (FreeBSD),
+`/Library/Application Support/cbb-update` (Mac) или
+`C:\Program Files\cbb-update` (Windows).
 
 Устройства группы сообщают друг другу о самом новом подписанном релизе, который видело любое из
 них, поэтому проверки одного устройства достаточно, чтобы `cbb status` и приложение в трее на
@@ -244,7 +244,7 @@ OpenWrt обновляются через `docker compose pull` и `apk upgrade`
 его создавшей; с помощью [GitHub CLI](https://cli.github.com/):
 
 ```sh
-gh attestation verify clipboardbridge-linux-amd64.tar.gz --repo HunterEwok/clipboardbridge
+gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
 ```
 
 `get.sh` проверяет её сам, когда `gh` установлен и выполнен вход для root
@@ -264,17 +264,17 @@ gh attestation verify clipboardbridge-linux-amd64.tar.gz --repo HunterEwok/clipb
 В Linux и на Mac:
 
 ```sh
-sudo sh /usr/local/share/clipboardbridge/uninstall.sh
+sudo sh /usr/local/share/cbb/uninstall.sh
 ```
 
-В SteamOS это `sudo sh /opt/clipboardbridge/share/uninstall.sh`. С Homebrew после этого
-выполните `brew uninstall clipboardbridge`.
+В SteamOS это `sudo sh /opt/cbb/share/uninstall.sh`. С Homebrew после этого
+выполните `brew uninstall cbb`.
 
 В Windows: Параметры, Приложения, «CBB», Удалить.
 
 Это удаляет программу, службу и правила брандмауэра, добавленные установщиком. Ключи
 устройства остаются, поэтому повторная установка возвращает его в свою группу. Чтобы удалить и
 их, добавьте `--purge` (`-Purge` в Windows, с
-`powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`),
+`powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`),
 затем удалите устройство из группы на другом устройстве (`sudo cbb remove NAME`, или на
 телефоне).

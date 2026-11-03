@@ -16,12 +16,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // On Linux and Windows the installer lets the service reach only the home
 // network from outside the program: on Linux its systemd unit
-// (packaging/linux/clipboardbridge.service), on Windows an outbound rule of
+// (packaging/linux/cbb.service), on Windows an outbound rule of
 // Windows Firewall (packaging/windows/install.ps1). Sync away from home
 // reaches the group's own servers on the internet, its hub, forwarder and
 // relay, so cbb global lets the service reach those addresses and nothing
@@ -151,8 +151,8 @@ func setAwayNet(g grant) (changed, restarted bool, err error) {
 // IPAddressAllow, and a restart, since systemd applies it when the service
 // starts.
 var (
-	serviceUnit = "/etc/systemd/system/clipboardbridge.service"
-	awayDropIn  = "/etc/systemd/system/clipboardbridge.service.d/away.conf"
+	serviceUnit = "/etc/systemd/system/cbb.service"
+	awayDropIn  = "/etc/systemd/system/cbb.service.d/away.conf"
 	systemctl   = func(args ...string) error { return runCmd("systemctl", args...) }
 )
 
@@ -227,7 +227,7 @@ var linuxLimit = netLimit{
 		if err := systemctl("daemon-reload"); err != nil {
 			return err
 		}
-		return systemctl("restart", "clipboardbridge.service")
+		return systemctl("restart", "cbb.service")
 	},
 }
 
@@ -238,8 +238,8 @@ var linuxLimit = netLimit{
 // nothing restarts. What the rules allow is kept beside them in the
 // service's registry key (AwayAllow), so a reinstall keeps it.
 const (
-	firewallRule = "clipboardbridge-home-only"
-	serviceKey   = `HKLM:\SYSTEM\CurrentControlSet\Services\clipboardbridge`
+	firewallRule = "cbb-home-only"
+	serviceKey   = `HKLM:\SYSTEM\CurrentControlSet\Services\cbb`
 )
 
 var powershell = func(script string) (string, error) {
@@ -319,12 +319,12 @@ func windowsScript(g grant) string {
 	var b strings.Builder
 	b.WriteString("$ErrorActionPreference = 'Stop'\n")
 	fmt.Fprintf(&b, "$prog = (Get-NetFirewallRule -Name '%s' | Get-NetFirewallApplicationFilter).Program\n", firewallRule)
-	b.WriteString("Get-NetFirewallRule -Group 'clipboardbridge' | Where-Object { [string]$_.Direction -eq 'Outbound' } | Remove-NetFirewallRule\n")
-	common := "-Group 'clipboardbridge' -Direction Outbound -Action Block -Program $prog -Service 'clipboardbridge' -Profile Any"
+	b.WriteString("Get-NetFirewallRule -Group 'cbb' | Where-Object { [string]$_.Direction -eq 'Outbound' } | Remove-NetFirewallRule\n")
+	common := "-Group 'cbb' -Direction Outbound -Action Block -Program $prog -Service 'cbb' -Profile Any"
 	// PowerShell doubles a quote inside single quotes.
 	desc := "The CBB service reaches only the home network and its group''s servers; cbb global changes this rule."
 	if g.hubPort == 0 {
-		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'clipboardbridge: only the home network' %s -RemoteAddress %s -Description '%s' | Out-Null\n",
+		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'cbb: only the home network' %s -RemoteAddress %s -Description '%s' | Out-Null\n",
 			firewallRule, common, block, desc)
 	} else {
 		var ports []string
@@ -334,9 +334,9 @@ func windowsScript(g grant) string {
 		if g.hubPort < 65535 {
 			ports = append(ports, fmt.Sprintf("%d-65535", g.hubPort+1))
 		}
-		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'clipboardbridge: only the home network' %s -Protocol TCP -RemoteAddress %s -Description '%s' | Out-Null\n",
+		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'cbb: only the home network' %s -Protocol TCP -RemoteAddress %s -Description '%s' | Out-Null\n",
 			firewallRule, common, block, desc)
-		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s-udp' -DisplayName 'clipboardbridge: only the home network, UDP but the hub''s port' %s -Protocol UDP -LocalPort %s -RemoteAddress %s -Description '%s' | Out-Null\n",
+		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s-udp' -DisplayName 'cbb: only the home network, UDP but the hub''s port' %s -Protocol UDP -LocalPort %s -RemoteAddress %s -Description '%s' | Out-Null\n",
 			firewallRule, common, quote(ports), block, desc)
 	}
 	if g.on {

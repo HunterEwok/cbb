@@ -29,7 +29,7 @@ func (f *Fleet) AddLite(ctx context.Context) (*Device, error) {
 	if err != nil {
 		return nil, fmt.Errorf("-cbb-lite: %w", err)
 	}
-	d, err := f.containerOf(ctx, abs, f.net, nil, nil, "mkdir -p /run/clipboardbridge /var/lib/clipboardbridge; while :; do cbb service $(cat /tmp/cbb-run-opts 2>/dev/null); sleep 1; done")
+	d, err := f.containerOf(ctx, abs, f.net, nil, nil, "mkdir -p /run/cbb /var/lib/cbb; while :; do cbb service $(cat /tmp/cbb-run-opts 2>/dev/null); sleep 1; done")
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +57,8 @@ func joinLite(ctx context.Context, hub, d *Device) error {
 	// Under systemd the join runs as the service's user, as lite/README.md
 	// tells, so that the service reads what it saves.
 	join := "cbb pair -name lite -code " + net.JoinHostPort(ip, "8764")
-	if out, _ := Run(ctx, d, "id -u clipboardbridge 2>/dev/null; true", ""); strings.TrimSpace(out) != "" {
-		join = "su -s /bin/sh clipboardbridge -c '" + join + "'"
+	if out, _ := Run(ctx, d, "id -u cbb 2>/dev/null; true", ""); strings.TrimSpace(out) != "" {
+		join = "su -s /bin/sh cbb -c '" + join + "'"
 	}
 	out, err := RunFor(ctx, d, join, code+"\n", time.Minute)
 	stop()
@@ -214,7 +214,7 @@ func liteMember(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 		if got, err := Paste(ctx, lite); err != nil || got != beside {
 			return fmt.Errorf("after a copy of a file with no text %s holds %q (%v), not its last text", lite.Name, got, err)
 		}
-		out, err := Run(ctx, lite, "find / -xdev -type f -size +100k -newer /tmp/o6.start ! -path '/proc/*' ! -path '/usr/*' 2>/dev/null; ls /var/lib/clipboardbridge", "")
+		out, err := Run(ctx, lite, "find / -xdev -type f -size +100k -newer /tmp/o6.start ! -path '/proc/*' ! -path '/usr/*' 2>/dev/null; ls /var/lib/cbb", "")
 		if err != nil {
 			return err
 		}

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // A command against a fake service: what it sends, what it prints and its
@@ -129,7 +129,7 @@ func TestModeAndHolder(t *testing.T) {
 		{name: "holder", args: []string{"holder"}, answer: inG(control.Status{HoldSetting: "auto", Battery: true, HoldPriority: 2}),
 			check: sent(control.OpStatus, nil), stdout: "as a fallback when elected; another member does now (setting auto, a laptop)"},
 		{name: "holder set", args: []string{"holder", "first"}, answer: inG(control.Status{HoldSetting: "first", HoldPriority: 1, Holder: true}),
-			check: sent(control.OpHolder, func(m *control.Message) bool { return m.Name == "first" }), stdout: "Answers for clipboardbridge.local (first; setting first)"},
+			check: sent(control.OpHolder, func(m *control.Message) bool { return m.Name == "first" }), stdout: "Answers for cbb.local (first; setting first)"},
 		{name: "holder with no status", args: []string{"holder"}, check: sent(control.OpStatus, nil), code: 1, stderr: "sent no status"},
 		{name: "holder with two settings", args: []string{"holder", "a", "b"}, code: 2, stderr: "usage: cbb holder"},
 		{name: "network", args: []string{"network"}, check: sent(control.OpNetwork, nil), stdout: "publishes itself and takes connections here"},

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Test of the clipboardbridge image: two containers of it, run as the
+# Test of the cbb image: two containers of it, run as the
 # compose files run them (its own user, a read-only root file system, no
 # capabilities), find each other on one network, pair with a code and sync
 # both ways, and a forwarder starts and shows its key.
@@ -62,9 +62,9 @@ start() { # name, arguments...
 	keys=no
 	[ "$n" != a ] || keys=yes
 	docker run -d --name "$run-$n" --hostname "host-$n" --network "$net" \
-		-e CBB_KEYS_IN_FILE=$keys --read-only --tmpfs /run/clipboardbridge:uid=65532,gid=65532,mode=0750 \
+		-e CBB_KEYS_IN_FILE=$keys --read-only --tmpfs /run/cbb:uid=65532,gid=65532,mode=0750 \
 		--cap-drop ALL --security-opt no-new-privileges \
-		-v "$run-$n:/var/lib/clipboardbridge" "$image" "$@" >/dev/null
+		-v "$run-$n:/var/lib/cbb" "$image" "$@" >/dev/null
 }
 
 say "starting two members"

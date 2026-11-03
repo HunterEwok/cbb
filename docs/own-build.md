@@ -13,7 +13,7 @@ Every build checks and installs updates from this project unless it is changed:
 - **The release roots**: two public keys pinned in every program
   (`internal/release/roots/roots.pem`). An update installs only when its `keys.json` is
   signed by one of them ([protocol.md](protocol.md), section 16).
-- **The addresses**: GitHub's releases of `HunterEwok/clipboardbridge`, their mirror
+- **The addresses**: GitHub's releases of `HunterEwok/cbb`, their mirror
   `dl.cbb.tools`, and the branch `channel` with the current `keys.json` and `stable.json`.
 
 So there are three cases.

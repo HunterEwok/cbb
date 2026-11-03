@@ -64,14 +64,14 @@ fn base(value: Option<std::ffi::OsString>, home: Option<std::ffi::OsString>, def
     }
 }
 
-/// The state directory: ~/.local/state/clipboardbridge.
+/// The state directory: ~/.local/state/cbb.
 pub fn state_dir() -> PathBuf {
-    xdg("XDG_STATE_HOME", ".local/state").join("clipboardbridge")
+    xdg("XDG_STATE_HOME", ".local/state").join("cbb")
 }
 
-/// The updater's folder: ~/.local/state/clipboardbridge-update.
+/// The updater's folder: ~/.local/state/cbb-update.
 pub fn update_dir() -> PathBuf {
-    xdg("XDG_STATE_HOME", ".local/state").join("clipboardbridge-update")
+    xdg("XDG_STATE_HOME", ".local/state").join("cbb-update")
 }
 
 /// The user's systemd units: ~/.config/systemd/user.
@@ -91,7 +91,7 @@ fn socket_in(run: Option<std::ffi::OsString>, uid: u32) -> PathBuf {
         Some(p) if p.is_absolute() => p,
         _ => PathBuf::from(format!("/run/user/{uid}")),
     };
-    run.join("clipboardbridge/control.sock")
+    run.join("cbb/control.sock")
 }
 
 #[cfg(test)]
@@ -104,10 +104,7 @@ mod tests {
         assert_eq!(base(None, home(), ".local/state"), PathBuf::from("/home/u/.local/state"));
         assert_eq!(base(Some("relative".into()), home(), ".config"), PathBuf::from("/home/u/.config"));
         assert_eq!(base(Some("/x/state".into()), home(), ".local/state"), PathBuf::from("/x/state"));
-        assert_eq!(
-            socket_in(Some("/run/user/7".into()), 1000),
-            PathBuf::from("/run/user/7/clipboardbridge/control.sock")
-        );
-        assert_eq!(socket_in(None, 1000), PathBuf::from("/run/user/1000/clipboardbridge/control.sock"));
+        assert_eq!(socket_in(Some("/run/user/7".into()), 1000), PathBuf::from("/run/user/7/cbb/control.sock"));
+        assert_eq!(socket_in(None, 1000), PathBuf::from("/run/user/1000/cbb/control.sock"));
     }
 }

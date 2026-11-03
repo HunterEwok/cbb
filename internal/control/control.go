@@ -9,7 +9,7 @@
 // payload, usually a clipboard text. A client sends a request and reads the
 // answers; a watcher keeps its connection open, receives writes and reports
 // copies on it. Who may connect is decided by the socket's file permissions:
-// only root and the clipboardbridge group.
+// only root and the cbb group.
 package control
 
 import (
@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 const (
@@ -275,7 +275,7 @@ type Status struct {
 	CertEndsMS int64  `json:"cert_ends_ms,omitempty"`
 	Role       string `json:"role"`
 	OS         string `json:"os,omitempty"`     // this device's operating system
-	Holder     bool   `json:"holder,omitempty"` // answers for clipboardbridge.local
+	Holder     bool   `json:"holder,omitempty"` // answers for cbb.local
 	// HoldSetting is the holder setting: auto, first, fallback or never.
 	HoldSetting string `json:"hold_setting,omitempty"`
 	// HoldPriority is the holder priority it publishes: 1 first, 2 as a

@@ -4,9 +4,9 @@
 package main
 
 import (
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/pasteboard"
-	"github.com/HunterEwok/clipboardbridge/internal/winpaste"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/pasteboard"
+	"github.com/HunterEwok/cbb/internal/winpaste"
 )
 
 // agentTarget is the agent's remote paste target: on Windows the window

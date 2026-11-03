@@ -39,7 +39,7 @@ clipboards, which any program of the signed-in user may read.
 ## Trust boundaries
 
 1. **The device.** The service runs as its own user; the admin socket admits only the
-   computer's administrators, the control socket root and the `clipboardbridge` group. A
+   computer's administrators, the control socket root and the `cbb` group. A
    phone's keys are behind its secure hardware and biometrics.
 2. **The home network.** Every connection between members is mutual TLS 1.3 under the
    group's certificates, on the member port, which takes only private, unique-local and
@@ -58,7 +58,7 @@ of service, **E**levation of privilege.
 | # | Boundary | STRIDE | Threat | Defence | Where |
 |---|---|---|---|---|---|
 | 1 | home network | I | someone on the LAN reads the traffic | TLS 1.3 on every connection; no plain-text protocol | `internal/node`, `lite/core/src/tls` |
-| 2 | home network | S | a device poses as a member, for example by answering mDNS or `clipboardbridge.local` | mutual TLS: members dial discovered addresses and check the peer's certificate against the group's CAs, the device records and the revocations | `internal/group`, `internal/node` |
+| 2 | home network | S | a device poses as a member, for example by answering mDNS or `cbb.local` | mutual TLS: members dial discovered addresses and check the peer's certificate against the group's CAs, the device records and the revocations | `internal/group`, `internal/node` |
 | 3 | home network | S | someone guesses or intercepts a pairing code | CPace inside TLS, bound to the TLS exporter: one online guess per attempt, three per window of 5 minutes, no offline attack; the code never on the command line | `internal/pair`, `lite/core/src/pair` |
 | 4 | home network | S | a man in the middle during a phone's QR pairing | the QR code carries the pairing code, which the phone spends on CPace inside TLS as in threat 3, so a device in the middle learns nothing it can use | the kits' `Pairing*` |
 | 5 | home network | D | a flood of connections or mDNS packets | limits on handshakes, mDNS cache entries and peers; the member port drops other addresses | `internal/service`, `internal/mdns` |
@@ -78,11 +78,11 @@ of service, **E**levation of privilege.
 | 19 | device control | E | an admin types into a device or restarts it against its user's will | every remote paste target and quick action is off until the device's own user turns it on there; Enter, the console and reboot are separate consents; any admin turns them off everywhere; never on a lock or login screen | `internal/remotepaste`, `internal/actions`, `internal/lockcheck` |
 | 20 | device control | E | a pasted text runs as a command | control characters removed; a text with a line break is refused on every target of a computer unless the user turned Enter on | `internal/remotepaste` |
 | 21 | device control | E | a user's own action becomes a shell | the program runs by its full path with fixed arguments, no shell, as the signed-in user, for at most 15 s | `internal/actions` |
-| 22 | device | I | another local user reads the clipboard through the service | the control socket admits only root and the `clipboardbridge` group; changes to the group only on the admin socket | `internal/control`, `internal/service/control_windows.go` |
-| 23 | device | E | a bug in the network code takes over the computer | memory-safe languages; the service unprivileged in a systemd sandbox (`NoNewPrivileges`, `ProtectSystem=strict`, no capabilities, restricted address families and system calls) | `packaging/linux/clipboardbridge.service` |
+| 22 | device | I | another local user reads the clipboard through the service | the control socket admits only root and the `cbb` group; changes to the group only on the admin socket | `internal/control`, `internal/service/control_windows.go` |
+| 23 | device | E | a bug in the network code takes over the computer | memory-safe languages; the service unprivileged in a systemd sandbox (`NoNewPrivileges`, `ProtectSystem=strict`, no capabilities, restricted address families and system calls) | `packaging/linux/cbb.service` |
 | 24 | device | I | a secret outlives its minute | secrets are kept in memory only, never on disk, and gone 60 s after the copy; their formatting is never read | `internal/clip` |
 | 25 | device | E | a received file is opened as a program | received files are never executable, carry the quarantine mark on a Mac and the Mark of the Web on Windows, and names are made safe | `internal/mediafile` |
-| 26 | iPhone shortcut | I | a member uses the iPhone CA against the phone's other HTTPS | the iPhone CA is limited by name constraints to `clipboardbridge.local` and excludes IP addresses | `internal/group/cert.go` |
+| 26 | iPhone shortcut | I | a member uses the iPhone CA against the phone's other HTTPS | the iPhone CA is limited by name constraints to `cbb.local` and excludes IP addresses | `internal/group/cert.go` |
 | 27 | release | T | a changed program reaches users | release builds only in CI, pinned actions, `SHA256SUMS`, build provenance attestations; release files signed outside CI with the project's keys: roots on two YubiKeys, the release key in a Mac's Secure Enclave, a channel key on cbb.tools that only renews `stable.json` (D-69); every installer and updater checks them against the pinned roots | `.github/workflows/release.yml`, `internal/release`, `packaging/get.sh`, `tools/release-sign` |
 | 28 | release | T | a vulnerable dependency | few dependencies, `govulncheck` for Go and OSV-Scanner for the Rust crates, the Android libraries and the tray app in CI | `.github/workflows/ci.yml` |
 

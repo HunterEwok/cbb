@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
 )
 
 // modeFile holds the sync mode, in the state directory. A device that made

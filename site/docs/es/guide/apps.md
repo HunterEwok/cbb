@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: fab5414079e4 -->
+<!-- source: d10744fc3cc7 -->
 # Las apps
 
 Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps de teléfono llevan el grupo; las de escritorio son una ventana al servicio que ya se ejecuta en el ordenador.
 
 | App | Dónde conseguirla | Estado |
 |---|---|---|
-| Android | `clipboardbridge-X.Y.Z.apk` en cada [versión](https://github.com/HunterEwok/clipboardbridge/releases) | compilada y probada en CI, aún no en un teléfono real |
-| Android sin Google | `clipboardbridge-fdroid-X.Y.Z.apk`, y F-Droid cuando la acepten: la misma app sin el reloj Wear OS | compilada y probada en CI |
+| Android | `cbb-X.Y.Z.apk` en cada [versión](https://github.com/HunterEwok/cbb/releases) | compilada y probada en CI, aún no en un teléfono real |
+| Android sin Google | `cbb-fdroid-X.Y.Z.apk`, y F-Droid cuando la acepten: la misma app sin el reloj Wear OS | compilada y probada en CI |
 | iPhone y iPad | TestFlight, cuando se abra | compilada y probada en CI; funciona en un iPhone compilada con el equipo propio de un desarrollador |
-| Wear OS | `clipboardbridge-wear-X.Y.Z.apk`, que se instala en el reloj desde un ordenador con `adb install` por la depuración inalámbrica del reloj, hasta que la app esté en Google Play | compilada |
+| Wear OS | `cbb-wear-X.Y.Z.apk`, que se instala en el reloj desde un ordenador con `adb install` por la depuración inalámbrica del reloj, hasta que la app esté en Google Play | compilada |
 | Apple Watch | con la app del iPhone | compilada; funciona en un Apple Watch con la app del iPhone |
 | App para Mac | aún no es una descarga: por ahora se compila desde `apps/macos` | compilada |
 | App de bandeja para Linux y Windows | en los archivos de Windows y Linux de cada versión, instalada con el servicio | compilada; probada en una máquina virtual con Windows 11 |
@@ -20,7 +20,7 @@ Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps 
 
 1. [Instala](install.md) Copy Beyond Borders en un ordenador y ejecuta allí `sudo cbb pair`. Muestra un código QR.
 2. Abre la app, pulsa **Connect a new device** y escanea el código. La app crea la clave del grupo en el chip de seguridad del teléfono (el Secure Enclave en un iPhone, el Keystore en Android), añade el ordenador y abre Inicio.
-3. Añade cada ordenador adicional con **+** en Inicio. Un miembro ligero se une de la misma manera (`sudo -u clipboardbridge cbb pair` en él muestra su código).
+3. Añade cada ordenador adicional con **+** en Inicio. Un miembro ligero se une de la misma manera (`sudo -u cbb cbb pair` en él muestra su código).
 
 Cuando no se puede usar la cámara: en un iPhone, escribe los seis dígitos que muestra el ordenador; en Android, pega el texto del código QR, que `cbb pair` también imprime.
 

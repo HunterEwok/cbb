@@ -35,7 +35,7 @@ line here with every new function, and a case for it in the catalogue.
 | I.16 | `--console` | I2, H4 |
 | I.17 | `--uinput` | I2, T2 |
 | I.18 | `--home-cgnat on/off`, `-HomeCgnat`, `CBB_HOME_CGNAT` | I2, G4 |
-| I.19 | The kept answers: `firewall.answer`, `clipboardbridge.env`, the registry key | I2 |
+| I.19 | The kept answers: `firewall.answer`, `cbb.env`, the registry key | I2 |
 | I.20 | Firewall rules: ufw, firewalld, nftables, iptables | I2, S12 |
 | I.21 | Firewall rules: Windows Firewall | I2, S12 |
 | I.22 | The macOS application firewall | I2, H8 |
@@ -160,7 +160,7 @@ line here with every new function, and a case for it in the catalogue.
 | K.1 | Member certificates renewed under 240 days | K1 |
 | K.2 | The `cert` message and its `issuer` | K1, K3 |
 | K.3 | A renewal from an admin phone | K1 |
-| K.4 | The `clipboardbridge.local` certificate renewed at 60 days | K2 |
+| K.4 | The `cbb.local` certificate renewed at 60 days | K2 |
 | K.5 | Checks on a renewal | K3 |
 | K.6 | Expiry when no admin renews | K4 |
 | K.7 | Certificates that end with their CA; the CA's end | K5 |
@@ -198,7 +198,7 @@ line here with every new function, and a case for it in the catalogue.
 | D.7 | One connection per pair | D2 |
 | D.8 | Full members dial lite members | D3 |
 | D.9 | Phones dial; a phone hub listens | D3 |
-| D.10 | The holder of `clipboardbridge.local` | D4 |
+| D.10 | The holder of `cbb.local` | D4 |
 | D.11 | `cbb holder` | D4 |
 | D.12 | The holder's handover | D5 |
 | D.13 | Known networks and quiet interfaces | D6 |
@@ -370,7 +370,7 @@ line here with every new function, and a case for it in the catalogue.
 | W.1 | `cbb global on` | W1 |
 | W.2 | `cbb global off`, `-yes` | W1 |
 | W.3 | The systemd drop-in | W2 |
-| W.4 | The Windows rule `clipboardbridge-home-only` | W2 |
+| W.4 | The Windows rule `cbb-home-only` | W2 |
 | W.5 | The program's own limit on macOS | W2 |
 | W.6 | `cbb global allow` | W2 |
 | W.7 | Fail closed | W3, S9 |

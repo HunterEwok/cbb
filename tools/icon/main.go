@@ -34,9 +34,9 @@ import (
 )
 
 const (
-	appIcon     = "apps/ios/ClipboardBridge/Resources/Assets.xcassets/AppIcon.appiconset/"
+	appIcon     = "apps/ios/CBB/Resources/Assets.xcassets/AppIcon.appiconset/"
 	watchIcon   = "apps/ios/Watch/Assets.xcassets/AppIcon.appiconset/"
-	macIcon     = "apps/macos/ClipboardBridgeMac/Resources/Assets.xcassets/AppIcon.appiconset/"
+	macIcon     = "apps/macos/CBBMac/Resources/Assets.xcassets/AppIcon.appiconset/"
 	androidIcon = "apps/android/shared/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
 )
 

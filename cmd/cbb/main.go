@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Command clipboardbridge shares one clipboard between Apple devices and the Linux
+// Command cbb shares one clipboard between Apple devices and the Linux
 // and Windows computers of a home network. The design is in docs/design.md.
 package main
 
@@ -10,11 +10,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/HunterEwok/clipboardbridge/internal/core"
-	"github.com/HunterEwok/clipboardbridge/internal/version"
+	"github.com/HunterEwok/cbb/internal/core"
+	"github.com/HunterEwok/cbb/internal/version"
 )
 
-const usage = `Usage: clipboardbridge <command> [arguments]
+const usage = `Usage: cbb <command> [arguments]
 
 Commands:
   copy [-secret]          Send standard input to the group.
@@ -95,7 +95,7 @@ Commands:
 
 Rarely needed:
   holder [auto|first|fallback|never]
-                          Show or set whether this computer holds clipboardbridge.local.
+                          Show or set whether this computer holds cbb.local.
   network                 Take the network this computer is on now as one where the group
                           is: it publishes itself and takes connections only on those.
   install [options]       Windows, after winget: install the service from this copy
@@ -103,8 +103,8 @@ Rarely needed:
   service                 Run the service (started by systemd, launchd or Windows).
   agent                   Link this desktop's clipboard to the service (started at sign-in).
   paste-helper tmux|console|uinput
-                          Take remote pastes into tmux (started by clipboardbridge.conf)
-                          or the Linux text console (the clipboardbridge-console unit).
+                          Take remote pastes into tmux (started by cbb.conf)
+                          or the Linux text console (the cbb-console unit).
 
 The design is in docs/design.md.
 `

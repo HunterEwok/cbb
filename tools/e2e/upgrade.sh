@@ -108,7 +108,7 @@ group() {
 	cb "$1" status | awk '/^NAME/ { on = 1; next } on && NF { print $NF }' | sort
 }
 
-version() { "$1" version | sed -n 's/^clipboardbridge v\([0-9][0-9.]*\).*/\1/p'; }
+version() { "$1" version | sed -n 's/^cbb v\([0-9][0-9.]*\).*/\1/p'; }
 oldv=$(version "$old")
 newv=$(version "$new")
 [ -n "$oldv" ] && [ -n "$newv" ] || fail "no versions: $oldv, $newv"

@@ -15,7 +15,7 @@ import (
 // timerState is what systemd says of the update timer on d: enabled or
 // disabled.
 func timerState(ctx context.Context, d *Device) string {
-	out, _ := Run(ctx, d, "systemctl is-enabled clipboardbridge-update.timer 2>/dev/null || true", "")
+	out, _ := Run(ctx, d, "systemctl is-enabled cbb-update.timer 2>/dev/null || true", "")
 	return strings.TrimSpace(out)
 }
 
@@ -47,14 +47,14 @@ func groupUpdate(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[
 			// The service checks the group's releases with the feed's
 			// roots, as cbb update does: a drop-in of its own, which
 			// install.sh keeps across the update (it writes
-			// clipboardbridge.env anew).
-			if _, err := Run(ctx, d, "mkdir -p /feed /etc/systemd/system/clipboardbridge.service.d && printf '[Service]\\nEnvironment=CBB_RELEASE_ROOTS=/feed/roots.pem\\n' >/etc/systemd/system/clipboardbridge.service.d/bench-roots.conf && systemctl daemon-reload", ""); err != nil {
+			// cbb.env anew).
+			if _, err := Run(ctx, d, "mkdir -p /feed /etc/systemd/system/cbb.service.d && printf '[Service]\\nEnvironment=CBB_RELEASE_ROOTS=/feed/roots.pem\\n' >/etc/systemd/system/cbb.service.d/bench-roots.conf && systemctl daemon-reload", ""); err != nil {
 				return err
 			}
 			if _, err := docker(ctx, "cp", fd.roots, d.Container+":/feed/roots.pem"); err != nil {
 				return err
 			}
-			if _, err := Run(ctx, d, "systemctl restart clipboardbridge", ""); err != nil {
+			if _, err := Run(ctx, d, "systemctl restart cbb", ""); err != nil {
 				return err
 			}
 			if err := runsVersion(ctx, d, "0.6.0"); err != nil {

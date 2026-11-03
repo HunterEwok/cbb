@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Package service is the clipboardbridge service: it holds the device's identity,
+// Package service is the cbb service: it holds the device's identity,
 // the sync engine and the member connections, publishes and browses with
 // mDNS (D-12, D-32), admits devices,
 // and serves the local control socket.
@@ -22,21 +22,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/benchtime"
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/hlc"
-	"github.com/HunterEwok/clipboardbridge/internal/mdns"
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/phone"
-	"github.com/HunterEwok/clipboardbridge/internal/piv"
-	"github.com/HunterEwok/clipboardbridge/internal/remotepaste"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/benchtime"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/hlc"
+	"github.com/HunterEwok/cbb/internal/mdns"
+	"github.com/HunterEwok/cbb/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/phone"
+	"github.com/HunterEwok/cbb/internal/piv"
+	"github.com/HunterEwok/cbb/internal/remotepaste"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // markFile holds the hybrid clock's saved mark, in the state directory.
@@ -173,7 +173,7 @@ func mdnsDiscovery(c DiscoveryConfig) (Discovery, error) {
 	return mdns.New(mdns.Config{ID: c.ID, Port: c.Port, TXT: c.TXT, BrowseOnly: c.BrowseOnly, Publish: c.Publish, Interfaces: c.Only, OnPeers: c.OnPeers, Logf: c.Logf})
 }
 
-// Service is a running clipboardbridge service.
+// Service is a running cbb service.
 type Service struct {
 	cfg   Config
 	clock *hlc.Clock
@@ -469,7 +469,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 // errBroken is what the user sees when the device's group file cannot be
 // read.
-const errBroken = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or remove clipboardbridge with its keys (uninstall --purge, -Purge on Windows), install it again and join"
+const errBroken = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or remove cbb with its keys (uninstall --purge, -Purge on Windows), install it again and join"
 
 // engine returns the sync engine, or nil while the device is in no group.
 func (s *Service) engine() *clip.Engine {
@@ -495,7 +495,7 @@ func loadMark(dir string) (hlc.Timestamp, error) {
 
 // startGroup starts the network part with an identity: the member
 // connections, discovery and the member port; on Linux also
-// clipboardbridge.local. Its state is set only when all of it started.
+// cbb.local. Its state is set only when all of it started.
 //
 // The group's context does not derive from Run's: only stopGroup ends it,
 // after the goodbyes, so a stopping service leaves in order.
@@ -584,7 +584,7 @@ func (s *Service) startGroup(id *group.Identity) error {
 		s.servePhone(gctx, ln.Addr())
 	}()
 	// Discovery has its own context, so it can say goodbye for
-	// clipboardbridge.local before the member connections close.
+	// cbb.local before the member connections close.
 	dctx, dcancel := context.WithCancel(gctx)
 	s.responder, s.discoveryStop, s.discoveryDone = r, dcancel, make(chan struct{})
 	go func(done chan struct{}) {
@@ -593,7 +593,7 @@ func (s *Service) startGroup(id *group.Identity) error {
 			s.logf("cbb: discovery: %v", err)
 		}
 	}(s.discoveryDone)
-	s.electLocked() // alone, a member that can hold clipboardbridge.local holds it at once
+	s.electLocked() // alone, a member that can hold cbb.local holds it at once
 	s.tunMu.Lock()
 	s.runTunnelLocked()
 	s.tunMu.Unlock()
@@ -602,7 +602,7 @@ func (s *Service) startGroup(id *group.Identity) error {
 
 // stopGroup stops the network part: first discovery, which sends the
 // goodbyes for this member's names, then the member connections, which say
-// goodbye too, so the next holder takes clipboardbridge.local over at once.
+// goodbye too, so the next holder takes cbb.local over at once.
 func (s *Service) stopGroup() {
 	s.mu.Lock()
 	s.stopping = true
@@ -635,14 +635,14 @@ func (s *Service) stopGroup() {
 // txtLocked returns the TXT record of this member.
 func (s *Service) txtLocked() []string { return txt(s.id, s.priorityLocked(s.id), s.window != nil) }
 
-// priorityLocked returns this member's priority for clipboardbridge.local,
+// priorityLocked returns this member's priority for cbb.local,
 // 0 if it never holds the name (see priority).
 func (s *Service) priorityLocked(id *group.Identity) int {
 	return priority(s.holdSetting, id != nil && id.Phone != nil, s.battery)
 }
 
 // txt returns a TXT record: the protocol version, the group tag, the
-// holder priority if the member can hold clipboardbridge.local, and whether
+// holder priority if the member can hold cbb.local, and whether
 // a pairing window is open.
 func txt(id *group.Identity, prio int, window bool) []string {
 	t := []string{"v=1", "g=" + group.Tag(id.GroupCA.Cert)}

@@ -15,9 +15,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/keyseal"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/keyseal"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
 // StateFile holds a member's tunnel state, next to its identity.

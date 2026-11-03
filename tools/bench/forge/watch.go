@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // The writes a member makes (Y15): forge [-socket PATH] watch:SECONDS

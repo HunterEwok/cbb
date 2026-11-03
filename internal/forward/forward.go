@@ -35,9 +35,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/budget"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
-	"github.com/HunterEwok/clipboardbridge/internal/vless"
+	"github.com/HunterEwok/cbb/internal/budget"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless"
 )
 
 // Limits bound what one group, one source and all of them may take, so

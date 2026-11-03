@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/phone"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/phone"
 )
 
 // The joiner that listens (G17, docs/protocol.md section 6, "The joiner

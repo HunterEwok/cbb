@@ -1,6 +1,6 @@
-# clipboardbridge: notes for Claude Code
+# cbb: notes for Claude Code
 
-clipboardbridge syncs the clipboard between Linux computers, Windows PCs, Macs and an iPhone on
+cbb syncs the clipboard between Linux computers, Windows PCs, Macs and an iPhone on
 the home network. A Go service (`cmd/cbb`, `internal/...`) runs on the computers; the iPhone
 app (`apps/ios`) is in development, and in its groups the phone is the root of trust.
 Read [README.md](README.md), [docs/design.md](docs/design.md),
@@ -84,10 +84,10 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `internal/pasteboard/pasteboard_windows.go` (the Win32 clipboard), `internal/winpaste` (remote paste:
   Ctrl+V or SendInput's Unicode keys, the secure desktop and integrity checks), `packaging/windows`
   (`install.ps1`, `uninstall.ps1`, `get.ps1`); CI's `windows installer` job runs them.
-- `apps/ios/ClipboardBridgeKit`: the phone's protocol core: `Pairing*`, `Member`, `SyncEngine`,
+- `apps/ios/CBBKit`: the phone's protocol core: `Pairing*`, `Member`, `SyncEngine`,
   `MemberNode`, `Records`, `Certificates`, `PhoneGroup`, `Discovery`/`BonjourBrowser`,
   `TLSTransport`, `KeychainIdentity`, `SecKeySigner`, `AwayFromHome` (sync away from home through
-  `Cbbtun.xcframework`); `clipboardbridge-interop` plays the phone
+  `Cbbtun.xcframework`); `cbb-interop` plays the phone
   in Go tests.
 - `lite/`: the lite member in Rust (its command is `cbb` too): no CA keys, joins by the phone's QR code,
   dials the Linux members and listens for phones and Macs (mDNS TXT `r=lite`). Its protocol core is the crate `lite/core` (`cbb_core`: `certs`,
@@ -130,7 +130,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   on a paired device with the kit's `Keyboard` tables), in two flavors: `full` (GitHub, the watch, its own update) and `fdroid` (no Play services; `src/fdroid`, `packaging/fdroid`, reproducible, CI's `fdroid` job);
   `apps/android/wear`: the Wear OS app, through the phone over the Wearable Data Layer;
   `apps/android/shared`: what the two share (`Tokens.kt`, the glyphs, `WatchState`).
-- `apps/ios/ClipboardBridge`: the SwiftUI app (`AppModel`, `LiveGroup`, views, theme from
+- `apps/ios/CBB`: the SwiftUI app (`AppModel`, `LiveGroup`, views, theme from
   `apps/design/tokens.json`, String Catalogs in English and Russian; `GroupEvents` notifies of
   the group's events, `WatchLink` talks to the watch); `apps/ios/Watch`: the Apple Watch app,
   which works only through the iPhone over WatchConnectivity (`Shared/WatchState.swift`).

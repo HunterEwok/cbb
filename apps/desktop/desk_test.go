@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 func TestPickLanguage(t *testing.T) {

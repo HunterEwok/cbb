@@ -29,13 +29,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/mdns"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/mdns"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/pair"
 )
 
 func init() {
@@ -487,7 +487,7 @@ func TestThreeMembers(t *testing.T) {
 	for _, s := range []*testService{a, b, c} {
 		waitFor(t, s.name+" has the text", func() bool { return s.paste(t) == "from alpha" })
 	}
-	// Exactly one member holds clipboardbridge.local: the lowest device ID
+	// Exactly one member holds cbb.local: the lowest device ID
 	// of the two that hold the iPhone CA.
 	holders := func() []string {
 		var out []string
@@ -642,13 +642,13 @@ func TestWatcherKeepsTheNewestWrite(t *testing.T) {
 
 func TestAloneHoldsTheName(t *testing.T) {
 	// A single Linux member, with an iPhone and no other computer, answers
-	// for clipboardbridge.local.
+	// for cbb.local.
 	var h hub
 	a := startService(t, &h, "alpha")
 	b := startService(t, &h, "beta")
 	pairWith(t, a, b)
 	b.stop()
-	waitFor(t, "alpha holds clipboardbridge.local alone", func() bool { return a.status(t).Holder })
+	waitFor(t, "alpha holds cbb.local alone", func() bool { return a.status(t).Holder })
 	a.stop()
 	a2 := restartService(t, &h, a)
 	waitFor(t, "alpha holds it right after a restart", func() bool { return a2.status(t).Holder })
@@ -674,7 +674,7 @@ func TestRestartWithANewPort(t *testing.T) {
 func TestMac(t *testing.T) {
 	// A Mac joins through a Linux member, admits no devices until it is an
 	// admin, and syncs in both directions; until then it never holds
-	// clipboardbridge.local. Its rules must hold whichever device ID is
+	// cbb.local. Its rules must hold whichever device ID is
 	// lower, so the test runs once with the Mac's ID below the pi's and
 	// once above it.
 	for _, macLower := range []bool{true, false} {
@@ -712,7 +712,7 @@ func TestMac(t *testing.T) {
 		}
 		waitFor(t, "the Mac has it", func() bool { return mac.paste(t) == "from the pi" })
 		if mac.status(t).Holder || !pi.status(t).Holder {
-			t.Error("the Mac holds clipboardbridge.local, or the pi does not")
+			t.Error("the Mac holds cbb.local, or the pi does not")
 		}
 		pi.stop()
 		mac.stop()
@@ -746,7 +746,7 @@ func TestRenewal(t *testing.T) {
 	}
 	id, _ := group.Load(pi.dir)
 	if !id.Phone.NotAfter.After(before["pi"].Phone.NotAfter) {
-		t.Error("the pi did not renew its clipboardbridge.local certificate")
+		t.Error("the pi did not renew its cbb.local certificate")
 	}
 	// The renewed certificates work: the members connect again.
 	mac.stop()
@@ -1119,9 +1119,9 @@ func TestIPhone(t *testing.T) {
 	if other.status(t).Holder {
 		holder, notHolder = other, pi
 	}
-	// Only the holder of clipboardbridge.local pairs an iPhone.
-	if _, err := notHolder.do(t, control.Header{Op: control.OpPairPhone}, ""); err == nil || !strings.Contains(err.Error(), "does not answer for clipboardbridge.local") {
-		t.Errorf("pair -phone on a member that does not hold clipboardbridge.local: %v", err)
+	// Only the holder of cbb.local pairs an iPhone.
+	if _, err := notHolder.do(t, control.Header{Op: control.OpPairPhone}, ""); err == nil || !strings.Contains(err.Error(), "does not answer for cbb.local") {
+		t.Errorf("pair -phone on a member that does not hold cbb.local: %v", err)
 	}
 	c := holder.dial(t)
 	defer c.Close()
@@ -1136,7 +1136,7 @@ func TestIPhone(t *testing.T) {
 
 	// 1. The iPhone downloads the profile over plain HTTP and trusts the
 	// CA in it, nothing else.
-	resp, err := http.Get("http://" + profileAddr + "/clipboardbridge.mobileconfig")
+	resp, err := http.Get("http://" + profileAddr + "/cbb.mobileconfig")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1157,9 +1157,9 @@ func TestIPhone(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AddCert(ca)
 	iphone := &http.Client{Timeout: 10 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "clipboardbridge.local"}}}
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "cbb.local"}}}
 
-	// 2. The pairing page, reached as clipboardbridge.local, takes the code.
+	// 2. The pairing page, reached as cbb.local, takes the code.
 	resp, err = iphone.PostForm("https://"+phoneAddr+"/pair", url.Values{"code": {m.Code}})
 	if err != nil {
 		t.Fatalf("the iPhone could not reach the pairing page: %v", err)
@@ -1174,7 +1174,7 @@ func TestIPhone(t *testing.T) {
 		t.Fatalf("pair -phone ended with %+v, %v", m, err)
 	}
 	// The window and the profile port closed before the answer.
-	if _, err := http.Get("http://" + profileAddr + "/clipboardbridge.mobileconfig"); err == nil {
+	if _, err := http.Get("http://" + profileAddr + "/cbb.mobileconfig"); err == nil {
 		t.Error("the profile port is still open")
 	}
 
@@ -1276,7 +1276,7 @@ func shortcutPhone(t *testing.T, pi *testService) (post func(path, token, body s
 			waitFor(t, "the iPhone port", func() bool { a, _ := pi.addrs(); return a != "" })
 			var profileAddr string
 			phoneAddr, profileAddr = pi.addrs()
-			resp, err := http.Get("http://" + profileAddr + "/clipboardbridge.mobileconfig")
+			resp, err := http.Get("http://" + profileAddr + "/cbb.mobileconfig")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1290,7 +1290,7 @@ func shortcutPhone(t *testing.T, pi *testService) (post func(path, token, body s
 			}
 			roots := x509.NewCertPool()
 			roots.AddCert(ca)
-			shortcutTLS := &tls.Config{RootCAs: roots, ServerName: "clipboardbridge.local"}
+			shortcutTLS := &tls.Config{RootCAs: roots, ServerName: "cbb.local"}
 			// The shortcut's HTTPS takes the member port's connections a
 			// moment after the port opens; until then the member TLS
 			// answers them.
@@ -1341,7 +1341,7 @@ func TestShortcutTokenOnlySyncs(t *testing.T) {
 	if code, rep := post("/sync", token, `{"v":1,"text":"from the iPhone"}`); code != http.StatusOK || rep["direction"] != "from_iphone" {
 		t.Fatalf("sync: %d %v", code, rep)
 	}
-	if code, _ := post("/admit", token, `{"v":1,"code":"clipboardbridge://join?code=246802&addr=127.0.0.1:1&fp=x"}`); code != http.StatusNotFound {
+	if code, _ := post("/admit", token, `{"v":1,"code":"cbb://join?code=246802&addr=127.0.0.1:1&fp=x"}`); code != http.StatusNotFound {
 		t.Errorf("/admit answered %d, want 404", code)
 	}
 	second := pairAgain(false)
@@ -1419,7 +1419,7 @@ func listBox(t *testing.T, dir string, admin *group.Identity, dev group.DeviceID
 
 func TestLinuxMemberWithoutCAKeys(t *testing.T) {
 	// A Linux member without the CA keys, as in a group whose root is the
-	// phone, connects and syncs, but never holds clipboardbridge.local, even
+	// phone, connects and syncs, but never holds cbb.local, even
 	// with the lowest device ID, and admits nobody. (A group is either one
 	// or the other, so the pi gives the name up to the lower ID here; in a
 	// group whose root is the phone nobody holds it.)
@@ -1461,7 +1461,7 @@ func TestLinuxMemberWithoutCAKeys(t *testing.T) {
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "from the box" })
 	if box.status(t).Holder {
-		t.Error("the member without CA keys holds clipboardbridge.local")
+		t.Error("the member without CA keys holds cbb.local")
 	}
 	if _, err := box.do(t, control.Header{Op: control.OpPair}, ""); err == nil {
 		t.Error("a member without CA keys opened a pairing window")
@@ -2039,7 +2039,7 @@ func TestMacsListen(t *testing.T) {
 }
 
 // TestHolderPriority checks that a machine without a battery holds
-// clipboardbridge.local before a laptop, whatever the device IDs, and that
+// cbb.local before a laptop, whatever the device IDs, and that
 // the setting overrides the guess.
 func TestHolderPriority(t *testing.T) {
 	var h hub

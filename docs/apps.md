@@ -26,7 +26,7 @@ they look, so both apps are built to the same plan.
 ## Screens
 
 1. **Start** (no group yet): one sentence, the big button "Connect a new device" with a hint
-   below it (on a computer, run `cbb pair` and scan the code it shows; `clipboardbridge
+   below it (on a computer, run `cbb pair` and scan the code it shows; `cbb
    pair -phone` in the mode without the app), and a second button, "I already use
    Copy Beyond Borders on another phone", which joins that phone's group, and a third, "My group was
    made on a computer", where the user types the six-digit code that `cbb pair` shows on the
@@ -147,7 +147,7 @@ they look, so both apps are built to the same plan.
    kit's `HubOnPhone` drive cbbtun's hub, and the hub publishes itself on a home network
    with `r=phone` (docs/protocol.md, section 3). While the hub is registered, "Invite a
    device from afar" makes a remote invitation for an hour (docs/protocol.md, section 12):
-   the phone shares the file `clipboardbridge.cbbinvite`, the other side runs
+   the phone shares the file `cbb.cbbinvite`, the other side runs
    `cbb pair -invite` with it, and the phone asks "Admit …?" with the device's fingerprint,
    which `cbb` shows too; on yes it unlocks the group's key and admits it.
 
@@ -286,7 +286,7 @@ The Mac app (`apps/macos`, SwiftUI, macOS 14) is a menu bar item and a window ov
 service that the installer or Homebrew put on the Mac; the service and its pasteboard agent
 keep syncing without it. It speaks the service's control socket (`Control`, the protocol of
 `internal/control`: a JSON header line, then the payload), as a member of the
-`_clipboardbridge` group, and reads the status and the devices every few seconds.
+`_cbb` group, and reads the status and the devices every few seconds.
 
 - **The window**: the group in a line (how many devices are online, its tag, sync away from
   home and its switch), the devices as tiles, a list or orbits around this Mac (the toolbar
@@ -345,7 +345,7 @@ service and its clipboard agent keep syncing without it.
   with the Swift and Kotlin tokens), the appearance, this computer's sync mode (`cbb mode`),
   and error details (as cbb: on in a
   build without a release version, `CBB_DEBUG=1` or `0`, or the switch). They are kept in
-  the user's configuration folder (`clipboardbridge/desktop.json`).
+  the user's configuration folder (`cbb/desktop.json`).
 - What changes the group runs `cbb` as the administrator: through `pkexec` on Linux (the
   desktop's password dialog; each argument passed as it is, no shell), and through the UAC
   prompt on Windows (an elevated PowerShell started with `ShellExecuteEx`'s `runas`, each
@@ -356,7 +356,7 @@ service and its clipboard agent keep syncing without it.
 
 CI's `tray app` jobs vet, test and build it on Linux and Windows. The release archives carry
 it: Windows' (`cbb-desktop.exe`, built without cgo beside `cbb.exe` and signed with it), whose
-`install.ps1` starts it at every sign-in (the Run value `clipboardbridge tray`) and puts
+`install.ps1` starts it at every sign-in (the Run value `cbb tray`) and puts
 "CBB" in the Start menu; and Linux's for amd64 and arm64 (`cbb-desktop`, built
 with cgo on a runner of each architecture), whose `install.sh` adds it with its autostart
 entry and applications menu entry when `ldd` finds GTK 4 and WebKitGTK 6.0, and otherwise
@@ -705,8 +705,8 @@ collection. The watch does not change the arrangement.
 
 ## Releasing the Android app
 
-Each release carries `clipboardbridge-X.Y.Z.apk` and the Wear OS app,
-`clipboardbridge-wear-X.Y.Z.apk`, both signed with the project's release key; the key and
+Each release carries `cbb-X.Y.Z.apk` and the Wear OS app,
+`cbb-wear-X.Y.Z.apk`, both signed with the project's release key; the key and
 its secrets are in [maintaining.md](maintaining.md#android-signing-key). The watch app is
 installed on the watch with `adb install` over the watch's wireless debugging until the apps
 are on Google Play.
@@ -718,7 +718,7 @@ for a newer release, and "Update automatically" (off until the user turns it on)
 day when the app comes to the front and installs what it finds. Each check fetches the signed
 `keys.json`, `stable.json` and `release.json` from GitHub, else `dl.cbb.tools`, and checks them
 as `cbb update` does (docs/protocol.md, section 16), sending no version, system or group data.
-The release's `clipboardbridge-X.Y.Z.apk` must match release.json's size and SHA-256, be this
+The release's `cbb-X.Y.Z.apk` must match release.json's size and SHA-256, be this
 app with a higher version code, and carry this app's signing certificate before the system's
 `PackageInstaller` gets it with `USER_ACTION_NOT_REQUIRED`: the system asks only for the first
 update after an install from elsewhere, which also lets the app install updates ("Install
@@ -735,17 +735,17 @@ another key refused with its message.
 
 One source gives two builds of the app, two Gradle flavors of `apps/android/app`:
 
-- **full**, `clipboardbridge-X.Y.Z.apk`: the releases on GitHub and, later, the stores. It
+- **full**, `cbb-X.Y.Z.apk`: the releases on GitHub and, later, the stores. It
   has the Wear OS watch, through `play-services-wearable` (`src/full`: `WatchLink.kt` and its
   service in the manifest), and its own update with the installer's permissions.
-- **fdroid**, `clipboardbridge-fdroid-X.Y.Z.apk`: no Google Play services and no other
+- **fdroid**, `cbb-fdroid-X.Y.Z.apk`: no Google Play services and no other
   non-free code, which F-Droid requires. Its `WatchLink` (`src/fdroid`) reaches no watch, so
   Settings offers none; `BuildConfig.SELF_UPDATE` is false and it has no installer
   permission, so it leaves its updates to F-Droid. Everything else is the same code.
 
 F-Droid builds the fdroid flavor itself from each release's tag, by the recipe in
 `packaging/fdroid` (in fdroiddata once accepted), and checks it against our
-`clipboardbridge-fdroid-X.Y.Z.apk`: when the two are the same apart from the signature, it
+`cbb-fdroid-X.Y.Z.apk`: when the two are the same apart from the signature, it
 publishes ours. Both builds carry the same application id and key, so a phone moves between
 them by installing the other one over it, the group and the settings kept; F-Droid offers
 its updates to either. That needs the build to be reproducible:
@@ -801,16 +801,16 @@ the app on real devices.
 - `apps/ios/` — the app (SwiftUI): `project.yml` describes the Xcode project for XcodeGen
   (`cd apps/ios && xcodegen generate`; the generated project is not committed), built and
   tested on an iPhone simulator in CI without signing; and
-  `apps/ios/ClipboardBridgeKit`, the Swift package with the protocol core (CPace, the pairing
+  `apps/ios/CBBKit`, the Swift package with the protocol core (CPace, the pairing
   frames, the join QR code, the member protocol and the phone's sync engine). It has no UI
   and runs on Linux too; its tests check it against the vectors that the Go tests write to
   `testdata/interop/` (`go test ./internal/group ./internal/pair ./internal/phone ./internal/node -update`
   regenerates them), and CI runs it against the Go code: pairing over plain TCP on Linux,
   pairing and a member connection over real TLS on macOS.
-- The app finds the full members by browsing `_clipboardbridge._tcp` (ClipboardBridgeKit's
+- The app finds the full members by browsing `_cbb._tcp` (CBBKit's
   `BonjourBrowser` on iOS) and keeps one connection to each member of its group
   (`MemberDialer`). iOS asks once for local network access: the Info.plist lists
-  `_clipboardbridge._tcp` under `NSBonjourServices` and explains the use in
+  `_cbb._tcp` under `NSBonjourServices` and explains the use in
   `NSLocalNetworkUsageDescription`.
 - A phone joins another phone's group from its Start screen ("I already use Copy Beyond Borders on
   another phone"):
@@ -873,7 +873,7 @@ the app on real devices.
   for light and dark mode, and the Android app takes the same drawings; `icon/tray/` holds the single-colour glyph of
   the Mac's menu bar and the tray in three states, which the tool copies into the Mac app's asset catalog as template
   images and turns into the tray's symbolic SVGs and white and black PNGs for Linux and white and black ICOs for Windows in `apps/desktop/trayicon`); `go run ./tools/tokens` turns `tokens.json` into
-  `apps/ios/ClipboardBridge/Theme/Tokens.swift` and the Android apps' `Tokens.kt` and fails when a palette misses the
+  `apps/ios/CBB/Theme/Tokens.swift` and the Android apps' `Tokens.kt` and fails when a palette misses the
   WCAG AA contrast, and CI checks that the generated files are up to date; `apps/l10n/` — the shared glossary of terms, so
   both apps use the same words.
 - The protocol both apps speak is [protocol.md](protocol.md).

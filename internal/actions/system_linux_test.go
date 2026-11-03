@@ -31,7 +31,7 @@ func TestGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(path)
-	for _, want := range []string{`subject.user != "clipboardbridge"`, `"org.freedesktop.login1.lock-sessions"`, `"org.freedesktop.login1.reboot-multiple-sessions"`} {
+	for _, want := range []string{`subject.user != "cbb"`, `"org.freedesktop.login1.lock-sessions"`, `"org.freedesktop.login1.reboot-multiple-sessions"`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("%s lacks %s:\n%s", path, want, b)
 		}
@@ -53,7 +53,7 @@ func TestGrant(t *testing.T) {
 		t.Fatalf("the old polkit: %s, %v", path, err)
 	}
 	b, _ = os.ReadFile(path)
-	if !strings.Contains(string(b), "Identity=unix-user:clipboardbridge\nAction=org.freedesktop.login1.suspend;org.freedesktop.login1.suspend-multiple-sessions\n") {
+	if !strings.Contains(string(b), "Identity=unix-user:cbb\nAction=org.freedesktop.login1.suspend;org.freedesktop.login1.suspend-multiple-sessions\n") {
 		t.Errorf("the .pkla file:\n%s", b)
 	}
 }

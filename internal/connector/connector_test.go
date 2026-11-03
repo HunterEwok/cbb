@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/service"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/service"
 )
 
 // fakeBoard is a clipboard that the test changes by hand.

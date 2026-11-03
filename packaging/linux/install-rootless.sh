@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs clipboardbridge's full member or lite member for the user who
+# Installs cbb's full member or lite member for the user who
 # runs it, without root (a rootless install, D-79; docs/design.md,
 # "Rootless installs"):
 #
@@ -11,8 +11,8 @@
 # install.sh runs this script for --rootless. It puts the binary in
 # ~/.local/bin, the service (and the full member's desktop agent) in the
 # user's systemd user units, the tmux configuration in
-# ~/.local/share/clipboardbridge, the settings in ~/.config/clipboardbridge
-# and the state in ~/.local/state/clipboardbridge, and starts the service.
+# ~/.local/share/cbb, the settings in ~/.config/cbb
+# and the state in ~/.local/state/cbb, and starts the service.
 # Every program of the user can read the device's keys, so the device is
 # never the group's root, an admin or a hub. It has no firewall rules, no
 # TPM, no uinput or console helper and no polkit rule, and it runs while
@@ -114,7 +114,7 @@ if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
 	echo "install.sh: --home-cgnat is for the full member" >&2
 	exit 2
 fi
-for f in /usr/local/bin/cbb /opt/clipboardbridge/bin/cbb /etc/systemd/system/clipboardbridge.service; do
+for f in /usr/local/bin/cbb /opt/cbb/bin/cbb /etc/systemd/system/cbb.service; do
 	if [ -e "$f" ]; then
 		echo "install.sh: CBB is installed for the whole system here ($f), and one device runs one service; remove it first or keep it" >&2
 		exit 1
@@ -125,11 +125,11 @@ done
 export CBB_ROOTLESS=1
 home=${HOME:?install.sh: HOME is not set}
 cbb=$home/.local/bin/cbb
-share=${XDG_DATA_HOME:-$home/.local/share}/clipboardbridge
+share=${XDG_DATA_HOME:-$home/.local/share}/cbb
 config=${XDG_CONFIG_HOME:-$home/.config}
 units=$config/systemd/user
-state=${XDG_STATE_HOME:-$home/.local/state}/clipboardbridge
-env=$config/clipboardbridge/clipboardbridge.env
+state=${XDG_STATE_HOME:-$home/.local/state}/cbb
+env=$config/cbb/cbb.env
 
 # place FILE DEST installs FILE, a unit or the autostart entry, with the
 # binary's path here.
@@ -143,13 +143,13 @@ install -d -m 0700 "$state" "${env%/*}"
 install -m 0755 "$bin" "$cbb.new"
 mv "$cbb.new" "$cbb"
 install -m 0644 "$here/uninstall.sh" "$share/uninstall.sh"
-install -m 0644 "$here/../tmux/clipboardbridge.conf" "$share/tmux.conf"
-place "$here/clipboardbridge-rootless.service" "$units/clipboardbridge.service"
+install -m 0644 "$here/../tmux/cbb.conf" "$share/tmux.conf"
+place "$here/cbb-rootless.service" "$units/cbb.service"
 # The lite member has no desktop clipboard, so no agent.
 if [ "$kind" = full ]; then
 	install -d -m 0755 "$config/autostart"
-	place "$here/clipboardbridge-agent.service" "$units/clipboardbridge-agent.service"
-	place "$here/clipboardbridge-desktop.desktop" "$config/autostart/clipboardbridge-desktop.desktop"
+	place "$here/cbb-agent.service" "$units/cbb-agent.service"
+	place "$here/cbb-desktop.desktop" "$config/autostart/cbb-desktop.desktop"
 fi
 
 # The settings: the ones given, else the ones kept from before, else the
@@ -166,7 +166,7 @@ if [ "$port" = 8764 ] && [ "$cgnat" = 0 ]; then
 	rm -f "$env"
 else
 	{
-		echo "# Written by clipboardbridge's install.sh --rootless; change it with install.sh --rootless --port N and --home-cgnat on|off."
+		echo "# Written by cbb's install.sh --rootless; change it with install.sh --rootless --port N and --home-cgnat on|off."
 		if [ "$port" != 8764 ]; then
 			echo "CBB_PORT=$port"
 		fi
@@ -178,13 +178,13 @@ else
 fi
 
 systemctl --user daemon-reload
-systemctl --user enable clipboardbridge.service
-systemctl --user reset-failed clipboardbridge.service >/dev/null 2>&1 || true
-systemctl --user restart clipboardbridge.service
+systemctl --user enable cbb.service
+systemctl --user reset-failed cbb.service >/dev/null 2>&1 || true
+systemctl --user restart cbb.service
 if [ "$kind" = full ]; then
-	systemctl --user enable clipboardbridge-agent.service >/dev/null 2>&1 || true
+	systemctl --user enable cbb-agent.service >/dev/null 2>&1 || true
 	if systemctl --user is-active -q graphical-session.target 2>/dev/null; then
-		systemctl --user restart clipboardbridge-agent.service >/dev/null 2>&1 ||
+		systemctl --user restart cbb-agent.service >/dev/null 2>&1 ||
 			echo "install.sh: the desktop agent did not start; it starts at your next login" >&2
 	fi
 fi

@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5174e28a6a9e -->
+<!-- source: 62cc1d41168b -->
 # Cuando algo no funciona
 
-Empieza con `cbb status` en el dispositivo que falla: dice si el servicio está en marcha, en qué grupo está, qué miembros están conectados y el estado de la sincronización fuera de casa. Cada mensaje es corto; `CBB_DEBUG=1 cbb status` (en Windows, antes `$env:CBB_DEBUG = "1"`) muestra debajo el error subyacente. El registro del servicio siempre tiene los detalles: en Linux `journalctl -u clipboardbridge`, y el del conector de escritorio está en el diario de la sesión, `journalctl --user`; los demás sistemas están en [archivos y registros](../reference/devices.md#files-and-logs). El interruptor de detalles de cada parte, incluidas las apps y los instaladores, está en [mensajes de error y detalles](../reference/errors.md).
+Empieza con `cbb status` en el dispositivo que falla: dice si el servicio está en marcha, en qué grupo está, qué miembros están conectados y el estado de la sincronización fuera de casa. Cada mensaje es corto; `CBB_DEBUG=1 cbb status` (en Windows, antes `$env:CBB_DEBUG = "1"`) muestra debajo el error subyacente. El registro del servicio siempre tiene los detalles: en Linux `journalctl -u cbb`, y el del conector de escritorio está en el diario de la sesión, `journalctl --user`; los demás sistemas están en [archivos y registros](../reference/devices.md#files-and-logs). El interruptor de detalles de cada parte, incluidas las apps y los instaladores, está en [mensajes de error y detalles](../reference/errors.md).
 
 ## Comandos
 
-**"the CBB service is not running"**: inícialo (`sudo systemctl start clipboardbridge` en Linux; `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` en un Mac; `Start-Service clipboardbridge` en Windows) y mira su registro.
+**"the CBB service is not running"**: inícialo (`sudo systemctl start cbb` en Linux; `sudo launchctl kickstart -k system/tools.cbb` en un Mac; `Start-Service cbb` en Windows) y mira su registro.
 
-**"permission denied" en el socket de control, justo después de instalar**: el instalador te añadió al grupo `clipboardbridge`, y un grupo cuenta solo desde el siguiente inicio de sesión. Cierra la sesión y vuelve a abrirla (en Windows, abre una terminal nueva); hasta entonces, `sudo cbb ...` funciona.
+**"permission denied" en el socket de control, justo después de instalar**: el instalador te añadió al grupo `cbb`, y un grupo cuenta solo desde el siguiente inicio de sesión. Cierra la sesión y vuelve a abrirla (en Windows, abre una terminal nueva); hasta entonces, `sudo cbb ...` funciona.
 
 ## Los dispositivos no se ven entre sí
 
@@ -21,17 +21,17 @@ Empieza con `cbb status` en el dispositivo que falla: dice si el servicio está 
 
 - **"wrong code"**: cada ventana de emparejamiento admite tres intentos; ejecuta `cbb pair` de nuevo para obtener un código nuevo.
 - **El teléfono no llega al ordenador tras escanear su código QR**: el teléfono y el ordenador deben estar en la misma red, y el puerto del ordenador debe estar abierto (arriba). En iOS, permite la red local para la app (Ajustes, Privacidad y seguridad, Red local).
-- **El atajo no llega a `clipboardbridge.local`**: solo los ordenadores raíz y administradores del grupo lo sirven, y solo en el puerto 8764; al menos uno debe estar encendido (`cbb status` en cada ordenador dice si responde). Comprueba que el perfil está instalado y con confianza total ([Sin la app](without-app.md#3-add-an-iphone-with-the-shortcut)).
+- **El atajo no llega a `cbb.local`**: solo los ordenadores raíz y administradores del grupo lo sirven, y solo en el puerto 8764; al menos uno debe estar encendido (`cbb status` en cada ordenador dice si responde). Comprueba que el perfil está instalado y con confianza total ([Sin la app](without-app.md#3-add-an-iphone-with-the-shortcut)).
 
 ## Sincronización fuera de casa
 
 `cbb global` en el dispositivo y en el hub dice qué falla. Las causas habituales: el router no reenvía al hub el puerto UDP del hub, el cortafuegos del hub lo descarta, o la dirección dada a `cbb global hub` no es la que alcanza internet. Un dispositivo que no ha encontrado al hub en casa desde que se activó la sincronización fuera de casa, o desde que el hub cambió sus ajustes (`-obfuscate`, `-vless`), no sabe cómo llegar a él: llévalo a casa una vez. Una red que bloquea las VPN necesita [AmneziaWG o VLESS](blocked-networks.md). Con `CBB_DEBUG=1` en el entorno del servicio, el registro muestra también los saludos de WireGuard. En Linux:
 
 ```sh
-sudo systemctl edit clipboardbridge     # add the two lines below, save
+sudo systemctl edit cbb     # add the two lines below, save
 # [Service]
 # Environment=CBB_DEBUG=1
-sudo systemctl restart clipboardbridge
+sudo systemctl restart cbb
 ```
 
 ## Android
@@ -41,4 +41,4 @@ sudo systemctl restart clipboardbridge
 
 ## Sigue sin funcionar
 
-Abre una [incidencia](https://github.com/HunterEwok/clipboardbridge/issues) con la salida de `CBB_DEBUG=1 cbb status`, la parte relevante del registro y los sistemas implicados. Quita todo lo privado que hayas copiado. Los problemas de seguridad van a [SECURITY.md](../../SECURITY.md).
+Abre una [incidencia](https://github.com/HunterEwok/cbb/issues) con la salida de `CBB_DEBUG=1 cbb status`, la parte relevante del registro y los sistemas implicados. Quita todo lo privado que hayas copiado. Los problemas de seguridad van a [SECURITY.md](../../SECURITY.md).

@@ -363,7 +363,7 @@ func render(root string) (map[string][]byte, []*translator, error) {
 		if line.Coming, err = tr.t("The website opens soon."); err != nil {
 			return nil, nil, err
 		}
-		if line.Meanwhile, err = tr.t("Meanwhile, Copy Beyond Borders is on %s.", link("https://github.com/HunterEwok/clipboardbridge", "GitHub")); err != nil {
+		if line.Meanwhile, err = tr.t("Meanwhile, Copy Beyond Borders is on %s.", link("https://github.com/HunterEwok/cbb", "GitHub")); err != nil {
 			return nil, nil, err
 		}
 		soon = append(soon, line)
@@ -448,8 +448,8 @@ func securityTxt(r Release) []byte {
 	if err != nil {
 		released = time.Now()
 	}
-	return []byte("Contact: https://github.com/HunterEwok/clipboardbridge/security/advisories/new\n" +
-		"Policy: https://github.com/HunterEwok/clipboardbridge/blob/main/SECURITY.md\n" +
+	return []byte("Contact: https://github.com/HunterEwok/cbb/security/advisories/new\n" +
+		"Policy: https://github.com/HunterEwok/cbb/blob/main/SECURITY.md\n" +
 		"Preferred-Languages: en, ru\n" +
 		"Canonical: " + siteURL + "/.well-known/security.txt\n" +
 		"Expires: " + released.AddDate(1, 0, 0).Format(time.RFC3339) + "\n")

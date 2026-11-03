@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b1ce9d06c9cb -->
+<!-- source: f299825ed818 -->
 # Kubandika kwa mbali
 
 Kwa yeyote anayetaka kuweka maandishi kwenye programu ya kifaa kingine: nenosiri kwenye fomu ya kuingia ya televisheni, amri kwenye terminal ya seva, anwani kwenye kompyuta iliyo upande wa pili wa chumba. Msimamizi wa kikundi hutuma maandishi, nayo hutua mahali ambapo mwelekeo wa kifaa hicho upo, yakibandikwa au kuandikwa herufi kwa herufi.
@@ -19,7 +19,7 @@ Kubandika kwa mbali kumezimwa kwenye kila kifaa hadi mtumiaji wake mwenyewe akiw
 
 `-enter` (kwenye simu, "Let a paste press Enter") huruhusu kubandika kubonyeza Enter baada ya maandishi. Bila hiyo maandishi yenye kikatizo cha mstari hukataliwa, kwa sababu kikatizo cha mstari kinaweza kutekeleza kama amri kilichotangulia popote ambapo terminal haipokei kubandika kama kipande kimoja.
 
-Kwenye GNOME na KDE kubandika kwa mara ya kwanza hufungua kisanduku cha mazungumzo cha mfumo cha udhibiti wa mbali wa skrini; kiruhusu mara moja na hukumbukwa. Ili kuruka kisanduku hicho, sakinisha msaidizi wa uinput: sakinisha tena kwa `--uinput` (`curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --uinput`), ambayo huongeza kibodi pepe inayobonyeza Shift+Insert na Enter tu kwa niaba ya mtumiaji aliye mbele ya skrini.
+Kwenye GNOME na KDE kubandika kwa mara ya kwanza hufungua kisanduku cha mazungumzo cha mfumo cha udhibiti wa mbali wa skrini; kiruhusu mara moja na hukumbukwa. Ili kuruka kisanduku hicho, sakinisha msaidizi wa uinput: sakinisha tena kwa `--uinput` (`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`), ambayo huongeza kibodi pepe inayobonyeza Shift+Insert na Enter tu kwa niaba ya mtumiaji aliye mbele ya skrini.
 
 Bila eneo-kazi, tmux na kiweko cha maandishi vinahitaji wasaidizi wao. Kila usakinishaji huongeza sehemu ya Copy Beyond Borders ya `/etc/tmux.conf`, inayoanzisha msaidizi wa tmux pamoja na tmux; `install.sh --console` huongeza huduma ya msaidizi wa kiweko.
 

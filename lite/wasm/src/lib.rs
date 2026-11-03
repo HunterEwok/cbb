@@ -6,7 +6,7 @@
 //! run it under wazero (internal/core). Built with
 //!
 //! ```sh
-//! cargo build --locked --release -p clipboardbridge-wasm --target wasm32-unknown-unknown
+//! cargo build --locked --release -p cbb-wasm --target wasm32-unknown-unknown
 //! ```
 //!
 //! The module exports `cbb_abi`, `cbb_alloc`, `cbb_call` and `cbb_free`,

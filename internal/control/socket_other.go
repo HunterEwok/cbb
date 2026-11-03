@@ -8,8 +8,8 @@ package control
 import (
 	"runtime"
 
-	"github.com/HunterEwok/clipboardbridge/internal/openwrt"
-	"github.com/HunterEwok/clipboardbridge/internal/rootless"
+	"github.com/HunterEwok/cbb/internal/openwrt"
+	"github.com/HunterEwok/cbb/internal/rootless"
 )
 
 // DefaultSocket is where the service listens: in the runtime directory that
@@ -23,13 +23,13 @@ func defaultSocket() string {
 		return rootless.Socket()
 	}
 	if runtime.GOOS == "linux" && !openwrt.Is() {
-		return "/run/clipboardbridge/control.sock"
+		return "/run/cbb/control.sock"
 	}
-	return "/var/run/clipboardbridge/control.sock"
+	return "/var/run/cbb/control.sock"
 }
 
 // Group is the group whose members may use the control socket.
-const Group = "clipboardbridge"
+const Group = "cbb"
 
 // permissionHint tells a user without access to the socket what to do.
 const permissionHint = "add your user to the " + Group + " group and log in again"
@@ -37,9 +37,9 @@ const permissionHint = "add your user to the " + Group + " group and log in agai
 // startHint tells a user whose service is not running how to start it.
 var startHint = func() string {
 	if rootless.Is() {
-		return "start it with: systemctl --user start clipboardbridge"
+		return "start it with: systemctl --user start cbb"
 	}
-	return "start it with: sudo systemctl start clipboardbridge"
+	return "start it with: sudo systemctl start cbb"
 }()
 
 // adminSocketName is the admin socket's name next to the control socket.

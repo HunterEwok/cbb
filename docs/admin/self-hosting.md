@@ -32,7 +32,7 @@ The image is published with each release from 0.5. The repository's
 [compose.server.yaml](../../packaging/docker/compose.server.yaml) runs a forwarder:
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/HunterEwok/clipboardbridge/main/packaging/docker/compose.server.yaml
+curl -fsSLO https://raw.githubusercontent.com/HunterEwok/cbb/main/packaging/docker/compose.server.yaml
 docker compose -f compose.server.yaml up -d
 docker compose -f compose.server.yaml exec forward cbb forward -show-key
 ```
@@ -46,9 +46,9 @@ in the file to `["relay", "-group", "TAG", "-listen", ":8764"]`. More in the
 Download the release for the server's CPU and put `cbb` in place:
 
 ```sh
-curl -fsSLO https://github.com/HunterEwok/clipboardbridge/releases/latest/download/clipboardbridge-linux-amd64.tar.gz
-tar -xzf clipboardbridge-linux-amd64.tar.gz
-sudo install -m 755 clipboardbridge/cbb /usr/local/bin/cbb
+curl -fsSLO https://github.com/HunterEwok/cbb/releases/latest/download/cbb-linux-amd64.tar.gz
+tar -xzf cbb-linux-amd64.tar.gz
+sudo install -m 755 cbb/cbb /usr/local/bin/cbb
 ```
 
 (`-arm64` for an ARM server. Check the archive against the release's `SHA256SUMS` as in
@@ -58,7 +58,7 @@ The archive carries the servers' systemd units, `cbb-forward.service` and
 `cbb-relay.service`. Install the one you want and start it:
 
 ```sh
-sudo install -m 644 clipboardbridge/packaging/linux/cbb-forward.service /etc/systemd/system/
+sudo install -m 644 cbb/packaging/linux/cbb-forward.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now cbb-forward
 journalctl -u cbb-forward | grep key          # its key, 44 characters of base64
@@ -71,7 +71,7 @@ log each time it starts. Keep that file: a new key means giving every hub the ne
 The units run `cbb` as a user of its own made for the service, with no privileges, no
 access to the rest of the system and a short list of system calls
 (`systemd-analyze security` rates them 1.2, "OK"). Their flags go in a file the unit reads,
-`/etc/clipboardbridge/forward.env` (`CBB_FORWARD_FLAGS=...`) or `relay.env`
+`/etc/cbb/forward.env` (`CBB_FORWARD_FLAGS=...`) or `relay.env`
 (`CBB_RELAY_FLAGS=...`), owned by root with mode 0644; it holds no secret. `cbb-forward`
 needs no file; `cbb-relay` needs one with the groups to serve, written before it starts
 (see [A blind relay](#a-blind-relay)). `CBB_DEBUG=1` on a line of its own in the same file
@@ -79,7 +79,7 @@ turns on the counts described in [what the server keeps](#what-the-server-keeps)
 the journal needs `sudo` or the `systemd-journal` group.
 
 Run the servers only through their units, never by hand: by hand, `cbb` keeps its key in
-`/var/lib/clipboardbridge` instead of the unit's state directory, so the key the hubs
+`/var/lib/cbb` instead of the unit's state directory, so the key the hubs
 were given would change when the unit takes over.
 
 ### The firewall
@@ -122,7 +122,7 @@ the forwarder also takes VLESS with REALITY on TCP 443, borrowing the TLS of a w
 site:
 
 ```sh
-echo 'CBB_FORWARD_FLAGS=-vless-site www.example.com' | sudo tee /etc/clipboardbridge/forward.env
+echo 'CBB_FORWARD_FLAGS=-vless-site www.example.com' | sudo tee /etc/cbb/forward.env
 sudo systemctl edit cbb-forward      # add the two lines below under [Service]
 sudo systemctl restart cbb-forward
 ```
@@ -151,8 +151,8 @@ A relay serves only the groups you list. Find your group's tag with `cbb status`
 its computers, then set it up on the server:
 
 ```sh
-echo 'CBB_RELAY_FLAGS=-group 0123456789abcdef' | sudo tee /etc/clipboardbridge/relay.env   # several: -group TAG1,TAG2
-sudo install -m 644 clipboardbridge/packaging/linux/cbb-relay.service /etc/systemd/system/
+echo 'CBB_RELAY_FLAGS=-group 0123456789abcdef' | sudo tee /etc/cbb/relay.env   # several: -group TAG1,TAG2
+sudo install -m 644 cbb/packaging/linux/cbb-relay.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now cbb-relay
 sudo journalctl -u cbb-relay | grep key          # its key, 44 characters of base64
@@ -236,7 +236,7 @@ release's digest in `image:` and run `up -d` again.
 
 **Backing up**: the key is all a server has to keep, `forwarder.pem` or `relay.pem` (with
 the forwarder's `forward-state.json`) in `/var/lib/private/cbb-forward` or
-`/var/lib/private/cbb-relay`, or the Docker volume; and your `/etc/clipboardbridge/*.env`
+`/var/lib/private/cbb-relay`, or the Docker volume; and your `/etc/cbb/*.env`
 and drop-ins. To restore, put the files back in the same directory before the unit starts;
 systemd gives them to the unit's user. The forwarder's file also holds its REALITY key.
 

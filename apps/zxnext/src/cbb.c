@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// .cbb: the clipboardbridge dot command for the ZX Spectrum Next. It talks
+// .cbb: the cbb dot command for the ZX Spectrum Next. It talks
 // to the lite member on the Next's own Raspberry Pi over the UART between
 // them, by typing `cbb next ...` at NextPi's shell (docs/roadmap.md, item 14;
 // the frames are in lite/README.md, "ZX Spectrum Next").
@@ -31,7 +31,7 @@ static uint8_t debug;
 
 static void usage(void)
 {
-    printf("clipboardbridge " VERSION "\n\n"
+    printf("cbb " VERSION "\n\n"
            ".cbb paste [FILE]  show the group's\n"
            "                   text, or save it\n"
            ".cbb copy FILE     send a file\n"

@@ -19,11 +19,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/release"
-	"github.com/HunterEwok/clipboardbridge/internal/rootless"
-	"github.com/HunterEwok/clipboardbridge/internal/update"
-	"github.com/HunterEwok/clipboardbridge/internal/version"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/release"
+	"github.com/HunterEwok/cbb/internal/rootless"
+	"github.com/HunterEwok/cbb/internal/update"
+	"github.com/HunterEwok/cbb/internal/version"
 )
 
 const updateUsage = `usage: cbb update [-check | -to VERSION]
@@ -176,7 +176,7 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 	if !check && !elevated {
 		return needAdmin()
 	}
-	// install.ps1 stops every program in Program Files\clipboardbridge,
+	// install.ps1 stops every program in Program Files\cbb,
 	// this one too: the update runs from a copy in its own folder.
 	if runtime.GOOS == "windows" && !check && os.Getenv("CBB_UPDATE_FROM") == "" {
 		return updateFromCopy(dir, exe, args, stdout, stderr)

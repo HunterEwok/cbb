@@ -2,12 +2,12 @@
 # Copyright (C) 2026 HunterEwok
 
 [package]
-name = "clipboardbridge-lite"
+name = "cbb-lite"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "AGPL-3.0-only"
-description = "The lite member of clipboardbridge, for small Linux devices"
+description = "The lite member of cbb, for small Linux devices"
 publish = false
 
 [workspace]
@@ -25,7 +25,7 @@ default = ["tunnel"]
 tunnel = ["dep:gotatun", "dep:bytes", "dep:smoltcp"]
 
 [dependencies]
-clipboardbridge-core = { path = "core", features = ["std", "tls"] }
+cbb-core = { path = "core", features = ["std", "tls"] }
 if-addrs = "0.15.0"
 libc = "0.2.191"
 mdns-sd = "0.21.6"

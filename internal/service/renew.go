@@ -10,8 +10,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/benchtime"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/benchtime"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // renewEvery is how often a member checks whether certificates are due for
@@ -204,7 +204,7 @@ func (s *Service) setIdentityLocked(next *group.Identity) error {
 	s.id = next
 	s.nd.SetIdentity(next)
 	// Taking or losing the iPhone CA changes whether this member may hold
-	// clipboardbridge.local.
+	// cbb.local.
 	if s.responder != nil && !s.stopping {
 		s.responder.SetTXT(s.txtLocked())
 		s.electLocked()

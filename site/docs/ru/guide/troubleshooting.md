@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5174e28a6a9e -->
+<!-- source: 62cc1d41168b -->
 # Когда что-то не работает
 
 Начните с `cbb status` на устройстве, которое ведёт себя неправильно: он покажет, работает ли
 служба, в какой группе она состоит, какие участники подключены и в каком состоянии синхронизация
 вне дома. Каждое сообщение короткое; `CBB_DEBUG=1 cbb status` (в Windows сначала
 `$env:CBB_DEBUG = "1"`) показывает под ним исходную ошибку. Подробности всегда есть в журнале
-службы: в Linux это `journalctl -u clipboardbridge`, а журнал настольного коннектора лежит в
+службы: в Linux это `journalctl -u cbb`, а журнал настольного коннектора лежит в
 журнале сеанса, `journalctl --user`; журналы других систем описаны в разделе
 [файлы и журналы](../reference/devices.md#files-and-logs). Переключатель подробностей для каждой
 части, включая приложения и установщики, описан в разделе
@@ -15,11 +15,11 @@
 ## Команды
 
 **«the Copy Beyond Borders service is not running»**: запустите службу
-(`sudo systemctl start clipboardbridge` в Linux; `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`
-на Mac; `Start-Service clipboardbridge` в Windows) и посмотрите её журнал.
+(`sudo systemctl start cbb` в Linux; `sudo launchctl kickstart -k system/tools.cbb`
+на Mac; `Start-Service cbb` в Windows) и посмотрите её журнал.
 
 **«permission denied» на управляющем сокете сразу после установки**: установщик добавил вас в
-группу `clipboardbridge`, а членство в группе вступает в силу только при следующем входе в
+группу `cbb`, а членство в группе вступает в силу только при следующем входе в
 систему. Выйдите и войдите снова (в Windows откройте новый терминал); до тех пор работает
 `sudo cbb ...`.
 
@@ -50,7 +50,7 @@
   компьютер должны быть в одной сети, а порт компьютера должен быть открыт (см. выше). На iOS
   разрешите приложению доступ к локальной сети (Настройки, Конфиденциальность и безопасность,
   Локальная сеть).
-- **Быстрая команда не может связаться с `clipboardbridge.local`**: его обслуживают только
+- **Быстрая команда не может связаться с `cbb.local`**: его обслуживают только
   компьютеры корня и администраторов группы, и только на порту 8764; хотя бы один из них должен
   быть включён (`cbb status` на каждом компьютере показывает, отвечает ли он). Проверьте, что
   профиль установлен и ему полностью доверяют
@@ -67,10 +67,10 @@
 задано `CBB_DEBUG=1`, в журнале видны ещё и рукопожатия WireGuard. В Linux:
 
 ```sh
-sudo systemctl edit clipboardbridge     # add the two lines below, save
+sudo systemctl edit cbb     # add the two lines below, save
 # [Service]
 # Environment=CBB_DEBUG=1
-sudo systemctl restart clipboardbridge
+sudo systemctl restart cbb
 ```
 
 ## Android
@@ -83,7 +83,7 @@ sudo systemctl restart clipboardbridge
 
 ## Всё ещё не получается
 
-Откройте [issue](https://github.com/HunterEwok/clipboardbridge/issues) и приложите вывод
+Откройте [issue](https://github.com/HunterEwok/cbb/issues) и приложите вывод
 `CBB_DEBUG=1 cbb status`, нужный фрагмент журнала и список затронутых систем. Удалите всё
 скопированное, что является личным. Проблемы безопасности отправляйте в
 [SECURITY.md](../../SECURITY.md).

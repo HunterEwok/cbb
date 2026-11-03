@@ -189,7 +189,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     once the owner's Apple developer account puts the app on real iPhones: with it go the
     iPhone CA and its key on the admins, the shortcut endpoints and pages on the member port,
     the configuration profile and its plain-HTTP port, the tokens, and the rule for who
-    holds `clipboardbridge.local`, which only the shortcut uses. The group then has one kind
+    holds `cbb.local`, which only the shortcut uses. The group then has one kind
     of trust, the member certificates, and no key that cannot be revoked by a record.
 - **31.** **Key levels**: the user picks who may be the group's root, an admin or a hub: only
     devices whose hardware key is proven by attestation, devices with a key in hardware (the
@@ -339,7 +339,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     project has no translation for it. One list of the languages serves the site, the apps and
     the command line; Arabic and Hebrew lay the screens out right to left; a native speaker
     reads the new translations before a release.
-- **50.** **Planned for 0.7.** A LuCI page on OpenWrt, `luci-app-clipboardbridge`, in the
+- **50.** **Planned for 0.7.** A LuCI page on OpenWrt, `luci-app-cbb`, in the
     project's own apk feed: the group's devices and their state, adding a device with its
     QR code, sync away from home and the hub, the network zones; the same sections in the
     same order as the apps, in LuCI's own look. A JavaScript view with a small rpcd backend
@@ -583,7 +583,7 @@ keyboard over Bluetooth LE, the one with a battery), so the keyboard needs a nam
 and forgetting either entry on the TV forgets both, while the computer keeps its key and
 then fails every connection ("PIN or Key Missing"), so the keyboard drops a bond its host
 lost and becomes visible again. It typed in the TV's own layout: with Russian on the TV and
-`-layout us` on the computer, "clipboardbridge ble 123" came out in Cyrillic, the
+`-layout us` on the computer, "cbb ble 123" came out in Cyrillic, the
 Russian letters on those keys, since a keyboard sends keys, not letters. For now the keyboard types as it is,
 and the apps get a "switch the layout" action for the keyboard's device, with the quick
 actions (restart and the others): the keyboard presses the device's shortcut

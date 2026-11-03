@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/seal"
+	"github.com/HunterEwok/cbb/internal/seal"
 )
 
 // sealedVectors is testdata/interop/go-sealed-commands.json.

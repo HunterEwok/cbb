@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv/atvtest"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv/atvtest"
 )
 
 // The TVs (T17, T19): forge tv:androidtv plays an Android TV on the ports

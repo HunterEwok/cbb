@@ -1,6 +1,6 @@
 [
 	{
-		"text": "clipboardbridge://join?code=246802\u0026addr=192.168.1.20%3A8767\u0026addr=%5Bfd00%3A%3A5%5D%3A8767\u0026fp=qFnj7Uv%2BCE%2FWNnna2IEmMaLbkA6tHcKf0VijTRzekKA%3D",
+		"text": "cbb://join?code=246802\u0026addr=192.168.1.20%3A8767\u0026addr=%5Bfd00%3A%3A5%5D%3A8767\u0026fp=qFnj7Uv%2BCE%2FWNnna2IEmMaLbkA6tHcKf0VijTRzekKA%3D",
 		"want": {
 			"Code": "246802",
 			"Addrs": [
@@ -11,7 +11,7 @@
 		}
 	},
 	{
-		"text": "clipboardbridge://join?code=012345",
+		"text": "cbb://join?code=012345",
 		"want": {
 			"Code": "012345",
 			"Addrs": null,
@@ -19,7 +19,7 @@
 		}
 	},
 	{
-		"text": " CLIPBOARDBRIDGE://JOIN?code=111111\u0026x=1\n",
+		"text": " CBB://JOIN?code=111111\u0026x=1\n",
 		"want": {
 			"Code": "111111",
 			"Addrs": null,
@@ -27,7 +27,7 @@
 		}
 	},
 	{
-		"text": "clipboardbridge://join?code=3\u0026addr=a:1\u0026addr=b:1\u0026addr=c:1\u0026addr=d:1\u0026addr=e:1\u0026addr=10.0.0.2",
+		"text": "cbb://join?code=3\u0026addr=a:1\u0026addr=b:1\u0026addr=c:1\u0026addr=d:1\u0026addr=e:1\u0026addr=10.0.0.2",
 		"want": {
 			"Code": "3",
 			"Addrs": [
@@ -40,15 +40,15 @@
 		}
 	},
 	{
-		"text": "clipboardbridge://join",
+		"text": "cbb://join",
 		"want": null
 	},
 	{
-		"text": "clipboardbridge://pair?code=123456",
+		"text": "cbb://pair?code=123456",
 		"want": null
 	},
 	{
-		"text": "clipboardbridge-join:123456",
+		"text": "cbb-join:123456",
 		"want": null
 	},
 	{
@@ -56,7 +56,7 @@
 		"want": null
 	},
 	{
-		"text": "clipboardbridge://join?code=246802\u0026fp=ab+c/d=",
+		"text": "cbb://join?code=246802\u0026fp=ab+c/d=",
 		"want": {
 			"Code": "246802",
 			"Addrs": null,

@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const deniedText = "No permission to use the service: add your user to the clipboardbridge group and log in again."
+const deniedText = "No permission to use the service: add your user to the cbb group and log in again."
 
 // runAdmin runs cbb through pkexec, which asks for the password in the
 // desktop's own dialog; pkexec passes the arguments as they are, without a
@@ -57,7 +57,7 @@ func pkexecArgs(cbb string, args []string, details bool) []string {
 	return append(append(a, cbb), args...)
 }
 
-// cbbPath is where the installer puts cbb (/opt/clipboardbridge on
+// cbbPath is where the installer puts cbb (/opt/cbb on
 // SteamOS), the first of them that root owns and only root may change;
 // pkexec runs it as root, so cbb is never taken from PATH, where the user's
 // own programs come first. It is "" when there is none: a cbb that root
@@ -71,7 +71,7 @@ func cbbPath() string {
 	return ""
 }
 
-var cbbPlaces = []string{"/usr/local/bin/cbb", "/opt/clipboardbridge/bin/cbb"}
+var cbbPlaces = []string{"/usr/local/bin/cbb", "/opt/cbb/bin/cbb"}
 
 // rootOnly tells whether p and the directories above it are owned by root
 // and writable by no one else, so that no other user could have put or

@@ -9,7 +9,7 @@ repository stays under the GNU AGPL v3.0 only ([LICENSE](../LICENSE)).
 This document specifies protocol version 1 of Copy Beyond Borders as the code in this
 repository implements it, so that another implementation can interoperate with it. Four
 implementations follow it today: Go (`cbb`, the computers and the servers), Rust (the lite
-member, `lite/core`), Swift (`ClipboardBridgeKit`) and Kotlin (`apps/android/kit`), with
+member, `lite/core`), Swift (`CBBKit`) and Kotlin (`apps/android/kit`), with
 shared test vectors in `testdata/interop`. [design.md](design.md) explains why the protocol
 is the way it is; this document only says what it is, and the threats it answers are in the
 [threat model](threat-model.md).
@@ -156,16 +156,16 @@ these words depends on it.
 | Phone ID | 16 random bytes, shown as 32 lowercase hex characters; embedded in the token | `internal/phone/token.go` |
 | Group tag | first 8 bytes of SHA-256 over the group CA certificate (DER), as 16 lowercase hex characters | `group.Tag` |
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
-| Service instance | `<device ID>._clipboardbridge._tcp.local` | `internal/mdns/zone.go` |
-| Shared iPhone name | `clipboardbridge.local` | `group.PhoneName` |
+| Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
+| Shared iPhone name | `cbb.local` | `group.PhoneName` |
 | Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Full and lite members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, the iPhone endpoints and the profile (section 7), and a listening join waits there | `internal/service/service.go`, `internal/service/demux.go` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
-| Member ALPN | `clipboardbridge/2` | `group.MemberProtocol` |
-| Pairing ALPN | `clipboardbridge-pair/2` | `pair.Protocol` |
-| Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `clipboardbridge-forward/2` (section 13) | `internal/forward` |
-| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `clipboardbridge-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `internal/relay` |
+| Member ALPN | `cbb/2` | `group.MemberProtocol` |
+| Pairing ALPN | `cbb-pair/2` | `pair.Protocol` |
+| Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
+| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `internal/relay` |
 | Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
-| Join QR text | `clipboardbridge://join?code=` followed by the six-digit code; unknown query fields are ignored | `phone.JoinQR`, `phone.ParseJoinQR` |
+| Join QR text | `cbb://join?code=` followed by the six-digit code; unknown query fields are ignored | `phone.JoinQR`, `phone.ParseJoinQR` |
 
 Device IDs, event IDs and group tags compare as byte strings. Accepting peers: the member
 port MUST accept TCP connections only from addresses that mDNS would publish (private IPv4,
@@ -183,24 +183,24 @@ rely on them. Source: `internal/group/cert.go`, `internal/group/tls.go`, `intern
 
 | Certificate | Subject CN | SAN | Validity | Extensions |
 |-------------|-----------|-----|----------|------------|
-| Group root CA | `clipboardbridge group root YYYY-MM-DD` (UTC creation date) | none | NotBefore = creation - 24 h; NotAfter = creation + 20 years | CA, path length 1 (MaxPathLen 1); key usage certSign, cRLSign |
-| iPhone CA | `clipboardbridge iPhone CA YYYY-MM-DD` | none | as the root CA | CA, path length 0; key usage certSign, cRLSign; plus critical name constraints (below) |
+| Group root CA | `cbb group root YYYY-MM-DD` (UTC creation date) | none | NotBefore = creation - 24 h; NotAfter = creation + 20 years | CA, path length 1 (MaxPathLen 1); key usage certSign, cRLSign |
+| iPhone CA | `cbb iPhone CA YYYY-MM-DD` | none | as the root CA | CA, path length 0; key usage certSign, cRLSign; plus critical name constraints (below) |
 | Member certificate (from the group CA) | the device ID | DNS `cb-<device ID>.local`, exactly one | NotBefore = the group CA's NotBefore; NotAfter = min(issue + 2 years, CA NotAfter) | key usage digitalSignature; EKU serverAuth and clientAuth; not a CA |
-| `clipboardbridge.local` server certificate (from the iPhone CA) | `clipboardbridge.local` | DNS `clipboardbridge.local` | NotBefore = max(issue - 24 h, CA NotBefore); NotAfter = min(NotBefore + 397 days, CA NotAfter) | key usage digitalSignature; EKU serverAuth; not a CA |
+| `cbb.local` server certificate (from the iPhone CA) | `cbb.local` | DNS `cbb.local` | NotBefore = max(issue - 24 h, CA NotBefore); NotAfter = min(NotBefore + 397 days, CA NotAfter) | key usage digitalSignature; EKU serverAuth; not a CA |
 | Joiner's self-signed certificate (pairing only) | the joiner's new device ID | none | 1970-01-01T00:00:00Z to 9999-12-31T23:59:59Z | none set |
 
-iPhone CA name constraints, marked critical: permitted DNS domains `clipboardbridge.local` (the
-name and names below it); permitted e-mail and URI domains `clipboardbridge.invalid` (a domain
+iPhone CA name constraints, marked critical: permitted DNS domains `cbb.local` (the
+name and names below it); permitted e-mail and URI domains `cbb.invalid` (a domain
 that never exists, so no such name is valid); excluded IP ranges `0.0.0.0/0` and `::/0`.
 
 A device has one key. The member certificate and, on a member that serves the shortcut, the
-`clipboardbridge.local` certificate certify the same key. A CA MUST NOT issue when the local
+`cbb.local` certificate certify the same key. A CA MUST NOT issue when the local
 clock is outside its own validity. The computer that creates a group is its **root**: it
 makes the group root CA (the `group_ca` that names the group, as a phone does, section 9) and
 the iPhone CA and holds both keys. The admins it makes (section 10, "Admins") hold an admin
 CA under the root and the iPhone CA key; every other member holds neither and has no
-`clipboardbridge.local` certificate. A group CA MUST have path length 1. A group made before
-0.4 had a group CA with path length 0 (`clipboardbridge group CA YYYY-MM-DD`), whose key every
+`cbb.local` certificate. A group CA MUST have path length 1. A group made before
+0.4 had a group CA with path length 0 (`cbb group CA YYYY-MM-DD`), whose key every
 Linux and Windows member held; such groups went with records of version 1, and a member that
 finds one leaves it at start, as section 10 says of version 1, and the group is set up again. The joiner's certificate carries the key that the member certifies in the welcome
 (section 6).
@@ -211,7 +211,7 @@ it, while an expired certificate is rejected. The subject CN MUST be a device ID
 certificate MUST carry exactly one DNS name, `cb-<that ID>.local`.
 
 Renewal rules (`Identity.Renew`): a member certificate SHOULD be renewed when less than 240 days
-remain, a `clipboardbridge.local` certificate when less than 60 days remain or when its NotBefore
+remain, a `cbb.local` certificate when less than 60 days remain or when its NotBefore
 is in the future; neither is renewed when it already ends with its CA.
 
 When renewal runs: a member that holds a CA key (the root or an admin) checks its own certificates when the group
@@ -238,13 +238,13 @@ Full members (Linux, FreeBSD, Windows and macOS computers) and lite members publ
 phones and joining devices only browse, except a phone that is the group's hub, which
 publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
 hub"). Only a full member that holds the iPhone CA key
-publishes a holder priority (`h`) and may hold `clipboardbridge.local`.
+publishes a holder priority (`h`) and may hold `cbb.local`.
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
 [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns`; a lite
 member publishes and browses with the `mdns-sd` crate (`lite/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=lite`), with the addresses of its interfaces except
-loopback, and never holds `clipboardbridge.local`.
+loopback, and never holds `cbb.local`.
 
 A full member SHOULD publish, answer queries and take connections on the member port only on
 an interface whose network it knows (design.md, "Known networks"); elsewhere it only
@@ -255,14 +255,14 @@ window is open. The lite member publishes on every interface.
 
 | Name | Type | Data | TTL | Cache-flush |
 |------|------|------|-----|-------------|
-| `_clipboardbridge._tcp.local` | PTR | `<id>._clipboardbridge._tcp.local` | 4500 s | no (shared) |
-| `<id>._clipboardbridge._tcp.local` | SRV | priority 0, weight 0, member port, target `cb-<id>.local` | 120 s | yes |
-| `<id>._clipboardbridge._tcp.local` | TXT | see below | 4500 s | yes |
+| `_cbb._tcp.local` | PTR | `<id>._cbb._tcp.local` | 4500 s | no (shared) |
+| `<id>._cbb._tcp.local` | SRV | priority 0, weight 0, member port, target `cb-<id>.local` | 120 s | yes |
+| `<id>._cbb._tcp.local` | TXT | see below | 4500 s | yes |
 | `cb-<id>.local` | A / AAAA | the addresses of the interface | 120 s | yes |
 | `cb-<id>.local` | NSEC | see below | 120 s | yes |
-| `clipboardbridge.local` (holder only) | A / AAAA | the addresses of the interface | 10 s | yes |
-| `clipboardbridge.local` (holder only) | NSEC | see below | 10 s | yes |
-| `_services._dns-sd._udp.local` | PTR | `_clipboardbridge._tcp.local` | 4500 s | no; only in answers, never announced |
+| `cbb.local` (holder only) | A / AAAA | the addresses of the interface | 10 s | yes |
+| `cbb.local` (holder only) | NSEC | see below | 10 s | yes |
+| `_services._dns-sd._udp.local` | PTR | `_cbb._tcp.local` | 4500 s | no; only in answers, never announced |
 
 TXT strings (each at most 255 bytes):
 
@@ -272,7 +272,7 @@ TXT strings (each at most 255 bytes):
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
 | `p` | `1` | present only while a computer pairing window is open |
 | `r` | `lite` or `phone` | `lite` on a lite member, which the full members do not dial (section 4); `phone` on a phone that is the group's hub while its app is open, which the full and lite members do not dial, since it dials them; the other phones dial it |
-| `h` | `1` or `2` | the holder priority, present only on a full member that may hold `clipboardbridge.local`: `1` first, `2` only as a fallback |
+| `h` | `1` or `2` | the holder priority, present only on a full member that may hold `cbb.local`: `1` first, `2` only as a fallback |
 
 The Go code publishes them in the order `v=1`, `g=<tag>`, `h=<priority>` (if any), `p=1`; a
 lite member publishes `v=1`, `g=<tag>`, `r=lite`. A receiver MUST treat an unknown `h` value as absent,
@@ -299,10 +299,10 @@ rescanned every 10 s.
   receiving interface, or an IPv6 link-local address). Only PTR, SRV, TXT, A and AAAA records are read;
   a record that does not decode, such as an instance name with a dot in a label, is skipped
   alone. At most 32 questions of a query are answered.
-- A PTR question for `_clipboardbridge._tcp.local` gets the PTR as answer and SRV, TXT, A/AAAA
+- A PTR question for `_cbb._tcp.local` gets the PTR as answer and SRV, TXT, A/AAAA
   and NSEC of the host as additionals. A question for the instance gets SRV (with the host
   addresses as additionals) and/or TXT. A question for the host name, or for
-  `clipboardbridge.local` on the holder, gets its A or AAAA records, or the NSEC record when the
+  `cbb.local` on the holder, gets its A or AAAA records, or the NSEC record when the
   name has no address of the asked type. Type ANY gets everything that matches.
 - Known-answer suppression: a record listed in the query with at least half of its TTL is
   left out. A record already multicast on the interface within the last second is left out.
@@ -312,22 +312,22 @@ rescanned every 10 s.
   the questions, TTLs capped at 10 s, no cache-flush bits, at most 5 answers a second per
   source. An answer over 9000 bytes drops its additionals.
 - Names are never probed: device IDs are random, and the election below decides who holds
-  `clipboardbridge.local`.
+  `cbb.local`.
 
 ### Announcements and goodbyes
 
 - All records are announced twice, one second apart, at start, on a new interface or new
   addresses, after a TXT change and when the member becomes the holder.
 - Addresses that go away get a goodbye (TTL 0) for the host name and, on the holder, for
-  `clipboardbridge.local`.
-- Giving up `clipboardbridge.local` sends a goodbye for its A/AAAA and NSEC records.
+  `cbb.local`.
+- Giving up `cbb.local` sends a goodbye for its A/AAAA and NSEC records.
 - On stop, every record gets a goodbye. Goodbyes never carry the cache-flush bit, so they end
   only their own record. A service that stops sends its mDNS goodbyes before the member
   goodbyes (section 4).
 
 ### Browsing
 
-- Query PTR `_clipboardbridge._tcp.local` at start, then after 1 s, doubling up to one hour,
+- Query PTR `_cbb._tcp.local` at start, then after 1 s, doubling up to one hour,
   listing as known answers the PTR records with more than half their TTL left of the members
   found (a PTR record whose SRV or addresses expired is not listed). When a member found is
   lost, start again: query now, then after 1 s, doubling. A member that was off the network
@@ -342,7 +342,7 @@ rescanned every 10 s.
 - A member is found when a live PTR names an instance that has a live SRV; its addresses
   are the live A/AAAA records of the SRV target that would be published. TXT is optional.
 
-### The holder of `clipboardbridge.local`
+### The holder of `cbb.local`
 
 Election (`electLocked`, `internal/service/members.go`): a full member takes part when it
 holds the iPhone CA key and its holder setting is not `never`; its priority is `1` (first)
@@ -351,14 +351,14 @@ machine with a battery of its own (a laptop: on Linux a power supply of type `Ba
 scope is not `Device`, on macOS `pmset -g batt` listing `InternalBattery`, on Windows
 `GetSystemPowerStatus` with a system battery) gets `2` and any other `1`; `first` and
 `fallback` set it, and `cbb holder` changes the setting (state file `holder`). It holds
-`clipboardbridge.local` when no connected peer with role `full` whose discovered TXT has an
+`cbb.local` when no connected peer with role `full` whose discovered TXT has an
 `h` comes before it: a lower priority number, or the same with a lower device ID. A member
 alone holds it at once. Members without the iPhone CA key never hold it: in a group whose
 root is the phone none has it. The election runs whenever the set of connected peers or
 what discovery finds changes, so a holder that leaves with a goodbye is
 replaced at once and one that falls silent after the 15-second timeout. Two holders for a
 moment are harmless. Only a member that holds the iPhone CA key MAY publish `h` or answer for
-`clipboardbridge.local`.
+`cbb.local`.
 
 ## 4. Member protocol
 
@@ -402,7 +402,7 @@ Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
 ### TLS
 
 - TLS 1.3 only ([RFC 8446](https://www.rfc-editor.org/rfc/rfc8446)): an implementation MUST
-  NOT negotiate an earlier version. ALPN `clipboardbridge/2` on both sides. Both sides
+  NOT negotiate an earlier version. ALPN `cbb/2` on both sides. Both sides
   present their member certificate (leaf only), with the admin CA's certificate after it
   when an admin issued it (section 10).
 - Every implementation MUST support the key exchange group `x25519`, the cipher suite
@@ -416,18 +416,18 @@ Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
   where the peer ID is the one found in discovery, and MUST check that the certificate names
   exactly that device.
 - Both sides MUST check the peer as in section 2 and against the records (section 10), and
-  that the negotiated version is TLS 1.3 and the ALPN protocol is `clipboardbridge/2`. A
+  that the negotiated version is TLS 1.3 and the ALPN protocol is `cbb/2`. A
   connection to one's own device ID is closed.
 - The handshake must finish within 10 s, counted from its start rather than from each read;
   an implementation SHOULD close one that does not.
 - A lite member listens on the member port for the member protocol only: TLS with ALPN
-  `clipboardbridge/2`, from home network addresses, at most 16 handshakes at once. It has
+  `cbb/2`, from home network addresses, at most 16 handshakes at once. It has
   no pairing window and no iPhone endpoints.
 - The member port tells its connections apart by their first bytes. One that does not start
   with a TLS handshake record (0x16) is plain HTTP for the profile (section 7) while an
   iPhone pairing window is open, and is closed otherwise. Over TLS, a ClientHello that
-  offers `clipboardbridge-pair/2` gets the pairing configuration (section 6), whether or not a
-  window is open; one that offers `clipboardbridge/2` the member configuration; any other, on a
+  offers `cbb-pair/2` gets the pairing configuration (section 6), whether or not a
+  window is open; one that offers `cbb/2` the member configuration; any other, on a
   member that serves the iPhone, the iPhone endpoints' (section 7, ALPN `http/1.1`).
   The connections passed on to the iPhone endpoints and to the profile are bounded while they
   are open: 32 at a time, at most 4 from one IP address; a connection over a limit is closed
@@ -511,14 +511,14 @@ while it is the group's hub: it then publishes `r=phone` (section 3) and other p
 it. A `lite`
 member publishes itself with `r=lite`, dials the full members and accepts phones and lite
 members with a lower device ID (above, "Who dials whom"); it never holds
-`clipboardbridge.local`. A `full` member is any computer with the service, a Mac included:
+`cbb.local`. A `full` member is any computer with the service, a Mac included:
 any of them can create a group and be its root, or be made an admin. Only the root and the
 admins admit devices, and only a member with the iPhone CA key holds the name.
 
 ### Hello
 
 A member speaks one version of the member protocol, the one its ALPN names
-(`clipboardbridge/2`); a release that changes the protocol so that an older member cannot
+(`cbb/2`); a release that changes the protocol so that an older member cannot
 read it takes the next ALPN version, which is the oldest peer it takes, and a peer of
 another version fails at the handshake. Within a version the hello says what the sender
 supports by its fields and by `features`, never by the sender's release, so no rule here
@@ -816,10 +816,10 @@ A window for a remote invitation (design.md, "Joining from another network") dif
 
 ### TLS
 
-- Joiner (client): TLS 1.3, ALPN `clipboardbridge-pair/2`, presents its self-signed certificate
+- Joiner (client): TLS 1.3, ALPN `cbb-pair/2`, presents its self-signed certificate
   (section 2) for the P-256 key it will keep, with its new device ID as CN; it does not
   verify the server's certificate during the handshake.
-- Member (server): TLS 1.3, ALPN `clipboardbridge-pair/2`, presents its member certificate (leaf
+- Member (server): TLS 1.3, ALPN `cbb-pair/2`, presents its member certificate (leaf
   only), requires any client certificate, session tickets off. It MUST reject the connection
   unless the client sent exactly one certificate with a P-256 key and a device ID as CN that
   differs from its own.
@@ -833,8 +833,8 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 |-------|-------|
 | Roles | joiner = initiator, member = responder |
 | PRS (password) | the six ASCII digits of the code, or a remote invitation's secret (its raw bytes) |
-| CI (channel identifier) | `"clipboardbridge pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
-| sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-clipboardbridge-pair-v2`, empty context |
+| CI (channel identifier) | `"cbb pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
+| sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-cbb-pair-v2`, empty context |
 | ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER); a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits `ios` and `android` joiners as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, and, only on the group's root, `ios` and `android` joiners as phones ("A phone joins a computer's group" below) |
 | ADb (member) | JSON `{"device":"<member device ID>","group":"<group tag>"}` |
 | Ya, Yb | 32-byte X25519 u-coordinates |
@@ -906,7 +906,7 @@ root of its own; the joiner keeps `records` in its record set before it keeps th
 The Welcome carries no CA key: no device gets the key of the group CA or of the iPhone CA by
 joining. A new computer is a member without CA keys: it publishes and listens, but admits
 nobody until the root makes it an admin (section 10, "Admins"), and until then serves no
-iPhone and never holds `clipboardbridge.local`. A joiner reads a Welcome by the fields of this
+iPhone and never holds `cbb.local`. A joiner reads a Welcome by the fields of this
 table only.
 
 The Welcome carries no group state and no token hashes: tokens need no hashes (section 7),
@@ -945,7 +945,7 @@ the QR code dials the computer, and nothing is announced:
   free, otherwise on a port the OS chooses (all
   addresses; only home network addresses may connect, as on the member port) for up to
   5 minutes, and shows the QR code
-  `clipboardbridge://join?code=<code>&addr=<host:port>&fp=<fingerprint>` (section 7): its
+  `cbb://join?code=<code>&addr=<host:port>&fp=<fingerprint>` (section 7): its
   addresses that mDNS would publish, IPv4 first, without link-local ones, at most four; and
   the fingerprint of its self-signed certificate's key (Conventions, "Fingerprints"),
   percent-encoded.
@@ -970,7 +970,7 @@ the QR code dials the computer, and nothing is announced:
 - On the member the window counts attempts as above. It is not announced (`p` stays unset)
   and takes no pairing connections on the member port, so the code is good only against the
   computer whose certificate `fp` names.
-- A phone joins a phone group the same way (ClipboardBridgeKit's `PairingJoiner`): it listens
+- A phone joins a phone group the same way (CBBKit's `PairingJoiner`): it listens
   while its "Join a group" screen is open, shows this QR code, and an admin phone scans it
   and dials. The phone makes its admin key before it listens and sends it in ADa; the root
   phone, when the user makes the new phone an admin (the default), answers with `admin_ca`.
@@ -986,13 +986,13 @@ with the app, iPhone or Android, is a member (section 4) and uses none of them.
 
 ### iPhone endpoints on the member port
 
-The shortcuts name `https://clipboardbridge.local:8764`, so they work only with the default
+The shortcuts name `https://cbb.local:8764`, so they work only with the default
 member port; up to 0.2.0 these endpoints had their own port, 8765.
 
-HTTPS, TLS 1.3 only, no client certificate; the server presents the `clipboardbridge.local`
+HTTPS, TLS 1.3 only, no client certificate; the server presents the `cbb.local`
 certificate followed by the iPhone CA certificate. Server timeouts: 10 s for the request
 header, 30 s for reading and writing; headers at most 16 KiB. The client MUST trust only the
-iPhone CA for `clipboardbridge.local`. Paths are exact; others get 404.
+iPhone CA for `cbb.local`. Paths are exact; others get 404.
 
 ### Tokens
 
@@ -1000,7 +1000,7 @@ iPhone CA for `clipboardbridge.local`. Paths are exact; others get 404.
 token = "cb1." base64url_nopad( phone_id[16] || HMAC-SHA-256(K, phone_id)[0:16] )
 K     = HKDF-SHA-256(IKM = iPhone CA private scalar (32 bytes, big-endian),
                      salt = SHA-256(iPhone CA certificate DER),
-                     info = "clipboardbridge iPhone token v1", length 32)
+                     info = "cbb iPhone token v1", length 32)
 ```
 
 The root and every admin of a group a computer created hold the iPhone CA key, so each
@@ -1051,7 +1051,7 @@ through Universal Clipboard). A server MUST NOT put a secret's text in `message`
 ### GET and POST /pair
 
 Needs no token. An iPhone pairing window is opened by `pair-phone` on the control socket, on
-the holder of `clipboardbridge.local` only; it has the limits of a computer window (5 minutes,
+the holder of `cbb.local` only; it has the limits of a computer window (5 minutes,
 one success, three wrong codes; any code that is not six digits counts as wrong).
 
 - `GET /pair`: an HTML form that posts the field `code`.
@@ -1082,11 +1082,11 @@ pairing window is open, same address restriction:
 | Path | Content |
 |------|---------|
 | `GET /` | an HTML page with the steps; it sends the user to the terminal of `cbb pair -phone` for the iPhone CA fingerprint and does not show it, since it comes over plain HTTP |
-| `GET /clipboardbridge.mobileconfig` | the configuration profile, `application/x-apple-aspen-config` |
-| `GET /clipboardbridge.shortcut` | the signed sync shortcut, `application/octet-stream` (404 if the build has none) |
+| `GET /cbb.mobileconfig` | the configuration profile, `application/x-apple-aspen-config` |
+| `GET /cbb.shortcut` | the signed sync shortcut, `application/octet-stream` (404 if the build has none) |
 
-The profile has the fixed identifier `io.github.hunterewok.clipboardbridge` with one payload of
-type `com.apple.security.root` (identifier `io.github.hunterewok.clipboardbridge.ca`) carrying
+The profile has the fixed identifier `tools.cbb` with one payload of
+type `com.apple.security.root` (identifier `tools.cbb.ca`) carrying
 the iPhone CA certificate. Its UUIDs are derived from SHA-256 of the CA certificate, so a new
 CA's profile replaces the old one.
 
@@ -1101,16 +1101,16 @@ Source: `internal/control`, `internal/service/socket.go`, `internal/connector/co
 
 | Platform | Path | Group |
 |----------|------|-------|
-| Linux | `/run/clipboardbridge/control.sock` | `clipboardbridge` |
-| OpenWrt, FreeBSD | `/var/run/clipboardbridge/control.sock` | `clipboardbridge` |
-| macOS | `/Library/Application Support/clipboardbridge/control.sock` | `_clipboardbridge` |
+| Linux | `/run/cbb/control.sock` | `cbb` |
+| OpenWrt, FreeBSD | `/var/run/cbb/control.sock` | `cbb` |
+| macOS | `/Library/Application Support/cbb/control.sock` | `_cbb` |
 
 `CBB_SOCKET` overrides the path for clients. The socket is a Unix stream socket with
 mode 0660, made in a private temporary directory and renamed into place, so only root, the
 service's user and members of the group can connect; secrets travel only to them. An
 implementation MUST NOT let any other local user connect, and MUST NOT listen for these
 operations on a network socket. On Windows
-it is `%ProgramData%\clipboardbridge\run\control.sock`, in a directory whose protected access
+it is `%ProgramData%\cbb\run\control.sock`, in a directory whose protected access
 list lets in the system, administrators, the service's account and the group.
 
 Next to it the service listens on the **admin socket** `admin.sock` (on Windows
@@ -1203,7 +1203,7 @@ A connection carries one request: the service reads the first message and dispat
 | `status` | none | `{status, done}`; `status` = `{device, group, role, os, holder, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
 | `new` | none | `{status, done}`: the device creates a group and is its root (section 10). Only on a device in no group |
 | `pair` | none | first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
-| `pair-phone` | none | first `{code, expires: 300, fingerprint, address}` (the member port, where the profile is), then `{name: <phone ID>, done}` or an error. Only on a member that holds the iPhone CA (in a group a computer created, the root or an admin) and answers for `clipboardbridge.local`. Hanging up closes the window |
+| `pair-phone` | none | first `{code, expires: 300, fingerprint, address}` (the member port, where the profile is), then `{name: <phone ID>, done}` or an error. Only on a member that holds the iPhone CA (in a group a computer created, the root or an admin) and answers for `cbb.local`. Hanging up closes the window |
 | `join` | `{code, address?}`, `{code, listen, expires}` or `{invite, consent}` | `{done}` or an error. Without `address` it browses for `p=1`. With `listen` it first answers `{addrs, fingerprint}` for the QR code, then `{done}` or an error when a member admitted it, or after `expires` seconds. With `invite`, the text of a remote invitation (section 12), it needs `consent` (sync away from home is turned on, and the device keeps its keys in files), first answers `{fingerprint}` (of this device's key, for the admin to compare), then `{done}` or an error. Hanging up cancels |
 | `invite` | `{expires?}`: seconds, 3600 if absent, at most 86 400 | Only on the group's hub, when it can admit devices. First `{invite, expires}`: the invitation's text. Then, for each device that used it and proved it knows the secret, `{joining: {id, name, os, fingerprint}}`, which the client answers with `{"op": "answer", consent}` (`true` admits it); last `{name, done}` or an error. Hanging up cancels the invitation |
 | `mode` | `{name, device?}`: `name` the sync mode, `own`, `shared`, `receive` or `send`; `device`, a name or device ID, for another device (on an admin) | without `device`: `{status, done}`, the mode saved and in effect; with it: `{done}` once that device answered `done` to the command (section 15), or an error with its reason. Only on the admin socket |
@@ -1212,7 +1212,7 @@ A connection carries one request: the service reads the first message and dispat
 | `keyboard` | `{name?, keyboard?}` + payload for `type`: `name` `on`, `off`, `pair`, `type` or none | `{status, done}`: `on` saves the Bluetooth keyboard's settings and registers it with BlueZ (Linux only), `off` takes it off, `pair` makes it discoverable for two minutes, `type` types the payload on the connected device and answers once it is typed, none only answers the status. Only on the admin socket |
 | `remote` | `{name?, address?, value?, new_name?, consent?, code?, device?}` + payload for `type`: `name` `add`, `code`, `cancel`, `remove`, `pastes`, `type` or none | `{status, done}`: `add` pairs with the TV at `address` (an Android TV or a Google TV shows a code; a Roku, `value` `roku`, needs `consent`, as its control is plain HTTP), `code` finishes that pairing within two minutes, `cancel` ends it, `remove` forgets the TV `device`, `pastes` sends the group's remote pastes to it or not, `type` types the payload into the field open on the TV, none only answers the status; `status.tvs` = `[{name?, kind, host, pastes?, pairing?}]`. An address outside the home network fails. Only on the admin socket |
 | `rename` | `{name, new_name}`: `name` the device, by name or device ID | `{name, done}` with the old name: an admin signs a `device` record like the device's newest one with the new name (section 10). Only on the admin socket |
-| `holder` | `{name}`: `auto`, `first`, `fallback` or `never` | `{status, done}`: the holder setting of `clipboardbridge.local` saved (state file `holder`), its priority published and the holder elected again (section 3, "The holder of `clipboardbridge.local`"). Only on the admin socket |
+| `holder` | `{name}`: `auto`, `first`, `fallback` or `never` | `{status, done}`: the holder setting of `cbb.local` saved (state file `holder`), its priority published and the holder elected again (section 3, "The holder of `cbb.local`"). Only on the admin socket |
 | `network` | none | `{status, done}`: the networks this device is on now become known ones, where it publishes itself and takes connections (`cbb network`). Only on the admin socket |
 | `answer` | `{consent?}` | none: during a request that asks the user, such as a listening `join` waiting for a phone or an `invite` asking whether to admit a device, the client's answer; `consent` is yes |
 | `action-set` | `{actions: [action]}`, exactly one | `{status, done}`: this device's user turns the quick action on or off and says who may run it (section 15); an action of the user's own carries its `command`. Only on the admin socket |
@@ -1317,13 +1317,13 @@ iPhone CA as well (section 10, "Admins").
 
 - **Group CA.** The app creates the group root CA: a P-256 key in the Secure Enclave or
   StrongBox that cannot be exported, with the certificate profile of section 2 except
-  path length 1 (MaxPathLen 1), CN `clipboardbridge group root YYYY-MM-DD`. Below it every admin
+  path length 1 (MaxPathLen 1), CN `cbb group root YYYY-MM-DD`. Below it every admin
   phone has an admin CA (section 10). Computers get member certificates; a computer holds a
   CA key only when the root phone makes it an admin (section 10, "A computer as admin").
   A phone MUST ask for the user's presence (Face ID, the fingerprint or the passcode) before
   it signs with the root or an admin key. A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
   6). There is no iPhone
-  CA in such a group, so no member of it holds `clipboardbridge.local`.
+  CA in such a group, so no member of it holds `cbb.local`.
 - **The app is a member.** It holds a member certificate of its own group with role
   `phone` and speaks the member protocol of section 4. It dials and never listens for
   members (a phone cannot accept connections in the background), so members MUST NOT dial a
@@ -1342,7 +1342,7 @@ iPhone CA as well (section 10, "Admins").
   mDNS does not reach. TLS checks the peer as for a found member.
   The shortcut endpoints of section 7 stay for phones without the app.
 - **Renewal and revocation.** The admin phones renew certificates with `cert` messages, as
-  an admin computer does (ClipboardBridgeKit's
+  an admin computer does (CBBKit's
   `GroupCertificates.renewal` and `MemberNode`'s `renew`; the app also renews its own
   certificate at start). Revocation and the devices list are section 10, and a second admin
   phone is the way back when a phone is lost.
@@ -1372,8 +1372,8 @@ job checks it from 0.5.0.
 
 | Certificate | Subject CN | Validity | Extensions |
 |-------------|-----------|----------|------------|
-| Group root CA (phone groups) | `clipboardbridge group root YYYY-MM-DD` | as the group CA | CA, path length 1; key usage certSign, cRLSign |
-| Admin CA | `clipboardbridge admin <device ID>`, the admin phone's device ID | NotBefore = the root's NotBefore; NotAfter = the root's NotAfter | CA, path length 0; key usage certSign, cRLSign; issued by the root |
+| Group root CA (phone groups) | `cbb group root YYYY-MM-DD` | as the group CA | CA, path length 1; key usage certSign, cRLSign |
+| Admin CA | `cbb admin <device ID>`, the admin phone's device ID | NotBefore = the root's NotBefore; NotAfter = the root's NotAfter | CA, path length 0; key usage certSign, cRLSign; issued by the root |
 
 - An admin phone has two keys: its admin key (certified by the admin CA, used only to sign
   certificates and records, behind a user-presence check) and its member key (certified by
@@ -1404,7 +1404,7 @@ removes it.
 - The root makes it an admin, the root phone with "Make it an admin" and the root computer
   with `cbb admin NAME`, after the user allows a computer whose keys sit in a file (section
   17): it issues the member's admin CA for that key (the profile above, CN
-  `clipboardbridge admin <device ID>`), signs a `device` record for the member that names
+  `cbb admin <device ID>`), signs a `device` record for the member that names
   that admin CA in `admin`, and sends `{"t":"admin","admin_ca":...}` on its connection to
   the member. The member must be connected.
 - The member MUST check that the admin CA is for its admin key, names its device ID and stands
@@ -1432,9 +1432,9 @@ removes it.
   only when the records do not revoke the new CA's key; it keeps it when it holds none, when
   the records revoke the one it holds, or when both stand and the new one's SHA-256 is the
   smaller (so two replacements at once settle on one); otherwise it keeps it aside, in case
-  the records revoke its own later. It then issues itself a `clipboardbridge.local`
+  the records revoke its own later. It then issues itself a `cbb.local`
   certificate and passes the CA on to the admins it is connected to. A member whose iPhone CA
-  key the records revoke deletes it and its `clipboardbridge.local` certificate, and serves
+  key the records revoke deletes it and its `cbb.local` certificate, and serves
   the shortcut again only once another admin sends the new one. A group a phone created has
   no iPhone CA, and its admins never get one.
 - It is removed as an admin phone is: a revocation of its member key and its admin key,
@@ -1633,7 +1633,7 @@ signer's chain goes on through it.
 seq k. The signer's next record then has seq k and `prev` the record of seq k - 1, a third
 record of that seq and the only one that counts, so the signer goes on below the fork.
 A member gives a key's next record the seq one above its highest record that is on no
-voided branch (of two records with one seq, the one with the lower ID), and signs nothing
+voided branch (of two records with one seq, the one with the lower ID in base64), and signs nothing
 but a root's `resolve` with a key the state names in a conflict of two histories.
 
 A device keeps a log of the records it signed. When the root's `resolve` voids both
@@ -1908,12 +1908,12 @@ while it is neither removed nor frozen.
 the Rust core makes and reads (`recovery_sheet` and `read_recovery_sheet`, docs/core-api.md;
 `testdata/interop/recovery-sheet.json`):
 
-- The QR code is `clipboardbridge://recover?g=<group>&k=<key>&c=<admin CA>`: the group's tag
+- The QR code is `cbb://recover?g=<group>&k=<key>&c=<admin CA>`: the group's tag
   (16 lower-case hex digits), the private key's 32 bytes and its admin CA's DER, both in
   base64url without padding. Each field once, no other field. It is enough on a new phone.
 - The text is the key's 32 bytes in Crockford's base32 (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`,
   52 characters, the last 4 bits zero), then 4 check characters, the first 20 bits of
-  SHA-256 over `clipboardbridge recovery` and the 32 bytes, in groups of four joined by
+  SHA-256 over `cbb recovery` and the 32 bytes, in groups of four joined by
   hyphens. A reader takes lower case, spaces or no separators, `I` and `L` for `1` and `O` for
   `0`. The text names no admin CA, so it needs a computer of the group, whose `recovery`
   record has it.
@@ -2345,7 +2345,7 @@ computers, and made and served on a phone that is the group's hub (mobile/cbbtun
 
 Made on the hub, by the control operation `invite` (`cbb invite`), or in the app of a phone
 that is the hub, whose endpoints are its forwarder's. Its text is
-`clipboardbridge://invite#` followed by standard base64 of this JSON (byte strings
+`cbb://invite#` followed by standard base64 of this JSON (byte strings
 in it as in the rest of this document):
 
 | Field | Type | Meaning |
@@ -2404,7 +2404,7 @@ the admin cancels it.
   so a guest address never names a member. Peers that stay when the hub's peers change
   keep their sessions.
 - Inside the tunnel, a connection from a guest address to TCP 8764 gets the pairing
-  (ALPN `clipboardbridge-pair/2`, section 6) of that invitation's window and nothing else,
+  (ALPN `cbb-pair/2`, section 6) of that invitation's window and nothing else,
   except, once the window admitted a device, member TLS from that device alone, for its
   first hello (below). Any other connection MUST be closed.
 - The hub drops the guest peer when the invitation ends without a device, and 2 minutes
@@ -2494,10 +2494,10 @@ Framing: inside TLS, each message of this section is one frame (Conventions, "Fr
 Go forwarders and hubs read at most 1 MiB in all from the other side, frames and lengths
 together, and close the connection beyond that; a sender MUST stay below it.
 
-1. The hub connects over TCP and runs TLS 1.3 with ALPN `clipboardbridge-forward/2` and no
+1. The hub connects over TCP and runs TLS 1.3 with ALPN `cbb-forward/2` and no
    server name. It MUST accept only the pinned key. A hub whose period's hubs' credential lists
    its server key (section 18) presents only a certificate of that key, self-signed, with
-   the subject `clipboardbridge server`, no names, key usage digitalSignature and client
+   the subject `cbb server`, no names, key usage digitalSignature and client
    use. Any other hub presents its member certificate, its admin CA if it has one, and the
    group's roots (the group CA, then the new roots of the claims that took effect).
 2. The forwarder takes the hub's certificate as a member certificate when it names a device
@@ -2512,7 +2512,7 @@ together, and close the connection beyond that; a sender MUST stay below it.
    with at most 1024 records and 3 credentials:
    - `key` is its WireGuard public key, and `proof` is HMAC-SHA256 under X25519(the hub's
      WireGuard private key, `e`) of 32 bytes exported from the TLS session with the label
-     `clipboardbridge forwarder key` and no context. So the hub proves it holds the key, on
+     `cbb forwarder key` and no context. So the hub proves it holds the key, on
      this connection only.
    - A hub with a credential sends `credentials`, the period's hubs' credential alone, and
      neither `admin`, `admin_sig` nor `records`. The forwarder checks it (section 18, "What
@@ -2524,7 +2524,7 @@ together, and close the connection beyond that; a sender MUST stay below it.
      groups that registered with a credential apart from these, so a period's tag never
      stands for a group CA's.
    - `admin_sig` is an ECDSA signature (ASN.1) of SHA-256 over 32 bytes exported with the label
-     `clipboardbridge forwarder admin` followed by `key`. The key of the group's root or of
+     `cbb forwarder admin` followed by `key`. The key of the group's root or of
      the hub's admin CA signs it. `admin` is that admin CA (DER), left out for a root. The
      forwarder takes the signature only from a root on the path of the records it knows, or
      from an admin CA that such a root certified, so a member that is no admin cannot
@@ -2583,7 +2583,7 @@ until it hears `seen`, then every 15 s, which also keeps its NAT mapping open. A
 content is 36 bytes: `0x80 0x00 0x00 0x00`, the registration ID (8 bytes, big-endian), a
 counter (8 bytes, big-endian, growing; the hub uses Unix nanoseconds), and the first 16
 bytes of HMAC-SHA256, under 32 bytes exported from the TLS session with the label
-`clipboardbridge forwarder hello`, of the first 20 bytes. On the wire it is masked: a random
+`cbb forwarder hello`, of the first 20 bytes. On the wire it is masked: a random
 12-byte nonce, then the content XORed with the ChaCha20 key stream under the `mask` key and
 that nonce, then 0 to 31 random bytes, so a hello is 48 to 79 bytes of random-looking data.
 The forwarder MUST take a hello only with a valid MAC and a counter above the last one, and the
@@ -2625,9 +2625,9 @@ protection off a copy, and checks that the type field is in the message's range 
 A forwarder started with a site to borrow (`cbb forward -vless-site www.example.com`) also
 listens on TCP (`-vless-listen`, port 443 by default) for VLESS inside REALITY:
 
-- Its REALITY key is X25519, kept in its key file as a PEM block `CLIPBOARDBRIDGE REALITY
+- Its REALITY key is X25519, kept in its key file as a PEM block `CBB REALITY
   KEY` of 32 bytes, made the first time. The short ID is the first 8 bytes of
-  HMAC-SHA256(that key, `clipboardbridge reality short id`), in hex.
+  HMAC-SHA256(that key, `cbb reality short id`), in hex.
 - A connection that is not a client's, by REALITY's check, gets the borrowed site's own
   TLS and answers, from port 443 of that site.
 - Only the VLESS user IDs of registered hubs that asked for VLESS are let in. A client's
@@ -2676,7 +2676,7 @@ network (an IPv4 /24 or an IPv6 /64) at most 256 of those it added, one wide net
 IPv4 /16 or an IPv6 /48) at most 1024 and one IPv6 provider (a /32) at most 4096; a tag new to the table is refused while any of these
 is full and nothing has expired, and no entry is ever dropped to make room. The file is written at most 2 s after a change, and when the forwarder stops,
 outside the lock the lookups use. The HMAC key is
-HMAC-SHA256 under the forwarder's private key (PKCS #8) of `clipboardbridge forwarder
+HMAC-SHA256 under the forwarder's private key (PKCS #8) of `cbb forwarder
 state`, so the file names no group by itself, and a period lasts about a month, so the file
 cannot link one month of a group to the next. A registration with a credential is refused
 when another period key signed it or its version is below the one kept. At start it deletes the files earlier versions kept, one per group with its roots
@@ -2711,7 +2711,7 @@ runs end to end between the two devices.
 Framing: as for the forwarder (section 13, "Registration"): one frame per message
 (Conventions, "Frames"), at most 1 MiB in all from the other side.
 
-1. The device connects over TCP and runs TLS 1.3 with ALPN `clipboardbridge-relay/2` and no
+1. The device connects over TCP and runs TLS 1.3 with ALPN `cbb-relay/2` and no
    server name. It MUST accept only the pinned key. A device whose period's members' credential
    lists its server key (section 18) presents only the certificate of that key, as a hub to
    its forwarder (section 13, step 1). Any other presents its member certificate, its admin
@@ -2721,7 +2721,7 @@ Framing: as for the forwarder (section 13, "Registration"): one frame per messag
    tag is among the groups it serves. That tag names the group. A group that took a new root
    (a claim, section 10) is served under each of its tags the relay is given.
 3. The key proof is the forwarder's (section 13, step 3) with the label
-   `clipboardbridge relay key`: `{"e": bytes, "roots": bool}` from the relay, `{"key":
+   `cbb relay key`: `{"e": bytes, "roots": bool}` from the relay, `{"key":
    bytes, "proof": bytes, "records": [record], "credentials": [credential], "roots":
    [bytes]}` from the device, with the device's WireGuard key.
    - With a member certificate, `records` are the group's authority records, as for the
@@ -2997,7 +2997,7 @@ A sender seals a command's orders to its receiver when the receiver's device rec
 
 - The **orders** are the fields `mode`, `hub`, `enter`, `kind`, `text` and `action`, as a JSON
   object in the strict form of signed bodies, with only those of them the command has.
-- The **associated data** is the header: the context `clipboardbridge command v2`, then
+- The **associated data** is the header: the context `cbb command v2`, then
   `type`, `group`, `by`, `to` and `id`, each of these six strings as its length in 4 bytes and
   its bytes, then `time_ms` and `expires_ms`, 8 bytes each; every number big-endian.
 - `sealed` is the orders sealed to the `seal` key with that associated data: X-Wing HPKE,
@@ -3101,7 +3101,7 @@ A release on GitHub cannot take new files once published, while `keys.json` and 
 channel files are signed again during its life. So `release.json` is a file of its release
 (`releases/download/vX.Y.Z/release.json`), and the current `keys.json` and `stable.json` are
 in the repository's branch `channel`, read at
-`https://raw.githubusercontent.com/HunterEwok/clipboardbridge/channel/<file>`. A mirror
+`https://raw.githubusercontent.com/HunterEwok/cbb/channel/<file>`. A mirror
 keeps all three at its top and each release's files under `vX.Y.Z/`. A device fetches
 `keys.json` and the channel file, then the `release.json` of the version the channel file
 names, and that version's files; `get.sh` and `get.ps1` install the release `stable.json`
@@ -3378,7 +3378,7 @@ a fresh **tag** for the servers and a fresh **period key**; each device signs wi
 key a fresh **server key** that it uses with the servers in that period only. The servers see
 only what the period key signs: the period's tag and lists of padded hashes of server keys.
 A device that registers this way presents a certificate of its server key alone, which names
-neither a device nor a group (`clipboardbridge server`, self-signed, no SAN, client
+neither a device nor a group (`cbb server`, self-signed, no SAN, client
 authentication).
 
 ### The envelope
@@ -3495,11 +3495,11 @@ does not know unless its section says it refuses it.
 
 | ID | Port | Section |
 |---|---|---|
-| `clipboardbridge/2` | TCP 8764, the member port; TCP 8764 inside the tunnel | 4 |
-| `clipboardbridge-pair/2` | the member port; a listening joiner's port; TCP 8764 inside a guest tunnel | 6, 12 |
+| `cbb/2` | TCP 8764, the member port; TCP 8764 inside the tunnel | 4 |
+| `cbb-pair/2` | the member port; a listening joiner's port; TCP 8764 inside a guest tunnel | 6, 12 |
 | `http/1.1` (or none) | the member port, on a member that serves the iPhone | 7 |
-| `clipboardbridge-forward/2` | TCP on the forwarder's port (8764 by default) | 13 |
-| `clipboardbridge-relay/2` | TCP on the relay's port (8764 by default) | 14 |
+| `cbb-forward/2` | TCP on the forwarder's port (8764 by default) | 13 |
+| `cbb-relay/2` | TCP on the relay's port (8764 by default) | 14 |
 | (WireGuard, AmneziaWG) | UDP on the hub's, forwarder's or relay's port (8764 by default) | 11, 13, 14 |
 | (VLESS with REALITY) | TCP 443 on a forwarder, by default | 11, 13 |
 | (mDNS) | UDP 5353, 224.0.0.251 and ff02::fb | 3 |
@@ -3508,15 +3508,15 @@ does not know unless its section says it refuses it.
 
 | String | Use | Section |
 |---|---|---|
-| `EXPERIMENTAL-clipboardbridge-pair-v2` | TLS exporter label: CPace's `sid` | 6 |
-| `clipboardbridge pair v2` + `0x00` | CPace's channel identifier prefix | 6 |
-| `clipboardbridge iPhone token v1` | HKDF `info` of the token key | 7 |
-| `clipboardbridge forwarder key` | TLS exporter label: a hub's proof of its WireGuard key | 13 |
-| `clipboardbridge forwarder admin` | TLS exporter label: the root's or an admin's signature of a registration | 13 |
-| `clipboardbridge forwarder hello` | TLS exporter label: the MAC key of a hub's hellos | 13 |
-| `clipboardbridge forwarder state` | HMAC input: the key of the forwarder's state file | 13 |
-| `clipboardbridge reality short id` | HMAC input: the forwarder's REALITY short ID | 13 |
-| `clipboardbridge relay key` | TLS exporter label: a device's proof of its WireGuard key | 14 |
+| `EXPERIMENTAL-cbb-pair-v2` | TLS exporter label: CPace's `sid` | 6 |
+| `cbb pair v2` + `0x00` | CPace's channel identifier prefix | 6 |
+| `cbb iPhone token v1` | HKDF `info` of the token key | 7 |
+| `cbb forwarder key` | TLS exporter label: a hub's proof of its WireGuard key | 13 |
+| `cbb forwarder admin` | TLS exporter label: the root's or an admin's signature of a registration | 13 |
+| `cbb forwarder hello` | TLS exporter label: the MAC key of a hub's hellos | 13 |
+| `cbb forwarder state` | HMAC input: the key of the forwarder's state file | 13 |
+| `cbb reality short id` | HMAC input: the forwarder's REALITY short ID | 13 |
+| `cbb relay key` | TLS exporter label: a device's proof of its WireGuard key | 14 |
 | `cbb attest v1` | the attestation challenge's prefix | 17 |
 
 Only the pairing label carries the `EXPERIMENTAL-` prefix that RFC 5705, section 4, asks of
@@ -3528,14 +3528,14 @@ within version 1, and a new ALPN version would rename them.
 
 | Common name | Certificate | Section |
 |---|---|---|
-| `clipboardbridge group root YYYY-MM-DD` | a group root CA | 2, 9 |
-| `clipboardbridge group CA YYYY-MM-DD` | the group CA of a group made before 0.4, refused | 2 |
-| `clipboardbridge iPhone CA YYYY-MM-DD` | the iPhone CA | 2 |
-| `clipboardbridge admin <device ID>` | an admin CA | 10 |
+| `cbb group root YYYY-MM-DD` | a group root CA | 2, 9 |
+| `cbb group CA YYYY-MM-DD` | the group CA of a group made before 0.4, refused | 2 |
+| `cbb iPhone CA YYYY-MM-DD` | the iPhone CA | 2 |
+| `cbb admin <device ID>` | an admin CA | 10 |
 | `<device ID>` | a member certificate, DNS name `cb-<device ID>.local` | 2 |
-| `clipboardbridge.local` | the shortcut's server certificate | 2, 7 |
-| `clipboardbridge server` | a server key's certificate | 13, 18 |
-| `clipboardbridge forwarder` | a forwarder's or relay's own certificate | 13, 14 |
+| `cbb.local` | the shortcut's server certificate | 2, 7 |
+| `cbb server` | a server key's certificate | 13, 18 |
+| `cbb forwarder` | a forwarder's or relay's own certificate | 13, 14 |
 
 ### Member protocol messages (`t`)
 
@@ -3577,8 +3577,8 @@ frames (section 4, "Content"); `records`, `admin`, `phone_ca` (section 10); `tun
 | Members' tunnel addresses | `fd00:cbb::/32` followed by the first 96 bits of the device ID | 11 |
 | Guests' tunnel addresses | `fd00:cbc::/32` followed by the first 96 bits of SHA-256 of the guest key | 12 |
 | A relay's own tunnel address | `fd00:cbb::1` | 14 |
-| Join QR code | `clipboardbridge://join?code=...&addr=...&fp=...` | 6, 7 |
-| Remote invitation | `clipboardbridge://invite#...`, file `.cbbinvite` | 12 |
+| Join QR code | `cbb://join?code=...&addr=...&fp=...` | 6, 7 |
+| Remote invitation | `cbb://invite#...`, file `.cbbinvite` | 12 |
 | Token | `cb1.` followed by base64url | 7 |
 
 ## 20. Security considerations
@@ -3587,7 +3587,7 @@ The threats, the defences and their code are in the [threat model](threat-model.
 section lists what an implementation must not get wrong, by section.
 
 - **Authentication is the certificate, never the address or the name** (sections 3, 4). mDNS
-  and `clipboardbridge.local` can be answered by anyone on the network; only the member TLS
+  and `cbb.local` can be answered by anyone on the network; only the member TLS
   handshake, checked against the group's CAs and the records, says who a peer is.
 - **The records decide, the same way everywhere** (section 10). An implementation that
   evaluates the records differently from the others splits the group: a removed device

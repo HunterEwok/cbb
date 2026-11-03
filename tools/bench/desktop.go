@@ -192,10 +192,10 @@ func linuxAgent(ctx context.Context, r *Report, l, other *Device, run string, ti
 		return nil
 	})
 	r.Do(p+"restarted", func() error {
-		if out, _ := Run(ctx, l, user+"systemctl --user is-active clipboardbridge-agent 2>/dev/null || true", ""); strings.TrimSpace(out) != "active" {
+		if out, _ := Run(ctx, l, user+"systemctl --user is-active cbb-agent 2>/dev/null || true", ""); strings.TrimSpace(out) != "active" {
 			return Skipped("the agent runs from the autostart entry, not the user unit: this desktop has no graphical-session.target")
 		}
-		if _, err := Run(ctx, l, user+"systemctl --user restart clipboardbridge-agent", ""); err != nil {
+		if _, err := Run(ctx, l, user+"systemctl --user restart cbb-agent", ""); err != nil {
 			return err
 		}
 		if err := eventually(ctx, 20*time.Second, func() error {
@@ -461,7 +461,7 @@ func inSession(ctx context.Context, d *Device, script string) (string, error) {
 	return out, nil
 }
 
-// linuxTmux (H3): in tmux with clipboardbridge's configuration on the
+// linuxTmux (H3): in tmux with cbb's configuration on the
 // Linux member, a selection copied in copy mode reaches the group, and the
 // paste key, pressed by a client attached on a terminal, pastes the first
 // line of the group's text and never a secret.
@@ -484,7 +484,7 @@ func linuxTmux(ctx context.Context, r *Report, l, other *Device, run string, tim
 			return err
 		}
 		if !strings.Contains(out, "cbb copy") {
-			return fmt.Errorf("tmux on %s does not read clipboardbridge's configuration from /etc/tmux.conf: copy-command is %q", l.Name, strings.TrimSpace(out))
+			return fmt.Errorf("tmux on %s does not read cbb's configuration from /etc/tmux.conf: copy-command is %q", l.Name, strings.TrimSpace(out))
 		}
 		return nil
 	}) != nil {

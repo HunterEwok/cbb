@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/relay"
+	"github.com/HunterEwok/cbb/internal/relay"
 )
 
 // cmdRelay runs a blind relay: the meeting point, on a server the user runs,

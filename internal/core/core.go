@@ -6,7 +6,7 @@
 // (lite/ffi/include/cbb_core.h). A build links the core with cgo under the
 // tag cbbcore, after building the library:
 //
-//	(cd lite && cargo build --locked --release -p clipboardbridge-ffi)
+//	(cd lite && cargo build --locked --release -p cbb-ffi)
 //	go test -tags cbbcore ./internal/core
 //
 // The builds for Windows, macOS and FreeBSD run the same core as

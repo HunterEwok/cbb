@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv/atvtest"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv/atvtest"
 )
 
 func pair(t *testing.T, tv *atvtest.TV, c androidtv.Client) []byte {

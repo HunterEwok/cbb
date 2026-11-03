@@ -60,7 +60,7 @@ func getScript(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[st
 		}
 		return runOut(ctx, d, feedEnv(at)+env+" sh /tmp/get.sh --no-firewall", 3*time.Minute)
 	}
-	archive := "clipboardbridge-linux-" + goarchOf() + ".tar.gz"
+	archive := "cbb-linux-" + goarchOf() + ".tar.gz"
 	for _, c := range []struct {
 		name  string
 		o     releaseOpts
@@ -193,7 +193,7 @@ func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[stri
 			return fmt.Errorf("cbb version after get.sh --lite: %q (%v)", out, err)
 		}
 		return eventually(ctx, 30*time.Second, func() error {
-			out, err := Run(ctx, d, "systemctl is-active clipboardbridge; cbb status 2>&1; true", "")
+			out, err := Run(ctx, d, "systemctl is-active cbb; cbb status 2>&1; true", "")
 			if err == nil && (!strings.HasPrefix(out, "active") || !strings.Contains(out, "in no group")) {
 				err = fmt.Errorf("the lite member after get.sh --lite: %q", out)
 			}

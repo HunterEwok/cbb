@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/release"
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // maxManifest is the largest release file fetched: a body of
@@ -36,13 +36,13 @@ type Source interface {
 // The update servers: GitHub's releases, and their mirror on a name of its
 // own, apart from the forwarder on cbb.tools.
 const (
-	GitHub = "https://github.com/HunterEwok/clipboardbridge/releases"
+	GitHub = "https://github.com/HunterEwok/cbb/releases"
 	Mirror = "https://dl.cbb.tools"
 	// ChannelFiles is where GitHub keeps the current keys.json and channel
 	// files: the branch channel, since a published release takes no new
 	// files and these are signed again while it is current
 	// (docs/protocol.md, section 16, "Where the files are").
-	ChannelFiles = "https://raw.githubusercontent.com/HunterEwok/clipboardbridge/channel"
+	ChannelFiles = "https://raw.githubusercontent.com/HunterEwok/cbb/channel"
 )
 
 // channelFile reports whether name is a file signed again while a release

@@ -23,18 +23,18 @@ func TestGoProfilesMerge(t *testing.T) {
 	// The same block from two test binaries, and from a run on another
 	// system: covered once any of them covered it, counted once.
 	a := write(t, "a.out", `mode: atomic
-github.com/HunterEwok/clipboardbridge/internal/group/a.go:1.1,2.2 3 0
-github.com/HunterEwok/clipboardbridge/internal/group/a.go:3.1,4.2 1 0
-github.com/HunterEwok/clipboardbridge/internal/group/a.go:3.1,4.2 1 5
-github.com/HunterEwok/clipboardbridge/internal/desktop/x.go:1.1,2.2 4 0
-github.com/HunterEwok/clipboardbridge/internal/third_party/cpace/c.go:1.1,2.2 9 0
-github.com/HunterEwok/clipboardbridge/internal/ei/eitest/s.go:1.1,2.2 9 0
-github.com/HunterEwok/clipboardbridge/internal/attest/attesttest/s.go:1.1,2.2 9 0
-github.com/HunterEwok/clipboardbridge/internal/attest/a.go:1.1,2.2 2 0
-github.com/HunterEwok/clipboardbridge/tools/bench/b.go:1.1,2.2 9 0
+github.com/HunterEwok/cbb/internal/group/a.go:1.1,2.2 3 0
+github.com/HunterEwok/cbb/internal/group/a.go:3.1,4.2 1 0
+github.com/HunterEwok/cbb/internal/group/a.go:3.1,4.2 1 5
+github.com/HunterEwok/cbb/internal/desktop/x.go:1.1,2.2 4 0
+github.com/HunterEwok/cbb/internal/third_party/cpace/c.go:1.1,2.2 9 0
+github.com/HunterEwok/cbb/internal/ei/eitest/s.go:1.1,2.2 9 0
+github.com/HunterEwok/cbb/internal/attest/attesttest/s.go:1.1,2.2 9 0
+github.com/HunterEwok/cbb/internal/attest/a.go:1.1,2.2 2 0
+github.com/HunterEwok/cbb/tools/bench/b.go:1.1,2.2 9 0
 `)
 	b := write(t, "b.out", `mode: set
-github.com/HunterEwok/clipboardbridge/internal/desktop/x.go:1.1,2.2 4 1
+github.com/HunterEwok/cbb/internal/desktop/x.go:1.1,2.2 4 1
 `)
 	var out strings.Builder
 	if err := run([]string{a, b}, nil, nil, "", 1, "", &out); err != nil {
@@ -51,7 +51,7 @@ github.com/HunterEwok/clipboardbridge/internal/desktop/x.go:1.1,2.2 4 1
 }
 
 func TestFloor(t *testing.T) {
-	prof := write(t, "c.out", "mode: set\ngithub.com/HunterEwok/clipboardbridge/cmd/cbb/m.go:1.1,2.2 1 1\ngithub.com/HunterEwok/clipboardbridge/cmd/cbb/m.go:3.1,4.2 1 0\n")
+	prof := write(t, "c.out", "mode: set\ngithub.com/HunterEwok/cbb/cmd/cbb/m.go:1.1,2.2 1 1\ngithub.com/HunterEwok/cbb/cmd/cbb/m.go:3.1,4.2 1 0\n")
 	for _, c := range []struct {
 		floor string
 		fail  bool

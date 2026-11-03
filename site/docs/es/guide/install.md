@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 01c5a8544c91 -->
+<!-- source: e1ce6c4f40f0 -->
 # Instalación
 
 Copy Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
@@ -9,7 +9,7 @@ Copy Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cad
 Cualquier Linux con systemd (x86-64, ARM64, ARMv7, ARMv6): un portátil, un sobremesa, una Raspberry Pi, un servidor, una Steam Deck.
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 Después, cierra sesión y vuelve a entrar una vez, para que tu usuario pueda usar `cbb` sin `sudo`. Una máquina sin escritorio obtiene copiar y pegar dentro de tmux con `--console` (`... | sudo sh -s -- --console`).
@@ -25,33 +25,33 @@ Los dispositivos pequeños que solo deben sincronizar, como un router o una Rasp
 En un ordenador Linux donde no puedes o no quieres usar `sudo`, instálalo para tu propio usuario, sin `sudo`:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh -s -- --rootless
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-Se ejecuta como tu propio servicio en segundo plano mientras tienes la sesión abierta y sincroniza como cualquier miembro. Úsalo solo cuando la instalación normal no sea posible: cualquier programa que ejecutes podría copiar sus claves, así que nunca puede ser la raíz del grupo, un administrador ni el hub ([cómo funciona](how-it-works.md#rootless-members)), y no tiene reglas de cortafuegos, ni TPM, ni `--console` ni `--uinput`. Para mantenerlo en marcha después de cerrar sesión, un administrador ejecuta una vez `sudo loginctl enable-linger YOUR-USER`. Para quitarlo: `sh ~/.local/share/clipboardbridge/uninstall.sh`. El miembro ligero también se instala así, con `--lite --rootless` ([miembro ligero](../../lite/README.md#without-sudo-rootless)).
+Se ejecuta como tu propio servicio en segundo plano mientras tienes la sesión abierta y sincroniza como cualquier miembro. Úsalo solo cuando la instalación normal no sea posible: cualquier programa que ejecutes podría copiar sus claves, así que nunca puede ser la raíz del grupo, un administrador ni el hub ([cómo funciona](how-it-works.md#rootless-members)), y no tiene reglas de cortafuegos, ni TPM, ni `--console` ni `--uinput`. Para mantenerlo en marcha después de cerrar sesión, un administrador ejecuta una vez `sudo loginctl enable-linger YOUR-USER`. Para quitarlo: `sh ~/.local/share/cbb/uninstall.sh`. El miembro ligero también se instala así, con `--lite --rootless` ([miembro ligero](../../lite/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 
-Cambia al Modo escritorio, abre Konsole, ponle una contraseña una vez al usuario `deck` si no tiene (`passwd`) y ejecuta el mismo comando. SteamOS sustituye sus archivos de sistema con cada actualización, así que el instalador coloca Copy Beyond Borders en `/opt/clipboardbridge` en lugar de `/usr/local`, y le indica a SteamOS cuáles de sus archivos de `/etc` debe conservar (`/etc/atomic-update.conf.d/clipboardbridge.conf`). Sigue instalado y en su grupo tras las actualizaciones de SteamOS.
+Cambia al Modo escritorio, abre Konsole, ponle una contraseña una vez al usuario `deck` si no tiene (`passwd`) y ejecuta el mismo comando. SteamOS sustituye sus archivos de sistema con cada actualización, así que el instalador coloca Copy Beyond Borders en `/opt/cbb` en lugar de `/usr/local`, y le indica a SteamOS cuáles de sus archivos de `/etc` debe conservar (`/etc/atomic-update.conf.d/cbb.conf`). Sigue instalado y en su grupo tras las actualizaciones de SteamOS.
 
-- `cbb` está en la ruta de un Konsole nuevo después de cerrar sesión y volver a entrar. `sudo` no busca ahí, así que los comandos que lo necesitan llevan la ruta completa: `sudo /opt/clipboardbridge/bin/cbb pair`.
+- `cbb` está en la ruta de un Konsole nuevo después de cerrar sesión y volver a entrar. `sudo` no busca ahí, así que los comandos que lo necesitan llevan la ruta completa: `sudo /opt/cbb/bin/cbb pair`.
 - En el Modo escritorio, el portapapeles se sincroniza como en cualquier escritorio KDE Plasma.
 - En el Modo juego no hay portapapeles de escritorio, así que allí no se sincroniza nada; el servicio sigue funcionando y se pone al día en el Modo escritorio.
-- Para quitarlo: `sudo sh /opt/clipboardbridge/share/uninstall.sh`.
+- Para quitarlo: `sudo sh /opt/cbb/share/uninstall.sh`.
 
 ## Mac
 
 Apple silicon o Intel, en Terminal, el mismo comando que en Linux:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 O con Homebrew, que también lo actualiza. Ejecuta de nuevo la segunda línea después de cada `brew upgrade`:
 
 ```sh
-brew install hunterewok/tap/clipboardbridge
-sudo sh "$(brew --prefix)/opt/clipboardbridge/share/clipboardbridge/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/clipboardbridge/bin/cbb"
+brew install hunterewok/tap/cbb
+sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
 ```
 
 ## Windows
@@ -59,7 +59,7 @@ sudo sh "$(brew --prefix)/opt/clipboardbridge/share/clipboardbridge/packaging/ma
 Windows 10 (1809 o posterior) u 11, x86-64 o ARM64, en un PowerShell abierto con «Ejecutar como administrador»:
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 Permite que el usuario con sesión iniciada en la pantalla use `cbb` (en una terminal nueva) e inicia para él el agente del portapapeles. Los comandos que cambian el grupo se ejecutan en una terminal abierta como administrador, donde Linux y macOS usan `sudo`.
@@ -69,7 +69,7 @@ También instala la app de la bandeja, que se abre al iniciar sesión y está en
 Con winget, cuando el paquete esté en el repositorio de winget:
 
 ```powershell
-winget install HunterEwok.clipboardbridge
+winget install HunterEwok.cbb
 cbb install           # in the administrator terminal; again after each winget upgrade
 ```
 
@@ -78,32 +78,32 @@ cbb install           # in the administrator terminal; again after each winget u
 Un router con OpenWrt 25.12 o posterior y espacio para un programa de 25 MB (128 MB de flash o más, o eMMC; 256 MB de RAM), como root por SSH:
 
 ```sh
-uclient-fetch -qO - https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh
+uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
-Instala `cbb` como un servicio que funciona solo en la zona `lan` y nunca responde en `wan`. Las claves están en `/etc/clipboardbridge`, que sysupgrade conserva; después de un sysupgrade atendido (ASU, owut), ejecuta de nuevo el comando. Otra zona, como una red IoT, el cortafuegos y las comprobaciones están en [routers y FreeBSD](../admin/routers.md#openwrt).
+Instala `cbb` como un servicio que funciona solo en la zona `lan` y nunca responde en `wan`. Las claves están en `/etc/cbb`, que sysupgrade conserva; después de un sysupgrade atendido (ASU, owut), ejecuta de nuevo el comando. Otra zona, como una red IoT, el cortafuegos y las comprobaciones están en [routers y FreeBSD](../admin/routers.md#openwrt).
 
 O desde nuestro repositorio de paquetes, que `apk upgrade` mantiene al día. La arquitectura del repositorio depende de la CPU del router (`grep DISTRIB_ARCH /etc/openwrt_release`): `arm64` para `aarch64_*`, `armv7` para `arm_cortex-a*` con `neon` o `vfp` en el nombre, `mipsle` para `mipsel_*`, `mips` para `mips_*`, `amd64` para `x86_64`. Pon la tuya en lugar de `arm64` en la segunda línea:
 
 ```sh
-uclient-fetch -qO /etc/apk/keys/clipboardbridge.pem https://cbb.tools/openwrt/clipboardbridge.pem
+uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
 echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
-apk update && apk add clipboardbridge
+apk update && apk add cbb
 ```
 
-`apk del clipboardbridge` lo quita y conserva las claves en `/etc/clipboardbridge`.
+`apk del cbb` lo quita y conserva las claves en `/etc/cbb`.
 
 ## FreeBSD
 
 FreeBSD 15, amd64 o arm64, como root (con `sudo` o `doas`):
 
 ```sh
-fetch -qo - https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh
+fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
-Instala `cbb`, un script rc.d que ejecuta el servicio mediante daemon(8), y añade la línea `clipboardbridge_enable="YES"` a rc.conf. Las claves están en `/var/db/clipboardbridge`.
+Instala `cbb`, un script rc.d que ejecuta el servicio mediante daemon(8), y añade la línea `cbb_enable="YES"` a rc.conf. Las claves están en `/var/db/cbb`.
 
-En OPNsense, el mismo instalador añade además un gancho de plugin: el servicio aparece en System > Diagnostics > Services, y sus reglas de cortafuegos (en el ancla `clipboardbridge` de pf) siguen cada recarga del filtro. Desactiva el repetidor de mDNS (Services > mDNS Repeater) mientras se ejecute: ambos necesitan el puerto UDP 5353, y el servicio responde él mismo a mDNS en cada interfaz doméstica. pfSense no está soportado: el instalador también se ejecuta allí, pero imprime las reglas de cortafuegos para Firewall > Rules en lugar de añadirlas, y una actualización de pfSense puede quitar Copy Beyond Borders.
+En OPNsense, el mismo instalador añade además un gancho de plugin: el servicio aparece en System > Diagnostics > Services, y sus reglas de cortafuegos (en el ancla `cbb` de pf) siguen cada recarga del filtro. Desactiva el repetidor de mDNS (Services > mDNS Repeater) mientras se ejecute: ambos necesitan el puerto UDP 5353, y el servicio responde él mismo a mDNS en cada interfaz doméstica. pfSense no está soportado: el instalador también se ejecuta allí, pero imprime las reglas de cortafuegos para Firewall > Rules en lugar de añadirlas, y una actualización de pfSense puede quitar Copy Beyond Borders.
 
 En un escritorio FreeBSD (X11, o Wayland con el protocolo data control, como en KDE, sway e Hyprland), la sesión inicia `cbb agent` desde el inicio automático de XDG y el portapapeles se une al grupo; vuelve a iniciar sesión después de la instalación. El pegado remoto escribe mediante XTEST en X11 y mediante el teclado virtual en los escritorios wlroots; GNOME no admite pegado remoto en FreeBSD, ya que sin logind nada indica si su pantalla está bloqueada.
 
@@ -112,9 +112,9 @@ En un escritorio FreeBSD (X11, o Wayland con el protocolo data control, como en 
 Para un NAS o un servidor doméstico que está siempre encendido ([README de la imagen](../../packaging/docker/README.md); publicada con cada versión desde la 0.5). Se une como un miembro normal: crea el grupo en el teléfono o en un ordenador que lleves tú.
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/HunterEwok/clipboardbridge/main/packaging/docker/compose.home.yaml
+curl -fsSLO https://raw.githubusercontent.com/HunterEwok/cbb/main/packaging/docker/compose.home.yaml
 docker compose -f compose.home.yaml up -d
-docker compose -f compose.home.yaml exec clipboardbridge cbb pair
+docker compose -f compose.home.yaml exec cbb cbb pair
 ```
 
 ## El cortafuegos
@@ -137,7 +137,7 @@ Las versiones están firmadas desde la 0.6. Para pasar a la 0.6 desde una versi�
 
 `sudo cbb update` (en Windows, `cbb update` en una terminal abierta como administrador) instala la versión más reciente en un ordenador o miembro ligero instalado con `get.sh`, `get.ps1` o un archivo de versión; `cbb update -check` solo dice si hay una. Tus ajustes se conservan. Solo instala una versión firmada por el proyecto, y nunca una anterior. Si la versión nueva no arranca en un minuto, la anterior vuelve por sí sola. Cómo comprueba las firmas está en el [protocolo](../protocol.md), sección 16.
 
-Los instaladores preguntan una vez si actualizar automáticamente (`--auto-update on|off`, o `-AutoUpdate on|off` y `$env:CBB_AUTO_UPDATE` en Windows, para responder de antemano); `sudo cbb update -auto on|off` lo cambia después. Activado, un temporizador comprueba una vez al día a una hora propia: un temporizador de systemd en Linux, una tarea de launchd en un Mac, una tarea programada como SYSTEM en Windows, cron en OpenWrt y FreeBSD. Cada comprobación descarga los mismos archivos pequeños de GitHub (o de `dl.cbb.tools` cuando GitHub no responde), así que GitHub conoce la dirección de este dispositivo y que usa Copy Beyond Borders, como con cualquier descarga; no envía nada sobre el grupo. `sudo cbb update -mirror https://...` toma las actualizaciones de otro espejo, lo que no requiere confianza, ya que las firmas se comprueban. El registro del temporizador es `update.log` en `/var/lib/clipboardbridge-update` (Linux), `/etc/clipboardbridge-update` (OpenWrt), `/var/db/clipboardbridge-update` (FreeBSD), `/Library/Application Support/clipboardbridge-update` (Mac) o `C:\Program Files\clipboardbridge-update` (Windows).
+Los instaladores preguntan una vez si actualizar automáticamente (`--auto-update on|off`, o `-AutoUpdate on|off` y `$env:CBB_AUTO_UPDATE` en Windows, para responder de antemano); `sudo cbb update -auto on|off` lo cambia después. Activado, un temporizador comprueba una vez al día a una hora propia: un temporizador de systemd en Linux, una tarea de launchd en un Mac, una tarea programada como SYSTEM en Windows, cron en OpenWrt y FreeBSD. Cada comprobación descarga los mismos archivos pequeños de GitHub (o de `dl.cbb.tools` cuando GitHub no responde), así que GitHub conoce la dirección de este dispositivo y que usa Copy Beyond Borders, como con cualquier descarga; no envía nada sobre el grupo. `sudo cbb update -mirror https://...` toma las actualizaciones de otro espejo, lo que no requiere confianza, ya que las firmas se comprueban. El registro del temporizador es `update.log` en `/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt), `/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update` (Mac) o `C:\Program Files\cbb-update` (Windows).
 
 Los dispositivos de un grupo se comunican entre sí la versión firmada más reciente que alguno de ellos haya visto, así que la comprobación de un solo dispositivo basta para que `cbb status` y la app de bandeja de los demás indiquen que hay una versión más nueva («Update to X» en la app de bandeja ejecuta `cbb update` como administrador). Cada dispositivo sigue comprobando las firmas por sí mismo y descargando su propio archivo.
 
@@ -148,7 +148,7 @@ Ejecutar de nuevo el mismo comando de instalación también actualiza. Con Homeb
 Los instaladores de una línea comprueban la descarga con el `SHA256SUMS` de la versión. Cada archivo de la versión lleva además una atestación de procedencia de la compilación que lo vincula a este repositorio y a la compilación que lo generó; con la [CLI de GitHub](https://cli.github.com/):
 
 ```sh
-gh attestation verify clipboardbridge-linux-amd64.tar.gz --repo HunterEwok/clipboardbridge
+gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
 ```
 
 `get.sh` la comprueba por sí mismo cuando `gh` está instalado y con sesión iniciada para root (`sudo gh auth login`); `CBB_ATTESTATION=require` se niega a instalar sin ella.
@@ -160,11 +160,11 @@ Las versiones también se firman con las claves propias del proyecto, que nunca 
 En Linux y en un Mac:
 
 ```sh
-sudo sh /usr/local/share/clipboardbridge/uninstall.sh
+sudo sh /usr/local/share/cbb/uninstall.sh
 ```
 
-En SteamOS es `sudo sh /opt/clipboardbridge/share/uninstall.sh`. Con Homebrew, ejecuta después `brew uninstall clipboardbridge`.
+En SteamOS es `sudo sh /opt/cbb/share/uninstall.sh`. Con Homebrew, ejecuta después `brew uninstall cbb`.
 
 En Windows: Configuración, Aplicaciones, «CBB», Desinstalar.
 
-Esto quita el programa, el servicio y las reglas de cortafuegos que añadió el instalador. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb remove NAME`, o en el teléfono).
+Esto quita el programa, el servicio y las reglas de cortafuegos que añadió el instalador. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb remove NAME`, o en el teléfono).

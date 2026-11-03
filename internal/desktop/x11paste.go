@@ -17,8 +17,8 @@ import (
 	"github.com/jezek/xgb/xproto"
 	"github.com/jezek/xgb/xtest"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/lockcheck"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/lockcheck"
 )
 
 // Remote paste on X11 (design.md, "Remote paste"): XTEST presses the keys

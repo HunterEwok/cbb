@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f06d2929ba18 -->
+<!-- source: dbcf5e524e51 -->
 # Bila programu
 
 Kikundi hakihitaji programu ya simu. Kompyuta inaweza kushikilia kikundi, na iPhone isiyo na programu hujiunga kwa njia ya mkato. Hii pia ndiyo njia wakati programu ya iPhone inasubiri TestFlight.
@@ -30,7 +30,7 @@ Kisha washa ushirikiano kwenye kila kompyuta, kama katika [mwanzo wa haraka](qui
 
 ## 3. Ongeza iPhone kwa njia ya mkato
 
-Kwenye mzizi, au kwenye kompyuta ya msimamizi inayojibu `clipboardbridge.local` (`cbb status` inasema kama inajibu):
+Kwenye mzizi, au kwenye kompyuta ya msimamizi inayojibu `cbb.local` (`cbb status` inasema kama inajibu):
 
 ```sh
 sudo cbb pair -phone
@@ -40,7 +40,7 @@ Huchapisha msimbo wa QR, mwanzo wa alama ya kidole na msimbo wa tarakimu sita.
 
 1. Changanua msimbo wa QR kwa kamera ya iPhone na ufuate ukurasa: sakinisha wasifu.
 2. Hakikisha alama ya kidole ya wasifu inaanza kama ile iliyochapishwa (Mipangilio, Jumla, VPN na Usimamizi wa Kifaa, "CBB", Maelezo Zaidi), kisha uwashe uaminifu kamili kwake (Mipangilio, Jumla, Kuhusu, Mipangilio ya Kuaminiwa kwa Cheti).
-3. Ongeza njia ya mkato "clipboardbridge" kutoka ukurasa uleule na uiendeshe mara moja; inauliza msimbo wa tarakimu sita.
+3. Ongeza njia ya mkato "cbb" kutoka ukurasa uleule na uiendeshe mara moja; inauliza msimbo wa tarakimu sita.
 4. Weka njia ya mkato kwenye kitufe cha Kitendo, au kwenye Gusa Nyuma (Mipangilio, Ufikivu, Mguso, Gusa Nyuma, Gusa Mara Mbili).
 
 Mbonyezo mmoja kisha huchagua mwelekeo wenyewe: kilichonakiliwa kwenye kompyuta muda mfupi uliopita huja kwenye iPhone; la sivyo nakala mpya kwenye iPhone huenda kwenye kompyuta.

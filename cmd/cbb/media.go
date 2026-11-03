@@ -11,10 +11,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/mediafile"
-	"github.com/HunterEwok/clipboardbridge/internal/service"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/mediafile"
+	"github.com/HunterEwok/cbb/internal/service"
 )
 
 // Images and files on the command line (design.md, "Images and files"):

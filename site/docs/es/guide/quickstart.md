@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 69c597a7b5db -->
+<!-- source: 6d2083e0e66e -->
 # Inicio rápido
 
 Copy Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
@@ -12,7 +12,7 @@ Un grupo puede tener un ordenador en su centro o estar formado solo por teléfon
 
 ## 1. Instala la app en el teléfono
 
-- **Android** 10 o posterior: descarga `clipboardbridge-X.Y.Z.apk` desde la [última versión](https://github.com/HunterEwok/clipboardbridge/releases/latest) en el propio teléfono y ábrelo; cuando Android lo pida, permite que el navegador instale aplicaciones.
+- **Android** 10 o posterior: descarga `cbb-X.Y.Z.apk` desde la [última versión](https://github.com/HunterEwok/cbb/releases/latest) en el propio teléfono y ábrelo; cuando Android lo pida, permite que el navegador instale aplicaciones.
 - **iPhone**: la app llegará con TestFlight, que todavía no está abierto. Hasta entonces, un iPhone usa un atajo y un ordenador lleva el grupo: consulta [Sin la app](without-app.md).
 
 Abre la app. Añadirás el primer ordenador en el paso 3.
@@ -24,13 +24,13 @@ Elige cualquier ordenador de tu red doméstica: un portátil, un sobremesa, una 
 En **Linux** o en un **Mac**, en una terminal:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 En **Windows** 10 u 11, en un PowerShell abierto con «Ejecutar como administrador»:
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 El instalador comprueba la descarga, inicia Copy Beyond Borders y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, winget, Docker y los detalles están en [Instalación](install.md).

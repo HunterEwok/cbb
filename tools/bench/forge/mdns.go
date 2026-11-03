@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/mdns"
+	"github.com/HunterEwok/cbb/internal/mdns"
 )
 
 // The member's mDNS records (D17, D3): forge -addr DIR mdns-browse browses

@@ -12,14 +12,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/appletv"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/roku"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/tvremote"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv"
+	"github.com/HunterEwok/cbb/internal/tvremote/appletv"
+	"github.com/HunterEwok/cbb/internal/tvremote/roku"
 )
 
 // The TVs' own remotes (docs/roadmap.md, item 25, way 2; internal/tvremote):

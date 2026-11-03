@@ -9,8 +9,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/strict"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/strict"
 )
 
 // fuzzSeeds adds the bodies of a section of strict-generated-*.json, valid

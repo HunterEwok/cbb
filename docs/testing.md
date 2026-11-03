@@ -13,7 +13,7 @@ real devices, and which level answers which question. The commands are in
 |---|---|---|---|
 | Unit tests | one package or type does what its comment says | `*_test.go`, `cargo test`, `swift test`, `./gradlew -p kit test` | every push, in CI |
 | Interop vectors | the four implementations (Go, Rust, Swift, Kotlin) read and write the same bytes | `testdata/interop` | every push, in CI |
-| Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `clipboardbridge-interop`, or the lite member | every push, in CI |
+| Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `cbb-interop`, or the lite member | every push, in CI |
 | Service tests | several members, with their real services, in one process or as programs | `internal/service`, `cmd/cbb` | every push, in CI |
 | System tests | the built program on a real system: containers, sockets, a desktop, an installer | the `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `freebsd` jobs | every push, in CI |
 | App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `Mac app`, `tray app`, `Android app` jobs | every push, in CI |
@@ -61,7 +61,7 @@ becomes a vector here.
 
 ## Cross tests
 
-- The Swift kit's `clipboardbridge-interop` and the Kotlin kit's (built by `./gradlew -p kit
+- The Swift kit's `cbb-interop` and the Kotlin kit's (built by `./gradlew -p kit
   interopScript`) play the phone in Go's pairing and member tests: over plain TCP on Linux,
   over real TLS on macOS and with Conscrypt on Linux.
 - `TestLiteMember`, `TestLiteRemotePaste`, `TestLiteQuickActions` and `TestLiteMemberAway`
@@ -77,7 +77,7 @@ becomes a vector here.
   relay (`TestAwayThroughRelay`), with obfuscation (`TestAwayObfuscated`).
 - `tools/e2e/e2e.sh` runs the built static binary as three members and an avahi resolver
   in Docker containers: mDNS, pairing with codes, sync, the holder of
-  `clipboardbridge.local` and its handover, a wrong code.
+  `cbb.local` and its handover, a wrong code.
 - The installer jobs install, run and remove the service on each system they cover.
 
 ## Bench scenarios
@@ -129,7 +129,7 @@ test, or a note why it cannot matter, and then the jobs fail on a new one.
 To run them locally:
 
 ```sh
-cd lite && cargo mutants --in-place -p clipboardbridge-core -f core/src/authority.rs -f core/src/strict.rs
+cd lite && cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
 go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/authority
 ```
 

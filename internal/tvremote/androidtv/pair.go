@@ -24,8 +24,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/protowire"
 
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv/wire"
+	"github.com/HunterEwok/cbb/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv/wire"
 )
 
 // The TV's ports: pairing, and the remote.

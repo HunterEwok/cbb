@@ -21,14 +21,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/forward"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/group/grouptest"
-	"github.com/HunterEwok/clipboardbridge/internal/relay"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
-	"github.com/HunterEwok/clipboardbridge/internal/uptime"
-	"github.com/HunterEwok/clipboardbridge/internal/vless/vlesstest"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/group/grouptest"
+	"github.com/HunterEwok/cbb/internal/relay"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/uptime"
+	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
 func tunnelState(t *testing.T, s *testService) *tunnel.State {

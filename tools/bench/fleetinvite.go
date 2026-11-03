@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/invite"
+	"github.com/HunterEwok/cbb/internal/invite"
 )
 
 // invitation is a cbb invite running on a group's hub.

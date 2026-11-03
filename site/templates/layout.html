@@ -69,7 +69,7 @@
       <a href="/{{.Lang.Code}}/download.html"{{if eq .Page "download.html"}} aria-current="page"{{end}}>{{t "Download"}}</a>
       <a href="/{{.Lang.Code}}/privacy.html"{{if eq .Page "privacy.html"}} aria-current="page"{{end}}>{{t "Privacy"}}</a>
       <a href="/{{.Lang.Code}}/docs/"{{if hasPrefix .Page "docs/"}} aria-current="page"{{end}}>{{t "Docs"}}</a>
-      <a href="https://github.com/HunterEwok/clipboardbridge">GitHub</a>
+      <a href="https://github.com/HunterEwok/cbb">GitHub</a>
     </nav>
     <details class="langs">
       <summary><svg class="globe" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span class="sr">{{t "Language"}}: </span><span class="lname">{{.Lang.Name}}</span></summary>
@@ -90,7 +90,7 @@
 </main>
 <footer class="foot">
   <div class="wrap">
-    <p>{{t "Copy Beyond Borders is free software under the %s." (link "https://github.com/HunterEwok/clipboardbridge/blob/main/LICENSE" "GNU AGPL v3")}}
+    <p>{{t "Copy Beyond Borders is free software under the %s." (link "https://github.com/HunterEwok/cbb/blob/main/LICENSE" "GNU AGPL v3")}}
        {{t "Status: early development."}}
        <a href="/{{.Lang.Code}}/code-signing.html">{{t "Code signing policy"}}</a></p>
     <p>{{t "This site counts visits without cookies, and sets one cookie only when you pick a language: %s." (link (printf "/%s/privacy.html#site" .Lang.Code) (t "what it knows about you"))}}

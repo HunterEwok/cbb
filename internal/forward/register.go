@@ -22,23 +22,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/frame"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
-	"github.com/HunterEwok/clipboardbridge/internal/vless"
+	"github.com/HunterEwok/cbb/internal/frame"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless"
 )
 
 // Protocol is the ALPN protocol of a hub's registration.
-const Protocol = "clipboardbridge-forward/2"
+const Protocol = "cbb-forward/2"
 
 // The labels of the keys the registration takes from TLS: the one the hub
 // proves its WireGuard key under, and the one its hellos carry a MAC of.
 const (
-	proofLabel = "clipboardbridge forwarder key"
-	helloLabel = "clipboardbridge forwarder hello"
+	proofLabel = "cbb forwarder key"
+	helloLabel = "cbb forwarder hello"
 	// adminLabel is the key the hub's root or admin CA signs, with the
 	// hub's WireGuard key, to show the hub may register its group.
-	adminLabel = "clipboardbridge forwarder admin"
+	adminLabel = "cbb forwarder admin"
 )
 
 // maxClaim bounds a claim, which carries the group's authority records,

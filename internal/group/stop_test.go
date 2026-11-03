@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // TestStopExchange checks Stopped and NoSecretsTo on the cases of

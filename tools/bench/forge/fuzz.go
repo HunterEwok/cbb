@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // Fuzzed frames (S20): forge -state DIR -to DEVICE -addr HOST:PORT

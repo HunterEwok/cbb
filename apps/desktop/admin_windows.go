@@ -16,7 +16,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-const deniedText = "No permission to use the service: add your user to the clipboardbridge group and sign in again."
+const deniedText = "No permission to use the service: add your user to the cbb group and sign in again."
 
 // runAdmin runs cbb as the administrator through the UAC prompt: an
 // elevated PowerShell, started with ShellExecuteEx's runas, calls cbb with
@@ -91,7 +91,7 @@ func cbbPath() string {
 	if err != nil {
 		dir = `C:\Program Files`
 	}
-	return filepath.Join(dir, "clipboardbridge", "cbb.exe")
+	return filepath.Join(dir, "cbb", "cbb.exe")
 }
 
 var (

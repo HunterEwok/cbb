@@ -21,18 +21,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // TestSwiftMemberTLS runs the phone app's member code against this node
-// over real TLS: clipboardbridge-interop (apps/ios/ClipboardBridgeKit), named by
+// over real TLS: cbb-interop (apps/ios/CBBKit), named by
 // CBB_SWIFT_INTEROP_TLS on macOS, makes a key in the keychain, gets
 // a member certificate for it, dials, sends a text, and waits for one.
 func TestSwiftMemberTLS(t *testing.T) {
 	tool := os.Getenv("CBB_SWIFT_INTEROP_TLS")
 	if tool == "" {
-		t.Skip("CBB_SWIFT_INTEROP_TLS names no clipboardbridge-interop binary")
+		t.Skip("CBB_SWIFT_INTEROP_TLS names no cbb-interop binary")
 	}
 	var store memContent
 	server := newMember(t, Full, withContent(&store))

@@ -12,11 +12,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/relay"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/relay"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // joinRelayLocked keeps this device registered with its blind relay until

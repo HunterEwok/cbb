@@ -248,7 +248,7 @@ func killService(ctx context.Context, r *Report, g *benchGroup, timeout time.Dur
 func killCmd(d *Device) string {
 	switch d.OS {
 	case "linux", "linux-lite":
-		return "sudo -n systemctl kill -s KILL clipboardbridge"
+		return "sudo -n systemctl kill -s KILL cbb"
 	case "netns":
 		// Restart=always starts it again.
 		return "sudo -n systemctl kill -s KILL " + netnsUnit(d)
@@ -259,11 +259,11 @@ func killCmd(d *Device) string {
 		// daemon -r starts it again.
 		return "sudo -n pkill -KILL -f '^/usr/local/bin/cbb service'"
 	case "windows":
-		return `Get-CimInstance Win32_Service -Filter "Name='clipboardbridge'" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`
+		return `Get-CimInstance Win32_Service -Filter "Name='cbb'" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`
 	case "darwin":
 		// launchd starts the daemon again (KeepAlive). The bench's
 		// sudoers rule allows exactly this command (docs/testbench.md).
-		return "sudo -n /bin/launchctl kill KILL system/io.github.hunterewok.clipboardbridge"
+		return "sudo -n /bin/launchctl kill KILL system/tools.cbb"
 	case "docker":
 		// The process dies as a crash would, not by docker kill, which
 		// Docker counts as stopping it by hand: its restart policy

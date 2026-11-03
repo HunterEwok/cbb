@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 69c597a7b5db -->
+<!-- source: 6d2083e0e66e -->
 # 快速入门
 
 Copy Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设备上复制，在另一台上粘贴。这些设备在你的家庭网络中组成一个**群组**。手机保管群组的密钥，并由它放行每台新设备，所以没有你的许可，谁也无法加入。
@@ -12,7 +12,7 @@ Copy Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设
 
 ## 1. 在手机上安装应用
 
-- **Android** 10 或更高版本：在手机上从[最新版本](https://github.com/HunterEwok/clipboardbridge/releases/latest)页面下载 `clipboardbridge-X.Y.Z.apk` 并打开；当 Android 询问时，允许浏览器安装应用。
+- **Android** 10 或更高版本：在手机上从[最新版本](https://github.com/HunterEwok/cbb/releases/latest)页面下载 `cbb-X.Y.Z.apk` 并打开；当 Android 询问时，允许浏览器安装应用。
 - **iPhone**：应用将通过 TestFlight 发布，目前尚未开放。在此之前，iPhone 使用快捷指令，群组由一台电脑保管：参见[不使用应用](without-app.md)。
 
 打开应用。你将在第 3 步添加第一台电脑。
@@ -24,13 +24,13 @@ Copy Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设
 在 **Linux** 或 **Mac** 上，在终端中运行：
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 在 **Windows** 10 或 11 上，在以“以管理员身份运行”打开的 PowerShell 中运行：
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 安装程序会校验下载内容，启动 Copy Beyond Borders，并问两个问题：是否为它开放防火墙（回答 `y`），以及是否自动更新（回答 `y` 也很合适）。然后注销再登录一次；在 Windows 上则打开一个新终端。Homebrew、winget、Docker 和更多细节见[安装](install.md)。

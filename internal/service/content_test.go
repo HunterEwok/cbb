@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
+	"github.com/HunterEwok/cbb/internal/clip"
 )
 
 // cacheBytes adds up the files in the cache.

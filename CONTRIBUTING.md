@@ -127,7 +127,7 @@ return an error. Where something truly cannot fail, allow the lint on that item 
 
 ```sh
 cd lite && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
-cargo build -p clipboardbridge-core --target riscv32imac-unknown-none-elf   # the core without an OS
+cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (lite/deny.toml, CI's advisories job)
 cargo build --release && cd .. && CBB_LITE=$PWD/lite/target/release/cbb \
   go test ./internal/service -run TestLiteMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
@@ -138,7 +138,7 @@ The Nano ESP32's network code on Linux (`lite/embassy`, root for the TAP interfa
 ```sh
 sudo ip tuntap add name tap0 mode tap user "$USER" && sudo ip addr add 192.168.69.1/24 dev tap0 \
   && sudo ip link set tap0 up
-cd lite && cargo build --release -p clipboardbridge-embassy --features host && cd .. && \
+cd lite && cargo build --release -p cbb-embassy --features host && cd .. && \
   CBB_ESP32_ON_LINUX=$PWD/lite/target/release/esp32-on-linux go test ./internal/service -run TestEmbassyJoiner
 ```
 
@@ -160,7 +160,7 @@ The phone kit (Swift package, runs on Linux too), with the Rust core it links:
 
 ```sh
 sh lite/ffi/bind.sh host /tmp/cbb-core
-cd apps/ios/ClipboardBridgeKit && swift test -Xlinker -L/tmp/cbb-core
+cd apps/ios/CBBKit && swift test -Xlinker -L/tmp/cbb-core
 ```
 
 The phones' tunnel (`mobile/cbbtun`, WireGuard for sync away from home) is a Go package that
@@ -184,7 +184,7 @@ libraries; the Android app's `bindCore` task and the Kotlin kit's tests build th
 themselves, and the `phone core` jobs build them with the latest Rust:
 
 ```sh
-cd lite && cargo test -p clipboardbridge-ffi
+cd lite && cargo test -p cbb-ffi
 ANDROID_NDK_HOME=<ndk> lite/ffi/bind.sh android OUT   # needs cargo-ndk
 lite/ffi/bind.sh ios OUT                              # macOS with Xcode
 lite/ffi/bind.sh host OUT                             # the static library, for swift test
@@ -203,13 +203,13 @@ Cross tests between Go and Swift: Swift tests write vectors that Go reads, and t
   `swift-renewal.json` and `swift-admin.json`; then
   `CBB_INTEROP_OUT=<dir> go test ./internal/group -run 'TestSwift'` reads them.
   Without the variable Go reads the committed copies in `testdata/interop`.
-- `CBB_SWIFT_INTEROP=<path to clipboardbridge-interop>` runs
+- `CBB_SWIFT_INTEROP=<path to cbb-interop>` runs
   `TestSwiftMemberAdmitsGoJoiner` (pairing over plain TCP); on macOS
   `CBB_SWIFT_INTEROP_TLS` runs the real-TLS pairing and member tests (see the
   `phone kit` job in `.github/workflows/ci.yml` for the keychain setup).
 - The Kotlin kit does the same: `CBB_INTEROP_OUT=<dir> ./gradlew -p kit test` writes the
   same files, and `./gradlew -p kit interopScript` builds
-  `kit/build/interop/clipboardbridge-interop`, which plays the Android phone in those three
+  `kit/build/interop/cbb-interop`, which plays the Android phone in those three
   Go tests on Linux too (TLS from Conscrypt; the `Android app` job runs them).
 
 The app (macOS with Xcode):
@@ -218,8 +218,8 @@ The app (macOS with Xcode):
 mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework   # the tunnel the app links; needs Go
 sh lite/ffi/bind.sh ios apps/ios/CbbCore                 # the Rust core the kit links; needs Rust
 brew install xcodegen
-cd apps/ios && xcodegen generate   # ClipboardBridge.xcodeproj and Info.plist are not committed
-xcodebuild test -project ClipboardBridge.xcodeproj -scheme ClipboardBridge \
+cd apps/ios && xcodegen generate   # CBB.xcodeproj and Info.plist are not committed
+xcodebuild test -project CBB.xcodeproj -scheme CBB \
   -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=  # any installed iPhone simulator
 ```
 
@@ -246,7 +246,7 @@ unlocked near the phone and open Xcode's Devices and Simulators window until the
 as connected, then run the script again; otherwise the watch refuses the app as one whose
 integrity it could not verify.
 
-The build has its own bundle identifier (`CBB_BUNDLE_ID`, `dev.<team>.clipboardbridge`)
+The build has its own bundle identifier (`CBB_BUNDLE_ID`, `dev.<team>.cbb`)
 and goes without the app group and the shared keychain, which need the developer account,
 as the simulator's build does: the share extension finds no group in it.
 
@@ -261,8 +261,8 @@ cd apps/desktop && go vet ./... && go test ./... && go build -o cbb-desktop .
 The Mac app (macOS with Xcode):
 
 ```sh
-cd apps/macos && xcodegen generate   # ClipboardBridgeMac.xcodeproj and Info.plist are not committed
-xcodebuild test -project ClipboardBridgeMac.xcodeproj -scheme ClipboardBridgeMac \
+cd apps/macos && xcodegen generate   # CBBMac.xcodeproj and Info.plist are not committed
+xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac \
   -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 

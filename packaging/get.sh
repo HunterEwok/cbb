@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs or updates clipboardbridge on a Linux machine, an OpenWrt router
+# Installs or updates cbb on a Linux machine, an OpenWrt router
 # (25.12 or later), a Mac or FreeBSD from a release (Windows has get.ps1):
 #
-#   curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+#   curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 #
 # Options go after "sh -s --": --express adds the firewall rules
-# clipboardbridge needs without asking and says what it added, --no-firewall
+# cbb needs without asking and says what it added, --no-firewall
 # adds none and prints the commands that would, --port N moves the member
 # port from 8764 to N, --home-cgnat on counts 100.64.0.0/10 as the home
 # network too (a home network on the carrier-grade NAT range); on Linux, --lite installs the lite member for small devices instead of the full
@@ -28,7 +28,7 @@
 # from the release, checks the archive against it and, when gh is there and
 # signed in, against the release workflow's attestation, and runs the archive's
 # install.sh for this system, which finds the firewall, lists the rules
-# clipboardbridge needs and asks whether to add them. On a Mac, Homebrew is
+# cbb needs and asks whether to add them. On a Mac, Homebrew is
 # the other way (docs/guide/install.md).
 set -eu
 
@@ -44,7 +44,7 @@ failed() {
 	fi
 }
 
-repo=https://github.com/HunterEwok/clipboardbridge
+repo=https://github.com/HunterEwok/cbb
 console=
 uinput=
 port=
@@ -196,14 +196,14 @@ v*) base=$repo/releases/download/$version ;;
 *) fail "CBB_VERSION must look like v1.2.3" ;;
 esac
 # OpenWrt takes the Linux archive, which carries its installer too.
-archive=clipboardbridge-$os-$arch.tar.gz
-[ "$os" != openwrt ] || archive=clipboardbridge-linux-$arch.tar.gz
-dir=clipboardbridge
+archive=cbb-$os-$arch.tar.gz
+[ "$os" != openwrt ] || archive=cbb-linux-$arch.tar.gz
+dir=cbb
 if [ "$lite" = yes ]; then
 	# The lite member's ARMv6 build runs on ARMv7 too.
 	[ "$arch" = armv7 ] && arch=armv6
-	archive=clipboardbridge-lite-linux-$arch.tar.gz
-	dir=clipboardbridge-lite
+	archive=cbb-lite-linux-$arch.tar.gz
+	dir=cbb-lite
 fi
 
 # The project's release root keys (docs/protocol.md, section 16), which sign
@@ -220,7 +220,7 @@ fDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg==
 # Where the current keys.json and stable.json are: the branch channel, since
 # a published release takes no new files and these are signed again while
 # it is current (docs/protocol.md, section 16).
-channel_files=https://raw.githubusercontent.com/HunterEwok/clipboardbridge/channel
+channel_files=https://raw.githubusercontent.com/HunterEwok/cbb/channel
 
 roots=$release_roots
 if [ -n "${CBB_RELEASE_DIR:-}" ] && [ -n "${CBB_RELEASE_ROOTS:-}" ]; then
@@ -370,7 +370,7 @@ attestation=${CBB_ATTESTATION:-check}
 if [ -n "${CBB_RELEASE_DIR:-}" ] || [ "$attestation" = skip ]; then
 	:
 elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-	gh attestation verify "$tmp/$archive" --repo HunterEwok/clipboardbridge >/dev/null ||
+	gh attestation verify "$tmp/$archive" --repo HunterEwok/cbb >/dev/null ||
 		fail "$archive does not have this repository's build attestation; not installing it"
 	echo "The archive's build attestation checks out."
 elif [ "$attestation" = require ]; then

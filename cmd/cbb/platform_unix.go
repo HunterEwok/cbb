@@ -14,8 +14,8 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/HunterEwok/clipboardbridge/internal/openwrt"
-	"github.com/HunterEwok/clipboardbridge/internal/rootless"
+	"github.com/HunterEwok/cbb/internal/openwrt"
+	"github.com/HunterEwok/cbb/internal/rootless"
 )
 
 // runService runs the service until a signal stops it; systemd keeps its
@@ -43,12 +43,12 @@ func defaultStateDir() string {
 	case rootless.Is():
 		return rootless.StateDir()
 	case runtime.GOOS == "darwin":
-		return "/Library/Application Support/clipboardbridge/state"
+		return "/Library/Application Support/cbb/state"
 	case runtime.GOOS == "freebsd":
-		return "/var/db/clipboardbridge"
+		return "/var/db/cbb"
 	case openwrt.Is():
 		// /var is in RAM there; sysupgrade keeps /etc.
-		return "/etc/clipboardbridge/state"
+		return "/etc/cbb/state"
 	}
-	return "/var/lib/clipboardbridge"
+	return "/var/lib/cbb"
 }

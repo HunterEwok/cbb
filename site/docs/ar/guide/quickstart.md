@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 69c597a7b5db -->
+<!-- source: 6d2083e0e66e -->
 # بداية سريعة
 
 يمنح Copy Beyond Borders هاتفك وحواسيبك حافظة واحدة: تنسخ على جهاز وتلصق على آخر. تشكّل الأجهزة **مجموعة** على شبكتك المنزلية. يحتفظ الهاتف بمفتاح المجموعة ويسمح بدخول كل جهاز جديد، فلا يستطيع أحد الانضمام من دونك.
@@ -12,7 +12,7 @@
 
 ## 1. ثبّت التطبيق على هاتفك
 
-- **Android** 10 أو أحدث: نزّل `clipboardbridge-X.Y.Z.apk` من [أحدث إصدار](https://github.com/HunterEwok/clipboardbridge/releases/latest) على الهاتف نفسه وافتحه؛ واسمح للمتصفح بتثبيت التطبيقات عندما يسألك Android.
+- **Android** 10 أو أحدث: نزّل `cbb-X.Y.Z.apk` من [أحدث إصدار](https://github.com/HunterEwok/cbb/releases/latest) على الهاتف نفسه وافتحه؛ واسمح للمتصفح بتثبيت التطبيقات عندما يسألك Android.
 - **iPhone**: سيأتي التطبيق عبر TestFlight، وهو غير متاح بعد. إلى ذلك الحين يستخدم iPhone اختصارًا، ويحمل حاسوب المجموعة: راجع [من دون التطبيق](without-app.md).
 
 افتح التطبيق. ستضيف أول حاسوب في الخطوة 3.
@@ -24,13 +24,13 @@
 على **Linux** أو **Mac**، في الطرفية:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 على **Windows** 10 أو 11، في PowerShell مفتوح بخيار «Run as administrator»:
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 يتحقق المثبّت من التنزيل، ويشغّل Copy Beyond Borders، ويطرح سؤالين: هل يفتح جدار الحماية له (أجب بـ `y`)، وهل يحدّث نفسه تلقائيًا (و`y` إجابة جيدة أيضًا). بعد ذلك سجّل الخروج ثم الدخول مرة واحدة، أو افتح طرفية جديدة على Windows. يوجد Homebrew وwinget وDocker والتفاصيل في [التثبيت](install.md).

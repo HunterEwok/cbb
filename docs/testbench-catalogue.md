@@ -25,7 +25,7 @@ here that replaces one there are in brackets, such as [C1].
 | Kind | What | Used for |
 |---|---|---|
 | **real** | the bench's devices (testbench.md, section 3): the Linux desktop, the Windows PC, the Mac, the lite board, the away computer, the router as a device under test, the relay server, the phones, the watches, a TV | everything a user does on a real system: clipboards, desktops, sessions, installers, sleep, the apps |
-| **fleet** | containers on the controller, each a member with its own network namespace and state volume: up to 32 full members and 8 lite members, a FreeBSD and an OpenWrt virtual machine in QEMU, and "phones" played by the kits' interop programs (`clipboardbridge-interop` in Go, the Kotlin kit on the JVM, the Swift kit on the Mac) | combinations that need many devices, groups made and thrown away by the hundred, faults that must not touch the real devices (netem, port blocks, a full disk, a clock far off, a killed process), several groups on one network |
+| **fleet** | containers on the controller, each a member with its own network namespace and state volume: up to 32 full members and 8 lite members, a FreeBSD and an OpenWrt virtual machine in QEMU, and "phones" played by the kits' interop programs (`cbb-interop` in Go, the Kotlin kit on the JVM, the Swift kit on the Mac) | combinations that need many devices, groups made and thrown away by the hundred, faults that must not touch the real devices (netem, port blocks, a full disk, a clock far off, a killed process), several groups on one network |
 | **time** | a test build (`-tags benchtime`, never released; `cbb version` says so) in which the long times run 100000 times faster: certificate lives and renewal thresholds (a member certificate lasts about 10 minutes), the 12 h renewal timer (every 5 s), server-credential periods (about 30 s) and the hub key's handover; and `CBB_TEST_CLOCK` (a duration such as `3h`, or an RFC 3339 time; or a file named by `CBB_TEST_CLOCK_FILE`, read when the service starts), which moves one member's wall clock for its service, its hybrid clock, its hellos and its certificate checks. `CBB_TEST_SCALE` sets another scale, such as 1 for cases that only move a clock by hours or days. Short times (pairing windows, invitations, secrets' 60 s, the media cache, replay caches) keep their length and are waited out | expiry, renewal and every rule that waits for time, in minutes |
 | **feed** | a release feed on the controller signed with the bench's own test keys, in the format of the real one (protocol.md, section 16) | updates, rollbacks, refused downgrades, tampered and expired manifests, without the real release keys |
 | **ui** | UI Automator over adb (Android phone, Wear OS, Android TV), XCUITest (the iPhone app on a simulator and a real iPhone, the Mac app), WebDriver for the tray app | the apps' screens, buttons and notifications |
@@ -65,7 +65,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | ID | Case | How | Needs |
 |---|---|---|---|
 | I1 | Fresh install with each installer: `install.sh` (Linux, macOS), `get.sh`, `get.sh --lite`, `install.ps1`, `get.ps1`, winget then `cbb install`, Homebrew then `install.sh --in-place`, Docker compose, the OpenWrt apk, FreeBSD's rc.d, the OPNsense plugin; `cbb version` names the build | real, fleet | |
-| I2 | Installer options: `--express`, `--no-firewall`, `--port N` and back with `--port 8764`, `--console`, `--uinput`, `--home-cgnat on/off` and `-HomeCgnat`, `CBB_FIREWALL=express/no`, `$env:CBB_PORT`; the kept answers (`firewall.answer`, `clipboardbridge.env`, the registry) used by the next run; each firewall (ufw, firewalld, nftables, iptables, Windows Firewall, the macOS application firewall, fw4, pf, ipfw) gets exactly its rules [P6, S12] | real, fleet | |
+| I2 | Installer options: `--express`, `--no-firewall`, `--port N` and back with `--port 8764`, `--console`, `--uinput`, `--home-cgnat on/off` and `-HomeCgnat`, `CBB_FIREWALL=express/no`, `$env:CBB_PORT`; the kept answers (`firewall.answer`, `cbb.env`, the registry) used by the next run; each firewall (ufw, firewalld, nftables, iptables, Windows Firewall, the macOS application firewall, fw4, pf, ipfw) gets exactly its rules [P6, S12] | real, fleet | |
 | I3 | `get.sh` and `get.ps1` check the release: a good build installs; a tampered archive, a wrong signature, an expired manifest, an unknown key and a missing openssl are refused with a clear message; `CBB_VERSION` installs that release | feed | |
 | I4 | Uninstall and purge on each system leave nothing: service, agent, units, firewall rules, users and groups, the Apps entry on Windows, the state with `--purge`/`-Purge` and the keys kept without it [L10] | real, fleet | |
 | I5 | Install again over an install: the group, mode, settings, quick actions, remote paste switch and keys stay | real | |
@@ -158,7 +158,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | ID | Case | How | Needs |
 |---|---|---|---|
 | K1 | A member certificate is renewed when less than 240 days remain, by the root, an admin computer and an admin phone (with `issuer`); new connections present it at once [L4] | time | |
-| K2 | The `clipboardbridge.local` certificate is renewed at 60 days left, and at once when its start is in the future | time | |
+| K2 | The `cbb.local` certificate is renewed at 60 days left, and at once when its start is in the future | time | |
 | K3 | A member takes a renewal only from a valid admin: a `cert` message for another device or key, ending earlier, not for client and server, or signed by a removed admin is ignored and logged; a frozen admin still renews a listed device (docs/protocol.md, section 10); a device whose certificate a removed admin renewed stays in the group | fleet | |
 | K4 | No admin on through the whole renewal window: the certificate expires, connections fail with a clear message, the device pairs again | time | |
 | K5 | A certificate already ending with its CA is not renewed; a CA at the end of its 20 years is replaced as after a removal | time | |
@@ -179,7 +179,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | D1 | mDNS: every full member and the lite member publish and browse; avahi, systemd-resolved, mDNSResponder and the Windows DNS client keep working beside it; another group's records are ignored | real, fleet | |
 | D2 | Who dials: of two full members the lower ID dials; the other dials after 30 s when that is blocked; one connection per pair stays [P4] | fleet, real | |
 | D3 | Full members dial lite members; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
-| D4 | `clipboardbridge.local`: a machine without a battery holds it first, a laptop only as a fallback; `cbb holder auto/first/fallback/never`; only devices with the iPhone CA key take part [L8, P25] | real, fleet | |
+| D4 | `cbb.local`: a machine without a battery holds it first, a laptop only as a fallback; `cbb holder auto/first/fallback/never`; only devices with the iPhone CA key take part [L8, P25] | real, fleet | |
 | D5 | Handover: the holder stops (goodbye) and another takes the name at once; the holder loses power and another takes it within 20 s | real, fleet | |
 | D6 | Known networks: a member is quiet on a network it does not know; it learns one by making or joining a group, a pairing window or a member connection; `cbb status` names quiet networks; `sudo cbb network` after a new router | fleet | |
 | D7 | Only private, unique-local and link-local addresses are published and accepted; a public source address on the member port is refused by the program and by the unit's limits | fleet | |
@@ -320,7 +320,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | ID | Case | How | Needs |
 |---|---|---|---|
 | W1 | `cbb global on` with its warnings (consent for keys in files); `off` forgets the keys and asks first on a device that reaches the hub only through the tunnel; `-yes` [P11, P22] | real | |
-| W2 | The system's limit: the systemd drop-in, the Windows rule `clipboardbridge-home-only`, the program's own limit on macOS; `cbb global allow` after the hub's addresses change; `cbb global` and `cbb status` say when the limit lags | real | |
+| W2 | The system's limit: the systemd drop-in, the Windows rule `cbb-home-only`, the program's own limit on macOS; `cbb global allow` after the hub's addresses change; `cbb global` and `cbb status` say when the limit lags | real | |
 | W3 | Fail closed: the service reaches only the home network and the group's servers; with the tunnel broken nothing goes elsewhere [S9] | real, fleet | |
 | W4 | `cbb global hub` with addresses, `-port`, `-firewall ask/yes/no` (the port closed again when no longer needed), `-obfuscate`, `-forwarder -forwarder-key`, `-vless`; a name looked up once; the router as the hub through its init script | real, fleet | |
 | W5 | `cbb global` and the apps say where it stands: waiting for the hub's offer, at home, connecting, connected through the tunnel, and what went wrong | real, ui | |
@@ -375,7 +375,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 |---|---|---|---|
 | U1 | `cbb status` matches the real state on every system: devices, systems, roles, root, admin and frozen marks, key store, last seen, clock skew, mode, holder, quiet networks, dial-back warning, away state, transfers [P13] | real, fleet | |
 | U2 | `cbb version`, `help`, each command's `-h`; unknown flags and commands print the usage; the lite member's help says it is the lite member and a full member's command there says so | real | |
-| U3 | Local access: a user outside the `clipboardbridge` group is refused with the group named; a member of it cannot use the admin socket; the Windows socket's access list [S11] | real | |
+| U3 | Local access: a user outside the `cbb` group is refused with the group named; a member of it cannot use the admin socket; the Windows socket's access list [S11] | real | |
 | U4 | Errors as 0.2 says for every refusal of this catalogue, in both modes; a development build shows details by default | real, fleet | |
 | U5 | The service stopped: every command says it is not running and how to start it, the cause only with details on [F14] | real | |
 | U6 | The service hung: commands give up within seconds with a clear message [F13] | real | |

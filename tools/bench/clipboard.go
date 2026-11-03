@@ -29,7 +29,7 @@ const x11Env = `DISPLAY=${DISPLAY:-:0} XAUTHORITY=${XAUTHORITY:-$(ls /run/user/$
 func cbbCmd(d *Device) string {
 	switch d.OS {
 	case "windows":
-		return `& "$env:ProgramFiles\clipboardbridge\cbb.exe"`
+		return `& "$env:ProgramFiles\cbb\cbb.exe"`
 	case "docker":
 		return "docker exec -i " + d.Container + " cbb"
 	case "netns":

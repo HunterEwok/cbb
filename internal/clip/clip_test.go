@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/hlc"
+	"github.com/HunterEwok/cbb/internal/hlc"
 )
 
 // Device IDs of the test members.
@@ -674,7 +674,7 @@ func TestReofferOfLocalText(t *testing.T) {
 }
 
 func TestSendFromThePhone(t *testing.T) {
-	// The member that holds clipboardbridge.local gets the iPhone's text on its own
+	// The member that holds cbb.local gets the iPhone's text on its own
 	// clipboard too.
 	w := newWorld()
 	holder := w.member(idA)

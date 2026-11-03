@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 const actionUsage = `usage: cbb action                       list this device's quick actions

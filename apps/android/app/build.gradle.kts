@@ -14,7 +14,7 @@ val ndkPinned = property("cbb.ndk") as String
 val rustPinned = property("cbb.rust") as String
 
 android {
-    namespace = "io.github.hunterewok.clipboardbridge"
+    namespace = "tools.cbb"
     compileSdk = 37
 
     defaultConfig {
@@ -162,7 +162,7 @@ tasks.named("preBuild") { dependsOn(bindCore) }
 
 dependencies {
     implementation(files(tunnelAar).builtBy(bindTunnel))
-    implementation("io.github.hunterewok.clipboardbridge:kit:0")
+    implementation("tools.cbb:kit:0")
     // JNA with its native parts, through which the kit calls the Rust core.
     implementation("net.java.dev.jna:jna:5.19.1@aar")
     // The same JNA as a jar for the unit tests on the host: the aar has only Android's libraries.

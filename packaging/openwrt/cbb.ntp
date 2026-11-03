@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# /etc/hotplug.d/ntp/50-cbb: the first time NTP sets the clock
+# after a boot, leave a flag in /var/state, which is in RAM, and start the
+# service that waited for it (as dnsmasq does for DNSSEC).
+
+case $ACTION in stratum | step | periodic) ;; *) exit 0 ;; esac
+[ -f /var/state/cbb.time ] && exit 0
+mkdir -p /var/state
+touch /var/state/cbb.time
+/etc/init.d/cbb enabled && /etc/init.d/cbb start
+exit 0

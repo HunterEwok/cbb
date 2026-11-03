@@ -6,18 +6,18 @@
 #
 #   sh packaging/archive.sh path/to/cbb linux|darwin|freebsd|windows NAME OUTDIR
 #
-# writes OUTDIR/clipboardbridge-<os>-<NAME>.tar.gz, which holds clipboardbridge/ with
+# writes OUTDIR/cbb-<os>-<NAME>.tar.gz, which holds cbb/ with
 # the binary, LICENSE, THIRD_PARTY_NOTICES (the licenses of the Go modules and
 # the copied code and Go itself that the binary is built from; it needs the
 # go command) and
 # packaging/ (the platform's installer and tmux; OpenWrt's beside Linux's). For
 # Windows the binary is cbb.exe, with the windowless cbbw.exe beside it for
 # the agent and, when it was built, the tray app cbb-desktop.exe (Linux's
-# archive carries cbb-desktop the same way), and the archive is clipboardbridge-windows-<NAME>.zip, which
+# archive carries cbb-desktop the same way), and the archive is cbb-windows-<NAME>.zip, which
 # Windows opens without other tools. The release workflow and CI both use
 # it, so a wrong path fails on every pull request, not only at a release.
 # With CORE_NOTICES naming a file, the notices of the Rust core's crates
-# (lite/packaging/notices.sh wasm32-unknown-unknown clipboardbridge-wasm)
+# (lite/packaging/notices.sh wasm32-unknown-unknown cbb-wasm)
 # follow those of the Go modules, for a binary built with the core.
 set -eu
 
@@ -42,7 +42,7 @@ esac
 modules() {
 	(cd "$1" && GOOS=$os go list -deps \
 		-f '{{with .Module}}{{if not .Main}}{{.Path}} {{.Version}} {{.Dir}}{{end}}{{end}}' .) |
-		grep -v '^github.com/HunterEwok/clipboardbridge ' || true
+		grep -v '^github.com/HunterEwok/cbb ' || true
 }
 
 # notices writes the license files of every module that the programs for
@@ -89,32 +89,32 @@ linux) [ ! -f "$(dirname "$bin")/cbb-desktop" ] || desktop=$(dirname "$bin")/cbb
 esac
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-mkdir -p "$work/clipboardbridge/packaging" "$out"
+mkdir -p "$work/cbb/packaging" "$out"
 out=$(cd "$out" && pwd)
-cp "$root/LICENSE" "$work/clipboardbridge/"
-notices >"$work/clipboardbridge/THIRD_PARTY_NOTICES"
+cp "$root/LICENSE" "$work/cbb/"
+notices >"$work/cbb/THIRD_PARTY_NOTICES"
 if [ "$os" = windows ]; then
-	cp "$bin" "$work/clipboardbridge/cbb.exe"
-	cp "$(dirname "$bin")/cbbw.exe" "$work/clipboardbridge/cbbw.exe"
+	cp "$bin" "$work/cbb/cbb.exe"
+	cp "$(dirname "$bin")/cbbw.exe" "$work/cbb/cbbw.exe"
 	if [ -n "$desktop" ]; then
-		cp "$desktop" "$work/clipboardbridge/cbb-desktop.exe"
+		cp "$desktop" "$work/cbb/cbb-desktop.exe"
 	fi
-	cp -R "$root/packaging/windows" "$work/clipboardbridge/packaging/"
-	rm -f "$out/clipboardbridge-$os-$name.zip"
-	(cd "$work" && zip -qrX "$out/clipboardbridge-$os-$name.zip" clipboardbridge)
-	echo "$out/clipboardbridge-$os-$name.zip"
+	cp -R "$root/packaging/windows" "$work/cbb/packaging/"
+	rm -f "$out/cbb-$os-$name.zip"
+	(cd "$work" && zip -qrX "$out/cbb-$os-$name.zip" cbb)
+	echo "$out/cbb-$os-$name.zip"
 	exit 0
 fi
-cp "$bin" "$work/clipboardbridge/cbb"
-cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$work/clipboardbridge/packaging/"
+cp "$bin" "$work/cbb/cbb"
+cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$work/cbb/packaging/"
 if [ -n "$desktop" ]; then
-	cp "$desktop" "$work/clipboardbridge/cbb-desktop"
-	cp "$root/apps/desktop/icon.png" "$work/clipboardbridge/packaging/linux/clipboardbridge.png"
+	cp "$desktop" "$work/cbb/cbb-desktop"
+	cp "$root/apps/desktop/icon.png" "$work/cbb/packaging/linux/cbb.png"
 fi
 # OpenWrt runs the Linux binary, with its own installer.
 if [ "$os" = linux ]; then
-	cp -R "$root/packaging/openwrt" "$work/clipboardbridge/packaging/"
+	cp -R "$root/packaging/openwrt" "$work/cbb/packaging/"
 fi
 # No AppleDouble files from macOS tar.
-COPYFILE_DISABLE=1 tar -czf "$out/clipboardbridge-$os-$name.tar.gz" -C "$work" clipboardbridge
-echo "$out/clipboardbridge-$os-$name.tar.gz"
+COPYFILE_DISABLE=1 tar -czf "$out/cbb-$os-$name.tar.gz" -C "$work" cbb
+echo "$out/cbb-$os-$name.tar.gz"

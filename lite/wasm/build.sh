@@ -11,7 +11,7 @@ set -eu
 lite=$(cd "$(dirname "$0")/.." && pwd)
 cd "$lite"
 rustup target add wasm32-unknown-unknown >/dev/null 2>&1 || true
-cargo build --locked --release -p clipboardbridge-wasm --target wasm32-unknown-unknown
+cargo build --locked --release -p cbb-wasm --target wasm32-unknown-unknown
 module=$lite/target/wasm32-unknown-unknown/release/cbb_wasm.wasm
 embed=$(cd .. && pwd)/internal/core/cbb_core.wasm
 # Git Bash on Windows: paths as Go reads them there.

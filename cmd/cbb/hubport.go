@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/openwrt"
-	"github.com/HunterEwok/clipboardbridge/internal/steamos"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/openwrt"
+	"github.com/HunterEwok/cbb/internal/steamos"
 )
 
 // A hub reached at its own address takes its clients on a UDP port from the
@@ -23,8 +23,8 @@ import (
 // internet, so it is asked for on its own. The port stays open while this
 // device is a hub reached at its own address, and cbb closes it when that
 // ends (another port, a forwarder, cbb global off). The rule cbb opened is
-// remembered by the system's way (Linux: /etc/clipboardbridge/firewall.hub
-// through firewall.sh; Windows: the rule clipboardbridge-hub); the Mac's
+// remembered by the system's way (Linux: /etc/cbb/firewall.hub
+// through firewall.sh; Windows: the rule cbb-hub); the Mac's
 // application firewall allows a listed program on every port already.
 type hubFirewall struct {
 	name     string                  // the firewall, for the messages
@@ -41,12 +41,12 @@ var hubFW = map[string]*hubFirewall{"linux": &linuxHubFW, "freebsd": &linuxHubFW
 // /usr/share on OpenWrt, which has no /usr/local, or /opt on SteamOS.
 var firewallScript = func() string {
 	if openwrt.Is() {
-		return "/usr/share/clipboardbridge/firewall.sh"
+		return "/usr/share/cbb/firewall.sh"
 	}
 	if steamos.Is() {
 		return steamos.Share + "/firewall.sh"
 	}
-	return "/usr/local/share/clipboardbridge/firewall.sh"
+	return "/usr/local/share/cbb/firewall.sh"
 }()
 
 func firewallSh(args ...string) (string, error) {
@@ -85,7 +85,7 @@ var linuxHubFW = hubFirewall{
 	},
 }
 
-const hubRule = "clipboardbridge-hub"
+const hubRule = "cbb-hub"
 
 var windowsHubFW = hubFirewall{
 	name:   "Windows Firewall",
@@ -112,7 +112,7 @@ var windowsHubFW = hubFirewall{
 }
 
 func windowsHubRule(port int) string {
-	return fmt.Sprintf("New-NetFirewallRule -Name '%s' -Group 'clipboardbridge' -DisplayName 'CBB hub (UDP %d)' -Direction Inbound -Action Allow -Protocol UDP -LocalPort %d -Program \"$env:ProgramFiles\\clipboardbridge\\cbb.exe\" -Profile Any", hubRule, port, port)
+	return fmt.Sprintf("New-NetFirewallRule -Name '%s' -Group 'cbb' -DisplayName 'CBB hub (UDP %d)' -Direction Inbound -Action Allow -Protocol UDP -LocalPort %d -Program \"$env:ProgramFiles\\cbb\\cbb.exe\" -Profile Any", hubRule, port, port)
 }
 
 func windowsHubScript(port int) string {

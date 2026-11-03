@@ -18,8 +18,8 @@ devices).
 
 ## 1. Install the app on your phone
 
-- **Android** 10 or later: download `clipboardbridge-X.Y.Z.apk` from the
-  [latest release](https://github.com/HunterEwok/clipboardbridge/releases/latest) on the
+- **Android** 10 or later: download `cbb-X.Y.Z.apk` from the
+  [latest release](https://github.com/HunterEwok/cbb/releases/latest) on the
   phone and open it; allow the browser to install apps when Android asks.
 - **iPhone**: the app comes with TestFlight, which is not open yet. Until then an iPhone
   uses a shortcut, and a computer holds the group: see [Without the app](without-app.md).
@@ -33,13 +33,13 @@ Pick any computer on your home network: a laptop, a desktop, a Raspberry Pi.
 On **Linux** or a **Mac**, in a terminal:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 On **Windows** 10 or 11, in a PowerShell opened with "Run as administrator":
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 The installer checks the download, starts Copy Beyond Borders and asks two questions: whether

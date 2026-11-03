@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // The fetch limits (O15, docs/protocol.md section 4, "Content"): forge

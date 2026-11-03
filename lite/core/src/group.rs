@@ -595,7 +595,7 @@ impl Records {
         let Some(leaf) = chain.first() else { return false };
         if let Some(ca) = chain.get(1)
             && ca.is_ca
-            && ca.common_name.as_deref() == Some(format!("clipboardbridge admin {dev}").as_str())
+            && ca.common_name.as_deref() == Some(format!("cbb admin {dev}").as_str())
         {
             let k = ca.key_hash();
             return from(leaf, ca)

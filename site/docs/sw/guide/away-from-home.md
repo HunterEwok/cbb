@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 985320ae0bdc -->
+<!-- source: e1c2123fe696 -->
 # Mbali na nyumbani
 
 Nyumbani vifaa vyako husawazisha vyenyewe. Ili kuendelea kusawazisha laptopu au simu inapokuwa mahali pengine, kompyuta moja nyumbani huwa **kitovu** cha kikundi, na vifaa vinavyosafiri hukifikia kupitia handaki lililosimbwa la kikundi chenyewe. Picha za kila hali ziko katika [Jinsi inavyofanya kazi](how-it-works.md#away-from-home-the-hub).
@@ -70,10 +70,10 @@ Hoteli, ofisi na baadhi ya nchi huzuia WireGuard. Kitovu kinaweza kuficha handak
 Kompyuta iliyo mbali inaweza kujiunga na kikundi kwa mwaliko kutoka kwenye kitovu, mara usawazishaji ukiwa mbali na nyumbani unapofanya kazi:
 
 ```sh
-sudo cbb invite        # on the hub: writes clipboardbridge.cbbinvite, valid for an hour
+sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
 ```
 
-Tuma faili kwa kompyuta mpya kupitia njia unayoiamini, kama programu ya ujumbe unayotumia kujitumia mwenyewe; ni siri hadi itumike. Huko, endesha `sudo cbb pair -invite clipboardbridge.cbbinvite`. Kompyuta zote mbili huonyesha alama ya vidole ya ufunguo wa mpya; kwenye kitovu, andika `yes` tu kama zinalingana. Simu bado haziwezi kujiunga kwa mwaliko: ziongeze nyumbani.
+Tuma faili kwa kompyuta mpya kupitia njia unayoiamini, kama programu ya ujumbe unayotumia kujitumia mwenyewe; ni siri hadi itumike. Huko, endesha `sudo cbb pair -invite cbb.cbbinvite`. Kompyuta zote mbili huonyesha alama ya vidole ya ufunguo wa mpya; kwenye kitovu, andika `yes` tu kama zinalingana. Simu bado haziwezi kujiunga kwa mwaliko: ziongeze nyumbani.
 
 Njia nyingine za kujiunga ukiwa mbali, kupitia SSH au VPN yako mwenyewe, ziko katika [Bila programu](without-app.md#joining-from-another-network).
 

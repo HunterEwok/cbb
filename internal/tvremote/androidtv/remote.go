@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tvremote/androidtv/wire"
+	"github.com/HunterEwok/cbb/internal/tvremote/androidtv/wire"
 )
 
 // The fields of RemoteMessage.

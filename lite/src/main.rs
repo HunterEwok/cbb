@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! cbb is the lite member of clipboardbridge for small Linux devices,
+//! cbb is the lite member of cbb for small Linux devices,
 //! such as routers and small boards: a member without CA keys that only
 //! dials the computers, joins by QR code through the
 //! phone, and syncs (docs/design.md, roadmap item 11).
@@ -92,7 +92,7 @@ Commands:
                        the polkit rule that lets the service reboot.
   paste-helper tmux|console
                        The paste targets: tmux starts the one for tmux, the
-                       clipboardbridge-console unit the one for the console.
+                       cbb-console unit the one for the console.
   next paste|copy|pair The same for the ZX Spectrum Next's .cbb dot command,
                        in frames its Z80 reads (lite/README.md).
   update [-check]      Install the newest signed release, with sudo; -check
@@ -109,11 +109,11 @@ Commands:
 
 This is the lite member: the commands of a full member, such as invite or
 remove, are not here, and pair only joins a group. The state directory is
-/var/lib/clipboardbridge (CBB_STATE), the control socket /run/clipboardbridge/control.sock
-(CBB_SOCKET); on OpenWrt /etc/clipboardbridge/state and
-/var/run/clipboardbridge/control.sock; installed without root (install.sh
---rootless, CBB_ROOTLESS=1), ~/.local/state/clipboardbridge and
-$XDG_RUNTIME_DIR/clipboardbridge/control.sock. CBB_INTERFACES limits the member
+/var/lib/cbb (CBB_STATE), the control socket /run/cbb/control.sock
+(CBB_SOCKET); on OpenWrt /etc/cbb/state and
+/var/run/cbb/control.sock; installed without root (install.sh
+--rootless, CBB_ROOTLESS=1), ~/.local/state/cbb and
+$XDG_RUNTIME_DIR/cbb/control.sock. CBB_INTERFACES limits the member
 port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the details of errors.
 ";
 
@@ -140,16 +140,16 @@ fn main() {
             if rootless::is() {
                 rootless::state_dir()
             } else {
-                PathBuf::from(if openwrt() { "/etc/clipboardbridge/state" } else { "/var/lib/clipboardbridge" })
+                PathBuf::from(if openwrt() { "/etc/cbb/state" } else { "/var/lib/cbb" })
             }
         }),
         socket: std::env::var_os("CBB_SOCKET").map(PathBuf::from).unwrap_or_else(|| {
             if rootless::is() {
                 rootless::socket()
             } else if openwrt() {
-                PathBuf::from("/var/run/clipboardbridge/control.sock")
+                PathBuf::from("/var/run/cbb/control.sock")
             } else {
-                PathBuf::from("/run/clipboardbridge/control.sock")
+                PathBuf::from("/run/cbb/control.sock")
             }
         }),
     };
@@ -277,7 +277,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     }
     std::fs::create_dir_all(&g.state).context(format!(
         "cannot create {0}; make it for the service's user first: \
-         sudo install -d -o clipboardbridge -g clipboardbridge -m 0700 {0}",
+         sudo install -d -o cbb -g cbb -m 0700 {0}",
         g.state.display()
     ))?;
     let mut joiner = pair::Joiner::new(&name)?;
@@ -335,7 +335,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                     return;
                 }
                 println!("In the CBB app, tap \"Connect a new device\" (or run the shortcut");
-                println!("\"clipboardbridge: add a computer\") and scan this:\n");
+                println!("\"cbb: add a computer\") and scan this:\n");
                 print!("{}", qr(text));
                 println!("\nOr paste this into the app: {text}");
                 println!("\nWaiting up to 5 minutes. Press Ctrl+C to cancel.");
@@ -448,12 +448,12 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
 }
 
 /// Connects to the service's control socket, which only the members of the
-/// clipboardbridge group may use.
+/// cbb group may use.
 fn connect(g: &Global) -> Result<UnixStream> {
     match UnixStream::connect(&g.socket) {
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Err(Error::msg(
-            "no permission to use the CBB service; add your user to the clipboardbridge group and log in again",
-        )),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(Error::msg("no permission to use the CBB service; add your user to the cbb group and log in again"))
+        }
         c => c.context(format!("cannot reach the lite member's service at {}; {}", g.socket.display(), not_running())),
     }
 }
@@ -467,7 +467,7 @@ fn not_running() -> String {
 
 fn hint(systemd: bool, systemctl: &str) -> String {
     if systemd {
-        format!("is it running ({systemctl} status clipboardbridge)?")
+        format!("is it running ({systemctl} status cbb)?")
     } else {
         "is it running (start it with cbb service)?".to_string()
     }
@@ -1222,7 +1222,7 @@ mod tests {
     /// Without systemd (NextPi), the hint names cbb service, not systemctl.
     #[test]
     fn hint_without_systemd() {
-        assert_eq!(hint(true, "systemctl --user"), "is it running (systemctl --user status clipboardbridge)?");
+        assert_eq!(hint(true, "systemctl --user"), "is it running (systemctl --user status cbb)?");
         assert_eq!(hint(false, "systemctl"), "is it running (start it with cbb service)?");
     }
 

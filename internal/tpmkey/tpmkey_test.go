@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey/tpmtest"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpm2/transport/tcp"
 )

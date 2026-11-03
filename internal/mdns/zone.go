@@ -10,18 +10,18 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/netguard"
 )
 
 // Names and lifetimes of the records, after RFC 6762 and RFC 6763.
 const (
-	ServiceName  = "_clipboardbridge._tcp.local."
-	PhoneName    = "clipboardbridge.local."
+	ServiceName  = "_cbb._tcp.local."
+	PhoneName    = "cbb.local."
 	servicesName = "_services._dns-sd._udp.local."
 
 	hostTTL    = 120  // records that name a host: SRV, A, AAAA
 	otherTTL   = 4500 // PTR and TXT
-	phoneTTL   = 10   // clipboardbridge.local, so the iPhone follows a handover quickly
+	phoneTTL   = 10   // cbb.local, so the iPhone follows a handover quickly
 	legacyTTL  = 10   // the most a legacy unicast answer may carry
 	cacheFlush = 0x8000
 	classIN    = dnsmessage.ClassINET
@@ -29,13 +29,13 @@ const (
 )
 
 // zone is what one member publishes: its service instance, its own host
-// name and, while it holds it, clipboardbridge.local.
+// name and, while it holds it, cbb.local.
 type zone struct {
-	instance string // <device ID>._clipboardbridge._tcp.local.
+	instance string // <device ID>._cbb._tcp.local.
 	host     string // cb-<device ID>.local.
 	port     uint16
 	txt      []string
-	holder   bool // answers for clipboardbridge.local
+	holder   bool // answers for cbb.local
 }
 
 func newZone(id string, port uint16, txt []string) *zone {

@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: fab5414079e4 -->
+<!-- source: d10744fc3cc7 -->
 # 应用
 
 Copy Beyond Borders 有适用于手机、手表和桌面的应用。手机应用保管群组；桌面应用是进入电脑上已在运行的服务的一扇窗口。
 
 | 应用 | 获取方式 | 状态 |
 |---|---|---|
-| Android | 每个[版本](https://github.com/HunterEwok/clipboardbridge/releases)中的 `clipboardbridge-X.Y.Z.apk` | 已在 CI 中构建并测试，尚未在真机上测试 |
-| 不含 Google 服务的 Android | `clipboardbridge-fdroid-X.Y.Z.apk`，通过审核后还会上架 F-Droid：与上面是同一款应用，只是没有 Wear OS 手表功能 | 已在 CI 中构建并测试 |
+| Android | 每个[版本](https://github.com/HunterEwok/cbb/releases)中的 `cbb-X.Y.Z.apk` | 已在 CI 中构建并测试，尚未在真机上测试 |
+| 不含 Google 服务的 Android | `cbb-fdroid-X.Y.Z.apk`，通过审核后还会上架 F-Droid：与上面是同一款应用，只是没有 Wear OS 手表功能 | 已在 CI 中构建并测试 |
 | iPhone 和 iPad | TestFlight（开放后） | 已在 CI 中构建并测试；用开发者自己的团队构建后可在 iPhone 上运行 |
-| Wear OS | `clipboardbridge-wear-X.Y.Z.apk`，在应用上架 Google Play 之前，需要在电脑上通过手表的无线调试使用 `adb install` 安装到手表上 | 已构建 |
+| Wear OS | `cbb-wear-X.Y.Z.apk`，在应用上架 Google Play 之前，需要在电脑上通过手表的无线调试使用 `adb install` 安装到手表上 | 已构建 |
 | Apple Watch | 随 iPhone 应用一起提供 | 已构建；可与 iPhone 应用一起在 Apple Watch 上运行 |
 | Mac 应用 | 暂时还不能下载：目前需要从 `apps/macos` 自行构建 | 已构建 |
 | Linux 和 Windows 的托盘应用 | 包含在每个版本的 Windows 和 Linux 压缩包中，随服务一起安装 | 已构建；已在 Windows 11 虚拟机中运行 |
@@ -20,7 +20,7 @@ Copy Beyond Borders 有适用于手机、手表和桌面的应用。手机应用
 
 1. 在电脑上[安装](install.md) Copy Beyond Borders，并在那里运行 `sudo cbb pair`。它会显示一个二维码。
 2. 打开应用，点按 **Connect a new device**，然后扫描该二维码。应用会在手机的安全芯片中（iPhone 上是 Secure Enclave，Android 上是 Keystore）生成群组的密钥，添加这台电脑，并打开主页。
-3. 之后每添加一台电脑，都在主页点 **+**。轻量成员的加入方式相同（在它上面运行 `sudo -u clipboardbridge cbb pair` 会显示它的二维码）。
+3. 之后每添加一台电脑，都在主页点 **+**。轻量成员的加入方式相同（在它上面运行 `sudo -u cbb cbb pair` 会显示它的二维码）。
 
 摄像头无法使用时：在 iPhone 上，输入电脑显示的六位数字；在 Android 上，粘贴二维码的文本，`cbb pair` 也会打印这段文本。
 

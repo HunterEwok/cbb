@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Opens and closes clipboardbridge's ports in the firewall:
+# Opens and closes cbb's ports in the firewall:
 #
 #   sudo sh firewall.sh setup ask|express|no PORT   # install.sh runs it
 #   sudo sh firewall.sh open PORT...                 # e.g. 8764
@@ -12,14 +12,14 @@
 #   sudo sh firewall.sh hub-open PORT | hub-close     # cbb global hub runs them
 #   sh firewall.sh hub-port | hub-commands PORT
 #
-# setup finds the firewall, lists each rule clipboardbridge needs and asks
+# setup finds the firewall, lists each rule cbb needs and asks
 # whether to add them, unless the answer is given (express: yes, no: no)
-# or kept from before in /etc/clipboardbridge/firewall.answer. Yes adds them
+# or kept from before in /etc/cbb/firewall.answer. Yes adds them
 # and keeps them current on every run; no prints the commands that add them,
-# and clipboardbridge works while the firewall allows them.
+# and cbb works while the firewall allows them.
 #
 # open allows mDNS and the TCP ports from the home network only, when ufw or
-# firewalld is active, and remembers in /etc/clipboardbridge/firewall what it
+# firewalld is active, and remembers in /etc/cbb/firewall what it
 # added. A bare nftables or iptables setup that drops input gets the
 # commands to run, since rules added at run time do not survive a restart
 # and each system keeps them its own way. close removes exactly what open
@@ -29,9 +29,9 @@ set -eu
 # The firewall tools answer in the user's language; what this reads is English.
 export LC_ALL=C
 
-state=/etc/clipboardbridge/firewall
-hubstate=/etc/clipboardbridge/firewall.hub
-answer=/etc/clipboardbridge/firewall.answer
+state=/etc/cbb/firewall
+hubstate=/etc/cbb/firewall.hub
+answer=/etc/cbb/firewall.answer
 
 usage() {
 	echo "usage: sudo sh firewall.sh setup ask|express|no PORT | open PORT... | close | kind | commands PORT... | hub-open PORT | hub-close | hub-port | hub-commands PORT" >&2
@@ -65,7 +65,7 @@ kind() {
 nets() {
 	ip -o -f inet route show scope link 2>/dev/null | awk '
 		$1 ~ /^10\./ || $1 ~ /^192\.168\./ || $1 ~ /^172\.(1[6-9]|2[0-9]|3[01])\./ { print $1 }' | sort -u
-	if [ "$(sed -n 's/^CBB_HOME_CGNAT=//p' /etc/clipboardbridge/clipboardbridge.env 2>/dev/null | tail -n 1)" = 1 ]; then
+	if [ "$(sed -n 's/^CBB_HOME_CGNAT=//p' /etc/cbb/cbb.env 2>/dev/null | tail -n 1)" = 1 ]; then
 		echo 100.64.0.0/10
 	fi
 	# A kernel without IPv6 (ipv6.disable=1) has no IPv6 networks, and
@@ -81,7 +81,7 @@ ufw_no_ipv6() {
 	grep -Eqi '^[[:space:]]*IPV6=["'\'']?no["'\'']?[[:space:]]*$' /etc/default/ufw 2>/dev/null
 }
 
-# rules prints the rules clipboardbridge needs for the firewall named first,
+# rules prints the rules cbb needs for the firewall named first,
 # one numbered line each.
 rules() {
 	from=$(nets "$1" | paste -sd, - | sed 's/,/, /g')
@@ -103,9 +103,9 @@ commands() {
 	ufw)
 		for net in $(nets ufw); do
 			for p in "$@"; do
-				echo "  sudo ufw allow proto tcp from $net to any port $p comment clipboardbridge"
+				echo "  sudo ufw allow proto tcp from $net to any port $p comment cbb"
 			done
-			echo "  sudo ufw allow proto udp from $net to any port 5353 comment 'clipboardbridge mDNS'"
+			echo "  sudo ufw allow proto udp from $net to any port 5353 comment 'cbb mDNS'"
 		done
 		;;
 	firewalld)
@@ -143,7 +143,7 @@ commands() {
 		;;
 	fw4)
 		for p in "$@"; do
-			echo "  uci add firewall rule; uci set firewall.@rule[-1].name='clipboardbridge'; uci set firewall.@rule[-1].src=lan; uci set firewall.@rule[-1].proto=tcp; uci set firewall.@rule[-1].dest_port=$p; uci set firewall.@rule[-1].target=ACCEPT"
+			echo "  uci add firewall rule; uci set firewall.@rule[-1].name='cbb'; uci set firewall.@rule[-1].src=lan; uci set firewall.@rule[-1].proto=tcp; uci set firewall.@rule[-1].dest_port=$p; uci set firewall.@rule[-1].target=ACCEPT"
 		done
 		echo "  uci commit firewall && /etc/init.d/firewall reload"
 		;;
@@ -160,8 +160,8 @@ commands() {
 	esac
 }
 
-# The firewall rules in /etc/clipboardbridge/firewall: "ufw", which tagged its
-# rules with the comments clipboardbridge and "clipboardbridge mDNS", or "firewalld"
+# The firewall rules in /etc/cbb/firewall: "ufw", which tagged its
+# rules with the comments cbb and "cbb mDNS", or "firewalld"
 # followed by the rich rules it added, one "rule ..." per line. Without the
 # file it looks for tagged ufw rules, which get.sh added before the file.
 close() {
@@ -175,7 +175,7 @@ close() {
 			# Delete from the last number down, since a deletion renumbers
 			# the rules after it.
 			ours=$(ufw status numbered 2>/dev/null |
-				sed -n 's/^\[ *\([0-9][0-9]*\)\].*# clipboardbridge\( mDNS\)\{0,1\} *$/\1/p' | sort -rn)
+				sed -n 's/^\[ *\([0-9][0-9]*\)\].*# cbb\( mDNS\)\{0,1\} *$/\1/p' | sort -rn)
 			for n in $ours; do
 				ufw --force delete "$n" >/dev/null
 			done
@@ -189,7 +189,7 @@ close() {
 			tail -n +2 "$state" | while read -r rule; do
 				firewall-cmd --permanent --remove-rich-rule="$rule" >/dev/null 2>&1 || true
 			done
-			rm -f /etc/firewalld/services/clipboardbridge.xml
+			rm -f /etc/firewalld/services/cbb.xml
 			firewall-cmd --reload >/dev/null 2>&1 || true
 			echo "firewalld: removed the CBB rules and service."
 		fi
@@ -198,33 +198,33 @@ close() {
 	rm -f "$state"
 }
 
-# firewalld_service writes the clipboardbridge service with the TCP ports.
+# firewalld_service writes the cbb service with the TCP ports.
 firewalld_service() {
 	{
 		echo '<?xml version="1.0" encoding="utf-8"?>'
-		echo '<!-- Written by clipboardbridge'"'"'s firewall.sh; removed with the rules. -->'
+		echo '<!-- Written by cbb'"'"'s firewall.sh; removed with the rules. -->'
 		echo '<service>'
-		echo '  <short>clipboardbridge</short>'
+		echo '  <short>cbb</short>'
 		echo '  <description>CBB shared clipboard between the devices at home.</description>'
 		for p in "$@"; do
 			echo "  <port protocol=\"tcp\" port=\"$(echo "$p" | tr : -)\"/>"
 		done
 		echo '</service>'
-	} >/etc/firewalld/services/clipboardbridge.xml
-	chmod 0644 /etc/firewalld/services/clipboardbridge.xml
+	} >/etc/firewalld/services/cbb.xml
+	chmod 0644 /etc/firewalld/services/cbb.xml
 }
 
 # open adds the rules to ufw or firewalld, and reports whether it did.
 open() {
 	close
-	install -d -m 0755 /etc/clipboardbridge
+	install -d -m 0755 /etc/cbb
 	case $(kind) in
 	ufw)
 		echo ufw >"$state"
 		for net in $(nets ufw); do
-			ufw allow proto udp from "$net" to any port 5353 comment 'clipboardbridge mDNS' >/dev/null
+			ufw allow proto udp from "$net" to any port 5353 comment 'cbb mDNS' >/dev/null
 			for p in "$@"; do
-				ufw allow proto tcp from "$net" to any port "$p" comment clipboardbridge >/dev/null
+				ufw allow proto tcp from "$net" to any port "$p" comment cbb >/dev/null
 			done
 		done
 		;;
@@ -235,7 +235,7 @@ open() {
 		for net in $(nets); do
 			family=ipv4
 			case $net in *:*) family=ipv6 ;; esac
-			for svc in clipboardbridge mdns; do
+			for svc in cbb mdns; do
 				rule="rule family=$family source address=$net service name=$svc accept"
 				# A rule that was there before is not ours to remove.
 				if ! firewall-cmd --permanent --query-rich-rule="$rule" >/dev/null 2>&1; then
@@ -252,16 +252,16 @@ open() {
 
 # The hub's UDP port, which its clients reach from the internet: cbb global
 # hub opens it with the user's consent and closes it when this device stops
-# being a hub reached at its own address. /etc/clipboardbridge/firewall.hub
+# being a hub reached at its own address. /etc/cbb/firewall.hub
 # holds the firewall and the port it opened; ufw's rule carries the comment
-# "clipboardbridge hub", which close leaves alone.
+# "cbb hub", which close leaves alone.
 hub_close() {
 	[ -f "$hubstate" ] || return 0
 	read -r added p <"$hubstate" || true
 	case $added in
 	ufw)
 		ours=$(ufw status numbered 2>/dev/null |
-			sed -n 's/^\[ *\([0-9][0-9]*\)\].*# clipboardbridge hub *$/\1/p' | sort -rn)
+			sed -n 's/^\[ *\([0-9][0-9]*\)\].*# cbb hub *$/\1/p' | sort -rn)
 		for n in $ours; do
 			ufw --force delete "$n" >/dev/null
 		done
@@ -277,10 +277,10 @@ hub_close() {
 
 hub_open() {
 	hub_close >/dev/null
-	install -d -m 0755 /etc/clipboardbridge
+	install -d -m 0755 /etc/cbb
 	case $(kind) in
 	ufw)
-		ufw allow proto udp to any port "$1" comment 'clipboardbridge hub' >/dev/null
+		ufw allow proto udp to any port "$1" comment 'cbb hub' >/dev/null
 		echo "ufw $1" >"$hubstate"
 		;;
 	firewalld)
@@ -297,7 +297,7 @@ hub_open() {
 
 hub_commands() {
 	case $(kind) in
-	ufw) echo "  sudo ufw allow proto udp to any port $1 comment 'clipboardbridge hub'" ;;
+	ufw) echo "  sudo ufw allow proto udp to any port $1 comment 'cbb hub'" ;;
 	firewalld)
 		echo "  sudo firewall-cmd --permanent --add-port=$1/udp"
 		echo "  sudo firewall-cmd --reload"
@@ -333,7 +333,7 @@ ask() {
 	esac
 }
 
-# manual says what to run when clipboardbridge does not manage the rules.
+# manual says what to run when cbb does not manage the rules.
 manual() {
 	k=$1
 	shift
@@ -350,7 +350,7 @@ manual() {
 present() {
 	[ -s "$state" ] && return 0
 	command -v ufw >/dev/null 2>&1 &&
-		ufw status 2>/dev/null | grep -Eq '# clipboardbridge( mDNS)? *$'
+		ufw status 2>/dev/null | grep -Eq '# cbb( mDNS)? *$'
 }
 
 setup() {
@@ -368,12 +368,12 @@ setup() {
 	case $k in
 	nftables | iptables | fw4)
 		close
-		echo "clipboardbridge does not manage $k rules: rules added at run time do not survive a restart."
+		echo "cbb does not manage $k rules: rules added at run time do not survive a restart."
 		manual "$k" "$@"
 		return
 		;;
 	esac
-	install -d -m 0755 /etc/clipboardbridge
+	install -d -m 0755 /etc/cbb
 	kept=$(cat "$answer" 2>/dev/null || true)
 	how=
 	case $mode in

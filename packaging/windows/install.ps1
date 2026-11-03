@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs or updates clipboardbridge on Windows 10 (1809 or later) or 11, in
+# Installs or updates cbb on Windows 10 (1809 or later) or 11, in
 # an administrator PowerShell, from the unpacked release archive:
 #
 #   powershell -ExecutionPolicy Bypass -File packaging\windows\install.ps1 [-Port N] [-HomeCgnat on|off] [-AutoUpdate on|off] [-Express | -NoFirewall]
 #
 # It installs cbb.exe and the windowless cbbw.exe to Program Files and adds
 # them to PATH, with the tray app cbb-desktop.exe when the archive has it
-# (started with every sign-in and now, in the Start menu as CBB), makes the clipboardbridge local group and adds the signed-in
-# user to it, creates the clipboardbridge service, which runs as the virtual
-# account NT SERVICE\clipboardbridge with only the privilege it needs,
-# keeps its data in ProgramData\clipboardbridge where only the service and
+# (started with every sign-in and now, in the Start menu as CBB), makes the cbb local group and adds the signed-in
+# user to it, creates the cbb service, which runs as the virtual
+# account NT SERVICE\cbb with only the privilege it needs,
+# keeps its data in ProgramData\cbb where only the service and
 # administrators may reach it, starts the agent with every sign-in and now,
 # and registers the uninstaller under Settings, Apps. -Port moves the member
 # port from 8764 to N, kept until the next -Port; -Port 8764 goes back.
@@ -19,7 +19,7 @@
 # NAT range, as the home network too, for a home network that uses it: the
 # service, its firewall rules and its outbound limit; -HomeCgnat off goes
 # back, and either is kept until the next one. It
-# lists the rules of Windows Firewall that clipboardbridge needs (mDNS and
+# lists the rules of Windows Firewall that cbb needs (mDNS and
 # the member port from the local network) and asks whether to add them; the
 # answer is kept for later runs. -Express (CBB_FIREWALL=express) adds them
 # without asking and says what it added, -NoFirewall (CBB_FIREWALL=no) adds
@@ -53,7 +53,7 @@ Set-StrictMode -Version 3
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$name = 'clipboardbridge'
+$name = 'cbb'
 $programDir = Join-Path $env:ProgramFiles $name
 $dataDir = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) $name
 $serviceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$name"
@@ -143,7 +143,7 @@ if (-not $user) {
 	$user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 }
 
-$step = 'stopping clipboardbridge'
+$step = 'stopping cbb'
 $service = Get-Service -Name $name -ErrorAction SilentlyContinue
 if ($service -and $service.Status -ne 'Stopped') {
 	Stop-Service -Name $name -Force
@@ -201,7 +201,7 @@ $cbb = Join-Path $programDir 'cbb.exe'
 $cbbw = Join-Path $programDir 'cbbw.exe'
 $tray = Join-Path $programDir 'cbb-desktop.exe'
 
-$step = 'adding clipboardbridge to PATH'
+$step = 'adding cbb to PATH'
 $path = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 if (($path -split ';') -notcontains $programDir) {
 	[Environment]::SetEnvironmentVariable('Path', ($path.TrimEnd(';') + ';' + $programDir), 'Machine')
@@ -324,10 +324,10 @@ exe icacls.exe @($dataDir, '/setowner', '*S-1-5-32-544', '/T', '/C', '/L', '/Q')
 exe icacls.exe @($dataDir, '/reset', '/T', '/C', '/L', '/Q') | Out-Null
 exe icacls.exe @($dataDir, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', "NT SERVICE\$name`:(OI)(CI)F", '/Q') | Out-Null
 
-$step = 'allowing clipboardbridge in Windows Firewall'
-# Every rule carries the group clipboardbridge, so these lines and
+$step = 'allowing cbb in Windows Firewall'
+# Every rule carries the group cbb, so these lines and
 # uninstall.ps1 remove exactly the rules added here. The outbound rules
-# and the hub's port (clipboardbridge-hub) stay as cbb global left them.
+# and the hub's port (cbb-hub) stay as cbb global left them.
 $ours = @(Get-NetFirewallRule -Group $name -ErrorAction SilentlyContinue | Where-Object { [string]$_.Direction -eq 'Inbound' -and $_.Name -ne "$name-hub" })
 $ours | Remove-NetFirewallRule
 $on = @(Get-NetFirewallProfile | Where-Object { [string]$_.Enabled -eq 'True' } | ForEach-Object { $_.Name })
@@ -377,16 +377,16 @@ $managed = $answer -in @('yes', 'express')
 if ($managed) {
 	New-NetFirewallRule -Group $name -DisplayName "CBB (TCP $Port)" -Direction Inbound -Action Allow `
 		-Protocol TCP -LocalPort $Port -Program $cbb -RemoteAddress $from -Profile Any `
-		-Description 'clipboardbridge members and phones at home connect here.' | Out-Null
+		-Description 'cbb members and phones at home connect here.' | Out-Null
 	New-NetFirewallRule -Group $name -DisplayName 'CBB mDNS (UDP 5353)' -Direction Inbound -Action Allow `
 		-Protocol UDP -LocalPort 5353 -Program $cbb -RemoteAddress $from -Profile Any `
-		-Description 'clipboardbridge finds the other devices at home with mDNS.' | Out-Null
+		-Description 'cbb finds the other devices at home with mDNS.' | Out-Null
 	Write-Host "Added the rules above$how. CBB manages them from now on."
 } else {
 	Write-Host 'No firewall rules were added. CBB works only while the firewall allows the rules above.'
 	Write-Host 'To add them by hand, run in an administrator PowerShell:'
-	Write-Host "  New-NetFirewallRule -Group clipboardbridge -DisplayName 'CBB (TCP $Port)' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -Program '$cbb' -RemoteAddress $fromArg"
-	Write-Host "  New-NetFirewallRule -Group clipboardbridge -DisplayName 'CBB mDNS (UDP 5353)' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 5353 -Program '$cbb' -RemoteAddress $fromArg"
+	Write-Host "  New-NetFirewallRule -Group cbb -DisplayName 'CBB (TCP $Port)' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -Program '$cbb' -RemoteAddress $fromArg"
+	Write-Host "  New-NetFirewallRule -Group cbb -DisplayName 'CBB mDNS (UDP 5353)' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 5353 -Program '$cbb' -RemoteAddress $fromArg"
 	Write-Host 'To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).'
 }
 Write-Host 'CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group''s servers.'
@@ -434,7 +434,7 @@ New-ItemProperty -Path $runKey -Name $name -PropertyType String -Value "`"$cbbw`
 function startAsUser {
 	param([string]$what, [string]$program, [string]$arguments)
 	$script:step = "starting $what for $user"
-	$task = "clipboardbridge $what start"
+	$task = "cbb $what start"
 	try {
 		if ($arguments) {
 			$action = New-ScheduledTaskAction -Execute $program -Argument $arguments
@@ -482,7 +482,7 @@ foreach ($p in @(
 		@('InstallLocation', $programDir, 'String'),
 		@('DisplayIcon', $cbb, 'String'),
 		@('UninstallString', $uninstall, 'String'),
-		@('URLInfoAbout', 'https://github.com/HunterEwok/clipboardbridge', 'String'),
+		@('URLInfoAbout', 'https://github.com/HunterEwok/cbb', 'String'),
 		@('NoModify', 1, 'DWord'),
 		@('NoRepair', 1, 'DWord'))) {
 	New-ItemProperty -Path $uninstallKey -Name $p[0] -Value $p[1] -PropertyType $p[2] -Force | Out-Null

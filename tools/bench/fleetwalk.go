@@ -100,7 +100,7 @@ func randomWalk(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 	// wipe takes a container out of the group for good: no state, its
 	// service started again in no group, as a spare.
 	wipe := func(d *Device) error {
-		if _, err := Run(ctx, d, fleetKill+"; rm -rf /var/lib/clipboardbridge/*", ""); err != nil {
+		if _, err := Run(ctx, d, fleetKill+"; rm -rf /var/lib/cbb/*", ""); err != nil {
 			return err
 		}
 		return eventually(ctx, 20*time.Second, func() error {

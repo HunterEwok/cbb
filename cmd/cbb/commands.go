@@ -20,19 +20,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/benchtime"
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/pair"
-	"github.com/HunterEwok/clipboardbridge/internal/pasteboard"
-	"github.com/HunterEwok/clipboardbridge/internal/phone"
-	"github.com/HunterEwok/clipboardbridge/internal/rootless"
-	"github.com/HunterEwok/clipboardbridge/internal/service"
-	"github.com/HunterEwok/clipboardbridge/internal/sysinfo"
-	"github.com/HunterEwok/clipboardbridge/internal/version"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/benchtime"
+	"github.com/HunterEwok/cbb/internal/connector"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/pasteboard"
+	"github.com/HunterEwok/cbb/internal/phone"
+	"github.com/HunterEwok/cbb/internal/rootless"
+	"github.com/HunterEwok/cbb/internal/service"
+	"github.com/HunterEwok/cbb/internal/sysinfo"
+	"github.com/HunterEwok/cbb/internal/version"
 )
 
 const maxText = 1 << 20
@@ -524,7 +524,7 @@ func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
 		return fail(stderr, errors.New("this device has no address on the home network; connect it to the network, or use cbb pair -code"))
 	}
 	fmt.Fprintln(stdout, "In the CBB app, tap \"Connect a new device\" (or run the shortcut")
-	fmt.Fprintln(stdout, "\"clipboardbridge: add a computer\") and scan this:")
+	fmt.Fprintln(stdout, "\"cbb: add a computer\") and scan this:")
 	fmt.Fprintln(stdout)
 	jc := phone.JoinCode{Code: h.Code, Addrs: m.Addrs, Fingerprint: m.Fingerprint}
 	text := phone.JoinQR(jc)
@@ -681,7 +681,7 @@ func cmdService(args []string, stderr io.Writer) int {
 }
 
 func fail(stderr io.Writer, err error) int {
-	fmt.Fprintln(stderr, "clipboardbridge:", err)
+	fmt.Fprintln(stderr, "cbb:", err)
 	if !debugErrors() {
 		return 1
 	}
@@ -701,7 +701,7 @@ func receivedFiles() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "clipboardbridge", "received")
+	return filepath.Join(dir, "cbb", "received")
 }
 
 // hostOS names this computer's operating system as device records do.

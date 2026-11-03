@@ -9,9 +9,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/attest"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey"
-	"github.com/HunterEwok/clipboardbridge/internal/tpmkey/tpmtest"
+	"github.com/HunterEwok/cbb/internal/attest"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
+	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
 )
 
 // TestTPM runs a TPM's attestation of a key against swtpm with an EK

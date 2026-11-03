@@ -88,7 +88,7 @@ again after the connection drops.
 
 ## Joining a group
 
-Once the board has an address, type `pair`. It prints a `clipboardbridge://join?...` link
+Once the board has an address, type `pair`. It prints a `cbb://join?...` link
 with a new pairing code, its address and port 8764 and the fingerprint of its pairing
 certificate; in the app, tap "Connect a new device" and paste it. The phone dials the
 board, and the two run the pairing of docs/protocol.md over TLS 1.3 (`lite/embassy`, the

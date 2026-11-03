@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // fakeUnit points the away drop-in at a temporary unit and records the
@@ -20,7 +20,7 @@ import (
 func fakeUnit(t *testing.T, root bool) *[]string {
 	t.Helper()
 	dir := t.TempDir()
-	unit := filepath.Join(dir, "clipboardbridge.service")
+	unit := filepath.Join(dir, "cbb.service")
 	if err := os.WriteFile(unit, []byte("[Service]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func fakeUnit(t *testing.T, root bool) *[]string {
 	fakeLimit(t, &linuxLimit, root)
 	oldUnit, oldDropIn, oldCtl := serviceUnit, awayDropIn, systemctl
 	t.Cleanup(func() { serviceUnit, awayDropIn, systemctl = oldUnit, oldDropIn, oldCtl })
-	serviceUnit, awayDropIn = unit, filepath.Join(dir, "clipboardbridge.service.d", "away.conf")
+	serviceUnit, awayDropIn = unit, filepath.Join(dir, "cbb.service.d", "away.conf")
 	systemctl = func(args ...string) error {
 		calls = append(calls, strings.Join(args, " "))
 		return nil
@@ -81,7 +81,7 @@ func TestAwayNet(t *testing.T) {
 	if err != nil || !strings.Contains(string(data), "\nIPAddressAllow=198.51.100.9 203.0.113.7\n") {
 		t.Fatalf("drop-in %q, %v", data, err)
 	}
-	if want := []string{"daemon-reload", "restart clipboardbridge.service"}; !slices.Equal(*calls, want) {
+	if want := []string{"daemon-reload", "restart cbb.service"}; !slices.Equal(*calls, want) {
 		t.Fatalf("systemctl %q, want %q", *calls, want)
 	}
 	if g := linuxLimit.granted(); !g.equal(client) {

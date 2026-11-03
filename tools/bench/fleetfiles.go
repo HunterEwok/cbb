@@ -243,12 +243,12 @@ func commandLine(ctx context.Context, r *Report, f *Fleet) {
 	d := g.members[1]
 	r.Do(p+"version", func() error {
 		out, err := Run(ctx, d, "cbb version", "")
-		if err == nil && !regexp.MustCompile(`^clipboardbridge \S+ .*linux/`).MatchString(out) {
+		if err == nil && !regexp.MustCompile(`^cbb \S+ .*linux/`).MatchString(out) {
 			err = fmt.Errorf("cbb version printed %q", firstLine(out))
 		}
 		return err
 	})
-	r.Do(p+"help", func() error { return succeeds(ctx, d, "cbb help", "", "Usage: clipboardbridge <command>") })
+	r.Do(p+"help", func() error { return succeeds(ctx, d, "cbb help", "", "Usage: cbb <command>") })
 	r.Do(p+"each-h", func() error {
 		var errs []error
 		for _, c := range usageCommands {

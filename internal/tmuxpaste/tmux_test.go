@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 // TestTmux pastes and types into a pane running cat, with a client

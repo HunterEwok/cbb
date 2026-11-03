@@ -11,7 +11,7 @@ Please report vulnerabilities privately. Do not open a public issue, pull reques
 discussion.
 
 Use GitHub private vulnerability reporting: open the
-[Security tab](https://github.com/HunterEwok/clipboardbridge/security) of the repository and choose
+[Security tab](https://github.com/HunterEwok/cbb/security) of the repository and choose
 **Report a vulnerability**. Only the maintainer can see the report.
 
 Include, if you can:

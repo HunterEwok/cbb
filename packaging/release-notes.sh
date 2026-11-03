@@ -19,7 +19,7 @@ fi
 tag=$1
 version=${tag#v}
 root=$(cd "$(dirname "$0")/.." && pwd)
-repo=https://github.com/HunterEwok/clipboardbridge
+repo=https://github.com/HunterEwok/cbb
 
 # The version's section, without its heading, up to the next one. A
 # pre-release (v1.2.3-rc.1) without a section of its own takes Unreleased: the
@@ -65,17 +65,17 @@ the service and, when ufw is active, allows CBB's ports from the home network on
 **macOS** (Apple silicon; \`amd64\` instead of \`arm64\` for Intel), in Terminal:
 
 \`\`\`sh
-curl -fsSLO $repo/releases/download/$tag/clipboardbridge-darwin-arm64.tar.gz
-tar -xzf clipboardbridge-darwin-arm64.tar.gz
-sudo sh clipboardbridge/packaging/macos/install.sh clipboardbridge/cbb
+curl -fsSLO $repo/releases/download/$tag/cbb-darwin-arm64.tar.gz
+tar -xzf cbb-darwin-arm64.tar.gz
+sudo sh cbb/packaging/macos/install.sh cbb/cbb
 \`\`\`
 
-Or with Homebrew, on macOS or Linux (x86-64, ARM64): \`brew install hunterewok/tap/clipboardbridge\`,
+Or with Homebrew, on macOS or Linux (x86-64, ARM64): \`brew install hunterewok/tap/cbb\`,
 then the command it prints to start the service.
 
-**Android** 10 or later: open \`clipboardbridge-$version.apk\` on the phone and allow the
+**Android** 10 or later: open \`cbb-$version.apk\` on the phone and allow the
 install. The app makes its own group and adds the computers by their \`cbb pair\` QR code.
-For a Wear OS 3 watch paired with that phone, install \`clipboardbridge-wear-$version.apk\` on
+For a Wear OS 3 watch paired with that phone, install \`cbb-wear-$version.apk\` on
 the watch (with \`adb install\` over the watch's wireless debugging).
 
 **Lite member** for small Linux devices (a router, a Raspberry Pi Zero), with systemd:
@@ -84,7 +84,7 @@ the watch (with \`adb install\` over the watch's wireless debugging).
 curl -fsSL $repo/releases/download/$tag/get.sh | sudo CBB_VERSION=$tag sh -s -- --lite
 \`\`\`
 
-Its command is \`cbb\` too; \`clipboardbridge-lite/README.md\` in its archive has the rest.
+Its command is \`cbb\` too; \`cbb-lite/README.md\` in its archive has the rest.
 
 Then follow the [quick start]($repo/blob/$tag/docs/guide/quickstart.md): \`sudo cbb pair\` on each
 computer, and the phone app scans its QR code. Without the app, \`cbb new\` on the first computer
@@ -98,34 +98,34 @@ it:
 
 \`\`\`sh
 sha256sum --ignore-missing -c SHA256SUMS            # macOS: shasum -a 256 -c SHA256SUMS
-gh attestation verify clipboardbridge-linux-arm64.tar.gz --repo HunterEwok/clipboardbridge
+gh attestation verify cbb-linux-arm64.tar.gz --repo HunterEwok/cbb
 \`\`\`
 
 ## Files
 
 | File | For |
 |------|-----|
-| \`clipboardbridge-linux-amd64.tar.gz\` | Linux, x86-64 |
-| \`clipboardbridge-linux-arm64.tar.gz\` | Linux, ARM64 (Raspberry Pi 3, 4, 5 with a 64-bit system) |
-| \`clipboardbridge-linux-armv7.tar.gz\` | Linux, ARMv7 (Raspberry Pi 2, 3, 4 with a 32-bit system) |
-| \`clipboardbridge-linux-armv6.tar.gz\` | Linux, ARMv6 (Raspberry Pi Zero W, 1) |
-| \`clipboardbridge-darwin-arm64.tar.gz\` | macOS, Apple silicon |
-| \`clipboardbridge-darwin-amd64.tar.gz\` | macOS, Intel |
-| \`clipboardbridge-windows-amd64.zip\` | Windows 10 (1809 or later) and 11, x86-64 |
-| \`clipboardbridge-windows-arm64.zip\` | Windows 10 (1809 or later) and 11, ARM64 |
-| \`clipboardbridge-lite-linux-amd64.tar.gz\` | the lite member for small Linux devices, x86-64, static |
-| \`clipboardbridge-lite-linux-arm64.tar.gz\` | the lite member, ARM64, static |
-| \`clipboardbridge-lite-linux-armv6.tar.gz\` | the lite member, ARMv6 and ARMv7 (Raspberry Pi Zero, 1, 2), static |
-| \`clipboardbridge-$version.apk\` | Android 10 and later, signed with the project's release key |
-| \`clipboardbridge-wear-$version.apk\` | Wear OS 3 and later, through the paired Android phone, signed with the same key |
-| \`clipboardbridge-fdroid-$version.apk\` | the F-Droid build: no Wear OS watch, updated by F-Droid, signed with the same key |
+| \`cbb-linux-amd64.tar.gz\` | Linux, x86-64 |
+| \`cbb-linux-arm64.tar.gz\` | Linux, ARM64 (Raspberry Pi 3, 4, 5 with a 64-bit system) |
+| \`cbb-linux-armv7.tar.gz\` | Linux, ARMv7 (Raspberry Pi 2, 3, 4 with a 32-bit system) |
+| \`cbb-linux-armv6.tar.gz\` | Linux, ARMv6 (Raspberry Pi Zero W, 1) |
+| \`cbb-darwin-arm64.tar.gz\` | macOS, Apple silicon |
+| \`cbb-darwin-amd64.tar.gz\` | macOS, Intel |
+| \`cbb-windows-amd64.zip\` | Windows 10 (1809 or later) and 11, x86-64 |
+| \`cbb-windows-arm64.zip\` | Windows 10 (1809 or later) and 11, ARM64 |
+| \`cbb-lite-linux-amd64.tar.gz\` | the lite member for small Linux devices, x86-64, static |
+| \`cbb-lite-linux-arm64.tar.gz\` | the lite member, ARM64, static |
+| \`cbb-lite-linux-armv6.tar.gz\` | the lite member, ARMv6 and ARMv7 (Raspberry Pi Zero, 1, 2), static |
+| \`cbb-$version.apk\` | Android 10 and later, signed with the project's release key |
+| \`cbb-wear-$version.apk\` | Wear OS 3 and later, through the paired Android phone, signed with the same key |
+| \`cbb-fdroid-$version.apk\` | the F-Droid build: no Wear OS watch, updated by F-Droid, signed with the same key |
 | \`get.sh\` | the installer for Linux (\`--lite\` for the lite member) and macOS |
 | \`get.ps1\` | the Windows installer |
 | \`SHA256SUMS\` | SHA-256 checksums of all of the above |
 
-Each archive holds \`clipboardbridge/\`: the program, \`LICENSE\`, \`THIRD_PARTY_NOTICES\` with
+Each archive holds \`cbb/\`: the program, \`LICENSE\`, \`THIRD_PARTY_NOTICES\` with
 the licenses of the code it is built from, and \`packaging/\` with the installer for its
-system. Each \`clipboardbridge-lite\` archive holds \`clipboardbridge-lite/\`: the program
+system. Each \`cbb-lite\` archive holds \`cbb-lite/\`: the program
 \`cbb\`, \`LICENSE\`, \`THIRD_PARTY_NOTICES\` with the licenses of the crates it is built from, \`README.md\`, and
 \`packaging/\` with the Linux installer and the lite member's systemd unit.
 

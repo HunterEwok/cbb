@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // TestCredentialRegistration checks a hub that registers with its period's

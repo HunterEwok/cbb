@@ -38,7 +38,7 @@ comes later.
 
 1. Make sure NextPi answers: `.pisend -q`.
 2. Copy the lite member's binary `cbb` for the Pi Zero (from
-   `clipboardbridge-lite-linux-armv6` of a release) to the Pi, for example with `.piput`, and put it on the shell's `PATH` (NextPi's root is
+   `cbb-lite-linux-armv6` of a release) to the Pi, for example with `.piput`, and put it on the shell's `PATH` (NextPi's root is
    read-only: `mount -o remount,rw /`, copy, `mount -o remount,ro /`).
 3. Give the Pi a network: the Zero W's own Wi-Fi, which NextPi turns off, or the Next's
    ESP8266 through `CBB.DRV` (below). Many Accelerated boards carry a Pi Zero without a radio: NextPi's
@@ -150,4 +150,4 @@ make test     # the frame parser's tests with the host's C compiler, and the dri
 
 CI's `ZX Spectrum Next` job builds z88dk from its release source, checked against a
 SHA-256, and runs both; the run keeps `CBB`, `PIBRIDGE` and `CBB.DRV` as its artifact
-`clipboardbridge-zxnext-dot`.
+`cbb-zxnext-dot`.

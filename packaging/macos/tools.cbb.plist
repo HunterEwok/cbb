@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 HunterEwok -->
+<!-- The cbb service, a LaunchDaemon under the hidden _cbb user. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>tools.cbb</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/cbb</string>
+		<string>service</string>
+		<string>-state</string>
+		<string>/Library/Application Support/cbb/state</string>
+		<string>-socket</string>
+		<string>/Library/Application Support/cbb/control.sock</string>
+	</array>
+	<key>UserName</key>
+	<string>_cbb</string>
+	<key>GroupName</key>
+	<string>_cbb</string>
+	<key>Umask</key>
+	<integer>7</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Library/Logs/cbb/service.log</string>
+</dict>
+</plist>

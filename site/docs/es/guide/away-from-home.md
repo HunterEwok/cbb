@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 985320ae0bdc -->
+<!-- source: e1c2123fe696 -->
 # Fuera de casa
 
 En casa, tus dispositivos se sincronizan solos. Para seguir sincronizando cuando un portátil o un teléfono está en otro sitio, un ordenador de casa se convierte en el **hub** del grupo, y los dispositivos que viajan llegan a él por el túnel cifrado del propio grupo. Las imágenes de cada caso están en [Cómo funciona](how-it-works.md#away-from-home-the-hub).
@@ -70,10 +70,10 @@ Los hoteles, las oficinas y algunos países bloquean WireGuard. El hub puede dis
 Un ordenador lejano puede unirse al grupo con una invitación del hub, una vez que la sincronización fuera de casa funciona:
 
 ```sh
-sudo cbb invite        # on the hub: writes clipboardbridge.cbbinvite, valid for an hour
+sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
 ```
 
-Envía el archivo al nuevo ordenador por un canal de confianza, como una aplicación de mensajería que uses contigo mismo; es un secreto hasta que se usa. Allí, ejecuta `sudo cbb pair -invite clipboardbridge.cbbinvite`. Ambos ordenadores muestran la huella de la clave del nuevo; en el hub, escribe `yes` solo si coinciden. Los teléfonos todavía no pueden unirse por invitación: añádelos en casa.
+Envía el archivo al nuevo ordenador por un canal de confianza, como una aplicación de mensajería que uses contigo mismo; es un secreto hasta que se usa. Allí, ejecuta `sudo cbb pair -invite cbb.cbbinvite`. Ambos ordenadores muestran la huella de la clave del nuevo; en el hub, escribe `yes` solo si coinciden. Los teléfonos todavía no pueden unirse por invitación: añádelos en casa.
 
 Otras formas de unirse desde lejos, por SSH o con tu propia VPN, están en [Sin la app](without-app.md#joining-from-another-network).
 

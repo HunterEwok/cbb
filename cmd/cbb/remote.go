@@ -9,7 +9,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // remoteUsage is cbb remote's usage.

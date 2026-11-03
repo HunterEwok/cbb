@@ -24,7 +24,7 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/clipboardbridge/internal/strict"
+	"github.com/HunterEwok/cbb/internal/strict"
 )
 
 // MaxBody is the largest record body a member takes (8 KiB).

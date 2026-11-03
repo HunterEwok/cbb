@@ -29,7 +29,7 @@ pub const ENC_SIZE: usize = 1120;
 /// How much longer a sealed message is than the message.
 pub const OVERHEAD: usize = ENC_SIZE + 16;
 /// HPKE's info for every sealed message.
-pub const INFO: &[u8] = b"clipboardbridge seal v1";
+pub const INFO: &[u8] = b"cbb seal v1";
 
 type PrivateKey = <XWing as Kem>::PrivateKey;
 type PublicKey = <XWing as Kem>::PublicKey;

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
+	"github.com/HunterEwok/cbb/internal/authority"
 )
 
 // handover is the story of a claim (docs/protocol.md, section 10, "Handing the group

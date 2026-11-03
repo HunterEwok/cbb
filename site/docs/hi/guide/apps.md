@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: fab5414079e4 -->
+<!-- source: d10744fc3cc7 -->
 # ऐप
 
 Copy Beyond Borders के ऐप फ़ोन, घड़ी और डेस्कटॉप के लिए हैं। फ़ोन के ऐप समूह को संभालते हैं; डेस्कटॉप के ऐप उस सेवा की एक खिड़की हैं जो कंप्यूटर पर पहले से चल रही है।
 
 | ऐप | कहाँ से मिलेगा | स्थिति |
 |---|---|---|
-| Android | हर [रिलीज़](https://github.com/HunterEwok/clipboardbridge/releases) में `clipboardbridge-X.Y.Z.apk` | CI में बना और जाँचा गया, अभी असली फ़ोन पर नहीं |
-| बिना Google वाला Android | `clipboardbridge-fdroid-X.Y.Z.apk`, और स्वीकार होने पर F-Droid: वही ऐप, बिना Wear OS घड़ी के | CI में बना और जाँचा गया |
+| Android | हर [रिलीज़](https://github.com/HunterEwok/cbb/releases) में `cbb-X.Y.Z.apk` | CI में बना और जाँचा गया, अभी असली फ़ोन पर नहीं |
+| बिना Google वाला Android | `cbb-fdroid-X.Y.Z.apk`, और स्वीकार होने पर F-Droid: वही ऐप, बिना Wear OS घड़ी के | CI में बना और जाँचा गया |
 | iPhone और iPad | TestFlight, जब वह खुलेगा | CI में बना और जाँचा गया; डेवलपर की अपनी टीम से बनाने पर iPhone पर चलता है |
-| Wear OS | `clipboardbridge-wear-X.Y.Z.apk`, जब तक ऐप Google Play पर नहीं आता, इसे घड़ी की वायरलेस डीबगिंग से कंप्यूटर से `adb install` द्वारा घड़ी पर डाला जाता है | बना हुआ |
+| Wear OS | `cbb-wear-X.Y.Z.apk`, जब तक ऐप Google Play पर नहीं आता, इसे घड़ी की वायरलेस डीबगिंग से कंप्यूटर से `adb install` द्वारा घड़ी पर डाला जाता है | बना हुआ |
 | Apple Watch | iPhone ऐप के साथ | बना हुआ; iPhone ऐप के साथ Apple Watch पर चलता है |
 | Mac ऐप | अभी डाउनलोड के रूप में नहीं: फ़िलहाल `apps/macos` से बनाया जाता है | बना हुआ |
 | Linux और Windows के लिए ट्रे ऐप | हर रिलीज़ के Windows और Linux आर्काइव में, सेवा के साथ इंस्टॉल होता है | बना हुआ; Windows 11 वर्चुअल मशीन में चलाया गया |
@@ -20,7 +20,7 @@ Copy Beyond Borders के ऐप फ़ोन, घड़ी और डेस्
 
 1. किसी कंप्यूटर पर Copy Beyond Borders [इंस्टॉल करें](install.md) और वहाँ `sudo cbb pair` चलाएँ। यह एक QR कोड दिखाता है।
 2. ऐप खोलें और **Connect a new device** दबाएँ, फिर कोड स्कैन करें। ऐप फ़ोन की सुरक्षा चिप में (iPhone पर Secure Enclave, Android पर Keystore) समूह की कुंजी बनाता है, कंप्यूटर को जोड़ता है और होम खोलता है।
-3. होम पर **+** से बाकी हर कंप्यूटर जोड़ें। लाइट सदस्य भी इसी तरह जुड़ता है (उस पर `sudo -u clipboardbridge cbb pair` उसका कोड दिखाता है)।
+3. होम पर **+** से बाकी हर कंप्यूटर जोड़ें। लाइट सदस्य भी इसी तरह जुड़ता है (उस पर `sudo -u cbb cbb pair` उसका कोड दिखाता है)।
 
 जब कैमरा इस्तेमाल न हो सके: iPhone पर कंप्यूटर के दिखाए छह अंक टाइप करें; Android पर QR कोड का पाठ पेस्ट करें, जिसे `cbb pair` भी छापता है।
 

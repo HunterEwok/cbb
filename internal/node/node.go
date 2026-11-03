@@ -35,11 +35,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/netguard"
-	"github.com/HunterEwok/clipboardbridge/internal/seal"
-	"github.com/HunterEwok/clipboardbridge/internal/uptime"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/netguard"
+	"github.com/HunterEwok/cbb/internal/seal"
+	"github.com/HunterEwok/cbb/internal/uptime"
 )
 
 const (

@@ -6,7 +6,7 @@ package group
 import (
 	"fmt"
 
-	"github.com/HunterEwok/clipboardbridge/internal/strict"
+	"github.com/HunterEwok/cbb/internal/strict"
 )
 
 // checkStrict checks that b is a signed body in the strict form

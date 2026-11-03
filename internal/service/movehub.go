@@ -11,10 +11,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/forward"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
-	"github.com/HunterEwok/clipboardbridge/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // Moving the hub (docs/protocol.md, section 11, "Moving the hub"): the

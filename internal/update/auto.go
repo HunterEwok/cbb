@@ -15,23 +15,23 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/openwrt"
-	"github.com/HunterEwok/clipboardbridge/internal/rootless"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/openwrt"
+	"github.com/HunterEwok/cbb/internal/rootless"
 )
 
 // The timers that run cbb update -timer once a day, at a time of their
 // own on each device, so that the update servers learn little from when a
 // device asks.
 const (
-	systemdService = "/etc/systemd/system/clipboardbridge-update.service"
-	systemdTimer   = "/etc/systemd/system/clipboardbridge-update.timer"
-	launchdLabel   = "io.github.hunterewok.clipboardbridge.update"
+	systemdService = "/etc/systemd/system/cbb-update.service"
+	systemdTimer   = "/etc/systemd/system/cbb-update.timer"
+	launchdLabel   = "tools.cbb.update"
 	launchdPlist   = "/Library/LaunchDaemons/" + launchdLabel + ".plist"
-	cronFreeBSD    = "/usr/local/etc/cron.d/clipboardbridge-update"
+	cronFreeBSD    = "/usr/local/etc/cron.d/cbb-update"
 	cronOpenWrt    = "/etc/crontabs/root"
-	cronMark       = "# clipboardbridge-update"
-	windowsTask    = "clipboardbridge update"
+	cronMark       = "# cbb-update"
+	windowsTask    = "cbb update"
 )
 
 // SetTimer adds the timer that runs exe update -timer, or removes it.
@@ -90,7 +90,7 @@ func systemdTimers(on bool, exe string) error {
 	service := `# Written by cbb update -auto on; cbb update -auto off removes it.
 [Unit]
 Description=CBB automatic update
-Documentation=https://github.com/HunterEwok/clipboardbridge/blob/main/docs/guide/install.md
+Documentation=https://github.com/HunterEwok/cbb/blob/main/docs/guide/install.md
 Wants=network-online.target
 After=network-online.target
 

@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/hlc"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/hlc"
 )
 
 var update = flag.Bool("update", false, "rewrite the interop test vectors")
@@ -23,7 +23,7 @@ var update = flag.Bool("update", false, "rewrite the interop test vectors")
 func interopPath(name string) string { return filepath.Join("..", "..", "testdata", "interop", name) }
 
 // memberVectors are what another implementation of the member protocol,
-// such as the phone app's ClipboardBridgeKit, must decode and encode the same
+// such as the phone app's CBBKit, must decode and encode the same
 // way (docs/protocol.md, sections 4 and 5).
 type memberVectors struct {
 	Frames     []json.RawMessage `json:"frames"` // message objects as the Go side writes them
@@ -318,7 +318,7 @@ func TestMemberCertVectors(t *testing.T) {
 			{Name: "expired", Cert: g.Cert.Raw, NowMS: at(3 * 365 * 24 * time.Hour)},
 			{Name: "another group", Cert: other.Cert.Raw, NowMS: at(24 * time.Hour)},
 			{Name: "the group CA itself", Cert: g.GroupCA.Cert.Raw, NowMS: at(24 * time.Hour)},
-			{Name: "the clipboardbridge.local certificate", Cert: g.Phone.Raw, NowMS: at(24 * time.Hour)},
+			{Name: "the cbb.local certificate", Cert: g.Phone.Raw, NowMS: at(24 * time.Hour)},
 		}}
 		for i := range v.Cases {
 			c, _ := x509.ParseCertificate(v.Cases[i].Cert)
@@ -362,7 +362,7 @@ func TestMemberCertVectors(t *testing.T) {
 	}
 }
 
-// TestSwiftMemberFrames decodes the frames the phone app's ClipboardBridgeKit
+// TestSwiftMemberFrames decodes the frames the phone app's CBBKit
 // writes (testdata/interop/swift-member.json, from its tests) as a member
 // does.
 func TestSwiftMemberFrames(t *testing.T) {

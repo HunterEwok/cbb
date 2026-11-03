@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 69c597a7b5db -->
+<!-- source: 6d2083e0e66e -->
 # התחלה מהירה
 
 Copy Beyond Borders נותן לטלפון ולמחשבים שלך לוח העתקה אחד: מעתיקים באחד ומדביקים באחר. המכשירים יוצרים **קבוצה** ברשת הביתית שלך. הטלפון מחזיק את מפתח הקבוצה ומאשר כל מכשיר חדש, כך שאיש לא יכול להצטרף בלעדיך.
@@ -12,7 +12,7 @@ Copy Beyond Borders נותן לטלפון ולמחשבים שלך לוח העת�
 
 ## 1. התקינו את האפליקציה בטלפון
 
-- **Android** 10 ומעלה: הורידו את `clipboardbridge-X.Y.Z.apk` מ[הגרסה האחרונה](https://github.com/HunterEwok/clipboardbridge/releases/latest) ישירות בטלפון ופתחו אותו; כש-Android שואל, אפשרו לדפדפן להתקין אפליקציות.
+- **Android** 10 ומעלה: הורידו את `cbb-X.Y.Z.apk` מ[הגרסה האחרונה](https://github.com/HunterEwok/cbb/releases/latest) ישירות בטלפון ופתחו אותו; כש-Android שואל, אפשרו לדפדפן להתקין אפליקציות.
 - **iPhone**: האפליקציה תגיע דרך TestFlight, שעדיין לא נפתח. עד אז iPhone משתמש בקיצור דרך, ומחשב מחזיק את הקבוצה: ראו [בלי האפליקציה](without-app.md).
 
 פתחו את האפליקציה. את המחשב הראשון תוסיפו בשלב 3.
@@ -24,13 +24,13 @@ Copy Beyond Borders נותן לטלפון ולמחשבים שלך לוח העת�
 ב-**Linux** או ב-**Mac**, בטרמינל:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 ב-**Windows** 10 או 11, ב-PowerShell שנפתח באמצעות "Run as administrator":
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 תוכנית ההתקנה בודקת את ההורדה, מפעילה את Copy Beyond Borders ושואלת שתי שאלות: האם לפתוח בשבילו את חומת האש (ענו `y`) והאם להתעדכן אוטומטית (`y` היא תשובה טובה גם כאן). לאחר מכן התנתקו והתחברו מחדש פעם אחת, או פתחו טרמינל חדש ב-Windows. Homebrew, winget, Docker והפרטים נמצאים ב[התקנה](install.md).

@@ -12,7 +12,7 @@
 # replaces by itself.
 update_method() {
 	case $1 in
-	*/Cellar/* | */linuxbrew/* | */homebrew/* | */opt/clipboardbridge/bin/*) echo brew ;;
+	*/Cellar/* | */linuxbrew/* | */homebrew/* | */opt/cbb/bin/*) echo brew ;;
 	*) echo "${CBB_INSTALL_METHOD:-get}" ;;
 	esac
 }

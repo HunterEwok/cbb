@@ -1,4 +1,4 @@
-module github.com/HunterEwok/clipboardbridge
+module github.com/HunterEwok/cbb
 
 go 1.27.0
 

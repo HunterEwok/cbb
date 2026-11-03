@@ -17,12 +17,12 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/clipboardbridge/internal/actions"
-	"github.com/HunterEwok/clipboardbridge/internal/blekeyboard"
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/keyboard"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
+	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/blekeyboard"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/keyboard"
+	"github.com/HunterEwok/cbb/internal/node"
 )
 
 // This computer as a Bluetooth keyboard (docs/roadmap.md, item 25, way 3;

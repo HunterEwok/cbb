@@ -9,19 +9,19 @@ Categories:
 License: AGPL-3.0-only
 AuthorName: HunterEwok
 WebSite: https://cbb.tools
-SourceCode: https://github.com/HunterEwok/clipboardbridge
-IssueTracker: https://github.com/HunterEwok/clipboardbridge/issues
-Changelog: https://github.com/HunterEwok/clipboardbridge/blob/HEAD/CHANGELOG.md
+SourceCode: https://github.com/HunterEwok/cbb
+IssueTracker: https://github.com/HunterEwok/cbb/issues
+Changelog: https://github.com/HunterEwok/cbb/blob/HEAD/CHANGELOG.md
 
 AutoName: CBB
 Name: "CBB: Copy Beyond Borders"
 
 RepoType: git
-Repo: https://github.com/HunterEwok/clipboardbridge.git
-Binaries: https://github.com/HunterEwok/clipboardbridge/releases/download/v%v/clipboardbridge-fdroid-%v.apk
+Repo: https://github.com/HunterEwok/cbb.git
+Binaries: https://github.com/HunterEwok/cbb/releases/download/v%v/cbb-fdroid-%v.apk
 
 # The SHA-256 of the release key's certificate:
-#   apksigner verify --print-certs clipboardbridge-fdroid-X.Y.Z.apk
+#   apksigner verify --print-certs cbb-fdroid-X.Y.Z.apk
 AllowedAPKSigningKeys: RELEASE_CERTIFICATE_SHA256
 
 Builds:

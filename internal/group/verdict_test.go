@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/clip"
 )
 
 // TestVerdicts writes Go's verdict on each case of a corpus of

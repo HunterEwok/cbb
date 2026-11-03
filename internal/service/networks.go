@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
-	"github.com/HunterEwok/clipboardbridge/internal/mdns"
-	"github.com/HunterEwok/clipboardbridge/internal/netid"
-	"github.com/HunterEwok/clipboardbridge/internal/node"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/mdns"
+	"github.com/HunterEwok/cbb/internal/netid"
+	"github.com/HunterEwok/cbb/internal/node"
 )
 
 const (

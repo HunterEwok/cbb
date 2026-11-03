@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/version"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/version"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -86,7 +86,7 @@ func NewDesk() *Desk {
 	d := &Desk{socket: control.SocketPath(), lang: language(), settings: Settings{Color: "terminal", Appearance: "system", Layout: "tiles"}}
 	d.tr = translations(d.lang)
 	if dir, err := os.UserConfigDir(); err == nil {
-		d.settingsPath = filepath.Join(dir, "clipboardbridge", "desktop.json")
+		d.settingsPath = filepath.Join(dir, "cbb", "desktop.json")
 		if data, err := os.ReadFile(d.settingsPath); err == nil {
 			if err := json.Unmarshal(data, &d.settings); err != nil {
 				log.Printf("settings: %v", err)

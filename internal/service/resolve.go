@@ -6,8 +6,8 @@ package service
 import (
 	"errors"
 
-	"github.com/HunterEwok/clipboardbridge/internal/authority"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/authority"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // resolveHistories, on the group's root, voids both histories of every key

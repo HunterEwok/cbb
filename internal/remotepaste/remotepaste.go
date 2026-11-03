@@ -17,7 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/clipboardbridge/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/atomicfile"
 )
 
 // Settings are the switches of remote paste on a device, which only its own

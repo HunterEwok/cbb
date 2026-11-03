@@ -10,7 +10,7 @@ belongs to the project, and what others may do with it.
 An official build is one of these:
 
 - a release of this repository, from its
-  [Releases page](https://github.com/HunterEwok/clipboardbridge/releases), built by the
+  [Releases page](https://github.com/HunterEwok/cbb/releases), built by the
   repository's release workflow and described by release files signed with the project's
   release keys ([docs/protocol.md, section 16](docs/protocol.md#16-signed-releases));
 - an app that the maintainer publishes in an app store.
@@ -25,7 +25,7 @@ To check a download:
   repository and the build that made it. With the [GitHub CLI](https://cli.github.com/):
 
   ```sh
-  gh attestation verify clipboardbridge-linux-amd64.tar.gz --repo HunterEwok/clipboardbridge
+  gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
   ```
 
 - The Android app in each release is signed with the project's release key
@@ -81,6 +81,6 @@ the icon, the project's servers and keys, and how a build presents itself, which
 ## Contact
 
 For a [commercial license](README.md#license), open an issue with the **Commercial
-license** form on [GitHub](https://github.com/HunterEwok/clipboardbridge/issues/new/choose):
+license** form on [GitHub](https://github.com/HunterEwok/cbb/issues/new/choose):
 say in a few words who you are and what you need, and the maintainer continues in private.
 Questions about these rules go in an issue with the feature request form.

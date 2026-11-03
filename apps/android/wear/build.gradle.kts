@@ -15,7 +15,7 @@ plugins {
 val release = Properties().apply { rootDir.resolve("version.properties").reader().use { load(it) } }
 
 android {
-    namespace = "io.github.hunterewok.clipboardbridge.wear"
+    namespace = "tools.cbb.wear"
     compileSdk = 37
 
     defaultConfig {

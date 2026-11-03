@@ -20,12 +20,12 @@ func TestPhoneResults(t *testing.T) {
 	}
 	gradle := `<?xml version='1.0' encoding='UTF-8' ?>
 <testsuites tests="2" failures="1">
-  <testsuite name="io.github.hunterewok.clipboardbridge.GroupTest" tests="2" failures="1">
-    <testcase name="a1_admitComputer" classname="io.github.hunterewok.clipboardbridge.GroupTest" time="9.6">
+  <testsuite name="tools.cbb.GroupTest" tests="2" failures="1">
+    <testcase name="a1_admitComputer" classname="tools.cbb.GroupTest" time="9.6">
       <failure>java.lang.RuntimeException: boom
 	at somewhere</failure>
     </testcase>
-    <testcase name="a2_sendToComputer" classname="io.github.hunterewok.clipboardbridge.GroupTest" time="1.5" />
+    <testcase name="a2_sendToComputer" classname="tools.cbb.GroupTest" time="1.5" />
   </testsuite>
 </testsuites>`
 	bare := `<testsuite name="X"><testcase name="skipped" classname="a.b.Other"><skipped/></testcase></testsuite>`

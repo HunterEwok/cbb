@@ -10,7 +10,7 @@ Any Linux with systemd (x86-64, ARM64, ARMv7, ARMv6): a laptop, a desktop, a Ras
 a server, a Steam Deck.
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 Then log out and in again once, so your user may use `cbb` without `sudo`. A machine
@@ -35,7 +35,7 @@ On a Linux computer where you cannot or do not want to use `sudo`, install it fo
 user, without `sudo`:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh -s -- --rootless
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
 It runs as your own background service while you are logged in, and syncs as any member.
@@ -44,39 +44,39 @@ keys, so it can never be the group's root, an admin or the hub
 ([how it works](how-it-works.md#rootless-members)), and it has no firewall rules, no TPM and
 no `--console` or `--uinput`. To keep it running after you log out, an administrator runs
 `sudo loginctl enable-linger YOUR-USER` once. To remove it:
-`sh ~/.local/share/clipboardbridge/uninstall.sh`. The lite member installs this way too,
+`sh ~/.local/share/cbb/uninstall.sh`. The lite member installs this way too,
 with `--lite --rootless` ([lite member](../../lite/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 
 Switch to Desktop Mode, open Konsole, give the `deck` user a password once if it has none
 (`passwd`), and run the same command. SteamOS replaces its system files with each update, so
-the installer puts Copy Beyond Borders in `/opt/clipboardbridge` instead of `/usr/local`, and
-tells SteamOS which of its files in `/etc` to keep (`/etc/atomic-update.conf.d/clipboardbridge.conf`).
+the installer puts Copy Beyond Borders in `/opt/cbb` instead of `/usr/local`, and
+tells SteamOS which of its files in `/etc` to keep (`/etc/atomic-update.conf.d/cbb.conf`).
 It stays installed and in its group across SteamOS updates.
 
 - `cbb` is in the path of a new Konsole after you log out and in again. `sudo` does not
   look there, so commands that need it take the whole path:
-  `sudo /opt/clipboardbridge/bin/cbb pair`.
+  `sudo /opt/cbb/bin/cbb pair`.
 - In Desktop Mode the clipboard syncs as on any KDE Plasma desktop.
 - In Game Mode there is no desktop clipboard, so nothing syncs there; the service keeps
   running and catches up in Desktop Mode.
-- To remove it: `sudo sh /opt/clipboardbridge/share/uninstall.sh`.
+- To remove it: `sudo sh /opt/cbb/share/uninstall.sh`.
 
 ## Mac
 
 Apple silicon or Intel, in Terminal, the same command as on Linux:
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
 ```
 
 Or with Homebrew, which also updates it. Run the second line again after each
 `brew upgrade`:
 
 ```sh
-brew install hunterewok/tap/clipboardbridge
-sudo sh "$(brew --prefix)/opt/clipboardbridge/share/clipboardbridge/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/clipboardbridge/bin/cbb"
+brew install hunterewok/tap/cbb
+sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"
 ```
 
 ## Windows
@@ -85,7 +85,7 @@ Windows 10 (1809 or later) or 11, x86-64 or ARM64, in a PowerShell opened with "
 administrator":
 
 ```powershell
-irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
+irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
 It lets the user signed in at the screen use `cbb` (in a new terminal) and starts the
@@ -98,7 +98,7 @@ CBB.
 With winget, once the package is in winget's repository:
 
 ```powershell
-winget install HunterEwok.clipboardbridge
+winget install HunterEwok.cbb
 cbb install           # in the administrator terminal; again after each winget upgrade
 ```
 
@@ -108,11 +108,11 @@ A router with OpenWrt 25.12 or later and room for a 25 MB program (128 MB of fla
 more, or eMMC; 256 MB of RAM), as root over SSH:
 
 ```sh
-uclient-fetch -qO - https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh
+uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
 It installs `cbb` as a service that works only on the `lan` zone and never answers on
-`wan`. The keys live in `/etc/clipboardbridge`, which sysupgrade keeps; after an attended
+`wan`. The keys live in `/etc/cbb`, which sysupgrade keeps; after an attended
 sysupgrade (ASU, owut), run the command again. Another zone, such as an IoT network, the
 firewall and the checks are in [routers and FreeBSD](../admin/routers.md#openwrt).
 
@@ -123,26 +123,26 @@ follows the router's CPU (`grep DISTRIB_ARCH /etc/openwrt_release`): `arm64` for
 the second line:
 
 ```sh
-uclient-fetch -qO /etc/apk/keys/clipboardbridge.pem https://cbb.tools/openwrt/clipboardbridge.pem
+uclient-fetch -qO /etc/apk/keys/cbb.pem https://cbb.tools/openwrt/cbb.pem
 echo https://cbb.tools/openwrt/arm64/packages.adb >>/etc/apk/repositories.d/customfeeds.list
-apk update && apk add clipboardbridge
+apk update && apk add cbb
 ```
 
-`apk del clipboardbridge` removes it and keeps the keys in `/etc/clipboardbridge`.
+`apk del cbb` removes it and keeps the keys in `/etc/cbb`.
 
 ## FreeBSD
 
 FreeBSD 15, amd64 or arm64, as root (with `sudo` or `doas`):
 
 ```sh
-fetch -qo - https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sh
+fetch -qo - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 ```
 
 It installs `cbb`, an rc.d script that runs the service through daemon(8), and adds the
-line `clipboardbridge_enable="YES"` to rc.conf. The keys live in `/var/db/clipboardbridge`.
+line `cbb_enable="YES"` to rc.conf. The keys live in `/var/db/cbb`.
 
 On OPNsense the same installer also adds a plugin hook: the service shows under System >
-Diagnostics > Services, and its firewall rules (in pf's anchor `clipboardbridge`) follow
+Diagnostics > Services, and its firewall rules (in pf's anchor `cbb`) follow
 every filter reload. Turn off the mDNS repeater (Services > mDNS Repeater) while it runs:
 both need UDP port 5353, and the service answers mDNS on each home interface itself.
 pfSense is not supported: the installer runs there too, but it prints the firewall rules
@@ -162,9 +162,9 @@ For a NAS or a home server that is always on
 It joins as an ordinary member: make the group on the phone or a computer you hold.
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/HunterEwok/clipboardbridge/main/packaging/docker/compose.home.yaml
+curl -fsSLO https://raw.githubusercontent.com/HunterEwok/cbb/main/packaging/docker/compose.home.yaml
 docker compose -f compose.home.yaml up -d
-docker compose -f compose.home.yaml exec clipboardbridge cbb pair
+docker compose -f compose.home.yaml exec cbb cbb pair
 ```
 
 ## The firewall
@@ -214,9 +214,9 @@ Windows, cron on OpenWrt and FreeBSD. Each check downloads the same small files 
 and that it uses Copy Beyond Borders, as with any download; it sends nothing about the group.
 `sudo cbb update -mirror https://...` takes updates from another mirror instead, which
 needs no trust, since the signatures are checked. The timer's log is `update.log` in
-`/var/lib/clipboardbridge-update` (Linux), `/etc/clipboardbridge-update` (OpenWrt),
-`/var/db/clipboardbridge-update` (FreeBSD), `/Library/Application Support/clipboardbridge-update`
-(Mac) or `C:\Program Files\clipboardbridge-update` (Windows).
+`/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt),
+`/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update`
+(Mac) or `C:\Program Files\cbb-update` (Windows).
 
 The devices of a group tell each other of the newest signed release any of them has seen, so
 one device's check is enough for `cbb status` and the tray app on the others to say that a
@@ -234,7 +234,7 @@ release file also has a build provenance attestation that ties it to this reposi
 the build that made it; with the [GitHub CLI](https://cli.github.com/):
 
 ```sh
-gh attestation verify clipboardbridge-linux-amd64.tar.gz --repo HunterEwok/clipboardbridge
+gh attestation verify cbb-linux-amd64.tar.gz --repo HunterEwok/cbb
 ```
 
 `get.sh` checks it by itself when `gh` is installed and signed in for root
@@ -253,17 +253,17 @@ before they install, and refuse a release that is not signed; until then they ch
 On Linux and a Mac:
 
 ```sh
-sudo sh /usr/local/share/clipboardbridge/uninstall.sh
+sudo sh /usr/local/share/cbb/uninstall.sh
 ```
 
-On SteamOS it is `sudo sh /opt/clipboardbridge/share/uninstall.sh`. With Homebrew, run
-`brew uninstall clipboardbridge` after it.
+On SteamOS it is `sudo sh /opt/cbb/share/uninstall.sh`. With Homebrew, run
+`brew uninstall cbb` after it.
 
 On Windows: Settings, Apps, "CBB", Uninstall.
 
 This removes the program, the service and the firewall rules the installer added. The
 device's keys stay, so installing again brings it back into its group. To delete them too,
 add `--purge` (`-Purge` on Windows, with
-`powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`),
+`powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`),
 then remove the device from the group on another one (`sudo cbb remove NAME`, or on the
 phone).

@@ -14,7 +14,7 @@ and the log always has them. What to do about the common messages is in
 |---|---|---|---|
 | `cbb` on a computer | in a development build (`cbb version` says `dev`) | `CBB_DEBUG=1` shows them, `CBB_DEBUG=0` hides them: `CBB_DEBUG=1 cbb status`, on Windows `$env:CBB_DEBUG = "1"` first | the service's log ([where](devices.md#files-and-logs)) |
 | The service | | `CBB_DEBUG=1` in its environment also logs WireGuard's own messages | its log |
-| The lite member | in a debug build | `-debug` before the command, or `CBB_DEBUG=1`; `CBB_DEBUG=0` hides them | its log, `journalctl -u clipboardbridge` (on OpenWrt `logread -e clipboardbridge`) |
+| The lite member | in a debug build | `-debug` before the command, or `CBB_DEBUG=1`; `CBB_DEBUG=0` hides them | its log, `journalctl -u cbb` (on OpenWrt `logread -e cbb`) |
 | The iPhone and Android apps | in a debug build | Settings: seven taps on the version show the switch "Show error details"; the launch argument `ShowErrorDetails` sets it too | the app's log |
 | The watch apps | as their phone | follow the phone's switch | the phone app's log |
 | The Mac app | in a debug build | "Error details" in Settings; it passes `CBB_DEBUG=1` to the `cbb` commands it runs | the service's log |
@@ -27,12 +27,12 @@ The variables are in [settings and environment variables](config.md).
 
 ## What a message looks like
 
-`cbb` writes the message after `clipboardbridge:` on standard error and exits with status 1;
+`cbb` writes the message after `cbb:` on standard error and exits with status 1;
 with details on, the cause follows on a line of its own:
 
 ```
-clipboardbridge: the Copy Beyond Borders service is not running; start it with: sudo systemctl start clipboardbridge
-  Detail: dial unix /run/clipboardbridge/control.sock: connect: no such file or directory
+cbb: the Copy Beyond Borders service is not running; start it with: sudo systemctl start cbb
+  Detail: dial unix /run/cbb/control.sock: connect: no such file or directory
 ```
 
 A wrong command line exits with status 2 and prints the usage. The apps show the message,

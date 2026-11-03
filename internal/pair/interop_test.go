@@ -20,7 +20,7 @@ import (
 var update = flag.Bool("update", false, "rewrite the interop test vectors")
 
 // interopVectors are what another implementation of pairing, such as the
-// phone app's ClipboardBridgeKit, must compute and encode the same way.
+// phone app's CBBKit, must compute and encode the same way.
 type interopVectors struct {
 	MemberCert  []byte            `json:"member_cert"`
 	JoinerCert  []byte            `json:"joiner_cert"`

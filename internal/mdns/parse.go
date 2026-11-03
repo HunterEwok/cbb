@@ -14,7 +14,7 @@ import (
 // with a dot, which RFC 6763 allows in service instance names, such as
 // "Mr. Smith's iPad"; a query from an Apple device often carries such names
 // among its known answers, and it must not cost the questions next to them.
-// Only the record types clipboardbridge uses are kept.
+// Only the record types cbb uses are kept.
 func parse(data []byte) (*dnsmessage.Message, error) {
 	var p dnsmessage.Parser
 	h, err := p.Start(data)
@@ -57,7 +57,7 @@ func parse(data []byte) (*dnsmessage.Message, error) {
 					continue
 				}
 			}
-			// A record that does not decode, or of a type clipboardbridge does
+			// A record that does not decode, or of a type cbb does
 			// not use: skip it and go on.
 			if sec.skip() != nil {
 				return m, nil
@@ -67,7 +67,7 @@ func parse(data []byte) (*dnsmessage.Message, error) {
 	return m, nil
 }
 
-// parseBody reads the body of a record of a type clipboardbridge uses; for
+// parseBody reads the body of a record of a type cbb uses; for
 // another type it returns nil and leaves the record to skip.
 func parseBody(p *dnsmessage.Parser, t dnsmessage.Type) (dnsmessage.ResourceBody, error) {
 	switch t {

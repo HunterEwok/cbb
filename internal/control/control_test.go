@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
+	"github.com/HunterEwok/cbb/internal/clip"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -80,7 +80,7 @@ func TestSocketPath(t *testing.T) {
 }
 
 func TestDialErrors(t *testing.T) {
-	_, err := Dial("/nonexistent/clipboardbridge.sock")
+	_, err := Dial("/nonexistent/cbb.sock")
 	if err == nil || !strings.Contains(err.Error(), "not running") || !strings.Contains(err.Error(), "start it") {
 		t.Errorf("Dial of a missing socket: %v", err)
 	}

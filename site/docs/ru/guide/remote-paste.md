@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b1ce9d06c9cb -->
+<!-- source: f299825ed818 -->
 # Удалённая вставка
 
 Для тех, кому нужно вставить текст в приложение на другом устройстве: пароль в форму входа на
@@ -28,7 +28,7 @@
 В GNOME и KDE первая вставка открывает на экране системное окно удалённого управления;
 разрешите его один раз, и это запомнится. Чтобы пропустить это окно, установите помощник
 uinput: запустите установку снова с `--uinput`
-(`curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --uinput`);
+(`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`);
 он добавляет виртуальную клавиатуру, которая нажимает только Shift+Insert и Enter для
 пользователя за экраном.
 

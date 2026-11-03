@@ -20,8 +20,8 @@ import (
 	"github.com/jezek/xgb/xfixes"
 	"github.com/jezek/xgb/xproto"
 
-	"github.com/HunterEwok/clipboardbridge/internal/clip"
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/clip"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 // X11 is the clipboard of an X11 session, or of XWayland on GNOME: the

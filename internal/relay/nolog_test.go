@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/HunterEwok/clipboardbridge/internal/group"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // logLines collects what a server logs.

@@ -93,12 +93,12 @@ func updates(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		want                 string
 	}{
 		{name: "tampered", build: "0.6.1", version: "0.6.1", spoil: func(dir string) error {
-			return tamper(dir, "clipboardbridge-linux-"+goarchOf()+".tar.gz")
+			return tamper(dir, "cbb-linux-"+goarchOf()+".tar.gz")
 		}, want: "does not match the signed release.json"},
 		{name: "unknown-release-key", build: "0.6.1", version: "0.6.1", o: releaseOpts{relBy: "other"}, want: "stable.json: release: the signature is not valid"},
 		{name: "keys-by-no-root", build: "0.6.1", version: "0.6.1", o: releaseOpts{keysBy: "other"}, want: "keys.json: release: the signature is not valid"},
 		{name: "min-from", build: "0.6.1", version: "0.6.1", o: releaseOpts{minFrom: "0.6.1"}, want: "0.6.1"},
-		{name: "other-platform", build: "0.6.1-other-platform", version: "0.6.1", want: "clipboardbridge-linux-" + goarchOf() + ".tar.gz"},
+		{name: "other-platform", build: "0.6.1-other-platform", version: "0.6.1", want: "cbb-linux-" + goarchOf() + ".tar.gz"},
 	} {
 		r.Do("fleet/I9-refused/"+c.name, func() error {
 			dir, err := publish(c.build, "refused-"+c.name, c.version, c.o)

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f06d2929ba18 -->
+<!-- source: dbcf5e524e51 -->
 # Sin la app
 
 Un grupo no necesita la app del teléfono. Un ordenador puede sostener el grupo, y un iPhone sin la app se une con un atajo. Este es también el camino mientras la app del iPhone espera a TestFlight.
@@ -30,7 +30,7 @@ Después activa el uso compartido en cada ordenador, como en el [inicio rápido]
 
 ## 3. Añade un iPhone con el atajo
 
-En la raíz, o en un ordenador administrador que responda por `clipboardbridge.local` (`cbb status` dice si lo hace):
+En la raíz, o en un ordenador administrador que responda por `cbb.local` (`cbb status` dice si lo hace):
 
 ```sh
 sudo cbb pair -phone
@@ -40,7 +40,7 @@ Imprime un código QR, el comienzo de una huella digital y un código de seis d�
 
 1. Escanea el código QR con la cámara del iPhone y sigue la página: instala el perfil.
 2. Comprueba que la huella digital del perfil empieza por la impresa (Ajustes, General, VPN y gestión de dispositivos, «CBB», Más detalles), y luego activa la confianza total para él (Ajustes, General, Información, Ajustes de confianza de certificados).
-3. Añade el atajo «clipboardbridge» desde la misma página y ejecútalo una vez; te pide el código de seis dígitos.
+3. Añade el atajo «cbb» desde la misma página y ejecútalo una vez; te pide el código de seis dígitos.
 4. Pon el atajo en el botón de acción, o en Tocar atrás (Ajustes, Accesibilidad, Tocar, Tocar atrás, Doble toque).
 
 Una sola pulsación elige entonces la dirección por sí misma: lo que se copió en un ordenador hace un momento llega al iPhone; si no, una copia nueva en el iPhone va a los ordenadores.

@@ -11,7 +11,7 @@
 //
 // A uinput keyboard can type anywhere, a root shell and a lock screen
 // included, so it is not given to the user: cbb paste-helper uinput, the
-// clipboardbridge-uinput unit that install.sh --uinput adds, holds the
+// cbb-uinput unit that install.sh --uinput adds, holds the
 // device and presses only Shift+Insert and Enter, the keys of a paste,
 // for the user of the active graphical session while it is not locked.
 // The desktop connector of that session writes the clipboard and asks the

@@ -61,7 +61,7 @@ kind = "openwrt"
 	}
 	os.WriteFile(path, []byte("[device.nas]\nos = \"docker\"\nssh = \"a@b\"\n"), 0o600)
 	inv, err = LoadInventory(path)
-	if err != nil || inv.Device["nas"].Container != "clipboardbridge" || cbbCmd(inv.Device["nas"]) != "docker exec -i clipboardbridge cbb" {
+	if err != nil || inv.Device["nas"].Container != "cbb" || cbbCmd(inv.Device["nas"]) != "docker exec -i cbb cbb" {
 		t.Fatalf("a container: %+v, %v", inv, err)
 	}
 	os.WriteFile(path, []byte("[device.nas]\nos = \"docker\"\nssh = \"a@b\"\nclipboard = \"x11\"\n"), 0o600)
@@ -211,8 +211,8 @@ func TestContainer(t *testing.T) {
 			t.Errorf("checkLockedDown took %q", bad)
 		}
 	}
-	if got, want := recreateCmd("cbb|/srv/cbb/compose.home.yaml|clipboardbridge"),
-		"docker compose -p 'cbb' -f '/srv/cbb/compose.home.yaml' up -d --force-recreate 'clipboardbridge'"; got != want {
+	if got, want := recreateCmd("cbb|/srv/cbb/compose.home.yaml|cbb"),
+		"docker compose -p 'cbb' -f '/srv/cbb/compose.home.yaml' up -d --force-recreate 'cbb'"; got != want {
 		t.Errorf("recreateCmd = %s, want %s", got, want)
 	}
 	if got := recreateCmd("||"); got != "" {
@@ -225,7 +225,7 @@ func TestAdmin(t *testing.T) {
 		"linux":      "sudo -n cbb",
 		"linux-lite": "sudo -n cbb",
 		"darwin":     "sudo -n cbb",
-		"windows":    `& "$env:ProgramFiles\clipboardbridge\cbb.exe"`,
+		"windows":    `& "$env:ProgramFiles\cbb\cbb.exe"`,
 		"docker":     "docker exec -i c cbb",
 	} {
 		if got := adminCmd(&Device{OS: os, Container: "c"}); got != want {
@@ -291,19 +291,19 @@ key = "BBBB"
 
 func TestReset(t *testing.T) {
 	for _, c := range []struct{ os, machine, want string }{
-		{"linux", "x86_64", "clipboardbridge-linux-amd64.tar.gz"},
-		{"docker", "aarch64", "clipboardbridge-linux-arm64.tar.gz"},
-		{"linux-lite", "armv6l", "clipboardbridge-lite-linux-armv6.tar.gz"},
-		{"darwin", "arm64", "clipboardbridge-darwin-arm64.tar.gz"},
-		{"windows", "ARM64", "clipboardbridge-windows-arm64.zip"},
-		{"windows", "AMD64", "clipboardbridge-windows-amd64.zip"},
-		{"openwrt", "aarch64_cortex-a53", "clipboardbridge-linux-arm64.tar.gz"},
-		{"openwrt", "arm_cortex-a7_neon-vfpv4", "clipboardbridge-linux-armv7.tar.gz"},
-		{"openwrt", "arm_arm1176jzf-s_vfp", "clipboardbridge-linux-armv6.tar.gz"},
-		{"openwrt", "mipsel_24kc", "clipboardbridge-linux-mipsle.tar.gz"},
-		{"openwrt", "mips_24kc", "clipboardbridge-linux-mips.tar.gz"},
-		{"openwrt", "x86_64", "clipboardbridge-linux-amd64.tar.gz"},
-		{"freebsd", "amd64", "clipboardbridge-freebsd-amd64.tar.gz"},
+		{"linux", "x86_64", "cbb-linux-amd64.tar.gz"},
+		{"docker", "aarch64", "cbb-linux-arm64.tar.gz"},
+		{"linux-lite", "armv6l", "cbb-lite-linux-armv6.tar.gz"},
+		{"darwin", "arm64", "cbb-darwin-arm64.tar.gz"},
+		{"windows", "ARM64", "cbb-windows-arm64.zip"},
+		{"windows", "AMD64", "cbb-windows-amd64.zip"},
+		{"openwrt", "aarch64_cortex-a53", "cbb-linux-arm64.tar.gz"},
+		{"openwrt", "arm_cortex-a7_neon-vfpv4", "cbb-linux-armv7.tar.gz"},
+		{"openwrt", "arm_arm1176jzf-s_vfp", "cbb-linux-armv6.tar.gz"},
+		{"openwrt", "mipsel_24kc", "cbb-linux-mipsle.tar.gz"},
+		{"openwrt", "mips_24kc", "cbb-linux-mips.tar.gz"},
+		{"openwrt", "x86_64", "cbb-linux-amd64.tar.gz"},
+		{"freebsd", "amd64", "cbb-freebsd-amd64.tar.gz"},
 	} {
 		if got, err := archiveFor(&Device{OS: c.os}, c.machine); err != nil || got != c.want {
 			t.Errorf("archiveFor(%s, %s) = %q, %v", c.os, c.machine, got, err)
@@ -320,16 +320,16 @@ func TestReset(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "clipboardbridge-linux-amd64.tar.gz"), []byte("archive"), 0o600)
+	os.WriteFile(filepath.Join(dir, "cbb-linux-amd64.tar.gz"), []byte("archive"), 0o600)
 	b, err := LoadBuild(dir)
-	if err != nil || len(b.sums) != 1 || len(b.sums["clipboardbridge-linux-amd64.tar.gz"]) != 64 {
+	if err != nil || len(b.sums) != 1 || len(b.sums["cbb-linux-amd64.tar.gz"]) != 64 {
 		t.Fatalf("LoadBuild = %+v, %v", b, err)
 	}
-	os.WriteFile(filepath.Join(dir, "clipboardbridge-windows-arm64.zip"), []byte("zip"), 0o600)
+	os.WriteFile(filepath.Join(dir, "cbb-windows-arm64.zip"), []byte("zip"), 0o600)
 	if b, err := LoadBuild(dir); err != nil || len(b.sums) != 2 {
 		t.Fatalf("LoadBuild with a zip = %+v, %v", b, err)
 	}
-	os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte(strings.Repeat("0", 64)+"  clipboardbridge-linux-amd64.tar.gz\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte(strings.Repeat("0", 64)+"  cbb-linux-amd64.tar.gz\n"), 0o600)
 	if _, err := LoadBuild(dir); err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Fatalf("a wrong checksum: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestReset(t *testing.T) {
 		t.Fatal("LoadBuild took a directory without archives")
 	}
 
-	if got := composeCmd("cbb-nas|/home/u/cbb-nas/compose.yaml|clipboardbridge"); got != "docker compose -p 'cbb-nas' -f '/home/u/cbb-nas/compose.yaml'" {
+	if got := composeCmd("cbb-nas|/home/u/cbb-nas/compose.yaml|cbb"); got != "docker compose -p 'cbb-nas' -f '/home/u/cbb-nas/compose.yaml'" {
 		t.Fatalf("composeCmd = %q", got)
 	}
 	if composeCmd("||") != "" {
@@ -399,13 +399,13 @@ func TestCheckMessage(t *testing.T) {
 		out, mode string
 		ok        bool
 	}{
-		{"clipboardbridge: the CBB service is not running; start it with: sudo systemctl start clipboardbridge", "0", true},
-		{"clipboardbridge: the CBB service is not running (dial unix /run/clipboardbridge/control.sock: connect: no such file or directory)", "0", false},
-		{"clipboardbridge: the service is not running\n  Detail: dial unix /run/x: connect: no such file or directory", "0", false},
-		{"clipboardbridge: the service is not running\n  Detail: dial unix /run/x: connect: no such file or directory", "1", true},
-		{"clipboardbridge: the service is not running", "1", false},
-		{"clipboardbridge: something went wrong", "0", false},
-		{"clipboardbridge: no group", "0", false},
+		{"cbb: the CBB service is not running; start it with: sudo systemctl start cbb", "0", true},
+		{"cbb: the CBB service is not running (dial unix /run/cbb/control.sock: connect: no such file or directory)", "0", false},
+		{"cbb: the service is not running\n  Detail: dial unix /run/x: connect: no such file or directory", "0", false},
+		{"cbb: the service is not running\n  Detail: dial unix /run/x: connect: no such file or directory", "1", true},
+		{"cbb: the service is not running", "1", false},
+		{"cbb: something went wrong", "0", false},
+		{"cbb: no group", "0", false},
 		{"", "0", false},
 	} {
 		if err := checkMessage(c.out, ec, c.mode); (err == nil) != c.ok {
@@ -422,7 +422,7 @@ func TestWithDebug(t *testing.T) {
 		{"linux", "sudo -n cbb new", "0", "sudo -n env CBB_DEBUG=0 cbb new"},
 		{"darwin", "sudo -n cbb new", "", "sudo -n cbb new"},
 		{"windows", "cbb status", "1", "$env:CBB_DEBUG='1'; cbb status"},
-		{"docker", "docker exec -i clipboardbridge cbb status", "0", "docker exec -e CBB_DEBUG=0 -i clipboardbridge cbb status"},
+		{"docker", "docker exec -i cbb cbb status", "0", "docker exec -e CBB_DEBUG=0 -i cbb cbb status"},
 	} {
 		if got := withDebug(&Device{OS: c.os}, c.cmd, c.mode); got != c.want {
 			t.Errorf("withDebug(%s, %q, %q) = %q, want %q", c.os, c.cmd, c.mode, got, c.want)

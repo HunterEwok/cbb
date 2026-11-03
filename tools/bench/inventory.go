@@ -100,7 +100,7 @@ func LoadInventory(path string) (*Inventory, error) {
 				return nil, fmt.Errorf("device %s: a container has no clipboard but cbb's; leave out clipboard", name)
 			}
 			if d.Container == "" {
-				d.Container = "clipboardbridge"
+				d.Container = "cbb"
 			}
 			// The hub makes the group with cbb new and so holds its CA
 			// keys, which never go into a container (docs/design.md,

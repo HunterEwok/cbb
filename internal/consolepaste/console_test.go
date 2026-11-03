@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/HunterEwok/clipboardbridge/internal/connector"
+	"github.com/HunterEwok/cbb/internal/connector"
 )
 
 // openPTY returns the two ends of a new pseudo-terminal.

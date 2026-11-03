@@ -23,7 +23,7 @@ func TestProjectAddresses(t *testing.T) {
 			`pub const MIRROR: &str = "` + Mirror + `";`,
 			`const CHANNEL_FILES: &str = "` + ChannelFiles + `";`,
 		},
-		"apps/android/app/src/main/kotlin/io/github/hunterewok/clipboardbridge/ApkUpdate.kt": {
+		"apps/android/app/src/main/kotlin/tools/cbb/ApkUpdate.kt": {
 			`private const val GITHUB = "` + GitHub + `"`,
 			`private const val MIRROR = "` + Mirror + `"`,
 			`private const val CHANNEL_FILES = "` + ChannelFiles + `"`,

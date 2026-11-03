@@ -17,14 +17,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/group"
-	"github.com/HunterEwok/clipboardbridge/internal/invite"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/invite"
 )
 
 // defaultInviteFile is where cbb invite writes the invitation unless told
 // otherwise.
-const defaultInviteFile = "clipboardbridge" + invite.Ext
+const defaultInviteFile = "cbb" + invite.Ext
 
 // cmdInvite makes a remote invitation on the group's hub, writes it to a
 // file, and asks the user to confirm the device that uses it.

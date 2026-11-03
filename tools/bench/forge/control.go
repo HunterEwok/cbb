@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
+	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // The control socket's cases (U11): forge [-socket PATH] control:CASE...

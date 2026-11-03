@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/clipboardbridge/internal/control"
-	"github.com/HunterEwok/clipboardbridge/internal/openwrt"
-	"github.com/HunterEwok/clipboardbridge/internal/rootless"
-	"github.com/HunterEwok/clipboardbridge/internal/steamos"
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/openwrt"
+	"github.com/HunterEwok/cbb/internal/rootless"
+	"github.com/HunterEwok/cbb/internal/steamos"
 )
 
 // ArchiveName returns the release's archive for this system, as
@@ -36,9 +36,9 @@ func ArchiveName() string {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		return "clipboardbridge-windows-" + arch + ".zip"
+		return "cbb-windows-" + arch + ".zip"
 	}
-	return "clipboardbridge-" + runtime.GOOS + "-" + arch + ".tar.gz"
+	return "cbb-" + runtime.GOOS + "-" + arch + ".tar.gz"
 }
 
 // Programs returns the installed programs, the main one first: this cbb,
@@ -89,18 +89,18 @@ func MethodCommands(method string) []string {
 	switch method {
 	case MethodBrew:
 		if runtime.GOOS == "darwin" {
-			return []string{"brew upgrade clipboardbridge",
-				`sudo sh "$(brew --prefix)/opt/clipboardbridge/share/clipboardbridge/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/clipboardbridge/bin/cbb"`}
+			return []string{"brew upgrade cbb",
+				`sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/macos/install.sh" --in-place "$(brew --prefix)/opt/cbb/bin/cbb"`}
 		}
-		return []string{"brew upgrade clipboardbridge",
-			`sudo sh "$(brew --prefix)/opt/clipboardbridge/share/clipboardbridge/packaging/linux/install.sh" "$(brew --prefix)/opt/clipboardbridge/bin/cbb"`}
+		return []string{"brew upgrade cbb",
+			`sudo sh "$(brew --prefix)/opt/cbb/share/cbb/packaging/linux/install.sh" "$(brew --prefix)/opt/cbb/bin/cbb"`}
 	case MethodWinget:
-		return []string{"winget upgrade HunterEwok.clipboardbridge", "cbb install (in a terminal opened as administrator)"}
+		return []string{"winget upgrade HunterEwok.cbb", "cbb install (in a terminal opened as administrator)"}
 	case MethodDocker:
 		return []string{"docker compose pull && docker compose up -d"}
 	case MethodPackage:
 		if openwrt.Is() {
-			return []string{"apk update && apk upgrade clipboardbridge"}
+			return []string{"apk update && apk upgrade cbb"}
 		}
 		return []string{"the package manager that installed it"}
 	}
@@ -162,21 +162,21 @@ func serviceVersion() (string, error) {
 func Paths() (dir, work string) {
 	switch runtime.GOOS {
 	case "darwin":
-		dir = "/Library/Application Support/clipboardbridge-update"
+		dir = "/Library/Application Support/cbb-update"
 	case "freebsd":
-		dir = "/var/db/clipboardbridge-update"
+		dir = "/var/db/cbb-update"
 	case "windows":
-		// Not under Program Files\clipboardbridge: install.ps1 stops
+		// Not under Program Files\cbb: install.ps1 stops
 		// every program there, and cbb update runs from this folder.
 		pf := os.Getenv("ProgramFiles")
 		if pf == "" {
 			pf = `C:\Program Files`
 		}
-		dir = filepath.Join(pf, "clipboardbridge-update")
+		dir = filepath.Join(pf, "cbb-update")
 	default:
 		if openwrt.Is() {
 			// /etc survives a sysupgrade; the downloads go to RAM.
-			return "/etc/clipboardbridge-update", "/tmp/clipboardbridge-update"
+			return "/etc/cbb-update", "/tmp/cbb-update"
 		}
 		if rootless.Is() {
 			return rootless.UpdateDir(), rootless.UpdateDir()
@@ -185,7 +185,7 @@ func Paths() (dir, work string) {
 			// /var is small on SteamOS; /opt lives in /home.
 			return steamos.Dir + "-update", steamos.Dir + "-update"
 		}
-		dir = "/var/lib/clipboardbridge-update"
+		dir = "/var/lib/cbb-update"
 	}
 	return dir, dir
 }

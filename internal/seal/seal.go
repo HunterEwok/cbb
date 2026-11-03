@@ -32,7 +32,7 @@ const (
 )
 
 // Info is HPKE's info for every sealed message.
-var Info = []byte("clipboardbridge seal v1")
+var Info = []byte("cbb seal v1")
 
 var (
 	kem  = hpke.MLKEM768X25519()

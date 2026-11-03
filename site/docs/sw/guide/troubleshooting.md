@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5174e28a6a9e -->
+<!-- source: 62cc1d41168b -->
 # Wakati kitu hakifanyi kazi
 
-Anza na `cbb status` kwenye kifaa chenye tatizo: kinasema kama huduma inaendesha, kiko kwenye kikundi gani, ni wanachama gani wameunganishwa na hali ya usawazishaji nje ya nyumbani. Kila ujumbe ni mfupi; `CBB_DEBUG=1 cbb status` (kwenye Windows kwanza `$env:CBB_DEBUG = "1"`) huonyesha kosa la msingi chini yake. Kumbukumbu ya huduma daima ina maelezo: kwenye Linux `journalctl -u clipboardbridge`, na ya kiunganishi cha eneo-kazi iko kwenye jarida la kikao, `journalctl --user`; mifumo mingine iko katika [faili na kumbukumbu](../reference/devices.md#files-and-logs). Swichi ya maelezo ya kila sehemu, ikiwemo programu na visakinishi, iko katika [ujumbe wa makosa na maelezo](../reference/errors.md).
+Anza na `cbb status` kwenye kifaa chenye tatizo: kinasema kama huduma inaendesha, kiko kwenye kikundi gani, ni wanachama gani wameunganishwa na hali ya usawazishaji nje ya nyumbani. Kila ujumbe ni mfupi; `CBB_DEBUG=1 cbb status` (kwenye Windows kwanza `$env:CBB_DEBUG = "1"`) huonyesha kosa la msingi chini yake. Kumbukumbu ya huduma daima ina maelezo: kwenye Linux `journalctl -u cbb`, na ya kiunganishi cha eneo-kazi iko kwenye jarida la kikao, `journalctl --user`; mifumo mingine iko katika [faili na kumbukumbu](../reference/devices.md#files-and-logs). Swichi ya maelezo ya kila sehemu, ikiwemo programu na visakinishi, iko katika [ujumbe wa makosa na maelezo](../reference/errors.md).
 
 ## Amri
 
-**"the CBB service is not running"**: ianzishe (`sudo systemctl start clipboardbridge` kwenye Linux; `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` kwenye Mac; `Start-Service clipboardbridge` kwenye Windows) na uangalie kumbukumbu yake.
+**"the CBB service is not running"**: ianzishe (`sudo systemctl start cbb` kwenye Linux; `sudo launchctl kickstart -k system/tools.cbb` kwenye Mac; `Start-Service cbb` kwenye Windows) na uangalie kumbukumbu yake.
 
-**"permission denied" kwenye soketi ya udhibiti, mara baada ya kusakinisha**: kisakinishi kilikuongeza kwenye kikundi `clipboardbridge`, na kikundi huhesabiwa tu kuanzia kuingia kunakofuata. Toka kisha uingie tena (kwenye Windows, fungua terminali mpya); hadi hapo, `sudo cbb ...` inafanya kazi.
+**"permission denied" kwenye soketi ya udhibiti, mara baada ya kusakinisha**: kisakinishi kilikuongeza kwenye kikundi `cbb`, na kikundi huhesabiwa tu kuanzia kuingia kunakofuata. Toka kisha uingie tena (kwenye Windows, fungua terminali mpya); hadi hapo, `sudo cbb ...` inafanya kazi.
 
 ## Vifaa havionani
 
@@ -21,17 +21,17 @@ Anza na `cbb status` kwenye kifaa chenye tatizo: kinasema kama huduma inaendesha
 
 - **"wrong code"**: kila dirisha la uoanishaji huruhusu majaribio matatu; endesha `cbb pair` tena upate msimbo mpya.
 - **Simu haifikii kompyuta baada ya kuchanganua msimbo wake wa QR**: simu na kompyuta lazima ziwe kwenye mtandao mmoja, na mlango wa kompyuta lazima uwe wazi (juu). Kwenye iOS, ruhusu Mtandao wa Ndani kwa programu (Mipangilio, Faragha na Usalama, Mtandao wa Ndani).
-- **Njia ya mkato haifikii `clipboardbridge.local`**: ni kompyuta za mzizi na za wasimamizi wa kikundi tu zinazoitoa, na kwenye mlango 8764 tu; angalau moja lazima iwe imewashwa (`cbb status` kwenye kila kompyuta inasema kama inajibu). Hakikisha wasifu umesakinishwa na unaaminiwa kikamilifu ([Bila programu](without-app.md#3-add-an-iphone-with-the-shortcut)).
+- **Njia ya mkato haifikii `cbb.local`**: ni kompyuta za mzizi na za wasimamizi wa kikundi tu zinazoitoa, na kwenye mlango 8764 tu; angalau moja lazima iwe imewashwa (`cbb status` kwenye kila kompyuta inasema kama inajibu). Hakikisha wasifu umesakinishwa na unaaminiwa kikamilifu ([Bila programu](without-app.md#3-add-an-iphone-with-the-shortcut)).
 
 ## Usawazishaji nje ya nyumbani
 
 `cbb global` kwenye kifaa na kwenye kitovu inasema nini kimekosewa. Sababu za kawaida: rauta haipitishi mlango wa UDP wa kitovu kwenda kwenye kitovu, ngome ya moto ya kitovu inaudondosha, au anwani iliyopewa `cbb global hub` si ile ambayo intaneti inaifikia. Kifaa ambacho hakijakutana na kitovu nyumbani tangu usawazishaji nje ya nyumbani uwashwe, au tangu kitovu kibadilishe mipangilio yake (`-obfuscate`, `-vless`), hakijui jinsi ya kukifikia: kilete nyumbani mara moja. Mtandao unaozuia VPN unahitaji [AmneziaWG au VLESS](blocked-networks.md). Kwa `CBB_DEBUG=1` kwenye mazingira ya huduma, kumbukumbu pia huonyesha mikono-ya-salamu ya WireGuard. Kwenye Linux:
 
 ```sh
-sudo systemctl edit clipboardbridge     # add the two lines below, save
+sudo systemctl edit cbb     # add the two lines below, save
 # [Service]
 # Environment=CBB_DEBUG=1
-sudo systemctl restart clipboardbridge
+sudo systemctl restart cbb
 ```
 
 ## Android
@@ -41,4 +41,4 @@ sudo systemctl restart clipboardbridge
 
 ## Bado umekwama
 
-Fungua [suala](https://github.com/HunterEwok/clipboardbridge/issues) lenye matokeo ya `CBB_DEBUG=1 cbb status`, sehemu husika ya kumbukumbu na mifumo inayohusika. Ondoa chochote ulichonakili ambacho ni cha faragha. Matatizo ya usalama yanakwenda kwenye [SECURITY.md](../../SECURITY.md) badala yake.
+Fungua [suala](https://github.com/HunterEwok/cbb/issues) lenye matokeo ya `CBB_DEBUG=1 cbb status`, sehemu husika ya kumbukumbu na mifumo inayohusika. Ondoa chochote ulichonakili ambacho ni cha faragha. Matatizo ya usalama yanakwenda kwenye [SECURITY.md](../../SECURITY.md) badala yake.

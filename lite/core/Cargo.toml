@@ -2,12 +2,12 @@
 # Copyright (C) 2026 HunterEwok
 
 [package]
-name = "clipboardbridge-core"
+name = "cbb-core"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.87"
 license = "AGPL-3.0-only"
-description = "The protocol core of the clipboardbridge lite member, without the operating system"
+description = "The protocol core of the cbb lite member, without the operating system"
 publish = false
 
 [lib]
