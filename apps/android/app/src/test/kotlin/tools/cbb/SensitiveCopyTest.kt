@@ -15,10 +15,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.ConscryptMode
 
-/** Automatic sending leaves a copy marked sensitive on the phone; the button still reads it. */
+/**
+ * Automatic sending leaves a copy marked sensitive on the phone; the button still reads it.
+ * The clipboard needs no TLS, so Robolectric's Conscrypt, whose native library a runner may
+ * lack, stays off.
+ */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
+@ConscryptMode(ConscryptMode.Mode.OFF)
 class SensitiveCopyTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val cm = context.getSystemService(ClipboardManager::class.java)
