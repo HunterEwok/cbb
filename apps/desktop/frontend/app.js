@@ -199,7 +199,10 @@ function render() {
     box.innerHTML = `<div class="notice"><div class="big">⚠</div><h2>${esc(t("The service does not answer"))}</h2><p class="dim">${esc(s.problem)}</p></div>`;
   } else if (!inGroup) {
     box.innerHTML = `<div class="notice"><div class="big">⧉</div><h2>${esc(t("This computer is in no group yet"))}</h2>` +
-      `<p class="dim">${esc(t("Run cbb pair in a terminal and scan its QR code with the phone app, or make a group of computers with cbb new."))}</p></div>`;
+      `<p class="dim">${esc(t("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new."))}</p>` +
+      `<p><button class="accent" id="join" ${state.busy || joining ? "disabled" : ""}>${esc(t("Join a phone's group"))}</button></p>` +
+      // Out of a group the bar with the message is hidden: a join that failed says why here.
+      (state.message ? `<p class="dim" id="join-message">${esc(state.message)}</p>` : "") + `</div>`;
   } else if (others.length === 0) {
     box.innerHTML = `<div class="notice"><div class="big">＋</div><h2>${esc(t("No other devices yet"))}</h2><p class="dim">${esc(t("Add one with the + button."))}</p></div>`;
   } else if (s.settings.layout === "orbit" && !arranging && !searching() && !opened) {
@@ -694,6 +697,51 @@ function renderSettings() {
   $("version").textContent = state.version;
 }
 
+// Joining a phone's group: JoinPhone runs until the join ends, while the
+// dialog asks JoinState for the QR code cbb writes once it runs as the
+// administrator (join.go). Closing the dialog cancels.
+let joining = false;
+
+async function joinPhone() {
+  if (joining) return;
+  joining = true;
+  render();
+  const dlg = $("join-dialog");
+  $("join-wait").hidden = false;
+  $("join-code").hidden = true;
+  let running = true;
+  const ended = call("JoinPhone").catch((e) => console.error("JoinPhone", e)).finally(() => {
+    running = false;
+    if (dlg.open) dlg.close("done");
+  });
+  dlg.onclose = () => {
+    if (running) call("CancelJoin").catch((e) => console.error("CancelJoin", e));
+  };
+  dlg.returnValue = "";
+  dlg.showModal();
+  while (running && dlg.open) {
+    let j;
+    try {
+      j = await call("JoinState");
+    } catch (e) {
+      console.error("JoinState", e);
+    }
+    if (j?.image) {
+      $("join-wait").hidden = true;
+      $("join-code").hidden = false;
+      $("join-qr").src = j.image;
+      $("join-text").textContent = j.text;
+      const min = Math.max(0, Math.ceil((j.ends - Date.now()) / 60000));
+      $("join-ends").textContent = t("The code is valid for %d more min.", min);
+      $("join-port").textContent = t("If the phone cannot connect, the firewall must let it reach TCP port %d here.", j.port);
+    }
+    await new Promise((r) => setTimeout(r, j?.image ? 1000 : 300));
+  }
+  await ended;
+  joining = false;
+  await refresh();
+}
+
 async function refresh() {
   try {
     state = await call("State");
@@ -743,6 +791,7 @@ document.addEventListener("click", async (e) => {
     case "fetch": return act("Fetch");
     case "update": return act("Update");
     case "add": return $("add-dialog").showModal();
+    case "join": return joinPhone();
     case "settings": renderSettings(); return $("settings-dialog").showModal();
   }
 });

@@ -76,6 +76,22 @@
     </form>
   </dialog>
 
+  <dialog id="join-dialog">
+    <form method="dialog">
+      <h2 data-t>Join a phone's group</h2>
+      <p id="join-wait" class="dim" data-t>Allow cbb to run as the administrator; the QR code shows next.</p>
+      <div id="join-code" hidden>
+        <p data-t>In the CBB app on the phone, tap "Connect a new device" and scan this code:</p>
+        <img id="join-qr" alt="">
+        <p class="dim small" data-t>Without a camera, paste this into the app:</p>
+        <code id="join-text" class="mono"></code>
+        <p class="dim small" id="join-ends"></p>
+        <p class="dim small" id="join-port"></p>
+      </div>
+      <menu><button value="cancel" class="glass" data-t>Cancel</button></menu>
+    </form>
+  </dialog>
+
   <dialog id="settings-dialog">
     <form method="dialog">
       <h2 data-t>Settings</h2>

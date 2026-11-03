@@ -51,7 +51,16 @@ struct MainView: View {
                 } else if model.status == nil {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if !model.inGroup {
-                    Notice(symbol: "person.3", title: "This Mac is in no group yet", text: Text("Scan its QR code with the phone app after running cbb pair in Terminal, or make a group of computers with cbb new."))
+                    Notice(symbol: "person.3", title: "This Mac is in no group yet", text: Text("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new.")) {
+                        Button { Task { await model.joinPhone() } } label: { Text("Join a phone's group") }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.busy || model.joining)
+                        // The bar with the message is hidden out of a group:
+                        // a join that failed says why here.
+                        if let message = model.message {
+                            Text(verbatim: message).foregroundStyle(palette.textDim).multilineTextAlignment(.center).textSelection(.enabled)
+                        }
+                    }
                 } else {
                     summary
                     GroupAlerts()
@@ -93,6 +102,7 @@ struct MainView: View {
             }
         }
         .sheet(isPresented: $adding) { AddDeviceSheet().modifier(Themed()) }
+        .sheet(isPresented: Binding(get: { model.joining }, set: { if !$0 { model.cancelJoin() } })) { JoinSheet().modifier(Themed()) }
         .modifier(ArrangePrompts())
         .environmentObject(arrange)
         // Arrange mode is off while a search or a filter is on.
@@ -262,10 +272,12 @@ struct AwayBadge: View {
 }
 
 /// A page-filling note with an icon, for an empty or a failed state.
-struct Notice: View {
+struct Notice<Actions: View>: View {
     let symbol: String
     let title: LocalizedStringKey
     let text: Text
+    /// What the user can do about it, under the text.
+    @ViewBuilder var actions: Actions
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -273,8 +285,15 @@ struct Notice: View {
             Image(systemName: symbol).font(.system(size: 40)).foregroundStyle(palette.accent)
             Text(title).font(.title3.weight(.semibold))
             text.foregroundStyle(palette.textDim).multilineTextAlignment(.center).textSelection(.enabled)
+            actions
         }
         .frame(maxWidth: 420)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+extension Notice where Actions == EmptyView {
+    init(symbol: String, title: LocalizedStringKey, text: Text) {
+        self.init(symbol: symbol, title: title, text: text) { EmptyView() }
     }
 }

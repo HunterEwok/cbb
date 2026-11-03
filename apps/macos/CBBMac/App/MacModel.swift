@@ -23,6 +23,12 @@ final class MacModel: ObservableObject {
     /// The outcome of the last action, for a line under it.
     @Published var message: String?
     @Published private(set) var busy = false
+    /// Whether a join of a phone's group runs (JoinSheet), and its QR code
+    /// once cbb wrote it.
+    @Published private(set) var joining = false
+    @Published private(set) var join: JoinCode?
+    private var joinFile: URL?
+    private var joinCancelled = false
     /// Whether macOS lets the app press keys for remote paste.
     @Published private(set) var pasteAllowed = Injector.allowed
 
@@ -232,6 +238,64 @@ final class MacModel: ObservableObject {
     /// warning the app showed, which cbb asks for.
     func setAway(_ on: Bool) async {
         await admin(["global", on ? "on" : "off"], answer: on, done: on ? String(localized: "Sync away from home is on.") : String(localized: "Sync away from home is off."))
+    }
+
+    /// What cbb pair -app writes (cmd/cbb/joinapp.go), with when the wait
+    /// ends.
+    struct JoinCode: Decodable, Equatable {
+        let qr: String
+        let expires: Int
+        let port: Int
+        var ends = Date()
+
+        private enum CodingKeys: String, CodingKey { case qr, expires, port }
+    }
+
+    /// Joins the group of the phone that scans the QR code: cbb runs as the
+    /// administrator and writes the code into a file the app made, which
+    /// the app reads while cbb waits; cancelJoin removes the file.
+    func joinPhone() async {
+        guard !joining, !busy else { return }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-join-\(UUID().uuidString).json")
+        guard FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+            message = Self.describe(Admin.Failure.failed(String(localized: "The app could not make the file for the QR code."), detail: file.path))
+            return
+        }
+        joining = true
+        joinFile = file
+        joinCancelled = false
+        let poll = Task { [weak self] in
+            while !Task.isCancelled {
+                if let data = try? Data(contentsOf: file), var code = try? JSONDecoder().decode(JoinCode.self, from: data) {
+                    code.ends = Date().addingTimeInterval(TimeInterval(code.expires))
+                    self?.join = code
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+        }
+        let details = Self.showsErrorDetails
+        await act { [weak self] in
+            do {
+                _ = try await Admin.run(["pair", "-app", file.path], details: details)
+            } catch {
+                if self?.joinCancelled == true { throw Admin.Failure.cancelled }
+                throw error
+            }
+            return String(localized: "Joined the group.")
+        }
+        poll.cancel()
+        try? FileManager.default.removeItem(at: file)
+        joinFile = nil
+        join = nil
+        joining = false
+    }
+
+    /// Ends the wait for the phone: cbb sees its file gone and hangs up.
+    func cancelJoin() {
+        guard let file = joinFile else { return }
+        joinCancelled = true
+        try? FileManager.default.removeItem(at: file)
     }
 
     private func admin(_ arguments: [String], answer: Bool = false, done: String) async {

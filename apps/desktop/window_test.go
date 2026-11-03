@@ -63,6 +63,7 @@ func TestWindow(t *testing.T) {
 	t.Run("russian", w.russian)
 	t.Run("errors", w.errors)
 	t.Run("admin", w.admin)
+	t.Run("join", w.joinPhone)
 }
 
 // window is the page under test and what stands around it.
@@ -495,6 +496,67 @@ func (w *window) admin(t *testing.T) {
 	}
 }
 
+// joinPhone joins a phone's group from a computer in none: the window shows
+// the QR code cbb pair -app writes, and closing the dialog removes the file,
+// which cancels.
+func (w *window) joinPhone(t *testing.T) {
+	w.t = t
+	t.Setenv("CBB_DEBUG", "0")
+	w.svc.mu.Lock()
+	group := w.svc.status.Group
+	w.svc.status.Group = ""
+	w.svc.mu.Unlock()
+	defer func() {
+		w.svc.mu.Lock()
+		w.svc.status.Group = group
+		w.svc.mu.Unlock()
+	}()
+	joined := make(chan struct{})
+	ran := make(chan []string, 4)
+	old := adminRun
+	adminRun = func(args []string, _, _ bool) error {
+		ran <- args
+		if len(args) != 3 || args[0] != "pair" || args[1] != "-app" {
+			return fmt.Errorf("ran %q", args)
+		}
+		code := `{"qr":"cbb://join?code=123456&addr=192.168.1.20%3A8764&fp=q83vEjRWeJA","expires":300,"port":8764}` + "\n"
+		if err := os.WriteFile(args[2], []byte(code), 0o600); err != nil {
+			return err
+		}
+		for {
+			select {
+			case <-joined:
+				return nil
+			case <-time.After(20 * time.Millisecond):
+			}
+			if _, err := os.Stat(args[2]); err != nil {
+				return &adminError{msg: "cancelled"}
+			}
+		}
+	}
+	defer func() { adminRun = old }()
+	w.open("en")
+	w.wait(`$q("#join") && !$q("#join").disabled`)
+
+	// Cancelled: the file is gone, and the window says nothing.
+	w.eval(`$click("#join")`, nil)
+	w.wait(`$q("#join-dialog").open && !$q("#join-code").hidden && $q("#join-qr").src.startsWith("data:image/png;base64,")`)
+	w.wait(`$q("#join-text").textContent.startsWith("cbb://join?code=123456") && $q("#join-port").textContent.includes("8764")`)
+	w.eval(`$clickText("#join-dialog menu button", "Cancel")`, nil)
+	w.wait(`!$q("#join-dialog").open`)
+	w.wait(`$q("#join") && !$q("#join").disabled && $q("#message").textContent === ""`)
+	if args := <-ran; args[0] != "pair" {
+		t.Errorf("join ran %q", args)
+	}
+
+	// Joined: the dialog closes by itself and the window says so.
+	w.eval(`$click("#join")`, nil)
+	w.wait(`$q("#join-dialog").open && !$q("#join-code").hidden`)
+	<-ran
+	close(joined)
+	w.wait(`!$q("#join-dialog").open && $q("#message").textContent === "Joined the group."`)
+}
+
 // fakeService answers the window's status and devices requests on a
 // control socket, and can stop listening, as a service that is not
 // running.
@@ -589,7 +651,9 @@ func (s *fakeService) serve(c net.Conn) {
 	a := &control.Message{Header: control.Header{Done: true}}
 	switch m.Op {
 	case control.OpStatus:
+		s.mu.Lock()
 		st := s.status
+		s.mu.Unlock()
 		a.Status = &st
 	case control.OpDevices:
 		a.Devices = s.devices

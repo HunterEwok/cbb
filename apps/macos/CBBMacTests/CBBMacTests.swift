@@ -35,6 +35,18 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(devices[0].systemWithVersion, "Ubuntu 24.04")
     }
 
+    /// What cbb pair -app writes reads as the join's code, and its QR code
+    /// draws.
+    func testJoinCode() throws {
+        let line = #"{"qr":"cbb://join?code=123456&addr=192.168.1.20%3A8764&fp=q83vEjRWeJA","expires":300,"port":8764}"#
+        let code = try JSONDecoder().decode(MacModel.JoinCode.self, from: Data(line.utf8))
+        XCTAssertEqual(code.expires, 300)
+        XCTAssertEqual(code.port, 8764)
+        XCTAssertTrue(code.qr.hasPrefix("cbb://join?code=123456"))
+        let image = try XCTUnwrap(JoinSheet.qrImage(code.qr))
+        XCTAssertGreaterThan(image.size.width, 20)
+    }
+
     func testBadHeader() {
         XCTAssertThrowsError(try Control.decode(Data("not json\n".utf8)))
         XCTAssertThrowsError(try Control.decode(Data(repeating: 0x41, count: Control.maxHeader + 1)))

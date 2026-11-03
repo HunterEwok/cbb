@@ -317,7 +317,11 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   second the pasteboard gets its items back, unless the user copied meanwhile. Typing posts
   Unicode key events, which no layout changes. It refuses without the permission, on the lock
   screen, in a session not on the screen, and under Secure Event Input.
-- Pairing runs in Terminal for now (`cbb pair`); the Developer ID app of roadmap item 22
+- **Join a phone's group**: on a Mac in no group, the button runs `cbb pair -app FILE` as the
+  administrator, and the sheet shows the QR code that cbb writes into the file (JSON: `qr`,
+  `expires`, `port`) while it waits for the phone, with the code as text and the time left.
+  Cancel removes the file, and cbb hangs up, which ends the wait. Admitting a computer into
+  a group still runs in Terminal (`sudo cbb pair`); the Developer ID app of roadmap item 22
   carries the service itself and a Network Extension.
 
 CI's `Mac app` job builds it and runs its tests, signed ad hoc. It runs on a real Mac when built with a
@@ -351,6 +355,10 @@ service and its clipboard agent keep syncing without it.
   prompt on Windows (an elevated PowerShell started with `ShellExecuteEx`'s `runas`, each
   argument a single-quoted literal, its output read back from a file). A dismissed prompt
   changes nothing and says nothing.
+- **Join a phone's group**: a computer in no group shows the button, which runs `cbb pair
+  -app FILE` as the administrator, as the Mac app does: the dialog shows the QR code cbb
+  writes into the file the app made, and Cancel removes the file. On Linux the file is
+  written over without being created, so root never makes a file in `/tmp`.
 - Languages: English and Russian (`frontend/l10n/ru.json`, keyed by the English text; the Go
   side reads it for the tray), picked from the system's language.
 

@@ -43,6 +43,12 @@ type Desk struct {
 	problem  string
 	message  string
 	busy     bool
+
+	// joinPath is the file of the join running now (join.go), "" when
+	// none; joinCancelled whether the window cancelled it.
+	joinPath      string
+	join          Join
+	joinCancelled bool
 }
 
 // State is the window's whole picture, read again every few seconds.

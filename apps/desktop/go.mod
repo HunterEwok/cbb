@@ -10,6 +10,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/wailsapp/wails/v3 v3.0.0-beta.34
 	golang.org/x/sys v0.49.0
+	rsc.io/qr v0.2.0
 )
 
 require (

@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The desktop apps show the QR code for joining a phone's group: on a computer in no group,
+  **Join a phone's group** in the tray app (Windows, Linux) and the Mac app runs `cbb pair
+  -app` as the administrator and shows the code, its text and the time left, without a
+  terminal; Cancel ends the wait. `cbb pair -app FILE` writes the code into a file the app
+  made and stops when the file is removed.
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
   `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,

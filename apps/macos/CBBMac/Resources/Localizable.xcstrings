@@ -891,16 +891,6 @@
         }
       }
     },
-    "Scan its QR code with the phone app after running cbb pair in Terminal, or make a group of computers with cbb new.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Выполните cbb pair в Терминале и отсканируйте QR-код приложением на телефоне или создайте группу компьютеров командой cbb new."
-          }
-        }
-      }
-    },
     "Send": {
       "localizations": {
         "ru": {
@@ -1757,6 +1747,106 @@
           "stringUnit": {
             "state": "translated",
             "value": "коллекция, %1$lld из %2$lld в сети, требует внимания"
+          }
+        }
+      }
+    },
+    "Join a phone's group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти в группу телефона"
+          }
+        }
+      }
+    },
+    "Show a QR code here and scan it with the phone app, or make a group of computers with cbb new.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Покажите здесь QR-код и отсканируйте его приложением на телефоне или создайте группу компьютеров командой cbb new."
+          }
+        }
+      }
+    },
+    "Allow cbb to run as the administrator; the QR code shows next.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешите cbb работать от имени администратора, и следом появится QR-код."
+          }
+        }
+      }
+    },
+    "In the CBB app on the phone, tap \"Connect a new device\" and scan this code:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В приложении CBB на телефоне нажмите «Подключить новое устройство» и отсканируйте этот код:"
+          }
+        }
+      }
+    },
+    "Without a camera, paste this into the app:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Без камеры вставьте в приложение этот текст:"
+          }
+        }
+      }
+    },
+    "The code is valid for %lld more min.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код действует ещё %lld мин."
+          }
+        }
+      }
+    },
+    "If the phone cannot connect, the firewall must let it reach TCP port %lld here.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Если телефон не может подключиться, брандмауэр должен пропускать его к TCP-порту %lld на этом Mac."
+          }
+        }
+      }
+    },
+    "Joined the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac вошёл в группу."
+          }
+        }
+      }
+    },
+    "QR code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-код"
+          }
+        }
+      }
+    },
+    "The app could not make the file for the QR code.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложение не смогло создать файл для QR-кода."
           }
         }
       }
