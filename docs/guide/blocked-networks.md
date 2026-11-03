@@ -51,16 +51,19 @@ VLESS runs between your devices and the forwarder, inside what looks to the netw
 ordinary HTTPS connection to a website.
 
 1. **The forwarder.** The project's forwarder at cbb.tools has VLESS on: to the network,
-   your devices visit `cbb.tools`. On a forwarder of your own, pick one of two ways
-   ([running your own servers](../admin/self-hosting.md#vless-on-the-forwarder)):
-   - **Behind your site's web server**, if the server has a website with its certificate:
-     `cbb forward -vless-xhttp vpn.example.org`, and the web server passes the path the
-     forwarder prints to it.
-   - **REALITY**, on a server without a site: `cbb forward -vless-site www.example.com`
-     borrows a large site's TLS, and anyone who connects without the group's keys, a censor
-     probing it for example, gets that site's own pages. Pick a site that is not blocked
-     where you travel and supports TLS 1.3, and open TCP 443 in the server's firewall,
-     beside UDP and TCP 8764.
+   your devices visit `cbb.tools`. A forwarder of your own runs it one of two ways:
+
+   ```sh
+   cbb forward -vless-xhttp vpn.example.org   # behind your site's web server
+   cbb forward -vless-site www.example.com    # REALITY, on a server without a site
+   ```
+
+   Behind a web server that has your site's certificate, the web server passes the path the
+   forwarder prints to it. REALITY borrows a large site's TLS, and anyone who connects
+   without the group's keys, a censor probing it for example, gets that site's own pages:
+   pick a site that is not blocked where you travel and supports TLS 1.3, and open TCP 443
+   in the server's firewall, beside UDP and TCP 8764. Setting up the server is in
+   [running your own servers](../admin/self-hosting.md#vless-on-the-forwarder).
 
 2. **On the hub**: switch VLESS on in the app (the hub's tunnel: VLESS), or:
 
