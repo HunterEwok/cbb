@@ -1176,6 +1176,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On an X11 desktop cbb could crash now and then while it opened another connection to the X
+  server or first used XTEST or the screen saver extension: xgb's extensions write tables that
+  every connection reads. Each extension now starts once, before any connection takes events.
 - A remote paste to Windows was refused with "not at the screen" though the agent ran in the
   session at the console: the service, as NT SERVICE\cbb, may not list the sessions, and now
   asks for the console's session first. A refusal names the target's session, or what the
