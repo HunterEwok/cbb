@@ -48,7 +48,7 @@ MKDIR "/cbb": CD "/cbb"
 ```
 
 `.http` fetches `.cbb` itself; `install` fetches the rest from cbb.tools into `/cbb`
-(`CBB.DRV`, `PIBRIDGE`, and the lite member for the Pi), then copies the Pi's `cbb` over the
+(`CBB.DRV` and the lite member for the Pi), then copies the Pi's `cbb` over the
 UART to `/NextPi/nextpi`, where it writes a start script `cbb` that keeps the member's state
 in `/NextPi/nextpi/cbb-state` (NextPi's root is read-only). Nothing else on the card or the Pi
 changes; the Pi's copy is removed from the card once the Pi has it.
@@ -83,7 +83,8 @@ The exact NextPi paths and the start script come with the first test on a real N
 drive the Pi without typing on the Next, even on a Pi Zero without a radio. The Next's
 ESP8266 dials the computer in its stock AT firmware's passthrough mode, and the Z80 copies
 bytes between the Pi's UART and the ESP's until SPACE is pressed. The shell is root's and
-travels in the clear: use it only on a network of your own, and only while testing.
+travels in the clear: use it only on a network of your own, and only while testing. For
+that reason `.cbb install` does not fetch it; copy it from CI's artifact when a test needs it.
 
 1. Join the ESP8266 to the Wi-Fi network once, as NextZXOS's own tools do.
 2. On the computer, listen on one port and take only the Next's address:

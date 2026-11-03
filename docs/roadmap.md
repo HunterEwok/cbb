@@ -889,7 +889,7 @@ forwarder to the hub, with the Next behind it.
 signature (apps/zxnext/README.md, "Install"):
 
 - The files for the Next are published on `cbb.tools` over plain HTTP, since NextZXOS's
-  `.http` has no TLS: `CBB`, `CBB.DRV`, `PIBRIDGE`, the Pi's `cbb` for ARMv6, and a list
+  `.http` has no TLS: `CBB`, `CBB.DRV`, the Pi's `cbb` for ARMv6, and a list
   with each file's size, CRC-32 and MD5 (`packaging/zxnext/site.sh`, the release's
   `clipboardbridge-zxnext.tar.gz`).
 - One line fetches `.cbb`: `.http -h cbb.tools -u /zxnext -f CBB`, then `../CBB install` fetches

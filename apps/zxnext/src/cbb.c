@@ -625,7 +625,6 @@ struct item {
 static struct item items[] = {
     {"CBB", "/cbb/CBB", "/cbb/CBB.PRT", 0, 0, ""},
     {"CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", 0, 0, ""},
-    {"PIBRIDGE", "/cbb/PIBRIDGE", "/cbb/PIB.PRT", 0, 0, ""},
     {"cbb", PI_CARD, "/cbb/CBBPI.PRT", 0, 0, ""},
 };
 #define ITEMS (sizeof items / sizeof items[0])

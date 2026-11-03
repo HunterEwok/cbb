@@ -8,7 +8,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
 
 ### Added
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
-  `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV`, `PIBRIDGE` and the
+  `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,
   SPACE to stop and a resumed download, checks each file against the site's list (size and
   CRC-32, MD5 on the Pi), and copies the Pi's `cbb` over the UART to `/NextPi/nextpi`. Each

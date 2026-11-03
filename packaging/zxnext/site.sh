@@ -7,10 +7,10 @@
 #
 #   sh packaging/zxnext/site.sh BUILD PI_CBB OUTDIR
 #
-# BUILD is apps/zxnext/build (CBB, CBB.DRV, PIBRIDGE), PI_CBB the lite
+# BUILD is apps/zxnext/build (CBB, CBB.DRV), PI_CBB the lite
 # member for the Pi Zero (arm-unknown-linux-musleabihf). OUTDIR gets
 #
-#   zxnext/CBB, zxnext/CBB.DRV, zxnext/PIBRIDGE, zxnext/cbb
+#   zxnext/CBB, zxnext/CBB.DRV, zxnext/cbb
 #   zxnext/LIST  a line NAME SIZE CRC32 MD5 for each, which .cbb checks
 #                each download against (CRC-32 on the Next, MD5 on the Pi)
 #
@@ -28,7 +28,7 @@ crc32() {
 }
 
 mkdir -p "$out/zxnext"
-for f in CBB CBB.DRV PIBRIDGE; do
+for f in CBB CBB.DRV; do
     test -s "$build/$f" || { echo "$0: $build/$f is missing" >&2; exit 1; }
     cp "$build/$f" "$out/zxnext/$f"
 done
@@ -36,7 +36,7 @@ test -s "$pi" || { echo "$0: $pi is missing" >&2; exit 1; }
 cp "$pi" "$out/zxnext/cbb"
 
 : >"$out/zxnext/LIST"
-for f in CBB CBB.DRV PIBRIDGE cbb; do
+for f in CBB CBB.DRV cbb; do
     p=$out/zxnext/$f
     size=$(wc -c <"$p" | tr -d ' ')
     md5=$(md5sum <"$p" | cut -c1-32)
