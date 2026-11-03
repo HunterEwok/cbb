@@ -251,6 +251,156 @@
         }
       }
     },
+    "How the hub's tunnel hides": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как хаб маскирует туннель"
+          }
+        }
+      }
+    },
+    "Forwarder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Форвардер"
+          }
+        }
+      }
+    },
+    "none": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нет"
+          }
+        }
+      }
+    },
+    "Change the forwarder…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить форвардер…"
+          }
+        }
+      }
+    },
+    "Change the forwarder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить форвардер"
+          }
+        }
+      }
+    },
+    "Change how the hub's tunnel hides?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить маскировку туннеля хаба?"
+          }
+        }
+      }
+    },
+    "Change": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить"
+          }
+        }
+      }
+    },
+    "Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда ваши устройства будут доходить до хаба только через VLESS к его форвардеру, а форвардер должен принимать VLESS. Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
+          }
+        }
+      }
+    },
+    "Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
+          }
+        }
+      }
+    },
+    "The key cbb forward prints": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ, который печатает cbb forward"
+          }
+        }
+      }
+    },
+    "The project's forwarder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Форвардер проекта"
+          }
+        }
+      }
+    },
+    "Your own forwarder's address and key, as cbb forward prints them, or the project's forwarder at cbb.tools.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Адрес и ключ своего форвардера, как их печатает cbb forward, или форвардер проекта на cbb.tools."
+          }
+        }
+      }
+    },
+    "The hub's settings are saved.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки хаба сохранены."
+          }
+        }
+      }
+    },
+    "The group's hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы"
+          }
+        }
+      }
+    },
+    "The group's hub, in use now": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы, используется сейчас"
+          }
+        }
+      }
+    },
     "Board": {
       "localizations": {
         "ru": {
@@ -887,16 +1037,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Рубин"
-          }
-        }
-      }
-    },
-    "Scan its QR code with the phone app after running cbb pair in Terminal, or make a group of computers with cbb new.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Выполните cbb pair в Терминале и отсканируйте QR-код приложением на телефоне или создайте группу компьютеров командой cbb new."
           }
         }
       }
@@ -1757,6 +1897,176 @@
           "stringUnit": {
             "state": "translated",
             "value": "коллекция, %1$lld из %2$lld в сети, требует внимания"
+          }
+        }
+      }
+    },
+    "Join a phone's group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти в группу телефона"
+          }
+        }
+      }
+    },
+    "Show a QR code here and scan it with the phone app, or make a group of computers with cbb new.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Покажите здесь QR-код и отсканируйте его приложением на телефоне или создайте группу компьютеров командой cbb new."
+          }
+        }
+      }
+    },
+    "Allow cbb to run as the administrator; the QR code shows next.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешите cbb работать от имени администратора, и следом появится QR-код."
+          }
+        }
+      }
+    },
+    "In the CBB app on the phone, tap \"Connect a new device\" and scan this code:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В приложении CBB на телефоне нажмите «Подключить новое устройство» и отсканируйте этот код:"
+          }
+        }
+      }
+    },
+    "Without a camera, paste this into the app:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Без камеры вставьте в приложение этот текст:"
+          }
+        }
+      }
+    },
+    "The code is valid for %lld more min.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код действует ещё %lld мин."
+          }
+        }
+      }
+    },
+    "If the phone cannot connect, the firewall must let it reach TCP port %lld here.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Если телефон не может подключиться, брандмауэр должен пропускать его к TCP-порту %lld на этом Mac."
+          }
+        }
+      }
+    },
+    "Joined the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac вошёл в группу."
+          }
+        }
+      }
+    },
+    "QR code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-код"
+          }
+        }
+      }
+    },
+    "The app could not make the file for the QR code.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложение не смогло создать файл для QR-кода."
+          }
+        }
+      }
+    },
+    "This Mac was removed from the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот Mac удалён из группы"
+          }
+        }
+      }
+    },
+    "Its members refuse it. To join a group again, remove CBB with its keys (sudo sh /usr/local/share/cbb/uninstall.sh --purge), install it again and join.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Участники группы его не принимают. Чтобы снова войти в группу, удалите CBB вместе с ключами (sudo sh /usr/local/share/cbb/uninstall.sh --purge), установите заново и войдите."
+          }
+        }
+      }
+    },
+    "Make it a hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать хабом"
+          }
+        }
+      }
+    },
+    "Make %@ a hub?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать %@ хабом?"
+          }
+        }
+      }
+    },
+    "It is a hub now.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Теперь это хаб."
+          }
+        }
+      }
+    },
+    "Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вне дома ваши устройства будут связываться с группой через него, через пересыльщик проекта на cbb.tools."
+          }
+        }
+      }
+    },
+    "Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вне дома ваши устройства будут связываться с группой через него, через пересыльщик проекта на cbb.tools. Синхронизация вне дома должна быть уже включена на нём: включает её только его пользователь."
           }
         }
       }

@@ -14,6 +14,7 @@ struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var switching = false
     @State private var moving: AppModel.Hub.Target?
+    @State private var disguiseTo: HubOnPhone.Disguise?
     @State private var forwarderAddress = ""
     @State private var forwarderKey = ""
     @State private var relayAddress = ""
@@ -261,6 +262,15 @@ struct SettingsView: View {
                     Text("Save the forwarder")
                 }
                 .disabled(switching || (forwarderAddress == ownForwarder(hub)?.endpoint ?? "" && forwarderKey == ownForwarder(hub)?.pin ?? ""))
+                Picker(selection: Binding(get: { hub.disguise }, set: { if $0 != hub.disguise { disguiseTo = $0 } })) {
+                    ForEach(HubOnPhone.Disguise.allCases, id: \.self) { Text(verbatim: Self.disguiseName($0)).tag($0) }
+                } label: {
+                    Text("How the hub's tunnel hides")
+                }
+                .disabled(switching)
+                Text("For networks that block WireGuard. VLESS needs a forwarder that takes it.")
+                    .font(.footnote)
+                    .foregroundStyle(palette.textDim)
             }
             if let note = model.hubNote {
                 Text(verbatim: note).font(.caption).foregroundStyle(palette.danger)
@@ -274,6 +284,29 @@ struct SettingsView: View {
         .onAppear {
             forwarderAddress = ownForwarder(hub)?.endpoint ?? ""
             forwarderKey = ownForwarder(hub)?.pin ?? ""
+        }
+        .alert(Text("Change how the hub's tunnel hides?"), isPresented: Binding(get: { disguiseTo != nil }, set: { if !$0 { disguiseTo = nil } })) {
+            Button {
+                if let d = disguiseTo {
+                    switching = true
+                    Task {
+                        await model.setHubDisguise(d)
+                        switching = false
+                    }
+                }
+            } label: { Text("Change") }
+            Button(role: .cancel) {} label: { Text("Cancel") }
+        } message: {
+            Text("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
+        }
+    }
+
+    /// The names of the ways the tunnel hides, the protocols' own.
+    static func disguiseName(_ d: HubOnPhone.Disguise) -> String {
+        switch d {
+        case .plain: "WireGuard"
+        case .obfuscate: "AmneziaWG"
+        case .vless: "VLESS"
         }
     }
 
@@ -328,7 +361,11 @@ struct SettingsView: View {
         switch away.status {
         case .atHome: return Text("At home: syncing directly.")
         case .connecting: return Text("Connecting to the hub through the tunnel…")
-        case .connected: return Text("Connected to the hub through the tunnel.")
+        case .connected:
+            if let name = away.hub.flatMap({ id in model.devices.first { $0.id == id }?.name }) {
+                return Text("Connected to the hub \(name) through the tunnel.")
+            }
+            return Text("Connected to the hub through the tunnel.")
         case .off, .waitingForHub: return Text("Waiting for the hub: open the app at home once, near a computer of the group.")
         }
     }

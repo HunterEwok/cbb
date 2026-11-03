@@ -124,7 +124,19 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val mode: String? = null,
         /** The quick actions its hello says are on, while it is connected. */
         val actions: List<String> = emptyList(),
+        /** The records let it be a hub: the root's own device or an admin with the hub power. */
+        val mayHub: Boolean = false,
+        /** Where it stands among the group's hubs, as this phone knows: null when it is none. */
+        val hub: HubMark? = null,
     )
+
+    /** A device as one of the group's hubs: this phone while it is the hub, or a hub whose offer the phone keeps. */
+    enum class HubMark {
+        HUB,
+
+        /** The hub the phone reaches now. */
+        IN_USE,
+    }
 
     /**
      * What this phone says about itself in its hellos: a phone, a tablet or
@@ -251,6 +263,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val modes = n?.modes.orEmpty()
             val acts = n?.actions.orEmpty()
             val root = g.records.rootDevice
+            val away = awayFromHome?.takeIf { it.isOn }
+            val (inUse, hubs) = away?.let { a ->
+                val reached = a.status == AwayFromHome.Status.CONNECTED || a.status == AwayFromHome.Status.AT_HOME
+                (if (reached) a.inUse else null) to a.hubs.toSet()
+            } ?: (null to emptySet())
+            val selfHub = phoneHub?.isOn == true
             return g.devices.map {
                 Device(
                     id = it.id, name = it.name, online = it.id == g.device || it.id in online, role = it.role, os = it.os, isSelf = it.id == g.device,
@@ -262,6 +280,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     device = if (it.id == g.device) ownDevice.cleaned else infos[it.id],
                     mode = if (it.id == g.device) syncMode else modes[it.id],
                     actions = acts[it.id].orEmpty(),
+                    mayHub = g.records.mayHost(it.id),
+                    hub = when {
+                        it.id == g.device -> if (selfHub) HubMark.HUB else null
+                        it.id == inUse -> HubMark.IN_USE
+                        it.id in hubs -> HubMark.HUB
+                        else -> null
+                    },
                 )
             }
         }
@@ -319,6 +344,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             h.setForwarder(HubState.Forwarder(ep, pin.trim()))
         }
         refreshHub()
+    }
+
+    /** Sets how the hub's tunnel hides, then connects again, so that the clients at home get the new offer; on the caller's IO thread. */
+    fun setHubDisguise(d: HubOnPhone.Disguise) {
+        val h = phoneHub ?: return
+        h.setDisguise(d)
+        restartSync()
     }
 
     /** Lets the hub run in the foreground service while the app is in the background. */
@@ -1242,6 +1274,35 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         h.turnOff()
         a.keep(id, offer.with(psk, null))
         withContext(Dispatchers.IO) { restartSync() }
+    }
+
+    /**
+     * Makes a connected admin computer a hub of the group as well
+     * (docs/protocol.md, section 11, "Several hubs"): a hub command signed
+     * with this phone's root or admin key, reached through this phone's
+     * forwarder or else the project's. This phone stays what it is: a hub
+     * hands the computer its clients, and with sync away from home on this
+     * phone hands itself and keeps the computer's offer. The computer must
+     * have sync away from home on; only its own user turns that on. A
+     * computer that is no admin yet becomes one first, on the root.
+     */
+    suspend fun makeHub(id: String) {
+        val n = currentNode ?: throw MemberNode.ProtocolException("the device is not connected")
+        if (copyOfState()?.records?.mayHost(id) != true) makeAdmin(id)
+        val h = synchronized(lock) { hub }
+        val fw = h?.forwarder ?: withContext(Dispatchers.IO) { HubState.Forwarder.project() } ?: throw HubOnPhone.NotRunning()
+        val ca = caSigner(R.string.reason_make_hub)
+        val g = copyOfState() ?: return
+        val clients = (if (h?.isOn == true) h.handover else emptyList()).toMutableList()
+        val a = awayFromHome
+        val psk = a?.takeIf { it.isOn }?.keys?.let { (key, psk) ->
+            clients += PhoneHub.Client(g.device, key, psk)
+            psk
+        }
+        val r = withContext(Dispatchers.IO) { n.command(id, g.hubCommand(id, fw.endpoint to fw.pin, clients, ca, Instant.now()), MOVE_TIMEOUT_MS) }
+        if (!r.done) throw CommandRefused(r.reason ?: r.status)
+        val offer = r.tunnel
+        if (offer != null && psk != null) a?.keep(id, offer.with(psk, null))
     }
 
     /**

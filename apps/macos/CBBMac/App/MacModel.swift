@@ -23,6 +23,12 @@ final class MacModel: ObservableObject {
     /// The outcome of the last action, for a line under it.
     @Published var message: String?
     @Published private(set) var busy = false
+    /// Whether a join of a phone's group runs (JoinSheet), and its QR code
+    /// once cbb wrote it.
+    @Published private(set) var joining = false
+    @Published private(set) var join: JoinCode?
+    private var joinFile: URL?
+    private var joinCancelled = false
     /// Whether macOS lets the app press keys for remote paste.
     @Published private(set) var pasteAllowed = Injector.allowed
 
@@ -215,6 +221,48 @@ final class MacModel: ObservableObject {
     /// which -allow-file-key consents to.
     func makeAdmin(_ id: String) async { await admin(["admin", "-allow-file-key", id], done: String(localized: "It is an admin now.")) }
     func freeze(_ id: String) async { await admin(["freeze", id], done: String(localized: "Frozen.")) }
+    /// Makes a device a hub of the group for sync away from home, reached
+    /// through the project's forwarder: this Mac as cbb global hub does, or
+    /// another admin computer, to which cbb sends a signed hub command.
+    func makeHub(_ d: Control.Device) async {
+        let args = d.isSelf ? ["global", "hub", "-firewall", "no"] : ["global", "hub", "-on", d.id]
+        await admin(args, done: String(localized: "It is a hub now."))
+    }
+    /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
+    enum HubTunnel: String, CaseIterable, Identifiable {
+        case plain, obfuscate, vless
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .plain: "WireGuard"
+            case .obfuscate: "AmneziaWG"
+            case .vless: "VLESS"
+            }
+        }
+    }
+
+    /// How this Mac's tunnel hides while it is a hub.
+    var hubTunnel: HubTunnel {
+        guard let a = status?.away else { return .plain }
+        return a.vless == true ? .vless : a.obfuscated == true ? .obfuscate : .plain
+    }
+
+    /// Sets how this hub's tunnel hides and, with forwarder, its forwarder
+    /// ("default" for the project's), keeping its addresses and port.
+    func setHub(_ tunnel: HubTunnel, forwarder: String? = nil, key: String? = nil) async {
+        var args = ["global", "hub", "-keep", "-firewall", "no"]
+        switch tunnel {
+        case .plain: break
+        case .obfuscate: args.append("-obfuscate")
+        case .vless: args.append("-vless")
+        }
+        if let forwarder, !forwarder.isEmpty {
+            args += ["-forwarder", forwarder]
+            if let key, !key.isEmpty { args += ["-forwarder-key", key] }
+        }
+        await admin(args, done: String(localized: "The hub's settings are saved."))
+    }
+
     /// On the group's root: voids both histories of every key that signed two.
     func resolve() async {
         await admin(["resolve"], done: String(localized: "Both histories are void. The device signs its records again by itself."))
@@ -232,6 +280,64 @@ final class MacModel: ObservableObject {
     /// warning the app showed, which cbb asks for.
     func setAway(_ on: Bool) async {
         await admin(["global", on ? "on" : "off"], answer: on, done: on ? String(localized: "Sync away from home is on.") : String(localized: "Sync away from home is off."))
+    }
+
+    /// What cbb pair -app writes (cmd/cbb/joinapp.go), with when the wait
+    /// ends.
+    struct JoinCode: Decodable, Equatable {
+        let qr: String
+        let expires: Int
+        let port: Int
+        var ends = Date()
+
+        private enum CodingKeys: String, CodingKey { case qr, expires, port }
+    }
+
+    /// Joins the group of the phone that scans the QR code: cbb runs as the
+    /// administrator and writes the code into a file the app made, which
+    /// the app reads while cbb waits; cancelJoin removes the file.
+    func joinPhone() async {
+        guard !joining, !busy else { return }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-join-\(UUID().uuidString).json")
+        guard FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+            message = Self.describe(Admin.Failure.failed(String(localized: "The app could not make the file for the QR code."), detail: file.path))
+            return
+        }
+        joining = true
+        joinFile = file
+        joinCancelled = false
+        let poll = Task { [weak self] in
+            while !Task.isCancelled {
+                if let data = try? Data(contentsOf: file), var code = try? JSONDecoder().decode(JoinCode.self, from: data) {
+                    code.ends = Date().addingTimeInterval(TimeInterval(code.expires))
+                    self?.join = code
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+        }
+        let details = Self.showsErrorDetails
+        await act { [weak self] in
+            do {
+                _ = try await Admin.run(["pair", "-app", file.path], details: details)
+            } catch {
+                if self?.joinCancelled == true { throw Admin.Failure.cancelled }
+                throw error
+            }
+            return String(localized: "Joined the group.")
+        }
+        poll.cancel()
+        try? FileManager.default.removeItem(at: file)
+        joinFile = nil
+        join = nil
+        joining = false
+    }
+
+    /// Ends the wait for the phone: cbb sees its file gone and hangs up.
+    func cancelJoin() {
+        guard let file = joinFile else { return }
+        joinCancelled = true
+        try? FileManager.default.removeItem(at: file)
     }
 
     private func admin(_ arguments: [String], answer: Bool = false, done: String) async {

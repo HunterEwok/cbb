@@ -84,6 +84,7 @@ func TestTranslations(t *testing.T) {
 		"frontend/app.js":     regexp.MustCompile(`\bt\("([^"]+)"`),
 		"frontend/index.html": regexp.MustCompile(`data-t>([^<]+)<|data-t-title="([^"]+)"`),
 		"desk.go":             regexp.MustCompile(`d\.T\("([^"]+)"\)|false, "([^"]+)"\)|true, "([^"]+)"\)`),
+		"join.go":             regexp.MustCompile(`d\.T\("([^"]+)"\)`),
 		"admin_linux.go":      regexp.MustCompile(`deniedText = "([^"]+)"|msg: "([^"]+)"`),
 		"admin_windows.go":    regexp.MustCompile(`deniedText = "([^"]+)"|msg: "([^"]+)"`),
 	} {

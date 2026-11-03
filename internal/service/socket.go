@@ -660,9 +660,9 @@ func (s *Service) errNotAdmitter() error {
 		}
 	}
 	if len(names) == 0 {
-		return errors.New("only the group's root or an admin adds devices, and this device is neither")
+		return errors.New("this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither")
 	}
-	return fmt.Errorf("only the group's root or an admin adds devices; run cbb pair on %s", strings.Join(names, " or "))
+	return fmt.Errorf("this device is in a group already (cbb status lists it); only the group's root or an admin adds more devices, so to add one run cbb pair on %s", strings.Join(names, " or "))
 }
 
 // createGroup creates a group on a device in no group, with this device as

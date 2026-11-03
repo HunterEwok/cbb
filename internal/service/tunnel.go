@@ -670,6 +670,9 @@ func (s *Service) away(ctx context.Context, m *control.Message) error {
 	if m.Name == "off" && m.Device != "" {
 		return s.awayOffOn(ctx, m.Device)
 	}
+	if m.Name == "hub" && m.Device != "" {
+		return s.makeHub(ctx, m.Device, m.Forwarder, m.ForwarderKey, m.Addrs)
+	}
 	if m.Name == "hub" && !id.IsAdmin() {
 		return errors.New("only the group's root or an admin can be its hub, since the members take the hub's offer from them only; make this device an admin first (cbb admin on the root)")
 	}
@@ -691,6 +694,42 @@ func (s *Service) away(ctx context.Context, m *control.Message) error {
 		nd.Reconnect()
 	}
 	return nil
+}
+
+// hubSettings returns the forwarder, addresses and UDP port a hub message
+// sets: those it gives, and with Keep the hub's own where it gives none,
+// so that the apps change how the tunnel hides without restating them.
+func (s *Service) hubSettings(st *tunnel.State, m *control.Message) (*tunnel.ForwarderLink, []netip.AddrPort, int, error) {
+	fwdGiven := m.Forwarder != "" || m.ForwarderKey != ""
+	if !m.Keep {
+		fw, eps, err := hubAddrs(m.Forwarder, m.ForwarderKey, m.Addrs, s.projectPins())
+		return fw, eps, m.Port, err
+	}
+	if !st.IsHub {
+		return nil, nil, 0, errors.New("this device is not a hub yet, so it has no settings to keep; make it one first: cbb global hub")
+	}
+	var fw *tunnel.ForwarderLink
+	if st.Forwarder != nil {
+		c := *st.Forwarder
+		fw = &c
+	}
+	eps, port := slices.Clone(st.Endpoints), st.ListenPort
+	if fwdGiven || len(m.Addrs) > 0 {
+		f, e, err := hubAddrs(m.Forwarder, m.ForwarderKey, m.Addrs, s.projectPins())
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if fwdGiven {
+			fw = f
+		}
+		if len(m.Addrs) > 0 {
+			eps = e
+		}
+	}
+	if m.Port != 0 {
+		port = m.Port
+	}
+	return fw, eps, port, nil
 }
 
 func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, key, psk []byte, err error) {
@@ -732,9 +771,12 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 		if m.Port < 0 || m.Port > 65535 {
 			return false, nil, nil, fmt.Errorf("a bad port %d", m.Port)
 		}
-		fw, eps, err := hubAddrs(m.Forwarder, m.ForwarderKey, m.Addrs, s.projectPins())
+		fw, eps, port, err := s.hubSettings(st, m)
 		if err != nil {
 			return false, nil, nil, err
+		}
+		if !m.VLESS && fw != nil {
+			fw.VLESSID, fw.VLESS = "", nil
 		}
 		if m.VLESS {
 			if fw == nil {
@@ -763,7 +805,7 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 			}
 		}
 		old := *st
-		st.IsHub, st.Endpoints, st.ListenPort, st.Forwarder, st.Relay, st.Obfuscation = true, eps, m.Port, fw, nil, obf
+		st.IsHub, st.Endpoints, st.ListenPort, st.Forwarder, st.Relay, st.Obfuscation = true, eps, port, fw, nil, obf
 		if err := st.Save(s.cfg.StateDir); err != nil {
 			*st = old
 			return false, nil, nil, fmt.Errorf("saving the tunnel state: %w", err)

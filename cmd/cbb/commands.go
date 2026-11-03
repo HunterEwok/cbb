@@ -350,6 +350,7 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	newToken := fs.Bool("new-token", false, "with -phone: revoke the token of every shortcut paired so far, and pair this iPhone with a new one")
 	typed := fs.Bool("code", false, "join with the code that cbb pair shows on the group's root or an admin, read from standard input")
 	invitation := fs.String("invite", "", "join from afar with the invitation file that cbb invite made on the group's hub")
+	forApp := fs.String("app", "", "for the desktop apps: join by the phone's QR code, write its text to this file, which must exist, and stop when the file is removed")
 	if fs.Parse(args) != nil {
 		return 2
 	}
@@ -358,6 +359,7 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case *phone && (*typed || *invitation != "" || len(rest) != 0),
 		*newToken && !*phone,
 		*invitation != "" && (*typed || len(rest) != 0),
+		*forApp != "" && (*phone || *typed || *invitation != "" || len(rest) != 0),
 		len(rest) > 1 || len(rest) == 1 && (!*typed || !strings.Contains(rest[0], ":")):
 		fmt.Fprintln(stderr, pairUsage)
 		return 2
@@ -383,8 +385,13 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
-	if st.Group == "" {
+	switch {
+	case st.Group == "" && *forApp != "":
+		return joinForApp(*forApp, stdout, stderr)
+	case st.Group == "":
 		return joinByQR(stdin, stdout, stderr)
+	case *forApp != "":
+		return fail(stderr, errors.New("this device is in a group already (cbb status lists it)"))
 	}
 	return admit(stdout, stderr)
 }
@@ -394,7 +401,8 @@ const pairUsage = `usage: cbb pair                  in a group: show a code for 
        cbb pair -code [address:port]   join with the code, read from standard input
        cbb pair -phone          pair an iPhone with the shortcut
        cbb pair -phone -new-token   revoke every shortcut's token, then pair with a new one
-       cbb pair -invite file    join from afar with an invitation`
+       cbb pair -invite file    join from afar with an invitation
+       cbb pair -app file       for the desktop apps: join by the QR code they show`
 
 // serviceStatus asks the service for its status.
 func serviceStatus() (*control.Status, error) {
@@ -507,40 +515,50 @@ func joinWithCode(line, address string, stdout, stderr io.Writer) int {
 // device: it shows the QR code and waits for the window the phone opens.
 // Meanwhile the user may type the code that cbb pair shows on a computer
 // of the group instead.
-func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
+// listenForPhone asks the service to wait for the phone that scans the QR
+// code, and returns the connection, the code's text and how many seconds
+// the wait lasts. The service answers first with where, for the QR code,
+// then once more when the join ends; closing the connection cancels it.
+func listenForPhone() (*control.Client, string, int, error) {
 	h := control.Header{Op: control.OpJoin, Code: pair.NewCode(), Expires: int(pair.Lifetime / time.Second), Listen: true}
 	c, err := control.DialFor(control.OpJoin)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	m, err := c.Do(&control.Message{Header: h})
+	if err != nil {
+		c.Close()
+		return nil, "", 0, err
+	}
+	if len(m.Addrs) == 0 {
+		c.Close()
+		return nil, "", 0, errors.New("this device has no address on the home network; connect it to the network, or use cbb pair -code")
+	}
+	return c, phone.JoinQR(phone.JoinCode{Code: h.Code, Addrs: m.Addrs, Fingerprint: m.Fingerprint}), h.Expires, nil
+}
+
+func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
+	c, text, expires, err := listenForPhone()
 	if err != nil {
 		return fail(stderr, err)
 	}
 	defer c.Close()
-	m, err := c.Do(&control.Message{Header: h})
-	if err != nil {
-		return fail(stderr, err)
-	}
-	// The service listens and answers first with where, for the QR code,
-	// then once more when the join ends.
-	if len(m.Addrs) == 0 {
-		return fail(stderr, errors.New("this device has no address on the home network; connect it to the network, or use cbb pair -code"))
-	}
 	fmt.Fprintln(stdout, "In the CBB app, tap \"Connect a new device\" (or run the shortcut")
 	fmt.Fprintln(stdout, "\"cbb: add a computer\") and scan this:")
 	fmt.Fprintln(stdout)
-	jc := phone.JoinCode{Code: h.Code, Addrs: m.Addrs, Fingerprint: m.Fingerprint}
-	text := phone.JoinQR(jc)
 	if err := writeQR(stdout, text); err != nil {
 		return fail(stderr, err)
 	}
 	// The same code as text, for a phone without a camera, such as the
 	// app in the iOS simulator.
 	fmt.Fprintf(stdout, "\nOr paste this into the app: %s\n", text)
-	fmt.Fprintf(stdout, "\nWaiting up to %d minutes. Press Ctrl+C to cancel.\n", h.Expires/60)
+	fmt.Fprintf(stdout, "\nWaiting up to %d minutes. Press Ctrl+C to cancel.\n", expires/60)
 	port, err := service.Port()
 	if err != nil {
 		port = service.MemberPort
 	}
 	fmt.Fprintf(stdout, "If the phone cannot connect, a firewall may be in the way: TCP %d must be open to\n", port)
-	fmt.Fprintln(stdout, "the home network; the installer opens it in ufw or firewalld (docs/guide/install.md).")
+	fmt.Fprintln(stdout, firewallHint)
 	fmt.Fprint(stdout, "\nWithout a phone: run cbb pair on the group's root or an admin and type its code here: ")
 
 	ended := make(chan error, 1)

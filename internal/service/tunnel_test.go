@@ -394,6 +394,14 @@ func TestAwayObfuscated(t *testing.T) {
 	if again := tunnelState(t, pi).Obfuscation; !again.Equal(obf) {
 		t.Error("setting the hub again made new obfuscation settings")
 	}
+	// The apps' switch sets only how the tunnel hides and keeps the rest.
+	keep := control.Header{Op: control.OpAway, Name: "hub", Keep: true, Obfuscate: true}
+	if _, err := pi.do(t, keep, ""); err != nil {
+		t.Fatal(err)
+	}
+	if st := tunnelState(t, pi); !st.Obfuscation.Equal(obf) || st.ListenPort != port || len(st.Endpoints) != 1 || st.Endpoints[0].Port() != uint16(port) || st.Forwarder != nil {
+		t.Errorf("-keep changed the hub: port %d, endpoints %v, forwarder %+v", st.ListenPort, st.Endpoints, st.Forwarder)
+	}
 	piID := pi.status(t).Device
 	waitFor(t, "the deck keeps the hub's offer with its settings", func() bool {
 		a := deck.status(t).Away
@@ -415,6 +423,17 @@ func TestAwayObfuscated(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "hidden on the way" })
+
+	keep.Obfuscate = false
+	if _, err := pi.do(t, keep, ""); err != nil {
+		t.Fatal(err)
+	}
+	if st := tunnelState(t, pi); st.Obfuscation != nil || st.ListenPort != port || len(st.Endpoints) != 1 {
+		t.Errorf("-keep without -obfuscate: obfuscation %+v, port %d, endpoints %v", st.Obfuscation, st.ListenPort, st.Endpoints)
+	}
+	if _, err := deck.do(t, keep, ""); err == nil {
+		t.Error("-keep made a device that is no hub one")
+	}
 }
 
 // TestAwayThroughForwarder makes the pi a hub that only a forwarder
@@ -951,5 +970,83 @@ func TestHubsToTry(t *testing.T) {
 	got := hubsToTry(order, "deck", st)
 	if !slices.Equal(devs(got), []string{"phone", "pi"}) || got[0].PublicKey != (tunnel.Key{1}) || got[0].Next != (tunnel.Key{2}) {
 		t.Errorf("a client tries %+v", got)
+	}
+}
+
+// TestMakeHub has the pi, the group's root and not a hub, make the Mac, an
+// admin, a hub of the group: the Mac refuses while sync away from home is
+// off there, then becomes a hub and serves, and the pi keeps its offer. A
+// device that is no admin cannot be made one.
+func TestMakeHub(t *testing.T) {
+	var h hub
+	pi := startService(t, &h, "pi")
+	mac := startService(t, &h, "mac")
+	deck := startService(t, &h, "deck")
+	pairWith(t, pi, mac)
+	pairWith(t, pi, deck)
+	makeAdmin(t, pi, mac)
+	macID := mac.status(t).Device
+
+	for _, d := range pi.devices(t) {
+		if want := d.Name == "pi" || d.Name == "mac"; d.MayHub != want {
+			t.Errorf("%s: may_hub %v", d.Name, d.MayHub)
+		}
+	}
+	port := freeUDP(t)
+	addr := []string{fmt.Sprintf("127.0.0.1:%d", port)}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "turn it on there first") {
+		t.Errorf("a Mac without sync away from home became a hub: %v", err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "deck", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "make it an admin first") {
+		t.Errorf("a device that is no admin became a hub: %v", err)
+	}
+	if _, err := deck.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err == nil {
+		t.Error("a device that is no admin made another a hub")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac"}, ""); err == nil {
+		t.Error("made a hub without addresses or a forwarder")
+	}
+
+	for _, s := range []*testService{pi, mac} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mac.stop()
+	mst := tunnelState(t, mac)
+	mst.ListenPort = port
+	if err := mst.Save(mac.dir); err != nil {
+		t.Fatal(err)
+	}
+	mac = restartService(t, &h, mac)
+	waitUpTo(t, 30*time.Second, "the pi and the Mac meet again", func() bool {
+		return len(pi.status(t).Peers) == 2
+	})
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if a := mac.status(t).Away; a == nil || !a.Hub {
+		t.Errorf("the Mac: %+v", a)
+	}
+	if a := pi.status(t).Away; a == nil || a.Hub {
+		t.Errorf("the pi became a hub itself: %+v", a)
+	}
+	if tunnelState(t, pi).Hub(macID) == nil {
+		t.Error("the pi did not keep the Mac's offer")
+	}
+	var pid string
+	for _, c := range tunnelState(t, mac).Members {
+		pid = c.Device
+	}
+	if pid != pi.status(t).Device {
+		t.Errorf("the Mac's clients: %+v", tunnelState(t, mac).Members)
+	}
+	// Both list the Mac as the group's hub, and only the Mac.
+	for _, s := range []*testService{pi, mac} {
+		for _, d := range s.devices(t) {
+			if want := d.Name == "mac"; d.Hub != want {
+				t.Errorf("on %s, %s: hub %v", s.name, d.Name, d.Hub)
+			}
+		}
 	}
 }

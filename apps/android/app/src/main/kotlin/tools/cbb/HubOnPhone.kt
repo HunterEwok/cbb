@@ -31,6 +31,10 @@ data class HubState(
     val background: Boolean = false,
     val homes: List<String> = emptyList(),
     val clients: List<PhoneHub.Client> = emptyList(),
+    /** The group's AmneziaWG settings as JSON while the hub's tunnel speaks it, null for plain WireGuard; kept while it stays on, so the clients' offers stay good. */
+    val obfuscation: String? = null,
+    /** The group's VLESS user ID while its clients come only over VLESS to the forwarder, null otherwise. */
+    val vlessID: String? = null,
 ) {
     /** The forwarder: its endpoint, "ip:port", and the pin of its key: SHA-256 of its key in standard base64. */
     data class Forwarder(val endpoint: String, val pin: String) {
@@ -54,6 +58,8 @@ data class HubState(
         "background" to JsonPrimitive(background),
         "homes" to JsonArray(homes.map { JsonPrimitive(it) }),
         "clients" to JsonArray(clients.map { it.toJson(keep = true) }),
+        "obfuscation" to obfuscation?.let { Json.parseToJsonElement(it) },
+        "vless_id" to vlessID?.let { JsonPrimitive(it) },
     )).toString().toByteArray()
 
     override fun equals(other: Any?): Boolean = other is HubState && encode().contentEquals(other.encode())
@@ -77,6 +83,8 @@ data class HubState(
                 background = o["background"]?.jsonPrimitive?.booleanOrNull ?: false,
                 homes = (o["homes"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty(),
                 clients = PhoneHub.clientsFromJson((o["clients"] as? JsonArray)?.toString() ?: ""),
+                obfuscation = (o["obfuscation"] as? JsonObject)?.toString(),
+                vlessID = o.string("vless_id"),
             )
         }.getOrNull()
 
@@ -108,7 +116,8 @@ data class HubState(
 /** A running hub of mobile/cbbtun. */
 interface HubTunnel {
     fun setClients(json: String)
-    fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String)
+    /** Registers with the forwarder; vlessID is the group's VLESS user ID, "" without VLESS. */
+    fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String)
     fun setRecords(records: String)
     /** cbbtun's Status JSON. */
     fun status(): String
@@ -133,19 +142,26 @@ interface HubGuest {
 interface HubTunnels {
     fun newKey(): ByteArray
     fun publicKey(private: ByteArray): ByteArray
-    fun start(private: ByteArray, device: String, memberPort: Int, clients: String): HubTunnel
+    /** Starts the hub; obfuscation is its AmneziaWG settings as JSON, "" for plain WireGuard. */
+    fun start(private: ByteArray, device: String, memberPort: Int, obfuscation: String, clients: String): HubTunnel
+    /** New AmneziaWG settings for the group as JSON (cbbtun's NewObfuscation). */
+    fun newObfuscation(): String
+    /** A new VLESS user ID for the group (cbbtun's NewVLESSID). */
+    fun newVLESSID(): String
 }
 
 /** The hub of mobile/cbbtun, WireGuard in the app's process. */
 object GoHubTunnels : HubTunnels {
     override fun newKey(): ByteArray = cbbtun.Cbbtun.newKey()
     override fun publicKey(private: ByteArray): ByteArray = cbbtun.Cbbtun.publicKey(private)
-    override fun start(private: ByteArray, device: String, memberPort: Int, clients: String): HubTunnel {
-        val h = cbbtun.Cbbtun.startHub(private, device, memberPort.toLong(), "", clients)
+    override fun newObfuscation(): String = cbbtun.Cbbtun.newObfuscation()
+    override fun newVLESSID(): String = cbbtun.Cbbtun.newVLESSID()
+    override fun start(private: ByteArray, device: String, memberPort: Int, obfuscation: String, clients: String): HubTunnel {
+        val h = cbbtun.Cbbtun.startHub(private, device, memberPort.toLong(), obfuscation, clients)
         return object : HubTunnel {
             override fun setClients(json: String) = h.setClients(json)
-            override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String) =
-                h.register(endpoint, pin, chain, cbbtun.Signer { sign(it) }, records, "")
+            override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String) =
+                h.register(endpoint, pin, chain, cbbtun.Signer { sign(it) }, records, vlessID)
             override fun setRecords(records: String) = h.setRecords(records)
             override fun status(): String = h.status()
             override fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int): HubGuest {
@@ -186,6 +202,9 @@ class HubOnPhone(
     /** What the screens show. */
     enum class Status { OFF, PAUSED, HOME_ONLY, REGISTERING, REGISTERED, FAILED }
 
+    /** How the hub's tunnel hides (docs/design.md, "Blocked networks"): plain WireGuard, AmneziaWG, or only over VLESS to the forwarder. */
+    enum class Disguise { PLAIN, OBFUSCATE, VLESS }
+
     /** What a running hub needs from the group: the member listener's port, the member chain, the member key's signer, the authority records. */
     class Group(val memberPort: Int, val chain: List<ByteArray>, val sign: (ByteArray) -> ByteArray, val records: List<Member.Record>)
 
@@ -198,6 +217,16 @@ class HubOnPhone(
     val isOn: Boolean get() = synchronized(lock) { state?.on == true }
     val forwarder: HubState.Forwarder? get() = synchronized(lock) { state?.forwarder }
     val background: Boolean get() = synchronized(lock) { state?.background == true }
+
+    /** How the hub's tunnel hides now. */
+    val disguise: Disguise
+        get() = synchronized(lock) {
+            when {
+                state?.vlessID != null -> Disguise.VLESS
+                state?.obfuscation != null -> Disguise.OBFUSCATE
+                else -> Disguise.PLAIN
+            }
+        }
     val running: Boolean get() = synchronized(lock) { tunnel != null }
 
     /** The clients' devices, for the screens. */
@@ -211,8 +240,16 @@ class HubOnPhone(
         synchronized(lock) { hub }?.movedOffer(device, newHub, offer)
 
     private fun phoneHub(s: HubState): PhoneHub? = runCatching {
-        PhoneHub(tunnels.publicKey(s.key), s.clients).also { h -> s.forwarder?.let { h.endpoints = listOf(it.endpoint) } }
+        PhoneHub(tunnels.publicKey(s.key), s.clients).also { configure(it, s) }
     }.onFailure { log("cannot make the hub", it) }.getOrNull()
+
+    /** Gives h what the state says it offers: the forwarder's endpoint, the AmneziaWG settings and whether its clients come only over VLESS. */
+    private fun configure(h: PhoneHub, s: HubState) {
+        h.endpoints = listOfNotNull(s.forwarder?.endpoint)
+        h.obfuscation = s.obfuscation
+        h.vlessOnly = s.vlessID != null
+        if (s.vlessID == null) h.vless = null
+    }
 
     private fun change(f: (HubState) -> HubState) {
         val next = synchronized(lock) {
@@ -220,7 +257,7 @@ class HubOnPhone(
             f(s).also {
                 state = it
                 if (hub == null || !it.key.contentEquals(s.key)) hub = phoneHub(it)
-                hub?.endpoints = listOfNotNull(it.forwarder?.endpoint)
+                hub?.let { h -> configure(h, it) }
             }
         }
         save(next)
@@ -240,6 +277,19 @@ class HubOnPhone(
         require(f == null || HubState.validPin(f.pin)) { "not a forwarder's key" }
         change { it.copy(forwarder = f) }
         stop() // the next start registers with it
+    }
+
+    /**
+     * Sets how the hub's tunnel hides. The AmneziaWG settings and the VLESS
+     * ID are made once and kept while that stays on; the clients get the new
+     * offer the next time they meet the hub at home.
+     */
+    fun setDisguise(d: Disguise) {
+        val current = synchronized(lock) { state }
+        val obf = if (d == Disguise.OBFUSCATE) current?.obfuscation ?: tunnels.newObfuscation() else null
+        val id = if (d == Disguise.VLESS) current?.vlessID ?: tunnels.newVLESSID() else null
+        change { it.copy(obfuscation = obf, vlessID = id) }
+        stop() // the next start speaks it
     }
 
     /** Lets Android keep the hub running in the foreground service while the app is in the background. */
@@ -348,8 +398,8 @@ class HubOnPhone(
         }
         val fw = s.forwarder ?: return
         val t = try {
-            tunnels.start(s.key, device, g.memberPort, h.clientsJson).also {
-                it.register(fw.endpoint, fw.pin, JsonArray(g.chain.map { bytes(it) }).toString(), g.sign, recordsJson(g.records))
+            tunnels.start(s.key, device, g.memberPort, s.obfuscation ?: "", h.clientsJson).also {
+                it.register(fw.endpoint, fw.pin, JsonArray(g.chain.map { bytes(it) }).toString(), g.sign, recordsJson(g.records), s.vlessID ?: "")
             }
         } catch (e: Exception) {
             log("the hub could not start", e)
@@ -404,6 +454,10 @@ class HubOnPhone(
         if (s.forwarder == null) return Status.HOME_ONLY to null
         if (t == null) return if (f != null && !paused) Status.FAILED to f else Status.PAUSED to null
         val o = runCatching { Json.parseToJsonElement(t.status()) as JsonObject }.getOrNull() ?: return Status.REGISTERING to null
+        // The way over VLESS comes with the forwarder's answer; the offers wait for it.
+        if (s.vlessID != null) {
+            (o["vless"] as? JsonObject)?.toString()?.let { v -> synchronized(lock) { hub }?.let { h -> if (h.vless != v) h.vless = v } }
+        }
         if (o["registered"]?.jsonPrimitive?.booleanOrNull == true) return Status.REGISTERED to null
         val e = o.string("error") ?: return Status.REGISTERING to null
         return Status.FAILED to e

@@ -14,15 +14,18 @@ final class HubOnPhoneTests: XCTestCase {
         let memberPort: UInt16
         var held: String
         var registered: [String]?
+        var obfuscation = ""
+        var vlessID = ""
         var shown = ""
         var report = "{}"
         var closed = false
 
         init(memberPort: UInt16, clients: String) { (self.memberPort, held) = (memberPort, clients) }
         func setClients(_ json: String) throws { held = json }
-        func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String) throws {
+        func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String, vlessID: String) throws {
             registered = [endpoint, pin]
             shown = records
+            self.vlessID = vlessID
         }
         func setRecords(_ records: String) throws { shown = records }
         func status() -> String { report }
@@ -44,11 +47,19 @@ final class HubOnPhoneTests: XCTestCase {
         var started: [FakeHub] = []
         func newKey() throws -> Data { Data(repeating: 7, count: 32) }
         func publicKey(_ privateKey: Data) throws -> Data { Data(repeating: 8, count: 32) }
-        func start(privateKey: Data, device: String, memberPort: UInt16, clients: String) throws -> HubTunnel {
+        var made = 0
+        func start(privateKey: Data, device: String, memberPort: UInt16, obfuscation: String, clients: String) throws -> HubTunnel {
             let h = FakeHub(memberPort: memberPort, clients: clients)
+            h.obfuscation = obfuscation
             started.append(h)
             return h
         }
+        func newObfuscation() throws -> Member.Obfuscation {
+            made += 1
+            return Member.Obfuscation(jc: 4, jmin: 50, jmax: 300, s1: 20, s2: 30, s3: 17, s4: 18,
+                                      h1: "5-100", h2: "200-300", h3: "400-500", h4: "600-700", headerProtectionKey: Data(repeating: 9, count: 32))
+        }
+        func newVLESSID() throws -> String { "00000000-0000-4000-8000-000000000000" }
     }
 
     final class Saved: @unchecked Sendable {
@@ -164,6 +175,45 @@ final class HubOnPhoneTests: XCTestCase {
         XCTAssertTrue(tunnels.started.last?.closed == true)
         XCTAssertEqual(h.status(paused: false).0, .off)
         XCTAssertEqual(HubOnPhone(device: phone, tunnels: FakeTunnels(), state: saved.state, save: { _ in }).clients, [tv])
+    }
+
+    /// The tunnel hides as the user chose: the AmneziaWG settings go to the
+    /// tunnel and into the offers and stay while it stays on; VLESS waits
+    /// for the forwarder's way there before it offers anything.
+    func testDisguise() throws {
+        let saved = Saved(), tunnels = FakeTunnels()
+        let h = HubOnPhone(device: phone, tunnels: tunnels, state: nil, save: { saved.state = $0 })
+        try h.turnOn(home: nil)
+        try h.setForwarder(.init(endpoint: "203.0.113.9:8764", pin: pin))
+        XCTAssertEqual(h.disguise, .plain)
+        try h.setDisguise(.obfuscate)
+        try h.setDisguise(.obfuscate)
+        XCTAssertEqual(h.disguise, .obfuscate)
+        XCTAssertEqual(tunnels.made, 1)
+        let obf = try XCTUnwrap(saved.state?.obfuscation)
+        XCTAssertEqual(h.offer(device: pc, key: Data(repeating: 2, count: 32))?.obfuscation, obf)
+        h.start(group())
+        let t = try XCTUnwrap(tunnels.started.last)
+        XCTAssertEqual(try JSONDecoder().decode(Member.Obfuscation.self, from: Data(t.obfuscation.utf8)), obf)
+        XCTAssertEqual(t.vlessID, "")
+
+        try h.setDisguise(.vless)
+        XCTAssertTrue(t.closed)
+        XCTAssertNil(saved.state?.obfuscation)
+        XCTAssertEqual(saved.state?.vlessID, "00000000-0000-4000-8000-000000000000")
+        XCTAssertNil(h.offer(device: pc, key: Data(repeating: 2, count: 32)))
+        h.start(group())
+        let v = try XCTUnwrap(tunnels.started.last)
+        XCTAssertEqual(v.obfuscation, "")
+        XCTAssertEqual(v.vlessID, "00000000-0000-4000-8000-000000000000")
+        v.report = #"{"registered":true,"vless":{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=","short_id":"ab","server_name":"www.example.com","id":"00000000-0000-4000-8000-000000000000"}}"#
+        XCTAssertEqual(h.status(paused: false).0, .registered)
+        XCTAssertEqual(h.offer(device: pc, key: Data(repeating: 2, count: 32))?.vless?.endpoint, "203.0.113.9:443")
+
+        try h.setDisguise(.plain)
+        XCTAssertEqual(h.disguise, .plain)
+        XCTAssertNil(saved.state?.vlessID)
+        XCTAssertNil(h.offer(device: pc, key: Data(repeating: 2, count: 32))?.vless)
     }
 
     func testRemembersAFewHomes() throws {

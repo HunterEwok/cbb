@@ -289,6 +289,8 @@ final class AwayFromHomeTests: XCTestCase {
         XCTAssertEqual(saved.current?.hubs.map(\.device), [hub, pc])
         let first = await a.hub
         XCTAssertEqual(first, hub)
+        let listed = await a.hubs
+        XCTAssertEqual(listed, [hub, pc])
         // Passed on by the hub, without the hub field, in place of the earlier one.
         let passed = Member.TunnelOffer(hubKey: pcOffer.hubKey, psk: offer.psk, endpoints: ["203.0.113.6:8764"])
         await a.keep(from: hub, offer: passed.with(psk: passed.psk, hub: pc))
@@ -334,6 +336,9 @@ final class AwayFromHomeTests: XCTestCase {
         try await eventually("the second hub") { served.current == [hub] }
         let second = await a.hub
         XCTAssertEqual(second, hub)
+        let (inUse, hubs) = (await a.inUse, await a.hubs)
+        XCTAssertEqual(inUse, hub)
+        XCTAssertEqual(hubs, [pc, hub])
         pcUp.set(true)
         try await eventually("back to the first") { served.current == [hub, pc] }
         let first = await a.hub

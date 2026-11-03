@@ -61,7 +61,7 @@ jobs:
           brew install xcodegen
           (cd apps/ios && xcodegen generate)
           xcodebuild -resolvePackageDependencies -project apps/ios/CBB.xcodeproj -scheme CBB
-      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: swift
           build-mode: manual
@@ -71,6 +71,6 @@ jobs:
           set -o pipefail
           xcodebuild build -project apps/ios/CBB.xcodeproj -scheme CBB \
             -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO | tail -n 50
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: /language:swift

@@ -565,7 +565,12 @@ internal fun DeviceRow(d: LiveGroup.Device, modifier: Modifier = Modifier, open:
 @Composable
 internal fun DeviceSubtitle(d: LiveGroup.Device) {
     val first = d.system ?: stringResource(d.kind.title)
-    val text = d.standing?.let { "$first · ${stringResource(it)}" } ?: first
+    val standing = d.standing?.let { "$first · ${stringResource(it)}" } ?: first
+    val text = when (d.hub) {
+        LiveGroup.HubMark.IN_USE -> "$standing · ${stringResource(R.string.hub_in_use)}"
+        LiveGroup.HubMark.HUB -> "$standing · ${stringResource(R.string.hub_mark)}"
+        null -> standing
+    }
     Text(text, style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 

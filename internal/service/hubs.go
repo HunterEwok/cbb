@@ -55,6 +55,29 @@ func (s *Service) hubOrder() []group.DeviceID {
 	return s.records.HubOrder()
 }
 
+// knownHubs returns the group's hubs this device knows of, as the device
+// lists mark them: itself while it is a hub, and the hubs in the group's
+// order whose offers it keeps.
+func (s *Service) knownHubs(self group.DeviceID) map[group.DeviceID]bool {
+	order := s.hubOrder()
+	out := map[group.DeviceID]bool{}
+	s.tunMu.Lock()
+	defer s.tunMu.Unlock()
+	st := s.tunnel
+	if st == nil {
+		return out
+	}
+	if st.IsHub {
+		out[self] = true
+	}
+	for _, h := range st.Hubs {
+		if rankOf(order, h.Device) < len(order) {
+			out[group.DeviceID(h.Device)] = true
+		}
+	}
+	return out
+}
+
 // rankOf returns where dev is in order; len(order) when it is not there.
 func rankOf(order []group.DeviceID, dev string) int {
 	if i := slices.Index(order, group.DeviceID(dev)); i >= 0 {

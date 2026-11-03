@@ -593,6 +593,11 @@ func (s *Service) startGroup(id *group.Identity) error {
 			s.logf("cbb: discovery: %v", err)
 		}
 	}(s.discoveryDone)
+	if s.keyStore(id) == group.StoreFile {
+		if why := group.WhyNotHardware(); why != "" {
+			s.logf("cbb: this device's keys are in a file, not in hardware: %s", why)
+		}
+	}
 	s.electLocked() // alone, a member that can hold cbb.local holds it at once
 	s.tunMu.Lock()
 	s.runTunnelLocked()

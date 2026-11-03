@@ -70,8 +70,13 @@ func (p peer) privileged() bool {
 }
 
 // atScreen allows a process in an active session: the one at the console,
-// or one connected by Remote Desktop.
+// or one connected by Remote Desktop. The console's session is asked first,
+// which needs no rights: a service account such as NT SERVICE\cbb may be
+// refused the list of sessions.
 func atScreen(p peer, _ string) verdict {
+	if c := windows.WTSGetActiveConsoleSessionId(); c != 0xFFFFFFFF && c == p.session {
+		return allowed
+	}
 	var info *windows.WTS_SESSION_INFO
 	var n uint32
 	if windows.WTSEnumerateSessions(0, 0, 1, &info, &n) != nil {

@@ -63,6 +63,7 @@ func TestWindow(t *testing.T) {
 	t.Run("russian", w.russian)
 	t.Run("errors", w.errors)
 	t.Run("admin", w.admin)
+	t.Run("join", w.joinPhone)
 }
 
 // window is the page under test and what stands around it.
@@ -493,6 +494,122 @@ func (w *window) admin(t *testing.T) {
 	if r := ran(); !reflect.DeepEqual(r, [][]string{{"admin", "-allow-file-key", "srv"}}) {
 		t.Errorf("make it an admin ran %q", r)
 	}
+
+	// An admin computer may be made a hub; one that may not offers no such
+	// action.
+	var offers bool
+	w.eval(`!!$q('[data-action="hub"]')`, &offers)
+	if offers {
+		t.Error("a computer that may not be a hub offers it")
+	}
+	// A hub of the group says so on its page.
+	var page string
+	w.eval(`document.body.innerText`, &page)
+	if !strings.Contains(page, "The group's hub") {
+		t.Errorf("the hub's page does not say it is the hub:\n%s", page)
+	}
+	w.eval(`$click('.tile[data-id="mac"]')`, nil)
+	w.wait(`$q('[data-action="hub"]')`)
+	w.eval(`$click('[data-action="hub"]')`, nil)
+	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("must be on there already")`)
+	w.eval(`$click("#confirm-ok")`, nil)
+	w.wait(`$q("#message").textContent === "It is a hub now."`)
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-on", "mac"}}) {
+		t.Errorf("make it a hub ran %q", r)
+	}
+
+	// On this computer, a hub, the tunnel's disguise and the forwarder
+	// change and keep the rest.
+	w.svc.mu.Lock()
+	w.svc.status.Away = &control.Away{Hub: true, Forwarder: &control.Forwarder{Endpoint: "198.51.100.20:8764", Registered: true}}
+	w.svc.mu.Unlock()
+	defer func() {
+		w.svc.mu.Lock()
+		w.svc.status.Away = nil
+		w.svc.mu.Unlock()
+	}()
+	w.eval(`$click('.tile[data-id="self"]')`, nil)
+	w.wait(`$q('[data-tunnel="obfuscate"]') && $q('[data-tunnel="plain"]').getAttribute("aria-checked") === "true"`)
+	w.eval(`$click('[data-tunnel="obfuscate"]')`, nil)
+	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("next time they meet this hub at home")`)
+	w.eval(`$click("#confirm-ok")`, nil)
+	w.wait(`$q("#message").textContent === "The hub's settings are saved."`)
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-obfuscate"}}) {
+		t.Errorf("the disguise ran %q", r)
+	}
+	w.wait(`$q('[data-action="forwarder"]') && !$q('[data-action="forwarder"]').disabled`)
+	w.eval(`$click('[data-action="forwarder"]')`, nil)
+	w.wait(`$q("#confirm").open && !$q("#confirm-input").hidden`)
+	w.eval(`$q("#confirm-input").value = " 203.0.113.9:8764   KEY "; $click("#confirm-ok")`, nil)
+	var r [][]string
+	for deadline := time.Now().Add(10 * time.Second); len(r) == 0 && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+		r = ran()
+	}
+	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-forwarder", "203.0.113.9:8764", "-forwarder-key", "KEY"}}) {
+		t.Errorf("the forwarder ran %q", r)
+	}
+}
+
+// joinPhone joins a phone's group from a computer in none: the window shows
+// the QR code cbb pair -app writes, and closing the dialog removes the file,
+// which cancels.
+func (w *window) joinPhone(t *testing.T) {
+	w.t = t
+	t.Setenv("CBB_DEBUG", "0")
+	w.svc.mu.Lock()
+	group := w.svc.status.Group
+	w.svc.status.Group = ""
+	w.svc.mu.Unlock()
+	defer func() {
+		w.svc.mu.Lock()
+		w.svc.status.Group = group
+		w.svc.mu.Unlock()
+	}()
+	joined := make(chan struct{})
+	ran := make(chan []string, 4)
+	old := adminRun
+	adminRun = func(args []string, _, _ bool) error {
+		ran <- args
+		if len(args) != 3 || args[0] != "pair" || args[1] != "-app" {
+			return fmt.Errorf("ran %q", args)
+		}
+		code := `{"qr":"cbb://join?code=123456&addr=192.168.1.20%3A8764&fp=q83vEjRWeJA","expires":300,"port":8764}` + "\n"
+		if err := os.WriteFile(args[2], []byte(code), 0o600); err != nil {
+			return err
+		}
+		for {
+			select {
+			case <-joined:
+				return nil
+			case <-time.After(20 * time.Millisecond):
+			}
+			if _, err := os.Stat(args[2]); err != nil {
+				return &adminError{msg: "cancelled"}
+			}
+		}
+	}
+	defer func() { adminRun = old }()
+	w.open("en")
+	w.wait(`$q("#join") && !$q("#join").disabled`)
+
+	// Cancelled: the file is gone, and the window says nothing.
+	w.eval(`$click("#join")`, nil)
+	w.wait(`$q("#join-dialog").open && !$q("#join-code").hidden && $q("#join-qr").src.startsWith("data:image/png;base64,")`)
+	w.wait(`$q("#join-text").textContent.startsWith("cbb://join?code=123456") && $q("#join-port").textContent.includes("8764")`)
+	w.eval(`$clickText("#join-dialog menu button", "Cancel")`, nil)
+	w.wait(`!$q("#join-dialog").open`)
+	w.wait(`$q("#join") && !$q("#join").disabled && $q("#message").textContent === ""`)
+	if args := <-ran; args[0] != "pair" {
+		t.Errorf("join ran %q", args)
+	}
+
+	// Joined: the dialog closes by itself and the window says so.
+	w.eval(`$click("#join")`, nil)
+	w.wait(`$q("#join-dialog").open && !$q("#join-code").hidden`)
+	<-ran
+	close(joined)
+	w.wait(`!$q("#join-dialog").open && $q("#message").textContent === "Joined the group."`)
 }
 
 // fakeService answers the window's status and devices requests on a
@@ -517,14 +634,14 @@ func newFakeService(t *testing.T) *fakeService {
 		status: control.Status{Device: "self", Group: "cbb-7f3a", Role: "full", OS: "linux", Mode: "shared"},
 		devices: []control.Device{
 			{ID: "self", Name: "This PC", Role: "full", OS: "linux", Admin: true, Root: true, Self: true, Online: true, Listed: true},
-			{ID: "mac", Name: "MacBook", Role: "full", OS: "macos", OSVersion: "26.1", Online: true, Listed: true},
+			{ID: "mac", Name: "MacBook", Role: "full", OS: "macos", OSVersion: "26.1", Online: true, Listed: true, MayHub: true},
 			{ID: "win", Name: "Windows PC", Role: "full", OS: "windows", Admin: true, Frozen: true, Listed: true},
 			{ID: "iphone", Name: "iPhone", Role: "phone", OS: "ios", Admin: true, Online: true, Listed: true},
 			{ID: "pixel", Name: "Pixel", Role: "phone", OS: "android", Online: true, Listed: true},
 			{ID: "ipad", Name: "iPad", Role: "phone", OS: "ios", Form: "tablet", Listed: true},
 			{ID: "tv", Name: "Living room TV", Role: "full", OS: "linux", Form: "tv", Online: true, Listed: true},
 			{ID: "nano", Name: "Nano", Role: "lite", Listed: true},
-			{ID: "srv", Name: "Home server", Role: "full", OS: "linux", Form: "server", Online: true, Listed: true},
+			{ID: "srv", Name: "Home server", Role: "full", OS: "linux", Form: "server", Online: true, Listed: true, Hub: true},
 			{ID: "gate", Name: "Router", Role: "full", OS: "linux", Form: "router", Listed: true},
 			{ID: "deck", Name: "Steam Deck", Role: "full", OS: "linux", Form: "console", Online: true, Listed: true},
 			{ID: "watch", Name: "Watch", Role: "watch", OS: "watchos", Listed: true},
@@ -589,7 +706,9 @@ func (s *fakeService) serve(c net.Conn) {
 	a := &control.Message{Header: control.Header{Done: true}}
 	switch m.Op {
 	case control.OpStatus:
+		s.mu.Lock()
 		st := s.status
+		s.mu.Unlock()
 		a.Status = &st
 	case control.OpDevices:
 		a.Devices = s.devices

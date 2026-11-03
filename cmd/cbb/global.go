@@ -60,11 +60,15 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       cbb global off [-yes]          turn it off here and forget its keys\n" +
 		"       cbb global off -on DEVICE      on an admin: turn it off on another device, whose own user\n" +
 		"                                      turns it on again\n" +
-		"       cbb global hub [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder default|address:port -forwarder-key KEY [-vless]] [address:port...]\n" +
+		"       cbb global hub [-keep] [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder default|address:port -forwarder-key KEY] [-vless] [address:port...]\n" +
 		"                                      make this device the group's hub, reached at these addresses\n" +
 		"                                      or through the forwarder (without addresses, the project's at\n" +
 		"                                      " + forward.ProjectHost + "); -obfuscate for networks that block WireGuard,\n" +
 		"                                      -vless for clients that reach the forwarder only over VLESS\n" +
+		"       cbb global hub -on DEVICE [-forwarder default|address:port -forwarder-key KEY] [address:port...]\n" +
+		"                                      on an admin: make DEVICE, an admin computer with sync away from\n" +
+		"                                      home on, a hub of the group as well, reached through the forwarder\n" +
+		"                                      (without addresses, the project's) or at these addresses\n" +
 		"       cbb global move DEVICE [-forwarder default|address:port -forwarder-key KEY] [address:port...]\n" +
 		"                                      on the hub: make DEVICE, an admin computer with sync away from\n" +
 		"                                      home on, the hub in its place, reached through this hub's\n" +
@@ -148,9 +152,6 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return cmdGlobalAllow(stdout, stderr)
 	case "hub":
-		if err := checkAwayNet(); err != nil {
-			return fail(stderr, err)
-		}
 		fs := flag.NewFlagSet("global hub", flag.ContinueOnError)
 		fs.SetOutput(stderr)
 		port := fs.Int("port", 0, "the UDP port the hub listens on (default 8764)")
@@ -159,8 +160,23 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fwdKey := fs.String("forwarder-key", "", "the forwarder's key, which cbb forward prints (not for the project's)")
 		obfuscate := fs.Bool("obfuscate", false, "speak AmneziaWG, which hides that the packets are WireGuard, for networks that block it")
 		vlessOnly := fs.Bool("vless", false, "the clients reach the forwarder only over VLESS, which looks like HTTPS to a well-known site")
+		on := fs.String("on", "", "on an admin: make the device DEVICE, an admin computer with sync away from home on, a hub of the group")
+		keep := fs.Bool("keep", false, "on a hub: keep its addresses, port and forwarder where none are given, changing only how its tunnel hides (-obfuscate, -vless)")
 		if fs.Parse(args[1:]) != nil {
 			return 2
+		}
+		if *on != "" && *keep {
+			fmt.Fprintln(stderr, "cbb: -keep changes this hub's own settings; -on makes another device a hub")
+			return 2
+		}
+		if *on != "" && (*port != 0 || *obfuscate || *vlessOnly || firewall != "ask") {
+			fmt.Fprintln(stderr, "cbb: -on takes only -forwarder, -forwarder-key and the new hub's addresses; its own settings stay its own")
+			return 2
+		}
+		if *on == "" {
+			if err := checkAwayNet(); err != nil {
+				return fail(stderr, err)
+			}
 		}
 		if !slices.Contains([]string{"ask", "yes", "no"}, firewall) {
 			fmt.Fprintln(stderr, usage)
@@ -168,7 +184,7 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		// A hub without addresses of its own is reached through the
 		// project's forwarder, whose address and key cbb knows.
-		if fs.NArg() == 0 && *fwd == "" && *fwdKey == "" {
+		if fs.NArg() == 0 && *fwd == "" && *fwdKey == "" && !*keep {
 			*fwd = forward.ProjectKey
 		}
 		if err := projectForwarder(fwd, fwdKey); err != nil {
@@ -180,7 +196,10 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 				return fail(stderr, err)
 			}
 		}
-		h.Port, h.Addrs, h.Forwarder, h.ForwarderKey, h.Obfuscate, h.VLESS = *port, fs.Args(), *fwd, *fwdKey, *obfuscate, *vlessOnly
+		h.Port, h.Addrs, h.Forwarder, h.ForwarderKey, h.Obfuscate, h.VLESS, h.Keep = *port, fs.Args(), *fwd, *fwdKey, *obfuscate, *vlessOnly, *keep
+		if *on != "" {
+			h.Device = *on
+		}
 	case "move":
 		if len(args) < 2 || strings.HasPrefix(args[1], "-") {
 			fmt.Fprintln(stderr, usage)
@@ -265,6 +284,10 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	m, err := c.Do(&control.Message{Header: h})
 	if err != nil {
 		return fail(stderr, err)
+	}
+	if h.Device != "" && args[0] == "hub" {
+		fmt.Fprintf(stdout, "%s is a hub of the group now.\n", h.Device)
+		return 0
 	}
 	if m.Status != nil {
 		a := m.Status.Away

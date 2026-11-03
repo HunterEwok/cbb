@@ -55,7 +55,10 @@ On the computer:
 sudo cbb pair
 ```
 
-On Windows, run `cbb pair` in the administrator terminal. It shows a QR code.
+On Windows, run `cbb pair` in the administrator terminal. It shows a QR code. Or, without a
+terminal, open the CBB app on the computer (the tray app on Windows and Linux, the menu bar
+app on a Mac) and click **Join a phone's group**: it asks for the administrator's password
+and shows the same code.
 
 In the app, tap **Connect a new device** and scan the code. The app makes the group's key
 (it asks for your fingerprint, face or passcode) and adds the computer. That's the group.

@@ -163,6 +163,23 @@ const modeName = (m) => ({ own: t("Own clipboard"), shared: t("Shared"), receive
 
 // modeButtons is a row of the four modes; id names the device, "" this
 // computer.
+// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
+const tunnels = ["plain", "obfuscate", "vless"];
+const tunnelName = (m) => ({ plain: "WireGuard", obfuscate: "AmneziaWG", vless: "VLESS" })[m];
+const hubTunnel = (a) => a?.vless ? "vless" : a?.obfuscated ? "obfuscate" : "plain";
+
+// The hub's own settings, on this computer's page while it is a hub.
+function hubCard(d) {
+  const a = state.status?.away;
+  if (!d.self || !a?.hub) return "";
+  const cur = hubTunnel(a);
+  const fwd = a.forwarder ? a.forwarder.endpoint : t("none");
+  return `<div class="card"><div class="dim small">${esc(t("How the hub's tunnel hides"))}</div><div class="segmented">` +
+    tunnels.map((m) => `<button type="button" data-tunnel="${m}" aria-checked="${m === cur}" ${state.busy ? "disabled" : ""}>${esc(tunnelName(m))}</button>`).join("") +
+    `</div><div class="line"><span class="dim">${esc(t("Forwarder"))}</span><span class="value mono">${esc(fwd)}</span></div>` +
+    `<div class="actions"><button data-action="forwarder" ${state.busy ? "disabled" : ""}>${esc(t("Change the forwarder…"))}</button></div></div>`;
+}
+
 function modeButtons(current, id) {
   return modes.map((m) => `<button type="button" data-mode="${m}" data-mode-for="${esc(id)}" aria-checked="${m === current}" ` +
     `${state.busy ? "disabled" : ""}>${esc(modeName(m))}</button>`).join("");
@@ -197,9 +214,16 @@ function render() {
   box.classList.toggle("fixed", inGroup && others.length > 0 && s.settings.layout === "orbit");
   if (s.problem) {
     box.innerHTML = `<div class="notice"><div class="big">⚠</div><h2>${esc(t("The service does not answer"))}</h2><p class="dim">${esc(s.problem)}</p></div>`;
+  } else if (s.status?.removed) {
+    // The service keeps a removed computer's group: joining again needs its keys gone first.
+    box.innerHTML = `<div class="notice"><div class="big">⧉</div><h2>${esc(t("This computer was removed from the group"))}</h2>` +
+      `<p class="dim">${esc(t("Its members refuse it. To join a group again, remove CBB with its keys (uninstall --purge), install it again and join."))}</p></div>`;
   } else if (!inGroup) {
     box.innerHTML = `<div class="notice"><div class="big">⧉</div><h2>${esc(t("This computer is in no group yet"))}</h2>` +
-      `<p class="dim">${esc(t("Run cbb pair in a terminal and scan its QR code with the phone app, or make a group of computers with cbb new."))}</p></div>`;
+      `<p class="dim">${esc(t("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new."))}</p>` +
+      `<p><button class="accent" id="join" ${state.busy || joining ? "disabled" : ""}>${esc(t("Join a phone's group"))}</button></p>` +
+      // Out of a group the bar with the message is hidden: a join that failed says why here.
+      (state.message ? `<p class="dim" id="join-message">${esc(state.message)}</p>` : "") + `</div>`;
   } else if (others.length === 0) {
     box.innerHTML = `<div class="notice"><div class="big">＋</div><h2>${esc(t("No other devices yet"))}</h2><p class="dim">${esc(t("Add one with the + button."))}</p></div>`;
   } else if (s.settings.layout === "orbit" && !arranging && !searching() && !opened) {
@@ -586,6 +610,7 @@ function renderDetail() {
   const standing = d.self ? (d.admin ? t("This computer · admin") : t("This computer"))
     : d.frozen ? t("frozen") : d.root ? t("root") : d.admin ? t("admin") : "";
   if (standing) lines.push([t("In the group"), standing]);
+  if (d.hub) lines.push([t("Away from home"), state.status?.away?.hub_device === d.id ? t("The group's hub, in use now") : t("The group's hub")]);
   if (d.mode) lines.push([t("Sync mode"), modeName(d.mode)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
   lines.push([t("Device ID"), d.id, true]);
@@ -597,6 +622,9 @@ function renderDetail() {
     if (d.frozen && me.root) actions.push(["unfreeze", t("Unfreeze")]);
     if (!d.self && d.admin && !d.root && !d.frozen && d.role === "full") actions.push(["freeze", t("Freeze"), true]);
     if (me.root && !d.admin && !d.frozen && d.role === "full") actions.push(["admin", t("Make it an admin")]);
+    // This computer needs sync away from home on; another one is told, and
+    // refuses while it is off there.
+    if (d.may_hub && !d.frozen && d.role === "full" && (!d.self || (state.status?.away && !state.status.away.hub))) actions.push(["hub", t("Make it a hub")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   pane.innerHTML = `<div class="detail-head">${glyph(d, 56)}<div><div class="name">${esc(d.name)}</div>` +
@@ -607,6 +635,7 @@ function renderDetail() {
     // lite members have no modes yet and refuse.
     (me?.admin && !d.self && d.online && d.role === "full"
       ? `<div class="card"><div class="dim small">${esc(t("Sync mode"))}</div><div class="segmented">${modeButtons(d.mode, d.id)}</div></div>` : "") +
+    hubCard(d) +
     (me?.admin
       ? `<div class="card actions">${actions.map(([a, label, danger]) => `<button data-action="${a}"${danger ? ' class="danger"' : ""} ${state.busy ? "disabled" : ""}>${esc(label)}</button>`).join("")}</div>`
       : `<p class="dim small">${esc(t("This computer is no admin of the group: the phone or an admin computer adds and removes devices."))}</p>`);
@@ -656,6 +685,22 @@ async function deviceAction(action) {
     case "admin":
       if (await ask(t("Make %s an admin?", d.name), t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe."), t("Make it an admin"))) await act("MakeAdmin", d.id);
       break;
+    case "hub":
+      if (await ask(t("Make %s a hub?", d.name), d.self
+        ? t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
+        : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on."), t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id);
+      break;
+    case "forwarder": {
+      const text = await ask(t("Change the forwarder"), t("Your own forwarder's address and key, as cbb forward prints them, with a space between; leave it empty for the project's forwarder at cbb.tools."), t("Save"), "");
+      if (text === null) break;
+      const [addr, key, extra] = text.trim().split(/\s+/).filter(Boolean);
+      if (extra || (addr && !key)) {
+        $("message").textContent = t("Give the forwarder's address and its key, such as 203.0.113.9:8764 and the key cbb forward prints.");
+        break;
+      }
+      await act("SetHub", hubTunnel(state.status?.away), addr ?? "default", key ?? "");
+      break;
+    }
     case "freeze":
       if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);
       break;
@@ -694,6 +739,51 @@ function renderSettings() {
   $("version").textContent = state.version;
 }
 
+// Joining a phone's group: JoinPhone runs until the join ends, while the
+// dialog asks JoinState for the QR code cbb writes once it runs as the
+// administrator (join.go). Closing the dialog cancels.
+let joining = false;
+
+async function joinPhone() {
+  if (joining) return;
+  joining = true;
+  render();
+  const dlg = $("join-dialog");
+  $("join-wait").hidden = false;
+  $("join-code").hidden = true;
+  let running = true;
+  const ended = call("JoinPhone").catch((e) => console.error("JoinPhone", e)).finally(() => {
+    running = false;
+    if (dlg.open) dlg.close("done");
+  });
+  dlg.onclose = () => {
+    if (running) call("CancelJoin").catch((e) => console.error("CancelJoin", e));
+  };
+  dlg.returnValue = "";
+  dlg.showModal();
+  while (running && dlg.open) {
+    let j;
+    try {
+      j = await call("JoinState");
+    } catch (e) {
+      console.error("JoinState", e);
+    }
+    if (j?.image) {
+      $("join-wait").hidden = true;
+      $("join-code").hidden = false;
+      $("join-qr").src = j.image;
+      $("join-text").textContent = j.text;
+      const min = Math.max(0, Math.ceil((j.ends - Date.now()) / 60000));
+      $("join-ends").textContent = t("The code is valid for %d more min.", min);
+      $("join-port").textContent = t("If the phone cannot connect, the firewall must let it reach TCP port %d here.", j.port);
+    }
+    await new Promise((r) => setTimeout(r, j?.image ? 1000 : 300));
+  }
+  await ended;
+  joining = false;
+  await refresh();
+}
+
 async function refresh() {
   try {
     state = await call("State");
@@ -729,6 +819,14 @@ document.addEventListener("click", async (e) => {
     await act("SetMode", el.dataset.modeFor, el.dataset.mode);
     return renderSettings();
   }
+  if (el.dataset.tunnel) {
+    if (el.dataset.tunnel === hubTunnel(state.status?.away)) return;
+    const text = el.dataset.tunnel === "vless"
+      ? t("Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
+      : t("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.");
+    if (await ask(t("Change how the hub's tunnel hides?"), text, t("Change"))) await act("SetHub", el.dataset.tunnel, "", "");
+    return;
+  }
   if (el.dataset.id) {
     selected = el.dataset.id;
     return render();
@@ -743,6 +841,7 @@ document.addEventListener("click", async (e) => {
     case "fetch": return act("Fetch");
     case "update": return act("Update");
     case "add": return $("add-dialog").showModal();
+    case "join": return joinPhone();
     case "settings": renderSettings(); return $("settings-dialog").showModal();
   }
 });

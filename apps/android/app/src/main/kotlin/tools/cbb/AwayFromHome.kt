@@ -294,6 +294,17 @@ class AwayFromHome(
             return synchronized(lock) { using ?: state?.let { hubsToTry(o, it) }?.firstOrNull()?.first ?: state?.hubs?.firstOrNull()?.first }
         }
 
+    /** The hub the phone reaches now, through the tunnel or at home; null while it reaches none. */
+    val inUse: String? get() = synchronized(lock) { using }
+
+    /** The group's hubs whose offers the phone keeps, highest first, as the screens list them; empty while it is off. */
+    val hubs: List<String>
+        get() {
+            val o = order()
+            val kept = synchronized(lock) { state?.hubs?.map { it.first } } ?: return emptyList()
+            return kept.filter { rank(o, it) < o.size }.sortedBy { rank(o, it) }
+        }
+
     /** The public key the hellos offer the hubs; null while it is off. */
     val publicKey: ByteArray?
         get() = synchronized(lock) { state?.key }?.let { runCatching { tunnels.publicKey(it) }.getOrNull() }

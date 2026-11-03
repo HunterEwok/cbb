@@ -31,6 +31,13 @@ public struct HubState: Codable, Equatable, Sendable {
     public var forwarder: Forwarder?
     public var homes: [String] = []
     public var clients: [PhoneHub.Client] = []
+    /// The group's AmneziaWG settings while the hub's tunnel speaks it, nil
+    /// for plain WireGuard; kept while it stays on, so the clients' offers
+    /// stay good.
+    public var obfuscation: Member.Obfuscation?
+    /// The group's VLESS user ID while its clients come only over VLESS to
+    /// the forwarder, nil otherwise.
+    public var vlessID: String?
 
     /// The most home networks the phone remembers; the oldest goes first.
     public static let maxHomes = 8
@@ -87,7 +94,9 @@ public struct HubState: Codable, Equatable, Sendable {
 /// A running hub of mobile/cbbtun.
 public protocol HubTunnel: AnyObject, Sendable {
     func setClients(_ json: String) throws
-    func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String) throws
+    /// Registers with the forwarder; vlessID is the group's VLESS user ID,
+    /// "" without VLESS.
+    func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String, vlessID: String) throws
     func setRecords(_ records: String) throws
     /// cbbtun's Status JSON.
     func status() -> String
@@ -113,7 +122,13 @@ public protocol HubGuest: AnyObject, Sendable {
 public protocol HubTunnels: Sendable {
     func newKey() throws -> Data
     func publicKey(_ privateKey: Data) throws -> Data
-    func start(privateKey: Data, device: String, memberPort: UInt16, clients: String) throws -> HubTunnel
+    /// Starts the hub; obfuscation is its AmneziaWG settings as JSON, ""
+    /// for plain WireGuard.
+    func start(privateKey: Data, device: String, memberPort: UInt16, obfuscation: String, clients: String) throws -> HubTunnel
+    /// New AmneziaWG settings for the group (cbbtun's NewObfuscation).
+    func newObfuscation() throws -> Member.Obfuscation
+    /// A new VLESS user ID for the group (cbbtun's NewVLESSID).
+    func newVLESSID() throws -> String
 }
 
 /// The phone as the group's hub while its app is open (D-64). At home it
@@ -128,6 +143,10 @@ public protocol HubTunnels: Sendable {
 public final class HubOnPhone: @unchecked Sendable {
     /// What the screens show.
     public enum Status: Sendable, Equatable { case off, paused, homeOnly, registering, registered, failed }
+
+    /// How the hub's tunnel hides (docs/design.md, "Blocked networks"):
+    /// plain WireGuard, AmneziaWG, or only over VLESS to the forwarder.
+    public enum Disguise: String, Sendable, CaseIterable { case plain, obfuscate, vless }
 
     /// The forwarder's address is no "ip:port", or its key no pin.
     /// badForwarder: not a forwarder's address and key; notRunning: an
@@ -165,6 +184,11 @@ public final class HubOnPhone: @unchecked Sendable {
 
     public var isOn: Bool { lock.withLock { state?.on == true } }
     public var forwarder: HubState.Forwarder? { lock.withLock { state?.forwarder } }
+
+    /// How the hub's tunnel hides now.
+    public var disguise: Disguise {
+        lock.withLock { state?.vlessID != nil ? .vless : state?.obfuscation != nil ? .obfuscate : .plain }
+    }
     public var running: Bool { lock.withLock { tunnel != nil } }
 
     /// The clients' devices, for the screens.
@@ -183,12 +207,21 @@ public final class HubOnPhone: @unchecked Sendable {
     private func phoneHub(_ s: HubState) -> PhoneHub? {
         do {
             let h = PhoneHub(publicKey: try tunnels.publicKey(s.key), clients: s.clients)
-            h.endpoints = s.forwarder.map { [$0.endpoint] } ?? []
+            Self.configure(h, s)
             return h
         } catch {
             log("cannot make the hub", error)
             return nil
         }
+    }
+
+    /// Gives h what the state says it offers: the forwarder's endpoint, the
+    /// AmneziaWG settings and whether its clients come only over VLESS.
+    private static func configure(_ h: PhoneHub, _ s: HubState) {
+        h.endpoints = s.forwarder.map { [$0.endpoint] } ?? []
+        h.obfuscation = s.obfuscation
+        h.vlessOnly = s.vlessID != nil
+        if s.vlessID == nil { h.vless = nil }
     }
 
     private func change(_ f: (inout HubState) -> Void) throws {
@@ -198,7 +231,7 @@ public final class HubOnPhone: @unchecked Sendable {
             f(&s)
             state = s
             if hub == nil || s.key != old.key { hub = phoneHub(s) }
-            hub?.endpoints = s.forwarder.map { [$0.endpoint] } ?? []
+            if let h = hub { Self.configure(h, s) }
             return s
         }
         try save(next)
@@ -225,6 +258,19 @@ public final class HubOnPhone: @unchecked Sendable {
         if let f, !HubState.validPin(f.pin) || HubState.endpoint(f.endpoint) == nil { throw Failure.badForwarder }
         try change { $0.forwarder = f }
         stop() // the next start registers with it
+    }
+
+    /// Sets how the hub's tunnel hides. The AmneziaWG settings and the
+    /// VLESS ID are made once and kept while that stays on; the clients get
+    /// the new offer the next time they meet the hub at home.
+    public func setDisguise(_ d: Disguise) throws {
+        let current = lock.withLock { state }
+        let obf = d == .obfuscate ? try current?.obfuscation ?? tunnels.newObfuscation() : nil
+        let id = d == .vless ? try current?.vlessID ?? tunnels.newVLESSID() : nil
+        try change { s in
+            (s.obfuscation, s.vlessID) = (obf, id)
+        }
+        stop() // the next start speaks it
     }
 
     /// Remembers home as a home network.
@@ -335,8 +381,9 @@ public final class HubOnPhone: @unchecked Sendable {
         guard let fw = s.forwarder else { return }
         let t: HubTunnel
         do {
-            t = try tunnels.start(privateKey: s.key, device: device, memberPort: g.memberPort, clients: try h.clientsJSON())
-            try t.register(endpoint: fw.endpoint, pin: fw.pin, chain: g.chain, sign: g.sign, records: try Self.json(g.records))
+            t = try tunnels.start(privateKey: s.key, device: device, memberPort: g.memberPort,
+                                  obfuscation: try s.obfuscation?.jsonText() ?? "", clients: try h.clientsJSON())
+            try t.register(endpoint: fw.endpoint, pin: fw.pin, chain: g.chain, sign: g.sign, records: try Self.json(g.records), vlessID: s.vlessID ?? "")
         } catch {
             log("the hub could not start", error)
             lock.withLock { failure = String(describing: error) }
@@ -386,9 +433,13 @@ public final class HubOnPhone: @unchecked Sendable {
         guard let t else { return f != nil && !paused ? (.failed, f) : (.paused, nil) }
         struct Report: Decodable {
             var registered: Bool?
+            var vless: Member.VLESS?
             var error: String?
         }
         guard let r = try? JSONDecoder().decode(Report.self, from: Data(t.status().utf8)) else { return (.registering, nil) }
+        // The way over VLESS comes with the forwarder's answer; the offers
+        // wait for it.
+        if s.vlessID != nil, let v = r.vless, let h = lock.withLock({ hub }), h.vless != v { h.vless = v }
         if r.registered == true { return (.registered, nil) }
         if let e = r.error { return (.failed, e) }
         return (.registering, nil)

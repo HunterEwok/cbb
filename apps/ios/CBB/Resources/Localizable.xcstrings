@@ -1564,6 +1564,56 @@
         }
       }
     },
+    "Connected to the hub %@ through the tunnel.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключено к хабу %@ через туннель."
+          }
+        }
+      }
+    },
+    "hub in use": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "используемый хаб"
+          }
+        }
+      }
+    },
+    "hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "хаб"
+          }
+        }
+      }
+    },
+    "The group's hub, in use now": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы, используется сейчас"
+          }
+        }
+      }
+    },
+    "The group's hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы"
+          }
+        }
+      }
+    },
     "Connecting to the device…": {
       "localizations": {
         "ru": {
@@ -3214,6 +3264,56 @@
         }
       }
     },
+    "How the hub's tunnel hides": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как хаб маскирует туннель"
+          }
+        }
+      }
+    },
+    "For networks that block WireGuard. VLESS needs a forwarder that takes it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для сетей, где блокируют WireGuard. Для VLESS нужен форвардер, который его принимает."
+          }
+        }
+      }
+    },
+    "Change how the hub's tunnel hides?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить маскировку туннеля хаба?"
+          }
+        }
+      }
+    },
+    "Change": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить"
+          }
+        }
+      }
+    },
+    "Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
+          }
+        }
+      }
+    },
     "This phone as the hub": {
       "localizations": {
         "ru": {
@@ -4170,6 +4270,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "Введите PIN YubiKey, затем приложите YubiKey к верхней части телефона: один раз для сертификата этого телефона и, когда ответит компьютер группы, ещё раз для заявки. Держите телефон в сети компьютера группы."
+          }
+        }
+      }
+    },
+    "Make it a hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать хабом"
+          }
+        }
+      }
+    },
+    "Make %@ a hub?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать %@ хабом?"
+          }
+        }
+      }
+    },
+    "Make a computer a hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать компьютер хабом"
+          }
+        }
+      }
+    },
+    "It is a hub now: your devices reach the group through it when they are away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Теперь это хаб: вне дома ваши устройства связываются с группой через него."
+          }
+        }
+      }
+    },
+    "Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вне дома ваши устройства будут связываться с группой через него, через пересыльщик проекта на cbb.tools. Синхронизация вне дома должна быть уже включена на нём: включает её только его пользователь."
           }
         }
       }

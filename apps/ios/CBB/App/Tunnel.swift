@@ -48,12 +48,26 @@ struct GoHubTunnels: HubTunnels {
 
     func publicKey(_ privateKey: Data) throws -> Data { try GoTunnels().publicKey(privateKey) }
 
-    func start(privateKey: Data, device: String, memberPort: UInt16, clients: String) throws -> HubTunnel {
+    func start(privateKey: Data, device: String, memberPort: UInt16, obfuscation: String, clients: String) throws -> HubTunnel {
         var error: NSError?
-        guard let h = CbbtunStartHub(privateKey, device, Int(memberPort), "", clients, &error) else {
+        guard let h = CbbtunStartHub(privateKey, device, Int(memberPort), obfuscation, clients, &error) else {
             throw error ?? GoTunnels.Failure(call: "StartHub")
         }
         return GoHub(h)
+    }
+
+    func newObfuscation() throws -> Member.Obfuscation {
+        var error: NSError?
+        let text = CbbtunNewObfuscation(&error)
+        if let error { throw error }
+        return try JSONDecoder().decode(Member.Obfuscation.self, from: Data(text.utf8))
+    }
+
+    func newVLESSID() throws -> String {
+        var error: NSError?
+        let id = CbbtunNewVLESSID(&error)
+        if let error { throw error }
+        return id
     }
 }
 
@@ -65,9 +79,9 @@ final class GoHub: HubTunnel, @unchecked Sendable {
 
     func setClients(_ json: String) throws { try hub.setClients(json) }
 
-    func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String) throws {
+    func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String, vlessID: String) throws {
         let ders = String(decoding: try JSONEncoder().encode(chain), as: UTF8.self)
-        try hub.register(endpoint, pin: pin, chain: ders, signer: DigestSigner(sign), records: records, vlessID: "")
+        try hub.register(endpoint, pin: pin, chain: ders, signer: DigestSigner(sign), records: records, vlessID: vlessID)
     }
 
     func setRecords(_ records: String) throws { try hub.setRecords(records) }

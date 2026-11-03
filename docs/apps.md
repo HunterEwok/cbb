@@ -102,6 +102,16 @@ they look, so both apps are built to the same plan.
    takes it over in the same step. A connected computer's page shows its sync mode and, on an admin phone,
    offers "Sync mode": the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
+   An admin phone also offers "Make it a hub" for a connected computer that is an admin, or that
+   the root phone makes one first: after Face ID or the fingerprint it signs a `hub` command
+   (docs/protocol.md, section 11, "Several hubs") with its forwarder, or the project's, and the
+   computer becomes a hub of the group as well; it refuses while sync away from home is off
+   there, which only its own user turns on.
+   With sync away from home on, the list marks the group's hubs whose offers the phone keeps
+   ("hub", or "hub in use" for the one it reaches now; this phone too while it is the hub), a
+   device's page says "The group's hub", and Settings, "Away from home", names the hub the
+   phone is connected to through the tunnel. The Mac app and the tray app say the same on a
+   device's page, from `hub` in the service's device list.
    On an admin phone, the page of a computer or a lite member also offers "Paste on it…"
    (docs/design.md, "Remote paste"): a text, typed or taken from the clipboard (on the iPhone
    through the system's Paste button, which asks nothing), pasted or typed key by key, with
@@ -137,7 +147,11 @@ they look, so both apps are built to the same plan.
    stands (at home only without a forwarder, registering, registered, or why the forwarder
    refuses it, with the error underneath when details are on); whether the network the
    phone is on is one of the hub's home networks, with "This is my home network" when it
-   is not; the forwarder's address and key, as `cbb forward` prints them; and on Android
+   is not; the forwarder's address and key, as `cbb forward` prints them; how the hub's
+   tunnel hides (WireGuard, AmneziaWG, or VLESS to a forwarder that takes it: the phone makes
+   the AmneziaWG settings or the VLESS user ID with cbbtun's `NewObfuscation` and
+   `NewVLESSID` and keeps them while that choice stays, and the clients get them the next
+   time they meet the hub at home); and on Android
    "Keep the hub running in the background", which lets the foreground service keep it.
    While the phone is the hub, the switch for its own sync away from home is hidden: a hub
    is nobody's client. Home says "This phone is the hub: sync works while the app is open".
@@ -305,7 +319,10 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   of the iPhone app, shared), this Mac's sync mode (`cbb mode`), whether the app may press keys for remote paste, and error details (on in debug builds, off in release ones, and
   the `ShowErrorDetails` default either way).
 - What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from
-  home, the sync mode of this Mac or, on an admin, of another computer: `cbb mode -on`) goes only through the admin socket, which only root reaches, so the app runs
+  home, "Make it a hub" for this Mac or, on an admin, for another admin computer (`cbb global
+  hub -on`), and on this Mac while it is a hub how its tunnel hides (WireGuard, AmneziaWG,
+  VLESS) and its forwarder (`cbb global hub -keep`, the tray app's page of this computer
+  the same), the sync mode of this Mac or, on an admin, of another computer: `cbb mode -on`) goes only through the admin socket, which only root reaches, so the app runs
   `cbb` with administrator privileges (`Admin`, `do shell script … with administrator
   privileges`): macOS asks for the password, as `sudo cbb` does in Terminal. With error
   details on, `CBB_DEBUG=1` makes cbb name the error underneath.
@@ -317,7 +334,11 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   second the pasteboard gets its items back, unless the user copied meanwhile. Typing posts
   Unicode key events, which no layout changes. It refuses without the permission, on the lock
   screen, in a session not on the screen, and under Secure Event Input.
-- Pairing runs in Terminal for now (`cbb pair`); the Developer ID app of roadmap item 22
+- **Join a phone's group**: on a Mac in no group, the button runs `cbb pair -app FILE` as the
+  administrator, and the sheet shows the QR code that cbb writes into the file (JSON: `qr`,
+  `expires`, `port`) while it waits for the phone, with the code as text and the time left.
+  Cancel removes the file, and cbb hangs up, which ends the wait. Admitting a computer into
+  a group still runs in Terminal (`sudo cbb pair`); the Developer ID app of roadmap item 22
   carries the service itself and a Network Extension.
 
 CI's `Mac app` job builds it and runs its tests, signed ad hoc. It runs on a real Mac when built with a
@@ -351,6 +372,10 @@ service and its clipboard agent keep syncing without it.
   prompt on Windows (an elevated PowerShell started with `ShellExecuteEx`'s `runas`, each
   argument a single-quoted literal, its output read back from a file). A dismissed prompt
   changes nothing and says nothing.
+- **Join a phone's group**: a computer in no group shows the button, which runs `cbb pair
+  -app FILE` as the administrator, as the Mac app does: the dialog shows the QR code cbb
+  writes into the file the app made, and Cancel removes the file. On Linux the file is
+  written over without being created, so root never makes a file in `/tmp`.
 - Languages: English and Russian (`frontend/l10n/ru.json`, keyed by the English text; the Go
   side reads it for the tray), picked from the system's language.
 

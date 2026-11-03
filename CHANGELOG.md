@@ -7,6 +7,30 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The desktop apps show the QR code for joining a phone's group: on a computer in no group,
+  **Join a phone's group** in the tray app (Windows, Linux) and the Mac app runs `cbb pair
+  -app` as the administrator and shows the code, its text and the time left, without a
+  terminal; Cancel ends the wait. `cbb pair -app FILE` writes the code into a file the app
+  made and stops when the file is removed.
+- **Make it a hub** for an admin computer of the group, in both phone apps, the Mac app and the
+  tray app, and `cbb global hub -on DEVICE` on an admin computer: the admin signs a `hub`
+  command, and the computer becomes a hub of the group as well, reached through the project's
+  forwarder (or the phone's own) or at the addresses given, while the sender stays what it is.
+  A computer that is no admin yet becomes one first on the root phone; sync away from home must
+  be on there already, since only its own user turns it on. The desktop apps also make their
+  own computer a hub. `cbb status` lists `may_hub` for the devices the records let be hubs.
+- Every app marks the group's hubs: "hub" in the device list of both phones, and "The group's
+  hub" (or "in use now", for the one this device reaches) on a device's page in all four apps;
+  a phone's "Away from home" names the hub it is connected to. A device knows a hub by the
+  offer it keeps, so it marks them once sync away from home is on there. `cbb status` lists
+  `hub` for them.
+- **How the hub's tunnel hides** in every app that can be a hub: WireGuard, AmneziaWG or VLESS,
+  and its forwarder (the project's at cbb.tools or your own), on this computer's page in the
+  tray app and the Mac app and under "This phone as the hub" on both phones. The computers
+  run `cbb global hub -keep`, new: it keeps the hub's addresses, port and forwarder where the
+  command gives none. A phone hub makes its AmneziaWG settings and VLESS user ID with the new
+  `NewObfuscation` and `NewVLESSID` of `mobile/cbbtun`, keeps them in its state, starts its
+  tunnel with them and registers with its forwarder over VLESS when asked.
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
   `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,
@@ -1134,6 +1158,21 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A remote paste to Windows was refused with "not at the screen" though the agent ran in the
+  session at the console: the service, as NT SERVICE\cbb, may not list the sessions, and now
+  asks for the console's session first. A refusal names the target's session, or what the
+  system did not tell about its user.
+- The service logs why this device's keys are in a file when the machine has a TPM: the TPM
+  that did not open, or the error of the key it did not make. Until now a TPM that failed left
+  the keys in a file without a word.
+- `cbb pair` on a member that is not an admin says that the device is in a group already
+  before it names where to add more devices; it read as if the device had to join first.
+- An unknown command prints one line that points to `cbb help` instead of the whole help,
+  and `cbb cbb status`, the name typed twice after a path to `cbb.exe`, says to drop it.
+- `cbb pair` draws its QR code in the console that Windows PowerShell 5.1 and cmd open in:
+  it turns on the console's escape sequences, which only Windows Terminal had on, so the
+  code came out as `←[97;107m▀` text. Its note on a firewall in the way names Windows
+  Firewall there, not ufw or firewalld.
 - `cbb next link` on the Next's Pi starts the lite member's service when none runs, pointed at
   its ports, once the Next's clock has set the Pi's: NextPi starts nothing at boot, and after the
   Next was switched off the Pi stayed out of the group until the service was started by hand.

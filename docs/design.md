@@ -1093,7 +1093,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 | The whole group away together (a trip, a hotel Wi-Fi that isolates its clients, mobile data) | the phone hub, through the forwarder | |
 | A computer is the hub but is off, broken or offline | another hub of the group serves: the root and every admin with a hub set up, phones first (docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb global hubs` signs it, the apps later) |
 | The hub's home has no public address and the project's forwarder is not reached | nothing syncs away from home, unless the group has a forwarder or relay of the user's own (`cbb forward`, `cbb relay`) | |
-| A network blocks WireGuard | AmneziaWG, then VLESS; AmneziaWG for the phone hub as for any hub | VLESS for the phone hub's own registration is to be checked |
+| A network blocks WireGuard | AmneziaWG, then VLESS; the hub's setting in every app, the phone hub's too | VLESS for the phone hub's own registration is not yet tried against a real forwarder |
 | The root phone that is the hub is lost | an admin phone takes over and is the hub; devices far away are invited again | |
 
 ##### Steps
@@ -1393,7 +1393,8 @@ relay, or a hub.
 
 1. **AmneziaWG**, a fork of wireguard-go that randomises message headers, adds junk and
    imitation packets before the handshake and pads messages. Same keys and code; the user
-   switches it on per group, on the hub (`cbb global hub -obfuscate`). `cbb` and the phones'
+   switches it on per group, on the hub (`cbb global hub -obfuscate`, or the hub's setting
+   in the apps: `cbb global hub -keep` on the computers, the phone hub's own on the phones). `cbb` and the phones'
    tunnel run on amneziawg-go always; without settings it is plain WireGuard on the wire.
    - The hub makes the group's settings once, at random, and keeps them while obfuscation
      stays on: 3 to 8 junk packets of 40 to 600 bytes before each handshake, 16 to 64 random

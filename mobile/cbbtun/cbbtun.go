@@ -53,6 +53,21 @@ func PublicKey(private []byte) ([]byte, error) {
 	return pub[:], nil
 }
 
+// NewObfuscation returns new AmneziaWG settings for a group whose hub is
+// the phone, as JSON (Hub's obfuscation and the offers carry them).
+func NewObfuscation() (string, error) {
+	o, err := tunnel.NewObfuscation()
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(o)
+	return string(b), err
+}
+
+// NewVLESSID returns a new VLESS user ID for a group whose clients reach
+// the phone's hub only over VLESS (Hub's Register).
+func NewVLESSID() (string, error) { return tunnel.NewVLESSID() }
+
 // Tunnel is a running tunnel to the hub with its loopback port.
 type Tunnel struct {
 	client *tunnel.Client

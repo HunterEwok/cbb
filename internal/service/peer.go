@@ -36,6 +36,20 @@ func (p peer) String() string {
 	return fmt.Sprintf("uid %d", p.uid)
 }
 
+// where tells a refused paste's sender where the target's user is, without
+// naming the user: the session on Windows, or what the system did not tell.
+func (p peer) where() string {
+	switch {
+	case !p.known && p.why != "":
+		return "the system does not name its user: " + p.why
+	case !p.known:
+		return "the system does not name its user"
+	case p.sid != "":
+		return fmt.Sprintf("session %d", p.session)
+	}
+	return fmt.Sprintf("uid %d", p.uid)
+}
+
 // A verdict says whether a watcher's user may take what goes to a target.
 type verdict int
 

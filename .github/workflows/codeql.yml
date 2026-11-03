@@ -60,11 +60,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-      - uses: github/codeql-action/autobuild@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+      - uses: github/codeql-action/autobuild@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         if: matrix.build-mode == 'autobuild'
       - name: build the Android apps and the kit
         if: matrix.language == 'java-kotlin'
@@ -81,6 +81,6 @@ jobs:
             :app:assembleDebug :app:compileFullDebugUnitTestKotlin :app:compileFdroidDebugUnitTestKotlin :wear:assembleDebug
           ./gradlew --no-daemon --no-build-cache -Pkotlin.compiler.execution.strategy=in-process \
             -p kit testClasses
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: /language:${{ matrix.language }}

@@ -20,6 +20,7 @@ struct DeviceDetailView: View {
     @State private var pasting = false
     @State private var confirmingAction: String?
     @State private var turningOff = false
+    @State private var hubbing = false
 
     private var device: AppModel.Computer? { model.devices.first { $0.id == id } }
 
@@ -70,6 +71,13 @@ struct DeviceDetailView: View {
             } else {
                 Text("It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.")
             }
+        }
+        .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing, titleVisibility: .visible) {
+            Button {
+                Task { await model.makeHub(id) }
+            } label: { Text("Make it a hub") }
+        } message: {
+            Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.")
         }
         .alert(Text("Rename \(device?.name ?? "")"), isPresented: $renaming) {
             TextField(text: $newName) { Text("Name") }
@@ -158,6 +166,10 @@ struct DeviceDetailView: View {
                 Divider().overlay(palette.line)
                 row(Text("In the group"), Text(standing))
             }
+            if let mark = model.hubMark(d) {
+                Divider().overlay(palette.line)
+                row(Text("Away from home"), mark == .inUse ? Text("The group's hub, in use now") : Text("The group's hub"))
+            }
             if let mode = d.mode.flatMap(SyncMode.init(rawValue:)) {
                 Divider().overlay(palette.line)
                 row(Text("Sync mode"), Text(mode.title))
@@ -206,6 +218,12 @@ struct DeviceDetailView: View {
                 if d.canMakeAdmin {
                     Divider().overlay(palette.line)
                     action(Text("Make it an admin"), "person.badge.key") { promoting = true }
+                }
+                // An admin computer, or one the root makes an admin first;
+                // this phone is the hub under Settings.
+                if !d.isSelf, d.online, d.role == "full", !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin {
+                    Divider().overlay(palette.line)
+                    action(Text("Make it a hub"), "antenna.radiowaves.left.and.right") { hubbing = true }
                 }
                 if d.isSelf || d.online {
                     Divider().overlay(palette.line)

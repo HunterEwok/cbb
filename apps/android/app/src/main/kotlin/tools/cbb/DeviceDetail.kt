@@ -113,6 +113,7 @@ private fun Summary(d: LiveGroup.Device) {
         }
         add(Line(stringResource(R.string.role), stringResource(roleTitle(d.role, d.rootless))))
         d.standing?.let { add(Line(stringResource(R.string.in_the_group), stringResource(it))) }
+        d.hub?.let { add(Line(stringResource(R.string.away_title), stringResource(if (it == LiveGroup.HubMark.IN_USE) R.string.group_hub_in_use else R.string.group_hub))) }
         d.mode?.let { m -> modeTitle(m)?.let { add(Line(stringResource(R.string.sync_mode), stringResource(it))) } }
     }
     Column(Modifier.fillMaxWidth().card()) {
@@ -174,6 +175,7 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
     var choosingMode by remember { mutableStateOf(false) }
     var pasting by remember { mutableStateOf(false) }
     var acting by remember { mutableStateOf(false) }
+    var hubbing by remember { mutableStateOf(false) }
     if (choosingMode) ModeChoice(d, dismiss = { choosingMode = false }) { mode -> scope.launch { model.setMode(d.id, mode) } }
     // Every phone sets its own sync mode; an admin sets any other device's.
     if (!model.isAdmin) {
@@ -193,6 +195,11 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
         if (d.canMakeAdmin) {
             HorizontalDivider(color = palette.line)
             Action("★", stringResource(R.string.make_admin)) { promoting = true }
+        }
+        // An admin computer, or one the root makes an admin first; this phone is the hub under Settings.
+        if (!d.isSelf && d.online && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin)) {
+            HorizontalDivider(color = palette.line)
+            Action("⌁", stringResource(R.string.make_hub)) { hubbing = true }
         }
         if (d.isSelf || d.online) {
             HorizontalDivider(color = palette.line)
@@ -232,6 +239,14 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
             action = stringResource(R.string.make_admin),
             dismiss = { promoting = false },
         ) { scope.launch { model.makeAdmin(d.id) } }
+    }
+    if (hubbing) {
+        Confirm(
+            title = stringResource(R.string.make_hub_title, d.name),
+            body = stringResource(R.string.make_hub_body),
+            action = stringResource(R.string.make_hub),
+            dismiss = { hubbing = false },
+        ) { scope.launch { model.makeHub(d.id) } }
     }
     if (pasting) PasteOn(model, d, dismiss = { pasting = false })
     if (acting) QuickActions(model, d, dismiss = { acting = false })

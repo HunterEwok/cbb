@@ -97,7 +97,7 @@ protocol GroupController: AnyObject {
     func refresh() async
     /// Sync away from home: whether it is on, where it stands and its last
     /// failure; nil without a group.
-    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?)?
+    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])?
     /// Turns sync away from home on or off.
     func setAwayFromHome(_ on: Bool) async throws
     /// The phone as the group's hub; nil on a phone that cannot be it.
@@ -106,6 +106,8 @@ protocol GroupController: AnyObject {
     func setPhoneHub(_ on: Bool) async throws
     /// Sets the hub's forwarder; both empty for the project's.
     func setForwarder(address: String, pin: String) async throws
+    /// Sets how the hub's tunnel hides.
+    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws
     /// Remembers the network the phone is on as a home network of the hub.
     func addHomeNetwork() async throws
     /// Tells the group whether the app is in front, where the hub works.
@@ -116,6 +118,8 @@ protocol GroupController: AnyObject {
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation
     func moveHub(to id: String) async throws
+    /// Makes a connected admin computer a hub of the group as well.
+    func makeHub(_ id: String) async throws
     /// The phone at a blind relay; nil without a group.
     func relayStatus() async -> AppModel.BlindRelay?
     /// Meets the group at a blind relay; both empty leave it.
@@ -149,11 +153,12 @@ extension GroupController {
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
     func runAction(_ id: String, name: String) async throws {}
     func actionsOff(_ id: String) async throws {}
-    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?)? { nil }
+    func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])? { nil }
     func setAwayFromHome(_ on: Bool) async throws {}
     func hubStatus() async -> AppModel.Hub? { nil }
     func setPhoneHub(_ on: Bool) async throws {}
     func setForwarder(address: String, pin: String) async throws {}
+    func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {}
     func addHomeNetwork() async throws {}
     func setForeground(_ on: Bool) {}
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
@@ -161,6 +166,7 @@ extension GroupController {
         throw HubOnPhone.Failure.notRunning
     }
     func moveHub(to id: String) async throws { throw HubOnPhone.Failure.notRunning }
+    func makeHub(_ id: String) async throws { throw HubOnPhone.Failure.notRunning }
     func relayStatus() async -> AppModel.BlindRelay? { nil }
     func setRelay(address: String, pin: String) async throws {}
 }
@@ -206,6 +212,9 @@ final class AppModel: ObservableObject {
         var mode: String?
         /// The quick actions its hello says are on, while it is connected.
         var actions: [String] = []
+        /// The records let it be a hub: the root's own device or an admin
+        /// with the hub power.
+        var mayHub = false
     }
 
     enum SyncResult: Equatable {
@@ -259,6 +268,28 @@ final class AppModel: ObservableObject {
         var status: AwayFromHome.Status
         /// The last failure while it is still trying, in words.
         var error: String?
+        /// The hub the phone reaches now, by device ID; nil while it reaches none.
+        var hub: String?
+        /// The group's hubs whose offers the phone keeps, highest first.
+        var hubs: [String] = []
+    }
+
+    /// Where a device stands among the group's hubs, as the device list and
+    /// its page show it.
+    enum HubMark: Equatable {
+        /// One of the group's hubs.
+        case hub
+        /// The hub this phone reaches now.
+        case inUse
+    }
+
+    /// Whether d is one of the group's hubs, as this phone knows: this phone
+    /// while it is the hub, or a hub whose offer it keeps; nil otherwise.
+    func hubMark(_ d: Computer) -> HubMark? {
+        if d.isSelf { return hub?.on == true ? .hub : nil }
+        guard let a = away, a.on else { return nil }
+        if a.hub == d.id, a.status == .connected || a.status == .atHome { return .inUse }
+        return a.hubs.contains(d.id) ? .hub : nil
     }
 
     @Published private(set) var away: Away?
@@ -276,6 +307,8 @@ final class AppModel: ObservableObject {
         var forwarder: HubState.Forwarder?
         var home = false
         var clients = 0
+        /// How its tunnel hides.
+        var disguise = HubOnPhone.Disguise.plain
         /// The connected computers the hub can move to: admins, or
         /// computers the root can make admins.
         var computers: [Target] = []
@@ -661,7 +694,7 @@ final class AppModel: ObservableObject {
         if notifies { Notifier.shared.away(trying: a.on && failing != nil) }
         away = Away(on: a.on, status: a.status, error: failing.map {
             Self.describe($0, summary: String(localized: "The hub does not answer through the tunnel.", bundle: .app), log: false)
-        })
+        }, hub: a.hub, hubs: a.hubs)
     }
 
     private func refreshHub() async {
@@ -716,6 +749,22 @@ final class AppModel: ObservableObject {
         }
         await refreshHub()
     }
+
+    /// Makes a connected admin computer a hub of the group as well
+    /// (docs/protocol.md, section 11, "Several hubs").
+    func makeHub(_ id: String) async {
+        do {
+            try await group.makeHub(id)
+            message = String(localized: "It is a hub now: your devices reach the group through it when they are away from home.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        devices = group.devices
+        await refreshHub()
+    }
+
+    /// Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
+    func setHubDisguise(_ d: HubOnPhone.Disguise) async { await hubChange { try await self.group.setHubDisguise(d) } }
 
     /// Keeps this phone as the hub: the app no longer suggests a computer.
     func keepPhoneHub() async {

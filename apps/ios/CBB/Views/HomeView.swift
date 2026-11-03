@@ -316,6 +316,7 @@ struct DeviceRow: View {
 /// The system (or kind) of a device, then where it stands.
 struct DeviceSubtitle: View {
     let device: AppModel.Computer
+    @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -328,6 +329,11 @@ struct DeviceSubtitle: View {
             if let standing = device.standing {
                 Text(verbatim: "·")
                 Text(standing)
+            }
+            if let mark = model.hubMark(device) {
+                Text(verbatim: "·")
+                Text(mark == .inUse ? "hub in use" : "hub")
+                    .foregroundStyle(mark == .inUse ? palette.accent : palette.textDim)
             }
         }
         .font(.caption)

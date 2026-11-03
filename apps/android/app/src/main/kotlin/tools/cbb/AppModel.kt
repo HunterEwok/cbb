@@ -165,6 +165,8 @@ class AppModel(private val app: Context) {
         val background: Boolean = false,
         val home: Boolean = false,
         val clients: Int = 0,
+        /** How its tunnel hides. */
+        val disguise: HubOnPhone.Disguise = HubOnPhone.Disguise.PLAIN,
         /** The connected computers the hub can move to: admins, or computers the root can make admins; by ID, with their names. */
         val computers: List<Pair<String, String>> = emptyList(),
         /** The computer that is always on which the app suggests as the hub, unless the user chose to keep the phone. */
@@ -490,6 +492,7 @@ class AppModel(private val app: Context) {
                         emptyList()
                     },
                     suggested = group.suggestedHub?.takeIf { h.isOn && !settings.keepsPhoneHub }?.let { it.id to it.name },
+                    disguise = h.disguise,
                 )
             }
         }
@@ -570,6 +573,9 @@ class AppModel(private val app: Context) {
         if (pin.isNotBlank() && !HubState.validPin(pin.trim())) throw IllegalArgumentException("not a pin")
         group.setForwarder(address, pin)
     }
+
+    /** Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS. */
+    suspend fun setHubDisguise(d: HubOnPhone.Disguise) = hubChange { group.setHubDisguise(d) }
 
     /** Lets the hub run in the background, at the battery's cost. */
     suspend fun setHubInBackground(on: Boolean) = hubChange { group.setHubInBackground(on) }
@@ -933,6 +939,28 @@ class AppModel(private val app: Context) {
             Note(R.string.made_admin)
         } catch (e: CancellationException) {
             throw e
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
+    /**
+     * Makes a connected admin computer a hub of the group as well
+     * (docs/protocol.md, section 11, "Several hubs"); the reason it
+     * refused, if it does, shows under the message.
+     */
+    suspend fun makeHub(id: String) {
+        message = try {
+            group.makeHub(id)
+            Note(R.string.made_hub)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LiveGroup.CommandRefused) {
+            Log.e(TAG, app.getString(R.string.make_hub_refused), e)
+            Note(R.string.make_hub_refused, e.reason, error = true)
+        } catch (e: MemberNode.ProtocolException) {
+            describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
         }

@@ -624,7 +624,12 @@ func (s *Service) devices() ([]control.Device, error) {
 	s.recMu.Lock()
 	list := s.records.Devices()
 	root := s.records.RootDevice()
+	mayHub := map[group.DeviceID]bool{}
+	for _, d := range list {
+		mayHub[d.ID] = s.records.MayHost(d.ID)
+	}
 	s.recMu.Unlock()
+	hubs := s.knownHubs(id.ID)
 
 	frozen := map[group.DeviceID]bool{}
 	for _, d := range list {
@@ -635,7 +640,7 @@ func (s *Service) devices() ([]control.Device, error) {
 	var out []control.Device
 	shown := map[group.DeviceID]bool{}
 	entry := func(dev group.DeviceID, name, role, os, store string, admin, listed bool) {
-		d := control.Device{ID: string(dev), Name: name, Role: role, OS: os, Store: store, Listed: listed, Self: dev == id.ID, Root: dev == root, Frozen: frozen[dev]}
+		d := control.Device{ID: string(dev), Name: name, Role: role, OS: os, Store: store, Listed: listed, Self: dev == id.ID, Root: dev == root, Frozen: frozen[dev], MayHub: mayHub[dev], Hub: hubs[dev]}
 		d.Admin = admin
 		if _, ok := peers[dev]; ok || d.Self {
 			d.Online, d.LastSeenMS = true, now.UnixMilli()
