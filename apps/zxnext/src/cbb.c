@@ -606,6 +606,8 @@ static int net(int argc, char **argv)
 // The Pi's cbb: on the card, and where NextPi's shell finds it.
 #define PI_CARD "/cbb/CBBPI.BIN"
 #define PI_DIR "/NextPi/nextpi"
+// Where NextZXOS looks for dot commands first.
+#define DOT_CBB "c:/dot/CBB"
 // A range is asked for at a time, kept in text[], and written while the
 // server waits: the ESP has no flow control, and a card write runs with
 // interrupts off for longer than the UART's buffer lasts.
@@ -930,6 +932,10 @@ static int to_pi(struct item *it)
         if (strcmp(line, "CBBOK") == 0) break;
     }
     link_prompt();
+    // A service of the old cbb, which .cbb net on or a hand started, stops,
+    // so that the next .cbb net on starts the new one.
+    link_send_str("pkill -f ' service -peer 127\\.0\\.0\\.1:'\n");
+    link_prompt();
     // The wrapper keeps the state in the user partition, since NextPi's
     // root is read-only; an older cbb that is the program itself is kept
     // as cbb.old.
@@ -946,7 +952,8 @@ static int install(void)
 {
     static char pimd5[33];
     struct item *pi = &items[ITEMS - 1];
-    uint8_t i, pi_answers;
+    uint8_t i, pi_answers, drv_new = 0;
+    uint32_t size;
     int err = 0;
     if (net_on()) return fail("the network runs; stop it first with .cbb net off", 0);
     crc_init();
@@ -970,6 +977,7 @@ static int install(void)
         // The Pi's cbb may be on the card from a try that stopped later.
         if (it == pi && up_to_date(it)) continue;
         err = fetch(it);
+        if (i == 1) drv_new = 1;
     }
     http_close();
     link_use(LINK_PI);
@@ -983,9 +991,20 @@ static int install(void)
         if (to_pi(pi)) return 1;
         // The card keeps no copy of the Pi's program.
         esx_f_unlink(pi->card);
-        printf("The Pi's cbb is installed.\n");
+        printf("The Pi's cbb is installed;\n.cbb net on starts it.\n");
     }
-    printf("Done. After a reset or a power\ncycle: .install /cbb/CBB.DRV\n");
+    // A driver installed earlier runs from memory until it is
+    // uninstalled; the card's new file takes its place only then.
+    if (driver(DRV_STATE, 0) != 0) {
+        printf("Next: .install /cbb/CBB.DRV\n(again after each reset)\n");
+    } else if (drv_new) {
+        printf("CBB.DRV is new: .uninstall\n/cbb/CBB.DRV, then .install\n/cbb/CBB.DRV\n");
+    }
+    // An older .cbb in C:/DOT runs as .cbb before this one.
+    if (file_crc(DOT_CBB, &size) != items[0].crc && size) {
+        printf("C:/DOT/CBB is another .cbb;\n.cbb runs it, ../CBB the new\none: replace or delete it.\n");
+    }
+    printf("Done.\n");
     return 0;
 }
 

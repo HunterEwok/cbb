@@ -61,6 +61,14 @@ the same and fetches only the files that changed. The files come over plain HTTP
 neither `.http` nor the ESP has TLS: the checks find a damaged download, not a changed one,
 until the list is signed (docs/roadmap.md, "Installing").
 
+Over an earlier installation: `.cbb install` asks for `.cbb net off` first while the network
+runs, and replaces only the files that differ. A `CBB.DRV` already installed keeps running
+from memory, so when the file is new it says to `.uninstall /cbb/CBB.DRV` and `.install` it
+again. On the Pi it stops the old `cbb service`, so the next `.cbb net on` starts the new
+one, and an old `cbb` that is the program itself, not the start script, is kept as
+`cbb.old`. A `CBB` in `C:/DOT` that differs from the new one is reported, not touched:
+`.cbb` runs that one, `../CBB` in `/cbb` the new one.
+
 Not yet run on a real Next.
 
 ## Set up the Pi
