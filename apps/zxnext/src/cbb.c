@@ -904,10 +904,12 @@ static void logo_draw(void)
 // ULA's entries (ink 0-7, bright ink 8-15, paper 16-23, bright paper 24-31)
 // that it uses and nothing else on the screen does, each with its 9-bit
 // colour RRRGGGBB,B (tools/icon, zx.go). The old ones come back after.
-#define PALETTE_COLOURS 2
+#define PALETTE_COLOURS 4
 static const uint8_t palette_new[PALETTE_COLOURS][3] = {
-    {2, 0x8C, 1}, // red ink: the board's brown, 4,3,1
-    {6, 0xD5, 1}, // yellow ink: the clip's tan, 6,5,3
+    {2, 0x8C, 1},  // red ink: the board's brown, 4,3,1
+    {6, 0xD5, 1},  // yellow ink: the clip's tan, 6,5,3
+    {31, 0xDB, 0}, // bright white paper: the page, light grey 6,6,6
+    {8, 0x24, 1},  // bright black ink: the page's lines, 1,1,1
 };
 static uint8_t palette_old[PALETTE_COLOURS][2];
 

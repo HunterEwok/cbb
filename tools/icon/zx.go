@@ -283,6 +283,44 @@ func zxClipLight(s zxShapes, x, y int) float64 {
 	return math.Min(1, f)
 }
 
+// The page's bottom right corner turned up over the board, as on the icon:
+// a fold zxCurl pixels from the corner, the turned flap with its tip
+// rounded. Its cells are the page's, but for the one wholly under the flap,
+// where the board shows on; the two the fold crosses clash: the board under
+// them is the flap's shadow.
+const (
+	zxCurl, zxCurlTip = 16, 8
+	// zxDarkPage: white lines on a dark page, not dark lines on a light one.
+	zxDarkPage = false
+)
+
+// zxCorner tells what the corner has at a pixel: 0 nothing, 1 the board
+// under the flap, 2 the flap's edge or fold, 3 the flap, with its shade.
+func zxCorner(x, y int) (kind int, shade float64) {
+	u, v := 95.5-(float64(x)+0.5), 127.5-(float64(y)+0.5)
+	if u < 0 || v < 0 || u >= zxCurl || v >= zxCurl {
+		return 0, 0
+	}
+	s := u + v
+	if s < zxCurl {
+		return 1, 0
+	}
+	t := float64(zxCurl - zxCurlTip)
+	if u > t && v > t {
+		d := math.Hypot(u-t, v-t)
+		if d > zxCurlTip {
+			return 0, 0
+		}
+		if d > zxCurlTip-1 {
+			return 2, 0
+		}
+	}
+	if s < zxCurl+1 || u > zxCurl-1.5 || v > zxCurl-1.5 {
+		return 2, 0
+	}
+	return 3, 0.5 * math.Pow(1-(s-zxCurl)/zxCurl, 1.3)
+}
+
 func zxLogoOutput() (map[string][]byte, error) {
 	f, err := os.Open("apps/design/icon/light.png")
 	if err != nil {
@@ -312,7 +350,10 @@ func zxLogoOutput() (map[string][]byte, error) {
 				}
 			}
 			var attr byte
+			under := cx == 11 && cy == 15 // wholly under the flap
 			switch {
+			case under:
+				attr = zxBoard
 			case page:
 				attr = zxPage
 			case clip:
@@ -329,8 +370,16 @@ func zxLogoOutput() (map[string][]byte, error) {
 					var on bool
 					switch attr {
 					case zxPage:
-						// The page's lines, as they are.
+						// The page's lines, as they are, and the corner.
 						on = s.page[i] && px[i].ink > 0.45
+						switch kind, shade := zxCorner(x, y); kind {
+						case 1: // the board in the clashing cells: the flap's shadow
+							on = !zxDarkPage
+						case 2:
+							on = true
+						case 3:
+							on = shade > th
+						}
 					case zxClip:
 						on = s.clip[i] && !s.clipEdge[i] && zxClipLight(s, x, y) > th
 						// The board in the clip's cells, in the clip's colour (the clash),
@@ -340,6 +389,15 @@ func zxLogoOutput() (map[string][]byte, error) {
 						}
 					case zxBoard:
 						on = s.board[i] && !s.page[i] && !s.clip[i] && lo+(hi-lo)*light[i] > th
+						if under {
+							// The board under the flap, in the flap's shadow:
+							// deepest by the fold and the clashing cells, its light
+							// the board's beside the page, as the page's own shadow is not under it.
+							u, v := 95.5-(float64(x)+0.5), 127.5-(float64(y)+0.5)
+							fold := math.Min(math.Abs(float64(y)+0.5-120), math.Abs(float64(x)+0.5-88))
+							sh := 0.6*math.Pow(math.Max(0, math.Min(1, (u+v-3)/(zxCurl-3))), 1.5) + 0.4*math.Max(0, 1-fold/4)
+							on = lo+(hi-lo)*light[i+8] > th && !(math.Min(sh, 1) > (zxBayer[y%4][(x+1)%4]+0.5)/16)
+						}
 					}
 					if on {
 						bits |= 0x80 >> (x % 8)
