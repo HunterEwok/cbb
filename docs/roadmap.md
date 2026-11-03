@@ -468,6 +468,18 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     and the list is stale, the app says so and where to get a new one. Later, once there is a spare domain or a CDN: several domains, or
     Cloudflare in front of XHTTP, in the same signed list, as the name a network sees in TLS
     is what it can block.
+- **57.** **Planned for 0.7 (the owner, 2026-11-03).** Push notifications on the iPhone, so
+    that a copy and the group's events reach it while its app is closed (Android needs
+    none: its foreground service keeps the connections). A member or the hub asks the
+    project's push service on cbb.tools to notify the phone; the service holds the APNs keys
+    and the phones' device tokens, never a group's keys. A Notification Service Extension
+    (about 30 seconds and 24 MiB) opens what is sealed to that phone: a short copy (a push
+    carries 4 KiB) shown with a "Copy" button, or a line that a larger copy or a file waits.
+    The service sees the tokens and the times, not the content: the privacy page says so,
+    and push can be switched off. Back Tap, the Action button and Share stay
+    as they are. To check on a device: whether the extension may put the text in the
+    clipboard without a tap, and whether Back Tap's 5 seconds are enough away from home
+    over VLESS (iOS allows about 30).
 
 ## Devices that are hard to type into
 
