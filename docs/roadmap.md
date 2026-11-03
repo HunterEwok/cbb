@@ -453,6 +453,17 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     go the registration (its TLS, with the forwarder's key pinned, inside VLESS) and the
     hub's own tunnel packets, and the forwarder passes the clients' packets to such a hub
     over that connection instead of UDP (docs/protocol.md, sections 11 and 13).
+    Nothing secret is compiled in: the builds stay reproducible (F-Droid) and the code
+    public. Instead the built-in path, and the `xhttp://host/path#key` string or QR code of
+    one's own forwarder, serve only a hub's first registration: the forwarder then gives each
+    group a data path of its own (random, kept with the group's registration), the hub hands
+    it to its clients in the offer, and the forwarder carries the group's packets only on
+    that path. The entry points (domains, ports, registration paths, the forwarders' keys)
+    are also published as a signed list in the release channel (`cbb.tools/channel/`, signed
+    with the channel key), so a blocked entry is replaced without a release; hubs and clients
+    pick the list up. Later, once there is a spare domain or a CDN: several domains, or
+    Cloudflare in front of XHTTP, in the same signed list, as the name a network sees in TLS
+    is what it can block.
 
 ## Devices that are hard to type into
 
