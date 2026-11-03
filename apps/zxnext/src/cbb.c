@@ -8,6 +8,7 @@
 
 #include <arch/zxn.h>
 #include <arch/zxn/esxdos.h>
+#include <ctype.h>
 #include <errno.h>
 #include <intrinsic.h>
 #include <stdio.h>
@@ -81,14 +82,24 @@ static void message_at(uint16_t len)
     screen_row += (uint8_t)(len / 32 + 1);
 }
 
+// Prints a text, in capitals while .cbb install's screen shows.
+static void put_text(const char *s)
+{
+    while (*s) putchar(screen_row ? toupper(*s++) : *s++);
+}
+
 // Shows a short message, and in debug mode the cause under it.
 static int fail(const char *msg, const char *detail)
 {
     message_at(strlen(msg) + 5);
-    printf("cbb: %s\n", msg);
+    put_text("cbb: ");
+    put_text(msg);
+    putchar('\n');
     if (debug && detail && *detail) {
         message_at(strlen(detail) + 4);
-        printf("  (%s)\n", detail);
+        put_text("  (");
+        put_text(detail);
+        put_text(")\n");
     }
     return 1;
 }
@@ -97,7 +108,8 @@ static int fail(const char *msg, const char *detail)
 static void say(const char *msg)
 {
     message_at(strlen(msg));
-    printf("%s\n", msg);
+    put_text(msg);
+    putchar('\n');
 }
 
 static int link_fail(uint8_t err)
@@ -741,16 +753,17 @@ static int net(int argc, char **argv)
 // The ROM's scroll count: kept high, the screen scrolls without "scroll?".
 #define SCR_CT (*(volatile uint8_t *)23692)
 
+// name: on the server; label: on the screen.
 struct item {
-    const char *name, *card, *part;
+    const char *name, *label, *card, *part;
     uint32_t size, crc;
     char md5[33];
 };
 
 static struct item items[] = {
-    {"CBB", "/cbb/CBB", "/cbb/CBB.PRT", 0, 0, ""},
-    {"CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", 0, 0, ""},
-    {"cbb", PI_CARD, "/cbb/CBBPI.PRT", 0, 0, ""},
+    {"CBB", ".CBB", "/cbb/CBB", "/cbb/CBB.PRT", 0, 0, ""},
+    {"CBB.DRV", "CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", 0, 0, ""},
+    {"cbb", "PI CBB", PI_CARD, "/cbb/CBBPI.PRT", 0, 0, ""},
 };
 #define ITEMS (sizeof items / sizeof items[0])
 
@@ -954,17 +967,17 @@ static void screen_open(void)
     zx_cls(PAPER_BLACK | INK_WHITE | BRIGHT);
     logo_unpack();
     logo_draw();
+    screen_row = MESSAGE_ROW;
     colour(INK_YELLOW);
     at(0, PANEL);
-    printf("Copy Beyond");
+    printf("COPY BEYOND");
     at(1, PANEL);
-    printf("Borders");
+    printf("BORDERS");
     colour(INK_WHITE);
     at(2, PANEL);
-    printf(VERSION ", " SITE);
+    put_text(VERSION ", " SITE);
     at(NOW_ROW + 2, PANEL);
-    printf("SPACE stops");
-    screen_row = MESSAGE_ROW;
+    printf("SPACE STOPS");
 }
 
 // Leaves the screen: the border and the palette as they were, the print
@@ -1024,12 +1037,12 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
     bar(FILE_ROW + 2 * row + 1, percent(got, size), bar_ink[row & 3]);
     bar(TOTAL_ROW + 1, percent(total_done + got, total_size), 0xFF);
     at(NOW_ROW, PANEL);
-    printf("%5luK of %5luK", got >> 10, size >> 10);
-    if (rate < 10240) sprintf(speed, "%u.%uK/s", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));
-    else sprintf(speed, "%uK/s", (uint16_t)(rate >> 10));
+    printf("%5luK OF %5luK", got >> 10, size >> 10);
+    if (rate < 10240) sprintf(speed, "%u.%uK/S", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));
+    else sprintf(speed, "%uK/S", (uint16_t)(rate >> 10));
     if (left > 5999) left = 5999;
     at(NOW_ROW + 1, PANEL);
-    printf("%-7s%2u:%02u left", speed, left / 60, left % 60);
+    printf("%-7s%2u:%02u LEFT", speed, left / 60, left % 60);
 }
 
 // CRC-32 by a table of 16, half a byte at a time: the Pi's cbb is
@@ -1086,20 +1099,20 @@ static int fetch(struct item *it, uint8_t row)
     fh = esx_f_open(it->part, ESX_MODE_W | ESX_MODE_OPEN_CREAT);
     if (errno) return fail("cannot write to /cbb", it->part);
     esx_f_seek(fh, got, ESX_SEEK_SET);
-    file_state(row, it->name, got ? "goes on" : "fetching");
+    file_state(row, it->label, got ? "GOES ON" : "FETCHING");
     while (got < it->size) {
         n = it->size - got > CHUNK ? CHUNK : (uint16_t)(it->size - got);
         err = http_range(it->name, got, n);
         if (err == LINK_BREAK) {
             esx_f_close(fh);
-            file_state(row, it->name, "stopped");
+            file_state(row, it->label, "STOPPED");
             return fail("stopped; .cbb install goes on from here", 0);
         }
         if (err) {
             // The server may have closed the connection: open it again.
             if (++tries > 5) {
                 esx_f_close(fh);
-                file_state(row, it->name, "broke off");
+                file_state(row, it->label, "BROKE OFF");
                 return fail("the download broke off; .cbb install goes on from here", line);
             }
             http_close();
@@ -1117,13 +1130,13 @@ static int fetch(struct item *it, uint8_t row)
     }
     esx_f_close(fh);
     if (crc != it->crc) {
-        file_state(row, it->name, "damaged");
+        file_state(row, it->label, "DAMAGED");
         esx_f_unlink(it->part);
         return fail("the file arrived damaged; run .cbb install again", it->name);
     }
     esx_f_unlink(it->card);
     if (esx_f_rename(it->part, it->card)) return fail("cannot put the file in place", it->card);
-    file_state(row, it->name, "fetched");
+    file_state(row, it->label, "FETCHED");
     return 0;
 }
 
@@ -1274,8 +1287,8 @@ static int install_files(void)
     drv_on = driver(DRV_STATE, 0) == 0;
     if (drv_on) old_bank = drv_bank();
     esx_f_mkdir("/cbb");
-    for (i = 0; i < ITEMS; i++) file_state(i, items[i].name, "");
-    file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "total", "");
+    for (i = 0; i < ITEMS; i++) file_state(i, items[i].label, "");
+    file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "TOTAL", "");
     pi_answers = !pi_md5(pimd5);
     if (http_open()) {
         http_close();
@@ -1288,18 +1301,18 @@ static int install_files(void)
     total_size = total_done = 0;
     for (i = 0; i < ITEMS && !err; i++) {
         struct item *it = &items[i];
-        const char *state = "current";
+        const char *state = "CURRENT";
         if (it == pi) {
-            if (!pi_answers) state = "no Pi";
-            else if (strcmp(pimd5, it->md5) == 0) state = "current";
+            if (!pi_answers) state = "NO PI";
+            else if (strcmp(pimd5, it->md5) == 0) state = "CURRENT";
             // On the card from a try that stopped later.
-            else if (up_to_date(it)) state = "fetched";
+            else if (up_to_date(it)) state = "FETCHED";
             else state = 0;
             if (pi_answers && strcmp(pimd5, it->md5)) total_size += it->size;
         } else if (!up_to_date(it)) {
             state = 0;
         }
-        if (state) file_state(i, it->name, state);
+        if (state) file_state(i, it->label, state);
         else {
             need[i] = 1;
             total_size += it->size;
@@ -1317,15 +1330,15 @@ static int install_files(void)
     if (!pi_answers) {
         say("The Pi does not answer: its cbb comes with .cbb update later.");
     } else if (strcmp(pimd5, pi->md5) == 0) {
-        file_state(PI_ROW, "cbb", "current");
+        file_state(PI_ROW, pi->label, "CURRENT");
     } else {
-        file_state(PI_ROW, "cbb", "to Pi");
+        file_state(PI_ROW, pi->label, "TO PI");
         if (to_pi(pi, PI_ROW)) return 1;
         total_done += pi->size;
         bar(TOTAL_ROW + 1, 100, 0xFF);
         // The card keeps no copy of the Pi's program.
         esx_f_unlink(pi->card);
-        file_state(PI_ROW, "cbb", "on Pi");
+        file_state(PI_ROW, pi->label, "ON PI");
     }
     // A driver installed earlier runs from memory: a new one takes its
     // place, with its bank. Without one, the driver is installed now (and
