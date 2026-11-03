@@ -428,6 +428,16 @@ program is signed ad hoc, as before. The certificates live in a keychain of the 
 request's build ad hoc with the same flags and runs `cbb version`, which loads the Rust core
 under the hardened runtime.
 
+The same secrets make the Mac's installer package, `cbb-X.Y.Z.pkg` (the job "the Mac app
+and the .pkg"): `cbb` for Apple silicon and Intel in one program (`lipo` of the two signed
+builds) and CBB.app, built for both, signed with the hardened runtime and notarized, in a
+package signed with the **Developer ID Installer** certificate (`packaging/macos/pkg.sh`) and
+notarized in turn, its ticket stapled. The package puts the app in `/Applications` and runs
+`install.sh` for the user signed in at the screen; without a terminal it keeps the answers
+given before about the firewall and automatic updates and asks nothing. Without the secrets
+the release has no `.pkg`. CI's `Mac app` job builds one unsigned, installs it with
+`installer`, and removes it with `uninstall.sh`.
+
 The Apple Developer account (team `U2ZJ8F2JCJ`) holds, all made once on the maintainer's
 Mac with a key of its own (`openssl genrsa 2048` and a CSR, never Xcode's automatic signing),
 with the files and a backup beside the other release keys:

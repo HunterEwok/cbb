@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Signs cbb for macOS with the hardened runtime, which notarization requires:
+# Signs cbb or CBB.app for macOS with the hardened runtime, which
+# notarization requires:
 #
 #   sh packaging/macos/sign.sh IDENTITY path/to/cbb
+#   sh packaging/macos/sign.sh IDENTITY path/to/CBB.app
 #
 # IDENTITY is a Developer ID Application identity in a keychain (its SHA-1
 # hash or name), as the release workflow passes, or "-" for an ad hoc
@@ -12,21 +14,43 @@
 # the hardened runtime with its Rust core (cbb version). A Developer ID
 # signature carries a secure timestamp, which notarization requires; an ad hoc
 # one cannot. The binary keeps its identifier tools.cbb.cli, so that every
-# release is the same program to macOS.
+# release is the same program to macOS. An app, built by xcodebuild without
+# signing, is signed from the inside out: its nested code first, then the
+# bundle, which keeps the identifier of its Info.plist.
 set -eu
 
 if [ $# -ne 2 ]; then
-	echo "usage: sh packaging/macos/sign.sh IDENTITY|- path/to/cbb" >&2
+	echo "usage: sh packaging/macos/sign.sh IDENTITY|- path/to/cbb|path/to/CBB.app" >&2
 	exit 2
 fi
 identity=$1
 bin=$2
 
-if [ "$identity" = - ]; then
-	codesign --force --options runtime --identifier tools.cbb.cli --sign - "$bin"
-else
-	codesign --force --options runtime --timestamp --identifier tools.cbb.cli --sign "$identity" "$bin"
-fi
+# sign PATH [codesign flags] signs one piece of code.
+sign() {
+	path=$1
+	shift
+	if [ "$identity" = - ]; then
+		codesign --force --options runtime "$@" --sign - "$path"
+	else
+		codesign --force --options runtime --timestamp "$@" --sign "$identity" "$path"
+	fi
+}
+
+case $bin in
+*.app | *.app/)
+	bin=${bin%/}
+	# The deepest first, since signing a bundle seals what it holds.
+	find "$bin/Contents" -depth \( -name '*.dylib' -o -name '*.framework' -o -name '*.appex' -o -name '*.xpc' \) |
+		while read -r nested; do sign "$nested"; done
+	sign "$bin"
+	codesign --verify --deep --strict --verbose=2 "$bin"
+	codesign --display --verbose=2 "$bin" 2>&1 | grep -q 'flags=.*runtime'
+	exit 0
+	;;
+esac
+
+sign "$bin" --identifier tools.cbb.cli
 codesign --verify --strict --verbose=2 "$bin"
 # The runtime flag is what notarization and the checks below rely on.
 codesign --display --verbose=2 "$bin" 2>&1 | grep -q 'flags=.*runtime'
