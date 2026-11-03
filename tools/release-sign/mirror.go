@@ -374,11 +374,16 @@ func readZXNext(path string) (map[string][]byte, error) {
 			strings.Contains(name, "..") || strings.HasPrefix(name, ".") || h.Size > zxnextMax:
 			return nil, fmt.Errorf("the archive holds %q", h.Name)
 		}
+		// Only a bare name, the same as its own base, goes on to a path.
+		base := filepath.Base(name)
+		if base != name || strings.Contains(base, "..") {
+			return nil, fmt.Errorf("the archive holds %q", h.Name)
+		}
 		var b bytes.Buffer
 		if _, err := io.Copy(&b, io.LimitReader(tr, zxnextMax)); err != nil {
 			return nil, err
 		}
-		files[name] = b.Bytes()
+		files[base] = b.Bytes()
 	}
 }
 
