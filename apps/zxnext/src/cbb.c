@@ -832,15 +832,15 @@ static void http_close(void)
 //
 //   rows 0-17, columns 0-13   the logo
 //   rows 0-2, from column 15  the name and the version
-//   rows 4-11                 a file's name and state, then its bar, in
-//                             the stripes' colours: red, yellow, green, cyan
-//   rows 12-13                all of it, its bar in the four stripes
-//   rows 15-16                the file under way: kilobytes, speed
+//   rows 4-9                  a file's name and state, then its bar, in
+//                             the stripes' colours: red, yellow, green
+//   rows 10-11                all of it, its bar in the four stripes
+//   rows 13-14                the file under way: kilobytes, speed
 //   rows 19-23                messages
 #define PANEL 15
 #define FILE_ROW 4
-#define TOTAL_ROW 12
-#define NOW_ROW 15
+#define TOTAL_ROW 10
+#define NOW_ROW 13
 #define MESSAGE_ROW 19
 #define BAR_CELLS 12
 
@@ -1258,7 +1258,8 @@ static int to_pi(struct item *it, uint8_t row)
 // .cbb install and .cbb update: the Next's files to /cbb, the Pi's cbb
 // through the card to the Pi; each only when the list has another. The
 // rows of the screen: CBB, CBB.DRV, the Pi's cbb fetched, then sent.
-#define PI_ROW (ITEMS)
+// The Pi's cbb goes on in its row: fetched, then sent.
+#define PI_ROW (ITEMS - 1)
 
 static int install_files(void)
 {
@@ -1272,7 +1273,6 @@ static int install_files(void)
     if (drv_on) old_bank = drv_bank();
     esx_f_mkdir("/cbb");
     for (i = 0; i < ITEMS; i++) file_state(i, items[i].name, "");
-    file_state(PI_ROW, "to Pi", "");
     file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "total", "");
     pi_answers = !pi_md5(pimd5);
     if (http_open()) {
@@ -1315,15 +1315,15 @@ static int install_files(void)
     if (!pi_answers) {
         say("The Pi does not answer: its cbb comes with .cbb update later.");
     } else if (strcmp(pimd5, pi->md5) == 0) {
-        file_state(PI_ROW, "to Pi", "current");
+        file_state(PI_ROW, "cbb", "current");
     } else {
-        file_state(PI_ROW, "to Pi", "sending");
+        file_state(PI_ROW, "cbb", "to Pi");
         if (to_pi(pi, PI_ROW)) return 1;
         total_done += pi->size;
         bar(TOTAL_ROW + 1, 100, 0xFF);
         // The card keeps no copy of the Pi's program.
         esx_f_unlink(pi->card);
-        file_state(PI_ROW, "to Pi", "installed");
+        file_state(PI_ROW, "cbb", "on Pi");
     }
     // A driver installed earlier runs from memory: a new one takes its
     // place, with its bank. Without one, the driver is installed now (and
