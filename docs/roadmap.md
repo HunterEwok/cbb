@@ -461,7 +461,11 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     that path. The entry points (domains, ports, registration paths, the forwarders' keys)
     are also published as a signed list in the release channel (`cbb.tools/channel/`, signed
     with the channel key), so a blocked entry is replaced without a release; hubs and clients
-    pick the list up. Later, once there is a spare domain or a CDN: several domains, or
+    pick the list up. Every device fetches the list with its update check, whether or not
+    VLESS is on, and takes it from any source, as the signature is what it trusts: cbb.tools,
+    the `channel` branch on GitHub, any member of its group (over the member protocol, as the
+    signed release), or a QR code or string another device shares; when none of them answers
+    and the list is stale, the app says so and where to get a new one. Later, once there is a spare domain or a CDN: several domains, or
     Cloudflare in front of XHTTP, in the same signed list, as the name a network sees in TLS
     is what it can block.
 
