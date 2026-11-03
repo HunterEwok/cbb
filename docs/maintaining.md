@@ -438,6 +438,17 @@ given before about the firewall and automatic updates and asks nothing. Without 
 the release has no `.pkg`. CI's `Mac app` job builds one unsigned, installs it with
 `installer`, and removes it with `uninstall.sh`.
 
+The iPhone app goes to TestFlight from the same environment (the job "the iPhone app, to
+TestFlight", `apps/ios/testflight.sh`): an archive of the app with its share extension,
+widgets and watch app, each target signed by hand with the **Apple Distribution**
+certificate and its own App Store profile from `CBB_APPLE_PROFILES` (a base64 `tar.gz` of
+the four `.mobileprovision` files, found by their App IDs), exported for App Store Connect
+and uploaded with the API key. Its version is the tag's numbers (`0.6.0` for `v0.6.0-rc.1`),
+its build number the run's. A run by hand from `main` builds and signs it as `0.0.0` and
+uploads nothing. Apple asks about the app's encryption (export compliance) in App Store
+Connect for each build until the answer is in the app's `Info.plist`. The profiles expire
+after a year: make new ones in the account, then set `CBB_APPLE_PROFILES` again.
+
 The Apple Developer account (team `U2ZJ8F2JCJ`) holds, all made once on the maintainer's
 Mac with a key of its own (`openssl genrsa 2048` and a CSR, never Xcode's automatic signing),
 with the files and a backup beside the other release keys:

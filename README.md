@@ -103,7 +103,8 @@ through tmux and `cbb copy` and `cbb paste`.
 | The project's forwarder and relay at `cbb.tools`, open to everyone | being tested | the forwarder carried a phone's sync to a Mac hub |
 | Console paste on a key press | planned | |
 | Homebrew (`hunterewok/tap`) | a formula with each release | |
-| Signed macOS `.pkg`, TestFlight, app stores | planned (needs an Apple developer account) | |
+| Signed macOS `.pkg` with the Mac app, TestFlight | built; the release signs them with the Apple developer account | not yet run |
+| App stores | planned | |
 
 The order of what comes next is the [roadmap](docs/roadmap.md).
 

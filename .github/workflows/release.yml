@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Builds a release from a version tag: an archive per platform, the lite
 # member's archives, the Android app's and the Wear OS app's APKs, with the
-# Developer ID certificates the Mac's .pkg (CBB.app and the service), SHA256SUMS,
+# Developer ID certificates the Mac's .pkg (CBB.app and the service) and the
+# iPhone app's build for TestFlight, SHA256SUMS,
 # the Linux and Windows installers, a software bill of materials for each part
 # (tools/sbom) and a build provenance attestation for each file, the Docker
 # image on ghcr.io with its bill of materials and the winget manifest; with a
@@ -251,6 +252,57 @@ jobs:
           path: ${{ runner.temp }}/dist/
           if-no-files-found: ignore
           retention-days: 1
+
+  testflight:
+    name: build (the iPhone app, to TestFlight)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    # The Apple Distribution certificate, the App Store profiles and the App
+    # Store Connect key live in the environment release (docs/maintaining.md,
+    # "Signing for macOS"). A tag uploads the build to TestFlight; a run by
+    # hand from main only builds and signs it.
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # a release builds from scratch
+      - name: bind the phones' tunnel and build the Rust core, which the app links
+        run: |
+          mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework
+          sh lite/ffi/bind.sh ios apps/ios/CbbCore
+      - name: generate the Xcode project
+        working-directory: apps/ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: sign the app for the App Store and upload it to TestFlight
+        env:
+          P12: ${{ secrets.CBB_APPLE_DISTRIBUTION_P12 }}
+          P12_PASSWORD: ${{ secrets.CBB_APPLE_DISTRIBUTION_PASSWORD }}
+          PROFILES: ${{ secrets.CBB_APPLE_PROFILES }}
+          ASC_KEY: ${{ secrets.CBB_ASC_KEY }}
+          ASC_KEY_ID: ${{ secrets.CBB_ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.CBB_ASC_ISSUER_ID }}
+        run: |
+          if [ -z "$P12" ] || [ -z "$PROFILES" ] || [ -z "$ASC_KEY" ]; then
+            echo "::warning::no CBB_APPLE_DISTRIBUTION_P12, CBB_APPLE_PROFILES or CBB_ASC_KEY in the secrets; no TestFlight build"
+            exit 0
+          fi
+          sh packaging/macos/keychain.sh create "$RUNNER_TEMP/signing"
+          trap 'sh packaging/macos/keychain.sh delete "$RUNNER_TEMP/signing"' EXIT
+          sh packaging/macos/keychain.sh import "$RUNNER_TEMP/signing" "Apple Distribution" U2ZJ8F2JCJ >/dev/null
+          version=${GITHUB_REF_NAME#v}
+          upload=upload
+          if [ "$GITHUB_REF_TYPE" != tag ]; then version=0.0.0 upload=; fi
+          # The run's number grows with every run of this workflow, so each
+          # upload has a higher build number than the one before.
+          # shellcheck disable=SC2086 # $upload is one word or none
+          KEYCHAIN="$RUNNER_TEMP/signing/cbb.keychain-db" \
+            sh apps/ios/testflight.sh "$version" "$GITHUB_RUN_NUMBER" "$RUNNER_TEMP/ios" $upload
 
   android:
     name: build (android)
