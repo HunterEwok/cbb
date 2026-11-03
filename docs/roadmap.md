@@ -443,6 +443,16 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
     Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
     with this item, on the same server.
+- **56.** **Planned for 0.6 (the owner, 2026-11-03).** A hub that reaches its forwarder
+    only over VLESS, for a phone hub on a trip in a network that lets nothing else through.
+    The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
+    into `cbb` and the kits beside its key, as they are no secret the design relies on; a
+    forwarder of one's own prints them with its key (`cbb forward`), and the user enters
+    them once. A hub keeps what the forwarder's answer says and uses that afterwards. It
+    tries TCP and UDP 8764 first and VLESS on 443 after them, as its clients do: over VLESS
+    go the registration (its TLS, with the forwarder's key pinned, inside VLESS) and the
+    hub's own tunnel packets, and the forwarder passes the clients' packets to such a hub
+    over that connection instead of UDP (docs/protocol.md, sections 11 and 13).
 
 ## Devices that are hard to type into
 
