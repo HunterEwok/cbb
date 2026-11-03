@@ -212,7 +212,7 @@ class BluetoothKeyboard(private val context: Context, dir: File) {
         val sdp = BluetoothHidDeviceAppSdpSettings(
             context.getString(R.string.keyboard_sdp_name),
             context.getString(R.string.keyboard_sdp_description),
-            "Clipboard Bridge",
+            "CBB",
             BluetoothHidDevice.SUBCLASS1_KEYBOARD,
             Keyboard.DESCRIPTOR,
         )

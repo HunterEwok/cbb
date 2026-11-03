@@ -79,7 +79,7 @@ func logindError(name string, err error) error {
 	if errors.As(err, &de) {
 		switch de.Name {
 		case "org.freedesktop.DBus.Error.AccessDenied", "org.freedesktop.DBus.Error.InteractiveAuthorizationRequired":
-			return &Refusal{Reason: fmt.Sprintf("this device's user has not given Clipboard Bridge the right to %s; they run sudo cbb action enable %s there", name, name)}
+			return &Refusal{Reason: fmt.Sprintf("this device's user has not given CBB the right to %s; they run sudo cbb action enable %s there", name, name)}
 		}
 	}
 	return fmt.Errorf("logind: %w", err)
@@ -161,7 +161,7 @@ func jsRule(ids []string) string {
 	for i, id := range ids {
 		q[i] = fmt.Sprintf("%q", id)
 	}
-	return `// Written by cbb action enable: lets the Clipboard Bridge service ask logind
+	return `// Written by cbb action enable: lets the CBB service ask logind
 // for the quick actions this computer's user turned on, and nothing else.
 polkit.addRule(function (action, subject) {
 	if (subject.user != "` + serviceUser + `") return polkit.Result.NOT_HANDLED;
@@ -172,9 +172,9 @@ polkit.addRule(function (action, subject) {
 }
 
 func pklaRule(ids []string) string {
-	return `# Written by cbb action enable: lets the Clipboard Bridge service ask logind
+	return `# Written by cbb action enable: lets the CBB service ask logind
 # for the quick actions this computer's user turned on, and nothing else.
-[Clipboard Bridge quick actions]
+[CBB quick actions]
 Identity=unix-user:` + serviceUser + `
 Action=` + strings.Join(ids, ";") + `
 ResultAny=yes

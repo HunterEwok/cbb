@@ -94,7 +94,7 @@ struct DeviceDetail: View {
             }
             if let version = d.version {
                 line
-                row(Text("Clipboard Bridge"), Text(verbatim: version).monospaced())
+                row(Text("CBB"), Text(verbatim: version).monospaced())
             }
             if let mac = d.mac {
                 line

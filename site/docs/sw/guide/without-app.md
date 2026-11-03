@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 00a76d11e6c5 -->
+<!-- source: f06d2929ba18 -->
 # Bila programu
 
 Kikundi hakihitaji programu ya simu. Kompyuta inaweza kushikilia kikundi, na iPhone isiyo na programu hujiunga kwa njia ya mkato. Hii pia ndiyo njia wakati programu ya iPhone inasubiri TestFlight.
@@ -8,7 +8,7 @@ Kikundi hakihitaji programu ya simu. Kompyuta inaweza kushikilia kikundi, na iPh
 
 ## 1. Tengeneza kikundi kwenye kompyuta
 
-[Sakinisha](install.md) Clipboard Bridge kwenye kompyuta inayowashwa mara nyingi: Linux, Windows, Mac au FreeBSD. Inashikilia kikundi na kutoa njia ya mkato ya iPhone. Kisha:
+[Sakinisha](install.md) Copy Beyond Borders kwenye kompyuta inayowashwa mara nyingi: Linux, Windows, Mac au FreeBSD. Inashikilia kikundi na kutoa njia ya mkato ya iPhone. Kisha:
 
 ```sh
 sudo cbb new
@@ -39,7 +39,7 @@ sudo cbb pair -phone
 Huchapisha msimbo wa QR, mwanzo wa alama ya kidole na msimbo wa tarakimu sita.
 
 1. Changanua msimbo wa QR kwa kamera ya iPhone na ufuate ukurasa: sakinisha wasifu.
-2. Hakikisha alama ya kidole ya wasifu inaanza kama ile iliyochapishwa (Mipangilio, Jumla, VPN na Usimamizi wa Kifaa, "Clipboard Bridge", Maelezo Zaidi), kisha uwashe uaminifu kamili kwake (Mipangilio, Jumla, Kuhusu, Mipangilio ya Kuaminiwa kwa Cheti).
+2. Hakikisha alama ya kidole ya wasifu inaanza kama ile iliyochapishwa (Mipangilio, Jumla, VPN na Usimamizi wa Kifaa, "CBB", Maelezo Zaidi), kisha uwashe uaminifu kamili kwake (Mipangilio, Jumla, Kuhusu, Mipangilio ya Kuaminiwa kwa Cheti).
 3. Ongeza njia ya mkato "clipboardbridge" kutoka ukurasa uleule na uiendeshe mara moja; inauliza msimbo wa tarakimu sita.
 4. Weka njia ya mkato kwenye kitufe cha Kitendo, au kwenye Gusa Nyuma (Mipangilio, Ufikivu, Mguso, Gusa Nyuma, Gusa Mara Mbili).
 

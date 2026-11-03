@@ -4,7 +4,7 @@ import AppKit
 import os
 import SwiftUI
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge.mac", category: "app")
+private let log = Logger(subsystem: "tools.cbb.mac", category: "app")
 
 /// What the app knows of the service on this Mac: its status and the
 /// group's devices, read from the control socket every few seconds. The
@@ -258,7 +258,7 @@ final class MacModel: ObservableObject {
     /// Whether a message names the error underneath, to find out what
     /// failed: on in debug builds, off in release ones, and either way the
     /// ShowErrorDetails default when it is set (Settings, or
-    /// defaults write io.github.hunterewok.clipboardbridge.mac ShowErrorDetails -bool YES).
+    /// defaults write tools.cbb.mac ShowErrorDetails -bool YES).
     nonisolated static var showsErrorDetails: Bool {
         // bool(forKey:) reads YES and NO given as text too, as a launch
         // argument (-ShowErrorDetails NO) gives them.
@@ -281,7 +281,7 @@ final class MacModel: ObservableObject {
     nonisolated static func summary(_ error: Error) -> (String, String) {
         switch error {
         case Control.Failure.notRunning(let why):
-            return (String(localized: "The Clipboard Bridge service is not running on this Mac. Install it, or start it with sudo launchctl kickstart system/io.github.hunterewok.clipboardbridge."), why)
+            return (String(localized: "The CBB service is not running on this Mac. Install it, or start it with sudo launchctl kickstart system/io.github.hunterewok.clipboardbridge."), why)
         case Control.Failure.denied:
             return (String(localized: "No permission to use the service: add your user to the _clipboardbridge group and log in again."), "EACCES")
         case Control.Failure.refused(let text, let detail):

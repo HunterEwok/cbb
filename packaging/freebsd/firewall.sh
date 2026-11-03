@@ -193,7 +193,7 @@ close() {
 	case $k in
 	pf | ipfw | opnsense)
 		apply_closed "$k"
-		echo "$k: removed the Clipboard Bridge rules."
+		echo "$k: removed the CBB rules."
 		;;
 	esac
 }
@@ -303,7 +303,7 @@ ask() {
 }
 
 manual() {
-	echo "No firewall rules were added. Clipboard Bridge works only while the firewall allows the rules above."
+	echo "No firewall rules were added. CBB works only while the firewall allows the rules above."
 	echo "To add them by hand:"
 	commands "$1"
 }
@@ -317,11 +317,11 @@ setup() {
 		echo "If pf or ipfw is turned on later, run the installer again."
 		return
 	fi
-	echo "Firewall: $k (active). Clipboard Bridge requires these rules:"
+	echo "Firewall: $k (active). CBB requires these rules:"
 	rules "$port"
 	if [ "$k" = pfsense ]; then
 		close
-		echo "Clipboard Bridge does not change pfSense's rules, and runs there unsupported. Add them by hand:"
+		echo "CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:"
 		commands "$port"
 		return
 	fi
@@ -336,17 +336,17 @@ setup() {
 		yes | no) yes=$kept how=" (as answered before)" ;;
 		*)
 			if [ "$k" = opnsense ]; then
-				echo "With Yes, Clipboard Bridge keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both."
+				echo "With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both."
 			elif [ "$k" = pf ]; then
-				echo "With Yes, Clipboard Bridge keeps these rules in its own pf anchor and adds the lines that load it at the end of $pfconf; uninstalling removes both."
+				echo "With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of $pfconf; uninstalling removes both."
 			else
-				echo "With Yes, Clipboard Bridge adds these rules to ipfw's set $set17 at every start, and removes them on uninstall."
+				echo "With Yes, CBB adds these rules to ipfw's set $set17 at every start, and removes them on uninstall."
 			fi
 			if ask "Add these rules now?"; then
 				yes=yes
 			elif [ $? -eq 2 ]; then
 				manual "$k" "$port"
-				echo "To let Clipboard Bridge add and manage them, run the installer again with --express."
+				echo "To let CBB add and manage them, run the installer again with --express."
 				return
 			else
 				yes=no
@@ -359,11 +359,11 @@ setup() {
 	chmod 0644 "$answer"
 	if [ "$yes" = yes ]; then
 		open "$port"
-		echo "Added the rules above$how. Clipboard Bridge manages them from now on."
+		echo "Added the rules above$how. CBB manages them from now on."
 	else
 		close
 		manual "$k" "$port"
-		echo "To let Clipboard Bridge add and manage them, run the installer again with --express."
+		echo "To let CBB add and manage them, run the installer again with --express."
 	fi
 }
 

@@ -145,7 +145,7 @@ struct RecoverySheetView: View {
         let c = UIPrintInteractionController.shared
         let info = UIPrintInfo.printInfo()
         info.outputType = .grayscale
-        info.jobName = String(localized: "Clipboard Bridge recovery key", bundle: .app)
+        info.jobName = String(localized: "CBB recovery key", bundle: .app)
         c.printInfo = info
         c.printingItem = pdf
         c.present(animated: true)
@@ -167,7 +167,7 @@ struct RecoveryPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Clipboard Bridge recovery key").font(.title2.weight(.bold))
+            Text("CBB recovery key").font(.title2.weight(.bold))
             Text("Made on \(made.formatted(date: .long, time: .omitted)).")
             HStack {
                 Spacer()
@@ -197,7 +197,7 @@ struct RecoveryPage: View {
     /// The page as a PDF of A4 in the temporary folder, which the caller
     /// deletes when the sheet closes.
     @MainActor static func pdf(sheet: Core.RecoverySheet, made: Date) throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Clipboard Bridge recovery key.pdf")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CBB recovery key.pdf")
         try? FileManager.default.removeItem(at: url)
         let renderer = ImageRenderer(content: RecoveryPage(sheet: sheet, made: made).frame(width: 520))
         var box = CGRect(x: 0, y: 0, width: 595, height: 842)

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 931b83ed0988 -->
+<!-- source: 5174e28a6a9e -->
 # Когда что-то не работает
 
 Начните с `cbb status` на устройстве, которое ведёт себя неправильно: он покажет, работает ли
@@ -14,7 +14,7 @@
 
 ## Команды
 
-**«the Clipboard Bridge service is not running»**: запустите службу
+**«the Copy Beyond Borders service is not running»**: запустите службу
 (`sudo systemctl start clipboardbridge` в Linux; `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`
 на Mac; `Start-Service clipboardbridge` в Windows) и посмотрите её журнал.
 

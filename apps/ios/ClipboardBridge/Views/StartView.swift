@@ -2,9 +2,9 @@
 
 import SwiftUI
 
-/// No group yet: what Clipboard Bridge does, the note that this phone is ready
+/// No group yet: what CBB does, the note that this phone is ready
 /// (once), connecting a device, and joining the group of a phone that
-/// already uses Clipboard Bridge. Colour and language are a tap away.
+/// already uses CBB. Colour and language are a tap away.
 struct StartView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -37,8 +37,11 @@ struct StartView: View {
                 .accessibilityLabel(Text("Settings"))
             }
             Spacer()
-            Text("Clipboard Bridge")
+            Text("CBB")
                 .font(.system(.largeTitle, design: .monospaced).weight(.bold))
+                .foregroundStyle(palette.accent)
+            Text(verbatim: "Copy Beyond Borders")
+                .font(.system(.headline, design: .monospaced))
                 .foregroundStyle(palette.accent)
             Text("One clipboard for this phone and your computers.")
                 .multilineTextAlignment(.center)
@@ -58,7 +61,7 @@ struct StartView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(palette.textDim)
             }
-            Button("I already use Clipboard Bridge on another phone") { model.startJoining() }
+            Button("I already use CBB on another phone") { model.startJoining() }
                 .buttonStyle(GlassButtonStyle())
             Button("My group was made on a computer") { model.startJoiningComputer() }
                 .buttonStyle(GlassButtonStyle())

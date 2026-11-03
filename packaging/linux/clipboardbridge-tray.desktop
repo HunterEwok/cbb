@@ -2,8 +2,8 @@
 # Copyright (C) 2026 HunterEwok
 [Desktop Entry]
 Type=Application
-Name=Clipboard Bridge
-Comment=The Clipboard Bridge tray item, which opens its window
+Name=CBB
+Comment=The CBB tray item, which opens its window
 Exec=/usr/local/bin/cbb-desktop
 Icon=/usr/local/share/clipboardbridge/clipboardbridge.png
 NoDisplay=true

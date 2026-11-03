@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Limits and lifetimes
 
-The sizes, rates, timeouts and lifetimes that Clipboard Bridge enforces, in one place. A
+The sizes, rates, timeouts and lifetimes that Copy Beyond Borders enforces, in one place. A
 limit that a device's user can change says so and names the command. The wire format behind
 them is in the [protocol](../protocol.md).
 

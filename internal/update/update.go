@@ -347,7 +347,7 @@ func (u *Updater) Apply(ctx context.Context, src Source, st State, r release.Rel
 	if err == nil {
 		st.Failed = slices.DeleteFunc(st.Failed, func(v string) bool { return v == r.Version })
 		st.Available = ""
-		u.logf("Clipboard Bridge %s is installed.", r.Version)
+		u.logf("CBB %s is installed.", r.Version)
 		if u.Keep != nil {
 			u.Keep(path, asset)
 		}

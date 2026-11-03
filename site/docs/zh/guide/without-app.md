@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 00a76d11e6c5 -->
+<!-- source: f06d2929ba18 -->
 # 不用应用
 
 群组并不需要手机应用。群组可以由一台电脑来持有，没有应用的 iPhone 则通过快捷指令加入。在 iPhone 应用还在等待 TestFlight 的这段时间，这也是可行的办法。
@@ -8,7 +8,7 @@
 
 ## 1. 在电脑上创建群组
 
-在一台经常开机的电脑上[安装](install.md) Clipboard Bridge：Linux、Windows、Mac 或 FreeBSD 均可。它持有群组，并为 iPhone 快捷指令提供服务。然后运行：
+在一台经常开机的电脑上[安装](install.md) Copy Beyond Borders：Linux、Windows、Mac 或 FreeBSD 均可。它持有群组，并为 iPhone 快捷指令提供服务。然后运行：
 
 ```sh
 sudo cbb new
@@ -39,7 +39,7 @@ sudo cbb pair -phone
 它会打印一个二维码、指纹的开头部分和一个六位数字码。
 
 1. 用 iPhone 的相机扫描二维码，然后按页面提示操作：安装描述文件。
-2. 检查描述文件的指纹是否以打印出来的开头一致（设置、通用、VPN 与设备管理，“Clipboard Bridge”，更多详细信息），然后为它开启完全信任（设置、通用、关于本机、证书信任设置）。
+2. 检查描述文件的指纹是否以打印出来的开头一致（设置、通用、VPN 与设备管理，“CBB”，更多详细信息），然后为它开启完全信任（设置、通用、关于本机、证书信任设置）。
 3. 从同一页面添加快捷指令“clipboardbridge”并运行一次；它会要求输入六位数字码。
 4. 把快捷指令放到操作按钮上，或放到轻点背面上（设置、辅助功能、触控、轻点背面、轻点两下）。
 

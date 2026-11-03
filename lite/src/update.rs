@@ -477,7 +477,7 @@ impl Updater<'_> {
             Ok(()) => {
                 st.failed.retain(|v| v != &r.version);
                 st.available.clear();
-                (self.log)(&format!("Clipboard Bridge {} is installed.", r.version));
+                (self.log)(&format!("CBB {} is installed.", r.version));
                 return Ok(());
             }
             Err(e) => e,
@@ -633,13 +633,13 @@ pub fn set_timer(on: bool, exe: &Path) -> Result<()> {
         return run(&["daemon-reload"]);
     }
     let service = format!(
-        "# Written by cbb update -auto on; cbb update -auto off removes it.\n[Unit]\nDescription=Clipboard Bridge automatic update\n\
+        "# Written by cbb update -auto on; cbb update -auto off removes it.\n[Unit]\nDescription=CBB automatic update\n\
          Wants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=oneshot\n\
          # No sandbox: it runs the new release's install.sh, which changes the\n# system as installing does.\n\
          ExecStart={} update -timer\n",
         exe.display()
     );
-    let timer = "# Written by cbb update -auto on; cbb update -auto off removes it.\n[Unit]\nDescription=Check for a Clipboard Bridge update once a day\n\n\
+    let timer = "# Written by cbb update -auto on; cbb update -auto off removes it.\n[Unit]\nDescription=Check for a CBB update once a day\n\n\
                  [Timer]\nOnCalendar=daily\nRandomizedDelaySec=6h\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n";
     if user {
         fs::create_dir_all(timer_file.parent().unwrap()).context("cannot make the user's unit folder")?;

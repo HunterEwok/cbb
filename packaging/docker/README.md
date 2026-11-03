@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# The Clipboard Bridge image
+# The Copy Beyond Borders image
 
 The full service in a container, for machines that are always on but have no desktop: a
 NAS, a home server, or a rented server for a forwarder or a relay. The design is in

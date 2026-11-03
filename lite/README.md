@@ -1,6 +1,6 @@
 # The lite member
 
-The lite member is a small Clipboard Bridge member in Rust for weak Linux devices: a
+The lite member is a small Copy Beyond Borders member in Rust for weak Linux devices: a
 Raspberry Pi, a router, a small board. Its command is `cbb`, as on a full member, with the
 same paths and service (`cbb version` says which one a device runs). It speaks the member
 protocol of [docs/protocol.md](../docs/protocol.md), but unlike a full member it
@@ -127,7 +127,7 @@ can read its keys:
 sudo -u clipboardbridge cbb pair -name pi
 ```
 
-It shows a QR code: in the Clipboard Bridge app (iPhone or Android) tap "Connect a new device"
+It shows a QR code: in the Copy Beyond Borders app (iPhone or Android) tap "Connect a new device"
 (or, on an iPhone with the shortcut, run "clipboardbridge: add a computer") and scan it. The phone reaches the device on
 TCP port 8764 (`-port` to change it), while it joins and afterwards to sync. In a group
 without a phone, run `cbb pair` on the group's root or an admin and
@@ -224,7 +224,7 @@ sudo cbb paste-receive off
 
 An admin phone's "Paste on it…", or `cbb paste --on` on an admin computer, puts a text where
 this device's keyboard focus is, as on a full Linux member: into the tmux pane in use, through
-the helper that Clipboard Bridge's `tmux.conf` starts in each tmux server, or, with
+the helper that CBB's `tmux.conf` starts in each tmux server, or, with
 `-console`, into the active text console, through the `clipboardbridge-console` unit that
 `--console` installs. The device's own user turns it on, never an admin; a text with a line
 break needs `-enter`, since tmux and the console would run it; a locked tmux client or console,

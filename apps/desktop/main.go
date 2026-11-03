@@ -26,13 +26,13 @@ var icon []byte
 func main() {
 	desk := NewDesk()
 	app := application.New(application.Options{
-		Name:        "Clipboard Bridge",
+		Name:        "CBB",
 		Description: "One clipboard for the devices of your home",
 		Icon:        icon,
 		Services:    []application.Service{application.NewService(desk)},
 		Assets:      application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
 		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: "io.github.hunterewok.clipboardbridge.desktop",
+			UniqueID: "tools.cbb.desktop",
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
 				desk.Open()
 			},
@@ -42,7 +42,7 @@ func main() {
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:      "main",
-		Title:     "Clipboard Bridge",
+		Title:     "CBB",
 		Width:     920,
 		Height:    640,
 		MinWidth:  520,
@@ -59,12 +59,12 @@ func main() {
 
 	tray := app.SystemTray.New()
 	setTrayIcon(tray, "tray")
-	tray.SetTooltip("Clipboard Bridge")
+	tray.SetTooltip("CBB")
 	if runtime.GOOS == "linux" {
 		// Wails names the StatusNotifierItem (its title and tooltip) after
 		// the label it has when the tray starts, else "Wails", and does not
 		// pass a later tooltip on there yet.
-		tray.SetLabel("Clipboard Bridge")
+		tray.SetLabel("CBB")
 	}
 	tray.OnClick(desk.Open)
 	desk.tray = tray

@@ -21,7 +21,7 @@ public enum SealKey {
         }
     }
 
-    static let service = "io.github.hunterewok.clipboardbridge.seal"
+    static let service = "tools.cbb.seal"
 
     private static func query(_ account: String) -> [CFString: Any] {
         [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account]

@@ -817,7 +817,7 @@ impl Service {
             res.reason = if console && !set.console {
                 "only a text console is here, and its user did not allow consoles (sudo cbb paste-receive on -console)"
             } else {
-                "nothing on this device can paste: no tmux or console helper of Clipboard Bridge, nor cbb next link, runs here"
+                "nothing on this device can paste: no tmux or console helper of CBB, nor cbb next link, runs here"
             }
             .into();
             return res;

@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
-# Clipboard Bridge protocol
+# Copy Beyond Borders protocol
 
 The text of this document is under the
 [Creative Commons Attribution 4.0 license](https://creativecommons.org/licenses/by/4.0/).
 You may implement the protocol in your own code under any license. The code of this
 repository stays under the GNU AGPL v3.0 only ([LICENSE](../LICENSE)).
 
-This document specifies protocol version 1 of Clipboard Bridge as the code in this
+This document specifies protocol version 1 of Copy Beyond Borders as the code in this
 repository implements it, so that another implementation can interoperate with it. Four
 implementations follow it today: Go (`cbb`, the computers and the servers), Rust (the lite
 member, `lite/core`), Swift (`ClipboardBridgeKit`) and Kotlin (`apps/android/kit`), with
@@ -158,7 +158,7 @@ these words depends on it.
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
 | Service instance | `<device ID>._clipboardbridge._tcp.local` | `internal/mdns/zone.go` |
 | Shared iPhone name | `clipboardbridge.local` | `group.PhoneName` |
-| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Full and lite members listen on it; phones only while they are the hub. Clipboard Bridge's only port: it also serves pairing, the iPhone endpoints and the profile (section 7), and a listening join waits there | `internal/service/service.go`, `internal/service/demux.go` |
+| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Full and lite members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, the iPhone endpoints and the profile (section 7), and a listening join waits there | `internal/service/service.go`, `internal/service/demux.go` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
 | Member ALPN | `clipboardbridge/2` | `group.MemberProtocol` |
 | Pairing ALPN | `clipboardbridge-pair/2` | `pair.Protocol` |
@@ -336,7 +336,7 @@ rescanned every 10 s.
   again at 80, 85, 90 and 95 percent of its lifetime, plus 0 to 2 percent at random.
 - Received records are kept only if relevant: PTR of the service, SRV/TXT of an instance
   whose first label is a device ID, A/AAAA of `cb-<device ID>.local`. Their TTL is capped at
-  what Clipboard Bridge itself uses (4500 s for PTR and TXT, 120 s otherwise). A goodbye expires the
+  what Copy Beyond Borders itself uses (4500 s for PTR and TXT, 120 s otherwise). A goodbye expires the
   record after 1 s; a cache-flush record expires older records of its name and type after
   1 s.
 - A member is found when a live PTR names an instance that has a live SRV; its addresses

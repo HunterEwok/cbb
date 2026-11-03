@@ -24,7 +24,7 @@ struct StatusActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: "Clipboard Bridge").font(.caption).foregroundStyle(.secondary)
+                        Text(verbatim: "CBB").font(.caption).foregroundStyle(.secondary)
                         Text(verbatim: state.line).font(.headline).lineLimit(2)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -76,7 +76,7 @@ struct StatusLockScreen: View {
         HStack(spacing: 12) {
             StatusIcon(kind: state.kind).font(.title).foregroundStyle(p.accent)
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "Clipboard Bridge").font(.caption).foregroundStyle(p.textDim)
+                Text(verbatim: "CBB").font(.caption).foregroundStyle(p.textDim)
                 Text(verbatim: state.line).font(.headline).foregroundStyle(p.text).lineLimit(2)
             }
             Spacer()

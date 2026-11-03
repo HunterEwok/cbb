@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: ba8bb2b8b763 -->
+<!-- source: 01c5a8544c91 -->
 # इंस्टॉल करना
 
-Clipboard Bridge हर कंप्यूटर पर एक छोटी बैकग्राउंड सेवा की तरह चलता है। इसका कमांड `cbb` है। नीचे के सभी तरीके एक ही प्रोग्राम इंस्टॉल करते हैं; जो पसंद आए, चुन लें।
+Copy Beyond Borders हर कंप्यूटर पर एक छोटी बैकग्राउंड सेवा की तरह चलता है। इसका कमांड `cbb` है। नीचे के सभी तरीके एक ही प्रोग्राम इंस्टॉल करते हैं; जो पसंद आए, चुन लें।
 
 ## Linux
 
@@ -32,7 +32,7 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 
 ### SteamOS (Steam Deck)
 
-डेस्कटॉप मोड में जाएँ, Konsole खोलें, अगर `deck` उपयोगकर्ता का पासवर्ड नहीं है तो एक बार उसे दें (`passwd`), और वही कमांड चलाएँ। SteamOS हर अपडेट में अपनी सिस्टम फ़ाइलें बदल देता है, इसलिए इंस्टॉलर Clipboard Bridge को `/usr/local` की जगह `/opt/clipboardbridge` में रखता है, और SteamOS को बताता है कि `/etc` की उसकी कौन-सी फ़ाइलें रखनी हैं (`/etc/atomic-update.conf.d/clipboardbridge.conf`)। SteamOS के अपडेट के बाद भी यह इंस्टॉल रहता है और अपने समूह में बना रहता है।
+डेस्कटॉप मोड में जाएँ, Konsole खोलें, अगर `deck` उपयोगकर्ता का पासवर्ड नहीं है तो एक बार उसे दें (`passwd`), और वही कमांड चलाएँ। SteamOS हर अपडेट में अपनी सिस्टम फ़ाइलें बदल देता है, इसलिए इंस्टॉलर Copy Beyond Borders को `/usr/local` की जगह `/opt/clipboardbridge` में रखता है, और SteamOS को बताता है कि `/etc` की उसकी कौन-सी फ़ाइलें रखनी हैं (`/etc/atomic-update.conf.d/clipboardbridge.conf`)। SteamOS के अपडेट के बाद भी यह इंस्टॉल रहता है और अपने समूह में बना रहता है।
 
 - लॉग आउट और दोबारा लॉग इन के बाद `cbb` नए Konsole के पाथ में होता है। `sudo` वहाँ नहीं देखता, इसलिए जिन कमांड को उसकी ज़रूरत है उन्हें पूरा पाथ देना पड़ता है: `sudo /opt/clipboardbridge/bin/cbb pair`।
 - डेस्कटॉप मोड में क्लिपबोर्ड वैसे ही सिंक होता है जैसे किसी भी KDE Plasma डेस्कटॉप पर।
@@ -64,7 +64,7 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 
 यह स्क्रीन पर साइन इन उपयोगकर्ता को `cbb` इस्तेमाल करने देता है (नए टर्मिनल में) और उसके लिए क्लिपबोर्ड एजेंट शुरू करता है। समूह बदलने वाले कमांड एडमिनिस्ट्रेटर के रूप में खोले गए टर्मिनल में चलते हैं, जहाँ Linux और macOS `sudo` इस्तेमाल करते हैं।
 
-यह ट्रे ऐप भी इंस्टॉल करता है, जो साइन-इन पर शुरू होता है और Start मेनू में Clipboard Bridge नाम से रहता है।
+यह ट्रे ऐप भी इंस्टॉल करता है, जो साइन-इन पर शुरू होता है और Start मेनू में CBB नाम से रहता है।
 
 winget के साथ, पैकेज के winget के रिपॉज़िटरी में आ जाने के बाद:
 
@@ -103,7 +103,7 @@ fetch -qo - https://github.com/HunterEwok/clipboardbridge/releases/latest/downlo
 
 यह `cbb` इंस्टॉल करता है, एक rc.d स्क्रिप्ट जो daemon(8) के ज़रिए सेवा चलाती है, और rc.conf में `clipboardbridge_enable="YES"` पंक्ति जोड़ता है। कुंजियाँ `/var/db/clipboardbridge` में रहती हैं।
 
-OPNsense पर वही इंस्टॉलर एक प्लगइन हुक भी जोड़ता है: सेवा System > Diagnostics > Services के तहत दिखती है, और उसके फ़ायरवॉल नियम (pf के एंकर `clipboardbridge` में) हर फ़िल्टर रीलोड के साथ बने रहते हैं। सेवा चलने तक mDNS रिपीटर (Services > mDNS Repeater) बंद रखें: दोनों को UDP पोर्ट 5353 चाहिए, और सेवा हर घरेलू इंटरफ़ेस पर mDNS का जवाब खुद देती है। pfSense समर्थित नहीं है: इंस्टॉलर वहाँ भी चलता है, पर वह फ़ायरवॉल नियम जोड़ने के बजाय Firewall > Rules के लिए छाप देता है, और pfSense का अपडेट Clipboard Bridge को हटा सकता है।
+OPNsense पर वही इंस्टॉलर एक प्लगइन हुक भी जोड़ता है: सेवा System > Diagnostics > Services के तहत दिखती है, और उसके फ़ायरवॉल नियम (pf के एंकर `clipboardbridge` में) हर फ़िल्टर रीलोड के साथ बने रहते हैं। सेवा चलने तक mDNS रिपीटर (Services > mDNS Repeater) बंद रखें: दोनों को UDP पोर्ट 5353 चाहिए, और सेवा हर घरेलू इंटरफ़ेस पर mDNS का जवाब खुद देती है। pfSense समर्थित नहीं है: इंस्टॉलर वहाँ भी चलता है, पर वह फ़ायरवॉल नियम जोड़ने के बजाय Firewall > Rules के लिए छाप देता है, और pfSense का अपडेट Copy Beyond Borders को हटा सकता है।
 
 FreeBSD डेस्कटॉप पर (X11, या data control प्रोटोकॉल वाला Wayland, जैसे KDE, sway और Hyprland में), सत्र XDG ऑटोस्टार्ट से `cbb agent` शुरू करता है और क्लिपबोर्ड समूह में जुड़ जाता है; इंस्टॉल के बाद दोबारा लॉग इन करें। रिमोट पेस्ट X11 पर XTEST से और wlroots डेस्कटॉप पर वर्चुअल कीबोर्ड से टाइप करता है; GNOME FreeBSD पर रिमोट पेस्ट नहीं लेता, क्योंकि logind के बिना कुछ नहीं बताता कि उसकी स्क्रीन लॉक है या नहीं।
 
@@ -119,7 +119,7 @@ docker compose -f compose.home.yaml exec clipboardbridge cbb pair
 
 ## फ़ायरवॉल
 
-Clipboard Bridge को एक TCP पोर्ट, 8764, और mDNS (UDP 5353) चाहिए, दोनों केवल घर के नेटवर्क से। इंस्टॉलर फ़ायरवॉल ढूँढता है (Linux पर ufw, firewalld, nftables या iptables, FreeBSD पर pf या ipfw, Mac का एप्लिकेशन फ़ायरवॉल, Windows Firewall), हर नियम सूचीबद्ध करता है, और पूछता है `Add these rules now? [y/N]`:
+Copy Beyond Borders को एक TCP पोर्ट, 8764, और mDNS (UDP 5353) चाहिए, दोनों केवल घर के नेटवर्क से। इंस्टॉलर फ़ायरवॉल ढूँढता है (Linux पर ufw, firewalld, nftables या iptables, FreeBSD पर pf या ipfw, Mac का एप्लिकेशन फ़ायरवॉल, Windows Firewall), हर नियम सूचीबद्ध करता है, और पूछता है `Add these rules now? [y/N]`:
 
 - **हाँ**: वह उन्हें जोड़ता है, हर अपडेट पर उन्हें ताज़ा रखता है और अनइंस्टॉल करने पर हटा देता है। वह दूसरे नियमों को कभी नहीं छूता।
 - **नहीं** (डिफ़ॉल्ट, और तब भी जब पूछने के लिए टर्मिनल न हो): वह कुछ नहीं जोड़ता और सटीक कमांड छाप देता है, ताकि आप खुद चलाएँ।
@@ -137,7 +137,7 @@ nftables और iptables को हमेशा केवल कमांड म
 
 `sudo cbb update` (Windows पर एडमिनिस्ट्रेटर के रूप में खोले गए टर्मिनल में `cbb update`) `get.sh`, `get.ps1` या रिलीज़ आर्काइव से इंस्टॉल किए गए कंप्यूटर या लाइट सदस्य पर नवीनतम रिलीज़ इंस्टॉल करता है; `cbb update -check` केवल बताता है कि कोई है या नहीं। आपकी सेटिंग्स बनी रहती हैं। यह केवल वही रिलीज़ इंस्टॉल करता है जिस पर परियोजना ने हस्ताक्षर किए हैं, और कभी पुरानी नहीं। अगर नया संस्करण एक मिनट में शुरू न हो, तो पिछला अपने आप लौट आता है। यह हस्ताक्षर कैसे जाँचता है, यह [प्रोटोकॉल](../protocol.md) के खंड 16 में है।
 
-इंस्टॉलर एक बार पूछते हैं कि अपने आप अपडेट करना है या नहीं (`--auto-update on|off`, या Windows पर `-AutoUpdate on|off` और `$env:CBB_AUTO_UPDATE`, पहले से जवाब देने के लिए); `sudo cbb update -auto on|off` इसे बाद में बदलता है। चालू होने पर एक टाइमर दिन में एक बार अपने ही समय पर जाँच करता है: Linux पर systemd टाइमर, Mac पर launchd जॉब, Windows पर SYSTEM के रूप में शेड्यूल्ड टास्क, OpenWrt और FreeBSD पर cron। हर जाँच GitHub से (या GitHub के जवाब न देने पर `dl.cbb.tools` से) वही छोटी फ़ाइलें डाउनलोड करती है, इसलिए GitHub इस डिवाइस का पता जान लेता है और यह भी कि यह Clipboard Bridge इस्तेमाल करता है, जैसे किसी भी डाउनलोड में; यह समूह के बारे में कुछ नहीं भेजता। `sudo cbb update -mirror https://...` इसके बजाय किसी दूसरे मिरर से अपडेट लेता है, जिसमें भरोसे की ज़रूरत नहीं, क्योंकि हस्ताक्षर जाँचे जाते हैं। टाइमर का लॉग `update.log` है, जो `/var/lib/clipboardbridge-update` (Linux), `/etc/clipboardbridge-update` (OpenWrt), `/var/db/clipboardbridge-update` (FreeBSD), `/Library/Application Support/clipboardbridge-update` (Mac) या `C:\Program Files\clipboardbridge-update` (Windows) में रहता है।
+इंस्टॉलर एक बार पूछते हैं कि अपने आप अपडेट करना है या नहीं (`--auto-update on|off`, या Windows पर `-AutoUpdate on|off` और `$env:CBB_AUTO_UPDATE`, पहले से जवाब देने के लिए); `sudo cbb update -auto on|off` इसे बाद में बदलता है। चालू होने पर एक टाइमर दिन में एक बार अपने ही समय पर जाँच करता है: Linux पर systemd टाइमर, Mac पर launchd जॉब, Windows पर SYSTEM के रूप में शेड्यूल्ड टास्क, OpenWrt और FreeBSD पर cron। हर जाँच GitHub से (या GitHub के जवाब न देने पर `dl.cbb.tools` से) वही छोटी फ़ाइलें डाउनलोड करती है, इसलिए GitHub इस डिवाइस का पता जान लेता है और यह भी कि यह Copy Beyond Borders इस्तेमाल करता है, जैसे किसी भी डाउनलोड में; यह समूह के बारे में कुछ नहीं भेजता। `sudo cbb update -mirror https://...` इसके बजाय किसी दूसरे मिरर से अपडेट लेता है, जिसमें भरोसे की ज़रूरत नहीं, क्योंकि हस्ताक्षर जाँचे जाते हैं। टाइमर का लॉग `update.log` है, जो `/var/lib/clipboardbridge-update` (Linux), `/etc/clipboardbridge-update` (OpenWrt), `/var/db/clipboardbridge-update` (FreeBSD), `/Library/Application Support/clipboardbridge-update` (Mac) या `C:\Program Files\clipboardbridge-update` (Windows) में रहता है।
 
 समूह के डिवाइस एक-दूसरे को वह नवीनतम हस्ताक्षरित रिलीज़ बताते हैं जो उनमें से किसी ने देखी है, इसलिए एक डिवाइस की जाँच इतनी काफ़ी है कि बाकी पर `cbb status` और ट्रे ऐप बता दें कि नई रिलीज़ आ गई है (ट्रे ऐप में "Update to X" एडमिनिस्ट्रेटर के रूप में `cbb update` चलाता है)। हर डिवाइस फिर भी हस्ताक्षर खुद जाँचता है और अपना आर्काइव खुद डाउनलोड करता है।
 
@@ -165,6 +165,6 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 
 SteamOS पर यह `sudo sh /opt/clipboardbridge/share/uninstall.sh` है। Homebrew के साथ, उसके बाद `brew uninstall clipboardbridge` चलाएँ।
 
-Windows पर: सेटिंग्स, ऐप्स, "Clipboard Bridge", अनइंस्टॉल।
+Windows पर: सेटिंग्स, ऐप्स, "CBB", अनइंस्टॉल।
 
 इससे प्रोग्राम, सेवा और इंस्टॉलर के जोड़े फ़ायरवॉल नियम हट जाते हैं। डिवाइस की कुंजियाँ रहती हैं, इसलिए दोबारा इंस्टॉल करने पर वह अपने समूह में लौट आता है। उन्हें भी मिटाने के लिए `--purge` जोड़ें (Windows पर `-Purge`, `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge` के साथ), फिर किसी दूसरे डिवाइस से इस डिवाइस को समूह से हटाएँ (`sudo cbb remove NAME`, या फ़ोन पर)।

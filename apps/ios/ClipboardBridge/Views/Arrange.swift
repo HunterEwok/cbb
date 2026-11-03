@@ -29,7 +29,7 @@ final class ArrangeState: ObservableObject {
 
     /// The type of a dragged tile, which never leaves the app: other apps
     /// get nothing from it, and nothing from them drops on a tile.
-    static let tileType = UTType(exportedAs: "io.github.hunterewok.clipboardbridge.tile")
+    static let tileType = UTType(exportedAs: "tools.cbb.tile")
 
     func provider(_ ref: Arrangement.Ref) -> NSItemProvider {
         dragging = ref

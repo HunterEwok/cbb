@@ -148,7 +148,7 @@ func TestPasteOnMacNeedsTheApp(t *testing.T) {
 	if _, err := mac.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "mac"}, "ls"); err == nil || !strings.Contains(err.Error(), "a Mac pastes through the Clipboard Bridge app") {
+	if _, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "mac"}, "ls"); err == nil || !strings.Contains(err.Error(), "a Mac pastes through the CBB app") {
 		t.Errorf("a paste on a Mac without the app: %v", err)
 	}
 }

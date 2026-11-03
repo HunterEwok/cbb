@@ -61,7 +61,7 @@ fi
 rm -rf "$share" /usr/local/etc/clipboardbridge /var/run/clipboardbridge
 if [ "$purge" = yes ]; then
 	rm -rf /var/db/clipboardbridge
-	echo "Clipboard Bridge is removed, with this device's keys; it left its group."
+	echo "CBB is removed, with this device's keys; it left its group."
 else
-	echo "Clipboard Bridge is removed. Its keys stay in /var/db/clipboardbridge for a reinstall; --purge removes them."
+	echo "CBB is removed. Its keys stay in /var/db/clipboardbridge for a reinstall; --purge removes them."
 fi

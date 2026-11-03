@@ -92,7 +92,7 @@ struct GroupAlerts: View {
             }
         }
         if let n = st.newer, n > 0 {
-            out.append(Line(text: String(localized: "The group holds \(n) records of a later version: update Clipboard Bridge to read them.")))
+            out.append(Line(text: String(localized: "The group holds \(n) records of a later version: update CBB to read them.")))
         }
         return out
     }

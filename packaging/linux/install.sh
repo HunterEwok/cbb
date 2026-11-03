@@ -210,7 +210,7 @@ if [ -e /usr/local/bin/clipbridge ] || [ -e /etc/systemd/system/clipbridge.servi
 	fi
 	userdel clipbridge 2>/dev/null || true
 	groupdel clipbridge 2>/dev/null || true
-	echo "Removed clipbridge, as Clipboard Bridge was called before; pair this device again."
+	echo "Removed clipbridge, an old name of CBB; pair this device again."
 fi
 
 # The lite member was the command cbb-lite, with its own user and paths. Its
@@ -346,7 +346,7 @@ if [ "$steamos" = yes ]; then
 	# in /etc/atomic-update.conf.d, this one among them.
 	install -d -m 0755 /etc/atomic-update.conf.d
 	cat >/etc/atomic-update.conf.d/clipboardbridge.conf.new <<'EOF'
-# Written by clipboardbridge's install.sh: Clipboard Bridge's files in /etc,
+# Written by clipboardbridge's install.sh: CBB's files in /etc,
 # which SteamOS keeps across its updates. uninstall.sh removes it.
 /etc/clipboardbridge/**
 /etc/sysusers.d/clipboardbridge.conf
@@ -453,9 +453,9 @@ yes) firewall=ask ;; # what get.sh passed before --express
 esac
 sh "$share/firewall.sh" setup "$firewall" "$port"
 if [ "$port" != 8764 ]; then
-	echo "Clipboard Bridge uses TCP port $port instead of 8764. If a firewall on the network"
+	echo "CBB uses TCP port $port instead of 8764. If a firewall on the network"
 	echo "limits incoming connections, allow TCP $port from the home network. The iPhone shortcut"
-	echo "works only with 8764; the Clipboard Bridge app takes any port."
+	echo "works only with 8764; the CBB app takes any port."
 fi
 
 systemctl daemon-reload
@@ -518,7 +518,7 @@ fi
 # shellcheck source=packaging/update.sh
 . "$here/../update.sh"
 update_setup "$cbb" "$bin" "$auto"
-echo "Clipboard Bridge is running on TCP port $port. To remove it: sudo sh $share/uninstall.sh"
+echo "CBB is running on TCP port $port. To remove it: sudo sh $share/uninstall.sh"
 # sudo looks for commands in its own PATH, without /opt/clipboardbridge/bin.
 run=cbb
 if [ "$steamos" = yes ]; then
@@ -527,5 +527,5 @@ fi
 if [ "$kind" = lite ]; then
 	echo "Next: see lite/README.md; in short, sudo -u clipboardbridge $run pair here, and scan its QR code with the phone app."
 else
-	echo "Next: run sudo $run pair and scan its QR code with the Clipboard Bridge app on your phone; without the app, see docs/guide/without-app.md."
+	echo "Next: run sudo $run pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."
 fi

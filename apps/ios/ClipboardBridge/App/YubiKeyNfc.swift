@@ -19,8 +19,8 @@ final class YubiKeyNfc: NSObject, NFCTagReaderSessionDelegate, @unchecked Sendab
 
     /// The PIV commands run here, not on the session's queue, whose
     /// callbacks answer them.
-    private let work = DispatchQueue(label: "io.github.hunterewok.clipboardbridge.yubikey")
-    private let queue = DispatchQueue(label: "io.github.hunterewok.clipboardbridge.nfc")
+    private let work = DispatchQueue(label: "tools.cbb.yubikey")
+    private let queue = DispatchQueue(label: "tools.cbb.nfc")
     private let lock = NSLock()
     private var finish: ((Result<Any, Error>) -> Void)?
     private let block: (SmartCard) throws -> Any

@@ -1951,7 +1951,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
         data class Image(val file: File, val alt: String) : Got()
 
-        /** Files saved in Downloads/Clipboard Bridge. */
+        /** Files saved in Downloads/CBB. */
         data class Files(val count: Int) : Got()
     }
 

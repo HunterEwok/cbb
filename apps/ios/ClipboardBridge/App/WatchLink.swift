@@ -6,7 +6,7 @@ import os
 import UIKit
 import WatchConnectivity
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "watch")
+private let log = Logger(subsystem: "tools.cbb", category: "watch")
 
 /// The phone's side of the Apple Watch app: it hands the watch the group as
 /// the app sees it, and turns sync away from home on or off when the watch
@@ -144,7 +144,7 @@ extension WatchLink {
             await AppModel.shared.refresh()
             return [WatchState.doneKey: true]
         } catch MemberNode.Failure.notConnected {
-            return [WatchState.refusedKey: String(localized: "The iPhone is not connected to that device. Open Clipboard Bridge on the iPhone, then try again.", bundle: .app)]
+            return [WatchState.refusedKey: String(localized: "The iPhone is not connected to that device. Open CBB on the iPhone, then try again.", bundle: .app)]
         } catch {
             return [WatchState.refusedKey: AppModel.describe(error)]
         }

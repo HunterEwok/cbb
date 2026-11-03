@@ -6,7 +6,7 @@
 # REQUIRE: NETWORKING ntpd
 # KEYWORD: shutdown
 #
-# The Clipboard Bridge service on FreeBSD; install.sh puts it in
+# The CBB service on FreeBSD; install.sh puts it in
 # /usr/local/etc/rc.d and sets clipboardbridge_enable=YES in rc.conf.
 # daemon(8) runs cbb service, which opens its mDNS sockets as root and then
 # runs as the user clipboardbridge (-user), starts it again 5 s after it

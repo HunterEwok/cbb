@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// The OPNsense plugin hook of Clipboard Bridge; install.sh puts it in
+// The OPNsense plugin hook of CBB; install.sh puts it in
 // /usr/local/etc/inc/plugins.inc.d on OPNsense. OPNsense writes pf's
 // ruleset anew at each filter reload, so the rules firewall.sh loads into
 // the anchor "clipboardbridge" count only while the ruleset names the
@@ -19,7 +19,7 @@ function clipboardbridge_services()
     }
     $rc = '/usr/local/etc/rc.d/clipboardbridge';
     $services[] = [
-        'description' => gettext('Clipboard Bridge'),
+        'description' => gettext('CBB'),
         'name' => 'clipboardbridge',
         'pidfile' => '/var/run/clipboardbridge/daemon.pid',
         'mwexec' => [

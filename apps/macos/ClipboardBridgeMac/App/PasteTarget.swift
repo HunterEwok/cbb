@@ -4,7 +4,7 @@ import AppKit
 import Carbon.HIToolbox
 import os
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge.mac", category: "paste")
+private let log = Logger(subsystem: "tools.cbb.mac", category: "paste")
 
 /// Remote paste on this Mac (docs/design.md, "Remote paste"): only an app
 /// may press keys, once its user allowed it in Accessibility, so the app,
@@ -13,7 +13,7 @@ private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge.mac", 
 /// and answers each inject.
 final class PasteTarget {
     private let client: ControlClient
-    private let queue = DispatchQueue(label: "io.github.hunterewok.clipboardbridge.mac.paste")
+    private let queue = DispatchQueue(label: "tools.cbb.mac.paste")
     private var started = false
 
     init(client: ControlClient = ControlClient()) { self.client = client }
@@ -106,7 +106,7 @@ enum Injector {
     /// Why keys cannot go to the focus now, or nil.
     static func blocked() -> Failure? {
         if !allowed {
-            return Failure(reason: "Clipboard Bridge may not press keys on this Mac; its user allows it in System Settings, Privacy & Security, Accessibility")
+            return Failure(reason: "CBB may not press keys on this Mac; its user allows it in System Settings, Privacy & Security, Accessibility")
         }
         let session = CGSessionCopyCurrentDictionary() as? [String: Any] ?? [:]
         if session["kCGSSessionOnConsoleKey"] as? Bool == false {

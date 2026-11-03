@@ -50,7 +50,7 @@ func stopLines(st *control.Status) []string {
 		}
 	}
 	if st.Newer > 0 {
-		out = append(out, fmt.Sprintf("The group holds %d records of a later version of Clipboard Bridge: update it to read them.", st.Newer))
+		out = append(out, fmt.Sprintf("The group holds %d records of a later version of CBB: update it to read them.", st.Newer))
 	}
 	return out
 }

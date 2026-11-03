@@ -31,7 +31,7 @@ final class StartUITests: XCTestCase {
         let app = launch(["-welcomed", "NO"])
         XCTAssertTrue(app.staticTexts["One clipboard for this phone and your computers."].waitForExistence(timeout: 30))
         XCTAssertTrue(app.buttons["Connect a new device"].exists)
-        XCTAssertTrue(app.buttons["I already use Clipboard Bridge on another phone"].exists)
+        XCTAssertTrue(app.buttons["I already use CBB on another phone"].exists)
         // Without the Secure Enclave the phone's key may not be made; the
         // note then stays away, and an error says why instead.
         if app.staticTexts["This phone is ready"].waitForExistence(timeout: 5) {
@@ -44,11 +44,11 @@ final class StartUITests: XCTestCase {
         }
     }
 
-    /// A14: "I already use Clipboard Bridge on another phone" shows the code
+    /// A14: "I already use CBB on another phone" shows the code
     /// the other phone scans.
     func testJoinFromStart() {
         let app = launch()
-        let join = app.buttons["I already use Clipboard Bridge on another phone"]
+        let join = app.buttons["I already use CBB on another phone"]
         XCTAssertTrue(join.waitForExistence(timeout: 30))
         join.tap()
         XCTAssertTrue(app.staticTexts["Join a group"].waitForExistence(timeout: 10))
@@ -124,7 +124,7 @@ final class StartUITests: XCTestCase {
         var app = launch(language: "ru")
         XCTAssertTrue(app.buttons[ru("Connect a new device")].waitForExistence(timeout: 30))
         XCTAssertTrue(app.staticTexts[ru("One clipboard for this phone and your computers.")].exists)
-        XCTAssertTrue(app.buttons[ru("I already use Clipboard Bridge on another phone")].exists)
+        XCTAssertTrue(app.buttons[ru("I already use CBB on another phone")].exists)
         app.buttons[ru("Settings")].tap()
         XCTAssertTrue(app.buttons[ru("Ocean")].waitForExistence(timeout: 10))
         XCTAssertTrue(app.segmentedControls.buttons[ru("Dark")].exists)

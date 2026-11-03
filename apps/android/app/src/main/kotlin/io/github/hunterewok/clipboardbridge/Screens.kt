@@ -171,6 +171,7 @@ private fun StartScreen(model: AppModel) {
             fontWeight = FontWeight.Bold,
             color = palette.accent,
         )
+        Text(stringResource(R.string.full_name), fontFamily = FontFamily.Monospace, color = palette.accent)
         Text(stringResource(R.string.tagline), textAlign = TextAlign.Center, color = palette.textDim)
         if (model.isTv) {
             // A TV has no camera to scan a code: it shows its own, for the phone.

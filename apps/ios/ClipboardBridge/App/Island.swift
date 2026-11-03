@@ -4,7 +4,7 @@ import ActivityKit
 import Foundation
 import os
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "island")
+private let log = Logger(subsystem: "tools.cbb", category: "island")
 
 /// Starts and ends the Live Activities of StatusActivity. Each kind runs at
 /// most once; a sync's result shows for a few seconds, then ends.

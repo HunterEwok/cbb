@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-{{define "title"}}Clipboard Bridge: {{t "one clipboard for all your devices"}}{{end}}
+{{define "title"}}Copy Beyond Borders: {{t "one clipboard for all your devices"}}{{end}}
 {{define "description"}}{{t "One clipboard for your phone and your computers, on your own network: no cloud, no accounts."}}{{end}}
 
 {{define "head"}}<script type="application/ld+json">{{jsonld (dict
   "@context" "https://schema.org"
   "@type" "SoftwareApplication"
-  "name" "Clipboard Bridge"
+  "name" "Copy Beyond Borders"
   "url" (.URL .Lang)
   "inLanguage" .Lang.Tag
   "description" (t "One clipboard for your phone and your computers, on your own network: no cloud, no accounts.")
@@ -74,7 +74,7 @@
   <table class="chalk-table compare">
     <thead><tr><td></td><th scope="col">{{t "Just copy and paste"}}</th><th scope="col">{{t "Text stays on your devices"}}</th><th scope="col">{{t "Between any systems"}}</th></tr></thead>
     <tbody>
-    <tr class="us"><th scope="row">Clipboard Bridge</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
+    <tr class="us"><th scope="row">Copy Beyond Borders</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
     <tr><th scope="row">{{t "A message to yourself"}}</th><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
     <tr><th scope="row">{{t "A cloud clipboard app"}}</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
     <tr><th scope="row">{{t "The clipboard of one system"}}</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td></tr>
@@ -85,13 +85,13 @@
 
 <section class="wrap reveal" id="compare">
   <h2>{{t "Compared with popular apps"}}</h2>
-  <p>{{t "Each of these does part of the job well. Clipboard Bridge is the one that does all of it."}}</p>
+  <p>{{t "Each of these does part of the job well. Copy Beyond Borders is the one that does all of it."}}</p>
   <div class="frame board-table">{{template "rails"}}<div class="surface">
   <table class="chalk-table compare apps">
     <colgroup><col class="name"><col span="7"></colgroup>
     <thead><tr><td></td><th scope="col">iPhone</th><th scope="col">Android</th><th scope="col">{{t "Computers"}}</th><th scope="col">{{t "No cloud, no account"}}</th><th scope="col">{{t "Away from home"}}</th><th scope="col">{{t "Open source"}}</th><th scope="col">{{t "Free"}}</th></tr></thead>
     <tbody>
-    <tr class="us"><th scope="row">Clipboard Bridge</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows<br>Mac<br>Linux</td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
+    <tr class="us"><th scope="row">Copy Beyond Borders</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows<br>Mac<br>Linux</td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
     <tr><th scope="row">{{t "Apple Universal Clipboard"}}</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="systems">Mac</td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
     <tr><th scope="row">{{t "Windows clipboard sync"}}</th><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows</td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
     <tr><th scope="row">KDE Connect</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Linux<br>Windows</td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
@@ -108,7 +108,7 @@
     <li><div class="frame">{{template "rails"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step1"}}</g></svg></div></div>
       <strong>{{t "Install the app on your phone."}}</strong> {{t "Android: the APK from the latest release. iPhone: the app comes with TestFlight; until then a shortcut and a computer do the job."}}</li>
     <li><div class="frame">{{template "rails"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step2"}}</g></svg></div></div>
-      <strong>{{t "Install Clipboard Bridge on a computer."}}</strong> {{t "One command on Linux, Mac or Windows: see %s." (link "download.html" (t "Download"))}}</li>
+      <strong>{{t "Install Copy Beyond Borders on a computer."}}</strong> {{t "One command on Linux, Mac or Windows: see %s." (link "download.html" (t "Download"))}}</li>
     <li><div class="frame">{{template "rails"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step3"}}</g></svg></div></div>
       <strong>{{t "Add the computer."}}</strong> {{t "Run %s on the computer and scan its QR code in the app. That's your group." (code "sudo cbb pair")}}</li>
   </ol>

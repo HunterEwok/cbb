@@ -425,7 +425,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | A11 | The iPhone's background app refresh runs and syncs | person | iPhone |
 | A12 | "Sync clipboard" without opening the app: App Intents and App Shortcuts, Back Tap, the Action button, the home-screen widget on both phones, the Control Center control; one line says what it did | ui | |
 | A13 | The iPhone's share extension: text and links at once, images and files up to 50 MB, waits until a computer fetched them, at most a minute; a debug build without the app group says there is no group | ui | Apple account |
-| A14 | First launch and the Start screen: "This phone is ready", settings before a group, "I already use Clipboard Bridge on another phone" | ui | |
+| A14 | First launch and the Start screen: "This phone is ready", settings before a group, "I already use CBB on another phone" | ui | |
 | A15 | Themes: ten colours in System, Dark and Light; tiles and list; every device icon | ui | |
 | A16 | Plain-language paths: a lost phone ("remove it on your other phone"), a group with one admin advised to add a second, errors in one line with the next step | ui | |
 

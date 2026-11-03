@@ -292,7 +292,7 @@ func (d *Desk) Resolve() {
 
 // Update installs the newest signed release the group passed around, as
 // cbb update does as the administrator.
-func (d *Desk) Update() { d.admin([]string{"update"}, false, "Clipboard Bridge is updated.") }
+func (d *Desk) Update() { d.admin([]string{"update"}, false, "CBB is updated.") }
 
 // SetAway turns sync away from home on or off; on answers yes to the
 // warning the window showed, which cbb asks for.
@@ -417,7 +417,7 @@ func (d *Desk) summary(err error) (string, string) {
 	case errors.As(err, &dial) && dial.Denied:
 		return d.T(deniedText), dial.Error()
 	case errors.As(err, &dial):
-		return d.T("The Clipboard Bridge service is not running on this computer."), fmt.Sprint(dial.Err)
+		return d.T("The CBB service is not running on this computer."), fmt.Sprint(dial.Err)
 	case errors.As(err, &req):
 		return req.Msg, req.Detail
 	case errors.As(err, &adm):
@@ -466,14 +466,14 @@ func (d *Desk) updateTray() {
 		menu.Add(fmt.Sprintf(d.T("Update to %s"), s.Status.Update)).SetEnabled(!s.Busy).OnClick(func(*application.Context) { go d.Update() })
 	}
 	menu.AddSeparator()
-	menu.Add(d.T("Open Clipboard Bridge")).OnClick(func(*application.Context) { d.Open() })
+	menu.Add(d.T("Open CBB")).OnClick(func(*application.Context) { d.Open() })
 	menu.Add(d.T("Quit")).OnClick(func(*application.Context) { d.app.Quit() })
 	d.tray.SetMenu(menu)
 	if state := trayState(s); state != d.trayState {
 		d.trayState = state
 		setTrayIcon(d.tray, state)
 	}
-	d.tray.SetTooltip("Clipboard Bridge · " + d.headline(s))
+	d.tray.SetTooltip("CBB · " + d.headline(s))
 }
 
 // headline is the group in a line.

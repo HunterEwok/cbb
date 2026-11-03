@@ -12,7 +12,7 @@ The details switch of every part, the apps and the installers included, is in
 
 ## Commands
 
-**"the Clipboard Bridge service is not running"**: start it
+**"the CBB service is not running"**: start it
 (`sudo systemctl start clipboardbridge` on Linux; `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`
 on a Mac; `Start-Service clipboardbridge` on Windows) and look at its log.
 

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The hardware test bench
 
-The plan for testing Clipboard Bridge on real devices before each release, starting with 0.4,
+The plan for testing Copy Beyond Borders on real devices before each release, starting with 0.4,
 and how the bench that runs it is built. The bench lives in `tools/bench` (being built, see
 "Order of work" at the end); this document is its specification. CI and its jobs are in
 [maintaining.md](maintaining.md#ci).
@@ -164,7 +164,7 @@ the same text is on every device at the end.
 
 ### Features and platforms
 
-Every other way Clipboard Bridge works, so no path ships untested:
+Every other way Copy Beyond Borders works, so no path ships untested:
 
 | ID | Case | Expected |
 |---|---|---|
@@ -489,7 +489,7 @@ is never the hub. `address` (`host:port`) on a device is where the others dial i
 find it; a lite member always joins at an address, which `cbb pair` prints.
 `tools/bench/inventory.example.toml` is a complete example. Each device needs the
 controller's SSH key for its desktop user; a Windows device also runs
-`tools/bench/setup-windows.ps1` once. Devices on the bench are test devices: the bench installs and wipes Clipboard Bridge
+`tools/bench/setup-windows.ps1` once. Devices on the bench are test devices: the bench installs and wipes Copy Beyond Borders
 on them as it needs.
 
 ## 14. Order of work

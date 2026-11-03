@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-{{define "title"}}{{t "Download"}}: Clipboard Bridge{{end}}
-{{define "description"}}{{t "Download Clipboard Bridge for Android, iPhone, Windows, Mac and Linux. Free and open source."}}{{end}}
+{{define "title"}}{{t "Download"}}: Copy Beyond Borders{{end}}
+{{define "description"}}{{t "Download Copy Beyond Borders for Android, iPhone, Windows, Mac and Linux. Free and open source."}}{{end}}
 
 {{define "content"}}
 <section class="wrap page">
   <h1>{{t "Download"}}</h1>
-  <p class="lead">{{t "Install the app on your phone and Clipboard Bridge on your computers. Every way installs the same program, and every release is free."}}</p>
+  <p class="lead">{{t "Install the app on your phone and Copy Beyond Borders on your computers. Every way installs the same program, and every release is free."}}</p>
   <p class="dim">{{t "Latest version: %s, released on %s." (link "https://github.com/HunterEwok/clipboardbridge/releases/latest" .Version) .Date}}
      {{t "What changed: %s." (link "https://github.com/HunterEwok/clipboardbridge/blob/main/CHANGELOG.md" (t "the changelog"))}}</p>
   <p class="actions pick" hidden>
@@ -61,7 +61,7 @@ sudo sh "$(brew --prefix)/opt/clipboardbridge/share/clipboardbridge/packaging/ma
       <pre><code>curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --lite</code></pre>
     </div>
   </div>
-  <p>{{t "The installer checks the download, starts Clipboard Bridge and asks before it opens the firewall for it. Then run %s and scan its QR code in the app." (code "sudo cbb pair")}}
+  <p>{{t "The installer checks the download, starts Copy Beyond Borders and asks before it opens the firewall for it. Then run %s and scan its QR code in the app." (code "sudo cbb pair")}}
      {{t "All the ways and options: %s." (link (printf "/%s/docs/guide/install.html" .Lang.Code) (t "installing"))}}</p>
 
   <h2 id="check">{{t "Checking a download"}}</h2>

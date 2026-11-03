@@ -13,7 +13,7 @@ struct ClipboardBridgeMacApp: App {
     @StateObject private var model = MacModel()
 
     var body: some Scene {
-        Window(Text("Clipboard Bridge"), id: "main") {
+        Window(Text("CBB"), id: "main") {
             MainView().environmentObject(model).modifier(Themed())
         }
         .defaultSize(width: 920, height: 620)

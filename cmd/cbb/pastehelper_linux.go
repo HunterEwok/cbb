@@ -41,7 +41,7 @@ func runUinputHelper(ctx context.Context, stderr io.Writer) int {
 		return fail(stderr, errors.New("the uinput helper runs as root, from the clipboardbridge-uinput unit"))
 	}
 	logf := func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
-	kbd, err := uinput.Open(uinput.Device, "Clipboard Bridge remote paste")
+	kbd, err := uinput.Open(uinput.Device, "CBB remote paste")
 	if err != nil {
 		return fail(stderr, fmt.Errorf("%w (is the uinput module loaded?)", err))
 	}

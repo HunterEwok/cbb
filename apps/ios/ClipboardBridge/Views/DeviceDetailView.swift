@@ -143,7 +143,7 @@ struct DeviceDetailView: View {
             }
             if let version = d.device?.version {
                 Divider().overlay(palette.line)
-                row(Text("Clipboard Bridge"), Text(verbatim: version).monospaced())
+                row(Text("CBB"), Text(verbatim: version).monospaced())
             }
             if let mac = d.device?.mac {
                 Divider().overlay(palette.line)
@@ -301,7 +301,7 @@ struct DeviceDetailView: View {
         case "reboot": String(localized: "Reboot", bundle: .app)
         case "shutdown": String(localized: "Shut down", bundle: .app)
         case "cancel-shutdown": String(localized: "Cancel the reboot or shutdown", bundle: .app)
-        case "restart": String(localized: "Restart Clipboard Bridge", bundle: .app)
+        case "restart": String(localized: "Restart CBB", bundle: .app)
         case "keyboard-layout": String(localized: "Switch the keyboard's layout", bundle: .app)
         default: name
         }

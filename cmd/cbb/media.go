@@ -70,7 +70,7 @@ func copyMedia(paths []string, typ, text string, stdout, stderr io.Writer) int {
 	}
 	total := mediafile.Size(parts)
 	if total > clip.MaxMedia {
-		return fail(stderr, fmt.Errorf("the copy is %s; Clipboard Bridge carries at most 1 GiB", service.SizeText(total)))
+		return fail(stderr, fmt.Errorf("the copy is %s; CBB carries at most 1 GiB", service.SizeText(total)))
 	}
 	c, err := control.DialFor(control.OpCopyMedia)
 	if err != nil {

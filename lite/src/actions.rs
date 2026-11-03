@@ -221,7 +221,7 @@ pub fn run(name: &str) -> std::result::Result<(), Failure> {
     let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
     if denied(&said) {
         return Err(Failure::Refused(format!(
-            "this device's user has not given Clipboard Bridge the right to {name}; they run sudo cbb action enable {name} there"
+            "this device's user has not given CBB the right to {name}; they run sudo cbb action enable {name} there"
         )));
     }
     Err(Failure::Failed(Error::msg(format!("{bin} {}: {} {said}", args.join(" "), out.status))))
@@ -291,7 +291,7 @@ pub fn grant(root: &Path, on: &[String]) -> Result<PathBuf> {
 fn js_rule(ids: &[&str]) -> String {
     let q: Vec<String> = ids.iter().map(|id| format!("\"{id}\"")).collect();
     format!(
-        "// Written by cbb action enable: lets the Clipboard Bridge service ask logind
+        "// Written by cbb action enable: lets the CBB service ask logind
 // for the quick actions this computer's user turned on, and nothing else.
 polkit.addRule(function (action, subject) {{
 \tif (subject.user != \"{SERVICE_USER}\") return polkit.Result.NOT_HANDLED;
@@ -305,9 +305,9 @@ polkit.addRule(function (action, subject) {{
 
 fn pkla_rule(ids: &[&str]) -> String {
     format!(
-        "# Written by cbb action enable: lets the Clipboard Bridge service ask logind
+        "# Written by cbb action enable: lets the CBB service ask logind
 # for the quick actions this computer's user turned on, and nothing else.
-[Clipboard Bridge quick actions]
+[CBB quick actions]
 Identity=unix-user:{SERVICE_USER}
 Action={}
 ResultAny=yes

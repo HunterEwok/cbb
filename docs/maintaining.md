@@ -228,7 +228,7 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   into a free retired PIV slot (82 when `ykman piv keys info 82` finds no key), and nothing
   else on the key is reset or changed. `ykman piv keys generate --algorithm ECCP256
   --pin-policy ALWAYS --touch-policy ALWAYS 82 root-N.pem`, then `ykman piv certificates
-  generate --subject "CN=Clipboard Bridge release signing root N (2026)" 82 root-N.pem` so
+  generate --subject "CN=Copy Beyond Borders release signing root N (2026)" 82 root-N.pem` so
   the key can be read from the slot, and `ykman piv keys attest 82` with the `f9`
   certificate as proof that the key was made on the YubiKey.
   Their public keys go into `packaging/get.sh` (`release_roots`), `packaging/windows/get.ps1`
@@ -298,7 +298,7 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
 
 The tap is the repository
 [HunterEwok/homebrew-tap](https://github.com/HunterEwok/homebrew-tap),
-the one tap for all of the owner's formulae; Clipboard Bridge's is `Formula/clipboardbridge.rb`, and users install with
+the one tap for all of the owner's formulae; CBB's is `Formula/clipboardbridge.rb`, and users install with
 `brew install hunterewok/tap/clipboardbridge`. After each release (not a
 pre-release) is published, `.github/workflows/published.yml` checks its signed files and writes the formula with
 `packaging/homebrew/formula.sh` from the release's `SHA256SUMS` and pushes it to the tap's
@@ -440,10 +440,10 @@ recipe we submit. Once, for the first release with the fdroid flavor:
   certificate (`apksigner verify --print-certs clipboardbridge-fdroid-X.Y.Z.apk`), and
   `ndk`, the `cbb.ndk` of the tag.
 - [ ] Check that F-Droid's build reproduces ours: `fdroid build -v -l
-  io.github.hunterewok.clipboardbridge` in a clone of fdroiddata with the recipe, on
+  tools.cbb` in a clone of fdroiddata with the recipe, on
   F-Droid's buildserver image (`fdroid build` compares with `Binaries`).
 - [ ] Open the merge request to fdroiddata (GitLab account), with the recipe as
-  `metadata/io.github.hunterewok.clipboardbridge.yml`, and answer the reviewers.
+  `metadata/tools.cbb.yml`, and answer the reviewers.
 
 After that, each release's tag is picked up by F-Droid's update check
 (`UpdateCheckData` reads `apps/android/version.properties`), usually within days. When a

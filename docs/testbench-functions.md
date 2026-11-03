@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The product's functions, for the bench
 
-Every function of Clipboard Bridge as release 0.6 has it, one line each, with the cases of
+Every function of Copy Beyond Borders as release 0.6 has it, one line each, with the cases of
 [testbench-catalogue.md](testbench-catalogue.md) that check it. It is gathered from
 [design.md](design.md), [protocol.md](protocol.md), [apps.md](apps.md),
 [reference/cli.md](reference/cli.md) and the 0.6 plan. "A function" is something a user can

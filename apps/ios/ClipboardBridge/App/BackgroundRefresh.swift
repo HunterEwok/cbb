@@ -3,7 +3,7 @@
 import BackgroundTasks
 import os
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "refresh")
+private let log = Logger(subsystem: "tools.cbb", category: "refresh")
 
 /// Background app refresh: until the app has push notifications (they need
 /// the Apple developer account), iOS now and then runs it for a few seconds
@@ -12,7 +12,7 @@ private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", cate
 /// runs none with Background App Refresh off or in Low Power Mode.
 enum BackgroundRefresh {
     /// The task's identifier, in Info.plist's BGTaskSchedulerPermittedIdentifiers.
-    static let id = "io.github.hunterewok.clipboardbridge.refresh"
+    static let id = "tools.cbb.refresh"
 
     /// The soonest the app asks to run again; iOS decides when it does.
     static let interval: TimeInterval = 15 * 60

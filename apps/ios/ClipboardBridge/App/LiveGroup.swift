@@ -10,13 +10,13 @@ import Security
 import UIKit
 import UniformTypeIdentifiers
 
-private let awayLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "away")
-private let relayLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "relay")
-private let browseLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "browse")
-private let hubLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "hub")
-private let modeLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "mode")
-private let keysLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "keys")
-private let imageLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "images")
+private let awayLog = Logger(subsystem: "tools.cbb", category: "away")
+private let relayLog = Logger(subsystem: "tools.cbb", category: "relay")
+private let browseLog = Logger(subsystem: "tools.cbb", category: "browse")
+private let hubLog = Logger(subsystem: "tools.cbb", category: "hub")
+private let modeLog = Logger(subsystem: "tools.cbb", category: "mode")
+private let keysLog = Logger(subsystem: "tools.cbb", category: "keys")
+private let imageLog = Logger(subsystem: "tools.cbb", category: "images")
 
 /// The phone's own group (docs/protocol.md, section 9): its root CA key in
 /// the Secure Enclave, signing only after Face ID or the passcode (a
@@ -41,9 +41,9 @@ final class LiveGroup: GroupController {
         let changeCount: Int
     }
 
-    nonisolated static let caLabel = "io.github.hunterewok.clipboardbridge.group-root"
+    nonisolated static let caLabel = "tools.cbb.group-root"
     /// The admin key of a phone that joined another phone's group.
-    nonisolated static let adminLabel = "io.github.hunterewok.clipboardbridge.admin"
+    nonisolated static let adminLabel = "tools.cbb.admin"
     /// How long the join QR code is good for, and how many wrong codes it
     /// takes, as for cbb pair (docs/protocol.md, section 6).
     static let joinWindow: TimeInterval = 300

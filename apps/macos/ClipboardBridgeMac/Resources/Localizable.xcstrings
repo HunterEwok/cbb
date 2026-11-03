@@ -131,12 +131,12 @@
         }
       }
     },
-    "The group holds %lld records of a later version: update Clipboard Bridge to read them.": {
+    "The group holds %lld records of a later version: update CBB to read them.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "В группе есть записи более новой версии (%lld): обновите Clipboard Bridge, чтобы их прочитать."
+            "value": "В группе есть записи более новой версии (%lld): обновите CBB, чтобы их прочитать."
           }
         }
       }
@@ -271,12 +271,12 @@
         }
       }
     },
-    "Clipboard Bridge": {
+    "CBB": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Clipboard Bridge"
+            "value": "CBB"
           }
         }
       }
@@ -701,12 +701,12 @@
         }
       }
     },
-    "Open Clipboard Bridge": {
+    "Open CBB": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открыть Clipboard Bridge"
+            "value": "Открыть CBB"
           }
         }
       }
@@ -981,12 +981,12 @@
         }
       }
     },
-    "Clipboard Bridge lives in the menu bar; its window opens from there.": {
+    "CBB lives in the menu bar; its window opens from there.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Clipboard Bridge живёт в строке меню; его окно открывается оттуда."
+            "value": "CBB живёт в строке меню; его окно открывается оттуда."
           }
         }
       }
@@ -1091,12 +1091,12 @@
         }
       }
     },
-    "The Clipboard Bridge service is not running on this Mac. Install it, or start it with sudo launchctl kickstart system/io.github.hunterewok.clipboardbridge.": {
+    "The CBB service is not running on this Mac. Install it, or start it with sudo launchctl kickstart system/io.github.hunterewok.clipboardbridge.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Служба Clipboard Bridge не запущена на этом Mac. Установите её или запустите командой sudo launchctl kickstart system/io.github.hunterewok.clipboardbridge."
+            "value": "Служба CBB не запущена на этом Mac. Установите её или запустите командой sudo launchctl kickstart system/io.github.hunterewok.clipboardbridge."
           }
         }
       }

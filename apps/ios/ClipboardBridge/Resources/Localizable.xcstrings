@@ -611,12 +611,12 @@
         }
       }
     },
-    "Clipboard Bridge recovery key": {
+    "CBB recovery key": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ключ восстановления Clipboard Bridge"
+            "value": "Ключ восстановления CBB"
           }
         }
       }
@@ -1171,22 +1171,22 @@
         }
       }
     },
-    "Open Clipboard Bridge on the watch, then try again." : {
+    "Open CBB on the watch, then try again." : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Откройте Clipboard Bridge на часах и попробуйте снова."
+            "value" : "Откройте CBB на часах и попробуйте снова."
           }
         }
       }
     },
-    "Saved in Files, On My iPhone, Clipboard Bridge.": {
+    "Saved in Files, On My iPhone, CBB.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сохранено в «Файлах»: «На iPhone», Clipboard Bridge."
+            "value": "Сохранено в «Файлах»: «На iPhone», CBB."
           }
         }
       }
@@ -1201,12 +1201,12 @@
         }
       }
     },
-    "The iPhone is not connected to that device. Open Clipboard Bridge on the iPhone, then try again." : {
+    "The iPhone is not connected to that device. Open CBB on the iPhone, then try again." : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iPhone не подключён к этому устройству. Откройте Clipboard Bridge на iPhone и попробуйте снова."
+            "value" : "iPhone не подключён к этому устройству. Откройте CBB на iPhone и попробуйте снова."
           }
         }
       }
@@ -1501,7 +1501,7 @@
         }
       }
     },
-    "Clipboard Bridge": {
+    "CBB": {
       "shouldTranslate": false
     },
     "Close": {
@@ -1594,22 +1594,22 @@
         }
       }
     },
-    "Could not reach the computer. Is it on the same network as this phone, and does its firewall let Clipboard Bridge in?": {
+    "Could not reach the computer. Is it on the same network as this phone, and does its firewall let CBB in?": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Не удалось связаться с компьютером. Он в той же сети, что и телефон, и пропускает ли его файрвол Clipboard Bridge?"
+            "value": "Не удалось связаться с компьютером. Он в той же сети, что и телефон, и пропускает ли его файрвол CBB?"
           }
         }
       }
     },
-    "Could not read the clipboard, so it was left as it is. Allow pasting for Clipboard Bridge, or copy the text again.": {
+    "Could not read the clipboard, so it was left as it is. Allow pasting for CBB, or copy the text again.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Не удалось прочитать буфер обмена, поэтому он оставлен как есть. Разрешите Clipboard Bridge вставку или скопируйте текст ещё раз."
+            "value": "Не удалось прочитать буфер обмена, поэтому он оставлен как есть. Разрешите CBB вставку или скопируйте текст ещё раз."
           }
         }
       }
@@ -1714,12 +1714,12 @@
         }
       }
     },
-    "I already use Clipboard Bridge on another phone": {
+    "I already use CBB on another phone": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "У меня уже есть Clipboard Bridge на другом телефоне"
+            "value": "У меня уже есть CBB на другом телефоне"
           }
         }
       }
@@ -1924,12 +1924,12 @@
         }
       }
     },
-    "Lost a phone? Make a second phone an admin: on it, tap I already use Clipboard Bridge on another phone, then scan its code here with +.": {
+    "Lost a phone? Make a second phone an admin: on it, tap I already use CBB on another phone, then scan its code here with +.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Потеряли телефон? Сделайте второй телефон админом: на нём нажмите «У меня уже есть Clipboard Bridge на другом телефоне» и отсканируйте его код здесь через +."
+            "value": "Потеряли телефон? Сделайте второй телефон админом: на нём нажмите «У меня уже есть CBB на другом телефоне» и отсканируйте его код здесь через +."
           }
         }
       }
@@ -2024,7 +2024,7 @@
         }
       }
     },
-    "Not a Clipboard Bridge QR code.": {
+    "Not a CBB QR code.": {
       "localizations": {
         "ru": {
           "stringUnit": {
@@ -2124,12 +2124,12 @@
         }
       }
     },
-    "Opens Clipboard Bridge and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
+    "Opens CBB and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открывает Clipboard Bridge и отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
+            "value": "Открывает CBB и отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
           }
         }
       }
@@ -3064,12 +3064,12 @@
         }
       }
     },
-    "The computer did not answer. It may run an older version of Clipboard Bridge.": {
+    "The computer did not answer. It may run an older version of CBB.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Компьютер не ответил. Возможно, на нём старая версия Clipboard Bridge."
+            "value": "Компьютер не ответил. Возможно, на нём старая версия CBB."
           }
         }
       }
@@ -3814,12 +3814,12 @@
         }
       }
     },
-    "Restart Clipboard Bridge": {
+    "Restart CBB": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Перезапустить Clipboard Bridge"
+            "value": "Перезапустить CBB"
           }
         }
       }
@@ -3864,12 +3864,12 @@
         }
       }
     },
-    "With a key of its own, the watch can freeze an admin computer, remove a device that is no admin, and turn remote paste, quick actions and sync away from home off. It needs a passcode and wrist detection. Open Clipboard Bridge on the watch first." : {
+    "With a key of its own, the watch can freeze an admin computer, remove a device that is no admin, and turn remote paste, quick actions and sync away from home off. It needs a passcode and wrist detection. Open CBB on the watch first." : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Со своим ключом часы могут заморозить компьютер-админ, удалить устройство, которое не админ, и выключить удалённую вставку, быстрые действия и синхронизацию вне дома. Нужны код-пароль и распознавание запястья. Сначала откройте Clipboard Bridge на часах."
+            "value" : "Со своим ключом часы могут заморозить компьютер-админ, удалить устройство, которое не админ, и выключить удалённую вставку, быстрые действия и синхронизацию вне дома. Нужны код-пароль и распознавание запястья. Сначала откройте CBB на часах."
           }
         }
       }

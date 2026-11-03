@@ -58,9 +58,9 @@ if [ "$(id -u)" -ne 0 ] && [ -n "${HOME:-}" ] && [ -e "$HOME/.local/bin/cbb" ]; 
 	rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/clipboardbridge" "$config/clipboardbridge" "$state/clipboardbridge-update"
 	if [ "$purge" = yes ]; then
 		rm -rf "$state/clipboardbridge"
-		echo "Clipboard Bridge is removed, with this device's keys; it left its group."
+		echo "CBB is removed, with this device's keys; it left its group."
 	else
-		echo "Clipboard Bridge is removed. Its keys stay in $state/clipboardbridge for a reinstall; --purge removes them."
+		echo "CBB is removed. Its keys stay in $state/clipboardbridge for a reinstall; --purge removes them."
 	fi
 	exit 0
 fi
@@ -136,7 +136,7 @@ fi
 rm -rf "$share" /etc/clipboardbridge /var/lib/clipboardbridge-update /opt/clipboardbridge /opt/clipboardbridge-update
 if [ "$purge" = yes ]; then
 	rm -rf /var/lib/clipboardbridge
-	echo "Clipboard Bridge is removed, with this device's keys; it left its group."
+	echo "CBB is removed, with this device's keys; it left its group."
 else
-	echo "Clipboard Bridge is removed. Its keys stay in /var/lib/clipboardbridge for a reinstall; --purge removes them."
+	echo "CBB is removed. Its keys stay in /var/lib/clipboardbridge for a reinstall; --purge removes them."
 fi

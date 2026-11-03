@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-{{define "title"}}{{t "Security and privacy"}}: Clipboard Bridge{{end}}
-{{define "description"}}{{t "What protects your clipboard in Clipboard Bridge, and what each server can and cannot see."}}{{end}}
+{{define "title"}}{{t "Security and privacy"}}: Copy Beyond Borders{{end}}
+{{define "description"}}{{t "What protects your clipboard in Copy Beyond Borders, and what each server can and cannot see."}}{{end}}
 
 {{define "content"}}
 <section class="wrap page">
@@ -9,9 +9,9 @@
 
   <h2>{{t "Your clipboard"}}</h2>
   <ul>
-    <li>{{t "There are no accounts, no cloud and no telemetry. Clipboard Bridge does not report to anyone."}}</li>
+    <li>{{t "There are no accounts, no cloud and no telemetry. Copy Beyond Borders does not report to anyone."}}</li>
     <li>{{t "Only devices you let in belong to your group, and they talk only to each other. Every connection is encrypted with TLS, and each device proves it is in the group."}}</li>
-    <li>{{t "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps its keys in files that only Clipboard Bridge can read."}}</li>
+    <li>{{t "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps its keys in files that only Copy Beyond Borders can read."}}</li>
     <li>{{t "What password managers mark as secret is not synced automatically."}}</li>
   </ul>
 
@@ -31,7 +31,7 @@
 
   <h2 id="programs">{{t "What the programs send"}}</h2>
   <ul>
-    <li>{{t "Updates, when you turn them on (the installers and the Android app ask): a computer or the Android app asks GitHub whether there is a new version and downloads it from there, or from %s when GitHub does not answer. They see your address and that you use Clipboard Bridge, nothing about your group." (code "dl.cbb.tools")}}</li>
+    <li>{{t "Updates, when you turn them on (the installers and the Android app ask): a computer or the Android app asks GitHub whether there is a new version and downloads it from there, or from %s when GitHub does not answer. They see your address and that you use Copy Beyond Borders, nothing about your group." (code "dl.cbb.tools")}}</li>
     <li>{{t "Once a day the group's root may fetch from %s the signed copy of Google's list of revoked Android keys. It is the same file for everyone." (code "cbb.tools")}}</li>
     <li>{{t "Nothing reports crashes or usage, and the logs stay on each device."}}</li>
     <li>{{t "If you install the app from the App Store, Google Play, F-Droid, Homebrew or winget, that store knows you installed it, under its own privacy policy."}}</li>
@@ -49,7 +49,7 @@
   </ul>
 
   <h2 id="contact">{{t "Who is responsible"}}</h2>
-  <p>{{t "Clipboard Bridge is an open-source project of its maintainer, %s; there is no company behind it, and nobody sells or shares data, since there is none to share. Questions about this policy: %s. Every change to this page is public in %s." (link "https://github.com/HunterEwok" "HunterEwok") (link "https://github.com/HunterEwok/clipboardbridge/issues" (t "a GitHub issue")) (link "https://github.com/HunterEwok/clipboardbridge/commits/main/site/templates/privacy.html" (t "its history"))}}</p>
+  <p>{{t "Copy Beyond Borders is an open-source project of its maintainer, %s; there is no company behind it, and nobody sells or shares data, since there is none to share. Questions about this policy: %s. Every change to this page is public in %s." (link "https://github.com/HunterEwok" "HunterEwok") (link "https://github.com/HunterEwok/clipboardbridge/issues" (t "a GitHub issue")) (link "https://github.com/HunterEwok/clipboardbridge/commits/main/site/templates/privacy.html" (t "its history"))}}</p>
 
   <h2>{{t "Found a problem?"}}</h2>
   <p>{{t "Please report a vulnerability privately, as %s describes, and not in a public issue." (link "https://github.com/HunterEwok/clipboardbridge/blob/main/SECURITY.md" "SECURITY.md")}}</p>

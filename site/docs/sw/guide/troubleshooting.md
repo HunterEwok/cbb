@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 931b83ed0988 -->
+<!-- source: 5174e28a6a9e -->
 # Wakati kitu hakifanyi kazi
 
 Anza na `cbb status` kwenye kifaa chenye tatizo: kinasema kama huduma inaendesha, kiko kwenye kikundi gani, ni wanachama gani wameunganishwa na hali ya usawazishaji nje ya nyumbani. Kila ujumbe ni mfupi; `CBB_DEBUG=1 cbb status` (kwenye Windows kwanza `$env:CBB_DEBUG = "1"`) huonyesha kosa la msingi chini yake. Kumbukumbu ya huduma daima ina maelezo: kwenye Linux `journalctl -u clipboardbridge`, na ya kiunganishi cha eneo-kazi iko kwenye jarida la kikao, `journalctl --user`; mifumo mingine iko katika [faili na kumbukumbu](../reference/devices.md#files-and-logs). Swichi ya maelezo ya kila sehemu, ikiwemo programu na visakinishi, iko katika [ujumbe wa makosa na maelezo](../reference/errors.md).
 
 ## Amri
 
-**"the Clipboard Bridge service is not running"**: ianzishe (`sudo systemctl start clipboardbridge` kwenye Linux; `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` kwenye Mac; `Start-Service clipboardbridge` kwenye Windows) na uangalie kumbukumbu yake.
+**"the CBB service is not running"**: ianzishe (`sudo systemctl start clipboardbridge` kwenye Linux; `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` kwenye Mac; `Start-Service clipboardbridge` kwenye Windows) na uangalie kumbukumbu yake.
 
 **"permission denied" kwenye soketi ya udhibiti, mara baada ya kusakinisha**: kisakinishi kilikuongeza kwenye kikundi `clipboardbridge`, na kikundi huhesabiwa tu kuanzia kuingia kunakofuata. Toka kisha uingie tena (kwenye Windows, fungua terminali mpya); hadi hapo, `sudo cbb ...` inafanya kazi.
 

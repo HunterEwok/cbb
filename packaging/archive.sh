@@ -49,7 +49,7 @@ modules() {
 # this OS are built from (the tray app's too, when it is packed), and of the
 # code copied into internal/third_party.
 notices() {
-	echo "Clipboard Bridge is free software under the GNU Affero General Public License v3.0"
+	echo "CBB is free software under the GNU Affero General Public License v3.0"
 	echo "only (LICENSE). It is built with the code below, under its own licenses."
 	{
 		modules "$root/cmd/cbb"

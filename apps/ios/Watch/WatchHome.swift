@@ -14,7 +14,7 @@ struct WatchHome: View {
                 if model.state.hasGroup {
                     group
                 } else {
-                    Text("Open Clipboard Bridge on the iPhone to make or join a group.")
+                    Text("Open CBB on the iPhone to make or join a group.")
                         .foregroundStyle(palette.textDim)
                 }
             }

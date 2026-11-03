@@ -30,7 +30,7 @@ trap 'rm -f "$meta"' EXIT
 cargo metadata --locked --format-version 1 >"$meta"
 
 if [ "$package" = clipboardbridge-lite ]; then
-	echo "The lite member of Clipboard Bridge is free software under the GNU Affero General"
+	echo "The lite member of CBB is free software under the GNU Affero General"
 	echo "Public License v3.0 only (LICENSE). It is built with the crates below, under"
 	echo "their own licenses."
 else

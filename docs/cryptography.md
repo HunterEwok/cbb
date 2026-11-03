@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Cryptography
 
-For engineers and security reviewers: every cryptographic primitive Clipboard Bridge uses,
+For engineers and security reviewers: every cryptographic primitive Copy Beyond Borders uses,
 with the library that provides it in each implementation, the key sizes, the lifetimes and
 where each key is kept. The wire format is normative in the [protocol](protocol.md); this
 page only lists. Why each choice was made is in the [design](design.md) and the

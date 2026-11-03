@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // adb shell am start -n io.github.hunterewok.clipboardbridge/.MainActivity --ez ShowErrorDetails true
+        // adb shell am start -n tools.cbb/io.github.hunterewok.clipboardbridge.MainActivity --ez ShowErrorDetails true
         if (intent.hasExtra(Settings.ERROR_DETAILS)) model.settings.showsErrorDetails = intent.getBooleanExtra(Settings.ERROR_DETAILS, false)
         enableEdgeToEdge()
         setContent { Root(model) }

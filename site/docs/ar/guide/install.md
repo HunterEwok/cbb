@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: ba8bb2b8b763 -->
+<!-- source: 01c5a8544c91 -->
 # التثبيت
 
-يعمل Clipboard Bridge كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.
+يعمل Copy Beyond Borders كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.
 
 ## Linux
 
@@ -32,7 +32,7 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 
 ### SteamOS (Steam Deck)
 
-انتقل إلى وضع سطح المكتب، وافتح Konsole، وأعطِ المستخدم `deck` كلمة مرور مرة واحدة إن لم تكن له (`passwd`)، ثم شغّل الأمر نفسه. يستبدل SteamOS ملفات نظامه مع كل تحديث، لذلك يضع المثبّت Clipboard Bridge في `/opt/clipboardbridge` بدلًا من `/usr/local`، ويخبر SteamOS بأي من ملفاته في `/etc` يجب الإبقاء عليها (`/etc/atomic-update.conf.d/clipboardbridge.conf`). يبقى مثبّتًا وفي مجموعته عبر تحديثات SteamOS.
+انتقل إلى وضع سطح المكتب، وافتح Konsole، وأعطِ المستخدم `deck` كلمة مرور مرة واحدة إن لم تكن له (`passwd`)، ثم شغّل الأمر نفسه. يستبدل SteamOS ملفات نظامه مع كل تحديث، لذلك يضع المثبّت Copy Beyond Borders في `/opt/clipboardbridge` بدلًا من `/usr/local`، ويخبر SteamOS بأي من ملفاته في `/etc` يجب الإبقاء عليها (`/etc/atomic-update.conf.d/clipboardbridge.conf`). يبقى مثبّتًا وفي مجموعته عبر تحديثات SteamOS.
 
 - يصبح `cbb` في مسار Konsole جديدة بعد أن تسجّل الخروج وتدخل من جديد. لا يبحث `sudo` هناك، لذلك تأخذ الأوامر التي تحتاج إليه المسار الكامل: `sudo /opt/clipboardbridge/bin/cbb pair`.
 - في وضع سطح المكتب تتزامن الحافظة كما على أي سطح مكتب KDE Plasma.
@@ -64,7 +64,7 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 
 يتيح للمستخدم المسجَّل دخوله عند الشاشة استعمال `cbb` (في طرفية جديدة)، ويشغّل له وكيل الحافظة. تُنفَّذ الأوامر التي تغيّر المجموعة في طرفية مفتوحة بصلاحية المسؤول، حيث يستعمل Linux وmacOS الأمر `sudo`.
 
-ويثبّت أيضًا تطبيق شريط النظام، الذي يبدأ عند تسجيل الدخول ويظهر في قائمة ابدأ باسم Clipboard Bridge.
+ويثبّت أيضًا تطبيق شريط النظام، الذي يبدأ عند تسجيل الدخول ويظهر في قائمة ابدأ باسم CBB.
 
 مع winget، حين تصبح الحزمة في مستودع winget:
 
@@ -103,7 +103,7 @@ fetch -qo - https://github.com/HunterEwok/clipboardbridge/releases/latest/downlo
 
 يثبّت `cbb` وسكربت rc.d يشغّل الخدمة عبر daemon(8)، ويضيف السطر `clipboardbridge_enable="YES"` إلى rc.conf. تقيم المفاتيح في `/var/db/clipboardbridge`.
 
-على OPNsense يضيف المثبّت نفسه أيضًا خطّاف إضافة: تظهر الخدمة تحت System > Diagnostics > Services، وتتبع قواعد جدار حمايتها (في مرساة pf المسماة `clipboardbridge`) كل إعادة تحميل للمرشّح. عطّل مكرّر mDNS (Services > mDNS Repeater) ما دامت الخدمة تعمل: فكلاهما يحتاج إلى المنفذ UDP 5353، والخدمة تجيب عن mDNS بنفسها على كل واجهة منزلية. pfSense غير مدعوم: يعمل المثبّت هناك أيضًا، لكنه يطبع قواعد جدار الحماية لتضعها في Firewall > Rules بدلًا من أن يضيفها، وقد يزيل تحديث pfSense برنامج Clipboard Bridge.
+على OPNsense يضيف المثبّت نفسه أيضًا خطّاف إضافة: تظهر الخدمة تحت System > Diagnostics > Services، وتتبع قواعد جدار حمايتها (في مرساة pf المسماة `clipboardbridge`) كل إعادة تحميل للمرشّح. عطّل مكرّر mDNS (Services > mDNS Repeater) ما دامت الخدمة تعمل: فكلاهما يحتاج إلى المنفذ UDP 5353، والخدمة تجيب عن mDNS بنفسها على كل واجهة منزلية. pfSense غير مدعوم: يعمل المثبّت هناك أيضًا، لكنه يطبع قواعد جدار الحماية لتضعها في Firewall > Rules بدلًا من أن يضيفها، وقد يزيل تحديث pfSense برنامج Copy Beyond Borders.
 
 على سطح مكتب FreeBSD (X11، أو Wayland مع بروتوكول data control كما في KDE وsway وHyprland) تشغّل الجلسة `cbb agent` من البدء التلقائي في XDG وتنضم الحافظة إلى المجموعة؛ سجّل الدخول من جديد بعد التثبيت. ويكتب اللصق عن بُعد عبر XTEST على X11 وعبر لوحة المفاتيح الافتراضية على أسطح مكتب wlroots؛ ولا يقبل GNOME اللصق عن بُعد على FreeBSD، إذ لا يوجد من دون logind ما يدل على أن شاشته مقفلة.
 
@@ -119,7 +119,7 @@ docker compose -f compose.home.yaml exec clipboardbridge cbb pair
 
 ## جدار الحماية
 
-يحتاج Clipboard Bridge إلى منفذ TCP واحد هو 8764، وإلى mDNS (UDP 5353)، وكلاهما من الشبكة المنزلية فقط. يجد المثبّت جدار الحماية (ufw أو firewalld أو nftables أو iptables على Linux، وpf أو ipfw على FreeBSD، وجدار حماية التطبيقات في Mac، وجدار حماية Windows)، ويعرض كل قاعدة، ويسأل `Add these rules now? [y/N]`:
+يحتاج Copy Beyond Borders إلى منفذ TCP واحد هو 8764، وإلى mDNS (UDP 5353)، وكلاهما من الشبكة المنزلية فقط. يجد المثبّت جدار الحماية (ufw أو firewalld أو nftables أو iptables على Linux، وpf أو ipfw على FreeBSD، وجدار حماية التطبيقات في Mac، وجدار حماية Windows)، ويعرض كل قاعدة، ويسأل `Add these rules now? [y/N]`:
 
 - **نعم**: يضيفها، ويُبقيها محدَّثة مع كل تحديث، ويزيلها حين تلغي التثبيت. ولا يمس القواعد الأخرى أبدًا.
 - **لا** (وهو الافتراضي، وهو ما يحدث حين لا توجد طرفية للسؤال): لا يضيف شيئًا ويطبع الأوامر بدقة لتشغّلها أنت.
@@ -137,7 +137,7 @@ docker compose -f compose.home.yaml exec clipboardbridge cbb pair
 
 يثبّت `sudo cbb update` (على Windows الأمر `cbb update` في طرفية مفتوحة بصلاحية المسؤول) أحدث إصدار على حاسوب أو عضو خفيف مثبَّت بـ `get.sh` أو `get.ps1` أو أرشيف إصدار؛ ويكتفي `cbb update -check` بإخبارك إن كان هناك إصدار جديد. وتبقى إعداداتك. لا يثبّت إلا إصدارًا وقّعه المشروع، ولا يثبّت أبدًا إصدارًا أقدم. وإذا لم يبدأ الإصدار الجديد خلال دقيقة، يعود السابق من تلقاء نفسه. وطريقة فحصه للتواقيع موصوفة في [البروتوكول](../protocol.md)، القسم 16.
 
-تسأل المثبّتات مرة واحدة عما إذا كان التحديث تلقائيًا (`--auto-update on|off`، أو `-AutoUpdate on|off` و`$env:CBB_AUTO_UPDATE` على Windows، لتجيب مسبقًا)؛ ويغيّره لاحقًا `sudo cbb update -auto on|off`. وعند تفعيله يفحص مؤقّت مرة في اليوم في وقت خاص به: مؤقّت systemd على Linux، ومهمة launchd على Mac، ومهمة مجدولة بصلاحية SYSTEM على Windows، وcron على OpenWrt وFreeBSD. ينزّل كل فحص الملفات الصغيرة نفسها من GitHub (أو من `dl.cbb.tools` حين لا يرد GitHub)، فيعرف GitHub عنوان هذا الجهاز وأنه يستخدم Clipboard Bridge، كما في أي تنزيل؛ ولا يرسل شيئًا عن المجموعة. ويأخذ `sudo cbb update -mirror https://...` التحديثات من مرآة أخرى بدلًا من ذلك، ولا يتطلب ذلك أي ثقة لأن التواقيع تُفحص. وسجل المؤقّت هو `update.log` في `/var/lib/clipboardbridge-update` (Linux) أو `/etc/clipboardbridge-update` (OpenWrt) أو `/var/db/clipboardbridge-update` (FreeBSD) أو `/Library/Application Support/clipboardbridge-update` (Mac) أو `C:\Program Files\clipboardbridge-update` (Windows).
+تسأل المثبّتات مرة واحدة عما إذا كان التحديث تلقائيًا (`--auto-update on|off`، أو `-AutoUpdate on|off` و`$env:CBB_AUTO_UPDATE` على Windows، لتجيب مسبقًا)؛ ويغيّره لاحقًا `sudo cbb update -auto on|off`. وعند تفعيله يفحص مؤقّت مرة في اليوم في وقت خاص به: مؤقّت systemd على Linux، ومهمة launchd على Mac، ومهمة مجدولة بصلاحية SYSTEM على Windows، وcron على OpenWrt وFreeBSD. ينزّل كل فحص الملفات الصغيرة نفسها من GitHub (أو من `dl.cbb.tools` حين لا يرد GitHub)، فيعرف GitHub عنوان هذا الجهاز وأنه يستخدم Copy Beyond Borders، كما في أي تنزيل؛ ولا يرسل شيئًا عن المجموعة. ويأخذ `sudo cbb update -mirror https://...` التحديثات من مرآة أخرى بدلًا من ذلك، ولا يتطلب ذلك أي ثقة لأن التواقيع تُفحص. وسجل المؤقّت هو `update.log` في `/var/lib/clipboardbridge-update` (Linux) أو `/etc/clipboardbridge-update` (OpenWrt) أو `/var/db/clipboardbridge-update` (FreeBSD) أو `/Library/Application Support/clipboardbridge-update` (Mac) أو `C:\Program Files\clipboardbridge-update` (Windows).
 
 تخبر أجهزة المجموعة بعضها بأحدث إصدار موقَّع رآه أيٌّ منها، فيكفي فحص جهاز واحد ليقول `cbb status` وتطبيق شريط المهام على الأجهزة الأخرى إن إصدارًا أحدث قد صدر (يشغّل «Update to X» في تطبيق شريط المهام الأمر `cbb update` بصلاحية المسؤول). ويفحص كل جهاز التواقيع بنفسه وينزّل أرشيفه الخاص.
 
@@ -165,6 +165,6 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 
 وعلى SteamOS هو `sudo sh /opt/clipboardbridge/share/uninstall.sh`. ومع Homebrew شغّل `brew uninstall clipboardbridge` بعده.
 
-على Windows: الإعدادات، التطبيقات، «Clipboard Bridge»، إلغاء التثبيت.
+على Windows: الإعدادات، التطبيقات، «CBB»، إلغاء التثبيت.
 
 يزيل هذا البرنامج والخدمة وقواعد جدار الحماية التي أضافها المثبّت. وتبقى مفاتيح الجهاز، فيعيده التثبيت من جديد إلى مجموعته. ولحذفها أيضًا أضف `--purge` (`-Purge` على Windows، مع `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`)، ثم أزل الجهاز من المجموعة من جهاز آخر (`sudo cbb remove NAME`، أو على الهاتف).

@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5a17c9adbba6 -->
+<!-- source: 90564bcf632e -->
 # Redes que bloquean las VPN
 
-Fuera de casa, tus dispositivos llegan al hub por el túnel WireGuard del propio grupo. Algunas redes bloquean WireGuard: el Wi-Fi de hoteles y oficinas, algunos operadores móviles y países enteros que filtran las VPN. Clipboard Bridge tiene dos formas de sortearlo. Ambas se activan en el hub, y los dispositivos las toman la próxima vez que se encuentran con el hub en casa.
+Fuera de casa, tus dispositivos llegan al hub por el túnel WireGuard del propio grupo. Algunas redes bloquean WireGuard: el Wi-Fi de hoteles y oficinas, algunos operadores móviles y países enteros que filtran las VPN. Copy Beyond Borders tiene dos formas de sortearlo. Ambas se activan en el hub, y los dispositivos las toman la próxima vez que se encuentran con el hub en casa.
 
 | Forma | Lo que ve la red | Qué necesitas | Funciona en |
 |---|---|---|---|

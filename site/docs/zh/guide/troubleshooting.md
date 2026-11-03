@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 931b83ed0988 -->
+<!-- source: 5174e28a6a9e -->
 # 出了问题怎么办
 
 先在出问题的设备上运行 `cbb status`：它会告诉你服务是否在运行、在哪个群组里、哪些成员已连接，以及离家同步的状态。每条消息都很简短；`CBB_DEBUG=1 cbb status`（在 Windows 上先运行 `$env:CBB_DEBUG = "1"`）会在它下面显示底层的错误。服务的日志里总有详细信息：在 Linux 上是 `journalctl -u clipboardbridge`，桌面连接器的日志在会话的日志里，用 `journalctl --user`；其他系统见[文件和日志](../reference/devices.md#files-and-logs)。包括应用和安装程序在内，每个部分的详细信息开关见[错误消息和详细信息](../reference/errors.md)。
 
 ## 命令
 
-**"the Clipboard Bridge service is not running"**：启动它（Linux 上 `sudo systemctl start clipboardbridge`；Mac 上 `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`；Windows 上 `Start-Service clipboardbridge`），然后查看它的日志。
+**"the CBB service is not running"**：启动它（Linux 上 `sudo systemctl start clipboardbridge`；Mac 上 `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`；Windows 上 `Start-Service clipboardbridge`），然后查看它的日志。
 
 **刚安装完，控制套接字出现 "permission denied"**：安装程序把你加入了 `clipboardbridge` 组，而组要到下次登录才生效。请退出再重新登录（在 Windows 上，打开一个新的终端）；在此之前，`sudo cbb ...` 是可以用的。
 

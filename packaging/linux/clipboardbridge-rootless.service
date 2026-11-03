@@ -7,7 +7,7 @@
 # admin or a hub. A system install (sudo sh install.sh) keeps the service
 # under an account and a sandbox of its own instead.
 [Unit]
-Description=Clipboard Bridge shared clipboard (rootless)
+Description=CBB shared clipboard (rootless)
 Documentation=https://github.com/HunterEwok/clipboardbridge/blob/main/docs/guide/install.md
 After=network-online.target
 

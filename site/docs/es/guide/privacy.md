@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9fde2fa70c1b -->
+<!-- source: 753c15aad88e -->
 # Privacidad: quién ve qué
 
-Para quien quiere saber qué sale de sus dispositivos. Clipboard Bridge no tiene cuentas, ni nube, ni telemetría: lo que copias va solo a los dispositivos de tu grupo, cifrado de extremo a extremo. Esta página enumera todo lo demás que alguien ajeno al grupo puede ver, y cómo desactivarlo.
+Para quien quiere saber qué sale de sus dispositivos. Copy Beyond Borders no tiene cuentas, ni nube, ni telemetría: lo que copias va solo a los dispositivos de tu grupo, cifrado de extremo a extremo. Esta página enumera todo lo demás que alguien ajeno al grupo puede ver, y cómo desactivarlo.
 
 ## Lo que copias
 
@@ -17,12 +17,12 @@ Hay dos excepciones, y ambas son decisión tuya:
 
 | Quién | Qué puede ver | Cómo evitarlo |
 |---|---|---|
-| Otros en tu red doméstica | que hay dispositivos que ejecutan Clipboard Bridge, sus ID de dispositivo aleatorios y la etiqueta de tu grupo en mDNS, y cuáles se comunican y cuánto; nunca los nombres de los dispositivos ni los contenidos | nada que hacer; un ordenador publica solo en las redes domésticas que conoce (un miembro ligero, en todas las redes) |
+| Otros en tu red doméstica | que hay dispositivos que ejecutan Copy Beyond Borders, sus ID de dispositivo aleatorios y la etiqueta de tu grupo en mDNS, y cuáles se comunican y cuánto; nunca los nombres de los dispositivos ni los contenidos | nada que hacer; un ordenador publica solo en las redes domésticas que conoce (un miembro ligero, en todas las redes) |
 | Otros en una red fuera de casa (una cafetería, un hotel) | que el dispositivo habla WireGuard, o que con VLESS abre una conexión TLS a tu hub o reenviador, cuándo y cuánto | una VPN del sistema oculta incluso eso |
 | El reenviador (el tuyo, o el del proyecto en `cbb.tools`) | las direcciones de las que vienen los paquetes cifrados y que van a tu hub; no a qué grupo o dispositivo pertenecen | ejecutar el tuyo, o redirigir un puerto a tu hub y no usar ninguno |
 | Un relé ciego | cuáles de los dispositivos de un grupo están en línea ahora y se comunican entre sí, cuándo y cuánto; no guarda nada de ello | ejecutar el tuyo, o usar un hub |
 | La empresa que aloja un reenviador o un relé | las direcciones que se comunican con él, cuándo y cuánto | una VPN del sistema en el dispositivo |
-| GitHub, o `dl.cbb.tools` cuando GitHub no responde | tu dirección y que usas Clipboard Bridge, en cada comprobación de actualizaciones y descarga; nada sobre el grupo | `sudo cbb update -auto off`, o un espejo propio (`-mirror`) |
+| GitHub, o `dl.cbb.tools` cuando GitHub no responde | tu dirección y que usas Copy Beyond Borders, en cada comprobación de actualizaciones y descarga; nada sobre el grupo | `sudo cbb update -auto off`, o un espejo propio (`-mirror`) |
 | `cbb.tools` | la dirección de la raíz, una vez al día, cuando obtiene la copia firmada de la lista de claves de Android revocadas de Google (cuando esa copia empiece, con las claves de firma del proyecto) | no hace falta nada: es el mismo archivo para todos |
 | Apple, Intel o AMD | que un dispositivo de ese tipo les pidió respaldar su clave, desde tu dirección | solo en el nivel de claves **estricto**; el nivel por defecto no pregunta a nadie ([claves](keys.md#the-three-levels)) |
 | La App Store, Google Play, F-Droid, Homebrew, winget | que instalaste la app, como con cualquier app | instala en su lugar el archivo firmado de la versión |
@@ -37,4 +37,4 @@ Nada informa de fallos ni de uso. Los registros se quedan en cada dispositivo; c
 
 - Qué guardan un reenviador y un relé, y qué ve su proveedor de alojamiento: [cómo ejecutar tus propios servidores](../admin/self-hosting.md#what-the-server-keeps).
 - Qué aprende cada servidor, campo por campo: el [protocolo](../protocol.md), secciones 13 y 14.
-- Los ataques frente a los que se defiende Clipboard Bridge, y aquellos frente a los que no: el [modelo de amenazas](../threat-model.md).
+- Los ataques frente a los que se defiende Copy Beyond Borders, y aquellos frente a los que no: el [modelo de amenazas](../threat-model.md).

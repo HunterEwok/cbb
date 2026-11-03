@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Your own build and your own keys
 
-For anyone who builds Clipboard Bridge from source: a distribution package, a fork with
+For anyone who builds Copy Beyond Borders from source: a distribution package, a fork with
 changes, or a build for your own devices. [BRAND.md](../BRAND.md) says what a build with
 changes may call itself; this page says what in the code ties a build to this project's
 releases and how to tie it to your own.

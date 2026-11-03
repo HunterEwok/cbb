@@ -6,7 +6,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "share")
+private let log = Logger(subsystem: "tools.cbb", category: "share")
 
 /// Share and the text selection menu's Share: sends the text, the link, an
 /// image or files to the group's computers at home, as the app's Home
@@ -63,8 +63,8 @@ final class ShareModel: ObservableObject {
         } catch {
             let summary: String
             switch error {
-            case OneShot.Failure.noGroup: summary = String(localized: "This phone is in no group yet: open Clipboard Bridge to make one or join one.")
-            case OneShot.Failure.noKey: summary = String(localized: "Open Clipboard Bridge once, then share again.")
+            case OneShot.Failure.noGroup: summary = String(localized: "This phone is in no group yet: open CBB to make one or join one.")
+            case OneShot.Failure.noKey: summary = String(localized: "Open CBB once, then share again.")
             case OneShot.Failure.noComputers: summary = String(localized: "No computer of your group answered. Are they on, and is this phone on the home network?")
             case OneShot.Failure.notFetched: summary = String(localized: "The computers did not fetch it within a minute. Try again, or send fewer files.")
             default: summary = String(localized: "Sending failed.")

@@ -55,7 +55,7 @@ if grep -q '# clipboardbridge-update$' /etc/crontabs/root 2>/dev/null; then
 fi
 if [ "$purge" = yes ]; then
 	rm -rf /etc/clipboardbridge
-	echo "Clipboard Bridge is removed, with this device's keys; it left its group."
+	echo "CBB is removed, with this device's keys; it left its group."
 else
-	echo "Clipboard Bridge is removed. Its keys stay in /etc/clipboardbridge for a reinstall; --purge removes them."
+	echo "CBB is removed. Its keys stay in /etc/clipboardbridge for a reinstall; --purge removes them."
 fi

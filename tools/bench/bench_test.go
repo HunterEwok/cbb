@@ -399,8 +399,8 @@ func TestCheckMessage(t *testing.T) {
 		out, mode string
 		ok        bool
 	}{
-		{"clipboardbridge: the Clipboard Bridge service is not running; start it with: sudo systemctl start clipboardbridge", "0", true},
-		{"clipboardbridge: the Clipboard Bridge service is not running (dial unix /run/clipboardbridge/control.sock: connect: no such file or directory)", "0", false},
+		{"clipboardbridge: the CBB service is not running; start it with: sudo systemctl start clipboardbridge", "0", true},
+		{"clipboardbridge: the CBB service is not running (dial unix /run/clipboardbridge/control.sock: connect: no such file or directory)", "0", false},
 		{"clipboardbridge: the service is not running\n  Detail: dial unix /run/x: connect: no such file or directory", "0", false},
 		{"clipboardbridge: the service is not running\n  Detail: dial unix /run/x: connect: no such file or directory", "1", true},
 		{"clipboardbridge: the service is not running", "1", false},

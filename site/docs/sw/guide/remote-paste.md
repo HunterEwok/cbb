@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 503bd28272de -->
+<!-- source: b1ce9d06c9cb -->
 # Kubandika kwa mbali
 
 Kwa yeyote anayetaka kuweka maandishi kwenye programu ya kifaa kingine: nenosiri kwenye fomu ya kuingia ya televisheni, amri kwenye terminal ya seva, anwani kwenye kompyuta iliyo upande wa pili wa chumba. Msimamizi wa kikundi hutuma maandishi, nayo hutua mahali ambapo mwelekeo wa kifaa hicho upo, yakibandikwa au kuandikwa herufi kwa herufi.
@@ -21,7 +21,7 @@ Kubandika kwa mbali kumezimwa kwenye kila kifaa hadi mtumiaji wake mwenyewe akiw
 
 Kwenye GNOME na KDE kubandika kwa mara ya kwanza hufungua kisanduku cha mazungumzo cha mfumo cha udhibiti wa mbali wa skrini; kiruhusu mara moja na hukumbukwa. Ili kuruka kisanduku hicho, sakinisha msaidizi wa uinput: sakinisha tena kwa `--uinput` (`curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --uinput`), ambayo huongeza kibodi pepe inayobonyeza Shift+Insert na Enter tu kwa niaba ya mtumiaji aliye mbele ya skrini.
 
-Bila eneo-kazi, tmux na kiweko cha maandishi vinahitaji wasaidizi wao. Kila usakinishaji huongeza sehemu ya Clipboard Bridge ya `/etc/tmux.conf`, inayoanzisha msaidizi wa tmux pamoja na tmux; `install.sh --console` huongeza huduma ya msaidizi wa kiweko.
+Bila eneo-kazi, tmux na kiweko cha maandishi vinahitaji wasaidizi wao. Kila usakinishaji huongeza sehemu ya Copy Beyond Borders ya `/etc/tmux.conf`, inayoanzisha msaidizi wa tmux pamoja na tmux; `install.sh --console` huongeza huduma ya msaidizi wa kiweko.
 
 ## Bandika kutoka kwa msimamizi
 

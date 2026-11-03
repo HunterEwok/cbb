@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: ba8bb2b8b763 -->
+<!-- source: 01c5a8544c91 -->
 # התקנה
 
-Clipboard Bridge רץ כשירות קטן ברקע בכל מחשב. הפקודה שלו היא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותה תוכנה; בחרו את זו שנוחה לכם.
+Copy Beyond Borders רץ כשירות קטן ברקע בכל מחשב. הפקודה שלו היא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותה תוכנה; בחרו את זו שנוחה לכם.
 
 ## Linux
 
@@ -32,7 +32,7 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 
 ### SteamOS ‏(Steam Deck)
 
-עברו למצב שולחן עבודה, פתחו את Konsole, תנו למשתמש `deck` סיסמה פעם אחת אם אין לו (`passwd`), והריצו את אותה פקודה. SteamOS מחליפה את קבצי המערכת שלה בכל עדכון, ולכן תוכנית ההתקנה מציבה את Clipboard Bridge ב-`/opt/clipboardbridge` במקום ב-`/usr/local`, ואומרת ל-SteamOS אילו מהקבצים שלה ב-`/etc` לשמור (`/etc/atomic-update.conf.d/clipboardbridge.conf`). הוא נשאר מותקן ובקבוצה שלו לאורך עדכוני SteamOS.
+עברו למצב שולחן עבודה, פתחו את Konsole, תנו למשתמש `deck` סיסמה פעם אחת אם אין לו (`passwd`), והריצו את אותה פקודה. SteamOS מחליפה את קבצי המערכת שלה בכל עדכון, ולכן תוכנית ההתקנה מציבה את Copy Beyond Borders ב-`/opt/clipboardbridge` במקום ב-`/usr/local`, ואומרת ל-SteamOS אילו מהקבצים שלה ב-`/etc` לשמור (`/etc/atomic-update.conf.d/clipboardbridge.conf`). הוא נשאר מותקן ובקבוצה שלו לאורך עדכוני SteamOS.
 
 - `cbb` נמצא בנתיב של Konsole חדש אחרי שמתנתקים ומתחברים מחדש. `sudo` לא מחפש שם, ולכן פקודות שזקוקות לו מקבלות את הנתיב המלא: ‏`sudo /opt/clipboardbridge/bin/cbb pair`.
 - במצב שולחן עבודה לוח ההעתקה מסתנכרן כמו בכל שולחן עבודה של KDE Plasma.
@@ -64,7 +64,7 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 
 הוא מאפשר למשתמש שמחובר במסך להשתמש ב-`cbb` (בטרמינל חדש) ומפעיל עבורו את סוכן לוח ההעתקה. פקודות ששינו את הקבוצה רצות בטרמינל שנפתח כמנהל, במקום שבו Linux ו-macOS משתמשים ב-`sudo`.
 
-הוא מתקין גם את אפליקציית המגש, שנפתחת בכניסה למערכת ונמצאת בתפריט התחל בשם Clipboard Bridge.
+הוא מתקין גם את אפליקציית המגש, שנפתחת בכניסה למערכת ונמצאת בתפריט התחל בשם CBB.
 
 עם winget, אחרי שהחבילה תהיה במאגר של winget:
 
@@ -103,7 +103,7 @@ fetch -qo - https://github.com/HunterEwok/clipboardbridge/releases/latest/downlo
 
 הוא מתקין את `cbb`, סקריפט rc.d שמריץ את השירות דרך daemon(8), ומוסיף את השורה `clipboardbridge_enable="YES"` ל-rc.conf. המפתחות נמצאים ב-`/var/db/clipboardbridge`.
 
-ב-OPNsense תוכנית ההתקנה הזאת מוסיפה גם וו לתוסף: השירות מופיע תחת System > Diagnostics > Services, וכללי חומת האש שלו (בעוגן `clipboardbridge` של pf) עוקבים אחרי כל טעינה מחדש של המסנן. כבו את מהדר ה-mDNS (‏Services > mDNS Repeater) בזמן שהשירות רץ: שניהם זקוקים ליציאת UDP 5353, והשירות עונה ל-mDNS בעצמו בכל ממשק ביתי. pfSense אינו נתמך: תוכנית ההתקנה רצה גם שם, אבל היא מדפיסה את כללי חומת האש עבור Firewall > Rules במקום להוסיף אותם, ועדכון של pfSense עלול להסיר את Clipboard Bridge.
+ב-OPNsense תוכנית ההתקנה הזאת מוסיפה גם וו לתוסף: השירות מופיע תחת System > Diagnostics > Services, וכללי חומת האש שלו (בעוגן `clipboardbridge` של pf) עוקבים אחרי כל טעינה מחדש של המסנן. כבו את מהדר ה-mDNS (‏Services > mDNS Repeater) בזמן שהשירות רץ: שניהם זקוקים ליציאת UDP 5353, והשירות עונה ל-mDNS בעצמו בכל ממשק ביתי. pfSense אינו נתמך: תוכנית ההתקנה רצה גם שם, אבל היא מדפיסה את כללי חומת האש עבור Firewall > Rules במקום להוסיף אותם, ועדכון של pfSense עלול להסיר את Copy Beyond Borders.
 
 בשולחן עבודה של FreeBSD (‏X11, או Wayland עם פרוטוקול data control, כמו ב-KDE, ב-sway וב-Hyprland) ההפעלה מתחילה את `cbb agent` מהפעלה האוטומטית של XDG ולוח ההעתקה מצטרף לקבוצה; התחברו מחדש אחרי ההתקנה. הדבקה מרחוק מקלידה דרך XTEST ב-X11 ודרך המקלדת הווירטואלית בשולחנות עבודה של wlroots; ‏GNOME אינו מקבל הדבקה מרחוק ב-FreeBSD, כי בלי logind שום דבר לא אומר אם המסך שלו נעול.
 
@@ -119,7 +119,7 @@ docker compose -f compose.home.yaml exec clipboardbridge cbb pair
 
 ## חומת האש
 
-Clipboard Bridge צריך יציאת TCP אחת, ‏8764, ואת mDNS (‏UDP 5353), שתיהן מהרשת הביתית בלבד. תוכנית ההתקנה מזהה את חומת האש (‏ufw, ‏firewalld, ‏nftables או iptables ב-Linux, ‏pf או ipfw ב-FreeBSD, חומת האש של האפליקציות ב-Mac, ‏Windows Firewall), מפרטת כל כלל, ושואלת `Add these rules now? [y/N]`:
+Copy Beyond Borders צריך יציאת TCP אחת, ‏8764, ואת mDNS (‏UDP 5353), שתיהן מהרשת הביתית בלבד. תוכנית ההתקנה מזהה את חומת האש (‏ufw, ‏firewalld, ‏nftables או iptables ב-Linux, ‏pf או ipfw ב-FreeBSD, חומת האש של האפליקציות ב-Mac, ‏Windows Firewall), מפרטת כל כלל, ושואלת `Add these rules now? [y/N]`:
 
 - **כן**: היא מוסיפה אותם, שומרת עליהם עדכניים בכל עדכון ומסירה אותם כשמסירים את ההתקנה. היא לעולם לא נוגעת בכללים אחרים.
 - **לא** (ברירת המחדל, וגם כשאין טרמינל לשאול בו): היא לא מוסיפה דבר ומדפיסה את הפקודות המדויקות, כדי שתריצו אותן בעצמכם.
@@ -137,7 +137,7 @@ Clipboard Bridge צריך יציאת TCP אחת, ‏8764, ואת mDNS (‏UDP 53
 
 ‏`sudo cbb update` (ב-Windows ‏`cbb update` בטרמינל שנפתח כמנהל) מתקין את הגרסה החדשה ביותר במחשב או בחבר קל שהותקנו באמצעות `get.sh`, ‏`get.ps1` או ארכיון גרסה; ‏`cbb update -check` רק אומר אם יש אחת. ההגדרות שלכם נשמרות. הוא מתקין רק גרסה שהפרויקט חתם עליה, ולעולם לא גרסה ישנה יותר. אם הגרסה החדשה לא עולה תוך דקה, הקודמת חוזרת מעצמה. איך הוא בודק את החתימות מתואר ב[פרוטוקול](../protocol.md), סעיף 16.
 
-תוכניות ההתקנה שואלות פעם אחת אם להתעדכן אוטומטית (‏`--auto-update on|off`, או `-AutoUpdate on|off` ו-`$env:CBB_AUTO_UPDATE` ב-Windows, כדי לענות מראש); ‏`sudo cbb update -auto on|off` משנה זאת מאוחר יותר. כשהאפשרות פועלת, טיימר בודק פעם ביום בשעה משלו: טיימר של systemd ב-Linux, משימת launchd ב-Mac, משימה מתוזמנת כ-SYSTEM ב-Windows, ו-cron ב-OpenWrt וב-FreeBSD. כל בדיקה מורידה את אותם קבצים קטנים מ-GitHub (או מ-`dl.cbb.tools` כש-GitHub לא עונה), ולכן GitHub לומד את כתובת המכשיר הזה ושהוא משתמש ב-Clipboard Bridge, כמו בכל הורדה; הוא לא שולח דבר על הקבוצה. ‏`sudo cbb update -mirror https://...` לוקח עדכונים ממראה אחרת במקום זאת, מה שאינו דורש אמון, כי החתימות נבדקות. יומן הטיימר הוא `update.log` ב-`/var/lib/clipboardbridge-update` (Linux), ב-`/etc/clipboardbridge-update` (OpenWrt), ב-`/var/db/clipboardbridge-update` (FreeBSD), ב-`/Library/Application Support/clipboardbridge-update` (Mac) או ב-`C:\Program Files\clipboardbridge-update` (Windows).
+תוכניות ההתקנה שואלות פעם אחת אם להתעדכן אוטומטית (‏`--auto-update on|off`, או `-AutoUpdate on|off` ו-`$env:CBB_AUTO_UPDATE` ב-Windows, כדי לענות מראש); ‏`sudo cbb update -auto on|off` משנה זאת מאוחר יותר. כשהאפשרות פועלת, טיימר בודק פעם ביום בשעה משלו: טיימר של systemd ב-Linux, משימת launchd ב-Mac, משימה מתוזמנת כ-SYSTEM ב-Windows, ו-cron ב-OpenWrt וב-FreeBSD. כל בדיקה מורידה את אותם קבצים קטנים מ-GitHub (או מ-`dl.cbb.tools` כש-GitHub לא עונה), ולכן GitHub לומד את כתובת המכשיר הזה ושהוא משתמש ב-Copy Beyond Borders, כמו בכל הורדה; הוא לא שולח דבר על הקבוצה. ‏`sudo cbb update -mirror https://...` לוקח עדכונים ממראה אחרת במקום זאת, מה שאינו דורש אמון, כי החתימות נבדקות. יומן הטיימר הוא `update.log` ב-`/var/lib/clipboardbridge-update` (Linux), ב-`/etc/clipboardbridge-update` (OpenWrt), ב-`/var/db/clipboardbridge-update` (FreeBSD), ב-`/Library/Application Support/clipboardbridge-update` (Mac) או ב-`C:\Program Files\clipboardbridge-update` (Windows).
 
 מכשירי הקבוצה מספרים זה לזה על הגרסה החתומה החדשה ביותר שמישהו מהם ראה, ולכן בדיקה של מכשיר אחד מספיקה כדי ש-`cbb status` ואפליקציית המגש במכשירים האחרים יגידו שיצאה גרסה חדשה יותר (‏"Update to X" באפליקציית המגש מריץ את `cbb update` כמנהל). כל מכשיר עדיין בודק את החתימות בעצמו ומוריד את הארכיון שלו.
 
@@ -165,6 +165,6 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 
 ב-SteamOS זה `sudo sh /opt/clipboardbridge/share/uninstall.sh`. עם Homebrew, הריצו אחריו `brew uninstall clipboardbridge`.
 
-ב-Windows: הגדרות, אפליקציות, "Clipboard Bridge", הסרת התקנה.
+ב-Windows: הגדרות, אפליקציות, "CBB", הסרת התקנה.
 
 פעולה זו מסירה את התוכנה, את השירות ואת כללי חומת האש שתוכנית ההתקנה הוסיפה. מפתחות המכשיר נשארים, ולכן התקנה מחדש מחזירה אותו לקבוצה שלו. כדי למחוק גם אותם, הוסיפו `--purge` (‏`-Purge` ב-Windows, עם `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" -Purge`), ואז הסירו את המכשיר מהקבוצה ממכשיר אחר (‏`sudo cbb remove NAME`, או בטלפון).

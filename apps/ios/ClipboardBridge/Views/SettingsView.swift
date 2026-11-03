@@ -467,7 +467,7 @@ extension SettingsView {
             Text("Apple Watch")
         } footer: {
             if watches.isEmpty {
-                Text("With a key of its own, the watch can freeze an admin computer, remove a device that is no admin, and turn remote paste, quick actions and sync away from home off. It needs a passcode and wrist detection. Open Clipboard Bridge on the watch first.")
+                Text("With a key of its own, the watch can freeze an admin computer, remove a device that is no admin, and turn remote paste, quick actions and sync away from home off. It needs a passcode and wrist detection. Open CBB on the watch first.")
             } else {
                 Text("To give a new watch the key, remove this one from the devices first.")
             }

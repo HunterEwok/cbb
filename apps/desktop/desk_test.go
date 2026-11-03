@@ -50,7 +50,7 @@ func TestDescribe(t *testing.T) {
 	d := &Desk{tr: map[string]string{}}
 	d.settings.Details = &off
 	notRunning := &control.DialError{Msg: "not running", Err: errors.New("dial unix /run/x: no such file")}
-	if got := d.describe(notRunning); got != "The Clipboard Bridge service is not running on this computer." {
+	if got := d.describe(notRunning); got != "The CBB service is not running on this computer." {
 		t.Errorf("not running, details off: %q", got)
 	}
 	d.settings.Details = &on

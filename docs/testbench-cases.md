@@ -594,7 +594,7 @@ written in mode `own`, or a copy over the hub's limit through its tunnel.
 
 **F1. Kill the service.** Runs: auto (`full`).
 1. On each member kill the service hard: Linux and lite `sudo systemctl kill -s KILL
-   Clipboard Bridge`; Windows `Stop-Process -Force` on the service's process; Mac `sudo launchctl
+   Copy Beyond Borders`; Windows `Stop-Process -Force` on the service's process; Mac `sudo launchctl
    kill KILL system/io.github.hunterewok.clipboardbridge` (the bench's sudoers rule).
 2. Within 30 s `cbb status` shows the same group.
 3. Copy a marker on another member; wait for it (twice the usual time).
@@ -728,7 +728,7 @@ Pass: refused with a message that names the group; the admin socket refuses non-
 
 **S12. Installers' firewall.** Runs: manual (passed on the bench).
 1. After each install list the rules: `ufw status verbose`, `Get-NetFirewallRule -DisplayName
-   Clipboard Bridge*`, the macOS application firewall.
+   Copy Beyond Borders*`, the macOS application firewall.
 Pass: only the member port and mDNS from the local subnet; the tunnel port only on the hub.
 
 **S13. Two groups on one network.** Runs: manual.

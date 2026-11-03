@@ -141,7 +141,7 @@ func Profile(ca *group.CA) []byte {
 			<key>PayloadContent</key>
 			<data>` + der + `</data>
 			<key>PayloadDescription</key>
-			<string>Lets the Clipboard Bridge shortcut reach clipboardbridge.local. The certificate is limited to that name.</string>
+			<string>Lets the CBB shortcut reach clipboardbridge.local. The certificate is limited to that name.</string>
 			<key>PayloadDisplayName</key>
 			<string>` + template.HTMLEscapeString(ca.Cert.Subject.CommonName) + `</string>
 			<key>PayloadIdentifier</key>
@@ -155,9 +155,9 @@ func Profile(ca *group.CA) []byte {
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>Trust for Clipboard Bridge on this home network.</string>
+	<string>Trust for CBB on this home network.</string>
 	<key>PayloadDisplayName</key>
-	<string>Clipboard Bridge</string>
+	<string>CBB</string>
 	<key>PayloadIdentifier</key>
 	<string>io.github.hunterewok.clipboardbridge</string>
 	<key>PayloadRemovalDisallowed</key>

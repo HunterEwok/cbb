@@ -4,7 +4,7 @@ import Foundation
 import os
 import UserNotifications
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "events")
+private let log = Logger(subsystem: "tools.cbb", category: "events")
 
 /// An event of the group the app notifies of (docs/apps.md, Notifications);
 /// iOS shows the notification on a paired Apple Watch too.
@@ -146,7 +146,7 @@ final class Notifier {
         WatchLink.shared.eventsChanged()
         guard event.kind.on(defaults) else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Clipboard Bridge"
+        content.title = "CBB"
         content.body = event.text
         content.threadIdentifier = event.kind.rawValue
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)) { error in

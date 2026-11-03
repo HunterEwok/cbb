@@ -6,7 +6,7 @@
 # the same install.sh (lite/packaging/archive.sh).
 
 [Unit]
-Description=Clipboard Bridge lite member
+Description=CBB lite member
 Documentation=https://github.com/HunterEwok/clipboardbridge
 After=network-online.target
 Wants=network-online.target

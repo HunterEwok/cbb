@@ -2,7 +2,7 @@
 # Copyright (C) 2026 HunterEwok
 
 # Removes what install.ps1 installed, in an administrator PowerShell, or
-# from Settings, Apps, Clipboard Bridge, Uninstall:
+# from Settings, Apps, CBB, Uninstall:
 #
 #   powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\clipboardbridge\uninstall.ps1" [-Purge]
 #
@@ -82,7 +82,7 @@ $step = 'removing the sign-in entries, the Start menu shortcut and the uninstall
 foreach ($run in @($name, "$name tray")) {
 	Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name $run -ErrorAction SilentlyContinue
 }
-Remove-Item -Force (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Clipboard Bridge.lnk') -ErrorAction SilentlyContinue
+Remove-Item -Force (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'CBB.lnk') -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$name" -ErrorAction SilentlyContinue
 
 $step = 'removing clipboardbridge from PATH'
@@ -98,8 +98,8 @@ if ($Purge) {
 	Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
 	# With errors allowed: Windows PowerShell 5.1 stops on a program's error output.
 	& { $ErrorActionPreference = 'Continue'; & net.exe localgroup $name /delete 2>&1 | Out-Null }
-	Write-Host "Clipboard Bridge is removed, with this device's keys; it left its group."
+	Write-Host "CBB is removed, with this device's keys; it left its group."
 } else {
 	Remove-Item -Recurse -Force (Join-Path $dataDir 'run') -ErrorAction SilentlyContinue
-	Write-Host "Clipboard Bridge is removed. Its keys stay in $dataDir for a reinstall; -Purge removes them."
+	Write-Host "CBB is removed. Its keys stay in $dataDir for a reinstall; -Purge removes them."
 }

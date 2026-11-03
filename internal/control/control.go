@@ -267,7 +267,7 @@ type Status struct {
 	// decides.
 	Conflicts []Conflict `json:"conflicts,omitempty"`
 	// Newer is how many records of a later version this member keeps: an
-	// update of Clipboard Bridge reads them.
+	// update of CBB reads them.
 	Newer int `json:"newer,omitempty"`
 	// CertEndsMS is when this device's member certificate ends, in Unix
 	// milliseconds: the members refuse it afterwards, unless an admin

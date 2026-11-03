@@ -1,8 +1,8 @@
-# Clipboard Bridge
+# Copy Beyond Borders
 
 One clipboard for your phone and every computer at home: copy on one, paste on another.
 Android, iPhone, Linux, Windows and Mac, on your own network, with no cloud and no
-accounts. Its command is `cbb`.
+accounts. Its short name is CBB and its command is `cbb`.
 
 > **Status: early development.** What works, and what has been tried on real devices, is
 > in the [status table](#status) below.
@@ -14,7 +14,7 @@ accounts. Its command is `cbb`.
 1. Install the app on your phone (Android: the APK in the
    [latest release](https://github.com/HunterEwok/clipboardbridge/releases/latest); iPhone:
    TestFlight, coming).
-2. Install Clipboard Bridge on a computer:
+2. Install Copy Beyond Borders on a computer:
 
    ```sh
    # Linux and Mac
@@ -45,7 +45,7 @@ The [quick start](docs/guide/quickstart.md) walks through it step by step;
 | Computer ↔ iPhone | One press of the Action button or a double tap on the back, then paste. |
 
 iOS does not let apps read the clipboard in the background, so the iPhone needs one
-gesture. Apple devices on one Apple Account already share a clipboard; Clipboard Bridge
+gesture. Apple devices on one Apple Account already share a clipboard; Copy Beyond Borders
 connects them to everything else. On Linux it works with any desktop, and without one
 through tmux and `cbb copy` and `cbb paste`.
 
@@ -125,7 +125,7 @@ The order of what comes next is the [roadmap](docs/roadmap.md).
 
 ## License
 
-Clipboard Bridge is free software, licensed under the
+Copy Beyond Borders is free software, licensed under the
 [GNU Affero General Public License v3.0 only](LICENSE).
 
 One author holds all the rights, so a commercial license without the AGPL's obligations is

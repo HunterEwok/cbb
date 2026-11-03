@@ -118,7 +118,7 @@ if ! pw groupshow clipboardbridge >/dev/null 2>&1; then
 	pw groupadd clipboardbridge
 fi
 if ! pw usershow clipboardbridge >/dev/null 2>&1; then
-	pw useradd clipboardbridge -g clipboardbridge -d /nonexistent -s /usr/sbin/nologin -c "Clipboard Bridge"
+	pw useradd clipboardbridge -g clipboardbridge -d /nonexistent -s /usr/sbin/nologin -c "CBB"
 fi
 install -m 0755 "$bin" /usr/local/bin/cbb
 install -d -m 0755 /usr/local/etc/rc.d /usr/local/share/clipboardbridge /usr/local/etc/clipboardbridge
@@ -184,8 +184,8 @@ if [ -z "$appliance" ]; then
 fi
 sh /usr/local/share/clipboardbridge/firewall.sh setup "$firewall" "$port"
 if [ "$port" != 8764 ]; then
-	echo "Clipboard Bridge uses TCP port $port instead of 8764. The iPhone shortcut works only"
-	echo "with 8764; the Clipboard Bridge app takes any port."
+	echo "CBB uses TCP port $port instead of 8764. The iPhone shortcut works only"
+	echo "with 8764; the CBB app takes any port."
 fi
 
 sysrc -q clipboardbridge_enable=YES >/dev/null
@@ -207,9 +207,9 @@ answers /usr/local/bin/cbb || true
 # shellcheck source=packaging/update.sh
 . "$here/../update.sh"
 update_setup /usr/local/bin/cbb "$bin" "$auto"
-echo "Clipboard Bridge is running on TCP port $port. To remove it: sh /usr/local/share/clipboardbridge/uninstall.sh"
+echo "CBB is running on TCP port $port. To remove it: sh /usr/local/share/clipboardbridge/uninstall.sh"
 case $appliance in
 opnsense) echo "OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload." ;;
-pfsense) echo "pfSense is not supported: an update of pfSense may remove Clipboard Bridge; run this installer again after one." ;;
+pfsense) echo "pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one." ;;
 esac
-echo "Next: run cbb pair as root and scan its QR code with the Clipboard Bridge app on your phone; without the app, see docs/guide/without-app.md."
+echo "Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."

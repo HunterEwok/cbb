@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 931b83ed0988 -->
+<!-- source: 5174e28a6a9e -->
 # כשמשהו לא עובד
 
 התחל ב-`cbb status` במכשיר שמתנהג לא כשורה: הוא אומר אם השירות רץ, באיזו קבוצה הוא נמצא, אילו חברים מחוברים ומה מצב הסנכרון מחוץ לבית. כל הודעה קצרה; ‏`CBB_DEBUG=1 cbb status` (ב-Windows קודם `$env:CBB_DEBUG = "1"`) מציג את השגיאה הבסיסית מתחתיה. ביומן השירות תמיד יש את הפרטים: ב-Linux `journalctl -u clipboardbridge`, וזה של מחבר שולחן העבודה נמצא ביומן ההפעלה, `journalctl --user`; שאר המערכות ב[קבצים ויומנים](../reference/devices.md#files-and-logs). מתג הפרטים של כל חלק, כולל האפליקציות והמתקינים, נמצא ב[הודעות שגיאה ופרטים](../reference/errors.md).
 
 ## פקודות
 
-**"the Clipboard Bridge service is not running"**: הפעל אותו (‏`sudo systemctl start clipboardbridge` ב-Linux; ‏`sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` ב-Mac; ‏`Start-Service clipboardbridge` ב-Windows) ועיין ביומן שלו.
+**"the CBB service is not running"**: הפעל אותו (‏`sudo systemctl start clipboardbridge` ב-Linux; ‏`sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` ב-Mac; ‏`Start-Service clipboardbridge` ב-Windows) ועיין ביומן שלו.
 
 **"permission denied" על שקע הבקרה, מיד אחרי ההתקנה**: המתקין הוסיף אותך לקבוצה `clipboardbridge`, וקבוצה נחשבת רק מההתחברות הבאה. התנתק והתחבר שוב (ב-Windows, פתח מסוף חדש); עד אז `sudo cbb ...` עובד.
 

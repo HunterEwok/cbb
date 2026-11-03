@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 503bd28272de -->
+<!-- source: b1ce9d06c9cb -->
 # Pegado remoto
 
 Para quien quiere poner un texto en una app de otro dispositivo: una contraseña en el formulario de inicio de sesión de un televisor, un comando en la terminal de un servidor, una dirección en un ordenador al otro lado de la habitación. Un administrador del grupo envía el texto, y aterriza donde esté el foco de ese dispositivo, pegado o escrito tecla a tecla.
@@ -21,7 +21,7 @@ El pegado remoto está desactivado en cada dispositivo hasta que su propio usuar
 
 En GNOME y KDE, el primer pegado abre el cuadro de diálogo del sistema para el control remoto de la pantalla; permítelo una vez y se recuerda. Para saltarte el cuadro de diálogo, instala el ayudante uinput: instala de nuevo con `--uinput` (`curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --uinput`), lo que añade un teclado virtual que solo pulsa Mayús+Insert e Intro para el usuario que está ante la pantalla.
 
-Sin escritorio, tmux y la consola de texto necesitan sus ayudantes. Cada instalación añade la parte de Clipboard Bridge de `/etc/tmux.conf`, que inicia el ayudante de tmux junto con tmux; `install.sh --console` añade el servicio del ayudante de la consola.
+Sin escritorio, tmux y la consola de texto necesitan sus ayudantes. Cada instalación añade la parte de Copy Beyond Borders de `/etc/tmux.conf`, que inicia el ayudante de tmux junto con tmux; `install.sh --console` añade el servicio del ayudante de la consola.
 
 ## Pegar desde un administrador
 

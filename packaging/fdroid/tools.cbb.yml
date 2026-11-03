@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The app's F-Droid metadata, for the merge request to fdroiddata
-# (metadata/io.github.hunterewok.clipboardbridge.yml there; docs/maintaining.md, "F-Droid").
+# (metadata/tools.cbb.yml there; docs/maintaining.md, "F-Droid").
 # F-Droid builds the fdroid flavor from each release's tag and, when its APK is the same as
 # Binaries apart from the signature, publishes ours (docs/apps.md, "F-Droid").
 # The store texts and the icon come from apps/android/app/fastlane.

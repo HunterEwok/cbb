@@ -36,8 +36,8 @@ import (
 //     field of its header (internal/control's Header) is named in section 8;
 //   - the pages for users and administrators (docs/guide, docs/admin and the
 //     READMEs) do not tell the reader something is easy ("simply", "easy",
-//     "easily", "obviously", "of course"), and call the product Clipboard
-//     Bridge: the lowercase clipboardbridge only in code, a link or quotes.
+//     "easily", "obviously", "of course"), and call the product Copy
+//     Beyond Borders (CBB): the lowercase clipboardbridge only in code, a link or quotes.
 
 var (
 	mdLink    = regexp.MustCompile(`\]\(([^)\s]+)\)`)
@@ -528,7 +528,7 @@ func checkStyle(files map[string][]byte) []string {
 				problems = append(problems, fmt.Sprintf("%s:%d: %q tells the reader it is easy; say what to do instead", name, i+1, m))
 			}
 			if lowerName.MatchString(prose) {
-				problems = append(problems, fmt.Sprintf("%s:%d: the product is Clipboard Bridge in prose; clipboardbridge only in code, links or quotes", name, i+1))
+				problems = append(problems, fmt.Sprintf("%s:%d: the product is Copy Beyond Borders in prose; clipboardbridge only in code, links or quotes", name, i+1))
 			}
 		}
 	}

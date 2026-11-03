@@ -23,12 +23,12 @@ import java.io.IOException
  * Files between the phone and the group (docs/design.md, "Images and
  * files"): what the user shares with the app goes to the computers, and
  * the files a computer copied are saved in Downloads, in a folder
- * "Clipboard Bridge", when the button fetches them. Android apps rarely
+ * "CBB", when the button fetches them. Android apps rarely
  * put files on the clipboard, so neither side uses it for files.
  */
 object Files {
     /** Where saved files go, under Downloads. */
-    const val FOLDER = "Clipboard Bridge"
+    const val FOLDER = "CBB"
 
     /** What the user shared: one image, which goes as an image, or files. */
     sealed class Shared {
@@ -75,7 +75,7 @@ object Files {
 
     /**
      * Fetches every file of e from the computers and saves it in
-     * Downloads/Clipboard Bridge, with its folders; it returns how many it
+     * Downloads/CBB, with its folders; it returns how many it
      * saved. A name taken there gets a number from Android.
      */
     fun save(context: Context, node: MemberNode, e: Member.Event, m: Media.Manifest): Int {

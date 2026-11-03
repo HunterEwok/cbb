@@ -131,7 +131,7 @@ func updates(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(out, "Clipboard Bridge 0.6.1 is available; this device runs v0.6.0") {
+		if !strings.Contains(out, "CBB 0.6.1 is available; this device runs v0.6.0") {
 			return fmt.Errorf("cbb update -check printed %q", out)
 		}
 		return runsVersion(ctx, d, "0.6.0")
@@ -145,7 +145,7 @@ func updates(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(out, "Clipboard Bridge 0.6.1 is installed.") {
+		if !strings.Contains(out, "CBB 0.6.1 is installed.") {
 			return fmt.Errorf("cbb update printed %q", out)
 		}
 		return runsVersion(ctx, d, "0.6.1")

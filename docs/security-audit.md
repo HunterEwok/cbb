@@ -1,6 +1,6 @@
 # Authorized security audit (pre-0.4)
 
-This document specifies an authorized security audit of Clipboard Bridge, run before the 0.4
+This document specifies an authorized security audit of Copy Beyond Borders, run before the 0.4
 release. It is a defensive exercise: we confirm that clipboard data cannot be read on the
 network and that an outsider with no access cannot join a group or get a useful answer from
 the servers.
@@ -58,7 +58,7 @@ To keep the result honest, the audit observes these rules:
 The bench's inventory (docs/testbench.md, section 13) maps each role to a real device.
 
 Everything reachable on these targets may be probed. On the two VPSes the audit interacts
-only with Clipboard Bridge's own processes and ports; it does not stop, reconfigure or firewall
+only with CBB's own processes and ports; it does not stop, reconfigure or firewall
 anything else, and does not alter `ufw`.
 
 ### Out of scope

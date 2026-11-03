@@ -204,7 +204,7 @@ func Type(ctx context.Context, t TV, client *androidtv.Client, text string) erro
 }
 
 // RemoteName is how an Apple TV knows the remote while it is connected.
-const RemoteName = "Clipboard Bridge"
+const RemoteName = "CBB"
 
 // fieldWait is how long Type waits for an Android TV to say a text field
 // is open, which it does right after the remote starts.

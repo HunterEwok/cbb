@@ -147,7 +147,7 @@ func (s *Service) takeRelease(set node.ReleaseSet) (bool, error) {
 	}
 	s.rel = h
 	if offered(h.version) {
-		s.logf("cbb: Clipboard Bridge %s is available; cbb update installs it", h.version)
+		s.logf("cbb: CBB %s is available; cbb update installs it", h.version)
 	}
 	go s.pruneReleaseFiles()
 	return true, nil

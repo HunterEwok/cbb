@@ -9,8 +9,8 @@ import Foundation
 /// build signed ad hoc, the app keeps its file in its own Application
 /// Support and the extension finds no group.
 enum Shared {
-    static let appGroup = "group.io.github.hunterewok.clipboardbridge"
-    static let memberLabel = "io.github.hunterewok.clipboardbridge.member"
+    static let appGroup = "group.tools.cbb"
+    static let memberLabel = "tools.cbb.member"
 
     /// The app group's container, or nil without the entitlement. Asked
     /// once: without it, every use of the group's settings would wait on

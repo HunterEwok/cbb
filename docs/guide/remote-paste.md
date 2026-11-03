@@ -32,7 +32,7 @@ which adds a virtual keyboard that presses only
 Shift+Insert and Enter for the user on the screen.
 
 Without a desktop, tmux and the text console need their helpers. Every installation adds
-Clipboard Bridge's part of `/etc/tmux.conf`, which starts the tmux helper with tmux;
+CBB's part of `/etc/tmux.conf`, which starts the tmux helper with tmux;
 `install.sh --console` adds the console helper's service.
 
 ## Paste from an admin

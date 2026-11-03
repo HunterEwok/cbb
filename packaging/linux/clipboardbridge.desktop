@@ -2,7 +2,7 @@
 # Copyright (C) 2026 HunterEwok
 [Desktop Entry]
 Type=Application
-Name=Clipboard Bridge
+Name=CBB
 Comment=One clipboard for the devices of your home
 Exec=/usr/local/bin/cbb-desktop
 Icon=/usr/local/share/clipboardbridge/clipboardbridge.png

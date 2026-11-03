@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 786c17b63218 -->
+<!-- source: 69c597a7b5db -->
 # Inicio rápido
 
-Clipboard Bridge da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
+Copy Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
 
 ![El teléfono añade cada ordenador con su código QR; después los dispositivos comparten un único portapapeles](../images/group.svg)
 
-Son cuatro pasos: instalar la app, instalar Clipboard Bridge en un ordenador, escanear el código QR del ordenador y activar el uso compartido en ese ordenador.
+Son cuatro pasos: instalar la app, instalar Copy Beyond Borders en un ordenador, escanear el código QR del ordenador y activar el uso compartido en ese ordenador.
 
-Un grupo puede tener un ordenador en su centro o estar formado solo por teléfonos: ambas opciones funcionan, y recomendamos un ordenador que esté encendido a menudo, que mantiene la sincronización fuera de casa disponible en todo momento ([dos tipos de grupo](how-it-works.md#two-kinds-of-group)). Si solo usas teléfonos, salta los pasos 2 a 4: en cada uno de los demás teléfonos pulsa **I already use Clipboard Bridge on another phone** y escanea el código que muestra con **Connect a new device** en el primero (**+** cuando ya tenga dispositivos).
+Un grupo puede tener un ordenador en su centro o estar formado solo por teléfonos: ambas opciones funcionan, y recomendamos un ordenador que esté encendido a menudo, que mantiene la sincronización fuera de casa disponible en todo momento ([dos tipos de grupo](how-it-works.md#two-kinds-of-group)). Si solo usas teléfonos, salta los pasos 2 a 4: en cada uno de los demás teléfonos pulsa **I already use Copy Beyond Borders on another phone** y escanea el código que muestra con **Connect a new device** en el primero (**+** cuando ya tenga dispositivos).
 
 ## 1. Instala la app en el teléfono
 
@@ -17,7 +17,7 @@ Un grupo puede tener un ordenador en su centro o estar formado solo por teléfon
 
 Abre la app. Añadirás el primer ordenador en el paso 3.
 
-## 2. Instala Clipboard Bridge en un ordenador
+## 2. Instala Copy Beyond Borders en un ordenador
 
 Elige cualquier ordenador de tu red doméstica: un portátil, un sobremesa, una Raspberry Pi.
 
@@ -33,7 +33,7 @@ En **Windows** 10 u 11, en un PowerShell abierto con «Ejecutar como administrad
 irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
 ```
 
-El instalador comprueba la descarga, inicia Clipboard Bridge y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, winget, Docker y los detalles están en [Instalación](install.md).
+El instalador comprueba la descarga, inicia Copy Beyond Borders y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, winget, Docker y los detalles están en [Instalación](install.md).
 
 ## 3. Añade el ordenador
 
@@ -73,7 +73,7 @@ El grupo funciona solo con el teléfono, pero dos cosas mejoran con un ordenador
 - **Conviértelo en administrador.** En el teléfono, pulsa el ordenador en Inicio y luego **Make it an admin**. Un ordenador sin TPM ni Secure Enclave guarda sus claves en un archivo, y la app te avisa primero ([claves](keys.md#the-three-levels)). Entonces también puede añadir y quitar dispositivos (`sudo cbb pair`, `sudo cbb revoke NAME`), así que no necesitas tener el teléfono a mano cada vez. El teléfono sigue siendo la raíz del grupo, su dispositivo de mayor confianza: la clave de la raíz nunca sale del chip de seguridad del teléfono.
 - **Conviértelo en el hub**, para que tus dispositivos sigan sincronizando cuando estén fuera de casa. Consulta [Fuera de casa](away-from-home.md).
 
-Añade también un segundo teléfono, para que perder uno no te haga perder nada: en el segundo teléfono pulsa **I already use Clipboard Bridge on another phone** y escanea su código con **+** en el primero. El primer teléfono lo convierte en administrador.
+Añade también un segundo teléfono, para que perder uno no te haga perder nada: en el segundo teléfono pulsa **I already use Copy Beyond Borders on another phone** y escanea su código con **+** en el primero. El primer teléfono lo convierte en administrador.
 
 ## Qué sigue
 

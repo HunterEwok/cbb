@@ -336,7 +336,7 @@ func windowsScript(g grant) string {
 	b.WriteString("Get-NetFirewallRule -Group 'clipboardbridge' | Where-Object { [string]$_.Direction -eq 'Outbound' } | Remove-NetFirewallRule\n")
 	common := "-Group 'clipboardbridge' -Direction Outbound -Action Block -Program $prog -Service 'clipboardbridge' -Profile Any"
 	// PowerShell doubles a quote inside single quotes.
-	desc := "The Clipboard Bridge service reaches only the home network and its group''s servers; cbb global changes this rule."
+	desc := "The CBB service reaches only the home network and its group''s servers; cbb global changes this rule."
 	if g.hubPort == 0 {
 		fmt.Fprintf(&b, "New-NetFirewallRule -Name '%s' -DisplayName 'clipboardbridge: only the home network' %s -RemoteAddress %s -Description '%s' | Out-Null\n",
 			firewallRule, common, block, desc)

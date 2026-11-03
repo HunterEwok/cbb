@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5a17c9adbba6 -->
+<!-- source: 90564bcf632e -->
 # Mitandao inayozuia VPN
 
-Ukiwa mbali na nyumbani, vifaa vyako hufikia kitovu kupitia handaki la WireGuard la kikundi chenyewe. Baadhi ya mitandao huzuia WireGuard: Wi-Fi ya hoteli na ofisi, baadhi ya waendeshaji wa simu, na nchi nzima zinazochuja VPN. Clipboard Bridge ina njia mbili za kukwepa hilo. Zote mbili huwashwa kwenye kitovu, na vifaa huzipokea wakati ujao vitakapokutana na kitovu nyumbani.
+Ukiwa mbali na nyumbani, vifaa vyako hufikia kitovu kupitia handaki la WireGuard la kikundi chenyewe. Baadhi ya mitandao huzuia WireGuard: Wi-Fi ya hoteli na ofisi, baadhi ya waendeshaji wa simu, na nchi nzima zinazochuja VPN. Copy Beyond Borders ina njia mbili za kukwepa hilo. Zote mbili huwashwa kwenye kitovu, na vifaa huzipokea wakati ujao vitakapokutana na kitovu nyumbani.
 
 | Njia | Kinachoonwa na mtandao | Unachohitaji | Inafanya kazi kwenye |
 |---|---|---|---|

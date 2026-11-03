@@ -13,7 +13,7 @@
 # lets it reach the control socket and give its own socket to the desktop
 # connectors.
 [Unit]
-Description=Clipboard Bridge remote paste keys (uinput)
+Description=CBB remote paste keys (uinput)
 Documentation=https://github.com/HunterEwok/clipboardbridge
 After=clipboardbridge.service systemd-logind.service
 Wants=clipboardbridge.service

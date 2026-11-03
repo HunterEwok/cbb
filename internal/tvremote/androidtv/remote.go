@@ -116,7 +116,7 @@ func (r *Remote) handle(b []byte, started func()) error {
 	}
 	switch {
 	case m.Has(rmConfigure):
-		info := wire.New().Str(1, "Clipboard Bridge").Str(2, "Clipboard Bridge").
+		info := wire.New().Str(1, "CBB").Str(2, "CBB").
 			Int(3, 1).Str(4, "1").Str(5, "atvremote").Str(6, "1.0.0")
 		return r.send(wire.New().Sub(rmConfigure, wire.New().Int(1, features).Sub(2, info)))
 	case m.Has(rmSetActive):

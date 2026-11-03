@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Settings and environment variables
 
-Every setting Clipboard Bridge reads from a file or from the environment. The commands and
+Every setting Copy Beyond Borders reads from a file or from the environment. The commands and
 their flags are in the [command reference](cli.md); where each system keeps its keys,
 state and logs is in [devices, ports and files](devices.md#files-and-logs).
 

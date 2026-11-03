@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Routers and FreeBSD
 
-For administrators who run Clipboard Bridge on an OpenWrt router, on OPNsense or on a FreeBSD
+For administrators who run Copy Beyond Borders on an OpenWrt router, on OPNsense or on a FreeBSD
 server, and for any computer with several networks. A router is always on and sits on every
 home network, so it makes a good member and a good hub. This page covers what the
 installers set up, how to limit the service to the right networks, and how to check it.
@@ -109,7 +109,7 @@ adds them; `--express` adds them without asking, `--no-firewall` only prints the
 The hub's port goes into the same anchor or rule set when `cbb global hub` opens it.
 
 **pfSense** is not supported: the installer runs, but it prints the rules for Firewall,
-Rules instead of adding them, and a pfSense update may remove Clipboard Bridge.
+Rules instead of adding them, and a pfSense update may remove Copy Beyond Borders.
 
 **Removing it.** `sh /usr/local/share/clipboardbridge/uninstall.sh` removes the program, the
 service and its firewall rules, and keeps the keys in `/var/db/clipboardbridge`; `--purge`

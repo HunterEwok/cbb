@@ -8,7 +8,7 @@
 #
 # It installs cbb.exe and the windowless cbbw.exe to Program Files and adds
 # them to PATH, with the tray app cbb-desktop.exe when the archive has it
-# (started with every sign-in and now, in the Start menu as Clipboard Bridge), makes the clipboardbridge local group and adds the signed-in
+# (started with every sign-in and now, in the Start menu as CBB), makes the clipboardbridge local group and adds the signed-in
 # user to it, creates the clipboardbridge service, which runs as the virtual
 # account NT SERVICE\clipboardbridge with only the privilege it needs,
 # keeps its data in ProgramData\clipboardbridge where only the service and
@@ -59,7 +59,7 @@ $dataDir = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) $na
 $serviceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$name"
 $runKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'
 $trayRun = "$name tray"
-$shortcut = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Clipboard Bridge.lnk'
+$shortcut = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'CBB.lnk'
 $uninstallKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$name"
 $details = $Details -or $env:CBB_ERROR_DETAILS -eq '1'
 $step = 'starting'
@@ -217,7 +217,7 @@ foreach ($child in $computer.Children) {
 }
 if (-not $exists) {
 	$group = $computer.Create('group', $name)
-	$group.Put('Description', 'May use the Clipboard Bridge service: cbb and the clipboard agent.')
+	$group.Put('Description', 'May use the CBB service: cbb and the clipboard agent.')
 	$group.SetInfo()
 }
 $step = "adding $user to the $name group"
@@ -230,14 +230,14 @@ if ($r.Code -ne 0 -and $r.Out -notmatch '1378') {
 $step = 'creating the service'
 $binPath = "`"$cbb`" service"
 if (-not $service) {
-	New-Service -Name $name -BinaryPathName $binPath -DisplayName 'Clipboard Bridge' -StartupType Automatic `
+	New-Service -Name $name -BinaryPathName $binPath -DisplayName 'CBB' -StartupType Automatic `
 		-Description 'Shares the clipboard with the other devices at home.' | Out-Null
 }
 # The path and the display name (which installs before 0.5 set to
 # clipboardbridge) through CIM, as Windows PowerShell 5.1 drops the quotes inside
 # an argument that it passes to sc.exe.
 $change = Get-CimInstance -ClassName Win32_Service -Filter "Name='$name'" |
-	Invoke-CimMethod -MethodName Change -Arguments @{ PathName = $binPath; DisplayName = 'Clipboard Bridge' }
+	Invoke-CimMethod -MethodName Change -Arguments @{ PathName = $binPath; DisplayName = 'CBB' }
 if ($change.ReturnValue -ne 0) {
 	throw "setting the service's path failed with $($change.ReturnValue)"
 }
@@ -342,7 +342,7 @@ if ($cgnat) {
 	$fromText = 'the local subnet and 100.64.0.0/10'
 	$fromArg = 'LocalSubnet, 100.64.0.0/10'
 }
-Write-Host "Firewall: Windows Firewall ($fwState). Clipboard Bridge requires these rules:"
+Write-Host "Firewall: Windows Firewall ($fwState). CBB requires these rules:"
 Write-Host "  1. Allow incoming TCP $Port from $fromText to $cbb. Purpose: connections from the group's devices."
 Write-Host "  2. Allow incoming UDP 5353 from $fromText to $cbb. Purpose: finding the group's devices (mDNS)."
 # The answer is kept in the service's key, which uninstall.ps1 removes.
@@ -361,7 +361,7 @@ if ($answer -eq 'ask') {
 	}
 }
 if ($answer -notin @('yes', 'no', 'express')) {
-	Write-Host 'With Yes, Clipboard Bridge adds these rules, keeps them current on every update and removes them on uninstall.'
+	Write-Host 'With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.'
 	if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
 		$reply = Read-Host 'Add these rules now? [y/N]'
 		$how = ''
@@ -376,21 +376,21 @@ if ($answer -in @('yes', 'no', 'express')) {
 }
 $managed = $answer -in @('yes', 'express')
 if ($managed) {
-	New-NetFirewallRule -Group $name -DisplayName "Clipboard Bridge (TCP $Port)" -Direction Inbound -Action Allow `
+	New-NetFirewallRule -Group $name -DisplayName "CBB (TCP $Port)" -Direction Inbound -Action Allow `
 		-Protocol TCP -LocalPort $Port -Program $cbb -RemoteAddress $from -Profile Any `
 		-Description 'clipboardbridge members and phones at home connect here.' | Out-Null
-	New-NetFirewallRule -Group $name -DisplayName 'Clipboard Bridge mDNS (UDP 5353)' -Direction Inbound -Action Allow `
+	New-NetFirewallRule -Group $name -DisplayName 'CBB mDNS (UDP 5353)' -Direction Inbound -Action Allow `
 		-Protocol UDP -LocalPort 5353 -Program $cbb -RemoteAddress $from -Profile Any `
 		-Description 'clipboardbridge finds the other devices at home with mDNS.' | Out-Null
-	Write-Host "Added the rules above$how. Clipboard Bridge manages them from now on."
+	Write-Host "Added the rules above$how. CBB manages them from now on."
 } else {
-	Write-Host 'No firewall rules were added. Clipboard Bridge works only while the firewall allows the rules above.'
+	Write-Host 'No firewall rules were added. CBB works only while the firewall allows the rules above.'
 	Write-Host 'To add them by hand, run in an administrator PowerShell:'
-	Write-Host "  New-NetFirewallRule -Group clipboardbridge -DisplayName 'Clipboard Bridge (TCP $Port)' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -Program '$cbb' -RemoteAddress $fromArg"
-	Write-Host "  New-NetFirewallRule -Group clipboardbridge -DisplayName 'Clipboard Bridge mDNS (UDP 5353)' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 5353 -Program '$cbb' -RemoteAddress $fromArg"
-	Write-Host 'To let Clipboard Bridge add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).'
+	Write-Host "  New-NetFirewallRule -Group clipboardbridge -DisplayName 'CBB (TCP $Port)' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -Program '$cbb' -RemoteAddress $fromArg"
+	Write-Host "  New-NetFirewallRule -Group clipboardbridge -DisplayName 'CBB mDNS (UDP 5353)' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 5353 -Program '$cbb' -RemoteAddress $fromArg"
+	Write-Host 'To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).'
 }
-Write-Host 'Clipboard Bridge also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group''s servers.'
+Write-Host 'CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group''s servers.'
 
 $step = 'keeping the service on the home network'
 # The service may reach only the home network, as its systemd unit allows
@@ -414,9 +414,9 @@ if (-not $rule -or -not $granted) {
 		'fec0::-feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
 	Get-NetFirewallRule -Group $name -ErrorAction SilentlyContinue | Where-Object { [string]$_.Direction -eq 'Outbound' } | Remove-NetFirewallRule
 	Remove-ItemProperty -Path $serviceKey -Name AwayAllow -ErrorAction SilentlyContinue
-	New-NetFirewallRule -Name "$name-home-only" -Group $name -DisplayName 'Clipboard Bridge: only the home network' `
+	New-NetFirewallRule -Name "$name-home-only" -Group $name -DisplayName 'CBB: only the home network' `
 		-Direction Outbound -Action Block -Program $cbb -Service $name -RemoteAddress $outside -Profile Any `
-		-Description 'The Clipboard Bridge service reaches only the home network and its group''s servers; cbb global changes this rule.' | Out-Null
+		-Description 'The CBB service reaches only the home network and its group''s servers; cbb global changes this rule.' | Out-Null
 }
 # Whatever the rule allowed before (another -HomeCgnat, an earlier version
 # that lifted it for cbb global on), cbb global allow writes it for what the
@@ -462,7 +462,7 @@ startAsUser -what 'agent' -program $cbbw -arguments 'agent'
 if ($binTray) {
 	$step = 'starting the tray app with every sign-in'
 	New-ItemProperty -Path $runKey -Name $trayRun -PropertyType String -Value "`"$tray`"" -Force | Out-Null
-	$step = 'adding Clipboard Bridge to the Start menu'
+	$step = 'adding CBB to the Start menu'
 	$shell = New-Object -ComObject WScript.Shell
 	$link = $shell.CreateShortcut($shortcut)
 	$link.TargetPath = $tray
@@ -478,7 +478,7 @@ New-Item -Force -Path $uninstallKey | Out-Null
 $uninstall = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $programDir 'uninstall.ps1')`""
 $v = ($version -split ' ')[1]
 foreach ($p in @(
-		@('DisplayName', 'Clipboard Bridge', 'String'),
+		@('DisplayName', 'CBB', 'String'),
 		@('DisplayVersion', $v, 'String'),
 		@('Publisher', 'HunterEwok', 'String'),
 		@('InstallLocation', $programDir, 'String'),
@@ -512,10 +512,10 @@ if ($LASTEXITCODE -ne 0) {
 # How this copy came, kept for cbb update: winget's own folder, else the
 # installer's environment (CBB_INSTALL_METHOD), else get.ps1 or the zip,
 # which cbb update replaces by itself.
-$step = 'recording how Clipboard Bridge was installed'
+$step = 'recording how CBB was installed'
 $method = if ($Bin -match '\\Microsoft\\WinGet\\') { 'winget' } elseif ($env:CBB_INSTALL_METHOD) { $env:CBB_INSTALL_METHOD } else { 'get' }
 if ((run $cbb @('update', '-installed-by', $method)).Code -ne 0) {
-	Write-Host 'Could not record how Clipboard Bridge was installed; cbb update takes it as get.ps1.'
+	Write-Host 'Could not record how CBB was installed; cbb update takes it as get.ps1.'
 }
 # Automatic updates: as given, else as answered before, else asked. An
 # update (CBB_UPDATING, set by cbb update) asks nothing and writes the kept
@@ -527,7 +527,7 @@ if ($method -eq 'get') {
 		$auto = (run $cbb @('update', '-auto')).Out
 	}
 	if ($auto -notin @('on', 'off') -and -not $env:CBB_UPDATING) {
-		Write-Host 'Clipboard Bridge can check once a day for a release the project signed and install it;'
+		Write-Host 'CBB can check once a day for a release the project signed and install it;'
 		Write-Host 'the check tells GitHub this device''s address, as any download does.'
 		if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
 			$reply = Read-Host 'Update automatically? [y/N]'
@@ -545,9 +545,9 @@ if ($method -eq 'get') {
 	}
 }
 
-Write-Host "Clipboard Bridge $v is running on TCP port $Port; $user may use it."
+Write-Host "CBB $v is running on TCP port $Port; $user may use it."
 if ($Port -ne 8764) {
-	Write-Host 'The iPhone shortcut works only with port 8764; the Clipboard Bridge app takes any port.'
+	Write-Host 'The iPhone shortcut works only with port 8764; the CBB app takes any port.'
 }
 # An update of a device in a group keeps its group: no need to join.
 if (Test-Path (Join-Path $dataDir 'state\identity.json')) {
@@ -555,4 +555,4 @@ if (Test-Path (Join-Path $dataDir 'state\identity.json')) {
 } else {
 	Write-Host 'Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group''s root or an admin; or start a group: cbb new.'
 }
-Write-Host 'To remove it: Settings, Apps, Clipboard Bridge, Uninstall.'
+Write-Host 'To remove it: Settings, Apps, CBB, Uninstall.'

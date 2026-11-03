@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: ba8bb2b8b763 -->
+<!-- source: 01c5a8544c91 -->
 # Установка
 
-Clipboard Bridge работает как небольшая фоновая служба на каждом компьютере. Его команда —
+Copy Beyond Borders работает как небольшая фоновая служба на каждом компьютере. Его команда —
 `cbb`. Все способы ниже ставят одну и ту же программу; выберите тот, что нравится.
 
 ## Linux
@@ -55,7 +55,7 @@ curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/downloa
 
 Переключитесь в режим рабочего стола, откройте Konsole, один раз задайте пользователю `deck`
 пароль, если его нет (`passwd`), и выполните ту же команду. SteamOS заменяет свои системные
-файлы при каждом обновлении, поэтому установщик кладёт Clipboard Bridge в
+файлы при каждом обновлении, поэтому установщик кладёт Copy Beyond Borders в
 `/opt/clipboardbridge` вместо `/usr/local` и сообщает SteamOS, какие из его файлов в `/etc`
 сохранять (`/etc/atomic-update.conf.d/clipboardbridge.conf`). Программа остаётся установленной
 и в своей группе после обновлений SteamOS.
@@ -98,7 +98,7 @@ irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.p
 терминале, открытом от имени администратора, там, где Linux и macOS используют `sudo`.
 
 Он ставит и приложение в трее, которое запускается при входе в систему и есть в меню «Пуск»
-как Clipboard Bridge.
+как CBB.
 
 Через winget, когда пакет появится в репозитории winget:
 
@@ -153,7 +153,7 @@ Diagnostics > Services, а её правила брандмауэра (в яко
 Repeater): обоим нужен UDP-порт 5353, а служба сама отвечает на mDNS на каждом домашнем
 интерфейсе. pfSense не поддерживается: установщик там тоже запускается, но не добавляет
 правила брандмауэра, а выводит их для Firewall > Rules, и обновление pfSense может удалить
-Clipboard Bridge.
+Copy Beyond Borders.
 
 На рабочем столе FreeBSD (X11 или Wayland с протоколом data control, как в KDE, sway и
 Hyprland) сеанс запускает `cbb agent` из автозапуска XDG, и буфер обмена присоединяется к
@@ -177,7 +177,7 @@ docker compose -f compose.home.yaml exec clipboardbridge cbb pair
 
 ## Брандмауэр
 
-Clipboard Bridge нужен один TCP-порт, 8764, и mDNS (UDP 5353), оба только из домашней сети.
+Copy Beyond Borders нужен один TCP-порт, 8764, и mDNS (UDP 5353), оба только из домашней сети.
 Установщик находит брандмауэр (ufw, firewalld, nftables или iptables в Linux, pf или ipfw во
 FreeBSD, брандмауэр приложений на Mac, брандмауэр Windows), перечисляет каждое правило и
 спрашивает
@@ -219,7 +219,7 @@ Windows `-AutoUpdate on|off` и `$env:CBB_AUTO_UPDATE`, чтобы ответи�
 в своё время: таймер systemd в Linux, задание launchd на Mac, запланированная задача от имени
 SYSTEM в Windows, cron в OpenWrt и FreeBSD. Каждая проверка скачивает одни и те же небольшие
 файлы с GitHub (или с `dl.cbb.tools`, когда GitHub не отвечает), поэтому GitHub узнаёт адрес
-этого устройства и то, что оно использует Clipboard Bridge, как при любой загрузке; о группе
+этого устройства и то, что оно использует Copy Beyond Borders, как при любой загрузке; о группе
 не отправляется ничего. `sudo cbb update -mirror https://...` берёт обновления с другого
 зеркала, которому доверять не нужно, поскольку подписи проверяются. Журнал таймера —
 `update.log` в `/var/lib/clipboardbridge-update` (Linux), `/etc/clipboardbridge-update`
@@ -270,7 +270,7 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 В SteamOS это `sudo sh /opt/clipboardbridge/share/uninstall.sh`. С Homebrew после этого
 выполните `brew uninstall clipboardbridge`.
 
-В Windows: Параметры, Приложения, «Clipboard Bridge», Удалить.
+В Windows: Параметры, Приложения, «CBB», Удалить.
 
 Это удаляет программу, службу и правила брандмауэра, добавленные установщиком. Ключи
 устройства остаются, поэтому повторная установка возвращает его в свою группу. Чтобы удалить и

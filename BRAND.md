@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Names, icon and official builds
 
-Clipboard Bridge reads your clipboard, and a clipboard sometimes holds passwords. So you
+Copy Beyond Borders reads your clipboard, and a clipboard sometimes holds passwords. So you
 should always know whose build you install. This page says which builds are official, what
 belongs to the project, and what others may do with it.
 
@@ -43,15 +43,14 @@ To check a download:
 
 ## The name
 
-"Clipboard Bridge" is the name of this project. Other projects, not connected with this
-one, have similar names, for example
-[copypasteengine/clipboard-bridge](https://github.com/copypasteengine/clipboard-bridge) and
-[Mattboxx/Clipboard-Bridge](https://github.com/Mattboxx/Clipboard-Bridge). This project is not
-responsible for them, and they are not responsible for it.
+"Copy Beyond Borders", short "CBB", is the name of this project. The borders are the ones
+between your own devices, never a way around a network's blocks. The project claims no
+exclusive right to "CBB", which others use too, so the full name leads wherever the project
+is listed.
 
 ## What you may do without asking
 
-- Talk about the project: "works with Clipboard Bridge", reviews, articles, videos.
+- Talk about the project: "works with Copy Beyond Borders", reviews, articles, videos.
 - Share the official releases unchanged.
 - Package it for a distribution (Debian, Arch, Homebrew and the like), with patches for
   building and packaging, as long as they do not change the protocol, the cryptography or

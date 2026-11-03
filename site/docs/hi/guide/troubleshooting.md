@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 931b83ed0988 -->
+<!-- source: 5174e28a6a9e -->
 # जब कुछ काम न करे
 
 उस डिवाइस पर `cbb status` से शुरू करें जो गड़बड़ कर रहा है: वह बताता है कि सेवा चल रही है या नहीं, वह किस समूह में है, कौन-से सदस्य जुड़े हैं और घर से बाहर सिंक की स्थिति क्या है। हर संदेश छोटा है; `CBB_DEBUG=1 cbb status` (Windows पर पहले `$env:CBB_DEBUG = "1"`) उसके नीचे असली त्रुटि दिखाता है। सेवा के लॉग में हमेशा ब्योरा होता है: Linux पर `journalctl -u clipboardbridge`, और डेस्कटॉप कनेक्टर का लॉग सत्र की जर्नल में, `journalctl --user`; बाकी सिस्टम [फ़ाइलें और लॉग](../reference/devices.md#files-and-logs) में हैं। ऐप और इंस्टॉलर समेत हर हिस्से का ब्योरा-स्विच [त्रुटि संदेश और ब्योरा](../reference/errors.md) में है।
 
 ## कमांड
 
-**"the Clipboard Bridge service is not running"**: इसे शुरू करें (Linux पर `sudo systemctl start clipboardbridge`; Mac पर `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`; Windows पर `Start-Service clipboardbridge`) और इसका लॉग देखें।
+**"the CBB service is not running"**: इसे शुरू करें (Linux पर `sudo systemctl start clipboardbridge`; Mac पर `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge`; Windows पर `Start-Service clipboardbridge`) और इसका लॉग देखें।
 
 **इंस्टॉल के तुरंत बाद कंट्रोल सॉकेट पर "permission denied"**: इंस्टॉलर ने आपको `clipboardbridge` समूह में जोड़ा है, और समूह अगले लॉगिन से ही गिना जाता है। लॉग आउट करके दोबारा लॉग इन करें (Windows पर नया टर्मिनल खोलें); तब तक `sudo cbb ...` काम करता है।
 

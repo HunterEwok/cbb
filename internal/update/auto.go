@@ -89,7 +89,7 @@ func systemdTimers(on bool, exe string) error {
 	}
 	service := `# Written by cbb update -auto on; cbb update -auto off removes it.
 [Unit]
-Description=Clipboard Bridge automatic update
+Description=CBB automatic update
 Documentation=https://github.com/HunterEwok/clipboardbridge/blob/main/docs/guide/install.md
 Wants=network-online.target
 After=network-online.target
@@ -102,7 +102,7 @@ ExecStart=` + exe + ` update -timer
 `
 	timer := `# Written by cbb update -auto on; cbb update -auto off removes it.
 [Unit]
-Description=Check for a Clipboard Bridge update once a day
+Description=Check for a CBB update once a day
 
 [Timer]
 OnCalendar=daily
@@ -227,7 +227,7 @@ $a = New-ScheduledTaskAction -Execute '` + strings.ReplaceAll(w, "'", "''") + `'
 $t = New-ScheduledTaskTrigger -Daily -At 1am -RandomDelay (New-TimeSpan -Hours 6)
 $p = New-ScheduledTaskPrincipal -UserId SYSTEM -LogonType ServiceAccount -RunLevel Highest
 $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1)
-Register-ScheduledTask -TaskName '` + windowsTask + `' -Description 'Checks for a Clipboard Bridge update once a day (cbb update -auto off removes it).' -Action $a -Trigger $t -Principal $p -Settings $s -Force | Out-Null`
+Register-ScheduledTask -TaskName '` + windowsTask + `' -Description 'Checks for a CBB update once a day (cbb update -auto off removes it).' -Action $a -Trigger $t -Principal $p -Settings $s -Force | Out-Null`
 	}
 	return run("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
 }

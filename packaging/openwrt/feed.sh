@@ -71,7 +71,7 @@ for archive in "$dist"/clipboardbridge-linux-*.tar.gz; do
 		--info "name:clipboardbridge" \
 		--info "version:$version" \
 		--info "arch:noarch" \
-		--info "description:Clipboard Bridge: one clipboard for your phones and computers" \
+		--info "description:CBB: one clipboard for your phones and computers" \
 		--info "license:AGPL-3.0-only" \
 		--info "origin:clipboardbridge" \
 		--info "url:https://cbb.tools" \

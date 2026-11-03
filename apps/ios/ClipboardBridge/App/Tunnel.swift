@@ -192,7 +192,7 @@ enum KeychainData {
 
 /// The state of sync away from home in the keychain.
 enum AwayKeychain {
-    static let service = "io.github.hunterewok.clipboardbridge.away"
+    static let service = "tools.cbb.away"
 
     static func load() -> AwayState? { KeychainData.load(service).flatMap(AwayState.decode) }
 
@@ -202,7 +202,7 @@ enum AwayKeychain {
 
 /// The phone's state as the group's hub in the keychain.
 enum HubKeychain {
-    static let service = "io.github.hunterewok.clipboardbridge.hub"
+    static let service = "tools.cbb.hub"
 
     static func load() -> HubState? { KeychainData.load(service).flatMap(HubState.decode) }
 
@@ -212,7 +212,7 @@ enum HubKeychain {
 
 /// The phone's settings for a blind relay in the keychain.
 enum RelayKeychain {
-    static let service = "io.github.hunterewok.clipboardbridge.relay"
+    static let service = "tools.cbb.relay"
 
     static func load() -> RelaySettings? { KeychainData.load(service).flatMap(RelaySettings.decode) }
 

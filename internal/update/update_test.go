@@ -501,8 +501,8 @@ func TestDetectMethod(t *testing.T) {
 }
 
 func TestInstallFailure(t *testing.T) {
-	out := "Stopping...\r\ninstall.ps1: starting the service failed: Service 'Clipboard Bridge' cannot be started.\r\nName : x\r\nat <ScriptBlock>, install.ps1: line 388\r\n"
-	if got := installFailure(out, "install.ps1"); got != "starting the service failed: Service 'Clipboard Bridge' cannot be started." {
+	out := "Stopping...\r\ninstall.ps1: starting the service failed: Service 'CBB' cannot be started.\r\nName : x\r\nat <ScriptBlock>, install.ps1: line 388\r\n"
+	if got := installFailure(out, "install.ps1"); got != "starting the service failed: Service 'CBB' cannot be started." {
 		t.Errorf("got %q", got)
 	}
 	if got := installFailure("a\nb\nc\nd\ne\nf\n", "install.sh"); got != "b\nc\nd\ne\nf" {

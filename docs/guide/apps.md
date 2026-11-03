@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # The apps
 
-Clipboard Bridge has apps for phones, watches and desktops. The phone apps hold the group;
+Copy Beyond Borders has apps for phones, watches and desktops. The phone apps hold the group;
 the desktop apps are a window onto the service that already runs on the computer.
 
 | App | Where to get it | State |
@@ -18,7 +18,7 @@ the desktop apps are a window onto the service that already runs on the computer
 
 ### Start a group
 
-1. [Install](install.md) Clipboard Bridge on a computer and run `sudo cbb pair` there. It
+1. [Install](install.md) Copy Beyond Borders on a computer and run `sudo cbb pair` there. It
    shows a QR code.
 2. Open the app and tap **Connect a new device**, then scan the code. The app makes the
    group's key in the phone's security chip (the Secure Enclave on an iPhone, the Keystore
@@ -36,13 +36,13 @@ Android, paste the text of the QR code, which `cbb pair` prints too.
   computers' latest copy if one was made a moment ago.
 - **iPhone**: iOS lets an app use the clipboard only while it is in front, so the iPhone
   syncs with one gesture: the "Sync clipboard" action on Back Tap or the Action button, the
-  Control Center control, or the home-screen widget. Share, Clipboard Bridge sends a text
+  Control Center control, or the home-screen widget. Share, Copy Beyond Borders sends a text
   or a link at once.
 - **Android**: copies from the computers arrive by themselves. To send the phone's copies
   by themselves too, turn on **Send my copies by themselves** (an accessibility service;
   the app explains what it reads). Without it, one tap: the **Send clipboard** tile in Quick
   Settings, Send in the notification, the home-screen widget, or Share and text selection,
-  Clipboard Bridge.
+  Copy Beyond Borders.
 - **Notifications** say when a device joins or is removed, becomes an admin, or the hub
   does not answer away from home. Each kind has its own switch in Settings.
 
@@ -59,7 +59,7 @@ Tap a device to see its kind, system, version and role. On an admin phone you ca
 
 ### A second phone, and a lost one
 
-- **A second phone**: on it, tap **I already use Clipboard Bridge on another phone**; it
+- **A second phone**: on it, tap **I already use Copy Beyond Borders on another phone**; it
   shows a QR code, which the first phone scans with **+**. The first phone, the root, makes
   it an admin, so that losing one phone loses nothing.
 - **A lost phone**: on your other phone, remove it in the devices list. The computers stay

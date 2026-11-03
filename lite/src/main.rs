@@ -334,7 +334,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                     out.flush().ok();
                     return;
                 }
-                println!("In the Clipboard Bridge app, tap \"Connect a new device\" (or run the shortcut");
+                println!("In the CBB app, tap \"Connect a new device\" (or run the shortcut");
                 println!("\"clipboardbridge: add a computer\") and scan this:\n");
                 print!("{}", qr(text));
                 println!("\nOr paste this into the app: {text}");
@@ -452,7 +452,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
 fn connect(g: &Global) -> Result<UnixStream> {
     match UnixStream::connect(&g.socket) {
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Err(Error::msg(
-            "no permission to use the Clipboard Bridge service; add your user to the clipboardbridge group and log in again",
+            "no permission to use the CBB service; add your user to the clipboardbridge group and log in again",
         )),
         c => c.context(format!("cannot reach the lite member's service at {}; {}", g.socket.display(), not_running())),
     }
@@ -833,7 +833,7 @@ fn action_warning(a: &control::Action) -> String {
     let what = match a.name.as_str() {
         actions::REBOOT => "reboot this device, a minute after they ask",
         actions::CANCEL => "cancel a reboot that is pending",
-        _ => "restart the Clipboard Bridge service here",
+        _ => "restart the CBB service here",
     };
     let mut who = if a.by.is_empty() {
         "the group's admins".to_string()
@@ -846,7 +846,7 @@ fn action_warning(a: &control::Action) -> String {
     let mut s = format!("Turning {} on lets {who} {what}, from wherever they are in the group.\n", a.name);
     let rights = actions::rights(std::slice::from_ref(&a.name));
     if !rights.is_empty() {
-        s += "It gives the Clipboard Bridge service these rights, in a polkit rule, and no others:\n";
+        s += "It gives the CBB service these rights, in a polkit rule, and no others:\n";
         for r in rights {
             s += &format!("  {r}\n");
         }
@@ -1142,19 +1142,19 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         let v = service::VERSION;
         match () {
             _ if !found.newer => {
-                log(&format!("Clipboard Bridge {} is the newest release; this device runs {v}.", r.version))
+                log(&format!("CBB {} is the newest release; this device runs {v}.", r.version))
             }
             _ if method != "get" => {
                 if !timer {
                     log(&format!(
-                        "Clipboard Bridge {} is available; this device runs {v}. It came from {method}, which updates it: {}",
+                        "CBB {} is available; this device runs {v}. It came from {method}, which updates it: {}",
                         r.version,
                         method_command(&method)
                     ));
                 }
             }
             _ if check => log(&format!(
-                "Clipboard Bridge {} is available; this device runs {v}. To install it: sudo cbb update",
+                "CBB {} is available; this device runs {v}. To install it: sudo cbb update",
                 r.version
             )),
             _ if v == "dev" => {

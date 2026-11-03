@@ -135,7 +135,7 @@ func TestKeyboard(t *testing.T) {
 	} else {
 		f.Close()
 	}
-	name := "Clipboard Bridge test " + time.Now().Format("150405.000")
+	name := "CBB test " + time.Now().Format("150405.000")
 	k, err := Open(Device, name)
 	if err != nil {
 		t.Fatal(err)

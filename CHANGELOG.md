@@ -11,7 +11,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own
   remote (`internal/tvremote/appletv`), with no key presses. The TV must allow access to
-  everyone on the same network. Tested against a fake Apple TV; not yet on a real one.
+  everyone on the same network. Tested on an Apple TV 4K (tvOS 27.2).
 - A Mac with a Secure Enclave (Apple silicon or the T2 chip) keeps its member, admin and server
   keys there (`internal/sekey`, through Security.framework): the service, a LaunchDaemon, makes
   them without a keychain and keeps only the enclave's encrypted copy, which opens on no other
@@ -837,6 +837,11 @@ All notable changes to clipboardbridge are documented in this file. The format f
   `clipboardbridge.sh`.
 
 ### Changed
+- The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
+  Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
+  installers; the full name in the docs, on the site and in the stores. The apps' identifiers
+  start with `tools.cbb` (the Android app and the watch `tools.cbb`, the iPhone app
+  `tools.cbb`, the Mac app `tools.cbb.mac`), so the apps install anew.
 - The lite member joins a group with `cbb pair`, as a full member in no group does, instead of
   `cbb join` (`cbb pair -code` for the code of a full member, `cbb next pair` for the ZX
   Spectrum Next); `cbb join` is gone. The Next's dot command is `.cbb pair` (0.4.0) and the

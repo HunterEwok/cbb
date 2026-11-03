@@ -6,7 +6,7 @@ import CryptoKit
 import Foundation
 import os
 
-private let credentialLog = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "credentials")
+private let credentialLog = Logger(subsystem: "tools.cbb", category: "credentials")
 
 /// The keys for the servers of each period (docs/protocol.md, section 18),
 /// the server key and on the root the period key: in the Secure Enclave on

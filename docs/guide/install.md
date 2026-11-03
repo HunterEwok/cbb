@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Installing
 
-Clipboard Bridge runs as a small background service on each computer. Its command is `cbb`.
+Copy Beyond Borders runs as a small background service on each computer. Its command is `cbb`.
 Every way below installs the same program; pick the one you like.
 
 ## Linux
@@ -51,7 +51,7 @@ with `--lite --rootless` ([lite member](../../lite/README.md#without-sudo-rootle
 
 Switch to Desktop Mode, open Konsole, give the `deck` user a password once if it has none
 (`passwd`), and run the same command. SteamOS replaces its system files with each update, so
-the installer puts Clipboard Bridge in `/opt/clipboardbridge` instead of `/usr/local`, and
+the installer puts Copy Beyond Borders in `/opt/clipboardbridge` instead of `/usr/local`, and
 tells SteamOS which of its files in `/etc` to keep (`/etc/atomic-update.conf.d/clipboardbridge.conf`).
 It stays installed and in its group across SteamOS updates.
 
@@ -92,8 +92,8 @@ It lets the user signed in at the screen use `cbb` (in a new terminal) and start
 clipboard agent for them. Commands that change the group run in a terminal opened as
 administrator, where Linux and macOS use `sudo`.
 
-It also installs the tray app, which starts at sign-in and is in the Start menu as Clipboard
-Bridge.
+It also installs the tray app, which starts at sign-in and is in the Start menu as
+CBB.
 
 With winget, once the package is in winget's repository:
 
@@ -146,8 +146,8 @@ Diagnostics > Services, and its firewall rules (in pf's anchor `clipboardbridge`
 every filter reload. Turn off the mDNS repeater (Services > mDNS Repeater) while it runs:
 both need UDP port 5353, and the service answers mDNS on each home interface itself.
 pfSense is not supported: the installer runs there too, but it prints the firewall rules
-for Firewall > Rules instead of adding them, and an update of pfSense may remove Clipboard
-Bridge.
+for Firewall > Rules instead of adding them, and an update of pfSense may remove Copy
+Beyond Borders.
 
 On a FreeBSD desktop (X11, or Wayland with the data control protocol, as in KDE, sway and
 Hyprland), the session starts `cbb agent` from XDG autostart and the clipboard joins the
@@ -169,7 +169,7 @@ docker compose -f compose.home.yaml exec clipboardbridge cbb pair
 
 ## The firewall
 
-Clipboard Bridge needs one TCP port, 8764, and mDNS (UDP 5353), both from the home network
+Copy Beyond Borders needs one TCP port, 8764, and mDNS (UDP 5353), both from the home network
 only. The installer finds the firewall (ufw, firewalld, nftables or iptables on Linux, pf
 or ipfw on FreeBSD, the Mac's application firewall, Windows Firewall), lists each rule, and
 asks
@@ -211,7 +211,7 @@ The installers ask once whether to update automatically (`--auto-update on|off`,
 its own: a systemd timer on Linux, a launchd job on a Mac, a scheduled task as SYSTEM on
 Windows, cron on OpenWrt and FreeBSD. Each check downloads the same small files from GitHub
 (or from `dl.cbb.tools` when GitHub does not answer), so GitHub learns this device's address
-and that it uses Clipboard Bridge, as with any download; it sends nothing about the group.
+and that it uses Copy Beyond Borders, as with any download; it sends nothing about the group.
 `sudo cbb update -mirror https://...` takes updates from another mirror instead, which
 needs no trust, since the signatures are checked. The timer's log is `update.log` in
 `/var/lib/clipboardbridge-update` (Linux), `/etc/clipboardbridge-update` (OpenWrt),
@@ -259,7 +259,7 @@ sudo sh /usr/local/share/clipboardbridge/uninstall.sh
 On SteamOS it is `sudo sh /opt/clipboardbridge/share/uninstall.sh`. With Homebrew, run
 `brew uninstall clipboardbridge` after it.
 
-On Windows: Settings, Apps, "Clipboard Bridge", Uninstall.
+On Windows: Settings, Apps, "CBB", Uninstall.
 
 This removes the program, the service and the firewall rules the installer added. The
 device's keys stay, so installing again brings it back into its group. To delete them too,

@@ -116,7 +116,7 @@ if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
 fi
 for f in /usr/local/bin/cbb /opt/clipboardbridge/bin/cbb /etc/systemd/system/clipboardbridge.service; do
 	if [ -e "$f" ]; then
-		echo "install.sh: Clipboard Bridge is installed for the whole system here ($f), and one device runs one service; remove it first or keep it" >&2
+		echo "install.sh: CBB is installed for the whole system here ($f), and one device runs one service; remove it first or keep it" >&2
 		exit 1
 	fi
 done
@@ -191,7 +191,7 @@ fi
 # Without lingering the user's services stop at the last logout.
 if [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" != yes ]; then
 	if ! loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
-		echo "Clipboard Bridge runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger $(id -un)"
+		echo "CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger $(id -un)"
 	fi
 fi
 
@@ -212,7 +212,7 @@ answers "$cbb" || true
 . "$here/../update.sh"
 update_setup "$cbb" "$bin" "$auto"
 
-echo "Clipboard Bridge is running for $(id -un) on TCP port $port, installed without root: it can never be"
+echo "CBB is running for $(id -un) on TCP port $port, installed without root: it can never be"
 echo "the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator"
 echo "allows TCP $port and UDP 5353 from the home network. To remove it: sh $share/uninstall.sh"
 run=cbb
@@ -224,5 +224,5 @@ echo "For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q 
 if [ "$kind" = lite ]; then
 	echo "Next: see lite/README.md; in short, $run pair here, and scan its QR code with the phone app."
 else
-	echo "Next: run $run pair and scan its QR code with the Clipboard Bridge app on your phone."
+	echo "Next: run $run pair and scan its QR code with the CBB app on your phone."
 fi

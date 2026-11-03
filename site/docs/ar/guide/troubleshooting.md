@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 931b83ed0988 -->
+<!-- source: 5174e28a6a9e -->
 # عندما لا يعمل شيء
 
 ابدأ بـ `cbb status` على الجهاز الذي يتصرف خطأً: يخبرك هل الخدمة تعمل، وفي أي مجموعة هو، وأي الأعضاء متصلون، وحالة المزامنة خارج المنزل. كل رسالة قصيرة؛ و`CBB_DEBUG=1 cbb status` (على Windows نفّذ أولًا `$env:CBB_DEBUG = "1"`) يعرض الخطأ الأساسي تحتها. سجل الخدمة فيه التفاصيل دائمًا: على Linux `journalctl -u clipboardbridge`، وسجل موصّل سطح المكتب في سجل الجلسة، `journalctl --user`؛ أما الأنظمة الأخرى ففي [الملفات والسجلات](../reference/devices.md#files-and-logs). ومفتاح التفاصيل لكل جزء، بما فيه التطبيقات والمثبّتات، في [رسائل الخطأ وتفاصيلها](../reference/errors.md).
 
 ## الأوامر
 
-**"the Clipboard Bridge service is not running"**: شغّلها (`sudo systemctl start clipboardbridge` على Linux؛ `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` على Mac؛ `Start-Service clipboardbridge` على Windows) وانظر في سجلها.
+**"the CBB service is not running"**: شغّلها (`sudo systemctl start clipboardbridge` على Linux؛ `sudo launchctl kickstart -k system/io.github.hunterewok.clipboardbridge` على Mac؛ `Start-Service clipboardbridge` على Windows) وانظر في سجلها.
 
 **"permission denied" على مقبس التحكم، بعد التثبيت مباشرة**: أضافك المثبّت إلى المجموعة `clipboardbridge`، ولا تُحتسب المجموعة إلا من تسجيل الدخول التالي. سجّل الخروج ثم الدخول (على Windows افتح نافذة طرفية جديدة)؛ وإلى ذلك الحين يعمل `sudo cbb ...`.
 

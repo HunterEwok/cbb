@@ -5,7 +5,7 @@ import ClipboardBridgeKit
 import Foundation
 import os
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "keys")
+private let log = Logger(subsystem: "tools.cbb", category: "keys")
 
 /// The revocation list of Android attestations that a root phone checks
 /// evidence against (docs/protocol.md, section 17, "Revoked attestations"):

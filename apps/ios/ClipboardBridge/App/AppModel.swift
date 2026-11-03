@@ -6,7 +6,7 @@ import os
 import SwiftUI
 import UIKit
 
-private let log = Logger(subsystem: "io.github.hunterewok.clipboardbridge", category: "app")
+private let log = Logger(subsystem: "tools.cbb", category: "app")
 
 /// The group as the app sees it: whether there is one, its computers,
 /// admitting a device and joining another phone's group. LiveGroup is the
@@ -368,7 +368,7 @@ final class AppModel: ObservableObject {
     /// Admits a scanned computer; on success the app goes Home.
     func scanned(_ text: String) async -> Bool {
         guard case let .joinCode(jc) = Self.read(scanned: text) else {
-            message = String(localized: "Not a Clipboard Bridge QR code.", bundle: .app)
+            message = String(localized: "Not a CBB QR code.", bundle: .app)
             return false
         }
         busy = true
@@ -574,7 +574,7 @@ final class AppModel: ObservableObject {
         case .nothingNew:
             return String(localized: "Nothing new to send or fetch.", bundle: .app)
         case .savedFiles:
-            return String(localized: "Saved in Files, On My iPhone, Clipboard Bridge.", bundle: .app)
+            return String(localized: "Saved in Files, On My iPhone, CBB.", bundle: .app)
         }
     }
 
@@ -961,7 +961,7 @@ final class AppModel: ObservableObject {
             try await WatchLink.shared.admit(admission)
             message = String(localized: "The watch is an admin now. It can freeze an admin computer, remove a device that is no admin and turn things off.", bundle: .app)
         } catch WatchLink.Failure.notReachable {
-            message = String(localized: "Open Clipboard Bridge on the watch, then try again.", bundle: .app)
+            message = String(localized: "Open CBB on the watch, then try again.", bundle: .app)
         } catch WatchLink.Failure.notProtected {
             message = String(localized: "The watch needs a passcode and wrist detection, and must be on your wrist. Turn them on in the Watch app on this iPhone.", bundle: .app)
         } catch WatchLink.Failure.noSecureEnclave {
@@ -1232,7 +1232,7 @@ final class AppModel: ObservableObject {
         if let f = error as? MemberNode.Failure {
             switch f {
             case .notConnected: return String(localized: "The computer is not connected to this phone. Try again when it shows online.", bundle: .app)
-            case .timedOut, .closed: return String(localized: "The computer did not answer. It may run an older version of Clipboard Bridge.", bundle: .app)
+            case .timedOut, .closed: return String(localized: "The computer did not answer. It may run an older version of CBB.", bundle: .app)
             default: break
             }
         }
@@ -1243,7 +1243,7 @@ final class AppModel: ObservableObject {
             return String(localized: "Could not get the image from the computers. Copy it there again, then try again.", bundle: .app)
         }
         if error is LiveGroup.ClipboardUnreadable {
-            return String(localized: "Could not read the clipboard, so it was left as it is. Allow pasting for Clipboard Bridge, or copy the text again.", bundle: .app)
+            return String(localized: "Could not read the clipboard, so it was left as it is. Allow pasting for CBB, or copy the text again.", bundle: .app)
         }
         if error is Arrangement.Refused {
             return String(localized: "The tiles stay as they were: that change does not fit.", bundle: .app)
@@ -1264,7 +1264,7 @@ final class AppModel: ObservableObject {
             return String(localized: "The other phone's group could not be joined. Try again.", bundle: .app)
         }
         if error is LiveGroup.Failure || error is TLSTransport.Failure {
-            return String(localized: "Could not reach the computer. Is it on the same network as this phone, and does its firewall let Clipboard Bridge in?", bundle: .app)
+            return String(localized: "Could not reach the computer. Is it on the same network as this phone, and does its firewall let CBB in?", bundle: .app)
         }
         return String(localized: "Something went wrong. Try again.", bundle: .app)
     }

@@ -1,22 +1,22 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "Opens Clipboard Bridge and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
+    "Opens CBB and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открывает Clipboard Bridge и отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
+            "value": "Открывает CBB и отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
           }
         }
       }
     },
-    "Opens Clipboard Bridge and syncs the clipboard with your computers.": {
+    "Opens CBB and syncs the clipboard with your computers.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открывает Clipboard Bridge и синхронизирует буфер с вашими компьютерами."
+            "value": "Открывает CBB и синхронизирует буфер с вашими компьютерами."
           }
         }
       }

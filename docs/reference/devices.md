@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Devices, ports and files
 
-What each kind of device can do, which ports Clipboard Bridge uses, and where it keeps its
+What each kind of device can do, which ports Copy Beyond Borders uses, and where it keeps its
 files. For developers, the full comparison with its reasons is in
 [Platform parity](../parity.md).
 

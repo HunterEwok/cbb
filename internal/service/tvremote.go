@@ -160,7 +160,7 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 		return nil
 	case tvremote.AppleTV:
 		s.endTVPairing()
-		p, err := appletv.Pair(ctx, host, "Clipboard Bridge "+s.cfg.Name)
+		p, err := appletv.Pair(ctx, host, "CBB "+s.cfg.Name)
 		if err != nil {
 			return tvError(tvremote.TV{Name: host, Kind: kind}, "pairing with", err)
 		}
@@ -174,7 +174,7 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 		return fmt.Errorf("the TV's kind is %s, %s or %s, not %q", tvremote.AndroidTV, tvremote.AppleTV, tvremote.Roku, kind)
 	}
 	if st.Client == nil {
-		c, err := androidtv.NewClient("Clipboard Bridge " + s.cfg.Name)
+		c, err := androidtv.NewClient("CBB " + s.cfg.Name)
 		if err != nil {
 			return err
 		}
@@ -184,7 +184,7 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 		}
 	}
 	s.endTVPairing()
-	p, err := androidtv.Pair(ctx, host, *st.Client, "Clipboard Bridge "+s.cfg.Name)
+	p, err := androidtv.Pair(ctx, host, *st.Client, "CBB "+s.cfg.Name)
 	if err != nil {
 		return tvError(tvremote.TV{Name: host, Kind: kind}, "pairing with", err)
 	}

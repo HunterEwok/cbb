@@ -42,7 +42,7 @@ struct SettingsView: View {
                 })) { Text("Open at login") }
                 if let loginError { Text(verbatim: loginError).foregroundStyle(palette.danger) }
             } footer: {
-                Text("Clipboard Bridge lives in the menu bar; its window opens from there.")
+                Text("CBB lives in the menu bar; its window opens from there.")
             }
             if model.inGroup, let mode = model.status?.mode.flatMap(SyncMode.init(rawValue:)) {
                 Section {
@@ -111,7 +111,7 @@ struct MenuContent: View {
         Button {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
-        } label: { Text("Open Clipboard Bridge") }
+        } label: { Text("Open CBB") }
             .keyboardShortcut("o")
         SettingsLink { Text("Settings…") }.keyboardShortcut(",")
         Divider()

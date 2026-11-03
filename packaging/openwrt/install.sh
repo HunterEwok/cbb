@@ -98,7 +98,7 @@ set +u
 . /lib/functions.sh
 gid=$(group_add_next clipboardbridge)
 if ! user_exists clipboardbridge; then
-	user_add clipboardbridge "" "$gid" "Clipboard Bridge" /var/run/clipboardbridge /bin/false
+	user_add clipboardbridge "" "$gid" "CBB" /var/run/clipboardbridge /bin/false
 fi
 set -u
 
@@ -140,7 +140,7 @@ touch /var/state/clipboardbridge.time
 /etc/init.d/clipboardbridge enable
 if ! ubus call service list >/dev/null 2>&1; then
 	# A root file system without procd, such as a container.
-	echo "Clipboard Bridge is installed; procd is not running here, so it starts at the next boot."
+	echo "CBB is installed; procd is not running here, so it starts at the next boot."
 	exit 0
 fi
 /etc/init.d/clipboardbridge restart
@@ -158,10 +158,10 @@ answers() { # cbb
 	return 1
 }
 answers /usr/bin/cbb || true
-echo "Clipboard Bridge is running on TCP port $port, on the lan zone. To remove it: sh /usr/share/clipboardbridge/uninstall.sh"
+echo "CBB is running on TCP port $port, on the lan zone. To remove it: sh /usr/share/clipboardbridge/uninstall.sh"
 echo "Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one."
 if /usr/bin/cbb version 2>/dev/null | grep -q "lite member"; then
-	echo "Next: run su -s /bin/sh clipboardbridge -c 'cbb pair -name router' and scan its QR code with the Clipboard Bridge app on your phone."
+	echo "Next: run su -s /bin/sh clipboardbridge -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
 else
-	echo "Next: run cbb pair and scan its QR code with the Clipboard Bridge app on your phone."
+	echo "Next: run cbb pair and scan its QR code with the CBB app on your phone."
 fi

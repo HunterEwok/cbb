@@ -20,7 +20,7 @@ final class KeychainTLSTests: XCTestCase {
     /// A keychain key and a self-signed certificate under a fresh label, as
     /// LiveGroup makes them, and the identity they give.
     private func identity() throws -> (SecIdentity, Data) {
-        let label = "io.github.hunterewok.clipboardbridge.test-\(UUID().uuidString)"
+        let label = "tools.cbb.test-\(UUID().uuidString)"
         labels.append(label)
         let key = try KeychainIdentity.makeKey(label: label)
         let signer = try SecKeySigner(key)
@@ -38,7 +38,7 @@ final class KeychainTLSTests: XCTestCase {
     /// under the same label, still signs once the identity is made.
     func testHandshakeWithAnOldKey() async throws {
         let (server, _) = try identity()
-        let label = "io.github.hunterewok.clipboardbridge.test-\(UUID().uuidString)"
+        let label = "tools.cbb.test-\(UUID().uuidString)"
         labels.append(label)
         var error: Unmanaged<CFError>?
         let attrs: [CFString: Any] = [kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeySizeInBits: 256,

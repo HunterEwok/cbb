@@ -1115,7 +1115,7 @@ jobs:
           if (-not (Test-Path "$env:ProgramFiles\clipboardbridge\cbb-desktop.exe")) { throw 'no tray app' }
           $trayRun = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'clipboardbridge tray').'clipboardbridge tray'
           if ($trayRun -notmatch 'cbb-desktop\.exe"$') { throw "the tray app's sign-in entry: $trayRun" }
-          if (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Clipboard Bridge.lnk")) { throw 'no Start menu shortcut' }
+          if (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\CBB.lnk")) { throw 'no Start menu shortcut' }
           $status = & $cbb status | Out-String
           if ($status -notmatch 'Not in a group') { throw "cbb status: $status" }
           $before = (Get-Item $cbb).LastWriteTimeUtc
@@ -1312,7 +1312,7 @@ jobs:
           }
           if (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name clipboardbridge -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the sign-in entry' }
           if (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'clipboardbridge tray' -ErrorAction SilentlyContinue) { throw 'uninstall.ps1 left the tray app''s sign-in entry' }
-          if (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Clipboard Bridge.lnk") { throw 'uninstall.ps1 left the Start menu shortcut' }
+          if (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\CBB.lnk") { throw 'uninstall.ps1 left the Start menu shortcut' }
           if ([Environment]::GetEnvironmentVariable('Path', 'Machine') -match 'clipboardbridge') { throw 'uninstall.ps1 left the PATH entry' }
           net.exe localgroup clipboardbridge 2>&1 | Out-Null
           if ($LASTEXITCODE -eq 0) { throw 'uninstall.ps1 -Purge left the group' }

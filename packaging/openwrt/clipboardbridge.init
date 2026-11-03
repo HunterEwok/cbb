@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# The Clipboard Bridge service on OpenWrt (/etc/init.d/clipboardbridge).
+# The CBB service on OpenWrt (/etc/init.d/clipboardbridge).
 # procd runs cbb service, the full or the lite member, as the user
 # clipboardbridge, with no capabilities
 # and no_new_privs, and starts it again when it stops. The settings are in

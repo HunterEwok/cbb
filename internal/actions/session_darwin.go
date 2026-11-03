@@ -71,7 +71,7 @@ func run(ctx context.Context, name string, args ...string) error {
 	}
 	msg := strings.TrimSpace(string(out))
 	if strings.Contains(msg, "-1743") {
-		return &Refusal{Reason: "macOS did not let Clipboard Bridge's agent control the Mac; its user allows it in System Settings, Privacy & Security, Automation"}
+		return &Refusal{Reason: "macOS did not let CBB's agent control the Mac; its user allows it in System Settings, Privacy & Security, Automation"}
 	}
 	return fmt.Errorf("%s: %w: %s", name, err, msg)
 }

@@ -7,7 +7,7 @@
 # paste-receive on -console). Installed and started by install.sh --console.
 # TIOCSTI into a console needs CAP_SYS_ADMIN, its only capability.
 [Unit]
-Description=Clipboard Bridge remote paste on the text console
+Description=CBB remote paste on the text console
 Documentation=https://github.com/HunterEwok/clipboardbridge
 After=clipboardbridge.service
 Wants=clipboardbridge.service

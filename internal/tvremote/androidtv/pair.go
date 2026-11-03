@@ -60,7 +60,7 @@ func NewClient(name string) (Client, error) {
 	now := time.Now()
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: name, Organization: []string{"Clipboard Bridge"}},
+		Subject:      pkix.Name{CommonName: name, Organization: []string{"CBB"}},
 		NotBefore:    now.Add(-time.Hour),
 		NotAfter:     now.AddDate(30, 0, 0),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,

@@ -197,7 +197,7 @@ func (p *portal) session() (*ei.Keyboard, bool, error) {
 	if err := obj.Call(portalRemote+".ConnectToEIS", 0, session, map[string]dbus.Variant{}).Store(&fd); err != nil {
 		return nil, false, fmt.Errorf("ConnectToEIS: %w", err)
 	}
-	kbd, err := ei.Dial(int(fd), "Clipboard Bridge", 5*time.Second)
+	kbd, err := ei.Dial(int(fd), "CBB", 5*time.Second)
 	return kbd, false, err
 }
 

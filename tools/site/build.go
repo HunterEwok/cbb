@@ -41,7 +41,7 @@ const siteURL = "https://cbb.tools"
 // faq are the questions on the home page, in English, also given to search
 // engines as a FAQPage. An answer is plain text: no links.
 var faq = []struct{ Q, A string }{
-	{"Is it free?", "Yes. Clipboard Bridge is free software: no price, no subscription, no ads."},
+	{"Is it free?", "Yes. Copy Beyond Borders is free software: no price, no subscription, no ads."},
 	{"Can anyone else read what I copy?", "No. Your devices talk only to each other, and always encrypted. Away from home a server may pass the traffic on, but it cannot read it."},
 	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on makes sync away from home simpler."},
 	{"Does it work away from home?", "Yes. Your devices reach the group through its hub, a computer of yours or a phone while its app is open, over an encrypted tunnel. For now this takes a port forward on your router or a small server of your own."},
@@ -50,7 +50,7 @@ var faq = []struct{ Q, A string }{
 	{"Where is the iPhone app?", "It comes with TestFlight, which is not open yet. Until then an iPhone joins with a shortcut, and a computer holds the group."},
 	{"Does it need the internet?", "No. At home your devices need only your own network, with or without the internet."},
 	{"What if I lose my phone?", "Remove it from the group on another device that can admit devices. If the lost phone made the group, another phone of yours that is an admin takes the group over."},
-	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Clipboard Bridge joins iPhone, Android, Windows, Mac and Linux, at home and away, with no account."},
+	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Copy Beyond Borders joins iPhone, Android, Windows, Mac and Linux, at home and away, with no account."},
 }
 
 // Language is one language of the site.
@@ -363,7 +363,7 @@ func render(root string) (map[string][]byte, []*translator, error) {
 		if line.Coming, err = tr.t("The website opens soon."); err != nil {
 			return nil, nil, err
 		}
-		if line.Meanwhile, err = tr.t("Meanwhile, Clipboard Bridge is on %s.", link("https://github.com/HunterEwok/clipboardbridge", "GitHub")); err != nil {
+		if line.Meanwhile, err = tr.t("Meanwhile, Copy Beyond Borders is on %s.", link("https://github.com/HunterEwok/clipboardbridge", "GitHub")); err != nil {
 			return nil, nil, err
 		}
 		soon = append(soon, line)
@@ -411,7 +411,7 @@ func render(root string) (map[string][]byte, []*translator, error) {
 		}
 	}
 	// Without the language chooser, "/" falls back to English.
-	out["index.html"] = []byte(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=en/"><title>Clipboard Bridge</title><a href="en/">Clipboard Bridge</a>` + "\n")
+	out["index.html"] = []byte(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=en/"><title>Copy Beyond Borders</title><a href="en/">Copy Beyond Borders</a>` + "\n")
 	tmpl, err := template.New("soon.html").Funcs(asset).ParseFiles(filepath.Join(root, "templates", "soon.html"))
 	if err != nil {
 		return nil, nil, err
@@ -458,8 +458,8 @@ func securityTxt(r Release) []byte {
 // manifest describes the site to a phone that keeps it on its home screen.
 func manifest() ([]byte, error) {
 	return json.MarshalIndent(map[string]any{
-		"name":             "Clipboard Bridge",
-		"short_name":       "Clipboard Bridge",
+		"name":             "Copy Beyond Borders",
+		"short_name":       "CBB",
 		"start_url":        "/",
 		"display":          "browser",
 		"theme_color":      "#0A7A3E",

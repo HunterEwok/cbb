@@ -2,7 +2,7 @@
 # Roadmap
 
 What comes next, the designs that are agreed but not built yet, and the questions to study
-before anything is planned. How Clipboard Bridge works today is in [design.md](design.md),
+before anything is planned. How Copy Beyond Borders works today is in [design.md](design.md),
 the decisions in [decisions.md](decisions.md); what works on real devices is the
 [status table](../README.md#status).
 
@@ -41,6 +41,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     ([design](design.md#the-phone-as-the-hub-while-its-app-is-open)).
 - **32.** What the forwarder and the relay learn, cut to short server credentials, in 0.6
     ([design](design.md#what-the-servers-learn)).
+- **48.** The name Copy Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
+    CBB under the icons, the full name in the stores, the docs and the site; the apps'
+    identifiers start with `tools.cbb`.
 
 ### Partly done
 
@@ -211,7 +214,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **38.** **Planned after 0.6.** The Android app and Google: the project has a Google Play
     Console account (2026-10-27).
     - Before 2027, when Android installs sideloaded apps only from registered developers:
-      register the package `io.github.hunterewok.clipboardbridge` there with the
+      register the package `tools.cbb` there with the
       certificate of the release key that signs the APKs of the releases
       (docs/maintaining.md, "Android signing key"), so that those APKs and their own
       updates (docs/apps.md, "Updates") keep installing.
@@ -326,27 +329,6 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     asks to add it; a card then gives the steps to Settings, Accessibility, Touch, Back Tap,
     Double Tap. The file names the release bundle identifier, so it waits for TestFlight; a
     copy for a Personal Team build tests it before.
-- **48.** **Planned for 0.6, before the launch.** A new name: **Copy Beyond Borders**,
-    short **CBB**. At least four other projects are called "Clipboard Bridge", two of them
-    older than this one and one in Google Play, so the old name cannot be found or told
-    apart. "Copy Beyond Borders" has no trademark or project of that name (searched
-    2026-11-02); the borders are the ones between a user's devices, never a way around a
-    network's blocks, and every text that explains the name says so. Where it goes:
-    - "CBB" under the icons (the iPhone's home screen, Android's launcher, the Windows Start
-      menu and taskbar, the Linux desktop's menus and tray, the Mac's `CBB.app`), in short
-      titles, Shortcuts and Siri; "Copy Beyond Borders" in full in the apps' About and first
-      screens, the website, the README, the docs and the release notes.
-    - The app stores: "Copy Beyond Borders" with a subtitle that says what it does
-      ("Clipboard sync between devices"). Not "CBB" alone: the App Store has an app called
-      "CBB", and the EU has a registered word mark "CBB" for software (class 9), so the full
-      name leads in every store; the App Store's review notes explain that CBB is the
-      short form of the project's own name.
-    - What stays: the command `cbb`, its subcommands, the paths, the service and package
-      names, the bundle and application identifiers and the repository's address (so
-      installs, updates and links keep working), and the site `cbb.tools`.
-    - The README and the site say once "formerly Clipboard Bridge", and BRAND.md takes the
-      new name with the same rules (no exclusive claim to "CBB", which others use).
-    - The translations of the apps and the site in the project's languages (item 49).
 - **49.** **Planned for 0.7.** One set of languages across the project: every app (the
     phones, the watches, the Mac app, the tray app) speaks the languages of the website
     (Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and offers a choice

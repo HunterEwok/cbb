@@ -6,7 +6,7 @@
 # group's keys and keeps nothing about the devices: no log names an
 # address, a group or a device, and on disk there is only its keys.
 [Unit]
-Description=Clipboard Bridge blind relay
+Description=CBB blind relay
 Documentation=https://github.com/HunterEwok/clipboardbridge/blob/main/docs/admin/self-hosting.md
 After=network-online.target
 Wants=network-online.target

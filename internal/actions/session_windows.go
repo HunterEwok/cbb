@@ -51,7 +51,7 @@ func (win) Run(ctx context.Context, name string) error {
 		if err := shutdownRight(); err != nil {
 			return err
 		}
-		msg, _ := windows.UTF16PtrFromString("Clipboard Bridge: an admin of your group asked for this.")
+		msg, _ := windows.UTF16PtrFromString("CBB: an admin of your group asked for this.")
 		return windows.InitiateSystemShutdownEx(nil, msg, uint32(ScheduleDelay.Seconds()), false, name == Reboot, shutdownReason)
 	case Cancel:
 		if err := shutdownRight(); err != nil {

@@ -121,7 +121,7 @@ class Settings(context: Context) {
      * failed: on in debug builds, off in release ones, and either way what
      * the switch in Settings (seven taps on the version show it) or the
      * launch extra ShowErrorDetails set last
-     * (adb shell am start -n io.github.hunterewok.clipboardbridge/.MainActivity --ez ShowErrorDetails true).
+     * (adb shell am start -n tools.cbb/io.github.hunterewok.clipboardbridge.MainActivity --ez ShowErrorDetails true).
      */
     var showsErrorDetails: Boolean
         get() = if (prefs.contains(ERROR_DETAILS)) prefs.getBoolean(ERROR_DETAILS, false) else debuggable

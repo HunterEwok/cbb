@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # How it works
 
-This page explains Clipboard Bridge in pictures: who is in a group, how the devices find
+This page explains Copy Beyond Borders in pictures: who is in a group, how the devices find
 each other at home, and every way they can stay in touch when they are away. The exact
 rules are in the [design](../design.md); you do not need them to use it.
 
@@ -21,11 +21,11 @@ each other, always encrypted (TLS). Each device has a role:
 
 The phone's key is made in its security chip (the Secure Enclave, Android's Keystore) and
 never leaves it; each use asks for your face, fingerprint or passcode. A computer keeps its
-keys in files that only Clipboard Bridge reads.
+keys in files that only Copy Beyond Borders reads.
 
 ### Rootless members
 
-Normally the installer needs `sudo` once, so that Clipboard Bridge runs under an
+Normally the installer needs `sudo` once, so that Copy Beyond Borders runs under an
 account of its own: your browser, your games and every other program you run cannot read
 its keys, and the system keeps the service in a tight sandbox. A rootless install skips
 that, for a computer where you have no `sudo`, at work for example. It syncs like any
@@ -99,7 +99,7 @@ to your hub. Two kinds:
 
 - **Your own**: `cbb forward` on any server with a public address, a cheap virtual server
   for example ([running your own servers](../admin/self-hosting.md)).
-- **The Clipboard Bridge forwarder** at `cbb.tools`, run by the project for everyone. It
+- **The Copy Beyond Borders forwarder** at `cbb.tools`, run by the project for everyone. It
   is being tested and not open to everyone yet; its address and key will be on this page
   when it opens.
 
@@ -152,5 +152,5 @@ yourself.
 
 Nothing else is involved: no accounts, no cloud, no telemetry. Everyone else who can see
 something, from your Wi-Fi to the update check, is listed in [privacy](privacy.md). With
-sync away from home on, the Clipboard Bridge service on a computer may reach only the home
+sync away from home on, the Copy Beyond Borders service on a computer may reach only the home
 network and the group's own hub, forwarder and relay.

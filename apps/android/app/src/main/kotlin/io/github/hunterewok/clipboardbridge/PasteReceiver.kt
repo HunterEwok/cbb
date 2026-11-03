@@ -91,9 +91,9 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
             body,
             if (CopyWatcher.isOn(context)) {
                 // On in the settings but not bound: the system stopped it, as Android TV 14 does with some services.
-                "Clipboard Bridge's accessibility service is on in the settings but the system stopped it; its user turns it off and on again"
+                "CBB's accessibility service is on in the settings but the system stopped it; its user turns it off and on again"
             } else {
-                "this device pastes through Clipboard Bridge's accessibility service, which is off; its user turns it on in the app's settings"
+                "this device pastes through CBB's accessibility service, which is off; its user turns it on in the app's settings"
             },
         )
         return when (val r = target.inject(text, body.mode ?: "paste", body.enter, body.kind == "secret")) {

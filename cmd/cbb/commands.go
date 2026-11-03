@@ -230,7 +230,7 @@ func certLine(endsMS int64, now time.Time) string {
 	end := time.UnixMilli(endsMS)
 	switch {
 	case !now.Before(end):
-		return fmt.Sprintf("This device's certificate ended on %s, before an admin renewed it: the group's members refuse it. If this device's date (%s) is wrong, set it right; otherwise, to join again, remove Clipboard Bridge with its keys (uninstall --purge), install it again and join.", end.Local().Format(time.DateOnly), now.Local().Format(time.DateOnly))
+		return fmt.Sprintf("This device's certificate ended on %s, before an admin renewed it: the group's members refuse it. If this device's date (%s) is wrong, set it right; otherwise, to join again, remove CBB with its keys (uninstall --purge), install it again and join.", end.Local().Format(time.DateOnly), now.Local().Format(time.DateOnly))
 	case end.Sub(now) < certWarning:
 		return fmt.Sprintf("This device's certificate ends on %s and no admin has renewed it: connect it to the group's root or an admin before then, or it must join again.", end.Local().Format(time.DateOnly))
 	}
@@ -241,7 +241,7 @@ func certLine(endsMS int64, now time.Time) string {
 func writeStatus(w io.Writer, st *control.Status, devs []control.Device, now time.Time) {
 	fmt.Fprintf(w, "%s\n", st.Version)
 	if st.Update != "" {
-		fmt.Fprintf(w, "Clipboard Bridge %s is available. To install it: %s\n", st.Update, updateCommand())
+		fmt.Fprintf(w, "CBB %s is available. To install it: %s\n", st.Update, updateCommand())
 	}
 	if np := noPasteboard(); np != "" {
 		fmt.Fprintln(w, np)
@@ -258,7 +258,7 @@ func writeStatus(w io.Writer, st *control.Status, devs []control.Device, now tim
 		fmt.Fprintln(w, l)
 	}
 	if st.Removed {
-		fmt.Fprintln(w, "This device was removed from the group: its members refuse it. To join again, remove Clipboard Bridge with its keys (uninstall --purge), install it again and join.")
+		fmt.Fprintln(w, "This device was removed from the group: its members refuse it. To join again, remove CBB with its keys (uninstall --purge), install it again and join.")
 	} else if st.Frozen {
 		fmt.Fprintln(w, "Another admin froze this computer's admin key: its members refuse it until the group's root or an admin phone unfreezes it (cbb unfreeze on the root).")
 	} else if st.TakenOverBy != "" {
@@ -462,7 +462,7 @@ func cmdPairPhone(newToken bool, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "\n  (or open http://%s/ in Safari)\n\n", m.Address)
 	fmt.Fprintf(stdout, "The profile's fingerprint must start with:  %s\n", shortFingerprint(m.Fingerprint))
 	fmt.Fprintln(stdout, "  Compare it on the iPhone before you trust the profile: Settings > General >")
-	fmt.Fprintln(stdout, "  VPN & Device Management > Clipboard Bridge > More Details. Only this terminal")
+	fmt.Fprintln(stdout, "  VPN & Device Management > CBB > More Details. Only this terminal")
 	fmt.Fprintln(stdout, "  shows the right one; if it differs, remove the profile and stop.")
 	fmt.Fprintf(stdout, "The code the shortcut asks for:            %s %s\n", m.Code[:3], m.Code[3:])
 	fmt.Fprintf(stdout, "\nWaiting up to %d minutes. Press Ctrl+C to cancel.\n", m.Expires/60)
@@ -523,7 +523,7 @@ func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(m.Addrs) == 0 {
 		return fail(stderr, errors.New("this device has no address on the home network; connect it to the network, or use cbb pair -code"))
 	}
-	fmt.Fprintln(stdout, "In the Clipboard Bridge app, tap \"Connect a new device\" (or run the shortcut")
+	fmt.Fprintln(stdout, "In the CBB app, tap \"Connect a new device\" (or run the shortcut")
 	fmt.Fprintln(stdout, "\"clipboardbridge: add a computer\") and scan this:")
 	fmt.Fprintln(stdout)
 	jc := phone.JoinCode{Code: h.Code, Addrs: m.Addrs, Fingerprint: m.Fingerprint}

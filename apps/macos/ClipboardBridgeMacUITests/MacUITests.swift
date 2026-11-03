@@ -8,7 +8,7 @@ import XCTest
 /// underneath only with error details on, the Settings window's switch, and
 /// Russian. A running service and the admin prompts are the bench's.
 final class MacUITests: XCTestCase {
-    static let plain = "The Clipboard Bridge service is not running on this Mac. Install it, or start it with sudo launchctl kickstart system/io.github.hunterewok.clipboardbridge."
+    static let plain = "The CBB service is not running on this Mac. Install it, or start it with sudo launchctl kickstart system/io.github.hunterewok.clipboardbridge."
 
     override func setUp() {
         continueAfterFailure = false

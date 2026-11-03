@@ -1,18 +1,18 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Quick start
 
-Clipboard Bridge gives your phone and your computers one clipboard: copy on one, paste on
+Copy Beyond Borders gives your phone and your computers one clipboard: copy on one, paste on
 another. The devices form a **group** on your home network. The phone holds the group's key
 and lets each new device in, so nobody can join without you.
 
 ![The phone adds each computer by its QR code; then the devices share one clipboard](../images/group.svg)
 
-It takes four steps: install the app, install Clipboard Bridge on a computer, scan the
+It takes four steps: install the app, install Copy Beyond Borders on a computer, scan the
 computer's QR code, and turn on sharing on that computer.
 
 A group can have a computer at its heart or be made of phones only: both work, and we recommend
 a computer that is often on, which keeps sync away from home going at any time ([two kinds of group](how-it-works.md#two-kinds-of-group)).
-With phones only, skip steps 2 to 4: on each other phone tap **I already use Clipboard Bridge
+With phones only, skip steps 2 to 4: on each other phone tap **I already use Copy Beyond Borders
 on another phone**, and scan the code it shows with **Connect a new device** on the first (**+** once it has
 devices).
 
@@ -26,7 +26,7 @@ devices).
 
 Open the app. You will add the first computer in step 3.
 
-## 2. Install Clipboard Bridge on a computer
+## 2. Install Copy Beyond Borders on a computer
 
 Pick any computer on your home network: a laptop, a desktop, a Raspberry Pi.
 
@@ -42,7 +42,7 @@ On **Windows** 10 or 11, in a PowerShell opened with "Run as administrator":
 irm https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.ps1 | iex
 ```
 
-The installer checks the download, starts Clipboard Bridge and asks two questions: whether
+The installer checks the download, starts Copy Beyond Borders and asks two questions: whether
 to open the firewall for it (answer `y`) and whether to update itself automatically (`y`
 is a good answer too). Then log out and in again once, or open a new terminal on
 Windows. Homebrew, winget, Docker and the details are in [Installing](install.md).
@@ -100,7 +100,7 @@ such as a home server, a Raspberry Pi or a desktop:
   [Away from home](away-from-home.md).
 
 Add a second phone too, so that losing one phone loses nothing: on the second phone tap
-**I already use Clipboard Bridge on another phone** and scan its code with **+** on the
+**I already use Copy Beyond Borders on another phone** and scan its code with **+** on the
 first. The first phone makes it an admin.
 
 ## What next

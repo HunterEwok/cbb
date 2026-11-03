@@ -3,7 +3,7 @@
 # The generated ClipboardBridgeMac.xcodeproj and Info.plist are not committed.
 name: ClipboardBridgeMac
 options:
-  bundleIdPrefix: io.github.hunterewok
+  bundleIdPrefix: tools.cbb
   deploymentTarget:
     macOS: "14.0"
   developmentLanguage: en
@@ -29,7 +29,7 @@ targets:
       path: ClipboardBridgeMac/Info.plist
       properties:
         CFBundleName: CBB
-        CFBundleDisplayName: Clipboard Bridge
+        CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ru]
         LSApplicationCategoryType: public.app-category.utilities
@@ -38,11 +38,11 @@ targets:
         LSUIElement: true
         # The type of a dragged tile, which stays in the app (Views/Arrange.swift).
         UTExportedTypeDeclarations:
-          - UTTypeIdentifier: io.github.hunterewok.clipboardbridge.mac.tile
+          - UTTypeIdentifier: tools.cbb.mac.tile
             UTTypeConformsTo: [public.data]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.hunterewok.clipboardbridge.mac
+        PRODUCT_BUNDLE_IDENTIFIER: tools.cbb.mac
         PRODUCT_NAME: CBB
         # Drawn by tools/icon.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

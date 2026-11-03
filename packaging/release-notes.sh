@@ -6,7 +6,7 @@
 #
 #   sh packaging/release-notes.sh v1.2.3
 #
-# what Clipboard Bridge is, the version's section of CHANGELOG.md, how to install
+# what Copy Beyond Borders is, the version's section of CHANGELOG.md, how to install
 # it, how to verify the files, where the source and the license are, and
 # where to report problems. The release workflow publishes them; GitHub
 # appends the list of merged pull requests.
@@ -43,7 +43,7 @@ if [ -z "$(printf '%s' "$changes" | tr -d '[:space:]')" ]; then
 fi
 
 cat <<NOTES
-Clipboard Bridge is one clipboard for your Apple devices and every Linux machine on your home
+Copy Beyond Borders is one clipboard for your Apple devices and every Linux machine on your home
 network: copy on one device, paste on another. It works only on the local network, with
 no cloud, accounts or telemetry, and all traffic is end-to-end encrypted between paired
 devices.
@@ -60,7 +60,7 @@ curl -fsSL $repo/releases/download/$tag/get.sh | sudo sh
 \`\`\`
 
 \`get.sh\` downloads the archive for the machine, checks it against \`SHA256SUMS\`, installs
-the service and, when ufw is active, allows Clipboard Bridge's ports from the home network only.
+the service and, when ufw is active, allows CBB's ports from the home network only.
 
 **macOS** (Apple silicon; \`amd64\` instead of \`arm64\` for Intel), in Terminal:
 
@@ -131,7 +131,7 @@ system. Each \`clipboardbridge-lite\` archive holds \`clipboardbridge-lite/\`: t
 
 ## Source and license
 
-Clipboard Bridge is free software under the [GNU Affero General Public License, version 3
+Copy Beyond Borders is free software under the [GNU Affero General Public License, version 3
 only]($repo/blob/$tag/LICENSE). The complete source of this release is the tag
 [\`$tag\`]($repo/tree/$tag) and the source archives below, from which these files are built
 by [the release workflow]($repo/blob/$tag/.github/workflows/release.yml).

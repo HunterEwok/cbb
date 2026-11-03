@@ -71,8 +71,8 @@ if [ -f "$support/firewall" ]; then
 fi
 if [ "$purge" = yes ]; then
 	rm -rf "$support"
-	echo "Clipboard Bridge is removed, with this Mac's keys; it left its group."
+	echo "CBB is removed, with this Mac's keys; it left its group."
 else
 	rm -f "$support/control.sock" "$support/admin.sock"
-	echo "Clipboard Bridge is removed. Its keys stay in $support/state for a reinstall; --purge removes them."
+	echo "CBB is removed. Its keys stay in $support/state for a reinstall; --purge removes them."
 fi

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 503bd28272de -->
+<!-- source: b1ce9d06c9cb -->
 # 远程粘贴
 
 适合想把一段文本放进另一台设备上某个应用的人：把密码输入电视的登录表单，把命令输入服务器的终端，把地址输入房间另一头的电脑。由群组的管理员发送文本，它会落到该设备当前获得焦点的地方，以粘贴或逐键输入的方式出现。
@@ -21,7 +21,7 @@
 
 在 GNOME 和 KDE 上，第一次粘贴会弹出系统的屏幕远程控制对话框；允许一次，之后就会记住。要跳过这个对话框，请安装 uinput 辅助程序：加上 `--uinput` 重新安装（`curl -fsSL https://github.com/HunterEwok/clipboardbridge/releases/latest/download/get.sh | sudo sh -s -- --uinput`），它会添加一个虚拟键盘，只为屏幕前的用户按下 Shift+Insert 和 Enter。
 
-没有桌面时，tmux 和文本控制台需要它们各自的辅助程序。每次安装都会加入 Clipboard Bridge 在 `/etc/tmux.conf` 中的那部分，它会随 tmux 一起启动 tmux 辅助程序；`install.sh --console` 会添加控制台辅助程序的服务。
+没有桌面时，tmux 和文本控制台需要它们各自的辅助程序。每次安装都会加入 Copy Beyond Borders 在 `/etc/tmux.conf` 中的那部分，它会随 tmux 一起启动 tmux 辅助程序；`install.sh --console` 会添加控制台辅助程序的服务。
 
 ## 由管理员粘贴
 

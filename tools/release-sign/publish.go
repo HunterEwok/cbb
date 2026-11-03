@@ -227,7 +227,7 @@ func publish(args []string) error {
 	step("%s is published; the published workflow updates the Homebrew tap", tag)
 	// The channel names the release only once it is public.
 	delete(files, "release.json")
-	return putChannel(s.repo, cur, files, "Clipboard Bridge "+tag)
+	return putChannel(s.repo, cur, files, "CBB "+tag)
 }
 
 // renew signs the channel file again with the release key, and keys.json
@@ -363,7 +363,7 @@ func putChannel(repo string, cur map[string]branchFile, files map[string]release
 // makeBranch makes the branch channel: one commit without a parent, with
 // its README.
 func makeBranch(repo string) error {
-	readme := "# The release channel\n\nThe current signed `keys.json` and `stable.json` of Clipboard Bridge's releases\n" +
+	readme := "# The release channel\n\nThe current signed `keys.json` and `stable.json` of CBB's releases\n" +
 		"(docs/protocol.md, section 16, on the main branch). `release-sign publish` writes them, and\n" +
 		"the channel workflow takes `stable.json` as cbb.tools renews it every week.\n"
 	call := func(v, body any, method, path string) error {

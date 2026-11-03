@@ -18,7 +18,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.hunterewok.clipboardbridge"
+        applicationId = "tools.cbb"
         minSdk = 29
         targetSdk = 37
         // The version of the last release, from ../version.properties, which F-Droid reads

@@ -133,7 +133,7 @@ func TestRemoteAppleTV(t *testing.T) {
 	if tvs := m.Status.TVs; len(tvs) != 1 || tvs[0].Name != "Lounge" || tvs[0].Kind != "appletv" || tvs[0].Pairing {
 		t.Fatalf("paired: %+v", tvs)
 	}
-	if names := tv.Names(); len(names) != 1 || names[0] != "Clipboard Bridge deck" {
+	if names := tv.Names(); len(names) != 1 || names[0] != "CBB deck" {
 		t.Errorf("the TV knows the remote as %q", names)
 	}
 

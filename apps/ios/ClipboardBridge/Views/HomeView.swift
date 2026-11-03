@@ -49,7 +49,7 @@ struct HomeView: View {
             }
             .modifier(DeviceSearch(on: many, query: $query))
             .background(AppBackground())
-            .navigationTitle(Text("Clipboard Bridge"))
+            .navigationTitle(Text("CBB"))
             .navigationDestination(for: AppModel.Computer.ID.self) { DeviceDetailView(id: $0) }
             .navigationDestination(for: CollectionRoute.self) { CollectionPage(id: $0.id) }
             .navigationDestination(isPresented: $settings) { SettingsView() }
@@ -223,7 +223,7 @@ struct HomeView: View {
         if !model.isAdmin {
             Text("Only an admin phone can add or remove devices.").font(.footnote).foregroundStyle(palette.textDim)
         } else if model.devices.filter({ $0.admin }).count == 1 {
-            Text("Lost a phone? Make a second phone an admin: on it, tap I already use Clipboard Bridge on another phone, then scan its code here with +.")
+            Text("Lost a phone? Make a second phone an admin: on it, tap I already use CBB on another phone, then scan its code here with +.")
                 .font(.footnote).foregroundStyle(palette.textDim)
         }
     }

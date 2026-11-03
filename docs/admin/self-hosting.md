@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Running your own servers
 
-Clipboard Bridge needs no server at home: the hub is one of your own computers. A server on
+Copy Beyond Borders needs no server at home: the hub is one of your own computers. A server on
 the internet helps in two cases:
 
 - a **forwarder**, when the internet cannot reach your hub (carrier-grade NAT), or for VLESS
@@ -89,9 +89,9 @@ TCP 8764 for the forwarder or the relay (the relay's port is the one after `-lis
 TCP 443 only with VLESS. With ufw:
 
 ```sh
-sudo ufw allow 8764/udp comment 'Clipboard Bridge'
-sudo ufw allow 8764/tcp comment 'Clipboard Bridge'
-sudo ufw allow 443/tcp comment 'Clipboard Bridge VLESS'    # only with VLESS
+sudo ufw allow 8764/udp comment 'Copy Beyond Borders'
+sudo ufw allow 8764/tcp comment 'Copy Beyond Borders'
+sudo ufw allow 443/tcp comment 'Copy Beyond Borders VLESS'    # only with VLESS
 ```
 
 With firewalld: `sudo firewall-cmd --permanent --add-port=8764/udp --add-port=8764/tcp`

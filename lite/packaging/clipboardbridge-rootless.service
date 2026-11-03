@@ -8,7 +8,7 @@
 # of the user can read its keys; a system install (sudo sh install.sh) keeps
 # the service under an account and a sandbox of its own instead.
 [Unit]
-Description=Clipboard Bridge lite member (rootless)
+Description=CBB lite member (rootless)
 Documentation=https://github.com/HunterEwok/clipboardbridge/blob/main/lite/README.md
 After=network-online.target
 

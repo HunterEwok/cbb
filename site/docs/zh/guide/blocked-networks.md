@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 5a17c9adbba6 -->
+<!-- source: 90564bcf632e -->
 # 封锁 VPN 的网络
 
-离家后，你的设备通过群组自己的 WireGuard 隧道连接中枢。有些网络会封锁 WireGuard：酒店和办公室的 Wi-Fi、部分移动运营商，以及整个过滤 VPN 的国家。Clipboard Bridge 有两种绕开的办法。两者都在中枢上开启，设备会在下次回家与中枢碰面时获取。
+离家后，你的设备通过群组自己的 WireGuard 隧道连接中枢。有些网络会封锁 WireGuard：酒店和办公室的 Wi-Fi、部分移动运营商，以及整个过滤 VPN 的国家。Copy Beyond Borders 有两种绕开的办法。两者都在中枢上开启，设备会在下次回家与中枢碰面时获取。
 
 | 方式 | 网络看到的是 | 你需要 | 适用于 |
 |---|---|---|---|
