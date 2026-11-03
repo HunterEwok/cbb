@@ -540,7 +540,7 @@ func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
 		port = service.MemberPort
 	}
 	fmt.Fprintf(stdout, "If the phone cannot connect, a firewall may be in the way: TCP %d must be open to\n", port)
-	fmt.Fprintln(stdout, "the home network; the installer opens it in ufw or firewalld (docs/guide/install.md).")
+	fmt.Fprintln(stdout, firewallHint)
 	fmt.Fprint(stdout, "\nWithout a phone: run cbb pair on the group's root or an admin and type its code here: ")
 
 	ended := make(chan error, 1)

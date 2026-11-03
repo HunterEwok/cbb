@@ -18,6 +18,7 @@ func writeQR(w io.Writer, text string) error {
 	if err != nil {
 		return err
 	}
+	enableVT(w)
 	const quiet = 2
 	n := code.Size + 2*quiet
 	black := func(x, y int) bool {

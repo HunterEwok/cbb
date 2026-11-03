@@ -1134,6 +1134,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `cbb pair` draws its QR code in the console that Windows PowerShell 5.1 and cmd open in:
+  it turns on the console's escape sequences, which only Windows Terminal had on, so the
+  code came out as `←[97;107m▀` text. Its note on a firewall in the way names Windows
+  Firewall there, not ufw or firewalld.
 - `cbb next link` on the Next's Pi starts the lite member's service when none runs, pointed at
   its ports, once the Next's clock has set the Pi's: NextPi starts nothing at boot, and after the
   Next was switched off the Pi stayed out of the group until the service was started by hand.
