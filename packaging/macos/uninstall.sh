@@ -10,7 +10,8 @@
 # their plists, the service's entry in the application firewall, the binary
 # in /usr/local/bin (but not Homebrew's link there: brew uninstall removes
 # that), the update timer and cbb update's folder, the settings in
-# /etc/cbb and the logs. The device's keys and group, in
+# /etc/cbb and the logs; after the installer package (pkg.sh), CBB.app in
+# /Applications and the package's receipt too. The device's keys and group, in
 # /Library/Application Support/cbb/state, stay for a reinstall
 # unless --purge; the hidden _cbb user and group stay too, since
 # files may still belong to them.
@@ -60,6 +61,12 @@ if [ -f /usr/local/bin/cbb ] && [ ! -L /usr/local/bin/cbb ]; then
 	rm -f /usr/local/bin/cbb
 fi
 rm -rf /Library/Logs/cbb /usr/local/share/cbb /etc/cbb
+# The app the package installed; one put there by hand or from source stays.
+if pkgutil --pkg-info tools.cbb.pkg >/dev/null 2>&1; then
+	pkill -x CBB 2>/dev/null || true
+	rm -rf /Applications/CBB.app
+	pkgutil --forget tools.cbb.pkg >/dev/null
+fi
 support="/Library/Application Support/cbb"
 rm -rf "${support:?}/bin"
 fw=/usr/libexec/ApplicationFirewall/socketfilterfw

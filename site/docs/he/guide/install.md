@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1ce6c4f40f0 -->
+<!-- source: 95a9f0f2e940 -->
 # התקנה
 
 Copy Beyond Borders רץ כשירות קטן ברקע בכל מחשב. הפקודה שלו היא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותה תוכנה; בחרו את זו שנוחה לכם.
@@ -41,7 +41,11 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 ## Mac
 
-Apple silicon או Intel, ב-Terminal, אותה פקודה כמו ב-Linux:
+Apple silicon או Intel, macOS 14 ומעלה: הורידו את `cbb-X.Y.Z.pkg` מ
+[הגרסה האחרונה](https://github.com/HunterEwok/cbb/releases/latest) ופתחו אותו. הוא מתקין את אפליקציית CBB
+בשורת התפריטים ואת השירות, שניהם חתומים על ידי הפרויקט ונבדקו על ידי Apple.
+
+או ב-Terminal, בלי האפליקציה, אותה פקודה כמו ב-Linux:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
@@ -167,4 +171,4 @@ sudo sh /usr/local/share/cbb/uninstall.sh
 
 ב-Windows: הגדרות, אפליקציות, "CBB", הסרת התקנה.
 
-פעולה זו מסירה את התוכנה, את השירות ואת כללי חומת האש שתוכנית ההתקנה הוסיפה. מפתחות המכשיר נשארים, ולכן התקנה מחדש מחזירה אותו לקבוצה שלו. כדי למחוק גם אותם, הוסיפו `--purge` (‏`-Purge` ב-Windows, עם `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), ואז הסירו את המכשיר מהקבוצה ממכשיר אחר (‏`sudo cbb remove NAME`, או בטלפון).
+פעולה זו מסירה את התוכנה, את השירות, את כללי חומת האש שתוכנית ההתקנה הוסיפה, וב-Mac גם את האפליקציה שה-`.pkg` התקין. מפתחות המכשיר נשארים, ולכן התקנה מחדש מחזירה אותו לקבוצה שלו. כדי למחוק גם אותם, הוסיפו `--purge` (‏`-Purge` ב-Windows, עם `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), ואז הסירו את המכשיר מהקבוצה ממכשיר אחר (‏`sudo cbb remove NAME`, או בטלפון).
