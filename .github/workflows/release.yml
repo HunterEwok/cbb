@@ -359,14 +359,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: z88dk from the cache
-        id: z88dk
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/z88dk
-          key: z88dk-${{ env.Z88DK }}-zxn-${{ runner.os }}
-      - name: z88dk from its source
-        if: steps.z88dk.outputs.cache-hit != 'true'
+      - name: z88dk from its source (no cache in a release; about 8 minutes)
         working-directory: ${{ runner.temp }}
         run: |
           sudo apt-get update -q
