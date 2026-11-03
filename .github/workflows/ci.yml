@@ -2201,8 +2201,8 @@ jobs:
       - name: the files for cbb.tools (packaging/zxnext/site.sh; CBB stands in for the Pi's cbb)
         run: |
           sh packaging/zxnext/site.sh apps/zxnext/build apps/zxnext/build/CBB "$RUNNER_TEMP/site"
-          test "$(wc -l <"$RUNNER_TEMP/site/next/LIST")" -eq 4
-          cmp "$RUNNER_TEMP/site/n" apps/zxnext/build/CBB
+          test "$(wc -l <"$RUNNER_TEMP/site/zxnext/LIST")" -eq 4
+          cmp "$RUNNER_TEMP/site/zxnext/CBB" apps/zxnext/build/CBB
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: clipboardbridge-zxnext-dot

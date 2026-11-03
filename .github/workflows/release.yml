@@ -389,7 +389,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/lite/clipboardbridge-lite-linux-armv6.tar.gz" -C "$RUNNER_TEMP/lite"
           sh packaging/zxnext/site.sh apps/zxnext/build "$RUNNER_TEMP/lite/clipboardbridge-lite/cbb" "$RUNNER_TEMP/site"
           mkdir -p "$RUNNER_TEMP/dist"
-          tar -czf "$RUNNER_TEMP/dist/clipboardbridge-zxnext.tar.gz" -C "$RUNNER_TEMP/site" n next
+          tar -czf "$RUNNER_TEMP/dist/clipboardbridge-zxnext.tar.gz" -C "$RUNNER_TEMP/site" zxnext
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: clipboardbridge-zxnext.tar.gz

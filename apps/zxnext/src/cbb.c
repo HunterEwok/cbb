@@ -601,7 +601,7 @@ static int net(int argc, char **argv)
 // they come over plain HTTP; each is checked against the list before it
 // replaces the old one, which guards against a damaged download.
 #define SITE "cbb.tools"
-#define SITE_DIR "/next/"
+#define SITE_DIR "/zxnext/"
 #define SITE_LIST "LIST"
 // The Pi's cbb: on the card, and where NextPi's shell finds it.
 #define PI_CARD "/cbb/CBBPI.BIN"

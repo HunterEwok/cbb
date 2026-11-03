@@ -43,7 +43,7 @@ NextBASIC:
 
 ```
 MKDIR "/cbb": CD "/cbb"
-.http -h cbb.tools -u /n -f CBB
+.http -h cbb.tools -u /zxnext -f CBB
 ../CBB install
 ```
 

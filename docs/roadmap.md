@@ -892,7 +892,7 @@ signature (apps/zxnext/README.md, "Install"):
   `.http` has no TLS: `CBB`, `CBB.DRV`, `PIBRIDGE`, the Pi's `cbb` for ARMv6, and a list
   with each file's size, CRC-32 and MD5 (`packaging/zxnext/site.sh`, the release's
   `clipboardbridge-zxnext.tar.gz`).
-- One line fetches `.cbb`: `.http -h cbb.tools -u /n -f CBB`, then `../CBB install` fetches
+- One line fetches `.cbb`: `.http -h cbb.tools -u /zxnext -f CBB`, then `../CBB install` fetches
   the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
   list before it replaces the old one, a download that broke goes on from where it
   stopped, and a line shows the percentage, the kilobytes, the speed and the time left;

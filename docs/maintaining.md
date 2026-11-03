@@ -364,8 +364,7 @@ secret the release still succeeds and warns that there is no feed.
 
 The release workflow's `zxnext` job builds `.cbb`, `CBB.DRV` and `PIBRIDGE`, takes the lite
 member for the Pi Zero from the `lite` job, and lays them out for cbb.tools
-(`packaging/zxnext/site.sh`) as `clipboardbridge-zxnext.tar.gz`: `n` (the dot command, which
-`.http -h cbb.tools -u /n -f CBB` fetches), and `next/` with the four files and `LIST`, a line
+(`packaging/zxnext/site.sh`) as `clipboardbridge-zxnext.tar.gz`: `zxnext/` with the four files and `LIST`, a line
 of name, size, CRC-32 and MD5 for each, which `.cbb install` checks every download against.
 
 NextZXOS's `.http` and the ESP8266 have no TLS, so these two paths are served over plain HTTP
@@ -373,12 +372,14 @@ on port 80, where the rest of the site redirects to HTTPS. Once, in the port-80 
 live configuration (merge it by hand; that file has edits of its own):
 
 ```nginx
-location = /n { alias /srv/cbb.tools/www/next/CBB; default_type application/octet-stream; }
-location /next/ { root /srv/cbb.tools/www; default_type application/octet-stream; }
+location = /zxnext { alias /srv/cbb.tools/www/zxnext/CBB; default_type application/octet-stream; }
+location /zxnext/ { root /srv/cbb.tools/www; default_type application/octet-stream; }
 ```
 
-For each release, unpack the archive into `/srv/cbb.tools/www/` (`n` beside the site's pages,
-and `next/`). The checks guard against a damaged download, not against a changed one: a
+The first serves the dot command at `/zxnext`, which `.http -h cbb.tools -u /zxnext -f CBB`
+fetches. A `return 301` at the server's level runs before any location, so the redirect to
+HTTPS has to move into `location / { ... }`. For each release, unpack the archive into
+`/srv/cbb.tools/www/`. The checks guard against a damaged download, not against a changed one: a
 signed list that the Next and the Pi check is the next step (docs/roadmap.md, "Installing").
 
 ## Signing for Windows

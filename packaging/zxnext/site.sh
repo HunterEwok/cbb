@@ -10,10 +10,12 @@
 # BUILD is apps/zxnext/build (CBB, CBB.DRV, PIBRIDGE), PI_CBB the lite
 # member for the Pi Zero (arm-unknown-linux-musleabihf). OUTDIR gets
 #
-#   n            CBB again: `.http -h cbb.tools -u /n -f CBB` fetches it
-#   next/CBB, next/CBB.DRV, next/PIBRIDGE, next/cbb
-#   next/LIST    a line NAME SIZE CRC32 MD5 for each, which .cbb checks
+#   zxnext/CBB, zxnext/CBB.DRV, zxnext/PIBRIDGE, zxnext/cbb
+#   zxnext/LIST  a line NAME SIZE CRC32 MD5 for each, which .cbb checks
 #                each download against (CRC-32 on the Next, MD5 on the Pi)
+#
+# The site serves zxnext/CBB at /zxnext as well, which
+# `.http -h cbb.tools -u /zxnext -f CBB` fetches (docs/maintaining.md).
 set -eu
 
 [ $# -eq 3 ] || { echo "usage: $0 BUILD PI_CBB OUTDIR" >&2; exit 2; }
@@ -25,20 +27,19 @@ crc32() {
     gzip -c <"$1" | tail -c 8 | od -An -tx1 -N4 | awk '{ print $4 $3 $2 $1 }'
 }
 
-mkdir -p "$out/next"
+mkdir -p "$out/zxnext"
 for f in CBB CBB.DRV PIBRIDGE; do
     test -s "$build/$f" || { echo "$0: $build/$f is missing" >&2; exit 1; }
-    cp "$build/$f" "$out/next/$f"
+    cp "$build/$f" "$out/zxnext/$f"
 done
 test -s "$pi" || { echo "$0: $pi is missing" >&2; exit 1; }
-cp "$pi" "$out/next/cbb"
-cp "$build/CBB" "$out/n"
+cp "$pi" "$out/zxnext/cbb"
 
-: >"$out/next/LIST"
+: >"$out/zxnext/LIST"
 for f in CBB CBB.DRV PIBRIDGE cbb; do
-    p=$out/next/$f
+    p=$out/zxnext/$f
     size=$(wc -c <"$p" | tr -d ' ')
     md5=$(md5sum <"$p" | cut -c1-32)
-    printf '%s %s %s %s\n' "$f" "$size" "$(crc32 "$p")" "$md5" >>"$out/next/LIST"
+    printf '%s %s %s %s\n' "$f" "$size" "$(crc32 "$p")" "$md5" >>"$out/zxnext/LIST"
 done
-cat "$out/next/LIST"
+cat "$out/zxnext/LIST"
