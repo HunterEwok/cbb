@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "frame.h"
+#include "logo.h"
 #include "link.h"
 
 #define VERSION "0.5.0"
@@ -704,15 +705,64 @@ static void http_close(void)
     }
 }
 
-// Shows where a download stands on one line, overwritten in place.
-static void progress(const char *name, uint32_t got, uint32_t size, uint16_t start)
+// The logo, from tools/icon: at the top in the middle, 6 pixel rows down,
+// so that the key's cells (blue) and the clipboard's (yellow, the icon's
+// gold) never share an 8 by 8 cell, which holds two colours only.
+#define LOGO_X 13
+#define LOGO_DY 6
+
+static void draw_logo(void)
+{
+    uint8_t x, y;
+    zx_border(INK_WHITE);
+    zx_cls(PAPER_WHITE | INK_BLACK);
+    for (y = 0; y < LOGO_SIZE; y++)
+        for (x = 0; x < LOGO_SIZE / 8; x++) *zx_pxy2saddr(LOGO_X * 8 + x * 8, y + LOGO_DY) = logo[y * (LOGO_SIZE / 8) + x];
+    for (y = 0; y < (LOGO_SIZE + LOGO_DY + 7) / 8; y++)
+        for (x = 0; x < LOGO_SIZE / 8; x++)
+            *zx_cxy2aaddr(LOGO_X + x, y) = PAPER_WHITE | ((x == 2 || x == 3) && y >= 3 && y <= 5 ? INK_BLUE : INK_YELLOW);
+    // The ROM's print position: AT 8,0, under the logo.
+    putchar(22);
+    putchar(8);
+    putchar(0);
+}
+
+// The progress line: a bar of 7 cells in half steps, the percentage, the
+// kilobytes so far, the speed and the time left, 31 characters, which
+// fit the 32 columns; each call goes back over the last with the ROM's
+// cursor-left code (8), since CR starts a new line on the Spectrum.
+#define BAR_CELLS 7
+#define PROGRESS_LEN 31
+static uint8_t progress_shown;
+
+static void progress(uint32_t got, uint32_t size, uint16_t start)
 {
     uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50;
     uint32_t rate = secs ? got / secs : 0;
     uint16_t left = rate ? (uint16_t)((size - got) / rate) : 0;
     uint8_t pct = size ? (uint8_t)(got * 100 / size) : 100;
+    uint8_t halves = (uint8_t)((uint16_t)pct * (BAR_CELLS * 2) / 100), i;
+    char speed[8];
     SCR_CT = 255;
-    printf("\r%-8s %3u%% %5luK %4luB/s %2u:%02u ", name, pct, got >> 10, rate, left / 60, left % 60);
+    if (progress_shown)
+        for (i = 0; i < PROGRESS_LEN; i++) putchar(8);
+    for (i = 0; i < BAR_CELLS; i++) {
+        // The ROM's block graphics: 143 full, 138 the left half.
+        putchar(halves >= 2 * i + 2 ? 143 : halves == 2 * i + 1 ? 138 : '-');
+    }
+    if (rate < 10240) sprintf(speed, "%u.%uK/s", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));
+    else sprintf(speed, "%uK/s", (uint16_t)(rate >> 10));
+    if (left > 5999) left = 5999;
+    printf(" %3u%% %4luK %6s %2u:%02u", pct, got >> 10, speed, left / 60, left % 60);
+    progress_shown = 1;
+}
+
+// Ends the progress line.
+static void progress_end(void)
+{
+    if (progress_shown) printf("\n");
+    progress_shown = 0;
+    zx_border(INK_WHITE);
 }
 
 // CRC-32 by a table: the Pi's cbb is megabytes, and frame.c's bit by bit
@@ -773,20 +823,22 @@ static int fetch(struct item *it)
     fh = esx_f_open(it->part, ESX_MODE_W | ESX_MODE_OPEN_CREAT);
     if (errno) return fail("cannot write to /cbb", it->part);
     esx_f_seek(fh, got, ESX_SEEK_SET);
-    if (got) printf("%-8s goes on from %luK\n", it->name, got >> 10);
+    printf("%s, %luK", it->name, (it->size + 1023) >> 10);
+    if (got) printf(", from %luK", got >> 10);
+    printf(":\n");
     while (got < it->size) {
         n = it->size - got > CHUNK ? CHUNK : (uint16_t)(it->size - got);
         err = http_range(it->name, got, n);
         if (err == LINK_BREAK) {
             esx_f_close(fh);
-            printf("\n");
+            progress_end();
             return fail("stopped; .cbb install goes on from here", 0);
         }
         if (err) {
             // The server may have closed the connection: open it again.
             if (++tries > 5) {
                 esx_f_close(fh);
-                printf("\n");
+                progress_end();
                 return fail("the download broke off; .cbb install goes on from here", line);
             }
             http_close();
@@ -796,16 +848,16 @@ static int fetch(struct item *it)
         tries = 0;
         if (esx_f_write(fh, text, n) != n) {
             esx_f_close(fh);
+            progress_end();
             return fail("cannot write to the card", it->part);
         }
         crc = crc_add(crc, text, n);
         got += n;
         zx_border((uint8_t)(got >> 12) & 7);
-        progress(it->name, got, it->size, start);
+        progress(got, it->size, start);
     }
     esx_f_close(fh);
-    zx_border(INK_BLACK);
-    printf("\n");
+    progress_end();
     if (crc != it->crc) {
         esx_f_unlink(it->part);
         return fail("the file arrived damaged; run .cbb install again", it->name);
@@ -916,10 +968,10 @@ static int to_pi(struct item *it)
         uint16_t i;
         for (i = 0; i < n; i++) link_send(text[i]);
         sent += n;
-        progress("to Pi", sent, it->size, start);
+        progress(sent, it->size, start);
     }
     esx_f_close(fh);
-    printf("\n");
+    progress_end();
     link_prompt();
     sprintf(line,
             "cd " PI_DIR " && [ \"$(md5sum <cbb.new | cut -c1-32)\" = %s ] && chmod 755 cbb.new && "
@@ -957,9 +1009,11 @@ static int install(void)
     int err = 0;
     if (net_on()) return fail("the network runs; stop it first with .cbb net off", 0);
     crc_init();
+    draw_logo();
+    printf("clipboardbridge " VERSION "\n\n");
     esx_f_mkdir("/cbb");
     pi_answers = !pi_md5(pimd5);
-    printf("From " SITE "; SPACE stops,\n.cbb install goes on.\n");
+    printf("From " SITE "; SPACE stops,\nand .cbb install goes on.\n\n");
     if (http_open()) {
         http_close();
         link_use(LINK_PI);
@@ -987,7 +1041,7 @@ static int install(void)
     } else if (strcmp(pimd5, pi->md5) == 0) {
         printf("%-8s up to date (Pi)\n", pi->name);
     } else {
-        printf("To the Pi:\n");
+        printf("The Pi's cbb, %luK, to the Pi:\n", (pi->size + 1023) >> 10);
         if (to_pi(pi)) return 1;
         // The card keeps no copy of the Pi's program.
         esx_f_unlink(pi->card);
