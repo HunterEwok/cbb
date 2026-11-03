@@ -883,6 +883,8 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- An Apple TV added without `-name` (`cbb remote add -appletv`) takes the name it announces on
+  the home network, the one in its Settings, instead of its address.
 - The project's name is now Copy Beyond Borders, short CBB: "CBB" under the icons, in the
   Start menu, the tray, the menu bar and the messages of `cbb`, the services and the
   installers; the full name in the docs and on the site, and "CBB: Copy Beyond Borders" in the stores. The apps' identifiers

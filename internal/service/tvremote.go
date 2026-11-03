@@ -160,13 +160,18 @@ func (s *Service) addTV(ctx context.Context, st *tvremote.State, m *control.Mess
 		return nil
 	case tvremote.AppleTV:
 		s.endTVPairing()
+		name := m.NewName
+		if name == "" {
+			// The name the TV shows in its Settings, as it announces it.
+			name = appleTVName(ctx, host)
+		}
 		p, err := appletv.Pair(ctx, host, "CBB "+s.cfg.Name)
 		if err != nil {
 			return tvError(tvremote.TV{Name: host, Kind: kind}, "pairing with", err)
 		}
 		s.tv.mu.Lock()
 		defer s.tv.mu.Unlock()
-		s.tv.apple, s.tv.host, s.tv.name = p, host, m.NewName
+		s.tv.apple, s.tv.host, s.tv.name = p, host, name
 		s.tv.timer = time.AfterFunc(tvPairWait, s.endTVPairing)
 		return nil
 	case tvremote.AndroidTV:
@@ -292,6 +297,10 @@ func (s *Service) tvStatus() []control.TV {
 	s.tv.mu.Unlock()
 	return out
 }
+
+// appleTVName finds the name an Apple TV announces by mDNS; tests stand
+// in for it.
+var appleTVName = appletv.Name
 
 // tvDial connects to a TV: only on the home network (tvremote.Dialer). A
 // variable for the tests.
