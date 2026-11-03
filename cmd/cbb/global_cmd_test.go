@@ -127,6 +127,13 @@ func TestGlobalCommand(t *testing.T) {
 			code: 1, stderr: "takes no -forwarder-key"},
 		{name: "default is no key of another forwarder", args: []string{"global", "hub", "-forwarder", "198.51.100.9:8764", "-forwarder-key", "default"},
 			code: 1, stderr: "goes with -forwarder default"},
+		{name: "hub elsewhere", args: []string{"global", "hub", "-on", "desk"},
+			check: sent(control.OpAway, func(m *control.Message) bool { return m.Device == "desk" && project(m) }), stdout: "desk is a hub of the group now."},
+		{name: "hub elsewhere at an address", args: []string{"global", "hub", "-on", "desk", "203.0.113.8:8764"},
+			check: sent(control.OpAway, func(m *control.Message) bool {
+				return m.Name == "hub" && m.Device == "desk" && m.Forwarder == "" && strings.Join(m.Addrs, ",") == "203.0.113.8:8764"
+			})},
+		{name: "hub elsewhere takes none of this hub's settings", args: []string{"global", "hub", "-on", "desk", "-obfuscate"}, code: 2, stderr: "-on takes only"},
 		{name: "hub with a strange firewall", args: []string{"global", "hub", "-firewall", "maybe", "a:1"}, code: 2},
 		{name: "move", args: []string{"global", "move", "desk", "203.0.113.8:8764"},
 			check: sent(control.OpAway, func(m *control.Message) bool {

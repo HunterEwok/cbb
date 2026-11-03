@@ -116,6 +116,8 @@ protocol GroupController: AnyObject {
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation
     func moveHub(to id: String) async throws
+    /// Makes a connected admin computer a hub of the group as well.
+    func makeHub(_ id: String) async throws
     /// The phone at a blind relay; nil without a group.
     func relayStatus() async -> AppModel.BlindRelay?
     /// Meets the group at a blind relay; both empty leave it.
@@ -161,6 +163,7 @@ extension GroupController {
         throw HubOnPhone.Failure.notRunning
     }
     func moveHub(to id: String) async throws { throw HubOnPhone.Failure.notRunning }
+    func makeHub(_ id: String) async throws { throw HubOnPhone.Failure.notRunning }
     func relayStatus() async -> AppModel.BlindRelay? { nil }
     func setRelay(address: String, pin: String) async throws {}
 }
@@ -206,6 +209,9 @@ final class AppModel: ObservableObject {
         var mode: String?
         /// The quick actions its hello says are on, while it is connected.
         var actions: [String] = []
+        /// The records let it be a hub: the root's own device or an admin
+        /// with the hub power.
+        var mayHub = false
     }
 
     enum SyncResult: Equatable {
@@ -714,6 +720,19 @@ final class AppModel: ObservableObject {
         } catch {
             hubNote = Self.describe(error)
         }
+        await refreshHub()
+    }
+
+    /// Makes a connected admin computer a hub of the group as well
+    /// (docs/protocol.md, section 11, "Several hubs").
+    func makeHub(_ id: String) async {
+        do {
+            try await group.makeHub(id)
+            message = String(localized: "It is a hub now: your devices reach the group through it when they are away from home.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        devices = group.devices
         await refreshHub()
     }
 

@@ -670,6 +670,9 @@ func (s *Service) away(ctx context.Context, m *control.Message) error {
 	if m.Name == "off" && m.Device != "" {
 		return s.awayOffOn(ctx, m.Device)
 	}
+	if m.Name == "hub" && m.Device != "" {
+		return s.makeHub(ctx, m.Device, m.Forwarder, m.ForwarderKey, m.Addrs)
+	}
 	if m.Name == "hub" && !id.IsAdmin() {
 		return errors.New("only the group's root or an admin can be its hub, since the members take the hub's offer from them only; make this device an admin first (cbb admin on the root)")
 	}

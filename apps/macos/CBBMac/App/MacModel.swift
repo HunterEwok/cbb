@@ -221,6 +221,13 @@ final class MacModel: ObservableObject {
     /// which -allow-file-key consents to.
     func makeAdmin(_ id: String) async { await admin(["admin", "-allow-file-key", id], done: String(localized: "It is an admin now.")) }
     func freeze(_ id: String) async { await admin(["freeze", id], done: String(localized: "Frozen.")) }
+    /// Makes a device a hub of the group for sync away from home, reached
+    /// through the project's forwarder: this Mac as cbb global hub does, or
+    /// another admin computer, to which cbb sends a signed hub command.
+    func makeHub(_ d: Control.Device) async {
+        let args = d.isSelf ? ["global", "hub", "-firewall", "no"] : ["global", "hub", "-on", d.id]
+        await admin(args, done: String(localized: "It is a hub now."))
+    }
     /// On the group's root: voids both histories of every key that signed two.
     func resolve() async {
         await admin(["resolve"], done: String(localized: "Both histories are void. The device signs its records again by itself."))

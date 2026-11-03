@@ -315,7 +315,7 @@ final class LiveGroup: GroupController {
                   keysInFile: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.file,
                   rootless: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.rootless, frozen: $0.frozen,
                   device: $0.id == g.device ? Self.ownDevice : infos[$0.id], mode: $0.id == g.device ? modeBox.mode : modes[$0.id],
-                  actions: actions[$0.id] ?? [])
+                  actions: actions[$0.id] ?? [], mayHub: g.records.mayHost($0.id))
         }
     }
 
@@ -1453,6 +1453,35 @@ final class LiveGroup: GroupController {
         try hub.turnOff()
         await away.keep(from: id, offer: offer.with(psk: psk, hub: nil))
         await restartSync()
+    }
+
+    /// Makes a connected admin computer a hub of the group as well
+    /// (docs/protocol.md, section 11, "Several hubs"): a hub command signed
+    /// with this phone's root or admin key after Face ID, reached through
+    /// this phone's forwarder or else the project's. This phone stays what
+    /// it is: a hub hands the computer its clients, and with sync away from
+    /// home on this phone hands itself and keeps the computer's offer. The
+    /// computer must have sync away from home on; only its own user turns
+    /// that on. A computer that is no admin yet becomes one first, on the
+    /// root.
+    func makeHub(_ id: String) async throws {
+        guard let node else { throw MemberNode.Failure.notConnected }
+        if state?.records.mayHost(id) != true { try await makeAdmin(id, allowFileKey: false) }
+        var forwarder = hub?.forwarder
+        if forwarder == nil { forwarder = await Self.projectForwarder() }
+        guard let fw = forwarder else { throw HubOnPhone.Failure.notRunning }
+        let ca = try await caSigner(reason: String(localized: "Make a computer a hub", bundle: .app))
+        guard let g = state else { return }
+        var clients = hub?.isOn == true ? hub?.handover ?? [] : []
+        var psk: Data?
+        if let away, await away.isOn, let key = await away.publicKey, let p = await away.psk {
+            clients.append(PhoneHub.Client(device: g.device, key: key, psk: p))
+            psk = p
+        }
+        let c = try g.hubCommand(to: id, forwarder: (fw.endpoint, fw.pin), clients: clients, caSigner: ca, now: Date())
+        let r = try await node.command(c, to: id, timeout: 20)
+        guard r.done else { throw CommandRefused(reason: r.reason ?? r.status) }
+        if let o = r.tunnel, let psk { await away?.keep(from: id, offer: o.with(psk: psk, hub: nil)) }
     }
 
     /// Tells the group the app came to the front or went to the background;

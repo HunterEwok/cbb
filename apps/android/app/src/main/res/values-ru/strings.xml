@@ -276,6 +276,12 @@
     <string name="hub_move_confirm">Перенести хаб</string>
     <string name="hub_moved">Теперь хаб — компьютер; телефон подключается к нему издалека.</string>
     <string name="hub_move_refused">Компьютер не стал хабом.</string>
+    <string name="make_hub">Сделать хабом</string>
+    <string name="make_hub_title">Сделать %1$s хабом?</string>
+    <string name="make_hub_body">Вне дома ваши устройства будут связываться с группой через него, через пересыльщик проекта на cbb.tools. Синхронизация вне дома должна быть уже включена на нём: включает её только его пользователь.</string>
+    <string name="made_hub">Теперь это хаб: вне дома ваши устройства связываются с группой через него.</string>
+    <string name="make_hub_refused">Компьютер не стал хабом.</string>
+    <string name="reason_make_hub">Сделать компьютер хабом</string>
     <string name="hub_move_not_running">Хаб можно перенести, только пока он работает с форвардером.</string>
     <string name="relay_title">Слепой релей</string>
     <string name="relay_off">Выключено: этот телефон ни с кем не встречается на релее.</string>

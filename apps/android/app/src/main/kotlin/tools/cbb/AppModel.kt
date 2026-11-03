@@ -939,6 +939,28 @@ class AppModel(private val app: Context) {
         update()
     }
 
+    /**
+     * Makes a connected admin computer a hub of the group as well
+     * (docs/protocol.md, section 11, "Several hubs"); the reason it
+     * refused, if it does, shows under the message.
+     */
+    suspend fun makeHub(id: String) {
+        message = try {
+            group.makeHub(id)
+            Note(R.string.made_hub)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LiveGroup.CommandRefused) {
+            Log.e(TAG, app.getString(R.string.make_hub_refused), e)
+            Note(R.string.make_hub_refused, e.reason, error = true)
+        } catch (e: MemberNode.ProtocolException) {
+            describe(e, R.string.error_no_answer)
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
     /** A tile below this phone's: a device, or a collection with its devices as the group lists them. */
     sealed interface Arranged {
         val key: String

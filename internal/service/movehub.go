@@ -324,3 +324,118 @@ func (s *Service) waitClientsLeft(ctx context.Context, nd *node.Node, self group
 	case <-time.After(moveLinger):
 	}
 }
+
+// makeHub makes the member target, by name or device ID, a hub of the
+// group with a hub command this device signs as an admin, while this
+// device stays what it is (docs/protocol.md, section 11, "Several hubs").
+// The target must be an admin computer that may be a hub and has sync away
+// from home on: only its own user turns that on (D-45). It is reached
+// through the forwarder and at the addresses given. A hub hands it its
+// clients, and a device with sync away from home on hands itself, so that
+// the new hub serves them before they meet it at home; this device keeps
+// the new hub's offer.
+func (s *Service) makeHub(ctx context.Context, target, fwd, fwdKey string, addrs []string) error {
+	s.mu.Lock()
+	id, nd := s.id, s.nd
+	s.mu.Unlock()
+	if id == nil || nd == nil {
+		return s.errNoGroup()
+	}
+	d, err := s.findDevice(target)
+	if err != nil {
+		return err
+	}
+	switch {
+	case d.Self:
+		return errors.New("-on names this device; cbb global hub makes it a hub here")
+	case d.Role != group.RoleFull:
+		return fmt.Errorf("%s is no computer: a phone is the hub while its app is open (This phone as the hub there), and a lite member or a watch is never one", d.Name)
+	case !s.mayHost(group.DeviceID(d.ID)):
+		return fmt.Errorf("%s may not be a hub: only the group's root or an admin with the hub power is one; make it an admin first", d.Name)
+	case d.Frozen:
+		return fmt.Errorf("%s is frozen; an admin thaws it first", d.Name)
+	}
+	ca, chain := id.Signer()
+	if ca == nil {
+		return errors.New("only an admin makes a device a hub: the group's root, an admin it made (cbb admin), or an admin phone")
+	}
+	if s.frozen(id) {
+		return errFrozen
+	}
+	order := group.HubOrder{Endpoints: addrs}
+	switch {
+	case fwd != "" && fwdKey == forward.ProjectKey:
+		order.Forwarder = &group.HubForwarder{Endpoint: fwd, Key: s.projectPins()[0]}
+	case fwd != "":
+		order.Forwarder = &group.HubForwarder{Endpoint: fwd, Key: fwdKey}
+	case fwdKey != "":
+		return errors.New("a forwarder's key without its address")
+	case len(addrs) == 0:
+		return errors.New("give the new hub's addresses away from home, or a forwarder")
+	}
+	if _, _, err := hubAddrs(fwd, fwdKey, addrs, s.projectPins()); err != nil {
+		return err
+	}
+
+	s.tunMu.Lock()
+	st := s.tunnel
+	var selfPSK *tunnel.Key
+	if st != nil && st.Relay == nil {
+		if st.IsHub {
+			for _, m := range st.Members {
+				if m.Device != d.ID {
+					order.Clients = append(order.Clients, group.HubClient{Device: group.DeviceID(m.Device), Key: m.PublicKey[:], PSK: m.PresharedKey[:]})
+				}
+			}
+		}
+		psk, pub := st.PSK, st.Key.Public()
+		selfPSK = &psk
+		order.Clients = append(order.Clients, group.HubClient{Device: id.ID, Key: pub[:], PSK: psk[:]})
+	}
+	s.tunMu.Unlock()
+	if len(order.Clients) > group.MaxHubClients {
+		order.Clients = order.Clients[len(order.Clients)-group.MaxHubClients:]
+	}
+
+	now := s.cfg.now()
+	body := group.CommandBody{Type: group.CommandHub, Group: group.Tag(id.GroupCA.Cert), By: id.ID, To: group.DeviceID(d.ID),
+		ID: group.NewCommandID(), TimeMS: now.UnixMilli(), ExpiresMS: now.Add(group.CommandLifetime).UnixMilli(), Hub: &order}
+	cmd, err := s.signCommand(body, ca, chain)
+	if err != nil {
+		return err
+	}
+	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	res, err := nd.SendCommand(cctx, group.DeviceID(d.ID), cmd, body.ID, nil)
+	if err != nil {
+		return fmt.Errorf("making %s a hub: %w", d.Name, err)
+	}
+	if res.Status != node.ResultDone {
+		return fmt.Errorf("%s did not become a hub: %s", d.Name, res.Reason)
+	}
+	s.logf("cbb: %s is a hub of the group now", d.Name)
+	if res.Tunnel == nil || selfPSK == nil {
+		return nil
+	}
+	o := *res.Tunnel
+	o.PSK = selfPSK[:]
+	link, err := hubLink(group.DeviceID(d.ID), o)
+	if err != nil {
+		return fmt.Errorf("the offer of %s: %w", d.Name, err)
+	}
+	s.tunMu.Lock()
+	defer s.tunMu.Unlock()
+	if s.tunnel != st {
+		return nil // sync away from home changed meanwhile
+	}
+	old := *st
+	changed, err := st.SetHub(link)
+	if err != nil || !changed {
+		return err
+	}
+	if err := st.Save(s.cfg.StateDir); err != nil {
+		*st = old
+		return fmt.Errorf("saving the tunnel state: %w", err)
+	}
+	return nil
+}

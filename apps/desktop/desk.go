@@ -278,7 +278,7 @@ func (d *Desk) Fetch() {
 	})
 }
 
-// Rename, Remove, MakeAdmin, Freeze, Unfreeze, SetAway and SetMode change the group:
+// Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, SetAway and SetMode change the group:
 // cbb does them as the administrator (admin_*.go), after the system asks.
 // MakeAdmin's dialog warns that the computer's key is a file, which
 // -allow-file-key consents to.
@@ -289,6 +289,18 @@ func (d *Desk) MakeAdmin(id string) {
 }
 func (d *Desk) Freeze(id string)   { d.admin([]string{"freeze", id}, false, "Frozen.") }
 func (d *Desk) Unfreeze(id string) { d.admin([]string{"unfreeze", id}, false, "Unfrozen.") }
+
+// MakeHub makes a device a hub of the group for sync away from home,
+// reached through the project's forwarder: this computer as cbb global hub
+// does, or with id another admin computer, to which cbb sends a signed hub
+// command; there sync away from home must be on already.
+func (d *Desk) MakeHub(id string) {
+	args := []string{"global", "hub", "-firewall", "no"}
+	if id != "" {
+		args = []string{"global", "hub", "-on", id}
+	}
+	d.admin(args, false, "It is a hub now.")
+}
 
 // Resolve, on the group's root, voids both histories of every key that
 // signed two, as cbb resolve does as the administrator.

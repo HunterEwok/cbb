@@ -174,6 +174,7 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
     var choosingMode by remember { mutableStateOf(false) }
     var pasting by remember { mutableStateOf(false) }
     var acting by remember { mutableStateOf(false) }
+    var hubbing by remember { mutableStateOf(false) }
     if (choosingMode) ModeChoice(d, dismiss = { choosingMode = false }) { mode -> scope.launch { model.setMode(d.id, mode) } }
     // Every phone sets its own sync mode; an admin sets any other device's.
     if (!model.isAdmin) {
@@ -193,6 +194,11 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
         if (d.canMakeAdmin) {
             HorizontalDivider(color = palette.line)
             Action("★", stringResource(R.string.make_admin)) { promoting = true }
+        }
+        // An admin computer, or one the root makes an admin first; this phone is the hub under Settings.
+        if (!d.isSelf && d.online && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin)) {
+            HorizontalDivider(color = palette.line)
+            Action("⌁", stringResource(R.string.make_hub)) { hubbing = true }
         }
         if (d.isSelf || d.online) {
             HorizontalDivider(color = palette.line)
@@ -232,6 +238,14 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
             action = stringResource(R.string.make_admin),
             dismiss = { promoting = false },
         ) { scope.launch { model.makeAdmin(d.id) } }
+    }
+    if (hubbing) {
+        Confirm(
+            title = stringResource(R.string.make_hub_title, d.name),
+            body = stringResource(R.string.make_hub_body),
+            action = stringResource(R.string.make_hub),
+            dismiss = { hubbing = false },
+        ) { scope.launch { model.makeHub(d.id) } }
     }
     if (pasting) PasteOn(model, d, dismiss = { pasting = false })
     if (acting) QuickActions(model, d, dismiss = { acting = false })

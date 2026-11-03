@@ -14,6 +14,7 @@ struct DeviceDetail: View {
     @State private var promoting = false
     @State private var freezing = false
     @State private var thawing = false
+    @State private var hubbing = false
     @State private var renaming = false
     @State private var newName = ""
 
@@ -44,6 +45,15 @@ struct DeviceDetail: View {
             Button { Task { await model.makeAdmin(id) } } label: { Text("Make it an admin") }
         } message: {
             Text("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.")
+        }
+        .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing) {
+            Button { if let d = device { Task { await model.makeHub(d) } } } label: { Text("Make it a hub") }
+        } message: {
+            if device?.isSelf == true {
+                Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
+            } else {
+                Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.")
+            }
         }
         .confirmationDialog(Text("Freeze \(device?.name ?? "")?"), isPresented: $freezing) {
             Button(role: .destructive) { Task { await model.freeze(id) } } label: { Text("Freeze") }
@@ -158,6 +168,12 @@ struct DeviceDetail: View {
                 if model.isRoot, !d.admin, !d.frozen, d.role == "full" {
                     line
                     action("star", "Make it an admin") { promoting = true }
+                }
+                // This Mac needs sync away from home on; another computer
+                // is told, and refuses while it is off there.
+                if d.mayHub, !d.frozen, d.role == "full", !d.isSelf || (model.awayOn && model.status?.away?.hub != true) {
+                    line
+                    action("antenna.radiowaves.left.and.right", "Make it a hub") { hubbing = true }
                 }
                 // The phones and lite members have no modes yet and refuse.
                 if !d.isSelf, d.online, d.role == "full" {

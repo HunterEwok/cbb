@@ -12,6 +12,13 @@ All notable changes to cbb are documented in this file. The format follows
   -app` as the administrator and shows the code, its text and the time left, without a
   terminal; Cancel ends the wait. `cbb pair -app FILE` writes the code into a file the app
   made and stops when the file is removed.
+- **Make it a hub** for an admin computer of the group, in both phone apps, the Mac app and the
+  tray app, and `cbb global hub -on DEVICE` on an admin computer: the admin signs a `hub`
+  command, and the computer becomes a hub of the group as well, reached through the project's
+  forwarder (or the phone's own) or at the addresses given, while the sender stays what it is.
+  A computer that is no admin yet becomes one first on the root phone; sync away from home must
+  be on there already, since only its own user turns it on. The desktop apps also make their
+  own computer a hub. `cbb status` lists `may_hub` for the devices the records let be hubs.
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
   `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,

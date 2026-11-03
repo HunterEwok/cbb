@@ -114,6 +114,9 @@ enum Control {
         var online = false
         var lastSeenMS: Int64 = 0
         var isSelf = false
+        /// The records let it be a hub: the root's own device or an admin
+        /// with the hub power.
+        var mayHub = false
         /// Its sync mode, as its hello says; nil when it says none or is
         /// not connected.
         var mode: String?
@@ -123,6 +126,7 @@ enum Control {
             case osVersion = "os_version"
             case lastSeenMS = "last_seen_ms"
             case isSelf = "self"
+            case mayHub = "may_hub"
         }
 
         init(id: String, name: String, role: String = "full", os: String? = nil) {
@@ -148,6 +152,7 @@ enum Control {
             online = try c.decodeIfPresent(Bool.self, forKey: .online) ?? false
             lastSeenMS = try c.decodeIfPresent(Int64.self, forKey: .lastSeenMS) ?? 0
             isSelf = try c.decodeIfPresent(Bool.self, forKey: .isSelf) ?? false
+            mayHub = try c.decodeIfPresent(Bool.self, forKey: .mayHub) ?? false
             mode = try c.decodeIfPresent(String.self, forKey: .mode)
         }
     }

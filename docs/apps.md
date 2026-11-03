@@ -102,6 +102,11 @@ they look, so both apps are built to the same plan.
    takes it over in the same step. A connected computer's page shows its sync mode and, on an admin phone,
    offers "Sync mode": the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
+   An admin phone also offers "Make it a hub" for a connected computer that is an admin, or that
+   the root phone makes one first: after Face ID or the fingerprint it signs a `hub` command
+   (docs/protocol.md, section 11, "Several hubs") with its forwarder, or the project's, and the
+   computer becomes a hub of the group as well; it refuses while sync away from home is off
+   there, which only its own user turns on.
    On an admin phone, the page of a computer or a lite member also offers "Paste on it…"
    (docs/design.md, "Remote paste"): a text, typed or taken from the clipboard (on the iPhone
    through the system's Paste button, which asks nothing), pasted or typed key by key, with
@@ -305,7 +310,8 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   of the iPhone app, shared), this Mac's sync mode (`cbb mode`), whether the app may press keys for remote paste, and error details (on in debug builds, off in release ones, and
   the `ShowErrorDetails` default either way).
 - What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from
-  home, the sync mode of this Mac or, on an admin, of another computer: `cbb mode -on`) goes only through the admin socket, which only root reaches, so the app runs
+  home, "Make it a hub" for this Mac or, on an admin, for another admin computer (`cbb global
+  hub -on`), the sync mode of this Mac or, on an admin, of another computer: `cbb mode -on`) goes only through the admin socket, which only root reaches, so the app runs
   `cbb` with administrator privileges (`Admin`, `do shell script … with administrator
   privileges`): macOS asks for the password, as `sudo cbb` does in Terminal. With error
   details on, `CBB_DEBUG=1` makes cbb name the error underneath.

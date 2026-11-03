@@ -451,6 +451,7 @@ type Device struct {
 	LastSeenMS int64 `json:"last_seen_ms,omitempty"` // when this member last saw it connected, Unix milliseconds; 0 if never
 	Self       bool  `json:"self,omitempty"`         // this device
 	Listed     bool  `json:"listed,omitempty"`       // it has a device record; a member that joined before the list existed may have none yet
+	MayHub     bool  `json:"may_hub,omitempty"`      // the records let it be a hub: the root's own device or an admin with the hub power
 }
 
 // Message is a header and its payload.

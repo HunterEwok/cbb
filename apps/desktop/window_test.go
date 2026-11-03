@@ -494,6 +494,23 @@ func (w *window) admin(t *testing.T) {
 	if r := ran(); !reflect.DeepEqual(r, [][]string{{"admin", "-allow-file-key", "srv"}}) {
 		t.Errorf("make it an admin ran %q", r)
 	}
+
+	// An admin computer may be made a hub; one that may not offers no such
+	// action.
+	var offers bool
+	w.eval(`!!$q('[data-action="hub"]')`, &offers)
+	if offers {
+		t.Error("a computer that may not be a hub offers it")
+	}
+	w.eval(`$click('.tile[data-id="mac"]')`, nil)
+	w.wait(`$q('[data-action="hub"]')`)
+	w.eval(`$click('[data-action="hub"]')`, nil)
+	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("must be on there already")`)
+	w.eval(`$click("#confirm-ok")`, nil)
+	w.wait(`$q("#message").textContent === "It is a hub now."`)
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-on", "mac"}}) {
+		t.Errorf("make it a hub ran %q", r)
+	}
 }
 
 // joinPhone joins a phone's group from a computer in none: the window shows
@@ -579,7 +596,7 @@ func newFakeService(t *testing.T) *fakeService {
 		status: control.Status{Device: "self", Group: "cbb-7f3a", Role: "full", OS: "linux", Mode: "shared"},
 		devices: []control.Device{
 			{ID: "self", Name: "This PC", Role: "full", OS: "linux", Admin: true, Root: true, Self: true, Online: true, Listed: true},
-			{ID: "mac", Name: "MacBook", Role: "full", OS: "macos", OSVersion: "26.1", Online: true, Listed: true},
+			{ID: "mac", Name: "MacBook", Role: "full", OS: "macos", OSVersion: "26.1", Online: true, Listed: true, MayHub: true},
 			{ID: "win", Name: "Windows PC", Role: "full", OS: "windows", Admin: true, Frozen: true, Listed: true},
 			{ID: "iphone", Name: "iPhone", Role: "phone", OS: "ios", Admin: true, Online: true, Listed: true},
 			{ID: "pixel", Name: "Pixel", Role: "phone", OS: "android", Online: true, Listed: true},

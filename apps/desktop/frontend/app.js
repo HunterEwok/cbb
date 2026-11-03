@@ -604,6 +604,9 @@ function renderDetail() {
     if (d.frozen && me.root) actions.push(["unfreeze", t("Unfreeze")]);
     if (!d.self && d.admin && !d.root && !d.frozen && d.role === "full") actions.push(["freeze", t("Freeze"), true]);
     if (me.root && !d.admin && !d.frozen && d.role === "full") actions.push(["admin", t("Make it an admin")]);
+    // This computer needs sync away from home on; another one is told, and
+    // refuses while it is off there.
+    if (d.may_hub && !d.frozen && d.role === "full" && (!d.self || (state.status?.away && !state.status.away.hub))) actions.push(["hub", t("Make it a hub")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   pane.innerHTML = `<div class="detail-head">${glyph(d, 56)}<div><div class="name">${esc(d.name)}</div>` +
@@ -662,6 +665,11 @@ async function deviceAction(action) {
       break;
     case "admin":
       if (await ask(t("Make %s an admin?", d.name), t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe."), t("Make it an admin"))) await act("MakeAdmin", d.id);
+      break;
+    case "hub":
+      if (await ask(t("Make %s a hub?", d.name), d.self
+        ? t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
+        : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on."), t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id);
       break;
     case "freeze":
       if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);
