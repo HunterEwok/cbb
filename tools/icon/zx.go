@@ -6,15 +6,16 @@ package main
 // The ZX Spectrum Next's logo: the light clipboard (apps/design/icon/light.png)
 // on the ULA screen, which .cbb install shows while it works, drawn as
 // Spectrum artists draw: on black, each 8 by 8 cell in two of the eight
-// colours, all of them bright or none (the attribute clash), and the
-// shades between the two in an ordered 4 by 4 dither, so that the board's
-// gold comes out as yellow over red. Each cell takes the pair, the
-// brightness and the dither that look nearest the drawing from a little
-// way off: the error is taken in CIELAB on the 2 by 2 averages, with a
-// little of each pixel's own. It is written as a C header: the bitmap a
-// pixel row at a time, the leftmost pixel in a byte's top bit, then an
-// attribute byte for each cell, packed as PackBits does (zxPack), since
-// .cbb has little memory to spare.
+// colours, all of them bright or none (the attribute clash). The page's
+// line drawing is kept as crisp black lines on bright white. The board's
+// light and shade go onto a ramp of mixes, from red over black to yellow
+// over white, so that it keeps its volume; each of its cells then takes
+// the pair, the brightness and the ordered 4 by 4 dither that look nearest
+// from a little way off: the error is taken in CIELAB on the 2 by 2
+// averages, with a little of each pixel's own. It is written as a C
+// header: the bitmap a pixel row at a time, the leftmost pixel in a byte's
+// top bit, then an attribute byte for each cell, packed as PackBits does
+// (zxPack), since .cbb has little memory to spare.
 
 import (
 	"fmt"
@@ -48,49 +49,96 @@ func zxRGB(c int, bright bool) [3]float64 {
 	return [3]float64{float64(c>>1&1) * v, float64(c>>2&1) * v, float64(c&1) * v}
 }
 
+// zxPixel is a pixel of the logo: its colour on black, and how much of it
+// is the drawing's ink and the page's paper.
+type zxPixel struct {
+	c          [3]float64
+	ink, paper float64
+}
+
 // zxPixels is the drawing scaled into the logo's cells on black, each
-// pixel the average of 4 by 4 samples, then livened as an artist would:
-// more saturated, more contrast, a little brighter.
-func zxPixels(img image.Image) [][3]float64 {
+// pixel 8 by 8 samples.
+func zxPixels(img image.Image) []zxPixel {
 	src := opaqueBounds(img)
 	w, h := zxCols*8, zxRows*8
 	scale := math.Max(float64(src.Dx())/float64(w), float64(src.Dy())/float64(h))
 	offX := (float64(w) - float64(src.Dx())/scale) / 2
 	offY := (float64(h) - float64(src.Dy())/scale) / 2
-	out := make([][3]float64, w*h)
-	var mean float64
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			var sum [4]float64
-			for sy := 0; sy < 4; sy++ {
-				for sx := 0; sx < 4; sx++ {
-					fx := (float64(x)-offX+(float64(sx)+0.5)/4)*scale + float64(src.Min.X)
-					fy := (float64(y)-offY+(float64(sy)+0.5)/4)*scale + float64(src.Min.Y)
+	out := make([]zxPixel, w*h)
+	const n = 8
+	for y := range h {
+		for x := range w {
+			p := &out[y*w+x]
+			for sy := range n {
+				for sx := range n {
+					fx := (float64(x)-offX+(float64(sx)+0.5)/n)*scale + float64(src.Min.X)
+					fy := (float64(y)-offY+(float64(sy)+0.5)/n)*scale + float64(src.Min.Y)
 					s := sample(img, src, fx, fy)
-					for i := range sum {
-						sum[i] += s[i]
+					// Premultiplied on black: the colour as it is.
+					c := [3]float64{s[0] / 0xFFFF, s[1] / 0xFFFF, s[2] / 0xFFFF}
+					lum := zxLuma(c)
+					sat := max(c[0], c[1], c[2]) - min(c[0], c[1], c[2])
+					if c[2] > c[0]+0.08 && lum < 0.45 && s[3]/0xFFFF > 0.5 {
+						p.ink++ // the navy lines
+					}
+					if lum > 0.75 && sat < 0.12 {
+						p.paper++
+					}
+					for i := range 3 {
+						p.c[i] += c[i]
 					}
 				}
 			}
-			p := &out[y*w+x]
 			for i := range 3 {
-				// Premultiplied on black: the colour as it is.
-				p[i] = sum[i] / 16 / 0xFFFF * 0xFF
+				p.c[i] /= n * n
 			}
-			mean += zxLuma(*p)
+			p.ink /= n * n
+			p.paper /= n * n
 		}
 	}
-	mean /= float64(w * h)
-	for i, p := range out {
-		l := zxLuma(p)
-		for k := range 3 {
-			c := l + (p[k]-l)*1.4    // saturation
-			c = mean + (c-mean)*1.15 // contrast
-			c *= 1.15                // brightness
-			out[i][k] = math.Max(0, math.Min(255, c))
-		}
-	}
+	zxShade(out)
 	return out
+}
+
+// zxShade puts the board's light and shade onto a ramp of the Spectrum's
+// mixes, as an artist would, keeping the board's volume, and makes the
+// paper bright white. Colours go from 0-1 to 0-255.
+func zxShade(px []zxPixel) {
+	ramp := [][3]float64{
+		{107, 0, 0}, {215, 0, 0}, {215, 54, 0}, // red over black, red, a little yellow
+		{255, 128, 0}, {255, 191, 0}, {255, 255, 0}, {255, 255, 128}, // to yellow over white
+	}
+	board := func(p *zxPixel) bool {
+		return 1-min(p.ink+p.paper, 1) > 0.6 && zxLuma(p.c) > 0.04
+	}
+	var sum, sq, n float64
+	for i := range px {
+		if board(&px[i]) {
+			l := zxLuma(px[i].c)
+			sum, sq, n = sum+l, sq+l*l, n+1
+		}
+	}
+	mean := sum / n
+	sd := math.Sqrt(sq/n - mean*mean)
+	for i := range px {
+		p := &px[i]
+		switch {
+		case p.paper > 0.5:
+			p.c = [3]float64{255, 255, 255}
+		case board(p):
+			at := math.Max(0, math.Min(6, 3.2+(zxLuma(p.c)-mean)/sd*1.2))
+			lo := int(at)
+			hi := min(lo+1, 6)
+			f := at - float64(lo)
+			for k := range 3 {
+				p.c[k] = ramp[lo][k]*(1-f) + ramp[hi][k]*f
+			}
+		default:
+			for k := range 3 {
+				p.c[k] *= 255
+			}
+		}
+	}
 }
 
 func zxLuma(p [3]float64) float64 { return 0.299*p[0] + 0.587*p[1] + 0.114*p[2] }
@@ -161,9 +209,6 @@ func zxCell(cell *[8][8][3]float64) (bits [8]byte, attr byte) {
 						e += 0.1 * zxLabDist(res[y][x], cell[y][x])
 					}
 				}
-				if !bright {
-					e *= 1.05
-				}
 				// The page: black lines on white are always bright.
 				if a == 0 && b == 7 && !bright {
 					continue
@@ -209,12 +254,24 @@ func zxLogoOutput() (map[string][]byte, error) {
 	for cy := range zxRows {
 		for cx := range zxCols {
 			var cell [8][8][3]float64
+			var bits [8]byte
+			lines, paper := 0, 0.0
 			for y := range 8 {
 				for x := range 8 {
-					cell[y][x] = px[(cy*8+y)*w+cx*8+x]
+					p := px[(cy*8+y)*w+cx*8+x]
+					cell[y][x] = p.c
+					paper += p.paper / 64
+					if p.ink > 0.45 {
+						lines++
+						bits[y] |= 0x80 >> x
+					}
 				}
 			}
-			bits, attr := zxCell(&cell)
+			// The page's lines: black on bright white, as they are.
+			attr := byte(0x40 | 7<<3)
+			if lines < 2 && paper <= 0.7 {
+				bits, attr = zxCell(&cell)
+			}
 			attrs[cy*zxCols+cx] = attr
 			for y := range 8 {
 				bitmap[(cy*8+y)*zxCols+cx] = bits[y]
