@@ -248,8 +248,8 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 		if a.VLESS == nil {
 			return errors.New("registering with the forwarder: it gave no VLESS settings")
 		}
-		vl = &tunnel.VLESS{Endpoint: netip.AddrPortFrom(cfg.Link.Endpoint.Addr(), a.VLESS.Port), PublicKey: a.VLESS.PublicKey,
-			ShortID: a.VLESS.ShortID, ServerName: a.VLESS.ServerName, ID: cfg.VLESSID}
+		vl = &tunnel.VLESS{Transport: a.VLESS.Transport, Endpoint: netip.AddrPortFrom(cfg.Link.Endpoint.Addr(), a.VLESS.Port),
+			PublicKey: a.VLESS.PublicKey, ShortID: a.VLESS.ShortID, ServerName: a.VLESS.ServerName, Path: a.VLESS.Path, ID: cfg.VLESSID}
 		if err := vl.Check(); err != nil {
 			return fmt.Errorf("registering with the forwarder: its VLESS settings: %w", err)
 		}

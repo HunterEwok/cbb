@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/atomicfile"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // NewCert makes a forwarder's key and its self-signed certificate. Hubs pin
@@ -113,4 +114,41 @@ func LoadRealityKey(path string) ([32]byte, error) {
 		return key, err
 	}
 	return key, nil
+}
+
+// xhttpBlock is the PEM type of the path the web server passes to the
+// forwarder's XHTTP, in its key file.
+const xhttpBlock = "CBB XHTTP PATH"
+
+// LoadXHTTPPath reads the path of the forwarder's XHTTP from its key file
+// at path, and adds a new random one to the file if it has none. The path
+// keeps scanners off the listener; it is not a secret the design relies
+// on.
+func LoadXHTTPPath(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	for rest := data; ; {
+		var b *pem.Block
+		if b, rest = pem.Decode(rest); b == nil {
+			break
+		}
+		if b.Type == xhttpBlock {
+			p := string(b.Bytes)
+			if err := tunnel.CheckVLESSPath(p); err != nil {
+				return "", fmt.Errorf("%s: %w", path, err)
+			}
+			return p, nil
+		}
+	}
+	p, err := tunnel.NewVLESSPath()
+	if err != nil {
+		return "", err
+	}
+	data = append(data, pem.EncodeToMemory(&pem.Block{Type: xhttpBlock, Bytes: []byte(p)})...)
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
+		return "", err
+	}
+	return p, nil
 }

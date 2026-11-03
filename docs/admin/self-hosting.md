@@ -118,12 +118,54 @@ only its key and a table of hashed tags (see [What the server keeps](#what-the-s
 ### VLESS on the forwarder
 
 For networks that block VPNs ([Networks that block VPNs](../guide/blocked-networks.md)),
-the forwarder also takes VLESS with REALITY on TCP 443, borrowing the TLS of a well-known
-site:
+the forwarder also takes VLESS, in one of two ways. The hub asks for VLESS with `-vless`
+and gets the rest from the forwarder, whichever way it runs.
+
+#### Behind your site's web server (XHTTP)
+
+If the server already has a website with its certificate on TCP 443, as `cbb.tools` does,
+the web server passes one path to the forwarder, which listens only on the loopback
+address; to the network it is HTTPS to your site. The site's name must point at the
+forwarder's own address.
+
+```sh
+echo 'CBB_FORWARD_FLAGS=-vless-xhttp vpn.example.org' | sudo tee /etc/cbb/forward.env
+sudo systemctl restart cbb-forward
+sudo journalctl -u cbb-forward | grep XHTTP     # the path the web server passes
+```
+
+Then give that path to the web server, in the site's `server` block for TCP 443 (nginx):
+
+```nginx
+location /PATH-FROM-THE-LOG {
+    proxy_pass http://127.0.0.1:3276;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_redirect off;
+    proxy_set_header Host $host;
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+    access_log off;
+}
+```
+
+- The path is made at random once and kept in the forwarder's key file; `-vless-path /PATH`
+  sets one of your own (a slash and 8 to 64 letters, digits, `-` or `_`). It keeps scanners
+  off the forwarder; the groups' security does not rely on it.
+- `-vless-listen` picks the loopback port (default `127.0.0.1:3276`), `-vless-port` the web
+  server's port if it is not 443.
+- The web server sees the group's VLESS user ID and WireGuard's encrypted packets, nothing
+  more; `access_log off` keeps even that out of its log.
+
+#### Without a web server (REALITY)
+
+On a server without a site of its own, the forwarder takes VLESS with REALITY on TCP 443
+itself, borrowing the TLS of a well-known site:
 
 ```sh
 echo 'CBB_FORWARD_FLAGS=-vless-site www.example.com' | sudo tee /etc/cbb/forward.env
-sudo systemctl edit cbb-forward      # add the two lines below under [Service]
+sudo systemctl edit cbb-forward      # add the three lines below under [Service]
 sudo systemctl restart cbb-forward
 ```
 
@@ -141,8 +183,7 @@ refused. The unit gives it no privileges otherwise.
 
 - The site must support TLS 1.3 and must not be blocked where your devices travel. Big
   sites people use every day are the best choice.
-- The REALITY key is kept in the forwarder's key file; nothing else to configure. The hub
-  asks for VLESS with `-vless` and gets the rest from the forwarder.
+- The REALITY key is kept in the forwarder's key file; nothing else to configure.
 - `-vless-listen ADDRESS:PORT` picks another port; 443 looks the most ordinary.
 
 ## A blind relay

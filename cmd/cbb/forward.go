@@ -28,7 +28,10 @@ func cmdForward(args []string, stdout, stderr io.Writer) int {
 	keyFile := fs.String("key", defaultForwarderKey(), "the forwarder's key, made on the first run")
 	showKey := fs.Bool("show-key", false, "print the key for cbb global hub -forwarder-key and stop")
 	vlessSite := fs.String("vless-site", "", "take VLESS with REALITY too, borrowing the TLS of this well-known site, such as www.example.com")
-	vlessListen := fs.String("vless-listen", ":443", "the TCP address to listen on for VLESS")
+	vlessXHTTP := fs.String("vless-xhttp", "", "take VLESS over XHTTP too, behind the web server of this site, such as cbb.tools, which passes -vless-path to -vless-listen")
+	vlessPath := fs.String("vless-path", "", "with -vless-xhttp, the path the web server passes (default: made once and kept in the key file)")
+	vlessPort := fs.Uint("vless-port", 443, "with -vless-xhttp, the web server's TCP port at the forwarder's address")
+	vlessListen := fs.String("vless-listen", "", "the TCP address to listen on for VLESS (default :443 with -vless-site, 127.0.0.1:3276 with -vless-xhttp)")
 	state := fs.String("state", "", "the file that keeps, under a hash of each group's tag, the version of its newest credential (default: forward-state.json next to the key; \"none\" keeps them in memory only)")
 	records := fs.String("records", "", "where earlier versions kept a file for each group; they are deleted (default: groups next to the key)")
 	if fs.Parse(args) != nil {
@@ -65,19 +68,43 @@ func cmdForward(args []string, stdout, stderr io.Writer) int {
 	} else if n > 0 {
 		logf("cbb forward: deleted the %d group files that earlier versions kept", n)
 	}
-	if *vlessSite != "" {
+	switch {
+	case *vlessSite != "" && *vlessXHTTP != "":
+		fmt.Fprintln(stderr, "cbb: forward takes -vless-site or -vless-xhttp, not both")
+		return 2
+	case *vlessSite != "":
 		key, err := forward.LoadRealityKey(*keyFile)
 		if err != nil {
 			return fail(stderr, err)
 		}
+		if *vlessListen == "" {
+			*vlessListen = ":443"
+		}
 		cfg.VLESS = &forward.VLESSConfig{Listen: *vlessListen, Site: *vlessSite, Key: key}
+	case *vlessXHTTP != "":
+		if *vlessPort == 0 || *vlessPort > 65535 {
+			fmt.Fprintln(stderr, "cbb: forward: -vless-port is not a TCP port")
+			return 2
+		}
+		path := *vlessPath
+		if path == "" {
+			if path, err = forward.LoadXHTTPPath(*keyFile); err != nil {
+				return fail(stderr, err)
+			}
+		}
+		if *vlessListen == "" {
+			*vlessListen = "127.0.0.1:3276"
+		}
+		cfg.VLESS = &forward.VLESSConfig{Listen: *vlessListen, XHTTP: &forward.XHTTPConfig{Host: *vlessXHTTP, Port: uint16(*vlessPort), Path: path}}
 	}
 	f, err := forward.Listen(cfg)
 	if err != nil {
 		return fail(stderr, err)
 	}
 	logf("cbb forward: listening on UDP and TCP port %d; its key, for cbb global hub -forwarder-key: %s", f.Addr().Port(), pin)
-	if cfg.VLESS != nil {
+	if v := cfg.VLESS; v != nil && v.XHTTP != nil {
+		logf("cbb forward: VLESS over XHTTP on %s, behind the web server of %s on TCP port %d, which passes the path %s to it; hubs ask for it with cbb global hub -vless", *vlessListen, v.XHTTP.Host, v.XHTTP.Port, v.XHTTP.Path)
+	} else if v != nil {
 		logf("cbb forward: VLESS on TCP %s, with the TLS of %s; hubs ask for it with cbb global hub -vless", *vlessListen, *vlessSite)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
