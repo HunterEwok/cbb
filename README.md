@@ -104,7 +104,8 @@ through tmux and `cbb copy` and `cbb paste`.
 | Keyboards and TV remotes (`cbb keyboard`, `cbb remote`, the Android phone as a Bluetooth keyboard) | built, CI against fake TVs and BlueZ | typing on an Apple TV 4K |
 | Console paste on a key press | planned | |
 | Homebrew (`hunterewok/tap`) | a formula with each release | |
-| Signed macOS `.pkg`, TestFlight, app stores | planned (needs an Apple developer account) | |
+| Signed macOS `.pkg` with the Mac app, TestFlight | built; the release signs them with the Apple developer account | not yet run |
+| App stores | planned | |
 
 The order of what comes next is the [roadmap](docs/roadmap.md).
 

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1ce6c4f40f0 -->
+<!-- source: 95a9f0f2e940 -->
 # Instalación
 
 Copy Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
@@ -41,7 +41,11 @@ Cambia al Modo escritorio, abre Konsole, ponle una contraseña una vez al usuari
 
 ## Mac
 
-Apple silicon o Intel, en Terminal, el mismo comando que en Linux:
+Apple silicon o Intel, macOS 14 o posterior: descargue `cbb-X.Y.Z.pkg` de la
+[última versión](https://github.com/HunterEwok/cbb/releases/latest) y ábralo. Instala la app CBB en
+la barra de menús y el servicio, ambos firmados por el proyecto y comprobados por Apple.
+
+O en Terminal, sin la app, el mismo comando que en Linux:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
@@ -167,4 +171,4 @@ En SteamOS es `sudo sh /opt/cbb/share/uninstall.sh`. Con Homebrew, ejecuta despu
 
 En Windows: Configuración, Aplicaciones, «CBB», Desinstalar.
 
-Esto quita el programa, el servicio y las reglas de cortafuegos que añadió el instalador. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb remove NAME`, o en el teléfono).
+Esto quita el programa, el servicio, las reglas de cortafuegos que añadió el instalador y, en un Mac, la app que instaló el `.pkg`. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb remove NAME`, o en el teléfono).

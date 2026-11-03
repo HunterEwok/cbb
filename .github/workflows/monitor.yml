@@ -28,6 +28,5 @@ jobs:
           cache: false
       - name: the servers
         # Until the first signed release (v0.6.0) the signed files are not
-        # served yet; from then on add -require-files. The relay's port
-        # 8765 joins the list once the project's relay runs.
-        run: go run ./tools/monitor -ports cbb.tools:8764
+        # served yet; from then on add -require-files.
+        run: go run ./tools/monitor -ports cbb.tools:8764,cbb.tools:8765

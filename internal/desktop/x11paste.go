@@ -84,7 +84,7 @@ func (b *X11) Inject(ctx context.Context, text, method string, enter, secret boo
 		return keysInject(ctx, b.kb, b, text, method, enter, secret)
 	}
 	b.inj.once.Do(func() {
-		if err := xtest.Init(b.x); err != nil {
+		if err := initExt(b.x, "XTEST", xtest.Init); err != nil {
 			b.inj.err = fmt.Errorf("the X server has no XTEST: %w", err)
 		}
 	})
@@ -120,7 +120,7 @@ func (b *X11) locked(noLockCheck bool) string {
 	if why := lockcheck.Reason(noLockCheck); why != "" {
 		return why
 	}
-	if screensaver.Init(b.x) == nil {
+	if initExt(b.x, "MIT-SCREEN-SAVER", screensaver.Init) == nil {
 		root := xproto.Setup(b.x).DefaultScreen(b.x).Root
 		if r, err := screensaver.QueryInfo(b.x, xproto.Drawable(root)).Reply(); err == nil && r.State == screensaver.StateOn {
 			return "the screen saver is on"

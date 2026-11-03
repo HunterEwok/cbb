@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1ce6c4f40f0 -->
+<!-- source: 95a9f0f2e940 -->
 # इंस्टॉल करना
 
 Copy Beyond Borders हर कंप्यूटर पर एक छोटी बैकग्राउंड सेवा की तरह चलता है। इसका कमांड `cbb` है। नीचे के सभी तरीके एक ही प्रोग्राम इंस्टॉल करते हैं; जो पसंद आए, चुन लें।
@@ -41,7 +41,11 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 ## Mac
 
-Apple silicon या Intel, Terminal में, वही कमांड जो Linux पर है:
+Apple silicon या Intel, macOS 14 या नया: `cbb-X.Y.Z.pkg`
+[नवीनतम रिलीज़](https://github.com/HunterEwok/cbb/releases/latest) से डाउनलोड करें और खोलें। यह मेन्यू बार में
+CBB ऐप और सेवा इंस्टॉल करता है; दोनों प्रोजेक्ट द्वारा हस्ताक्षरित और Apple द्वारा जाँचे गए हैं।
+
+या Terminal में, ऐप के बिना, वही कमांड जो Linux पर है:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
@@ -167,4 +171,4 @@ SteamOS पर यह `sudo sh /opt/cbb/share/uninstall.sh` है। Homebrew �
 
 Windows पर: सेटिंग्स, ऐप्स, "CBB", अनइंस्टॉल।
 
-इससे प्रोग्राम, सेवा और इंस्टॉलर के जोड़े फ़ायरवॉल नियम हट जाते हैं। डिवाइस की कुंजियाँ रहती हैं, इसलिए दोबारा इंस्टॉल करने पर वह अपने समूह में लौट आता है। उन्हें भी मिटाने के लिए `--purge` जोड़ें (Windows पर `-Purge`, `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge` के साथ), फिर किसी दूसरे डिवाइस से इस डिवाइस को समूह से हटाएँ (`sudo cbb remove NAME`, या फ़ोन पर)।
+इससे प्रोग्राम, सेवा, इंस्टॉलर के जोड़े फ़ायरवॉल नियम और Mac पर `.pkg` का इंस्टॉल किया ऐप हट जाते हैं। डिवाइस की कुंजियाँ रहती हैं, इसलिए दोबारा इंस्टॉल करने पर वह अपने समूह में लौट आता है। उन्हें भी मिटाने के लिए `--purge` जोड़ें (Windows पर `-Purge`, `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge` के साथ), फिर किसी दूसरे डिवाइस से इस डिवाइस को समूह से हटाएँ (`sudo cbb remove NAME`, या फ़ोन पर)।
