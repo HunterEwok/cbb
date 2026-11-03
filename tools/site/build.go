@@ -27,7 +27,7 @@ import (
 
 // pages are the site's pages, each site/templates/<page>.html inside
 // layout.html.
-var pages = []string{"index", "download", "privacy", "code-signing"}
+var pages = []string{"index", "download", "privacy", "terms", "code-signing"}
 
 // errorPages are the pages nginx shows for an error, in the visitor's
 // language (site/deploy/nginx.conf); search engines and the sitemap leave

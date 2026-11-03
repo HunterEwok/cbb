@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The website has the terms of the project's forwarder and relay at `cbb.tools` (Terms of the
+  public servers, in every language of the site, linked from every page's footer): open to
+  every group, free, as is without a promise of uptime, shared by the budget, and where to
+  report abuse.
 - The desktop apps show the QR code for joining a phone's group: on a computer in no group,
   **Join a phone's group** in the tray app (Windows, Linux) and the Mac app runs `cbb pair
   -app` as the administrator and shows the code, its text and the time left, without a

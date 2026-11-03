@@ -100,7 +100,9 @@ With firewalld: `sudo firewall-cmd --permanent --add-port=8764/udp --add-port=87
 ## A forwarder
 
 Without a forwarder of your own, a hub without addresses uses the project's at `cbb.tools`
-([Sync away from home](../guide/away-from-home.md#5-when-the-internet-cannot-reach-your-home-a-forwarder)).
+([Sync away from home](../guide/away-from-home.md#5-when-the-internet-cannot-reach-your-home-a-forwarder)),
+open to every group under the [terms of the public servers](https://cbb.tools/en/terms.html):
+free, as is, with no promise of uptime, and shared by the [budget](../relay-budget.md).
 Once yours runs, give the hub its address and key instead:
 
 ```sh
