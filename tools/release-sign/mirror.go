@@ -370,7 +370,8 @@ func readZXNext(path string) (map[string][]byte, error) {
 		switch {
 		case h.Typeflag == tar.TypeDir && (name == "" || h.Name == "zxnext"):
 			continue
-		case !ok || h.Typeflag != tar.TypeReg || name == "" || strings.Contains(name, "/") || strings.HasPrefix(name, ".") || h.Size > zxnextMax:
+		case !ok || h.Typeflag != tar.TypeReg || !filepath.IsLocal(name) || strings.ContainsAny(name, `/\:`) ||
+			strings.Contains(name, "..") || strings.HasPrefix(name, ".") || h.Size > zxnextMax:
 			return nil, fmt.Errorf("the archive holds %q", h.Name)
 		}
 		var b bytes.Buffer

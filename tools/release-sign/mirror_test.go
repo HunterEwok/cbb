@@ -58,7 +58,10 @@ func TestMirror(t *testing.T) {
 		t.Helper()
 		return string(call(t, mirror, append([]string{"-out", out, "-from", g.channel(), "-releases", g.dir, "-zxnext", zx}, extra...)...))
 	}
-	zxFile := func(name string) string { return string(must(os.ReadFile(filepath.Join(zx, name)))) }
+	// LIST tells which release the Next's files came from: on a file
+	// system that ignores case (Windows, macOS) the Pi's cbb and the dot
+	// command CBB are one file, while cbb.tools keeps them apart.
+	zxList := func() string { return string(must(os.ReadFile(filepath.Join(zx, "LIST")))) }
 
 	// Before any release the mirror has nothing to take.
 	if mirror([]string{"-out", out, "-from", g.channel(), "-releases", g.dir}) == nil {
@@ -77,8 +80,8 @@ func TestMirror(t *testing.T) {
 		t.Error("mirrored a pre-release nobody asked for")
 	}
 	run("-version", "v0.6.0-rc.1")
-	if zxFile("CBB") != "rc1" || zxFile("LIST") != "list rc1" {
-		t.Errorf("the Next's files are %q", zxFile("CBB"))
+	if zxList() != "list rc1" || string(must(os.ReadFile(filepath.Join(zx, "CBB.DRV")))) != "driver" {
+		t.Errorf("the Next's files are %q", zxList())
 	}
 
 	// The release the channel names, and its min_from, which stays.
@@ -108,8 +111,8 @@ func TestMirror(t *testing.T) {
 	}
 	// 0.6.1 has no Next's files: they stay those of 0.6.0, a newer
 	// release than the pre-release.
-	if zxFile("CBB") != "060" {
-		t.Errorf("the Next's files are %q", zxFile("CBB"))
+	if zxList() != "list 060" {
+		t.Errorf("the Next's files are %q", zxList())
 	}
 
 	// The mirror never goes back to an older channel file than it serves.
@@ -144,7 +147,7 @@ func TestMirror(t *testing.T) {
 }
 
 func TestReadZXNextRefusesOtherPaths(t *testing.T) {
-	for _, name := range []string{"zxnext/../x", "other/CBB", "zxnext/sub/CBB", "zxnext/.hidden"} {
+	for _, name := range []string{"zxnext/../x", "other/CBB", "zxnext/sub/CBB", "zxnext/.hidden", `zxnext/a\..\x`, "zxnext/C:x"} {
 		var tgz bytes.Buffer
 		gz := gzip.NewWriter(&tgz)
 		tw := tar.NewWriter(gz)
