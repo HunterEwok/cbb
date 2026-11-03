@@ -4,8 +4,9 @@ One clipboard for your phone and every computer at home: copy on one, paste on a
 Android, iPhone, Linux, Windows and Mac, on your own network, with no cloud and no
 accounts. Its short name is CBB and its command is `cbb`.
 
-> **Status: early development.** What works, and what has been tried on real devices, is
-> in the [status table](#status) below.
+> **Status: early development.** Tried on real devices so far: Linux computers, a Mac, an
+> iPhone and an Apple Watch; Windows only in a virtual machine, Android only in CI's emulator.
+> The [status table](#status) has every part.
 
 ![The phone adds each computer by its QR code; then the devices share one clipboard](docs/images/group.svg)
 
@@ -27,13 +28,28 @@ accounts. Its short name is CBB and its command is `cbb`.
    ```
 
 3. Run `sudo cbb pair` on the computer and scan its QR code in the app.
+4. Run `sudo cbb mode shared` on the computer (on Windows `cbb mode shared` as
+   administrator). A new computer keeps its clipboard to itself until then; in shared mode
+   its copies go to the group and the group's come to it.
+
+To check the installer before running it, download it with the release's `SHA256SUMS`:
+
+```sh
+v=https://github.com/HunterEwok/cbb/releases/latest/download
+curl -fsSLO "$v/get.sh" && curl -fsSLO "$v/SHA256SUMS"
+grep ' get.sh$' SHA256SUMS | sha256sum -c - && sudo sh get.sh
+```
+
+On a Mac, `shasum -a 256 -c -` takes the place of `sha256sum -c -`. The installer then checks
+everything it downloads against the same file ([checking a download](docs/guide/install.md#checking-a-download)).
 
 No computer? A group of phones only works too: the phone is the hub while its app is open.
 We recommend a computer that is often on, though, since it keeps sync away from home going at
 any time ([two kinds of group](docs/guide/how-it-works.md#two-kinds-of-group)).
 
 The [quick start](docs/guide/quickstart.md) walks through it step by step;
-[Installing](docs/guide/install.md) has Homebrew, winget, Docker and the firewall.
+[Installing](docs/guide/install.md) has Homebrew, Docker, the firewall, the
+[ports](docs/reference/devices.md#ports) and [removing it](docs/guide/install.md#removing-it).
 
 ## What it does
 
@@ -46,7 +62,7 @@ The [quick start](docs/guide/quickstart.md) walks through it step by step;
 
 iOS does not let apps read the clipboard in the background, so the iPhone needs one
 gesture. Apple devices on one Apple Account already share a clipboard; Copy Beyond Borders
-connects them to everything else. On Linux it works with any desktop, and without one
+connects them to everything else. On Linux it works with X11 and Wayland desktops, and without one
 through tmux and `cbb copy` and `cbb paste`.
 
 ## Principles
@@ -54,13 +70,52 @@ through tmux and `cbb copy` and `cbb paste`.
 - **Your network only.** At home the devices talk to each other directly. Away from home
   they reach a computer of yours at home through the group's own encrypted tunnel
   ([how it works](docs/guide/how-it-works.md)). No cloud, no accounts, no telemetry.
-- **Encrypted and paired.** All traffic uses TLS. A device joins your group once, by a QR
-  code or a six-digit code, and talks only to the devices of the group.
+- **Encrypted and paired.** The devices talk to each other only over TLS 1.3 with the
+  group's own certificates; what is not encrypted (mDNS on the home network, a Roku's text) is
+  in [privacy](docs/guide/privacy.md). A device joins your group once, by a QR code or a
+  six-digit code, and talks only to the devices of the group.
 - **The key stays on the phone.** In a group made on a phone, the phone holds the group's
-  key in its security chip and admits every device.
+  root key in its security chip and admits every device; each signature with it asks for your
+  face, fingerprint or passcode.
 - **Small.** One file per platform, no dependencies; runs on a Raspberry Pi Zero W.
 - **Passwords stay put.** Items that password managers mark as secret are not synced
   automatically.
+
+## Who can read what
+
+| | Holds | Can read your copies | Can admit or remove devices |
+|---|---|---|---|
+| The **root** (the phone or computer that made the group) | the group's root key, in its security chip where it has one | yes | yes, and makes admins |
+| An **admin** (a phone or computer the root chose) | an admin key under the root | yes | yes |
+| Every other device of the group, the **hub** included | its own member key and certificate | yes | no |
+| A **forwarder** (yours, or the project's at `cbb.tools`) | no group key | no: it sees the addresses, timing and sizes of encrypted packets | no |
+| A **blind relay** | no group key | no: it sees which devices of a group are online and talk, when and how much | no |
+
+The clipboard is encrypted between each two devices, not end to end from the one that copies
+to the one that pastes: every device of the group reads it, and a hub passes it on. Commands
+(a remote paste, a quick action) are sealed to the one device they are for. The six-digit
+pairing code, or the QR code that carries it, is the only secret a person handles: show it
+only to the device that should join, as anyone who has it during the pairing can join. The
+details: [privacy](docs/guide/privacy.md), [keys and attestation](docs/guide/keys.md) and
+the [threat model](docs/threat-model.md).
+
+## Compared with similar tools
+
+- [KDE Connect](https://apps.kde.org/kdeconnect) shares the clipboard among Linux, Android,
+  iOS, macOS and Windows, with much more besides (notifications, files, media control). It
+  pairs devices two by two; Copy Beyond Borders keeps one group with a root key in the
+  phone's security chip, syncs away from home through the group's own tunnel, and does only
+  the clipboard and what goes with it.
+- [ClipCascade](https://github.com/Sathvik-Rao/ClipCascade) syncs the clipboard of Windows,
+  macOS, Linux and Android, encrypted end to end, through a server you run or a community
+  server with an account, or peer to peer. Copy Beyond Borders needs no server and no
+  account at home, and has an iPhone app.
+- Apple's Universal Clipboard works between Apple devices on one Apple Account only.
+
+Where Copy Beyond Borders is weaker: the iPhone needs one gesture for each copy, since iOS
+lets no app read the clipboard in the background; every device of the group, a hub
+included, reads the copies (no end to end encryption from device to device); it is early
+software, with Android and Windows not yet tried on real devices.
 
 ## Platforms
 
@@ -141,7 +196,19 @@ implementation.
 
 ## Security
 
+- What each device and server can see: [Who can read what](#who-can-read-what) above and
+  [privacy](docs/guide/privacy.md).
+- The attacks it defends against and those it does not: the [threat model](docs/threat-model.md);
+  the cryptography in one place: [cryptography](docs/cryptography.md).
+- The plan of the security audits: [security audit](docs/security-audit.md).
+
 To report a vulnerability, follow [SECURITY.md](SECURITY.md). Please do not open a public issue.
+
+## How it is built
+
+The author directs the work, makes the decisions, runs the security audits and tests on real
+devices; most of the code and documentation is written with AI coding tools (Claude Code),
+under that direction and the project's tests in CI.
 
 ## Contributing
 

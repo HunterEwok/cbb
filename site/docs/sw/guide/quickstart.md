@@ -33,7 +33,7 @@ Kwenye **Windows** 10 au 11, kwenye PowerShell iliyofunguliwa kwa "Run as admini
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-Kisakinishi huangalia faili ulizopakua, huanzisha Copy Beyond Borders na kuuliza maswali mawili: kama kifungue ngome ya moto kwa ajili yake (jibu `y`) na kama kijisasishe chenyewe kiotomatiki (`y` pia ni jibu zuri). Kisha toka na uingie tena mara moja, au fungua terminal mpya kwenye Windows. Homebrew, winget, Docker na maelezo yote yako katika [Kusakinisha](install.md).
+Kisakinishi huangalia faili ulizopakua, huanzisha Copy Beyond Borders na kuuliza maswali mawili: kama kifungue ngome ya moto kwa ajili yake (jibu `y`) na kama kijisasishe chenyewe kiotomatiki (`y` pia ni jibu zuri). Kisha toka na uingie tena mara moja, au fungua terminal mpya kwenye Windows. Homebrew, Docker na maelezo yote yako katika [Kusakinisha](install.md).
 
 ## 3. Ongeza kompyuta
 

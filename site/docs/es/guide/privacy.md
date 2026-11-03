@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 753c15aad88e -->
+<!-- source: 0eb5464abc4a -->
 # Privacidad: quién ve qué
 
-Para quien quiere saber qué sale de sus dispositivos. Copy Beyond Borders no tiene cuentas, ni nube, ni telemetría: lo que copias va solo a los dispositivos de tu grupo, cifrado de extremo a extremo. Esta página enumera todo lo demás que alguien ajeno al grupo puede ver, y cómo desactivarlo.
+Para quien quiere saber qué sale de sus dispositivos. Copy Beyond Borders no tiene cuentas, ni nube, ni telemetría: lo que copias va solo a los dispositivos de tu grupo, y cada dispositivo del grupo puede leerlo. Por el camino va cifrado entre cada dos dispositivos, así que ningún servidor ni red intermedia puede leerlo. Esta página enumera todo lo demás que alguien ajeno al grupo puede ver, y cómo desactivarlo.
 
 ## Lo que copias
 
@@ -11,7 +11,7 @@ Los textos, las imágenes y los archivos pasan solo entre los dispositivos de tu
 Hay dos excepciones, y ambas son decisión tuya:
 
 - Un **Roku** añadido con `cbb remote add -roku -consent` recibe su texto como HTTP sin cifrar en tu red doméstica ([teclados y televisores](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
-- Un **hub** es uno de tus propios dispositivos, así que lee las copias como cualquier otro miembro.
+- Un **hub** es uno de tus propios dispositivos, así que lee las copias como cualquier otro miembro y las pasa a los demás. El portapapeles no va cifrado de extremo a extremo, del dispositivo que copia al que pega: cada dispositivo del grupo lo lee. Solo las órdenes, como un pegado remoto o una acción rápida, van selladas para el único dispositivo al que van dirigidas, así que un hub que las pasa no puede leerlas ([pegado remoto](remote-paste.md)).
 
 ## Todos los demás
 
@@ -19,7 +19,7 @@ Hay dos excepciones, y ambas son decisión tuya:
 |---|---|---|
 | Otros en tu red doméstica | que hay dispositivos que ejecutan Copy Beyond Borders, sus ID de dispositivo aleatorios y la etiqueta de tu grupo en mDNS, y cuáles se comunican y cuánto; nunca los nombres de los dispositivos ni los contenidos | nada que hacer; un ordenador publica solo en las redes domésticas que conoce (un miembro ligero, en todas las redes) |
 | Otros en una red fuera de casa (una cafetería, un hotel) | que el dispositivo habla WireGuard, o que con VLESS abre una conexión TLS a tu hub o reenviador, cuándo y cuánto | una VPN del sistema oculta incluso eso |
-| El reenviador (el tuyo, o el del proyecto en `cbb.tools`) | las direcciones de las que vienen los paquetes cifrados y que van a tu hub; no a qué grupo o dispositivo pertenecen | ejecutar el tuyo, o redirigir un puerto a tu hub y no usar ninguno |
+| El reenviador (el tuyo, o el del proyecto en `cbb.tools`) | las direcciones de las que vienen los paquetes cifrados y que van a tu hub, cuándo y de qué tamaño; no a qué grupo o dispositivo pertenecen | ejecutar el tuyo, o redirigir un puerto a tu hub y no usar ninguno |
 | Un relé ciego | cuáles de los dispositivos de un grupo están en línea ahora y se comunican entre sí, cuándo y cuánto; no guarda nada de ello | ejecutar el tuyo, o usar un hub |
 | La empresa que aloja un reenviador o un relé | las direcciones que se comunican con él, cuándo y cuánto | una VPN del sistema en el dispositivo |
 | GitHub, o `dl.cbb.tools` cuando GitHub no responde | tu dirección y que usas Copy Beyond Borders, en cada comprobación de actualizaciones y descarga; nada sobre el grupo | `sudo cbb update -auto off`, o un espejo propio (`-mirror`) |

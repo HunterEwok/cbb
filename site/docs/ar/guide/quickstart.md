@@ -33,7 +33,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-يتحقق المثبّت من التنزيل، ويشغّل Copy Beyond Borders، ويطرح سؤالين: هل يفتح جدار الحماية له (أجب بـ `y`)، وهل يحدّث نفسه تلقائيًا (و`y` إجابة جيدة أيضًا). بعد ذلك سجّل الخروج ثم الدخول مرة واحدة، أو افتح طرفية جديدة على Windows. يوجد Homebrew وwinget وDocker والتفاصيل في [التثبيت](install.md).
+يتحقق المثبّت من التنزيل، ويشغّل Copy Beyond Borders، ويطرح سؤالين: هل يفتح جدار الحماية له (أجب بـ `y`)، وهل يحدّث نفسه تلقائيًا (و`y` إجابة جيدة أيضًا). بعد ذلك سجّل الخروج ثم الدخول مرة واحدة، أو افتح طرفية جديدة على Windows. يوجد Homebrew وDocker والتفاصيل في [التثبيت](install.md).
 
 ## 3. أضف الحاسوب
 

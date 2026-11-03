@@ -33,7 +33,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-इंस्टॉलर डाउनलोड की जाँच करता है, Copy Beyond Borders चालू करता है और दो सवाल पूछता है: उसके लिए फ़ायरवॉल खोलना है या नहीं (`y` लिखें), और खुद को अपने आप अपडेट करना है या नहीं (यहाँ भी `y` अच्छा जवाब है)। फिर एक बार लॉग आउट करके दोबारा लॉग इन करें, या Windows पर नया टर्मिनल खोलें। Homebrew, winget, Docker और ब्योरे [इंस्टॉल करना](install.md) में हैं।
+इंस्टॉलर डाउनलोड की जाँच करता है, Copy Beyond Borders चालू करता है और दो सवाल पूछता है: उसके लिए फ़ायरवॉल खोलना है या नहीं (`y` लिखें), और खुद को अपने आप अपडेट करना है या नहीं (यहाँ भी `y` अच्छा जवाब है)। फिर एक बार लॉग आउट करके दोबारा लॉग इन करें, या Windows पर नया टर्मिनल खोलें। Homebrew, Docker और ब्योरे [इंस्टॉल करना](install.md) में हैं।
 
 ## 3. कंप्यूटर जोड़ें
 

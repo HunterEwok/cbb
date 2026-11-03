@@ -883,6 +883,12 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The README and the guides say exactly who can read the copies: every device of the group,
+  a hub included, over TLS between each two devices, with only commands sealed to their
+  receiver, and not "end to end"; the README has a trust model ("Who can read what"), the
+  step `sudo cbb mode shared`, a comparison with similar tools and their weak points, and a
+  way to check the installer against `SHA256SUMS` before running it. The website's first
+  screen says "Copy on one device, paste on another", and its translations are corrected.
 - Android's automatic sending ("Send my copies by themselves") leaves a copy marked sensitive
   (`android.content.extra.IS_SENSITIVE`, as password managers and the app's received secrets
   mark it) on the phone, as the computers leave the password managers' marks; the button still

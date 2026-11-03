@@ -11,7 +11,7 @@
   <ul>
     <li>{{t "There are no accounts, no cloud and no telemetry. Copy Beyond Borders does not report to anyone."}}</li>
     <li>{{t "Only devices you let in belong to your group, and they talk only to each other. Every connection is encrypted with TLS, and each device proves it is in the group."}}</li>
-    <li>{{t "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps its keys in files that only Copy Beyond Borders can read."}}</li>
+    <li>{{t "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps them in its TPM or Secure Enclave when it has one, otherwise in files that only Copy Beyond Borders can read."}}</li>
     <li>{{t "What password managers mark as secret is not synced automatically."}}</li>
   </ul>
 
@@ -22,7 +22,7 @@
     <thead><tr><td></td><th scope="col">{{t "Reads the clipboard"}}</th><th scope="col">{{t "Knows which of your devices talk, and when"}}</th><th scope="col">{{t "Whose it is"}}</th></tr></thead>
     <tbody>
     <tr><th scope="row">{{t "Hub"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "yes, it is one of your devices"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours: a computer, or a phone while its app is open"}}</td></tr>
-    <tr><th scope="row">{{t "Forwarder"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "no: it only passes encrypted packets to your hub"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours; the project's at cbb.tools is not open yet"}}</td></tr>
+    <tr><th scope="row">{{t "Forwarder"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "no: it sees only the addresses, timing and sizes of the encrypted packets it passes to your hub"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours; the project's at cbb.tools is not open yet"}}</td></tr>
     <tr><th scope="row">{{t "Blind relay"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours; the project's at cbb.tools is not open yet"}}</td></tr>
     </tbody>
   </table>

@@ -7,6 +7,10 @@ gets with the device. This page says where each kind of device keeps them, how t
 can check it, and which level of strictness to choose. The exact rules are in the
 [protocol](../protocol.md), section 17.
 
+> Built and tested in CI against a software TPM; on real devices so far only the iPhone's
+> Secure Enclave and Windows in a virtual machine. What has been tried where is in the
+> README's [status table](../../README.md#status).
+
 ## Where keys live
 
 | Where | Devices | What a thief gets |

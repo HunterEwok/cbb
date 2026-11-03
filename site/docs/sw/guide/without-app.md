@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: dbcf5e524e51 -->
+<!-- source: d6502212925b -->
 # Bila programu
 
 Kikundi hakihitaji programu ya simu. Kompyuta inaweza kushikilia kikundi, na iPhone isiyo na programu hujiunga kwa njia ya mkato. Hii pia ndiyo njia wakati programu ya iPhone inasubiri TestFlight.
@@ -40,7 +40,7 @@ Huchapisha msimbo wa QR, mwanzo wa alama ya kidole na msimbo wa tarakimu sita.
 
 1. Changanua msimbo wa QR kwa kamera ya iPhone na ufuate ukurasa: sakinisha wasifu.
 2. Hakikisha alama ya kidole ya wasifu inaanza kama ile iliyochapishwa (Mipangilio, Jumla, VPN na Usimamizi wa Kifaa, "CBB", Maelezo Zaidi), kisha uwashe uaminifu kamili kwake (Mipangilio, Jumla, Kuhusu, Mipangilio ya Kuaminiwa kwa Cheti).
-3. Ongeza njia ya mkato "cbb" kutoka ukurasa uleule na uiendeshe mara moja; inauliza msimbo wa tarakimu sita.
+3. Ongeza njia ya mkato "cbb" kutoka ukurasa uleule na uiendeshe mara moja; inauliza msimbo wa tarakimu sita. Kisha huhifadhi tokeni yake, inayoruhusu kusawazisha tu, katika iCloud Drive (Shortcuts/cbb/token.txt), ambapo vifaa vyako vingine vya Apple vinaweza kuisoma; tokeni iliyopotea hufutwa kwa `sudo cbb pair -phone -new-token`, ambayo huunganisha iPhone upya.
 4. Weka njia ya mkato kwenye kitufe cha Kitendo, au kwenye Gusa Nyuma (Mipangilio, Ufikivu, Mguso, Gusa Nyuma, Gusa Mara Mbili).
 
 Mbonyezo mmoja kisha huchagua mwelekeo wenyewe: kilichonakiliwa kwenye kompyuta muda mfupi uliopita huja kwenye iPhone; la sivyo nakala mpya kwenye iPhone huenda kwenye kompyuta.

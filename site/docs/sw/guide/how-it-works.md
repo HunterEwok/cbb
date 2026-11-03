@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 895e2077a95e -->
+<!-- source: 11b1348d8420 -->
 # Jinsi inavyofanya kazi
 
 Ukurasa huu unaeleza Copy Beyond Borders kwa picha: nani yumo kwenye kikundi, jinsi vifaa vinavyopatana nyumbani, na kila njia ambayo vinaweza kuendelea kuwasiliana vikiwa mbali. Kanuni kamili ziko kwenye [muundo](../design.md); huzihitaji ili kuutumia.
@@ -17,7 +17,7 @@ Vifaa vyako huunda **kikundi**. Ni vifaa ulivyoviruhusu tu vinavyokuwa ndani yak
 | **Mwanachama bila root** | kompyuta ya Linux iliyosakinishwa bila `sudo` | husawazisha kama mwanachama, lakini kamwe si mzizi, msimamizi wala kitovu ([tazama hapa chini](#rootless-members)) |
 | **Kitovu** | kompyuta ya msimamizi nyumbani, au simu wakati programu yake imefunguliwa, ukipenda | huwezesha vifaa vyako kusawazisha vikiwa mbali na nyumbani |
 
-Ufunguo wa simu hutengenezwa ndani ya chipu yake ya usalama (Secure Enclave, Keystore ya Android) na haitoki kamwe; kila matumizi huomba uso wako, alama ya kidole au nambari ya siri. Kompyuta huweka funguo zake kwenye faili ambazo Copy Beyond Borders pekee ndiyo huzisoma.
+Funguo za simu hutengenezwa ndani ya chipu yake ya usalama (Secure Enclave, Keystore ya Android) na hazitoki kamwe; kila sahihi kwa ufunguo wa mzizi wa kikundi au ufunguo wa msimamizi huomba uso wako, alama ya kidole au nambari ya siri, huku ufunguo ambao simu husawazisha nao ukifanya kazi bila kuuliza. Kompyuta huweka funguo zake kwenye faili ambazo Copy Beyond Borders pekee ndiyo huzisoma.
 
 ### Wanachama bila root
 
@@ -63,7 +63,7 @@ Watoa huduma wengi wa intaneti huweka nyumba nyuma ya anwani moja ya pamoja (car
 
 ![Kitovu kilicho nyuma ya NAT ya mtoa huduma hupiga nje kwa kisambazaji, kinachopitisha handaki kutoka kwa vifaa vilivyo mbali](../images/forwarder.svg)
 
-Kisambazaji hakina funguo na hakiwezi kusoma chochote: huona tu pakiti zilizosimbwa zinazoelekea kwenye kitovu chako. Kuna aina mbili:
+Kisambazaji hakina funguo na hakiwezi kusoma chochote: huona tu pakiti zilizosimbwa zinazoelekea kwenye kitovu chako, zinakotoka, lini na ukubwa wake. Kuna aina mbili:
 
 - **Chako mwenyewe**: `cbb forward` kwenye seva yoyote yenye anwani ya umma, seva pepe ya bei nafuu kwa mfano ([kuendesha seva zako mwenyewe](../admin/self-hosting.md)).
 - **Kisambazaji cha Copy Beyond Borders** kwenye `cbb.tools`, kinachoendeshwa na mradi kwa kila mtu. Kinajaribiwa na bado hakijafunguliwa kwa wote; anwani na ufunguo wake vitakuwa kwenye ukurasa huu kikifunguliwa.
@@ -97,7 +97,7 @@ Kikundi kinaweza kuwa na vitovu kadhaa: mzizi na kila msimamizi aliyeweka kitovu
 | Seva | Inasoma ubao wa kunakili | Inajua ni vifaa vipi vyako vinavyozungumza, na lini | Ni ya nani |
 |---|---|---|---|
 | Kitovu | ndiyo, ni kifaa chako | ndiyo | chako |
-| Kisambazaji | hapana | hapana: huona anwani ambazo pakiti zilizosimbwa hutoka na zinazoelekea kwenye kitovu chako | chako, au cha mradi kwenye `cbb.tools` |
+| Kisambazaji | hapana | hapana: huona anwani ambazo pakiti zilizosimbwa hutoka na zinazoelekea kwenye kitovu chako, lini na ukubwa wake | chako, au cha mradi kwenye `cbb.tools` |
 | Relei pofu | hapana | ndiyo | chako (moja kwenye `cbb.tools` imepangwa) |
 
 Hakuna kingine kinachohusika: hakuna akaunti, hakuna wingu, hakuna telemetria. Kila mtu mwingine anayeweza kuona chochote, kuanzia Wi-Fi yako hadi ukaguzi wa masasisho, ameorodheshwa katika [faragha](privacy.md). Usawazishaji ukiwa mbali na nyumbani ukiwa umewashwa, huduma ya Copy Beyond Borders kwenye kompyuta inaweza kufikia mtandao wa nyumbani tu na kitovu, kisambazaji na relei vya kikundi chenyewe.

@@ -34,7 +34,7 @@
 {{define "content"}}
 <section class="hero">
   <div class="wrap">
-    <h1>{{t "One clipboard"}} <span>{{t "to rule them all."}}</span></h1>
+    <h1>{{t "Copy on one device,"}} <span>{{t "paste on another."}}</span></h1>
     <p class="lead">{{t "Copy on a phone or a computer, paste on any other: iPhone, Android, Mac, Windows or Linux. Devices talk directly over your home network, TLS-encrypted, with no cloud and no accounts. Away from home it works through your own WireGuard tunnel."}}</p>
     <!-- A school board in a walnut frame, the picture drawn on it in chalk:
          the computer and the phone joined through the key. -->
@@ -60,8 +60,8 @@
   <h2>{{t "Works where you do"}}</h2>
   <div class="cards four">
     <div class="card"><h3>Android</h3><p>{{t "Receives copies by itself, and sends them with the accessibility service or one tap."}}</p></div>
-    <div class="card"><h3>iPhone</h3><p>{{t "One press of the Action button or a double tap on the back, then paste."}}</p></div>
-    <div class="card"><h3>{{t "Windows, Mac and Linux"}}</h3><p>{{t "Computers sync by themselves, both ways. On Linux it works with any desktop, and without one in tmux."}}</p></div>
+    <div class="card"><h3>iPhone</h3><p>{{t "One press of the Action button or a double tap on the back, then paste. The app comes with TestFlight."}}</p></div>
+    <div class="card"><h3>{{t "Windows, Mac and Linux"}}</h3><p>{{t "Computers sync by themselves, both ways. On Linux it works with X11 and Wayland desktops, and without one in tmux."}}</p></div>
     <div class="card"><h3>{{t "Raspberry Pi, router, NAS"}}</h3><p>{{t "A small member that only syncs, or a Docker image that is always on."}}</p></div>
   </div>
   <p class="dim">{{t "iOS does not let apps read the clipboard in the background, so the iPhone needs one gesture."}}</p>
@@ -85,7 +85,7 @@
 
 <section class="wrap reveal" id="compare">
   <h2>{{t "Compared with popular apps"}}</h2>
-  <p>{{t "Each of these does part of the job well. Copy Beyond Borders is the one that does all of it."}}</p>
+  <p>{{t "Each of these does part of the job well. Here is what each one covers."}}</p>
   <div class="frame board-table">{{template "rails"}}<div class="surface">
   <table class="chalk-table compare apps">
     <colgroup><col class="name"><col span="7"></colgroup>
@@ -158,8 +158,8 @@
   <h2>{{t "Principles"}}</h2>
   <div class="cards three">
     <div class="card"><h3>{{t "Your network only"}}</h3><p>{{t "At home the devices talk to each other directly. Away from home they reach your group through its own encrypted tunnel. Nothing goes through a cloud."}}</p></div>
-    <div class="card"><h3>{{t "Paired, then encrypted"}}</h3><p>{{t "A device joins your group once, by a QR code or a six-digit code. All traffic uses TLS, and devices talk only to the devices of the group."}}</p></div>
-    <div class="card"><h3>{{t "Keys in the chip"}}</h3><p>{{t "In a group made on a phone, the phone holds the group's key in its security chip, and each use asks for your face, fingerprint or passcode."}}</p></div>
+    <div class="card"><h3>{{t "Paired, then encrypted"}}</h3><p>{{t "A device joins your group once, by a QR code or a six-digit code. The devices talk only to the devices of the group, and only over TLS."}}</p></div>
+    <div class="card"><h3>{{t "Keys in the chip"}}</h3><p>{{t "In a group made on a phone, the phone holds the group's key in its security chip, and each signature with it asks for your face, fingerprint or passcode."}}</p></div>
     <div class="card"><h3>{{t "Passwords stay put"}}</h3><p>{{t "What password managers mark as secret is not synced automatically."}}</p></div>
     <div class="card"><h3>{{t "Small"}}</h3><p>{{t "One file per platform and no dependencies. It runs even on a Raspberry Pi Zero."}}</p></div>
     <div class="card"><h3>{{t "Open"}}</h3><p>{{t "Free software: every line is on GitHub, and every release is built there in the open."}}</p></div>

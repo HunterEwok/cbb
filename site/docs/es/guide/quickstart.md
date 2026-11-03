@@ -33,7 +33,7 @@ En **Windows** 10 u 11, en un PowerShell abierto con «Ejecutar como administrad
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-El instalador comprueba la descarga, inicia Copy Beyond Borders y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, winget, Docker y los detalles están en [Instalación](install.md).
+El instalador comprueba la descarga, inicia Copy Beyond Borders y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, Docker y los detalles están en [Instalación](install.md).
 
 ## 3. Añade el ordenador
 

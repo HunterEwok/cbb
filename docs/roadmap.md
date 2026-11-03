@@ -379,45 +379,34 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - Done in 0.6: Android's automatic sending skips a copy that carries
       `android.content.extra.IS_SENSITIVE`, as the computers skip the password managers'
       marks.
-    - No "end to end" for the clipboard: every device of the group, the hub included,
-      reads what is copied and passes it on, over mutual TLS 1.3; no server can read it.
-      The guides (privacy, how it works) and the README say exactly that; only sealed
-      commands (item 41) are encrypted to their receiver.
-    - The site's privacy page: the forwarder sees the addresses, the timing and the sizes
-      of encrypted packets, not "no". The guide's "not which group or device" holds from
-      0.6, with the short server credentials (item 32).
-    - The guides that describe what is built but not yet run on real devices (device keys,
-      sync away from home) link the README's status table; "each use asks for your face"
-      is said of the root's and the admins' keys only; the guide without the app says that
-      the shortcut keeps its token in iCloud Drive; "All traffic uses TLS" links the list of
-      what is not encrypted (mDNS, the profile page, Roku); winget is named once the package
-      is in winget's repository; docs/security-audit.md says it is a plan.
-    - One screen of the trust model in the README: who holds which key, who can read the
-      copies, who can admit a device, what the hub and the forwarder see, and a picture of
-      the keys. The pairing code is the only secret: show it only to people who may join.
-    - The README for a newcomer: the step `sudo cbb mode shared` (computers sync both ways
-      only in shared mode), one line on what is tested today, a short security section with
-      links, how it differs from the closest tools (facts with sources, weak points too),
-      screenshots, an install that checks SHA256SUMS before running, a glossary (group,
-      root, admin, hub, lite member, relay), ports, Docker and uninstalling, the other
-      projects of the old name, and how the project is built: with heavy use of AI coding
-      tools (Claude Code), the author directing the work, deciding, running the security
-      audits and testing on real devices.
+    - Done in 0.6: no "end to end" for the clipboard in the guides (privacy, how it works,
+      networks that block VPNs) and the README, which say that every device of the group,
+      the hub included, reads what is copied, and that only commands are sealed to their
+      receiver; the forwarder's addresses, timing and sizes on the site and in the guides;
+      the status notes and the README's status link in the guides of keys and away from
+      home; "each signature" of the root's and the admins' keys only; the shortcut's token
+      in iCloud Drive; "only over TLS" linking what is not encrypted; winget named only where
+      it says "once the package is in winget's repository"; docs/security-audit.md says it
+      is a plan.
+    - Done in 0.6: the README's trust model ("Who can read what": who holds which key, who
+      reads the copies, who admits devices, what the hub, the forwarder and the relay see;
+      the pairing code as the only secret), the step `sudo cbb mode shared`, one line on what
+      is tested, a security section with links, the comparison with KDE Connect, ClipCascade
+      and Universal Clipboard with its weak points, an install that checks SHA256SUMS first,
+      links to the ports and to removing it, and how the project is built. Still to do: a
+      picture of the keys, screenshots.
     - The repository's description and topics on GitHub, so that a search for "clipboard
-      sync" finds it.
-    - The website, from a read of its sources and translations (2026-11-02): the first
-      screen says what it does with a verb ("Copy on one device, paste on another", the
-      text the social image already uses) and shows why to trust it (open source, no
-      account, no telemetry) above the fold, and the iPhone in the list of platforms says
-      the app waits for TestFlight; no "trademarks" (the names belong to their owners), no
-      "the one that does all of it", no "simpler" for the recommended computer, no "any
-      desktop" while GNOME on Wayland is untested, no "runs on a Raspberry Pi Zero" before
-      it is run on one, the privacy page's keys on Linux with a TPM; the translations'
-      errors the read found (Chinese "全程" reads as end to end; Swahili "haimripoti" says
-      the opposite, and "huru"/"huria" are swapped; Hebrew's gender and prepositions before
-      links; Hindi's "जोड़ी" for pairing and mixed terms), links placed so that no
-      sentence wraps a whole page title, `dir="ltr"` on code, no letter spacing on Arabic
-      and Hebrew headings, and a native speaker's read of each language before the launch.
+      sync" finds it (the owner sets them).
+    - Done in 0.6 on the website: the first screen's title says what it does ("Copy on one
+      device, paste on another", also in the link picture), the iPhone card says the app
+      comes with TestFlight, no "trademarks", no "the one that does all of it", no "simpler"
+      for the recommended computer, X11 and Wayland instead of "any desktop", the privacy
+      page's keys in a TPM or Secure Enclave and the forwarder's addresses, timing and
+      sizes; the Chinese "全程", the Swahili "haimripoti" and "huru"/"huria", Hindi's
+      pairing and Hebrew's mixed singular and plural fixed; `dir="ltr"` on code and no
+      letter spacing in Arabic and Hebrew. Still to do: the trust facts above the fold,
+      Hebrew's prepositions before links, Hindi's mixed terms, links that wrap a whole page
+      title, and a native speaker's read of each language before the launch.
 - **54.** **Planned for 0.6, before the launch.** Support for the project: a
     `.github/FUNDING.yml` and a `funding.json` (the format FLOSS/fund reads), once the
     author's GitHub Sponsors and Liberapay accounts exist, and a short "Support" section in

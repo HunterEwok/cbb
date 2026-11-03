@@ -51,7 +51,9 @@ It prints a QR code, the start of a fingerprint and a six-digit code.
    VPN & Device Management, "CBB", More Details), then turn on full trust for it
    (Settings, General, About, Certificate Trust Settings).
 3. Add the shortcut "cbb" from the same page and run it once; it asks for the
-   six-digit code.
+   six-digit code. It then keeps its token, which lets it sync and nothing else, in iCloud
+   Drive (Shortcuts/cbb/token.txt), where your other Apple devices can read it; a lost
+   token is revoked by `sudo cbb pair -phone -new-token`, which pairs the iPhone again.
 4. Put the shortcut on the Action button, or on Back Tap (Settings, Accessibility, Touch,
    Back Tap, Double Tap).
 

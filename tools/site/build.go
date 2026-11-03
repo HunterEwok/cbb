@@ -43,7 +43,7 @@ const siteURL = "https://cbb.tools"
 var faq = []struct{ Q, A string }{
 	{"Is it free?", "Yes. Copy Beyond Borders is free software: no price, no subscription, no ads."},
 	{"Can anyone else read what I copy?", "No. Your devices talk only to each other, and always encrypted. Away from home a server may pass the traffic on, but it cannot read it."},
-	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on makes sync away from home simpler."},
+	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on keeps sync away from home going at any time."},
 	{"Does it work away from home?", "Yes. Your devices reach the group through its hub, a computer of yours or a phone while its app is open, over an encrypted tunnel. For now this takes a port forward on your router or a small server of your own."},
 	{"Why does the iPhone need a gesture?", "iOS does not let apps read the clipboard in the background. You send a copy with the Action button or a double tap on the back of the phone."},
 	{"Are my passwords synced?", "What password managers mark as secret is not synced automatically."},
@@ -229,7 +229,7 @@ var funcs = template.FuncMap{
 	"t":    func(string, ...any) template.HTML { return "" }, // replaced per language
 	"list": func(v ...any) []any { return v },
 	"code": func(s string) template.HTML {
-		return template.HTML("<code>" + template.HTMLEscapeString(s) + "</code>")
+		return template.HTML(`<code dir="ltr">` + template.HTMLEscapeString(s) + "</code>")
 	},
 	"link":      link,
 	"hasPrefix": strings.HasPrefix,

@@ -45,7 +45,7 @@ irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 The installer checks the download, starts Copy Beyond Borders and asks two questions: whether
 to open the firewall for it (answer `y`) and whether to update itself automatically (`y`
 is a good answer too). Then log out and in again once, or open a new terminal on
-Windows. Homebrew, winget, Docker and the details are in [Installing](install.md).
+Windows. Homebrew, Docker and the details are in [Installing](install.md).
 
 ## 3. Add the computer
 

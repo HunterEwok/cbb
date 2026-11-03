@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: dbcf5e524e51 -->
+<!-- source: d6502212925b -->
 # Sin la app
 
 Un grupo no necesita la app del teléfono. Un ordenador puede sostener el grupo, y un iPhone sin la app se une con un atajo. Este es también el camino mientras la app del iPhone espera a TestFlight.
@@ -40,7 +40,7 @@ Imprime un código QR, el comienzo de una huella digital y un código de seis d�
 
 1. Escanea el código QR con la cámara del iPhone y sigue la página: instala el perfil.
 2. Comprueba que la huella digital del perfil empieza por la impresa (Ajustes, General, VPN y gestión de dispositivos, «CBB», Más detalles), y luego activa la confianza total para él (Ajustes, General, Información, Ajustes de confianza de certificados).
-3. Añade el atajo «cbb» desde la misma página y ejecútalo una vez; te pide el código de seis dígitos.
+3. Añade el atajo «cbb» desde la misma página y ejecútalo una vez; te pide el código de seis dígitos. Después guarda su token, que solo permite sincronizar, en iCloud Drive (Shortcuts/cbb/token.txt), donde tus otros dispositivos Apple pueden leerlo; un token perdido se revoca con `sudo cbb pair -phone -new-token`, que vuelve a emparejar el iPhone.
 4. Pon el atajo en el botón de acción, o en Tocar atrás (Ajustes, Accesibilidad, Tocar, Tocar atrás, Doble toque).
 
 Una sola pulsación elige entonces la dirección por sí misma: lo que se copió en un ordenador hace un momento llega al iPhone; si no, una copia nueva en el iPhone va a los ordenadores.

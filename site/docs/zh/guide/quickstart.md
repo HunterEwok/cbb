@@ -33,7 +33,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-安装程序会校验下载内容，启动 Copy Beyond Borders，并问两个问题：是否为它开放防火墙（回答 `y`），以及是否自动更新（回答 `y` 也很合适）。然后注销再登录一次；在 Windows 上则打开一个新终端。Homebrew、winget、Docker 和更多细节见[安装](install.md)。
+安装程序会校验下载内容，启动 Copy Beyond Borders，并问两个问题：是否为它开放防火墙（回答 `y`），以及是否自动更新（回答 `y` 也很合适）。然后注销再登录一次；在 Windows 上则打开一个新终端。Homebrew、Docker 和更多细节见[安装](install.md)。
 
 ## 3. 添加电脑
 

@@ -1,8 +1,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1972e378f0c2 -->
+<!-- source: a9934944d8dd -->
 # Claves y atestación
 
 Cada dispositivo de un grupo tiene claves: una demuestra a los demás quién es, y las claves de la raíz y de los administradores añaden y quitan dispositivos. El lugar donde un dispositivo guarda sus claves decide lo que se lleva un ladrón con él. Esta página dice dónde guarda las suyas cada tipo de dispositivo, cómo puede comprobarlo el grupo y qué nivel de rigor elegir. Las reglas exactas están en el [protocolo](../protocol.md), sección 17.
+
+> Hecho y probado en CI con un TPM por software; en dispositivos reales, por ahora solo el Secure Enclave del iPhone y Windows en una máquina virtual. La [tabla de estado](../../README.md#status) del README dice qué se ha probado y dónde.
 
 ## Dónde viven las claves
 
