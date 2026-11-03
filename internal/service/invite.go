@@ -296,7 +296,7 @@ func (s *Service) joinInvite(ctx context.Context, c net.Conn, j *pair.Joiner, m 
 	if time.Now().After(in.Expires) {
 		return nil, nil, fmt.Errorf("the invitation expired at %s; ask for a new one", in.Expires.Format(time.RFC3339))
 	}
-	if keysInFile && !m.Consent {
+	if s.keysInFile() && !m.Consent {
 		return nil, nil, errors.New("a device that joins with an invitation syncs away from home, and this one keeps its keys in files, so it needs your consent; run cbb pair -invite and read what it says")
 	}
 	fp, err := j.Fingerprint()

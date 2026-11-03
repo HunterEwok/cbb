@@ -66,7 +66,11 @@ them is in the [protocol](../protocol.md).
 
 | What | Limit |
 |---|---|
-| Records the group keeps (devices, removals, admins) | 4,096; at most 1,024 signed by one admin |
+| Records the group keeps (devices, removals, admins, settings) | 1,024 and 1 MiB together, counted after the root's checkpoint; records past them count for nothing, the root's first ([protocol](../protocol.md), section 10, "Limits") |
+| One record | 8 KiB; a checkpoint 64 KiB |
+| Devices of one group | 256 |
+| Admin keys | 64 |
+| Handovers of the group to a new root | 15 |
 | Clients of one hub | 256 |
 | Members and hubs in one server credential | 256 and 16 |
 | Known home networks of one computer | 64 |

@@ -230,6 +230,7 @@ class PhoneGroupTest {
         val cert = GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, rootKey, t0)
         g.record(pi, "pi", "full", Records.keyHashOfCert(cert), rootKey, t0)
         g.computers.add(PhoneGroup.Computer(pi, "pi", "linux", cert, Instant.ofEpochMilli(t0.toEpochMilli()), listOf("10.0.0.5:8764")))
+        g.setKeyLevel(Records.LEVEL_FILES, rootKey, t0)
         val (ca, _) = g.makeAdmin(pi, SoftwareSigner().publicKeyDER, rootKey, t0.plusSeconds(1), allowFileKey = true)
         val f = File.createTempFile("group", ".json")
         try {
@@ -249,6 +250,34 @@ class PhoneGroupTest {
         assertEquals(64, PhoneGroup.validName("\u0436".repeat(40)).toByteArray().size)
     }
 
+    /** The key level decides who may be an admin; the root sets it, keeping the takeover delay, and never above its own key. */
+    @Test
+    fun keyLevel() {
+        val root = SoftwareSigner()
+        val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, t0)
+        assertEquals(Records.HARDWARE, g.keyLevel)
+        val pi = SyncEngine.newID()
+        g.record(pi, "pi", "full", Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0)
+        val adminKey = SoftwareSigner().publicKeyDER
+        val t1 = t0.plusSeconds(1)
+        // At the level hardware a key in a file is no admin, even with the consent.
+        assertFailsWith<PhoneGroup.BelowKeyLevel> { g.makeAdmin(pi, adminKey, root, t1, keyStore = Records.FILE, allowFileKey = true) }
+        // The root's own key is not proven, so the level proven is out of its reach.
+        assertFailsWith<PhoneGroup.BelowKeyLevel> { g.setKeyLevel(Records.PROVEN, root, t1) }
+        assertEquals(PhoneGroup.INVALID_KEY_LEVEL, assertFailsWith<PhoneGroup.Failure> { g.setKeyLevel("any", root, t1) }.message)
+        g.setTakeoverDelay(3_600_000, root, t1)
+        g.setKeyLevel(Records.LEVEL_FILES, root, t1)
+        assertEquals(Records.LEVEL_FILES, g.keyLevel)
+        assertEquals(3_600_000L, g.settings(Records.keyHash(root.publicKeyDER)).first, "the level keeps the delay")
+        g.makeAdmin(pi, adminKey, root, t1, keyStore = Records.FILE, allowFileKey = true)
+        assertEquals(listOf(pi), g.belowKeyLevel(Records.HARDWARE))
+        assertEquals(emptyList(), g.belowKeyLevel(Records.LEVEL_FILES))
+        g.setTakeoverDelay(0, root, t1)
+        assertEquals(Records.LEVEL_FILES, g.keyLevel, "the delay keeps the level")
+        g.isRoot = false
+        assertFailsWith<PhoneGroup.Failure> { g.setKeyLevel(Records.HARDWARE, root, t1) }
+    }
+
     @Test
     fun rename() {
         val root = SoftwareSigner()
@@ -256,6 +285,7 @@ class PhoneGroupTest {
         val pi = SyncEngine.newID()
         val piKey = Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0))
         g.record(pi, "pi", "full", piKey, root, t0, os = "linux")
+        g.setKeyLevel(Records.LEVEL_FILES, root, t0)
         val (ca, _) = g.makeAdmin(pi, SoftwareSigner().publicKeyDER, root, t0.plusSeconds(1), allowFileKey = true)
         val r = g.rename(pi, "  living room pi ", root, t0.plusSeconds(2))
         assertTrue(r in g.records.records)
@@ -278,6 +308,7 @@ class PhoneGroupTest {
         val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, t0)
         val pi = SyncEngine.newID()
         g.record(pi, "pi", "full", Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0)
+        g.setKeyLevel(Records.LEVEL_FILES, root, t0)
         g.makeAdmin(pi, SoftwareSigner().publicKeyDER, root, t0.plusSeconds(1), allowFileKey = true)
         val deck = SyncEngine.newID()
         g.record(deck, "deck", "full", Records.keyHashOfCert(GroupCertificates.member(deck, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0)
@@ -354,6 +385,7 @@ class PhoneGroupTest {
         val piKey = Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0))
         g.record(pi, "pi", "full", piKey, root, t0)
         val adminKey = SoftwareSigner()
+        g.setKeyLevel(Records.LEVEL_FILES, root, t0)
         // A computer whose keys sit in a file, or that does not say, needs
         // the user's consent; one with hardware keys does not.
         assertFailsWith<PhoneGroup.FileKey> { g.makeAdmin(pi, adminKey.publicKeyDER, root, t0.plusSeconds(1)) }
@@ -435,6 +467,7 @@ class PhoneGroupTest {
         // The root makes a computer an admin.
         g.record(pc, "pi", "full", Records.keyHashOfCert(cert), ca, t0)
         val computerKey = SoftwareSigner()
+        g.setKeyLevel(Records.LEVEL_FILES, ca, t0)
         val (computerCA, _) = g.makeAdmin(pc, computerKey.publicKeyDER, ca, t0.plusSeconds(1), allowFileKey = true)
         File(dir, "swift-computer-admin.json").writeBytes(
             Wire.encode(

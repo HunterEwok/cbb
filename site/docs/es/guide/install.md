@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 75a4b281a1c4 -->
+<!-- source: ba8bb2b8b763 -->
 # Instalación
 
 Clipboard Bridge se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.

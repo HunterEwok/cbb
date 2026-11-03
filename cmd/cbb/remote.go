@@ -13,7 +13,7 @@ import (
 )
 
 // remoteUsage is cbb remote's usage.
-const remoteUsage = "usage: cbb remote [add [-roku -consent] [-name NAME] ADDRESS | code CODE | cancel | remove TV | pastes TV on|off | type [-tv TV] [TEXT]]"
+const remoteUsage = "usage: cbb remote [add [-appletv | -roku -consent] [-name NAME] ADDRESS | code CODE | cancel | remove TV | pastes TV on|off | type [-tv TV] [TEXT]]"
 
 // cmdRemote shows the TVs this device is the remote of, pairs with one,
 // sends the remote pastes to one, or types a text on one.
@@ -21,6 +21,7 @@ func cmdRemote(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("remote", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	isRoku := fs.Bool("roku", false, "with add: the TV is a Roku, typed on over plain HTTP")
+	isApple := fs.Bool("appletv", false, "with add: the TV is an Apple TV, paired with the PIN it shows")
 	consent := fs.Bool("consent", false, "with add -roku: agree that the text crosses the home network unencrypted")
 	name := fs.String("name", "", "with add: the TV's name here, the one it gives if not set")
 	tv := fs.String("tv", "", "with type: the TV, if there are several")
@@ -47,7 +48,7 @@ func cmdRemote(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, remoteUsage)
 		return 2
 	}
-	if verb != "add" && (*isRoku || *consent || *name != "") || verb != "type" && *tv != "" {
+	if verb != "add" && (*isRoku || *isApple || *consent || *name != "") || verb != "type" && *tv != "" || *isRoku && *isApple {
 		return usage()
 	}
 	switch verb {
@@ -60,8 +61,11 @@ func cmdRemote(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return usage()
 		}
 		h.Address, h.NewName, h.Consent = rest[0], *name, *consent
-		if *isRoku {
+		switch {
+		case *isRoku:
 			h.Value = "roku"
+		case *isApple:
+			h.Value = "appletv"
 		}
 	case "code":
 		if len(rest) != 1 {
@@ -116,6 +120,10 @@ func cmdRemote(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if m.Status != nil {
 		tvs = m.Status.TVs
 	}
+	if verb == "add" && *isApple {
+		fmt.Fprintln(stdout, "The Apple TV shows a PIN now: run cbb remote code PIN with it within two minutes.")
+		return 0
+	}
 	if verb == "add" && !*isRoku {
 		fmt.Fprintln(stdout, "The TV shows a code now: run cbb remote code CODE with it within two minutes.")
 		return 0
@@ -127,17 +135,24 @@ func cmdRemote(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 // remoteLines lists the TVs.
 func remoteLines(tvs []control.TV) string {
 	if len(tvs) == 0 {
-		return "This device is the remote of no TV: cbb remote add ADDRESS pairs with an Android TV or a Google TV, cbb remote add -roku -consent ADDRESS takes a Roku.\n"
+		return "This device is the remote of no TV: cbb remote add ADDRESS pairs with an Android TV or a Google TV, cbb remote add -appletv ADDRESS with an Apple TV, cbb remote add -roku -consent ADDRESS takes a Roku.\n"
 	}
 	var w strings.Builder
 	for _, t := range tvs {
 		kind := "Android TV"
-		if t.Kind == "roku" {
+		switch t.Kind {
+		case "roku":
 			kind = "Roku, plain HTTP"
+		case "appletv":
+			kind = "Apple TV"
 		}
 		switch {
 		case t.Pairing:
-			fmt.Fprintf(&w, "Pairing with the TV at %s: it shows a code for cbb remote code.\n", t.Host)
+			what := "a code"
+			if t.Kind == "appletv" {
+				what = "a PIN"
+			}
+			fmt.Fprintf(&w, "Pairing with the TV at %s: it shows %s for cbb remote code.\n", t.Host, what)
 		case t.Pastes:
 			fmt.Fprintf(&w, "%s (%s) at %s: remote pastes go to it.\n", t.Name, kind, t.Host)
 		default:

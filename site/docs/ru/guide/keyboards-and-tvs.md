@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 97be486697d2 -->
+<!-- source: b61def346d84 -->
 # Клавиатуры и телевизоры
 
 Для тех, кому нужно набрать длинный пароль, ссылку или поисковый запрос на телевизоре,
@@ -96,6 +96,15 @@ sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a s
 sudo cbb remote code 123456              # within two minutes
 ```
 
+Apple TV сопрягается так же, по четырёхзначному PIN-коду на экране. Сначала на Apple TV
+выберите «Настройки», «AirPlay и HomeKit», «Разрешить доступ»: «Все в той же сети»; с
+вариантом «Только пользователи этого дома» он отклоняет любое сопряжение.
+
+```sh
+sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
+sudo cbb remote code 1234                # within two minutes
+```
+
 У Roku нет ни сопряжения, ни шифрования: текст идёт по вашей домашней сети простым HTTP,
 поэтому Roku добавляется, только когда вы прямо скажете об этом флагом `-consent`. На Roku
 сначала установите Settings, System, Advanced system settings, Control by mobile apps в
@@ -113,8 +122,8 @@ sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that
 ```
 
 `cbb remote` перечисляет телевизоры, `-tv NAME` выбирает один из нескольких, а
-`sudo cbb remote remove NAME` забывает один. Android TV, который сбросили, нужно сопрягать
-заново.
+`sudo cbb remote remove NAME` забывает один. Android TV или Apple TV, который сбросили или который забыл этот
+компьютер, нужно сопрягать заново.
 
 ## Безопасность
 

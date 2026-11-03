@@ -49,7 +49,7 @@ func handshake(t *testing.T, client, server *tls.Config) (ccs, scs tls.Connectio
 
 func TestMemberHandshake(t *testing.T) {
 	admin := newGroup(t)
-	mac := join(t, admin, false, t0)
+	mac := join(t, admin, t0)
 	at := func(when time.Time) TLSOptions { return TLSOptions{Now: func() time.Time { return when }} }
 	ccs, scs, cerr, serr := handshake(t, mac.ClientTLS(admin.ID, at(t0)), admin.ServerTLS(at(t0)))
 	if cerr != nil || serr != nil {
@@ -67,9 +67,9 @@ func TestMemberHandshake(t *testing.T) {
 }
 
 func TestMemberHandshakeRejects(t *testing.T) {
-	admin := newLegacyGroup(t)
-	mac := join(t, admin, false, t0)
-	linux := join(t, admin, true, t0)
+	admin := newGroup(t)
+	mac := join(t, admin, t0)
+	other := join(t, admin, t0)
 	stranger := newGroup(t)
 	at := func(when time.Time) TLSOptions { return TLSOptions{Now: func() time.Time { return when }} }
 	now := at(t0)
@@ -93,8 +93,8 @@ func TestMemberHandshakeRejects(t *testing.T) {
 	noALPN.NextProtos, noALPN.VerifyConnection = nil, nil // so only the server can object
 	noCert := mac.ClientTLS(admin.ID, now)
 	noCert.Certificates = nil
-	phoneCert := linux.ClientTLS(admin.ID, now)
-	phoneCert.Certificates = []tls.Certificate{linux.tlsCert(linux.Phone)}
+	phoneCert := admin.ClientTLS(admin.ID, now)
+	phoneCert.Certificates = []tls.Certificate{admin.tlsCert(admin.Phone)}
 	// A stranger that trusts this group's CA, so only the server can object
 	// to its certificate.
 	strangerClient := stranger.ClientTLS(admin.ID, now)
@@ -110,7 +110,7 @@ func TestMemberHandshakeRejects(t *testing.T) {
 		{"a server from another group", mac.ClientTLS(stranger.ID, now), stranger.ServerTLS(now), "client"},
 		{"a forged server that names the expected device", mac.ClientTLS(admin.ID, now), forged, "client"},
 		{"a client from another group", strangerClient, admin.ServerTLS(now), "server"},
-		{"another member than expected", mac.ClientTLS(admin.ID, now), linux.ServerTLS(now), "client"},
+		{"another member than expected", mac.ClientTLS(admin.ID, now), other.ServerTLS(now), "client"},
 		{"a revoked client", mac.ClientTLS(admin.ID, now), admin.ServerTLS(deny(mac.ID)), "server"},
 		{"a revoked server", mac.ClientTLS(admin.ID, deny(admin.ID)), admin.ServerTLS(now), "client"},
 		{"an expired server", mac.ClientTLS(admin.ID, at(t0.AddDate(3, 0, 0))), admin.ServerTLS(at(t0.AddDate(3, 0, 0))), "client"},
@@ -170,7 +170,7 @@ func TestMemberHandshakeWithClockBehind(t *testing.T) {
 	// A Raspberry Pi without a real-time clock may run years behind until
 	// it synchronizes; it still accepts the group's certificates.
 	admin := newGroup(t)
-	mac := join(t, admin, false, t0)
+	mac := join(t, admin, t0)
 	behind := TLSOptions{Now: func() time.Time { return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC) }}
 	if _, _, cerr, serr := handshake(t, mac.ClientTLS(admin.ID, behind), admin.ServerTLS(behind)); cerr != nil || serr != nil {
 		t.Errorf("handshake with the clock in 1970: client %v, server %v", cerr, serr)
@@ -195,7 +195,7 @@ func TestPhoneTLS(t *testing.T) {
 	if _, _, cerr, _ := handshake(t, member, admin.ServerTLS(TLSOptions{})); cerr == nil {
 		t.Error("an iPhone client accepted the member certificate")
 	}
-	mac := join(t, admin, false, t0)
+	mac := join(t, admin, t0)
 	if _, _, cerr, _ := handshake(t, mac.ClientTLS(admin.ID, TLSOptions{}), admin.PhoneTLS()); cerr == nil {
 		t.Error("a member accepted the clipboardbridge.local certificate")
 	}

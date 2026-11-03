@@ -92,6 +92,15 @@ sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a s
 sudo cbb remote code 123456              # within two minutes
 ```
 
+An Apple TV pairs the same way, with the four-digit PIN it shows. On the Apple TV, set
+Settings, AirPlay and HomeKit, Allow Access to "Everyone on the Same Network" first: with
+"Only People Sharing This Home" it refuses every pairing.
+
+```sh
+sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
+sudo cbb remote code 1234                # within two minutes
+```
+
 A Roku has no pairing and no encryption: the text crosses your home network as plain HTTP,
 so it is added only when you say so with `-consent`. On the Roku, set Settings, System,
 Advanced system settings, Control by mobile apps to Enabled or Permissive first.
@@ -108,7 +117,8 @@ sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that
 ```
 
 `cbb remote` lists the TVs, `-tv NAME` picks one when there are several, and
-`sudo cbb remote remove NAME` forgets one. An Android TV that was reset must pair again.
+`sudo cbb remote remove NAME` forgets one. An Android TV or an Apple TV that was reset, or
+that forgot this computer, must pair again.
 
 ## Safety
 

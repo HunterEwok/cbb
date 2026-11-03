@@ -320,7 +320,9 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
 - Pairing runs in Terminal for now (`cbb pair`); the Developer ID app of roadmap item 22
   carries the service itself and a Network Extension.
 
-CI's `Mac app` job builds it and runs its tests, signed ad hoc. Not yet run on a real Mac.
+CI's `Mac app` job builds it and runs its tests, signed ad hoc. It runs on a real Mac when built with a
+developer's own team (`apps/ios/device.sh`): the devices, the menu bar and remote paste to it
+from the iPhone, at home and away from home.
 
 ## The tray app
 
@@ -559,6 +561,16 @@ computer, never a member: it holds no key of the group.
   device at its address is refused until it pairs again. The protocol is not documented;
   `internal/tvremote/androidtv` follows its wire format as androidtvremote2 and AOSP's
   pairing code use it.
+- **Apple TV** speaks the Companion protocol of Apple's own remote, on TCP 49153 (the port
+  the TV announces in `_companion-link._tcp`; an address may name another). Pairing is
+  HomeKit's pair-setup: SRP-6a with the four-digit PIN the TV shows, then each side signs
+  its Ed25519 key, kept in `tvs.json` with the TV's. Each connection runs pair-verify
+  (X25519, both keys checked) and seals the frames with ChaCha20-Poly1305; the remote then
+  opens the TV's text input session and sets the field's text with one `_tiC` event, an
+  RTI archive in a binary property list, with no key presses. The TV pairs only while
+  Settings, AirPlay and HomeKit, Allow Access is "Everyone on the Same Network" (or
+  "Everyone"). The protocol is not documented; `internal/tvremote/appletv` follows what
+  pyatv found, and the spike of 2026-11-01 checked it with pyatv on a real Apple TV.
 - **Roku** takes keys through its External Control Protocol, one HTTP request a character
   on port 8060. It has no pairing and no encryption, so a Roku is added only with the
   user's consent, and since Roku OS 14.1 it needs "Control by mobile apps" on.
@@ -569,8 +581,9 @@ computer, never a member: it holds no key of the group.
   again after a reset, or turn the Roku's setting on; the underlying error is the detail, as
   everywhere.
 
-The tests run against a fake Android TV (`androidtv/atvtest`) and a fake Roku; a real TV is
-not yet tried. Samsung, LG and the Apple TV follow (roadmap item 25).
+The tests run against a fake Android TV (`androidtv/atvtest`), a fake Apple TV
+(`appletv/atvtest`) and a fake Roku; the Go remotes are not yet tried on real TVs. Samsung
+and LG follow (roadmap item 25).
 
 ## Collections and the order of the tiles
 

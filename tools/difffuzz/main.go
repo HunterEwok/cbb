@@ -9,13 +9,13 @@
 //	go run ./tools/difffuzz compare -corpus corpus.jsonl go=go-group.txt,go-release.txt rust=rust.txt ...
 //
 // gen writes a corpus, one case to a line, made from the bodies of
-// testdata/interop/strict-generated.json and strict-files.json and the
+// testdata/interop/strict-generated-*.json and strict-files.json and the
 // record sets of the other interop vectors, changed by a pseudo-random
 // generator from the seed: the same seed gives the same corpus. compare
 // reads the verdict files each implementation's test wrote for that corpus
 // (its verdict test runs when CBB_VERDICTS names a corpus and writes to
 // CBB_VERDICTS_OUT) and fails on any case they read differently, printing
-// the case, so that it can become a vector of strict-generated.json. seeds
+// the case, so that it can become a vector of strict-generated-*.json. seeds
 // writes the same bodies as the seed corpora of the cargo fuzz targets in
 // lite/core/fuzz.
 //

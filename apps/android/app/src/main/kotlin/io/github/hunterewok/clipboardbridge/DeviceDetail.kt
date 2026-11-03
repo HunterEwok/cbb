@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.hunterewok.clipboardbridge.kit.Records as KitRecords
 import kotlinx.coroutines.launch
 
 /**
@@ -224,7 +225,11 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
     if (promoting) {
         Confirm(
             title = stringResource(R.string.make_admin_title, d.name),
-            body = stringResource(if (d.keysInFile) R.string.make_admin_body else R.string.make_admin_hardware_body),
+            body = if (d.keysInFile && model.keyLevel != KitRecords.LEVEL_FILES) {
+                stringResource(R.string.make_admin_body) + " " + stringResource(R.string.make_admin_files_body)
+            } else {
+                stringResource(if (d.keysInFile) R.string.make_admin_body else R.string.make_admin_hardware_body)
+            },
             action = stringResource(R.string.make_admin),
             dismiss = { promoting = false },
         ) { scope.launch { model.makeAdmin(d.id) } }

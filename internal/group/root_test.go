@@ -6,6 +6,7 @@ package group
 import (
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"math/rand/v2"
 	"testing"
 	"time"
@@ -297,17 +298,21 @@ func TestUpgradeRecords(t *testing.T) {
 	checkV1Refused(t)
 }
 
-// TestUpgraded checks that an identity of a legacy group, made before
-// roots, holds no claim and never takes a group over: legacy groups went
-// with version 1.
+// TestUpgraded checks that an identity of a group made before 0.4, whose
+// group CA certifies no admin CAs, is refused with ErrOldGroup: such a
+// group is no longer upgraded in place.
 func TestUpgraded(t *testing.T) {
-	legacy := newLegacyGroup(t)
-	root := newRoot(t)
-	if _, err := legacy.WithClaim(root); err == nil {
-		t.Error("a member of a legacy group holds a claim")
+	id := newGroup(t)
+	ca, err := NewGroupCA(t0)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := legacy.TakenOver(root, []*x509.Certificate{root.Cert}, t0); err == nil {
-		t.Error("a member of a legacy group took it over")
+	id.GroupCA, id.PhoneCA, id.Phone = *ca, nil, nil
+	if id.Cert, err = ca.IssueMember(id.ID, PublicKey(id.Key), t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := id.Check(); !errors.Is(err, ErrOldGroup) {
+		t.Errorf("Check of a group made before 0.4: %v, want ErrOldGroup", err)
 	}
 }
 

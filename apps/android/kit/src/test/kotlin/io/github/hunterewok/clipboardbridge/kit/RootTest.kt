@@ -185,6 +185,20 @@ class RootTest {
         assertTrue(g.b.isRoot)
     }
 
+    /** The new root signs the old root's settings again, since the state counts only the current root's. */
+    @Test
+    fun takeOverKeepsSettings() {
+        val g = Group(t0)
+        g.b.records.clock = { t0 }
+        g.b.add(listOf(g.root.setTakeoverDelay(3_600_000, g.rootKey, t0), g.root.setKeyLevel(Records.LEVEL_FILES, g.rootKey, t0)))
+        assertEquals(Records.LEVEL_FILES, g.b.keyLevel)
+        val (_, after) = takeOver(g)
+        assertTrue(g.b.isRoot)
+        assertEquals(Records.LEVEL_FILES, g.b.keyLevel)
+        assertEquals(3_600_000L to Records.LEVEL_FILES, g.b.settings(Records.keyHash(g.newRootKey.publicKeyDER)))
+        assertEquals(1, after.count { Wire.parse(it.body)?.optString("type") == "settings" })
+    }
+
     @Test
     fun oldRootKeyAfterTakeOver() {
         val g = Group(t0)

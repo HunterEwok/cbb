@@ -39,14 +39,14 @@ on every platform of the class, on the roadmap).
 | Text-console helper (tmux) | yes (`--console`) | **OS** | **OS** | for a Linux machine without a desktop; a Mac and a Windows PC always have one |
 | Removal from the system's app list | — | **OS** | yes (Settings, Apps) | Linux has no common list; the Mac app (item 22) brings it to macOS |
 | Signed program | — | planned (`.pkg`, Developer ID) | ready, needs a certificate | the release signs with Authenticode once the secrets hold a certificate (G5) |
-| Device keys in hardware | yes, with a TPM (`internal/tpmkey`) | planned | planned | roadmap item 13: the Secure Enclave on a Mac, the TPM on Windows |
+| Device keys in hardware | yes, with a TPM (`internal/tpmkey`) | yes, the Secure Enclave on Apple silicon or the T2 chip (`internal/sekey`) | yes, with a TPM 2.0, not yet tested on a real PC | roadmap item 13 |
 | Update itself, by hand and once a day | yes (`cbb update`) | yes, or Homebrew | yes (`cbb update`), or winget | [installing](guide/install.md#updating) |
 | Quick actions and remote paste as a target | yes | yes | yes | each off until the device's own user turns it on |
 | Firewall rules only with the user's consent, listed one by one; `--express` without questions | yes | yes | yes (`-Express`) | nftables and iptables get the commands only, as their rules do not survive a restart |
 | Opening the hub's UDP port in the firewall, with consent | yes (ufw, firewalld; commands for nftables, iptables) | **OS** | yes | `cbb global hub` asks, `-firewall yes` without asking; the macOS application firewall already allows a listed program on every port |
 | Finding a firewall the installer does not know, by a check from home | yes | yes | yes | `cbb status` warns when the members at home could not connect and sync only because this computer dials them back |
 | Act as a Bluetooth keyboard for a TV, tablet or computer | yes (`cbb keyboard`, BLE) | **OS** | **OS** | macOS and Windows keep the HID service to the system |
-| Be the remote of an Android TV, a Google TV or a Roku | yes (`cbb remote`) | yes | yes | the same Go code everywhere; the phones' apps follow |
+| Be the remote of an Android TV, a Google TV, an Apple TV or a Roku | yes (`cbb remote`) | yes | yes | the same Go code everywhere; the phones' apps follow |
 | Tested on a real device | yes | yes | not yet | the 0.4 bench |
 
 ## Phones
@@ -71,7 +71,7 @@ on every platform of the class, on the roadmap).
 | Remote invitations | planned | planned | roadmap item 12; computers have them |
 | Arrange the tiles and collections | yes | yes | kept on each installation; the watches show their phone's |
 | Act as a Bluetooth keyboard for a TV, tablet or computer | yes | **OS** | iOS keeps the HID service to the system; some Android makers leave the profile out, which the app says |
-| Tested on a real phone | not yet | not yet | |
+| Tested on a real phone | not yet | yes | the iPhone app on an iPhone 12 Pro Max, built with a developer's own team |
 
 ## Lite devices
 

@@ -119,7 +119,7 @@ func mustAdd(t *testing.T, s *Records, r Record) {
 
 func TestRecordsInComputerGroup(t *testing.T) {
 	admin := newGroup(t)
-	mac := join(t, admin, false, t0)
+	mac := join(t, admin, t0)
 	s := NewRecords(admin.GroupCA.Cert)
 	mustAdd(t, s, deviceRecord(t, admin.GroupCA.Cert, &admin.GroupCA, nil, admin.Cert, "pi", 1))
 	mustAdd(t, s, deviceRecord(t, admin.GroupCA.Cert, &admin.GroupCA, nil, mac.Cert, "mac", 2))

@@ -19,7 +19,46 @@ final class ComputerAdminTests: XCTestCase {
         let cert = try GroupCertificates.member(device: pi, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: root, now: t0)
         let key = try Records.keyHash(cert: cert)
         _ = try g.record(device: pi, name: "pi", role: "full", key: key, caSigner: root, now: t0)
+        // Its computers keep their keys in files, which the level files lets in.
+        _ = try g.setKeyLevel(Records.levelFiles, rootSigner: root, now: t0)
         return (g, root, pi, key)
+    }
+
+    /// The key level decides who may be an admin; the root sets it, keeping
+    /// the takeover delay, and never above its own key.
+    func testKeyLevel() throws {
+        let root = SoftwareSigner()
+        var g = try PhoneGroup.create(caSigner: root, memberKey: SoftwareSigner().publicKeyDER, now: t0)
+        XCTAssertEqual(g.keyLevel, Records.hardware)
+        let pi = SyncEngine.newID()
+        let cert = try GroupCertificates.member(device: pi, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: root, now: t0)
+        _ = try g.record(device: pi, name: "pi", role: "full", key: try Records.keyHash(cert: cert), caSigner: root, now: t0)
+        let adminKey = SoftwareSigner().publicKeyDER
+        // At the level hardware a key in a file is no admin, even with the consent.
+        XCTAssertThrowsError(try g.makeAdmin(device: pi, adminKey: adminKey, rootSigner: root, now: t1, keyStore: Records.file, allowFileKey: true)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .belowKeyLevel)
+        }
+        // At the level proven, a key in hardware without a proof is not either.
+        XCTAssertThrowsError(try g.setKeyLevel(Records.proven, rootSigner: root, now: t1)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .belowKeyLevel, "the root's own key is not proven")
+        }
+        XCTAssertThrowsError(try g.setKeyLevel("any", rootSigner: root, now: t1)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .invalidKeyLevel)
+        }
+        _ = try g.setTakeoverDelay(ms: 3_600_000, rootSigner: root, now: t1)
+        _ = try g.setKeyLevel(Records.levelFiles, rootSigner: root, now: t1)
+        XCTAssertEqual(g.keyLevel, Records.levelFiles)
+        XCTAssertEqual(g.settings(of: PhoneGroup.signer(root)).delay, 3_600_000, "the level keeps the delay")
+        _ = try g.makeAdmin(device: pi, adminKey: adminKey, rootSigner: root, now: t1, keyStore: Records.file, allowFileKey: true)
+        XCTAssertEqual(g.belowKeyLevel(Records.hardware), [pi])
+        XCTAssertEqual(g.belowKeyLevel(Records.levelFiles), [])
+        _ = try g.setTakeoverDelay(ms: 0, rootSigner: root, now: t1)
+        XCTAssertEqual(g.keyLevel, Records.levelFiles, "the delay keeps the level")
+        var member = g
+        member.isRoot = false
+        XCTAssertThrowsError(try member.setKeyLevel(Records.hardware, rootSigner: root, now: t1)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .notRoot)
+        }
     }
 
     func testWire() throws {

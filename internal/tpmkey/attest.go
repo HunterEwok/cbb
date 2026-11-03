@@ -125,13 +125,14 @@ type AK struct {
 	tpm    *TPM
 	Public []byte // TPM2B_PUBLIC
 	ak     *tpm2.CreateResponse
+	parent uint32 // the storage root key's handle, as a Blob's
 }
 
 // NewAK makes an attestation key under the storage root key.
 func (t *TPM) NewAK() (*AK, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	srk, err := t.parent()
+	srk, handle, err := t.parent()
 	if err != nil {
 		return nil, err
 	}
@@ -144,13 +145,13 @@ func (t *TPM) NewAK() (*AK, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tpmkey: making an attestation key: %w", err)
 	}
-	return &AK{tpm: t, Public: tpm2.Marshal(rsp.OutPublic), ak: rsp}, nil
+	return &AK{tpm: t, Public: tpm2.Marshal(rsp.OutPublic), ak: rsp, parent: handle}, nil
 }
 
 // load loads the AK until the returned function flushes it; t.mu is held.
 func (ak *AK) load() (*tpm2.LoadResponse, func(), error) {
 	t := ak.tpm
-	srk, err := t.parent()
+	srk, err := t.parentOf(ak.parent)
 	if err != nil {
 		return nil, nil, err
 	}

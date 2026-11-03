@@ -14,8 +14,8 @@ the same record set of the same signed records in any order and subset.
 ## The parts
 
 - `tools/difffuzz gen` writes a **corpus**, one case to a line, from a seed: the same seed
-  gives the same corpus. It starts from every body of `testdata/interop/strict-generated.json`,
-  `strict-mutants-*.json` (more record bodies), `strict-files.json` (records, commands, manifests, server credentials, `keys.json`,
+  gives the same corpus. It starts from every body of `testdata/interop/strict-generated-*.json`,
+  `strict-mutants-*.json` (record bodies of version 1, which every member refuses), `strict-files.json` (records, commands, manifests, server credentials, `keys.json`,
   `release.json`, channel files and `attest-status.json`) and the records of `v2-records.json`, and changes them: bits and bytes,
   bytes that JSON treats specially, members twice, missing, in another place or with their
   names in another case or escaped, values of another JSON type, integers at the edges of
@@ -98,7 +98,7 @@ compares any of them.
 
 1. Find the row of the protocol's tables that decides it. When the protocol says nothing, the
    rule is a decision of the protocol, not of the implementation that happens to be right.
-2. Add the case to the generator of `strict-generated.json` or `strict-files.json`
+2. Add the case to the generator of `strict-generated-*.json` or `strict-files.json`
    (`internal/group/strictgen_test.go`, `strictgen_files_test.go`) under that rule, or, for a
    record set, to the Go test that writes the set's vector, and write the file again
    (`go test ./internal/group -run TestStrictGenerated -update`).

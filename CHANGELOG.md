@@ -7,6 +7,41 @@ All notable changes to clipboardbridge are documented in this file. The format f
 ## [Unreleased]
 
 ### Added
+- A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
+  with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
+  set the text of the field open on it at once, through the Companion protocol of Apple's own
+  remote (`internal/tvremote/appletv`), with no key presses. The TV must allow access to
+  everyone on the same network. Tested against a fake Apple TV; not yet on a real one.
+- A Mac with a Secure Enclave (Apple silicon or the T2 chip) keeps its member, admin and server
+  keys there (`internal/sekey`, through Security.framework): the service, a LaunchDaemon, makes
+  them without a keychain and keeps only the enclave's encrypted copy, which opens on no other
+  Mac. `CBB_TPM=off` keeps new keys in a file, and a Mac that joined earlier keeps its file until
+  it joins again.
+- A computer or a lite member updated from 0.5 leaves its old group at its first start, since
+  0.6 does not read records of version 1: the group's files go into `before-0.6` in the state
+  directory, the settings stay, and `cbb status` says that the group is set up again. Until now
+  the root saw only itself and the others waited for it without a word.
+- CI updates members of the last published release to the build under test, one at a time
+  (`tools/e2e/upgrade.sh`): from 0.6 on the group, its devices and sync must survive; from 0.5,
+  each member leaves the old group and a new one works.
+- Each release carries software bills of materials in CycloneDX 1.6 JSON, listed in
+  `SHA256SUMS` and the signed `release.json`: the Go programs' modules, the lite member's crates,
+  the phones' Rust core, the iPhone kit's Swift packages and the Android apps' Maven modules,
+  made by `tools/sbom`; the Docker image carries its own as an attestation in the registry
+  (docs/maintaining.md, "Releases").
+- The group's key level is a setting: `cbb keys proven|hardware|files` on a root computer
+  sets which devices may be the group's root, an admin or a hub, and `cbb keys` and `cbb
+  status` show it. `cbb admin`, `cbb hubs` and a hub's own tunnel check it; a group whose
+  root key is in a file starts at `files`, and its root cannot set a level its own key does
+  not pass (docs/guide/keys.md, "The three levels").
+- The phone apps set the group's key level too: Settings, Admin keys, on the root phone.
+  "Make it an admin" checks it, and making a computer whose keys are in a file an admin,
+  after the warning, moves the group to keys in files too. A phone that takes the group
+  over keeps the old root's takeover delay and key level.
+- A Windows PC with a TPM 2.0 keeps its new member, admin and tunnel keys in it, as a Linux
+  computer does, through TPM Base Services and under the storage root key Windows keeps;
+  sync away from home and an invitation then ask no consent for keys in files there. Not
+  yet tested on a real PC.
 - A phone joins a computer's group: `cbb pair` on the group's root admits a phone that types
   its code, and makes it an admin at once with the admin key it offers, so that `cbb handover`
   can give it the group (docs/protocol.md, section 6, "A phone joins a computer's group"). Both
@@ -813,6 +848,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   hubs are set with `cbb global hubs`, next to `cbb global hub` (`cbb hubs` is gone); and
   a takeover's wait with `cbb takeover -delay DURATION` (`cbb takeover-delay` is gone).
 
+- Every release build of `cbb`, and CI's builds of each platform, run the group's rules in
+  the Rust core (WebAssembly under wazero, on every system and architecture), as the phones
+  and the lite member do; until now they ran Go's own rules, which only the tests use now.
+  `cbb version` names the rules it runs, and the archives' notices list the core's crates.
 - Dependencies: der 0.8.3 for the lite member and the firmware, goldmark 1.8.6 (the website),
   coder/websocket 1.8.15 (the tray app), the Android Gradle plugin 9.5.0 and Robolectric 4.17.
   godbus stays at 5.1.0, as 5.2 panics on a message with an array of file descriptors, and
@@ -1054,6 +1093,15 @@ All notable changes to clipboardbridge are documented in this file. The format f
 - The Rust core's reader of group records of version 1 (`records`): commands now live in
   `command`, and the interop vectors of version 1 (`go-*.json` for records, commands, hubs
   and credentials) give way to the `v2-*.json` vectors of the same cases.
+- The record vectors of version 1 in `testdata/interop/strict-generated.json`: the vectors now
+  hold bodies of version 2 for every record type, each field against its row in protocol.md
+  section 10, the canonical form and the sizes, and Go and the Rust core must read each alike.
+  They are written to `strict-generated-1.json`, `-2.json` and so on, each under a megabyte,
+  and every reader takes all of them.
+- What was left of groups made before 0.4, whose group CA certified no admin CAs and whose
+  key every Linux and Windows member held: such a group went with records of version 1, so a
+  computer now leaves it at its first start, as it leaves a group of 0.5, even without a
+  records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
 - `cbb next link` on the Next's Pi starts the lite member's service when none runs, pointed at
@@ -1092,6 +1140,10 @@ All notable changes to clipboardbridge are documented in this file. The format f
   fails what waited for it, the tunnel's dial included, instead of leaving it waiting for good,
   and a dial of a slot the ESP still holds goes on for UDP and starts again for TCP.
 
+- The Rust core, and so the phones and the lite member, took no checkpoint record over 8 KiB,
+  while Go took them up to 64 KiB as protocol.md says; it takes them now.
+- A new root after a takeover signs the old root's settings again, so the group keeps its
+  takeover delay and key level instead of falling back to the defaults.
 - On Android, "This is my home network" says so when the phone is on no Wi-Fi or Ethernet
   network, instead of doing nothing.
 - Android: making the phone's first group on a new install no longer fails while saving the

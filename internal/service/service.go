@@ -182,6 +182,7 @@ type Service struct {
 	repeatMu sync.Mutex
 	repeated map[string]time.Time
 	broken   *control.RequestError // the group's files cannot be read; set once at start
+	leftOld  bool                  // the device left a group made before 0.6 at start
 
 	// The Bluetooth keyboard, on Linux (keyboard_linux.go).
 	kbd keyboardState
@@ -397,6 +398,12 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	})
 
+	if left, err := leaveVersion1Group(cfg.StateDir); err != nil {
+		return err
+	} else if left {
+		s.leftOld = true
+		cfg.Logf("cbb: this device's group was made before 0.6, whose records 0.6 does not read, so it left that group (its files are in %s); set the group up again: cbb new on one computer, cbb pair on the others", oldGroupDir)
+	}
 	id, err := group.Load(cfg.StateDir)
 	switch {
 	case errors.Is(err, group.ErrNoGroup):

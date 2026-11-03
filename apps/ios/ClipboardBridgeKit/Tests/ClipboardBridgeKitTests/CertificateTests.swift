@@ -21,7 +21,7 @@ final class CertificateTests: XCTestCase {
     func testGroupCAAndMember() throws {
         let now = Date(timeIntervalSince1970: 1_790_000_000) // 2026-09
         let caSigner = SoftwareSigner()
-        let ca = try GroupCertificates.groupCA(signer: caSigner, now: now)
+        let ca = try GroupCertificates.groupCA(signer: caSigner, now: now, pathLength: 1)
         let caInfo = try CertificateInfo(der: ca)
         XCTAssertTrue(try verify(ca, with: caSigner.publicKeyDER))
         XCTAssertEqual(caInfo.notBefore, now.addingTimeInterval(-GroupCertificates.backdate))

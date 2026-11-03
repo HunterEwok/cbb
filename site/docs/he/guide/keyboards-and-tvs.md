@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 97be486697d2 -->
+<!-- source: b61def346d84 -->
 # מקלדות וטלוויזיות
 
 למי שרוצה להקליד סיסמה ארוכה, קישור או חיפוש בטלוויזיה, בטאבלט, בקונסולה או במחשב שאין בהם שום דבר של Clipboard Bridge. מכשיר אחד בקבוצה שלך מקליד שם את הטקסט כמקלדת או כשלט של הטלוויזיה, כשאתה מקיש או כשמנהל שולח הדבקה מרחוק.
@@ -65,6 +65,13 @@ sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a s
 sudo cbb remote code 123456              # within two minutes
 ```
 
+Apple TV מותאם באותה דרך, עם קוד PIN בן ארבע ספרות שהוא מציג. קודם, ב-Apple TV, הגדירו הגדרות, AirPlay ו-HomeKit, אפשר גישה ל"כל מי שנמצא באותה רשת": עם "רק אנשים שמשתפים את הבית הזה" הוא מסרב לכל התאמה.
+
+```sh
+sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
+sudo cbb remote code 1234                # within two minutes
+```
+
 ב-Roku אין התאמה ואין הצפנה: הטקסט עובר ברשת הביתית שלך כ-HTTP גלוי, ולכן הוא מתווסף רק כשאתה אומר זאת במפורש עם `-consent`. ב-Roku, הגדר קודם הגדרות, מערכת, הגדרות מערכת מתקדמות, שליטה על ידי אפליקציות לנייד ל"מופעל" או ל"מתירני".
 
 ```sh
@@ -78,7 +85,7 @@ echo 'the film' | sudo cbb remote type
 sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that TV
 ```
 
-`cbb remote` מציג את רשימת הטלוויזיות, `-tv NAME` בוחר אחת כשיש כמה, ו-`sudo cbb remote remove NAME` שוכח אחת. Android TV שאופסה חייבת להיות מותאמת מחדש.
+`cbb remote` מציג את רשימת הטלוויזיות, `-tv NAME` בוחר אחת כשיש כמה, ו-`sudo cbb remote remove NAME` שוכח אחת. Android TV או Apple TV שאופסו, או ששכחו את המחשב הזה, חייבים להיות מותאמים מחדש.
 
 ## בטיחות
 

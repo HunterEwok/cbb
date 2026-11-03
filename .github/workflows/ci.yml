@@ -305,23 +305,28 @@ jobs:
       - name: go vet
         if: matrix.vet
         run: go vet ./...
-      - name: go build
+      - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
         run: |
+          sh lite/wasm/build.sh
+          sh lite/packaging/notices.sh wasm32-unknown-unknown clipboardbridge-wasm >"$RUNNER_TEMP/core-notices"
+      - name: go build, with the core as at a release
+        run: |
+          overlay=$GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json
           if [ "$GOOS" = windows ]; then
             # cbbw.exe is the same program without a console window, for the agent.
-            go build -trimpath -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
-            go build -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
             # The tray app goes in the archive too, as at a release.
             (cd apps/desktop && go build -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           else
-            go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
       - name: the release archive
         run: |
           name=$GOARCH
           if [ -n "$GOARM" ]; then name=armv$GOARM; fi
           if [ "$GOOS" = windows ]; then
-            sh packaging/archive.sh "$RUNNER_TEMP/cbb.exe" "$GOOS" "$name" "$RUNNER_TEMP/dist"
+            CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$RUNNER_TEMP/cbb.exe" "$GOOS" "$name" "$RUNNER_TEMP/dist"
             unzip -Z1 "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.zip" >"$RUNNER_TEMP/list"
             for f in cbb.exe cbbw.exe cbb-desktop.exe packaging/windows/install.ps1 packaging/windows/uninstall.ps1; do
               grep -qx "clipboardbridge/$f" "$RUNNER_TEMP/list"
@@ -330,8 +335,10 @@ jobs:
             file "$RUNNER_TEMP/cbbw.exe" | grep -q '(GUI)'
             file "$RUNNER_TEMP/cbb-desktop.exe" | grep -q '(GUI)'
           else
-            sh packaging/archive.sh "$RUNNER_TEMP/cbb" "$GOOS" "$name" "$RUNNER_TEMP/dist"
+            CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$RUNNER_TEMP/cbb" "$GOOS" "$name" "$RUNNER_TEMP/dist"
             tar -tzf "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.tar.gz" | grep -qx "clipboardbridge/cbb"
+            # The notices name the core's crates too.
+            tar -xzOf "$RUNNER_TEMP/dist/clipboardbridge-$GOOS-$name.tar.gz" clipboardbridge/THIRD_PARTY_NOTICES | grep -q '^chacha20poly1305 '
           fi
       - name: keep the Windows archive for the installer test
         if: matrix.goos == 'windows' && matrix.goarch == 'amd64'
@@ -519,6 +526,38 @@ jobs:
           sudo chmod 666 /dev/kvm
           sh tools/e2e/openwrt.sh vm "$RUNNER_TEMP/release"
 
+  upgrade:
+    name: upgrade from the last release
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the last published release, checked against its SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/old"
+          cd "$RUNNER_TEMP/old"
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern clipboardbridge-linux-amd64.tar.gz --pattern SHA256SUMS
+          sha256sum -c --ignore-missing SHA256SUMS
+          tar -xzf clipboardbridge-linux-amd64.tar.gz
+          clipboardbridge/cbb version
+      - name: the build under test, as the release after it
+        run: |
+          old=$("$RUNNER_TEMP/old/clipboardbridge/cbb" version | sed -n 's/^clipboardbridge v\([0-9][0-9.]*\).*/\1/p')
+          new="${old%.*}.$((${old##*.} + 1))"
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v$new" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+      - name: members of the release update one at a time and keep syncing (tools/e2e/upgrade.sh)
+        run: sh tools/e2e/upgrade.sh "$RUNNER_TEMP/old/clipboardbridge/cbb" "$RUNNER_TEMP/cbb"
+
   avahi:
     name: mdns with avahi
     needs: changes
@@ -613,7 +652,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -623,9 +662,26 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/clipboardbridge packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/clipboardbridge.init packaging/openwrt/clipboardbridge.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/clipboardbridge-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/clipboardbridge packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/clipboardbridge.init packaging/openwrt/clipboardbridge.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/clipboardbridge-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
+      - name: the software bills of materials, as the release makes them (tools/sbom)
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/sbom-cbb" ./cmd/cbb
+          out=$RUNNER_TEMP/sbom
+          mkdir -p "$out"
+          go run ./tools/sbom go -o "$out/sbom-go.cdx.json" -version v0.0.0 "$RUNNER_TEMP/sbom-cbb"
+          go run ./tools/sbom cargo -o "$out/sbom-lite.cdx.json" -version v0.0.0 -manifest lite/Cargo.toml \
+            -package clipboardbridge-lite -target x86_64-unknown-linux-musl,mips-unknown-linux-musl
+          go run ./tools/sbom cargo -o "$out/sbom-phone-core.cdx.json" -version v0.0.0 -manifest lite/Cargo.toml \
+            -package clipboardbridge-ffi -target aarch64-apple-ios,aarch64-linux-android
+          go run ./tools/sbom swift -o "$out/sbom-ios-kit.cdx.json" -version v0.0.0 apps/ios/ClipboardBridgeKit/Package.resolved
+          for f in "$out"/*.cdx.json; do
+            jq -e '.bomFormat == "CycloneDX" and (.components | length > 0)' "$f" >/dev/null
+          done
+          # The Go programs carry golang.org/x/crypto; the lite member, rustls.
+          jq -e 'any(.components[]; .name == "golang.org/x/crypto")' "$out/sbom-go.cdx.json" >/dev/null
+          jq -e 'any(.components[]; .name == "rustls")' "$out/sbom-lite.cdx.json" >/dev/null
       - name: systemd-analyze verify
         run: |
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
@@ -701,10 +757,10 @@ jobs:
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           go run ./tools/release-sign drill -version 0.6.0 "$rel" "$RUNNER_TEMP/roots.pem"
           export CBB_RELEASE_DIR="$rel" CBB_RELEASE_ROOTS="$RUNNER_TEMP/roots.pem"
-          sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep -q "signature checks out (0.6.0)"
+          sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "signature checks out (0.6.0)" >/dev/null
           # stable.json renewed by a channel key, as cbb.tools does.
           go run ./tools/release-sign drill -version 0.6.0 -channel-key "$rel" "$RUNNER_TEMP/roots.pem"
-          sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep -q "signature checks out (0.6.0)"
+          sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "signature checks out (0.6.0)" >/dev/null
           refused() {
             if sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall; then
               echo "get.sh installed a release with $1" >&2
@@ -733,10 +789,10 @@ jobs:
             refused "keys.json with the fault $f"
           done
           go run ./tools/release-sign drill -version 0.6.0 "$rel" "$RUNNER_TEMP/roots.pem"
-          sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep -q "signature checks out"
+          sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "signature checks out" >/dev/null
           rm "$rel/stable.json"
           refused "no stable.json"
-          CBB_VERIFY=skip sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep -q "Not checked"
+          CBB_VERIFY=skip sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "Not checked" >/dev/null
       - name: cbb update installs a newer signed release, puts the old one back, and sets the timer
         run: |
           version() { CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/clipboardbridge/internal/version.Version=v$1" -o "$2" ./cmd/cbb; }
@@ -792,10 +848,10 @@ jobs:
           test ! -e /var/lib/clipboardbridge-update
       - name: install.sh keeps a port, and uninstall.sh removes it all
         run: |
-          sudo CBB_FIREWALL=no sh packaging/linux/install.sh --port 9000 "$RUNNER_TEMP/cbb" | grep -q 'TCP port 9000'
+          sudo CBB_FIREWALL=no sh packaging/linux/install.sh --port 9000 "$RUNNER_TEMP/cbb" | grep 'TCP port 9000' >/dev/null
           grep -qx 'CBB_PORT=9000' /etc/clipboardbridge/clipboardbridge.env
-          sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" | grep -q 'TCP port 9000'
-          sudo CBB_FIREWALL=no sh packaging/linux/install.sh --console --uinput --port 8764 "$RUNNER_TEMP/cbb" | grep -q 'TCP port 8764'
+          sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" | grep 'TCP port 9000' >/dev/null
+          sudo CBB_FIREWALL=no sh packaging/linux/install.sh --console --uinput --port 8764 "$RUNNER_TEMP/cbb" | grep 'TCP port 8764' >/dev/null
           systemctl is-enabled -q clipboardbridge-console.service
           systemctl is-enabled -q clipboardbridge-uinput.service
           grep -qx uinput /etc/modules-load.d/clipboardbridge-uinput.conf
@@ -806,7 +862,7 @@ jobs:
           # A CBB_INTERFACES line set by hand survives the next install.
           dev=$(ip route show default | awk '{print $5; exit}')
           echo "CBB_INTERFACES=$dev" | sudo tee /etc/clipboardbridge/clipboardbridge.env >/dev/null
-          sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" | grep -q 'TCP port 8764'
+          sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" | grep 'TCP port 8764' >/dev/null
           grep -qx "CBB_INTERFACES=$dev" /etc/clipboardbridge/clipboardbridge.env
           # The desktop agent's user unit, enabled for every user's graphical session.
           test -L /etc/systemd/user/graphical-session.target.wants/clipboardbridge-agent.service
@@ -980,14 +1036,20 @@ jobs:
           for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
           sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
           # --port moves the member port, and a reinstall without it keeps it.
-          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall --port 9000 | grep -q 'TCP port 9000'
+          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall --port 9000 | tee "$RUNNER_TEMP/get.out"
+          grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
           grep -qx 'CBB_PORT=9000' /etc/clipboardbridge/clipboardbridge.env
           # The member port listens once the Mac is in a group.
           for _ in $(seq 20); do sudo /usr/local/bin/cbb status >/dev/null && break; sleep 0.5; done
           sudo /usr/local/bin/cbb new
-          for _ in $(seq 20); do sudo lsof -nP -iTCP:9000 -sTCP:LISTEN && break; sleep 0.5; done
-          sudo lsof -nP -iTCP:9000 -sTCP:LISTEN | grep -q cbb
-          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall | grep -q 'TCP port 9000'
+          for _ in $(seq 60); do sudo lsof -nP -iTCP:9000 -sTCP:LISTEN && break; sleep 0.5; done
+          if ! sudo lsof -nP -iTCP:9000 -sTCP:LISTEN | grep -q cbb; then
+            echo "the member port does not listen in 30 s; the service's log:" >&2
+            sudo cat /Library/Logs/clipboardbridge/service.log >&2 || true
+            exit 1
+          fi
+          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall | tee "$RUNNER_TEMP/get.out"
+          grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
           echo tampered >>"$rel/clipboardbridge-darwin-arm64.tar.gz"
           if sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall; then
             echo "get.sh installed an archive that does not match SHA256SUMS" >&2
@@ -1633,6 +1695,14 @@ jobs:
           ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease \
             :app:testFullDebugUnitTest :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
             :shared:testDebugUnitTest :shared:lintDebug :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
+      - name: the Android apps' software bill of materials, as the release makes it (tools/sbom)
+        working-directory: apps/android
+        run: |
+          ./gradlew --no-daemon --no-configuration-cache --init-script ../../packaging/sbom.init.gradle.kts \
+            -Pcbb.sbom.configs=fullReleaseRuntimeClasspath,fdroidReleaseRuntimeClasspath,releaseRuntimeClasspath :app:cbbSbom :wear:cbbSbom
+          cd ../..
+          go run ./tools/sbom gradle -o "$RUNNER_TEMP/sbom-android.cdx.json" -version v0.0.0 apps/android/build/sbom/*.txt
+          jq -e 'any(.components[]; .group == "androidx.core")' "$RUNNER_TEMP/sbom-android.cdx.json" >/dev/null
       - name: the F-Droid build has no Google Play services
         working-directory: apps/android
         run: |
@@ -2386,7 +2456,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

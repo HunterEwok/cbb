@@ -515,7 +515,6 @@ func (w *Window) serve(ctx context.Context, conn *tls.Conn, memberFirst bool) (r
 	if err != nil {
 		return nil, true, err
 	}
-	// Only a legacy group hands its CA keys to the computers it admits.
 	welcome, err := w.welcome(cert)
 	if err != nil {
 		return nil, true, err

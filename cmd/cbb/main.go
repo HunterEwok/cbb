@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/HunterEwok/clipboardbridge/internal/core"
 	"github.com/HunterEwok/clipboardbridge/internal/version"
 )
 
@@ -52,6 +53,9 @@ Commands:
   takeover <name or ID>   Claim the group from its lost root computer (on an admin); it waits.
   takeover -delay <duration>
                           Set how long such a claim waits, 0s to 168h (on the root; 72h by default).
+  keys [proven|hardware|files]
+                          Show or set which keys may be the group's root, an admin or a hub
+                          (on the root; hardware by default, files for a root with a key in a file).
   recovery [-yubikey]     Claim the group with its recovery key, typed from the sheet or on a
                           YubiKey, when every phone with the group is lost; it waits as a
                           takeover does.
@@ -124,6 +128,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 		fmt.Fprintln(stdout, version.String())
+		// The group's rules: the Rust core in a release build.
+		fmt.Fprintln(stdout, "rules: "+core.Rules())
 		if w := noPasteboard(); w != "" {
 			fmt.Fprintln(stdout, w)
 		}
@@ -152,6 +158,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdInstall(rest, stdout, stderr)
 	case "takeover":
 		return cmdTakeover(rest, stdout, stderr)
+	case "keys":
+		return cmdKeys(rest, stdout, stderr)
 	case "recovery":
 		return cmdRecovery(rest, stdin, stdout, stderr)
 	case "handover":

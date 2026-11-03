@@ -71,6 +71,23 @@ final class RootTests: XCTestCase {
         return (claim, rs)
     }
 
+    /// The new root signs the old root's settings again, since the state
+    /// counts only the current root's: the group keeps its delay and level.
+    func testTakeOverKeepsSettings() throws {
+        var g = try Group(now: t0)
+        let rs = [try g.root.setTakeoverDelay(ms: 3_600_000, rootSigner: g.rootKey, now: t0),
+                  try g.root.setKeyLevel(Records.levelFiles, rootSigner: g.rootKey, now: t0)]
+        g.b.add(rs)
+        XCTAssertEqual(g.b.keyLevel, Records.levelFiles)
+        let (_, after) = try takeOver(&g)
+        XCTAssertTrue(g.b.isRoot)
+        XCTAssertEqual(g.b.keyLevel, Records.levelFiles)
+        let mine = g.b.settings(of: PhoneGroup.signer(g.newRootKey))
+        XCTAssertEqual(mine.delay, 3_600_000)
+        XCTAssertEqual(mine.level, Records.levelFiles)
+        XCTAssertEqual(after.filter { (try? JSONSerialization.jsonObject(with: $0.body) as? [String: Any])?["type"] as? String == "settings" }.count, 1)
+    }
+
     /// Every record the set holds goes to a forwarder, which sees the same
     /// roots and the lost phone removed.
     func testAuthorityRecords() throws {
