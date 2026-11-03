@@ -352,6 +352,9 @@ jobs:
         if: matrix.goos == 'darwin'
         # Without cgo the agent would start and fail; this build must link AppKit.
         run: otool -L "$RUNNER_TEMP/cbb" | grep -q AppKit.framework
+      - name: cbb runs under the hardened runtime, as a release signs it (ad hoc here)
+        if: matrix.goos == 'darwin'
+        run: sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb"
 
   mips:
     name: test (linux/mips under qemu)
@@ -668,7 +671,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
@@ -1561,7 +1564,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.macos == 'true'
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1577,6 +1580,45 @@ jobs:
           set -o pipefail
           xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= | tail -n 200
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the .pkg installs the app and the service, and uninstall.sh removes them
+        # As the release builds it (release.yml, "the Mac app and the .pkg"),
+        # signed ad hoc and the package unsigned.
+        run: |
+          set -o pipefail
+          (cd apps/macos && xcodebuild build -project CBBMac.xcodeproj -scheme CBBMac -configuration Release \
+            -destination 'generic/platform=macOS' -derivedDataPath "$RUNNER_TEMP/derived" \
+            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tail -n 50)
+          app="$RUNNER_TEMP/derived/Build/Products/Release/CBB.app"
+          sh packaging/macos/sign.sh - "$app"
+          for a in arm64 amd64; do
+            CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-$a" ./cmd/cbb
+            # A build without the Rust core, which sign.sh's run would refuse;
+            # the build job checks that the release's runs signed.
+            codesign --force --options runtime --identifier tools.cbb.cli --sign - "$RUNNER_TEMP/cbb-$a"
+          done
+          lipo -create "$RUNNER_TEMP/cbb-arm64" "$RUNNER_TEMP/cbb-amd64" -output "$RUNNER_TEMP/cbb"
+          sh packaging/macos/pkg.sh 0.0.1 "$RUNNER_TEMP/cbb" "$app" "$RUNNER_TEMP/cbb-0.0.1.pkg"
+          sudo installer -pkg "$RUNNER_TEMP/cbb-0.0.1.pkg" -target / -verboseR
+          [ -x /Applications/CBB.app/Contents/MacOS/CBB ]
+          pkgutil --pkg-info tools.cbb.pkg
+          for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
+          sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
+          [ ! -e /usr/local/share/cbb/package ]
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          for f in /Applications/CBB.app /usr/local/bin/cbb "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
+            if [ -e "$f" ]; then
+              echo "uninstall.sh left $f" >&2
+              exit 1
+            fi
+          done
+          if pkgutil --pkg-info tools.cbb.pkg >/dev/null 2>&1; then
+            echo "uninstall.sh left the package's receipt" >&2
+            exit 1
+          fi
 
   trayapp:
     name: tray app (${{ matrix.os }})

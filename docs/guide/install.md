@@ -65,7 +65,12 @@ It stays installed and in its group across SteamOS updates.
 
 ## Mac
 
-Apple silicon or Intel, in Terminal, the same command as on Linux:
+Apple silicon or Intel, macOS 14 or later: download `cbb-X.Y.Z.pkg` from the
+[latest release](https://github.com/HunterEwok/cbb/releases/latest) and open it. It
+installs the CBB app in the menu bar and the service, both signed by the project and checked
+by Apple.
+
+Or in Terminal, without the app, the same command as on Linux:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
@@ -261,8 +266,8 @@ On SteamOS it is `sudo sh /opt/cbb/share/uninstall.sh`. With Homebrew, run
 
 On Windows: Settings, Apps, "CBB", Uninstall.
 
-This removes the program, the service and the firewall rules the installer added. The
-device's keys stay, so installing again brings it back into its group. To delete them too,
+This removes the program, the service, the firewall rules the installer added and, on a Mac,
+the app the `.pkg` installed. The device's keys stay, so installing again brings it back into its group. To delete them too,
 add `--purge` (`-Purge` on Windows, with
 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`),
 then remove the device from the group on another one (`sudo cbb remove NAME`, or on the

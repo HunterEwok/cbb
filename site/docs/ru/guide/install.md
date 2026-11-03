@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1ce6c4f40f0 -->
+<!-- source: 95a9f0f2e940 -->
 # Установка
 
 Copy Beyond Borders работает как небольшая фоновая служба на каждом компьютере. Его команда —
@@ -70,7 +70,11 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 ## Mac
 
-Apple silicon или Intel, в Терминале, та же команда, что и в Linux:
+Apple silicon или Intel, macOS 14 или новее: скачайте `cbb-X.Y.Z.pkg` из
+[последнего выпуска](https://github.com/HunterEwok/cbb/releases/latest) и откройте его. Он ставит
+приложение CBB в строке меню и службу; оба подписаны проектом и проверены Apple.
+
+Или в Терминале, без приложения, та же команда, что и в Linux:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
@@ -272,7 +276,8 @@ sudo sh /usr/local/share/cbb/uninstall.sh
 
 В Windows: Параметры, Приложения, «CBB», Удалить.
 
-Это удаляет программу, службу и правила брандмауэра, добавленные установщиком. Ключи
+Это удаляет программу, службу, правила брандмауэра, добавленные установщиком, и на Mac
+приложение, поставленное из `.pkg`. Ключи
 устройства остаются, поэтому повторная установка возвращает его в свою группу. Чтобы удалить и
 их, добавьте `--purge` (`-Purge` в Windows, с
 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`),
