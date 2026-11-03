@@ -834,7 +834,8 @@ static void http_close(void)
 //   rows 0-2, from column 15  the name and the version
 //   rows 4-9                  a file's name and state, then its bar, in
 //                             the stripes' colours: red, yellow, green
-//   rows 10-11                all of it, its bar in the four stripes
+//   rows 10-11                all of it, its bar the stripes' colour of
+//                             its quarter: red, yellow, green, cyan
 //   rows 13-14                the file under way: kilobytes, speed
 //   rows 19-23                messages
 #define PANEL 15
@@ -987,8 +988,8 @@ static void file_state(uint8_t row, const char *name, const char *state)
 // The bytes of the whole install, and those of the files done.
 static uint32_t total_size, total_done;
 
-// The bars' colours, the Next's stripes, a row each; the total's bar has
-// all four, a quarter each.
+// The bars' colours, the Next's stripes, a row each; the total's bar
+// takes the next one at each quarter.
 static const uint8_t bar_ink[4] = {INK_RED, INK_YELLOW, INK_GREEN, INK_CYAN};
 
 // Draws a bar in half cells at a screen row, with the percentage.
@@ -996,8 +997,9 @@ static void bar(uint8_t screen_row, uint8_t pct, uint8_t ink)
 {
     uint8_t halves = (uint8_t)((uint16_t)pct * (BAR_CELLS * 2) / 100), i;
     at(screen_row, PANEL);
+    // 0xFF: the total's bar, its colour by the quarter it reached.
+    colour(ink < 8 ? ink : bar_ink[pct < 100 ? pct / 25 : 3]);
     for (i = 0; i < BAR_CELLS; i++) {
-        colour(ink < 8 ? ink : bar_ink[i / (BAR_CELLS / 4)]);
         // The ROM's block graphics: 143 full, 138 the left half.
         putchar(halves >= 2 * i + 2 ? 143 : halves == 2 * i + 1 ? 138 : '-');
     }
