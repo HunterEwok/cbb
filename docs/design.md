@@ -965,8 +965,8 @@ These take precedence over convenience:
 
 What no design hides, and the documentation says so: the network between a client and the
 hub (or the forwarder) sees that encrypted packets go to that address, when, and roughly how
-many. VLESS with REALITY makes them look like an ordinary HTTPS connection to a well-known
-site. Where a network admits only listed addresses (allow-lists), no protocol helps.
+many. VLESS makes them look like an ordinary HTTPS connection to a website: the
+forwarder's own site, or a well-known one with REALITY. Where a network admits only listed addresses (allow-lists), no protocol helps.
 
 #### The hub
 
@@ -1420,30 +1420,43 @@ relay, or a hub.
    - The phones keep the settings with the hub's offer and start their tunnel with them
      (`mobile/cbbtun` takes them as JSON). The lite member's Rust WireGuard does not speak
      AmneziaWG, so in an obfuscated group it reaches the hub at home only.
-2. **WireGuard inside VLESS with REALITY**, between a client and the forwarder, with
+2. **WireGuard inside VLESS**, between a client and the forwarder, with
    Xray-core (MPL-2.0) as a Go module in `cbb`, and in the phones' Go tunnel
    (`mobile/cbbtun`) rather than libXray, so that one framework carries both; VLESS carries
    the UDP packets itself. The forwarder then has one path for everything, the hub does not
    change, and traffic is always inside our own tunnel. VLESS adds no security of its own and
    the design does not rely on it: the boundary stays the member TLS, then WireGuard.
-   - The forwarder's operator switches it on with a well-known site to borrow (`cbb forward
-     -vless-site www.example.com`): the forwarder listens on TCP 443, and whoever is not a
-     client gets that site's own TLS and pages, by REALITY. Its REALITY key stays in its key
-     file.
-   - The hub's user switches it on per group (`cbb global hub -forwarder ... -vless`). The hub
-     makes the group's VLESS user ID, the forwarder lets that ID in while the hub is
-     registered and tells the hub its REALITY key, short ID and site, and the hub gives all
-     of it to its clients with its offer, inside the member TLS at home.
+   - The forwarder's operator picks the transport, and the forwarder tells each registering
+     hub which one it runs:
+     - **XHTTP behind the web server of its own site**, the default on `cbb.tools`
+       (`cbb forward -vless-xhttp cbb.tools`): the web server (nginx) ends the TLS with the
+       site's own certificate on TCP 443 and passes one path to the forwarder, which listens
+       only on the loopback address; every other request gets the site. The path is made at
+       random and kept in the key file; it keeps scanners off the listener and is not a
+       secret the design relies on. The client's TLS has Chrome's fingerprint (uTLS) and
+       checks the site's certificate against the public CAs; XHTTP's `packet-up` mode is
+       plain HTTP requests, which every web server and proxy passes. The web server sees the
+       group's VLESS user ID and encrypted packets, nothing more, and that location keeps no
+       log.
+     - **REALITY**, for forwarders on servers without a site of their own (`cbb forward
+       -vless-site www.example.com`): the forwarder listens on TCP 443, and whoever is not a
+       client gets that well-known site's own TLS and pages. Its REALITY key stays in its
+       key file.
+   - The hub's user switches it on per group (`cbb global hub -forwarder ... -vless`, or the
+     apps' switch). The hub makes the group's VLESS user ID, the forwarder lets that ID in
+     while the hub is registered and tells the hub its transport and settings, and the hub
+     gives all of it to its clients with its offer, inside the member TLS at home.
    - Then VLESS is the clients' only way to the hub: a client that tried plain WireGuard
      first would show it to the network it wants to hide it from. The hub sends no offer
-     until it has the forwarder's settings.
+     until it has the forwarder's settings, and a client that does not know the transport
+     stays at home.
    - The forwarder passes whatever comes over VLESS to its own UDP port and routes it as it
      routes every packet, by `mac1` and the indices, so VLESS cannot be used to reach
      anything else; with AmneziaWG on as well, both apply.
-3. **Planned for 0.7: VLESS with the site's real certificate**, over XHTTP behind the
-   server's own web server, as a second kind of VLESS beside REALITY, for every client
-   including the lite member
-   ([roadmap item 46](roadmap.md#vless-behind-a-web-server)).
+   - Risks: WireGuard over TCP adds latency on a lossy network (TCP inside TCP), which a
+     clipboard tolerates; XHTTP's packet-up costs a request per batch of packets.
+3. **Next: VLESS on the lite member**, a VLESS and XHTTP client of its own in `cbb_core`
+   on rustls ([roadmap item 46](roadmap.md#vless-behind-a-web-server)).
 
 sing-box is not used (GPL).
 
@@ -1532,11 +1545,11 @@ only adds to it.
    switch, which keeps the hub's offer and reaches the hub through the tunnel while it is not
    found at home; remote invitations made and served on a phone that is the hub. Using an
    invitation on a phone follows.
-8. Blocked networks: AmneziaWG, then VLESS with REALITY. Done: `cbb` and the phones' tunnel
+8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` and the phones' tunnel
    run on amneziawg-go; obfuscation per group between computers (`cbb global hub
    -obfuscate`), in the hub's offer and in invitations, on both phones, and through the
-   forwarder; VLESS between computers (`cbb forward -vless-site`, `cbb global hub -vless`)
-   and on both phones.
+   forwarder; VLESS between computers (`cbb forward -vless-xhttp` behind a web server or
+   `-vless-site` with REALITY, `cbb global hub -vless`) and on both phones.
 9. The lite member on Linux (done: `cbb global on`, GotaTun and smoltcp in `cbb`, plain
    WireGuard only, so a group whose hub hides its tunnel keeps it at home); the ESP32 when
    WireGuard on it is mature.

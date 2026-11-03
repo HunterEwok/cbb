@@ -20,7 +20,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -824,6 +826,38 @@ func TestThroughVLESS(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// TestThroughXHTTP checks VLESS over XHTTP behind the web server of the
+// forwarder's site: the hub learns the transport, the site's name, the
+// web server's port and the path, and a client gets through with them.
+func TestThroughXHTTP(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back atomic.Value
+	back.Store("127.0.0.1:9")
+	web, cert := vlesstest.WebServer(t, path, func() string { return back.Load().(string) })
+	vless.TrustForTests(cert)
+	f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0",
+		XHTTP: &XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	back.Store(net.JoinHostPort("127.0.0.1", strconv.Itoa(int(f.vless.Port()))))
+	id, _ := tunnel.NewVLESSID()
+	key, peer := newClient(t)
+	hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{VLESSID: id})
+	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id}
+	if !hs.vless.Equal(&want) {
+		t.Fatalf("the hub learned %+v, want %+v", hs.vless, want)
+	}
+	vc, err := vless.Dial(*hs.vless)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer vc.Close()
+	if err := roundTripTo(t, vc.Addr(), hs, key, peer); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -31,6 +31,16 @@ All notable changes to cbb are documented in this file. The format follows
   command gives none. A phone hub makes its AmneziaWG settings and VLESS user ID with the new
   `NewObfuscation` and `NewVLESSID` of `mobile/cbbtun`, keeps them in its state, starts its
   tunnel with them and registers with its forwarder over VLESS when asked.
+- **VLESS over XHTTP behind a web server**, beside REALITY: `cbb forward -vless-xhttp
+  cbb.tools` listens on the loopback address (`-vless-listen`, default `127.0.0.1:3276`) and
+  the site's web server, which ends the TLS with the site's own certificate, passes it one
+  path (`-vless-path`, or one made at random and kept in the key file; the forwarder prints
+  it at start). The forwarder tells a registering hub its transport, and the hub's offer
+  carries `transport`, the site's name, the web server's port and `path`; `cbb` and the
+  phones' tunnel speak it with Chrome's TLS fingerprint and XHTTP's `packet-up` mode, and
+  check the site's certificate against the public CAs. A client that does not know a
+  transport stays at home. REALITY stays for forwarders without a site of their own;
+  docs/admin/self-hosting.md has the nginx location.
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
   `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,

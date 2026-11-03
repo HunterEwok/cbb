@@ -174,6 +174,34 @@ installs and changes it; nothing here does it by itself.
 
 Each change of the pages is step 6 again.
 
+## VLESS
+
+The project's forwarder takes VLESS over XHTTP behind this nginx (`CBB_FORWARD_FLAGS=-vless-xhttp
+cbb.tools` in `/etc/cbb/forward.env`; [self-hosting](../docs/admin/self-hosting.md)). It prints
+its path at start (`journalctl -u cbb-forward | grep XHTTP`); give it to nginx, outside the
+repository:
+
+```sh
+P=/PATH-FROM-THE-LOG
+echo "\"~^$P(/|\$)\" 1;" | sudo tee /etc/nginx/cbb-vless-path.conf
+sudo tee /etc/nginx/cbb-vless-location.conf <<EOF
+location $P {
+    proxy_pass http://cbb_vless;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_redirect off;
+    proxy_set_header Host \$host;
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+}
+EOF
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+The path stays open while the site is closed; the http block's `access_log off` keeps it out
+of the log.
+
 ## Closed until launch
 
 Until the project opens, every visitor sees `soon.html` ("the website opens soon", in every

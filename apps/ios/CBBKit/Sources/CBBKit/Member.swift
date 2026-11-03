@@ -441,25 +441,54 @@ public enum Member {
         }
     }
 
-    /// The way to the hub's forwarder over VLESS with REALITY (section 11,
-    /// "VLESS"); with it, the only way to the hub. The kit only carries it:
-    /// the tunnel in mobile/cbbtun checks and uses it.
+    /// The way to the hub's forwarder over VLESS (section 11, "VLESS"),
+    /// with REALITY (`transport` empty: `publicKey` and `shortID`) or XHTTP
+    /// behind the forwarder's web server (`transport` "xhttp": `path`);
+    /// with it, the only way to the hub. The kit only carries it: the
+    /// tunnel in mobile/cbbtun checks and uses it, and refuses a transport
+    /// it does not know.
     public struct VLESS: Codable, Equatable, Sendable {
+        public var transport: String
         public var endpoint: String
         public var publicKey: Data
         public var shortID: String
         public var serverName: String
+        public var path: String
         public var id: String
 
-        public init(endpoint: String, publicKey: Data, shortID: String, serverName: String, id: String) {
-            (self.endpoint, self.publicKey, self.shortID, self.serverName, self.id) = (endpoint, publicKey, shortID, serverName, id)
+        public init(transport: String = "", endpoint: String, publicKey: Data = Data(), shortID: String = "",
+                    serverName: String, path: String = "", id: String) {
+            (self.transport, self.endpoint, self.publicKey, self.shortID) = (transport, endpoint, publicKey, shortID)
+            (self.serverName, self.path, self.id) = (serverName, path, id)
         }
 
         enum CodingKeys: String, CodingKey {
-            case endpoint, id
+            case transport, endpoint, path, id
             case publicKey = "public_key"
             case shortID = "short_id"
             case serverName = "server_name"
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            transport = try c.decodeIfPresent(String.self, forKey: .transport) ?? ""
+            endpoint = try c.decode(String.self, forKey: .endpoint)
+            publicKey = try c.decodeIfPresent(Data.self, forKey: .publicKey) ?? Data()
+            shortID = try c.decodeIfPresent(String.self, forKey: .shortID) ?? ""
+            serverName = try c.decode(String.self, forKey: .serverName)
+            path = try c.decodeIfPresent(String.self, forKey: .path) ?? ""
+            id = try c.decode(String.self, forKey: .id)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            if !transport.isEmpty { try c.encode(transport, forKey: .transport) }
+            try c.encode(endpoint, forKey: .endpoint)
+            if !publicKey.isEmpty { try c.encode(publicKey, forKey: .publicKey) }
+            if !shortID.isEmpty { try c.encode(shortID, forKey: .shortID) }
+            try c.encode(serverName, forKey: .serverName)
+            if !path.isEmpty { try c.encode(path, forKey: .path) }
+            try c.encode(id, forKey: .id)
         }
 
         /// The settings as JSON, for mobile/cbbtun.

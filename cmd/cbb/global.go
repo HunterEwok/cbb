@@ -159,7 +159,7 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fwd := fs.String("forwarder", "", "the forwarder's address, for clients that cannot reach the hub directly; default for the project's (the default without addresses)")
 		fwdKey := fs.String("forwarder-key", "", "the forwarder's key, which cbb forward prints (not for the project's)")
 		obfuscate := fs.Bool("obfuscate", false, "speak AmneziaWG, which hides that the packets are WireGuard, for networks that block it")
-		vlessOnly := fs.Bool("vless", false, "the clients reach the forwarder only over VLESS, which looks like HTTPS to a well-known site")
+		vlessOnly := fs.Bool("vless", false, "the clients reach the forwarder only over VLESS, which looks like HTTPS to a website")
 		on := fs.String("on", "", "on an admin: make the device DEVICE, an admin computer with sync away from home on, a hub of the group")
 		keep := fs.Bool("keep", false, "on a hub: keep its addresses, port and forwarder where none are given, changing only how its tunnel hides (-obfuscate, -vless)")
 		if fs.Parse(args[1:]) != nil {
@@ -460,7 +460,7 @@ func writeAway(w io.Writer, a *control.Away) {
 			fmt.Fprintln(w, "  Obfuscated: the tunnel speaks AmneziaWG, so it does not look like WireGuard.")
 		}
 		if a.VLESS {
-			fmt.Fprintln(w, "  VLESS: the clients reach the forwarder only over VLESS, which looks like HTTPS to a well-known site.")
+			fmt.Fprintln(w, "  VLESS: the clients reach the forwarder only over VLESS, which looks like HTTPS to a website.")
 		}
 		switch {
 		case len(a.Endpoints) > 0:
@@ -512,7 +512,7 @@ func writeAway(w io.Writer, a *control.Away) {
 		fmt.Fprintf(w, "Sync away from home: on; the hub is %s, at %s; not connected through the tunnel.\n", a.HubDevice, strings.Join(a.Endpoints, ", "))
 	}
 	if a.VLESS && !a.Hub {
-		fmt.Fprintln(w, "  VLESS: the tunnel goes inside VLESS to the hub's forwarder, which looks like HTTPS to a well-known site.")
+		fmt.Fprintln(w, "  VLESS: the tunnel goes inside VLESS to the hub's forwarder, which looks like HTTPS to a website.")
 	}
 	// Where the keys are is said once, when the user turns it on (keysWarning),
 	// not every time the status is shown.

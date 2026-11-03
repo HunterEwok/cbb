@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/forward"
 )
 
 // TestInvite writes the invitation to a file of its own, asks before each
@@ -128,6 +129,30 @@ func TestServerKeys(t *testing.T) {
 				t.Errorf("%s with a damaged key: %d, %q", server, code, stderr.String())
 			}
 		})
+	}
+}
+
+// TestForwardXHTTPPath: cbb forward makes the path of its XHTTP once and
+// keeps it in the key file, and takes one transport of VLESS at a time.
+func TestForwardXHTTPPath(t *testing.T) {
+	key := filepath.Join(t.TempDir(), "forward.pem")
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"forward", "-key", key, "-show-key"}, strings.NewReader(""), &stdout, &stderr); code != 0 {
+		t.Fatalf("forward -show-key: %d, %s", code, stderr.String())
+	}
+	first, err := forward.LoadXHTTPPath(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, err := forward.LoadXHTTPPath(key); err != nil || again != first {
+		t.Errorf("the path of a second run: %q, %v; the first was %q", again, err, first)
+	}
+	if _, err := forward.LoadCert(key); err != nil {
+		t.Errorf("the key file after the path: %v", err)
+	}
+	stderr.Reset()
+	if code := run([]string{"forward", "-key", key, "-vless-site", "www.example.com", "-vless-xhttp", "cbb.tools"}, strings.NewReader(""), &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "not both") {
+		t.Errorf("both transports: %d, %q", code, stderr.String())
 	}
 }
 
