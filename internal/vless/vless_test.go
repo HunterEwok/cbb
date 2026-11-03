@@ -203,3 +203,55 @@ func TestUserOfEachClient(t *testing.T) {
 		t.Errorf("an address that is not the loopback came as %q", u)
 	}
 }
+
+// behindWebServer runs XHTTP behind a TLS web server that passes the path
+// to it, as nginx would on the forwarder's site, and returns the link for
+// the group id.
+func behindWebServer(t *testing.T, path, id string) (*Server, tunnel.VLESS) {
+	t.Helper()
+	s, err := Listen(ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	back := net.JoinHostPort("127.0.0.1", strconv.Itoa(int(s.Port())))
+	web, cert := vlesstest.WebServer(t, path, func() string { return back })
+	TrustForTests(cert)
+	return s, tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id}
+}
+
+func TestThroughXHTTP(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := tunnel.NewVLESSID()
+	s, l := behindWebServer(t, path, id)
+	if err := l.Check(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := s.Ready(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if roundTrip(t, l) {
+		t.Fatal("a group that was not let in got through")
+	}
+	if err := s.AddUser(id); err != nil {
+		t.Fatal(err)
+	}
+	if !roundTrip(t, l) {
+		t.Fatal("nothing came back")
+	}
+	other := l
+	other.Path = path + "x"
+	if roundTrip(t, other) {
+		t.Fatal("another path got through")
+	}
+	wrongName := l
+	wrongName.ServerName = "www.example.org"
+	if roundTrip(t, wrongName) {
+		t.Fatal("a site whose certificate does not carry the name got through")
+	}
+}

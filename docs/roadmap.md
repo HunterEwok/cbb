@@ -314,7 +314,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       relative's group): every call into the core and every saved state names its group.
     - A temporary guest: a device record with an end date, after which the device leaves the
       group without being removed by hand.
-- **46.** **Planned for 0.7.** Sync away from home through networks that block VPNs, on
+- **46.** **XHTTP in 0.6 for `cbb` and the phones; the lite member in 0.7.** Sync away from home through networks that block VPNs, on
     every member, the lite member included. There are two ways, equal options that the user
     or the server's operator picks, and more may join them: VLESS and AmneziaWG. VLESS comes
     in two kinds: with the site's real certificate, behind the server's own web server
@@ -725,9 +725,12 @@ marks in `cbb status` are built:
 
 ## VLESS behind a web server
 
-Item 46, decided by the owner on 2026-11-01, for 0.7. Today VLESS runs only inside REALITY
-([design](design.md#blocked-networks)): the forwarder listens on TCP 443 itself and borrows
-another site's TLS. A server that already serves a site on 443, as cbb.tools does with
+Item 46, decided by the owner on 2026-11-01. In 0.6 (moved there by the owner on 2026-11-03):
+the forwarder's XHTTP behind a web server (`cbb forward -vless-xhttp`), the transport in the
+hub's offer, and the clients in `cbb` and the phones' tunnel, the default on cbb.tools
+([design](design.md#blocked-networks)). Left for 0.7: the lite member's client, VLESS's own
+encryption, the interop vectors. Before it, VLESS ran only inside REALITY: the forwarder
+listens on TCP 443 itself and borrows another site's TLS. A server that already serves a site on 443, as cbb.tools does with
 nginx, cannot do that, and the lite member cannot speak REALITY at all: REALITY needs a
 browser's ClientHello and its own check inside the session ID, which rustls does not
 make. So VLESS gets a second kind beside REALITY, with the site's real certificate behind

@@ -27,7 +27,7 @@ const (
 
 // TestThroughTunnel connects to the loopback port and reaches the hub's
 // member port, both ways.
-func TestThroughTunnel(t *testing.T) { throughTunnel(t, nil, false) }
+func TestThroughTunnel(t *testing.T) { throughTunnel(t, nil, "") }
 
 // TestThroughObfuscatedTunnel does the same with a hub that speaks
 // AmneziaWG, whose settings the phone gets as JSON.
@@ -36,20 +36,21 @@ func TestThroughObfuscatedTunnel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	throughTunnel(t, obf, false)
+	throughTunnel(t, obf, "")
 }
 
-// TestThroughVLESS does the same over VLESS with REALITY to a forwarder,
-// here one that passes the packets straight to the hub, plain and
-// obfuscated.
+// TestThroughVLESS does the same over VLESS to a forwarder, here one that
+// passes the packets straight to the hub: with REALITY, plain and
+// obfuscated, and with XHTTP behind a web server.
 func TestThroughVLESS(t *testing.T) {
-	t.Run("plain", func(t *testing.T) { throughTunnel(t, nil, true) })
+	t.Run("plain", func(t *testing.T) { throughTunnel(t, nil, "reality") })
+	t.Run("xhttp", func(t *testing.T) { throughTunnel(t, nil, tunnel.TransportXHTTP) })
 	t.Run("obfuscated", func(t *testing.T) {
 		obf, err := tunnel.NewObfuscation()
 		if err != nil {
 			t.Fatal(err)
 		}
-		throughTunnel(t, obf, true)
+		throughTunnel(t, obf, "reality")
 	})
 }
 
@@ -92,7 +93,37 @@ func overVLESS(t *testing.T, port uint16) string {
 	return string(b)
 }
 
-func throughTunnel(t *testing.T, obf *tunnel.Obfuscation, viaVLESS bool) {
+// overXHTTP starts VLESS over XHTTP, behind a web server, in front of the
+// hub's UDP port and returns the settings a hub's offer would carry, as
+// JSON.
+func overXHTTP(t *testing.T, port uint16) string {
+	t.Helper()
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := vless.Listen(vless.ServerConfig{Listen: "127.0.0.1:0", Path: path, To: netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), port)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	back := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), s.Port()).String()
+	web, cert := vlesstest.WebServer(t, path, func() string { return back })
+	vless.TrustForTests(cert)
+	id, _ := tunnel.NewVLESSID()
+	if err := s.AddUser(id); err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// throughTunnel sends through the tunnel to the hub, over VLESS with the
+// transport via ("reality" or "xhttp"), or straight with "".
+func throughTunnel(t *testing.T, obf *tunnel.Obfuscation, via string) {
 	priv, err := NewKey()
 	if err != nil {
 		t.Fatal(err)
@@ -136,8 +167,11 @@ func throughTunnel(t *testing.T, obf *tunnel.Obfuscation, viaVLESS bool) {
 		settings = string(b)
 	}
 	endpoint, link := fmt.Sprintf("127.0.0.1:%d", hub.UDPPort()), ""
-	if viaVLESS {
+	switch via {
+	case "reality":
 		endpoint, link = "", overVLESS(t, uint16(hub.UDPPort()))
+	case tunnel.TransportXHTTP:
+		endpoint, link = "", overXHTTP(t, uint16(hub.UDPPort()))
 	}
 	tun, err := Start(priv, psk[:], hubPub[:], phoneID, hubID, endpoint, settings, link)
 	if err != nil {

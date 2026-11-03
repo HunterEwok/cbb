@@ -2,12 +2,15 @@
 // Copyright (C) 2026 HunterEwok
 
 // Package vless carries a group's WireGuard packets between a client and
-// the forwarder inside VLESS with REALITY, for networks that block
-// WireGuard and AmneziaWG alike (docs/design.md, "Blocked networks"). To
-// the network the connection is TLS 1.3 to a well-known site, whose
-// handshake the forwarder borrows; VLESS inside it carries the UDP packets.
-// It adds no security of its own: the packets are the group's WireGuard,
-// with the member TLS inside it.
+// the forwarder inside VLESS, for networks that block WireGuard and
+// AmneziaWG alike (docs/design.md, "Blocked networks"). It has two
+// transports. With REALITY the connection is, to the network, TLS 1.3 to a
+// well-known site, whose handshake the forwarder borrows. With XHTTP it is
+// HTTPS to the forwarder's own site: a web server there ends the TLS with
+// the site's certificate and passes one path to the forwarder, which
+// listens on the loopback address. VLESS inside either carries the UDP
+// packets. It adds no security of its own: the packets are the group's
+// WireGuard, with the member TLS inside it.
 //
 // It runs Xray-core in the process. The client side is a local UDP port
 // that WireGuard sends to; the forwarder's side passes every packet to the
@@ -46,6 +49,8 @@ import (
 	vlessout "github.com/xtls/xray-core/proxy/vless/outbound"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/reality"
+	"github.com/xtls/xray-core/transport/internet/splithttp"
+	xtls "github.com/xtls/xray-core/transport/internet/tls"
 	"google.golang.org/protobuf/proto"
 
 	// What the two sides use of Xray, registered by their init functions.
@@ -60,6 +65,9 @@ import (
 // ServerConfig configures the forwarder's side.
 type ServerConfig struct {
 	Listen string // the TCP address to listen on, such as ":443"
+	// Path, if set, makes it XHTTP behind a web server, which passes the
+	// path to Listen as plain HTTP; the rest is for REALITY.
+	Path string
 	// Dest is the site whose TLS the forwarder borrows, as host:port: a
 	// probe that is not a client gets that site's answers.
 	Dest       string
@@ -100,7 +108,11 @@ const inboundTag = "vless-in"
 // Listen starts the forwarder's side with no users; AddUser lets a
 // group's clients in.
 func Listen(cfg ServerConfig) (*Server, error) {
-	if err := tunnel.CheckServerName(cfg.ServerName); err != nil {
+	if cfg.Path != "" {
+		if err := tunnel.CheckVLESSPath(cfg.Path); err != nil {
+			return nil, err
+		}
+	} else if err := tunnel.CheckServerName(cfg.ServerName); err != nil {
 		return nil, err
 	}
 	host, port, err := net.SplitHostPort(cfg.Listen)
@@ -128,17 +140,24 @@ func Listen(cfg ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("vless: %w", err)
 	}
 	listen := netip.AddrPortFrom(ip, uint16(p))
-	sid, _ := hex.DecodeString(ShortID(cfg.Key))
-	stream := realityStream(&reality.Config{
-		Dest:        cfg.Dest,
-		Type:        "tcp",
-		ServerNames: []string{cfg.ServerName},
-		PrivateKey:  cfg.Key[:],
-		ShortIds:    [][]byte{sid},
-		// No limits, as Xray's JSON has it.
-		LimitFallbackUpload:   &reality.LimitFallback{},
-		LimitFallbackDownload: &reality.LimitFallback{},
-	})
+	var stream *internet.StreamConfig
+	if cfg.Path != "" {
+		// Plain HTTP: the web server in front has ended the TLS. Any host
+		// it passes is taken; what matters is the path.
+		stream = xhttpStream(&splithttp.Config{Path: cfg.Path}, nil)
+	} else {
+		sid, _ := hex.DecodeString(ShortID(cfg.Key))
+		stream = realityStream(&reality.Config{
+			Dest:        cfg.Dest,
+			Type:        "tcp",
+			ServerNames: []string{cfg.ServerName},
+			PrivateKey:  cfg.Key[:],
+			ShortIds:    [][]byte{sid},
+			// No limits, as Xray's JSON has it.
+			LimitFallbackUpload:   &reality.LimitFallback{},
+			LimitFallbackDownload: &reality.LimitFallback{},
+		})
+	}
 	// Whatever a client asks for, its packets go to the forwarder's UDP
 	// port and nowhere else, and no TCP stream, which would reach the
 	// forwarder's registrations (toForwarder).
@@ -156,7 +175,10 @@ func Listen(cfg ServerConfig) (*Server, error) {
 		inst.Close()
 		return nil, fmt.Errorf("vless: %w", err)
 	}
-	s := &Server{inst: inst, out: out, port: listen.Port(), site: cfg.Dest + " " + cfg.ServerName}
+	s := &Server{inst: inst, out: out, port: listen.Port()}
+	if cfg.Path == "" {
+		s.site = cfg.Dest + " " + cfg.ServerName
+	}
 	m, _ := inst.GetFeature(inbound.ManagerType()).(inbound.Manager)
 	if m == nil {
 		inst.Close()
@@ -184,6 +206,9 @@ func Listen(cfg ServerConfig) (*Server, error) {
 // once for each ALPN a client may offer. A client that comes before that
 // waits for it in steps of 5 seconds, its packets held.
 func (s *Server) Ready(ctx context.Context) error {
+	if s.site == "" {
+		return nil // XHTTP has nothing to learn
+	}
 	for {
 		learned := true
 		for alpn := range 3 {
@@ -251,18 +276,31 @@ func Dial(l tunnel.VLESS) (*Client, error) {
 	}
 	addr := pc.LocalAddr().(*net.UDPAddr).AddrPort()
 	pc.Close()
-	sid, err := hex.DecodeString(l.ShortID)
-	if err != nil {
-		return nil, fmt.Errorf("vless: %w", err)
+	var stream *internet.StreamConfig
+	if l.Transport == tunnel.TransportXHTTP {
+		// HTTPS to the site, its certificate checked against the public
+		// CAs, in a browser's ClientHello. packet-up is plain requests,
+		// which every web server and proxy passes as they are.
+		roots := make([]*xtls.Certificate, len(extraRoots))
+		for i, r := range extraRoots {
+			roots[i] = &xtls.Certificate{Certificate: r, Usage: xtls.Certificate_AUTHORITY_VERIFY}
+		}
+		stream = xhttpStream(&splithttp.Config{Host: l.ServerName, Path: l.Path, Mode: "packet-up"},
+			&xtls.Config{ServerName: l.ServerName, Fingerprint: "chrome", NextProtocol: []string{"h2", "http/1.1"}, Certificate: roots})
+	} else {
+		sid, err := hex.DecodeString(l.ShortID)
+		if err != nil {
+			return nil, fmt.Errorf("vless: %w", err)
+		}
+		stream = realityStream(&reality.Config{
+			Fingerprint: "chrome",
+			ServerName:  l.ServerName,
+			PublicKey:   l.PublicKey,
+			ShortId:     sid,
+			SpiderX:     "/",
+			SpiderY:     make([]int64, 10),
+		})
 	}
-	stream := realityStream(&reality.Config{
-		Fingerprint: "chrome",
-		ServerName:  l.ServerName,
-		PublicKey:   l.PublicKey,
-		ShortId:     sid,
-		SpiderX:     "/",
-		SpiderY:     make([]int64, 10),
-	})
 	// The address means nothing: the forwarder sends every packet to its
 	// own port.
 	in := &dokodemo.Config{
@@ -284,6 +322,24 @@ func (c *Client) Addr() netip.AddrPort { return c.addr }
 
 // Close stops the client's side.
 func (c *Client) Close() error { return c.inst.Close() }
+
+// extraRoots are CAs, in PEM, that the client of XHTTP trusts beside the
+// public ones: only tests set them (TrustForTests).
+var extraRoots [][]byte
+
+// TrustForTests makes the clients of XHTTP trust the CA, in PEM, beside
+// the public ones, for tests whose web server has a certificate of its
+// own. Nothing else calls it.
+func TrustForTests(pem []byte) { extraRoots = append(extraRoots, pem) }
+
+func xhttpStream(c *splithttp.Config, t *xtls.Config) *internet.StreamConfig {
+	sc := &internet.StreamConfig{ProtocolName: "splithttp", TransportSettings: []*internet.TransportConfig{{ProtocolName: "splithttp", Settings: serial.ToTypedMessage(c)}}}
+	if t != nil {
+		tm := serial.ToTypedMessage(t)
+		sc.SecurityType, sc.SecuritySettings = tm.Type, []*serial.TypedMessage{tm}
+	}
+	return sc
+}
 
 func realityStream(c *reality.Config) *internet.StreamConfig {
 	tm := serial.ToTypedMessage(c)

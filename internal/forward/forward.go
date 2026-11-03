@@ -185,16 +185,29 @@ type Config struct {
 	Logf      func(format string, args ...any)
 }
 
-// VLESSConfig configures the forwarder's VLESS with REALITY, for the
-// clients of hubs that ask for it (docs/design.md, "Blocked networks").
+// VLESSConfig configures the forwarder's VLESS, for the clients of hubs
+// that ask for it (docs/design.md, "Blocked networks"): with REALITY, or
+// with XHTTP behind the web server of the forwarder's own site.
 type VLESSConfig struct {
-	Listen string // the TCP address to listen on, such as ":443"
+	Listen string // the TCP address to listen on, such as ":443", or the loopback's for XHTTP
+	// XHTTP, if set, makes it XHTTP behind a web server; Site, Dest and
+	// Key are then not used.
+	XHTTP *XHTTPConfig
 	// Site is the well-known site whose TLS the forwarder borrows, such as
 	// www.example.com; its port 443 answers whoever is not a client. Dest,
 	// if set, is where that site is reached instead, for tests.
 	Site string
 	Dest string
 	Key  [32]byte // the REALITY key, X25519
+}
+
+// XHTTPConfig is the web server in front of the forwarder's XHTTP: it ends
+// the TLS of the site Host, on TCP Port at the forwarder's address, and
+// passes Path to the forwarder's VLESS listener as plain HTTP.
+type XHTTPConfig struct {
+	Host string // the site's name, which its certificate carries, such as cbb.tools
+	Port uint16 // the web server's TCP port, 443
+	Path string // the path it passes, such as /AbC-12_xyz0123456
 }
 
 // listenPair opens UDP and TCP on the same port of host. Windows reserves
@@ -328,15 +341,30 @@ func Listen(cfg Config) (*Forwarder, error) {
 	}
 	if v := cfg.VLESS; v != nil {
 		dest := v.Dest
-		if dest == "" {
+		if dest == "" && v.XHTTP == nil {
 			dest = net.JoinHostPort(v.Site, "443")
+		}
+		sc := vless.ServerConfig{Listen: v.Listen, Dest: dest, ServerName: v.Site, Key: v.Key}
+		if x := v.XHTTP; x != nil {
+			if err := tunnel.CheckServerName(x.Host); err != nil {
+				udp.Close()
+				tcp.Close()
+				return nil, fmt.Errorf("forward: %w", err)
+			}
+			if x.Port == 0 {
+				udp.Close()
+				tcp.Close()
+				return nil, errors.New("forward: the web server's port for XHTTP is missing")
+			}
+			sc = vless.ServerConfig{Listen: v.Listen, Path: x.Path}
 		}
 		// VLESS passes the packets to the UDP port, from the loopback.
 		to := f.Addr()
 		if to.Addr().IsUnspecified() {
 			to = netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), to.Port())
 		}
-		if f.vless, err = vless.Listen(vless.ServerConfig{Listen: v.Listen, Dest: dest, ServerName: v.Site, Key: v.Key, To: to}); err != nil {
+		sc.To = to
+		if f.vless, err = vless.Listen(sc); err != nil {
 			udp.Close()
 			tcp.Close()
 			return nil, fmt.Errorf("forward: %w", err)
