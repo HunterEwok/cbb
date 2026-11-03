@@ -1182,7 +1182,7 @@ Header fields (all omitted when empty):
 | `forwarder`, `forwarder_key` | strings | `away hub`: the forwarder's address and its key, 44 characters of base64 |
 | `relay`, `relay_key` | strings | `away relay`: the relay's address and its key; needs `consent` |
 | `obfuscate` | bool | `away hub`: speak AmneziaWG instead of plain WireGuard (section 11) |
-| `vless` | bool | `away hub`: the clients reach the forwarder only over VLESS (section 11) |
+| `vless` | bool | `away hub`: the clients reach the forwarder over VLESS where UDP does not pass, with AmneziaWG on (section 11) |
 | `keep` | bool | `away hub`: keep the hub's addresses, port and forwarder where the message gives none, changing only `obfuscate` and `vless` (the apps' setting) |
 | `invite` | string | the text of a remote invitation: made by `invite`, used by `join` (section 12) |
 | `joining` | object | `invite`: a device to confirm before it is admitted, `{id, name, os, fingerprint}` |
@@ -2114,7 +2114,7 @@ and then syncs at home only ("Through the tunnel" below).
 | `psk` | bytes | the member's own WireGuard preshared key, 32 bytes: the one its hello offered |
 | `endpoints` | array of strings or absent | the hub's addresses away from home, `ip:port` or `[ipv6]:port`, at most 8; its forwarder's last (section 13) |
 | `obfuscation` | object or absent | the group's AmneziaWG settings ("Obfuscation" below); absent for plain WireGuard |
-| `vless` | object or absent | the way to the hub's forwarder over VLESS ("VLESS" below); with it, the only way to the hub |
+| `vless` | object or absent | the way to the hub's forwarder over VLESS ("VLESS" below); with it, the endpoints are tried over UDP only with `obfuscation` |
 | `hub` | string or absent | in an offer one hub passes on for another: that hub's device ID ("Several hubs", "Moving the hub" below) |
 | `moved` | bool or absent | `true` when the sender is no hub any more and hands its clients over to `hub` |
 | `next_key` | bytes or absent | the key the hub serves with in the next period, 32 bytes ("The hub's key" below) |
@@ -2285,7 +2285,7 @@ with AmneziaWG's own names; every client sets them on its end before the hub as 
 ### VLESS
 
 A hub with a forwarder where the user asked for it (`cbb global hub -forwarder ... -vless`)
-has its clients reach the forwarder only inside VLESS, which to the network is HTTPS to a
+has its clients reach the forwarder inside VLESS where UDP does not pass, which to the network is HTTPS to a
 website (docs/design.md, "Blocked networks"), in the transport the forwarder runs: XHTTP
 behind the web server of the forwarder's own site, or REALITY, which borrows a well-known
 site's TLS. The hub makes a VLESS user ID for the group once and keeps it
@@ -2303,17 +2303,25 @@ carries:
 | `path` | string | XHTTP: the path the web server passes, a slash and 8 to 64 of `A-Z a-z 0-9 - _`; absent with REALITY |
 | `id` | string | the group's VLESS user ID, a random UUID (version 4) |
 
+- A hub that sets VLESS speaks AmneziaWG as well ("Obfuscation" above): its offer carries
+  `obfuscation` beside `vless`. Inside VLESS it hides WireGuard's fixed sizes from what the
+  TLS records show, and over UDP it lets a client try the faster way first.
 - Until the hub has the forwarder's answer it MUST NOT send an offer, so a client never
-  learns a way that bypasses VLESS. A client with a `vless` offer MUST NOT send plain
-  WireGuard to the hub's endpoints. When the answer comes, or changes, the members connect again
-  and get the new offer.
+  learns the hub without its way over VLESS. A client with a `vless` offer MUST NOT send plain
+  WireGuard to the hub's endpoints. It tries them over UDP only when the offer has
+  `obfuscation` too, and VLESS after them; the way that reached the hub goes first the next
+  time. An offer with `vless` and no `obfuscation` is reached over VLESS only. When the answer
+  comes, or changes, the members connect again and get the new offer.
 - The client runs VLESS without encryption (Xray-core) from a local UDP port to that
   endpoint, and points its WireGuard at the local port instead of the offer's `endpoints`.
   With REALITY it is inside REALITY, with the TLS fingerprint of Chrome. With XHTTP it is
   XHTTP's `packet-up` mode (plain HTTP requests, which any web server and proxy passes) on
   `path`, with `server_name` as the host, over TLS with the fingerprint of Chrome, ALPN `h2`
   and `http/1.1`, and the site's certificate checked against the public CAs for
-  `server_name`. The forwarder passes every UDP packet that comes over VLESS to its own UDP
+  `server_name`. Its HTTP connections are reused as Xray's own client configuration does
+  by default (three at once, each dropped after 600 to 900 requests or 1800 to 3000
+  seconds, at random), and the gap between two uploads is 10 to 50 ms at random; each
+  request carries Xray's padding of random length. The forwarder passes every UDP packet that comes over VLESS to its own UDP
   port, so the packets are forwarded as in section 13; VLESS carries nothing else.
 - A receiver MUST refuse settings that do not have this form, or a `transport` it does not
   know, and not start the tunnel; it never falls back to plain WireGuard.

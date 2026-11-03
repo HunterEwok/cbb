@@ -442,7 +442,27 @@ func TestAwayObfuscated(t *testing.T) {
 func TestAwayThroughForwarder(t *testing.T) {
 	t.Run("plain", func(t *testing.T) { testAwayThroughForwarder(t, false, false) })
 	t.Run("obfuscated", func(t *testing.T) { testAwayThroughForwarder(t, true, false) })
+	// VLESS comes with AmneziaWG, which goes first over UDP.
 	t.Run("vless", func(t *testing.T) { testAwayThroughForwarder(t, false, true) })
+	// Where no UDP passes, the deck falls back to VLESS.
+	t.Run("vless without UDP", func(t *testing.T) {
+		dead, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Put back after the services stop, which their cleanups do.
+		w, n := dialWindow, dialWindows
+		t.Cleanup(func() { dead.Close(); dialWindow, dialWindows, udpBlocked = w, n, nil })
+		dialWindow = 5 * time.Second
+		udpBlocked = func(eps []netip.AddrPort) []netip.AddrPort {
+			out := make([]netip.AddrPort, len(eps))
+			for i := range out {
+				out[i] = dead.LocalAddr().(*net.UDPAddr).AddrPort()
+			}
+			return out
+		}
+		testAwayThroughForwarder(t, false, true)
+	})
 }
 
 func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool) {
@@ -514,7 +534,7 @@ func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool) {
 	piID := pi.status(t).Device
 	waitFor(t, "the deck keeps the hub's offer", func() bool {
 		a := deck.status(t).Away
-		return a != nil && a.HubDevice == piID && len(a.Endpoints) == 1 && a.Endpoints[0] == f.Addr().String() && a.Obfuscated == obfuscate &&
+		return a != nil && a.HubDevice == piID && len(a.Endpoints) == 1 && a.Endpoints[0] == f.Addr().String() && a.Obfuscated == (obfuscate || overVLESS) &&
 			a.VLESS == overVLESS
 	})
 

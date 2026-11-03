@@ -159,7 +159,7 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fwd := fs.String("forwarder", "", "the forwarder's address, for clients that cannot reach the hub directly; default for the project's (the default without addresses)")
 		fwdKey := fs.String("forwarder-key", "", "the forwarder's key, which cbb forward prints (not for the project's)")
 		obfuscate := fs.Bool("obfuscate", false, "speak AmneziaWG, which hides that the packets are WireGuard, for networks that block it")
-		vlessOnly := fs.Bool("vless", false, "the clients reach the forwarder only over VLESS, which looks like HTTPS to a website")
+		vlessOnly := fs.Bool("vless", false, "the clients reach the forwarder over VLESS, which looks like HTTPS to a website, where AmneziaWG over UDP does not pass")
 		on := fs.String("on", "", "on an admin: make the device DEVICE, an admin computer with sync away from home on, a hub of the group")
 		keep := fs.Bool("keep", false, "on a hub: keep its addresses, port and forwarder where none are given, changing only how its tunnel hides (-obfuscate, -vless)")
 		if fs.Parse(args[1:]) != nil {
@@ -460,7 +460,7 @@ func writeAway(w io.Writer, a *control.Away) {
 			fmt.Fprintln(w, "  Obfuscated: the tunnel speaks AmneziaWG, so it does not look like WireGuard.")
 		}
 		if a.VLESS {
-			fmt.Fprintln(w, "  VLESS: the clients reach the forwarder only over VLESS, which looks like HTTPS to a website.")
+			fmt.Fprintln(w, "  VLESS: the clients try AmneziaWG over UDP first and reach the forwarder over VLESS, which looks like HTTPS to a website, where UDP does not pass.")
 		}
 		switch {
 		case len(a.Endpoints) > 0:

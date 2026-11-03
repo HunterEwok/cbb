@@ -285,7 +285,7 @@ func Dial(l tunnel.VLESS) (*Client, error) {
 		for i, r := range extraRoots {
 			roots[i] = &xtls.Certificate{Certificate: r, Usage: xtls.Certificate_AUTHORITY_VERIFY}
 		}
-		stream = xhttpStream(&splithttp.Config{Host: l.ServerName, Path: l.Path, Mode: "packet-up"},
+		stream = xhttpStream(xhttpClient(l.ServerName, l.Path),
 			&xtls.Config{ServerName: l.ServerName, Fingerprint: "chrome", NextProtocol: []string{"h2", "http/1.1"}, Certificate: roots})
 	} else {
 		sid, err := hex.DecodeString(l.ShortID)
@@ -331,6 +331,26 @@ var extraRoots [][]byte
 // the public ones, for tests whose web server has a certificate of its
 // own. Nothing else calls it.
 func TrustForTests(pem []byte) { extraRoots = append(extraRoots, pem) }
+
+// xhttpClient is the client's XHTTP: packet-up on path to host, with the
+// connection reuse that Xray's own configuration gives a client by
+// default (a few HTTP/2 connections, each dropped after a random number
+// of requests and seconds), which the configuration built here would
+// otherwise leave unlimited: one connection that carries everything for
+// as long as the tunnel lives. The gap between two uploads is random
+// within a range around Xray's fixed 30 ms, so that their rhythm is not
+// a constant. The padding of each request stays Xray's, random already.
+func xhttpClient(host, path string) *splithttp.Config {
+	return &splithttp.Config{
+		Host: host, Path: path, Mode: "packet-up",
+		ScMinPostsIntervalMs: &splithttp.RangeConfig{From: 10, To: 50},
+		Xmux: &splithttp.XmuxConfig{
+			MaxConnections:   &splithttp.RangeConfig{From: 3, To: 3},
+			HMaxRequestTimes: &splithttp.RangeConfig{From: 600, To: 900},
+			HMaxReusableSecs: &splithttp.RangeConfig{From: 1800, To: 3000},
+		},
+	}
+}
 
 func xhttpStream(c *splithttp.Config, t *xtls.Config) *internet.StreamConfig {
 	sc := &internet.StreamConfig{ProtocolName: "splithttp", TransportSettings: []*internet.TransportConfig{{ProtocolName: "splithttp", Settings: serial.ToTypedMessage(c)}}}

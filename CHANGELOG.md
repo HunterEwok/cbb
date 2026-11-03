@@ -41,6 +41,14 @@ All notable changes to cbb are documented in this file. The format follows
   check the site's certificate against the public CAs. A client that does not know a
   transport stays at home. REALITY stays for forwarders without a site of their own;
   docs/admin/self-hosting.md has the nginx location.
+- **VLESS comes with AmneziaWG, and UDP goes first.** A hub that sets VLESS (`cbb global hub
+  -vless`, or VLESS in the apps) speaks AmneziaWG too, and its clients, `cbb` and both
+  phones, try the hub's endpoints in AmneziaWG over UDP first and VLESS after them, keeping
+  to the way that worked; they never send plain WireGuard where VLESS is set. Inside VLESS,
+  AmneziaWG hides WireGuard's fixed packet sizes from what the TLS shows. The XHTTP client
+  reuses its HTTP connections as Xray's own configuration does by default (dropped after a
+  random number of requests and seconds; before, one connection carried everything for
+  ever) and spaces its uploads 10 to 50 ms apart at random instead of a fixed 30 ms.
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
   `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,

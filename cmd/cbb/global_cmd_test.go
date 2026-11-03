@@ -37,7 +37,7 @@ func TestWriteAwayStates(t *testing.T) {
 		{name: "a hub without an address", a: control.Away{Hub: true, Port: 8764},
 			want: []string{"The hub has no address away from home"}},
 		{name: "registered, port seen", a: control.Away{Hub: true, Port: 8764, VLESS: true, Forwarder: &control.Forwarder{Endpoint: "198.51.100.9:8764", Registered: true, Seen: "203.0.113.7:40000"}},
-			want: []string{"VLESS: the clients reach the forwarder only over VLESS", "Registered with the forwarder at 198.51.100.9:8764, which reaches this hub at 203.0.113.7:40000."},
+			want: []string{"reach the forwarder over VLESS, which looks like HTTPS", "Registered with the forwarder at 198.51.100.9:8764, which reaches this hub at 203.0.113.7:40000."},
 			not:  []string{"tunnel goes inside VLESS"}},
 		{name: "registered, port not heard", a: control.Away{Hub: true, Forwarder: &control.Forwarder{Endpoint: "f:1", Registered: true}},
 			want: []string{"it has not heard the hub's UDP port yet"}},

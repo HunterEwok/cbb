@@ -72,11 +72,13 @@ ordinary HTTPS connection to a website.
    ```
 
    (`-forwarder 198.51.100.9:8764 -forwarder-key <key>` for your own.) The forwarder tells
-   the hub which way it runs. Add `-obfuscate` too if you like; both then apply.
+   the hub which way it runs. VLESS switches AmneziaWG on as well: inside VLESS it hides
+   the sizes of WireGuard's packets, which would otherwise show through the HTTPS.
 
 3. **On the devices**: meet the hub at home once, as after any change. From then on they
-   reach the forwarder only through VLESS, never with plain WireGuard first, so the network
-   you want to hide the tunnel from never sees it.
+   try AmneziaWG over UDP first, which is faster where the network lets it through, and
+   VLESS when it does not, and keep to the way that worked. They never try plain WireGuard,
+   so the network you want to hide the tunnel from never sees it.
 
 ## Tips for countries that filter
 
@@ -86,6 +88,8 @@ ordinary HTTPS connection to a website.
   blocked there.
 - For VLESS with REALITY, choose a site that people in that country use every day, so
   blocking it would hurt; and one served from a different provider than your forwarder.
+- The forwarder's site shows in every connection's first packet: a network that blocks the
+  site blocks the way too. A forwarder of your own, on another site, is the answer then.
 - A phone's own VPN keeps working: the app's tunnel is ordinary traffic of the app and does
   not take the phone's VPN slot.
 - If the tunnel stops working on a trip, `cbb global` on a laptop says what fails, and

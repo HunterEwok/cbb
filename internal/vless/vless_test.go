@@ -255,3 +255,29 @@ func TestThroughXHTTP(t *testing.T) {
 		t.Fatal("a site whose certificate does not carry the name got through")
 	}
 }
+
+// The client's XHTTP drops its connections after a while and spaces its
+// uploads at random, as Xray's own configuration does, rather than one
+// connection for ever at a fixed rhythm.
+func TestXHTTPClientShape(t *testing.T) {
+	c := xhttpClient("example.com", "/abcdefgh")
+	if c.Mode != "packet-up" || c.Host != "example.com" || c.Path != "/abcdefgh" {
+		t.Fatalf("the client's XHTTP: %v", c)
+	}
+	if r := c.GetNormalizedScMinPostsIntervalMs(); r.From >= r.To {
+		t.Errorf("the gap between uploads is fixed: %d to %d ms", r.From, r.To)
+	}
+	x := c.Xmux
+	for name, r := range map[string]interface{ GetTo() int32 }{
+		"connections": x.GetNormalizedMaxConnections(), "requests": x.GetNormalizedHMaxRequestTimes(),
+		"seconds": x.GetNormalizedHMaxReusableSecs(),
+	} {
+		if r.GetTo() == 0 {
+			t.Errorf("the %s of a connection are unlimited", name)
+		}
+	}
+	if x.GetNormalizedHMaxRequestTimes().From >= x.GetNormalizedHMaxRequestTimes().To ||
+		x.GetNormalizedHMaxReusableSecs().From >= x.GetNormalizedHMaxReusableSecs().To {
+		t.Error("a connection is dropped after a fixed count")
+	}
+}

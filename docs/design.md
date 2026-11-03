@@ -1446,17 +1446,30 @@ relay, or a hub.
      apps' switch). The hub makes the group's VLESS user ID, the forwarder lets that ID in
      while the hub is registered and tells the hub its transport and settings, and the hub
      gives all of it to its clients with its offer, inside the member TLS at home.
-   - Then VLESS is the clients' only way to the hub: a client that tried plain WireGuard
-     first would show it to the network it wants to hide it from. The hub sends no offer
-     until it has the forwarder's settings, and a client that does not know the transport
-     stays at home.
+   - VLESS comes with AmneziaWG: a hub that sets VLESS speaks AmneziaWG too. A client tries
+     the hub's endpoints over UDP first, in AmneziaWG, which is faster and where UDP passes
+     shows nothing the network knows, and VLESS after them; the way that worked goes first
+     the next time. It never tries plain WireGuard where VLESS is set, which would show the
+     network what the user wants to hide and could get the forwarder's address blocked,
+     VLESS with it. Inside VLESS, AmneziaWG's junk and padding hide WireGuard's fixed sizes
+     and rhythm from what the TLS records show. The hub sends no offer until it has the
+     forwarder's settings, and a client that does not know the transport stays at home.
+   - What the network still sees of XHTTP is TLS records: their sizes, their timing and how
+     long a connection lives. The client reuses its HTTP connections as Xray's own client
+     configuration does by default, dropping each after a random number of requests and
+     seconds, spaces its uploads at random, and pads every request (Xray's padding); the
+     numbers are Xray's usual ones, since a rare constant would itself be a fingerprint.
+     The site's name stays visible in the TLS handshake: a network that blocks the site
+     blocks the way, which a CDN in front of the site or a forwarder of the group's own on
+     another site answers.
    - The forwarder passes whatever comes over VLESS to its own UDP port and routes it as it
      routes every packet, by `mac1` and the indices, so VLESS cannot be used to reach
      anything else; with AmneziaWG on as well, both apply.
    - Risks: WireGuard over TCP adds latency on a lossy network (TCP inside TCP), which a
      clipboard tolerates; XHTTP's packet-up costs a request per batch of packets.
-3. **Next: VLESS on the lite member**, a VLESS and XHTTP client of its own in `cbb_core`
-   on rustls ([roadmap item 46](roadmap.md#vless-behind-a-web-server)).
+3. **Next, in 0.7: the lite member.** AmneziaWG first, around GotaTun, for Linux and later
+   the ESP32; then VLESS over XHTTP on Linux only, a client of its own on rustls and HTTP/2,
+   without Chrome's TLS fingerprint ([roadmap item 46](roadmap.md#vless-behind-a-web-server)).
 
 sing-box is not used (GPL).
 
@@ -2203,7 +2216,7 @@ infrastructure, not a place to copy and paste:
 | Size of the binary | about 25 MB stripped (6.4 MB compressed with xz) for arm64; armv7, mips and mipsle the same order | 1.7 MB for arm64 (static musl) |
 | Routers it fits | 128 MB of flash or more, or eMMC (for example the Banana Pi BPI-R4); 256 MB of RAM or more | almost any OpenWrt router, 16 MB of flash and 64 MB of RAM |
 | Hub | yes | no: lite members are clients only |
-| Away from home | yes, as hub or client, with obfuscation and VLESS | as a client, with plain WireGuard (GotaTun); never AmneziaWG |
+| Away from home | yes, as hub or client, with obfuscation and VLESS | as a client, with plain WireGuard (GotaTun); AmneziaWG and VLESS in 0.7 |
 | Builds | Go cross-compiles statically for every OpenWrt CPU: aarch64, armv7, mips and mipsle (softfloat), x86-64; arm64 and armv7 are in every release already | aarch64, armv7, x86-64 with stable Rust; mips and mipsle are Tier 3 in Rust (nightly and `-Zbuild-std`) |
 
 Recommendation: the full service first, aimed at routers with room for it, because the hub

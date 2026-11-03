@@ -172,7 +172,7 @@ struct DeviceDetail: View {
                 } label: { Text("Change") }
             } message: {
                 if tunnelTo == .vless {
-                    Text("Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
+                    Text("Your devices then try AmneziaWG first and, where UDP does not pass, reach this hub over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
                 } else {
                     Text("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
                 }

@@ -33,7 +33,7 @@ data class HubState(
     val clients: List<PhoneHub.Client> = emptyList(),
     /** The group's AmneziaWG settings as JSON while the hub's tunnel speaks it, null for plain WireGuard; kept while it stays on, so the clients' offers stay good. */
     val obfuscation: String? = null,
-    /** The group's VLESS user ID while its clients come only over VLESS to the forwarder, null otherwise. */
+    /** The group's VLESS user ID while its clients may come over VLESS to the forwarder, null otherwise. */
     val vlessID: String? = null,
 ) {
     /** The forwarder: its endpoint, "ip:port", and the pin of its key: SHA-256 of its key in standard base64. */
@@ -202,7 +202,7 @@ class HubOnPhone(
     /** What the screens show. */
     enum class Status { OFF, PAUSED, HOME_ONLY, REGISTERING, REGISTERED, FAILED }
 
-    /** How the hub's tunnel hides (docs/design.md, "Blocked networks"): plain WireGuard, AmneziaWG, or only over VLESS to the forwarder. */
+    /** How the hub's tunnel hides (docs/design.md, "Blocked networks"): plain WireGuard, AmneziaWG, or AmneziaWG with VLESS to the forwarder. */
     enum class Disguise { PLAIN, OBFUSCATE, VLESS }
 
     /** What a running hub needs from the group: the member listener's port, the member chain, the member key's signer, the authority records. */
@@ -243,7 +243,7 @@ class HubOnPhone(
         PhoneHub(tunnels.publicKey(s.key), s.clients).also { configure(it, s) }
     }.onFailure { log("cannot make the hub", it) }.getOrNull()
 
-    /** Gives h what the state says it offers: the forwarder's endpoint, the AmneziaWG settings and whether its clients come only over VLESS. */
+    /** Gives h what the state says it offers: the forwarder's endpoint, the AmneziaWG settings and whether its clients may come over VLESS. */
     private fun configure(h: PhoneHub, s: HubState) {
         h.endpoints = listOfNotNull(s.forwarder?.endpoint)
         h.obfuscation = s.obfuscation
@@ -282,11 +282,13 @@ class HubOnPhone(
     /**
      * Sets how the hub's tunnel hides. The AmneziaWG settings and the VLESS
      * ID are made once and kept while that stays on; the clients get the new
-     * offer the next time they meet the hub at home.
+     * offer the next time they meet the hub at home. VLESS comes with
+     * AmneziaWG: the clients try it over UDP first, and inside VLESS it hides
+     * WireGuard's sizes (docs/protocol.md, section 11, "VLESS").
      */
     fun setDisguise(d: Disguise) {
         val current = synchronized(lock) { state }
-        val obf = if (d == Disguise.OBFUSCATE) current?.obfuscation ?: tunnels.newObfuscation() else null
+        val obf = if (d != Disguise.PLAIN) current?.obfuscation ?: tunnels.newObfuscation() else null
         val id = if (d == Disguise.VLESS) current?.vlessID ?: tunnels.newVLESSID() else null
         change { it.copy(obfuscation = obf, vlessID = id) }
         stop() // the next start speaks it

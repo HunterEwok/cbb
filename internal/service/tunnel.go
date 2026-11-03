@@ -437,6 +437,9 @@ type tunRun struct {
 	clients []*tunnel.Client // the link to the hub: one for each of its keys
 	hubKey  tunnel.Key       // the hub's key of the link while it is up
 	vless   *vless.Client    // the client's way to the hub's forwarder over VLESS
+	// vlessFirst tells, for each hub, that it was reached over VLESS the
+	// last time, so that VLESS goes first the next time.
+	vlessFirst map[string]bool
 }
 
 // guardLocked lets the service reach the group's hub, forwarder and relay
@@ -793,9 +796,12 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 				return false, nil, nil, err
 			}
 		}
+		// VLESS comes with AmneziaWG: the clients try it over UDP first,
+		// and inside VLESS it hides WireGuard's sizes (docs/protocol.md,
+		// section 11, "VLESS").
 		obf := st.Obfuscation
 		switch {
-		case !m.Obfuscate:
+		case !m.Obfuscate && !m.VLESS:
 			obf = nil
 		case obf == nil:
 			// Kept as they are when the hub is set again, so its clients'

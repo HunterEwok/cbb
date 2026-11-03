@@ -822,7 +822,7 @@ document.addEventListener("click", async (e) => {
   if (el.dataset.tunnel) {
     if (el.dataset.tunnel === hubTunnel(state.status?.away)) return;
     const text = el.dataset.tunnel === "vless"
-      ? t("Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
+      ? t("Your devices then try AmneziaWG first and, where UDP does not pass, reach this hub over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
       : t("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.");
     if (await ask(t("Change how the hub's tunnel hides?"), text, t("Change"))) await act("SetHub", el.dataset.tunnel, "", "");
     return;
