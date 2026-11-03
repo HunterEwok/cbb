@@ -1141,6 +1141,10 @@ All notable changes to cbb are documented in this file. The format follows
 - The service logs why this device's keys are in a file when the machine has a TPM: the TPM
   that did not open, or the error of the key it did not make. Until now a TPM that failed left
   the keys in a file without a word.
+- `cbb pair` on a member that is not an admin says that the device is in a group already
+  before it names where to add more devices; it read as if the device had to join first.
+- An unknown command prints one line that points to `cbb help` instead of the whole help,
+  and `cbb cbb status`, the name typed twice after a path to `cbb.exe`, says to drop it.
 - `cbb pair` draws its QR code in the console that Windows PowerShell 5.1 and cmd open in:
   it turns on the console's escape sequences, which only Windows Terminal had on, so the
   code came out as `←[97;107m▀` text. Its note on a firewall in the way names Windows

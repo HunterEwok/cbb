@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/HunterEwok/cbb/internal/core"
 	"github.com/HunterEwok/cbb/internal/version"
@@ -200,7 +201,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return 0
 	default:
-		fmt.Fprintf(stderr, "cbb: unknown command %q\n\n%s", cmd, usage)
+		if cmd == "cbb" && len(rest) > 0 {
+			// cbb cbb status: the program's name typed twice, as after a
+			// path to cbb.exe.
+			fmt.Fprintf(stderr, "cbb: unknown command \"cbb\"; the command comes right after the program: cbb %s\n", strings.Join(rest, " "))
+		} else {
+			fmt.Fprintf(stderr, "cbb: unknown command %q; cbb help lists the commands\n", cmd)
+		}
 		return 2
 	}
 }
