@@ -206,9 +206,6 @@ fi
 chmod 0644 "$sysusers.new"
 mv "$sysusers.new" "$sysusers"
 systemd-sysusers "$sysusers"
-if [ "$moved" = yes ]; then
-	chown -R clipboardbridge:clipboardbridge /var/lib/clipboardbridge
-fi
 place 0644 "$here/clipboardbridge.service" /etc/systemd/system/clipboardbridge.service
 # Desktop sessions start the connector with the session; the lite member has
 # none.
