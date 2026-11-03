@@ -870,6 +870,30 @@ handshake need, with more than 0.2 s of margin; a lost byte breaks the TLS sessi
 Pi dials again. Towards the Pi, the driver stops the Pi with XOFF (NextPi's terminal has
 `ixon`).
 
+**On the bench (November 2026).** Paired through the ESP, synced at home, and away from
+home through the hub's tunnel over the ESP's UDP: a text sent from a phone reached the Pi
+through the Mac's hub and `.cbb paste` typed it. The member connection through the tunnel
+still reconnects now and then on a read timeout; on a link of 2 KB a second the timeouts
+the other members use are short. `cbb next link` starts the service when none runs, since
+NextPi starts nothing of ours at boot. Not yet: a phone on a mobile network through the
+forwarder to the hub, with the Next behind it.
+
+**Installing.** Today the files are copied to the card by hand and `cbb` reaches the Pi
+through `.pibridge`. The plan, agreed with the owner:
+
+- The files for the Next are published on `cbb.tools` over plain HTTP, since NextZXOS's
+  `.http` has no TLS: `CBB`, `CBB.DRV`, `PIBRIDGE`, the Pi's `cbb` for ARMv6, and a list
+  with each file's size and CRC-32, signed with the release key so the Pi can check its
+  `cbb` before it runs it.
+- One line fetches `.cbb`: `.http -h cbb.tools -u /n -f CBB`, then `../CBB install` fetches
+  the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
+  list before it replaces the old one, a download that broke goes on from where it
+  stopped, and a bar shows the percentage, the kilobytes, the speed and the time left;
+  SPACE stops it.
+- The Pi's `cbb` goes from the card to `/NextPi/nextpi` through the UART with the same bar,
+  and the Pi checks the signature before it swaps the binary. `../CBB update` does the
+  same for newer files.
+
 **Open questions, for the bench.**
 
 1. The shell. NextPi's shell (`SUP>`) holds the Pi's UART, and `.cbb` and Terminex use it.
