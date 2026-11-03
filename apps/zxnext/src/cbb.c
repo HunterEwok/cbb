@@ -16,7 +16,7 @@
 #include "frame.h"
 #include "link.h"
 
-#define VERSION "0.4.1"
+#define VERSION "0.4.2"
 // The lite member on the Pi; the NextPi set-up puts it on the shell's PATH.
 #define CBB_LITE "cbb"
 // The longest text pasted or copied.
@@ -359,10 +359,25 @@ static uint8_t esp_at(uint32_t speed)
     return 0;
 }
 
-// Puts the ESP's UART at speed, from either speed it may be at (a reset of
-// the Next leaves the ESP as it was; AT+UART_CUR is not kept in its flash,
-// so a power cycle brings back 115200); 1 if it answers, the ESP selected.
-static uint8_t esp_speed(uint32_t speed)
+// Takes the ESP out of a transparent connection, as a .pibridge whose
+// connection ended under it leaves it: a second of quiet, +++, a second,
+// then back to normal sends.
+static void esp_escape(uint32_t speed)
+{
+    uint8_t i;
+    link_open_esp(speed);
+    for (i = 0; i < 2; i++) {
+        uint8_t n = 20;
+        while (n-- && link_line(line, sizeof line, 1) == LINK_OK) {
+        }
+        if (!i) link_send_str("+++");
+    }
+    link_send_str("AT+CIPMODE=0\r\n");
+}
+
+// Puts the ESP's UART at speed, from either speed it may be at; 1 if it
+// answers, the ESP selected.
+static uint8_t esp_answers(uint32_t speed)
 {
     if (esp_at(speed)) return 1;
     if (!esp_at(speed == ESP_SPEED ? ESP_NET_SPEED : ESP_SPEED)) return 0;
@@ -372,6 +387,18 @@ static uint8_t esp_speed(uint32_t speed)
         if (strcmp(line, "OK") == 0) break;
     }
     return esp_at(speed);
+}
+
+// The same, first from the speed the ESP is at (a reset of the Next leaves
+// the ESP as it was; AT+UART_CUR is not kept in its flash, so a power
+// cycle brings back 115200), then out of a transparent connection at each.
+static uint8_t esp_speed(uint32_t speed)
+{
+    if (esp_answers(speed)) return 1;
+    esp_escape(ESP_NET_SPEED);
+    if (esp_answers(speed)) return 1;
+    esp_escape(ESP_SPEED);
+    return esp_answers(speed);
 }
 
 // net_pair starts the network under its QR code, without a word.

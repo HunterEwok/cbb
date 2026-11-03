@@ -1056,6 +1056,9 @@ All notable changes to clipboardbridge are documented in this file. The format f
   and credentials) give way to the `v2-*.json` vectors of the same cases.
 
 ### Fixed
+- `.cbb` (0.4.2) takes the ESP8266 out of a transparent connection before it gives up on it:
+  after a `.pibridge` whose connection ended, `.cbb net on` said the ESP did not answer AT
+  until the Next was switched off and on.
 - Sync away from home on the phones tries each of the hub's keys at each of its addresses: a
   hub that offered its next key besides the one it serves with, at two addresses (at home and
   at its forwarder), was tried with its key now only at home and through the forwarder only
