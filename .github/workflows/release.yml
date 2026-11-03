@@ -348,7 +348,7 @@ jobs:
   zxnext:
     # The ZX Spectrum Next's files, laid out for cbb.tools (packaging/zxnext/site.sh),
     # with the Pi Zero's lite member from the lite job.
-    name: build (clipboardbridge-zxnext)
+    name: build (cbb-zxnext)
     needs: lite
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -382,11 +382,11 @@ jobs:
           tar -xzf "$RUNNER_TEMP/lite/clipboardbridge-lite-linux-armv6.tar.gz" -C "$RUNNER_TEMP/lite"
           sh packaging/zxnext/site.sh apps/zxnext/build "$RUNNER_TEMP/lite/clipboardbridge-lite/cbb" "$RUNNER_TEMP/site"
           mkdir -p "$RUNNER_TEMP/dist"
-          tar -czf "$RUNNER_TEMP/dist/clipboardbridge-zxnext.tar.gz" -C "$RUNNER_TEMP/site" zxnext
+          tar -czf "$RUNNER_TEMP/dist/cbb-zxnext.tar.gz" -C "$RUNNER_TEMP/site" zxnext
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: clipboardbridge-zxnext.tar.gz
-          path: ${{ runner.temp }}/dist/clipboardbridge-zxnext.tar.gz
+          name: cbb-zxnext.tar.gz
+          path: ${{ runner.temp }}/dist/cbb-zxnext.tar.gz
           if-no-files-found: error
           retention-days: 1
 

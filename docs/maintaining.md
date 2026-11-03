@@ -364,7 +364,7 @@ secret the release still succeeds and warns that there is no feed.
 
 The release workflow's `zxnext` job builds `.cbb` and `CBB.DRV`, takes the lite
 member for the Pi Zero from the `lite` job, and lays them out for cbb.tools
-(`packaging/zxnext/site.sh`) as `clipboardbridge-zxnext.tar.gz`: `zxnext/` with the three files and `LIST`, a line
+(`packaging/zxnext/site.sh`) as `cbb-zxnext.tar.gz`: `zxnext/` with the three files and `LIST`, a line
 of name, size, CRC-32 and MD5 for each, which `.cbb install` checks every download against.
 
 NextZXOS's `.http` and the ESP8266 have no TLS, so these two paths are served over plain HTTP

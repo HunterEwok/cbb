@@ -193,4 +193,4 @@ make test     # the frame parser's tests with the host's C compiler, and the dri
 
 CI's `ZX Spectrum Next` job builds z88dk from its release source, checked against a
 SHA-256, and runs both; the run keeps `CBB`, `PIBRIDGE` and `CBB.DRV` as its artifact
-`clipboardbridge-zxnext-dot`.
+`cbb-zxnext-dot`.

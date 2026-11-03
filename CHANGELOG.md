@@ -12,7 +12,7 @@ All notable changes to clipboardbridge are documented in this file. The format f
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,
   SPACE to stop and a resumed download, checks each file against the site's list (size and
   CRC-32, MD5 on the Pi), and copies the Pi's `cbb` over the UART to `/NextPi/nextpi`. Each
-  release carries the files for the site as `clipboardbridge-zxnext.tar.gz`
+  release carries the files for the site as `cbb-zxnext.tar.gz`
   (`packaging/zxnext/site.sh`). It fills the screen while it works: the logo on the left (drawn
   by `tools/icon` as Spectrum artists draw, two colours a cell and dithered shades, and shown
   as a screen loads from tape), each file's state

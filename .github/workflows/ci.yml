@@ -2205,7 +2205,7 @@ jobs:
           cmp "$RUNNER_TEMP/site/zxnext/CBB" apps/zxnext/build/CBB
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: clipboardbridge-zxnext-dot
+          name: cbb-zxnext-dot
           path: |
             apps/zxnext/build/CBB
             apps/zxnext/build/PIBRIDGE
