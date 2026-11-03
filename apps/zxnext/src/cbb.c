@@ -104,6 +104,19 @@ static int fail(const char *msg, const char *detail)
     return 1;
 }
 
+// Messages more than one place shows: kept once, as the compiler does
+// not merge equal strings.
+static const char no_prompt[] = "no SUP> prompt";
+static const char not_start[] = "cbb next link did not start on the Pi";
+static const char too_long[] = "the text is too long";
+static const char net_runs[] = "the network runs; stop it first with .cbb net off";
+
+// The Pi's shell did not answer.
+static int pi_silent(void)
+{
+    return fail("the Pi does not answer; is NextPi running? (.pisend -q)", no_prompt);
+}
+
 // Shows a line of .cbb install.
 static void say(const char *msg)
 {
@@ -245,7 +258,7 @@ static int command(const char *args)
         return fail("the network uses the Pi's line; stop it first with .cbb net off", "CBB.DRV is on");
     }
     if (link_shell()) {
-        return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
+        return pi_silent();
     }
     link_send_str(CBB_LITE);
     if (debug) link_send_str(" -debug");
@@ -306,7 +319,7 @@ static int paste(const char *file)
     if (expect(LINE_TEXT, &len, &crc, ANSWER_SECONDS) != LINE_TEXT) return 1;
     if (len > MAX_TEXT) {
         link_send(3);
-        return fail("the text is too long", "longer than -max");
+        return fail(too_long, "longer than -max");
     }
     for (got = 0; got < len; got++) {
         err = link_recv(&c, ANSWER_SECONDS);
@@ -370,7 +383,7 @@ static int copy_words(int argc, char **argv)
     int i;
     for (i = 0; i < argc; i++) {
         n = strlen(argv[i]);
-        if (len + n + 1 > MAX_TEXT) return fail("the text is too long", 0);
+        if (len + n + 1 > MAX_TEXT) return fail(too_long, 0);
         if (i) text[len++] = ' ';
         memcpy(text + len, argv[i], n);
         len += n;
@@ -573,7 +586,7 @@ static int net_start(int argc, char **argv)
     if (link_shell()) {
         esp_speed(ESP_SPEED);
         link_use(LINK_PI);
-        return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
+        return pi_silent();
     }
     link_send_str(CBB_LITE " next link ");
     link_send_str(net_args);
@@ -586,7 +599,7 @@ static int net_start(int argc, char **argv)
         uint8_t err = link_line(line, sizeof line, 15);
         if (err) {
             link_quit(); // it may run without having said so
-            return fail("cbb next link did not start on the Pi", err == LINK_BREAK ? "stopped" : "no CBBLINK");
+            return fail(not_start, err == LINK_BREAK ? "stopped" : "no CBBLINK");
         }
         if (strstr(line, "CBBLINK")) {
             // The line's LF: the driver would count it, and the link,
@@ -601,7 +614,7 @@ static int net_start(int argc, char **argv)
         }
         if (i == 8) {
             link_quit();
-            return fail("cbb next link did not start on the Pi", line);
+            return fail(not_start, line);
         }
     }
     if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
@@ -640,7 +653,7 @@ static int net_pair(void)
 {
     char ip[40], cmd[160], *serve, *colon = 0, *end;
     uint32_t len, crc;
-    if (net_on()) return fail("the network runs; stop it first with .cbb net off", 0);
+    if (net_on()) return fail(net_runs, 0);
     if (net_load()) return fail("no settings yet: .cbb net on -to \"HOST:PORT\" -serve \"8764:8764\"", NET_CFG);
     serve = strstr(net_args, "-serve ");
     if (serve) colon = strchr(serve + 7, ':');
@@ -652,7 +665,7 @@ static int net_pair(void)
     if (end) *end = 0;
     sprintf(cmd, CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null &\n", ip, serve + 7,
             colon + 1);
-    if (link_shell()) return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
+    if (link_shell()) return pi_silent();
     link_send_str(cmd);
     link_prompt();
     link_send_str("until grep -q 'CBBQ\\|CBBERR' /ram/cbbjoin; do sleep 1; done; sleep 1; cat /ram/cbbjoin\n");
@@ -672,7 +685,7 @@ static int net_stop(void)
     // Back to the stock speed, for NextZXOS's own tools and .pibridge.
     if (!esp_speed(ESP_SPEED)) printf("The ESP did not answer AT.\n");
     link_use(LINK_PI);
-    if (link_shell()) return fail("the network stopped, but the Pi does not answer", "no SUP> prompt");
+    if (link_shell()) return fail("the network stopped, but the Pi does not answer", no_prompt);
     printf("The network stopped.\n");
     return 0;
 }
@@ -847,8 +860,8 @@ static void http_close(void)
 //   rows 0-2, from column 15  the name and the version
 //   rows 4-9                  a file's name and state, then its bar, in
 //                             the stripes' colours: red, yellow, green
-//   rows 10-11                all of it, its bar the stripes' colour of
-//                             its quarter: red, yellow, green, cyan
+//   rows 10-11                all of it, its bar empty in the four stripes,
+//                             filled in the colour of the quarter reached
 //   rows 13-14                the file under way: kilobytes, speed
 //   rows 19-23                messages
 #define PANEL 15
@@ -1001,20 +1014,22 @@ static void file_state(uint8_t row, const char *name, const char *state)
 // The bytes of the whole install, and those of the files done.
 static uint32_t total_size, total_done;
 
-// The bars' colours, the Next's stripes, a row each; the total's bar
-// takes the next one at each quarter.
-static const uint8_t bar_ink[4] = {INK_RED, INK_YELLOW, INK_GREEN, INK_CYAN};
-
+// The bars' colours, the Next's stripes, a row each. The total's bar
+// (ink 0xFF): its empty part in all four, a quarter each, its filled part
+// all in the colour of the quarter it reached.
+// The fifth: the total's at 100%.
+static const uint8_t bar_ink[5] = {INK_RED, INK_YELLOW, INK_GREEN, INK_CYAN, INK_CYAN};
 // Draws a bar in half cells at a screen row, with the percentage.
 static void bar(uint8_t screen_row, uint8_t pct, uint8_t ink)
 {
-    uint8_t halves = (uint8_t)((uint16_t)pct * (BAR_CELLS * 2) / 100), i;
+    uint8_t halves = (uint8_t)((uint16_t)pct * (BAR_CELLS * 2) / 100), i, c;
+    uint8_t fill = ink < 8 ? ink : bar_ink[pct / 25];
     at(screen_row, PANEL);
-    // 0xFF: the total's bar, its colour by the quarter it reached.
-    colour(ink < 8 ? ink : bar_ink[pct < 100 ? pct / 25 : 3]);
     for (i = 0; i < BAR_CELLS; i++) {
         // The ROM's block graphics: 143 full, 138 the left half.
-        putchar(halves >= 2 * i + 2 ? 143 : halves == 2 * i + 1 ? 138 : '-');
+        c = halves >= 2 * i + 2 ? 143 : halves == 2 * i + 1 ? 138 : '-';
+        colour(c == '-' && ink > 7 ? bar_ink[i / (BAR_CELLS / 4)] : fill);
+        putchar(c);
     }
     colour(INK_WHITE);
     printf(" %3u%%", pct);
@@ -1220,7 +1235,7 @@ static int to_pi(struct item *it, uint8_t row)
     uint8_t fh, err;
     uint16_t n, start = FRAMES_LO;
     uint32_t sent = 0;
-    if (link_shell()) return fail("the Pi does not answer; is NextPi running? (.pisend -q)", "no SUP> prompt");
+    if (link_shell()) return pi_silent();
     errno = 0;
     fh = esx_f_open(it->card, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
     if (errno) return fail("the Pi's cbb is not on the card", it->card);
@@ -1377,7 +1392,7 @@ static int install_files(void)
 static int install(void)
 {
     int err;
-    if (net_on()) return fail("the network runs; stop it first with .cbb net off", 0);
+    if (net_on()) return fail(net_runs, 0);
     screen_open();
     err = install_files();
     screen_close();
