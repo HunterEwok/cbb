@@ -711,6 +711,16 @@
         }
       }
     },
+    "Terms of the project's servers": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Условия серверов проекта"
+          }
+        }
+      }
+    },
     "Void both histories" : {
       "localizations" : {
         "ru" : {

@@ -158,6 +158,8 @@ struct DeviceDetail: View {
                     .labelsHidden()
                 line
                 row(Text("Forwarder"), away.forwarder.map { Text(verbatim: $0.endpoint).monospaced() } ?? Text("none"))
+                Link(destination: URL(string: "https://cbb.tools/?p=terms.html")!) { Text("Terms of the project's servers") }
+                    .font(.footnote)
                 action("arrow.triangle.swap", "Change the forwarder…") {
                     (forwarderAddress, forwarderKey) = ("", "")
                     changingForwarder = true

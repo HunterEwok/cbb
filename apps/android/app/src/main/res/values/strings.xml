@@ -158,6 +158,7 @@
     <string name="hub_forwarder_address">Address, such as 198.51.100.9:8764</string>
     <string name="hub_forwarder_key">Key, 44 characters</string>
     <string name="hub_forwarder_save">Save the forwarder</string>
+    <string name="project_terms">Terms of the project\'s servers</string>
     <string name="hub_forwarder_project">Reached from afar through the project\'s forwarder at cbb.tools. To use your own, enter its address and key.</string>
     <string name="hub_forwarder_back">To go back to the project\'s forwarder, empty both fields and save.</string>
     <string name="hub_bad_forwarder">Give the forwarder\'s address with its port and its key, as cbb forward prints them, or leave both empty.</string>

@@ -49,6 +49,9 @@ All notable changes to cbb are documented in this file. The format follows
   reuses its HTTP connections as Xray's own configuration does by default (dropped after a
   random number of requests and seconds; before, one connection carried everything for
   ever) and spaces its uploads 10 to 50 ms apart at random instead of a fixed 30 ms.
+- Beside the forwarder, every app's hub settings link the terms of the project's servers
+  (`https://cbb.tools/?p=terms.html`, in the reader's language); the phones show the link
+  while the hub uses the project's forwarder.
 - `.cbb install` and `.cbb update` on the ZX Spectrum Next (0.5.0): after
   `.http -h cbb.tools -u /zxnext -f CBB`, `../CBB install` fetches `CBB.DRV` and the
   Pi's lite member from cbb.tools through the ESP8266 into `/cbb`, with a line of progress,

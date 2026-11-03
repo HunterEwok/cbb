@@ -466,6 +466,18 @@ func (d *Desk) summary(err error) (string, string) {
 	return d.T("Something failed on this computer."), err.Error()
 }
 
+// projectTerms is the page of the terms of the project's forwarder and
+// relay, in the reader's language.
+const projectTerms = "https://cbb.tools/?p=terms.html"
+
+// OpenTerms opens the terms of the project's servers in the browser.
+func (d *Desk) OpenTerms() error {
+	if d.app == nil {
+		return errors.New("no application")
+	}
+	return d.app.Browser.OpenURL(projectTerms)
+}
+
 // Open shows the window.
 func (d *Desk) Open() {
 	if d.window == nil {

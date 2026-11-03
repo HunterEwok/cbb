@@ -197,5 +197,6 @@
   "Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": "Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут.",
   "Change how the hub's tunnel hides?": "Изменить маскировку туннеля хаба?",
   "Change": "Изменить",
-  "The hub's settings are saved.": "Настройки хаба сохранены."
+  "The hub's settings are saved.": "Настройки хаба сохранены.",
+  "Terms of the project's servers": "Условия серверов проекта"
 }

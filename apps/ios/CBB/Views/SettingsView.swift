@@ -244,6 +244,10 @@ struct SettingsView: View {
                      : "To go back to the project's forwarder, empty both fields and save.")
                     .font(.footnote)
                     .foregroundStyle(palette.textDim)
+                if hub.forwarder?.isProject == true {
+                    Link(destination: URL(string: "https://cbb.tools/?p=terms.html")!) { Text("Terms of the project's servers") }
+                        .font(.footnote)
+                }
                 TextField(text: $forwarderAddress) { Text("Forwarder address, such as 198.51.100.9:8764") }
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
