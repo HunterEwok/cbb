@@ -178,8 +178,9 @@ final class HubOnPhoneTests: XCTestCase {
     }
 
     /// The tunnel hides as the user chose: the AmneziaWG settings go to the
-    /// tunnel and into the offers and stay while it stays on; VLESS waits
-    /// for the forwarder's way there before it offers anything.
+    /// tunnel and into the offers and stay while it stays on; VLESS keeps
+    /// them, and waits for the forwarder's way there before it offers
+    /// anything.
     func testDisguise() throws {
         let saved = Saved(), tunnels = FakeTunnels()
         let h = HubOnPhone(device: phone, tunnels: tunnels, state: nil, save: { saved.state = $0 })
@@ -199,12 +200,12 @@ final class HubOnPhoneTests: XCTestCase {
 
         try h.setDisguise(.vless)
         XCTAssertTrue(t.closed)
-        XCTAssertNil(saved.state?.obfuscation)
+        XCTAssertEqual(saved.state?.obfuscation, obf)
         XCTAssertEqual(saved.state?.vlessID, "00000000-0000-4000-8000-000000000000")
         XCTAssertNil(h.offer(device: pc, key: Data(repeating: 2, count: 32)))
         h.start(group())
         let v = try XCTUnwrap(tunnels.started.last)
-        XCTAssertEqual(v.obfuscation, "")
+        XCTAssertEqual(try JSONDecoder().decode(Member.Obfuscation.self, from: Data(v.obfuscation.utf8)), obf)
         XCTAssertEqual(v.vlessID, "00000000-0000-4000-8000-000000000000")
         v.report = #"{"registered":true,"vless":{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=","short_id":"ab","server_name":"www.example.com","id":"00000000-0000-4000-8000-000000000000"}}"#
         XCTAssertEqual(h.status(paused: false).0, .registered)
@@ -213,6 +214,7 @@ final class HubOnPhoneTests: XCTestCase {
         try h.setDisguise(.plain)
         XCTAssertEqual(h.disguise, .plain)
         XCTAssertNil(saved.state?.vlessID)
+        XCTAssertNil(saved.state?.obfuscation)
         XCTAssertNil(h.offer(device: pc, key: Data(repeating: 2, count: 32))?.vless)
     }
 

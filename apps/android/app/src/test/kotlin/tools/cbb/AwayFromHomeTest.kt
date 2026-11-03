@@ -133,6 +133,42 @@ class AwayFromHomeTest {
         }
     }
 
+    /**
+     * With VLESS the hub's endpoints are tried in AmneziaWG first and VLESS
+     * after them; without AmneziaWG settings only VLESS, never plain
+     * WireGuard.
+     */
+    @Test
+    fun triesAmneziaWGBeforeVLESS() {
+        val vless = """{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=","short_id":"ab","server_name":"www.example.com","id":"5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f"}"""
+        for ((obfuscation, ways) in listOf("""{"jc":4}""" to listOf("", "", vless, ""), null to listOf(vless, vless))) {
+            val tunnels = FakeTunnels()
+            val a = AwayFromHome(
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                tunnels,
+                load = { null },
+                save = {},
+                atHome = { false },
+                dial = { _, _ -> throw IOException("no answer") },
+                serve = { _, _ -> },
+                mayHost = { it == hub },
+                order = { listOf(hub) },
+                firstWaitMS = 10,
+                maxWaitMS = 20,
+                homeCheckMS = 10,
+            )
+            a.start()
+            try {
+                a.turnOn()
+                a.keep(hub, Member.TunnelOffer(offer.hubKey, offer.psk, offer.endpoints, obfuscation, vless))
+                val got = List(ways.size) { tunnels.started.poll(5, TimeUnit.SECONDS)!!.vless }
+                assertEquals(ways, got)
+            } finally {
+                a.stop()
+            }
+        }
+    }
+
     @Test
     fun reachesTheHubOnlyWhileItIsAway() {
         val tunnels = FakeTunnels()

@@ -118,6 +118,37 @@ final class AwayFromHomeTests: XCTestCase {
 
     private static let short = (first: Duration.milliseconds(10), max: Duration.milliseconds(20), home: Duration.milliseconds(10))
 
+    /// With VLESS the hub's endpoints are tried in AmneziaWG first and
+    /// VLESS after them; without AmneziaWG settings only VLESS, never plain
+    /// WireGuard.
+    func testTriesAmneziaWGBeforeVLESS() async throws {
+        let vless = Member.VLESS(endpoint: "203.0.113.9:443", publicKey: Data(repeating: 9, count: 32),
+                                 shortID: "ab", serverName: "www.example.com",
+                                 id: "5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f")
+        let obf = Member.Obfuscation(jc: 4, jmin: 50, jmax: 300, s1: 20, s2: 40, s3: 16, s4: 24,
+                                     h1: "100-200", h2: "300-400", h3: "500-600", h4: "700-800",
+                                     headerProtectionKey: Data(repeating: 8, count: 32))
+        for (obfuscation, ways) in [(obf as Member.Obfuscation?, [false, false, true, false]), (nil, [true, true])] {
+            let tunnels = FakeTunnels()
+            let hub = hub
+            let a = AwayFromHome(
+                device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", tunnels: tunnels, state: nil,
+                save: { _ in }, atHome: { _ in false },
+                dial: { _, _ in throw POSIXError(.ECONNREFUSED) },
+                serve: { _, _ in },
+                mayHost: { $0 == hub }, order: { [hub] },
+                firstWait: Self.short.first, maxWait: Self.short.max, homeCheck: Self.short.home)
+            await a.start()
+            try await a.turnOn()
+            var o = offer
+            (o.obfuscation, o.vless) = (obfuscation, vless)
+            await a.keep(from: hub, offer: o)
+            try await eventually("the tunnels") { tunnels.started.count >= ways.count }
+            XCTAssertEqual(tunnels.started.prefix(ways.count).map { !$0.vless.isEmpty }, ways)
+            await a.stop()
+        }
+    }
+
     func testReachesTheHubOnlyWhileItIsAway() async throws {
         let tunnels = FakeTunnels()
         let saved = Box<AwayState?>(nil)

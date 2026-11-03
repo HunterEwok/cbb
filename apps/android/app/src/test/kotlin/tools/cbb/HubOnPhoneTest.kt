@@ -229,8 +229,8 @@ class HubOnPhoneTest {
 
     /**
      * The tunnel hides as the user chose: the AmneziaWG settings go to the
-     * tunnel and into the offers and stay while it stays on; VLESS waits for
-     * the forwarder's way there before it offers anything.
+     * tunnel and into the offers and stay while it stays on; VLESS keeps
+     * them, and waits for the forwarder's way there before it offers anything.
      */
     @Test
     fun disguise() {
@@ -254,13 +254,13 @@ class HubOnPhoneTest {
 
         h.setDisguise(HubOnPhone.Disguise.VLESS)
         assertTrue(t.closed)
-        assertNull(saved?.obfuscation)
+        assertEquals(OBFUSCATION, saved?.obfuscation)
         assertEquals(VLESS_ID, saved?.vlessID)
         assertEquals(VLESS_ID, HubState.decode(saved!!.encode())?.vlessID)
         assertNull(h.offer(pc, ByteArray(32) { 2 }))
         h.start(group())
         val v = tunnels.started.last()
-        assertEquals("", v.obfuscation)
+        assertEquals(OBFUSCATION, v.obfuscation)
         assertEquals(VLESS_ID, v.vlessID)
         v.report = """{"registered":true,"vless":{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=","short_id":"ab","server_name":"www.example.com","id":"$VLESS_ID"}}"""
         assertEquals(HubOnPhone.Status.REGISTERED, h.status(paused = false).first)
@@ -269,6 +269,7 @@ class HubOnPhoneTest {
         h.setDisguise(HubOnPhone.Disguise.PLAIN)
         assertEquals(HubOnPhone.Disguise.PLAIN, h.disguise)
         assertNull(saved?.vlessID)
+        assertNull(saved?.obfuscation)
         assertNull(h.offer(pc, ByteArray(32) { 2 })?.vless)
     }
 
