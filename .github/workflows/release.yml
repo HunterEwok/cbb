@@ -129,6 +129,29 @@ jobs:
       - name: the agent has the pasteboard
         if: matrix.goos == 'darwin'
         run: otool -L "$RUNNER_TEMP/cbb" | grep -q AppKit.framework
+      - name: sign cbb with the Developer ID and notarize it, with the certificate in the secrets
+        # The Developer ID Application certificate as a base64 PKCS#12 file and
+        # its password, and the App Store Connect API key that notarytool signs
+        # in with (docs/maintaining.md, "Signing for macOS"); without them cbb
+        # is signed ad hoc, as before, and Gatekeeper asks before it first runs.
+        if: matrix.goos == 'darwin'
+        env:
+          P12: ${{ secrets.CBB_APPLE_DEVID_APP_P12 }}
+          P12_PASSWORD: ${{ secrets.CBB_APPLE_DEVID_APP_PASSWORD }}
+          ASC_KEY: ${{ secrets.CBB_ASC_KEY }}
+          ASC_KEY_ID: ${{ secrets.CBB_ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.CBB_ASC_ISSUER_ID }}
+        run: |
+          if [ -z "$P12" ] || [ -z "$ASC_KEY" ]; then
+            echo "::warning::no CBB_APPLE_DEVID_APP_P12 or CBB_ASC_KEY in the secrets; cbb for macOS is not signed with the Developer ID"
+            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb"
+            exit 0
+          fi
+          sh packaging/macos/keychain.sh create "$RUNNER_TEMP/signing"
+          trap 'sh packaging/macos/keychain.sh delete "$RUNNER_TEMP/signing"' EXIT
+          id=$(sh packaging/macos/keychain.sh import "$RUNNER_TEMP/signing" "Developer ID Application" U2ZJ8F2JCJ)
+          sh packaging/macos/sign.sh "$id" "$RUNNER_TEMP/cbb"
+          sh packaging/macos/notarize.sh "$RUNNER_TEMP/cbb"
       - name: archive
         run: |
           bin=$RUNNER_TEMP/cbb

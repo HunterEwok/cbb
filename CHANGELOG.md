@@ -7,6 +7,9 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- cbb for macOS is signed with the project's Developer ID and notarized by Apple, so that
+  Gatekeeper opens it without a warning; it runs under the hardened runtime, and CI checks
+  that every build still loads the Rust core there.
 - The desktop apps show the QR code for joining a phone's group: on a computer in no group,
   **Join a phone's group** in the tray app (Windows, Linux) and the Mac app runs `cbb pair
   -app` as the administrator and shows the code, its text and the time left, without a

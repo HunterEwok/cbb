@@ -38,7 +38,7 @@ on every platform of the class, on the roadmap).
 | Error details switch in the installers | yes (`CBB_ERROR_DETAILS=1`) | yes (`CBB_ERROR_DETAILS=1`) | yes (`-Details`, `CBB_ERROR_DETAILS=1`) | |
 | Text-console helper (tmux) | yes (`--console`) | **OS** | **OS** | for a Linux machine without a desktop; a Mac and a Windows PC always have one |
 | Removal from the system's app list | — | **OS** | yes (Settings, Apps) | Linux has no common list; the Mac app (item 22) brings it to macOS |
-| Signed program | — | planned (`.pkg`, Developer ID) | ready, needs a certificate | the release signs with Authenticode once the secrets hold a certificate (G5) |
+| Signed program | — | Developer ID, notarized (the `.pkg` planned) | ready, needs a certificate | the release signs with Authenticode once the secrets hold a certificate (G5) |
 | Device keys in hardware | yes, with a TPM (`internal/tpmkey`) | yes, the Secure Enclave on Apple silicon or the T2 chip (`internal/sekey`) | yes, with a TPM 2.0, not yet tested on a real PC | roadmap item 13 |
 | Update itself, by hand and once a day | yes (`cbb update`) | yes, or Homebrew | yes (`cbb update`), or winget | [installing](guide/install.md#updating) |
 | Quick actions and remote paste as a target | yes | yes | yes | each off until the device's own user turns it on |

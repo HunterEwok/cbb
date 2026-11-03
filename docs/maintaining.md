@@ -88,6 +88,10 @@ reviewers: the release tag is the maintainer's decision already.
 | --- | --- | --- |
 | `CBB_ANDROID_KEYSTORE_BASE64`, `CBB_ANDROID_KEYSTORE_PASSWORD`, `CBB_ANDROID_KEY_ALIAS`, `CBB_ANDROID_KEY_PASSWORD` | the Android release key | [Android signing key](#android-signing-key) |
 | `CBB_WINDOWS_CERT_BASE64`, `CBB_WINDOWS_CERT_PASSWORD` | the Windows code signing certificate | [Signing for Windows](#signing-for-windows) |
+| `CBB_APPLE_DEVID_APP_P12`, `CBB_APPLE_DEVID_APP_PASSWORD` | the Developer ID Application certificate and key | [Signing for macOS](#signing-for-macos) |
+| `CBB_APPLE_DEVID_INSTALLER_P12`, `CBB_APPLE_DEVID_INSTALLER_PASSWORD` | the Developer ID Installer certificate and key, for the `.pkg` | [Signing for macOS](#signing-for-macos) |
+| `CBB_APPLE_DISTRIBUTION_P12`, `CBB_APPLE_DISTRIBUTION_PASSWORD`, `CBB_APPLE_PROFILES` | the Apple Distribution certificate and the App Store profiles, for TestFlight | [Signing for macOS](#signing-for-macos) |
+| `CBB_ASC_KEY`, `CBB_ASC_KEY_ID`, `CBB_ASC_ISSUER_ID` | the App Store Connect API key (role App Manager): notarization and TestFlight uploads | [Signing for macOS](#signing-for-macos) |
 | `CBB_OPENWRT_FEED_KEY` | the OpenWrt feed's key | [The OpenWrt feed](#the-openwrt-feed) |
 | `CBB_HOMEBREW_TAP_KEY` | the tap's deploy key | [Homebrew](#homebrew) |
 
@@ -412,6 +416,39 @@ which signs open-source projects for free with its own certificate:
 
 `cbb update` on Windows needs nothing more: once the installed programs carry a signature,
 it installs only programs with the same signer.
+
+## Signing for macOS
+
+The release workflow signs `cbb` for macOS with the project's **Developer ID Application**
+certificate and the hardened runtime (`packaging/macos/sign.sh`) and has Apple's notary
+service check it (`packaging/macos/notarize.sh`, `notarytool` signed in with the App Store
+Connect API key), so that Gatekeeper opens it without a warning. Without the secrets the
+program is signed ad hoc, as before. The certificates live in a keychain of the run's own
+(`packaging/macos/keychain.sh`), removed when the step ends. CI's build job signs every pull
+request's build ad hoc with the same flags and runs `cbb version`, which loads the Rust core
+under the hardened runtime.
+
+The Apple Developer account (team `U2ZJ8F2JCJ`) holds, all made once on the maintainer's
+Mac with a key of its own (`openssl genrsa 2048` and a CSR, never Xcode's automatic signing),
+with the files and a backup beside the other release keys:
+
+- Certificates: Developer ID Application (programs and the Mac app outside the App Store),
+  Developer ID Installer (the `.pkg`), Apple Distribution (TestFlight and the App Store),
+  Apple Development (builds on the maintainer's own devices). Each `.p12` has a password of
+  its own.
+- Identifiers: the App Group `group.tools.cbb`; the App IDs `tools.cbb` (App Groups, NFC Tag
+  Reading, Push Notifications), `tools.cbb.share` (App Groups), `tools.cbb.widgets`,
+  `tools.cbb.watchkitapp` and `tools.cbb.mac`.
+- App Store profiles for the four iPhone IDs, which renew every year.
+- Keys: the App Store Connect API key (App Manager) for CI, and two APNs keys, one for
+  Sandbox (builds signed for development) and one for Production, for a push server.
+
+A Developer ID certificate is never revoked to replace it: a revoked one stops every release
+signed with it from opening. When it expires, a new one signs the next release; the releases
+signed before keep opening, since their signatures carry a secure timestamp.
+
+To check it without a release, run the release workflow from `main`: its macOS builds sign
+and notarize `cbb`.
 
 ## Updates of the Mac app (Sparkle)
 
