@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1ce6c4f40f0 -->
+<!-- source: 95a9f0f2e940 -->
 # Kusakinisha
 
 Copy Beyond Borders huendeshwa kama huduma ndogo ya chinichini kwenye kila kompyuta. Amri yake ni `cbb`. Kila njia iliyo hapa chini husakinisha programu ile ile; chagua unayopenda.
@@ -41,7 +41,11 @@ Badilisha kwenda Hali ya Eneo-kazi, fungua Konsole, mpe mtumiaji `deck` nenosiri
 
 ## Mac
 
-Apple silicon au Intel, kwenye Terminal, amri ile ile kama kwenye Linux:
+Apple silicon au Intel, macOS 14 au mpya zaidi: pakua `cbb-X.Y.Z.pkg` kutoka
+[toleo la karibuni](https://github.com/HunterEwok/cbb/releases/latest) na uifungue. Inasakinisha programu
+ya CBB kwenye upau wa menyu na huduma, zote zimesainiwa na mradi na kukaguliwa na Apple.
+
+Au kwenye Terminal, bila programu, amri ile ile kama kwenye Linux:
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh
@@ -167,4 +171,4 @@ Kwenye SteamOS ni `sudo sh /opt/cbb/share/uninstall.sh`. Kwa Homebrew, endesha `
 
 Kwenye Windows: Mipangilio, Programu, "CBB", Ondoa.
 
-Hii huondoa programu, huduma na kanuni za ngome ya moto zilizoongezwa na kisakinishi. Funguo za kifaa hubaki, kwa hiyo kusakinisha tena hukirudisha kwenye kikundi chake. Ili kuzifuta pia, ongeza `--purge` (`-Purge` kwenye Windows, kwa `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), kisha ondoa kifaa kutoka kwenye kikundi kupitia kifaa kingine (`sudo cbb remove NAME`, au kwenye simu).
+Hii huondoa programu, huduma, kanuni za ngome ya moto zilizoongezwa na kisakinishi na, kwenye Mac, programu iliyosakinishwa na `.pkg`. Funguo za kifaa hubaki, kwa hiyo kusakinisha tena hukirudisha kwenye kikundi chake. Ili kuzifuta pia, ongeza `--purge` (`-Purge` kwenye Windows, kwa `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), kisha ondoa kifaa kutoka kwenye kikundi kupitia kifaa kingine (`sudo cbb remove NAME`, au kwenye simu).

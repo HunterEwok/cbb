@@ -7,6 +7,14 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- cbb for macOS is signed with the project's Developer ID and notarized by Apple, so that
+  Gatekeeper opens it without a warning; it runs under the hardened runtime, and CI checks
+  that every build still loads the Rust core there.
+- The Mac app is in the releases: `cbb-X.Y.Z.pkg` installs CBB.app in the menu bar and the
+  service, both for Apple silicon and Intel, signed with the Developer ID and notarized;
+  `uninstall.sh` removes the app as well.
+- Each release sends the iPhone app, with its watch app, to TestFlight, signed for the App
+  Store.
 - The desktop apps show the QR code for joining a phone's group: on a computer in no group,
   **Join a phone's group** in the tray app (Windows, Linux) and the Mac app runs `cbb pair
   -app` as the administrator and shows the code, its text and the time left, without a
@@ -1185,6 +1193,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On an X11 desktop cbb could crash now and then while it opened another connection to the X
+  server or first used XTEST or the screen saver extension: xgb's extensions write tables that
+  every connection reads. Each extension now starts once, before any connection takes events.
 - A remote paste to Windows was refused with "not at the screen" though the agent ran in the
   session at the console: the service, as NT SERVICE\cbb, may not list the sessions, and now
   asks for the console's session first. A refusal names the target's session, or what the
