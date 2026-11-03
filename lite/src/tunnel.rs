@@ -92,13 +92,7 @@ pub struct Hub {
 impl State {
     /// A new state with a new key and preshared key.
     pub fn new(group: &str) -> Result<State> {
-        Ok(State {
-            version: 1,
-            group: group.to_string(),
-            key: random_key()?,
-            psk: random_key()?,
-            hubs: vec![],
-        })
+        Ok(State { version: 1, group: group.to_string(), key: random_key()?, psk: random_key()?, hubs: vec![] })
     }
 
     /// Reads dir/tunnel.json; None if there is none.

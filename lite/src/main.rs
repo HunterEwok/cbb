@@ -1141,9 +1141,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         }
         let v = service::VERSION;
         match () {
-            _ if !found.newer => {
-                log(&format!("CBB {} is the newest release; this device runs {v}.", r.version))
-            }
+            _ if !found.newer => log(&format!("CBB {} is the newest release; this device runs {v}.", r.version)),
             _ if method != "get" => {
                 if !timer {
                     log(&format!(
@@ -1153,10 +1151,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
                     ));
                 }
             }
-            _ if check => log(&format!(
-                "CBB {} is available; this device runs {v}. To install it: sudo cbb update",
-                r.version
-            )),
+            _ if check => {
+                log(&format!("CBB {} is available; this device runs {v}. To install it: sudo cbb update", r.version))
+            }
             _ if v == "dev" => {
                 return Err(Error::msg(format!(
                     "this is a development build; cbb update installs {} only over a release",
