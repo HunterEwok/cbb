@@ -761,7 +761,7 @@ struct item {
 };
 
 static struct item items[] = {
-    {"CBB", ".CBB", "/cbb/CBB", "/cbb/CBB.PRT", 0, 0, ""},
+    {"CBB", "CBB", "/cbb/CBB", "/cbb/CBB.PRT", 0, 0, ""},
     {"CBB.DRV", "CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", 0, 0, ""},
     {"cbb", "PI CBB", PI_CARD, "/cbb/CBBPI.PRT", 0, 0, ""},
 };
