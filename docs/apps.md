@@ -164,6 +164,14 @@ they look, so both apps are built to the same plan.
    the phone shares the file `cbb.cbbinvite`, the other side runs
    `cbb pair -invite` with it, and the phone asks "Admit …?" with the device's fingerprint,
    which `cbb` shows too; on yes it unlocks the group's key and admits it.
+   At the end, "Leave the group" (D-83, docs/design.md, "Leaving the group") asks once, then
+   stops syncing and deletes the phone's keys (root, admin, member, sealed messages, the
+   servers'), the group's files and the tunnel's state; Android turns remote paste off too.
+   The sync mode and the other settings stay, and the app goes back to Start with a new
+   member key. The root leaves only when the group has no other devices than its watch.
+   When the records no longer list the phone, Home shows "This phone was removed from the
+   group" with the same button. The watch hears that its phone is in no group, or in
+   another one than its admin key's, and deletes the key.
 
 The lost phone case is one path, and the app says so in plain words: "Lost a phone? Open
 Devices on your other phone and remove it." When the group has a single admin, Devices

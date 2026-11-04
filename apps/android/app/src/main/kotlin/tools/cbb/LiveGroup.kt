@@ -98,7 +98,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     class CommandRefused(val reason: String) : Exception(reason)
 
     class Failure(val kind: Kind) : Exception(kind.name) {
-        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT, NO_GROUP_COMPUTER }
+        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT, NO_GROUP_COMPUTER, NO_GROUP, ROOT_LEAVES }
     }
 
     /** A device of the group, as the screens show it: a computer, or this phone. */
@@ -1012,6 +1012,63 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         withContext(Dispatchers.IO) { adopt(g) }
         published(listOf(r))
         currentNode?.close(id)
+    }
+
+    /** Whether the group removed this phone: its records, once it has some, no longer list it. The app then offers to leave. */
+    val removed: Boolean
+        get() = synchronized(lock) {
+            val g = state ?: return false
+            g.records.records.isNotEmpty() && g.devices.none { it.id == g.device }
+        }
+
+    /**
+     * Takes this phone out of its group (D-83, docs/design.md, "Leaving the
+     * group"): it stops syncing and deletes its keys, the group's files and
+     * the tunnel's settings, and turns remote paste off, since it was
+     * allowed to the admins of the group it leaves; the sync mode and the
+     * other settings stay. The phone can then make a group or join one
+     * again. The root leaves only when the group has no other devices than
+     * itself and its watch: nobody could add or remove one after it. The
+     * group keeps listing the phone until an admin removes it.
+     */
+    fun leave() {
+        val g = synchronized(lock) { state } ?: throw Failure(Failure.Kind.NO_GROUP)
+        if (g.isRoot && g.devices.any { it.id != g.device && it.role != "watch" }) throw Failure(Failure.Kind.ROOT_LEAVES)
+        val (d, b, n) = synchronized(lock) {
+            Triple(dialer, browser, node).also {
+                dialer = null
+                browser = null
+                node = null
+            }
+        }
+        synchronized(lock) { away.also { away = null } }?.stop()
+        hubWork.submit {
+            stopHub()
+            stopRelay()
+            synchronized(lock) {
+                hub = null
+                relayLink = null
+            }
+        }.get()
+        d?.stop()
+        b?.stop()
+        n?.closeAll()
+        synchronized(lock) {
+            state = null
+            credentialStore = null
+        }
+        file.delete()
+        credentialsFile.delete()
+        awayFile.delete()
+        hubFile.delete()
+        relayFile.delete()
+        synchronized(sealFile) { sealFile.delete() }
+        File(context.filesDir, "attest-status").deleteRecursively()
+        pastes.turnOff()
+        pastes.forgetLog()
+        for (alias in listOf(Keys.ROOT, Keys.ADMIN, Keys.MEMBER)) runCatching { Keys.remove(alias) }
+        runCatching { Keys.PhoneKeys.clear() }
+        Log.i(TAG, "this phone left its group: its keys and the group's files are deleted")
     }
 
     /**

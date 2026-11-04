@@ -513,8 +513,9 @@ sync away from home, the admins, and remote paste.
   settings stay. The group's root leaves only alone; otherwise it hands the group over
   first. A removed device (`cbb status` says so) and one whose group file is damaged leave
   the same way. The lite member's `cbb leave` does the same through its service, or by
-  itself when the service does not run. The group keeps the device's entry until an admin
-  removes it.
+  itself when the service does not run. The phones, the tray app and the Mac app have a
+  "Leave the group" button (docs/apps.md), and a phone's watch forgets its admin key with
+  it. The group keeps the device's entry until an admin removes it.
 
 ### Discovery
 

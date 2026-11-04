@@ -12,7 +12,9 @@ All notable changes to cbb are documented in this file. The format follows
   quick actions off, and lets it join this group or another one with `cbb pair`; before, the
   only way was to uninstall with `--purge` and install again. The group's root leaves only
   when it is alone. `cbb status` tells a removed device to leave, and a device whose group
-  file is damaged leaves too.
+  file is damaged leaves too. The iPhone, Android, the tray app and the Mac app have a
+  "Leave the group" button, which a removed phone offers on Home; the phone's watch deletes
+  its admin key with it.
 - Updates on networks that block GitHub and the mirror: a device that syncs away from home
   over VLESS reaches `dl.cbb.tools` inside VLESS, through its hub's forwarder, which lets
   registered groups reach only the mirror on its own server (`cbb forward -vless-mirror`);

@@ -111,6 +111,15 @@ class Notifier(private val context: Context) {
         if (old != null) GroupEvent.between(old, now).forEach(::post)
     }
 
+    /** Forgets the group's devices and events, once the phone left its group: the next group's devices are not news of this one. */
+    @Synchronized
+    fun forget() {
+        prefs.edit().remove(SEEN).apply()
+        recent = emptyList()
+        failingSince = null
+        hubNotified = false
+    }
+
     /** Notifies once when the hub has not answered through the tunnel for a while, and again only after it answered. */
     @Synchronized
     fun away(trying: Boolean, nowMS: Long = System.currentTimeMillis()) {
