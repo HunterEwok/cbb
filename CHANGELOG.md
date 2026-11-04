@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The mirror of the releases at `dl.cbb.tools`, which `cbb update`, the installers, the
+  Android app and the lite member fall back to when GitHub does not answer: `release-sign
+  mirror` on cbb.tools takes every hour the newest `keys.json` and `stable.json` that check
+  out, the release they name and the `min_from` of each, checks every file as a device does
+  before it serves it, and unpacks the ZX Spectrum Next's files of the newest checked
+  release for `.cbb install` (docs/maintaining.md, "The mirror").
 - cbb for macOS is signed with the project's Developer ID and notarized by Apple, so that
   Gatekeeper opens it without a warning; it runs under the hardened runtime, and CI checks
   that every build still loads the Rust core there.
