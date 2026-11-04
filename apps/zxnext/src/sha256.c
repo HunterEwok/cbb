@@ -18,36 +18,46 @@ static const uint32_t k[64] = {
     0x748f82eeUL, 0x78a5636fUL, 0x84c87814UL, 0x8cc70208UL, 0x90befffaUL, 0xa4506cebUL, 0xbef9a3f7UL, 0xc67178f2UL,
 };
 
-#define ROR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
+// The rotations and mixes are functions, not macros: on the Z80 each
+// 32-bit operation is a call into the library, and inline copies of them
+// would not fit the dot command's 32 KiB.
+static uint32_t ror(uint32_t x, uint8_t n)
+{
+    return x >> n | x << (32 - n);
+}
+
+static uint32_t mix(uint32_t x, uint8_t a, uint8_t b, uint8_t c)
+{
+    return ror(x, a) ^ ror(x, b) ^ ror(x, c);
+}
+
+static uint32_t small(uint32_t x, uint8_t a, uint8_t b, uint8_t c)
+{
+    return ror(x, a) ^ ror(x, b) ^ x >> c;
+}
 
 static void compress(struct sha256 *s)
 {
-    // The schedule is kept as a ring of 16 words, to spare the Z80's memory.
-    static uint32_t w[16];
-    uint32_t a, b, c, d, e, f, g, h, t1, t2;
+    // The schedule is kept as a ring of 16 words, to spare the Z80's memory,
+    // and the working variables a to h as v[0] to v[7].
+    static uint32_t w[16], v[8];
+    uint32_t t1, t2;
     uint8_t i;
     for (i = 0; i < 16; i++) {
         const uint8_t *p = s->block + 4 * i;
         w[i] = (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
     }
-    a = s->h[0], b = s->h[1], c = s->h[2], d = s->h[3];
-    e = s->h[4], f = s->h[5], g = s->h[6], h = s->h[7];
+    memcpy(v, s->h, sizeof v);
     for (i = 0; i < 64; i++) {
-        uint32_t wi;
-        if (i < 16) {
-            wi = w[i];
-        } else {
-            uint32_t w15 = w[(i + 1) & 15], w2 = w[(i + 14) & 15];
-            wi = w[i & 15] += (ROR(w15, 7) ^ ROR(w15, 18) ^ (w15 >> 3)) + w[(i + 9) & 15] +
-                              (ROR(w2, 17) ^ ROR(w2, 19) ^ (w2 >> 10));
-        }
-        t1 = h + (ROR(e, 6) ^ ROR(e, 11) ^ ROR(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + wi;
-        t2 = (ROR(a, 2) ^ ROR(a, 13) ^ ROR(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
-        h = g, g = f, f = e, e = d + t1;
-        d = c, c = b, b = a, a = t1 + t2;
+        if (i >= 16)
+            w[i & 15] += small(w[(i + 1) & 15], 7, 18, 3) + w[(i + 9) & 15] + small(w[(i + 14) & 15], 17, 19, 10);
+        t1 = v[7] + mix(v[4], 6, 11, 25) + ((v[4] & v[5]) ^ (~v[4] & v[6])) + k[i] + w[i & 15];
+        t2 = mix(v[0], 2, 13, 22) + ((v[0] & v[1]) ^ (v[0] & v[2]) ^ (v[1] & v[2]));
+        memmove(v + 1, v, 7 * sizeof v[0]);
+        v[4] += t1;
+        v[0] = t1 + t2;
     }
-    s->h[0] += a, s->h[1] += b, s->h[2] += c, s->h[3] += d;
-    s->h[4] += e, s->h[5] += f, s->h[6] += g, s->h[7] += h;
+    for (i = 0; i < 8; i++) s->h[i] += v[i];
 }
 
 void sha256_init(struct sha256 *s)
