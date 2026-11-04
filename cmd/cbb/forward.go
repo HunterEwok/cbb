@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -31,6 +32,7 @@ func cmdForward(args []string, stdout, stderr io.Writer) int {
 	vlessXHTTP := fs.String("vless-xhttp", "", "take VLESS over XHTTP too, behind the web server of this site, such as cbb.tools, which passes -vless-path to -vless-listen")
 	vlessPath := fs.String("vless-path", "", "with -vless-xhttp, the path the web server passes (default: made once and kept in the key file)")
 	vlessPort := fs.Uint("vless-port", 443, "with -vless-xhttp, the web server's TCP port at the forwarder's address")
+	vlessMirror := fs.String("vless-mirror", "", "with VLESS, the TCP address of the mirror of the releases on this server, such as 127.0.0.1:443, which the clients of registered hubs reach over VLESS for their updates")
 	vlessListen := fs.String("vless-listen", "", "the TCP address to listen on for VLESS (default :443 with -vless-site, 127.0.0.1:3276 with -vless-xhttp)")
 	state := fs.String("state", "", "the file that keeps, under a hash of each group's tag, the version of its newest credential (default: forward-state.json next to the key; \"none\" keeps them in memory only)")
 	records := fs.String("records", "", "where earlier versions kept a file for each group; they are deleted (default: groups next to the key)")
@@ -97,6 +99,17 @@ func cmdForward(args []string, stdout, stderr io.Writer) int {
 		}
 		cfg.VLESS = &forward.VLESSConfig{Listen: *vlessListen, XHTTP: &forward.XHTTPConfig{Host: *vlessXHTTP, Port: uint16(*vlessPort), Path: path}}
 	}
+	if *vlessMirror != "" {
+		if cfg.VLESS == nil {
+			fmt.Fprintln(stderr, "cbb: forward: -vless-mirror goes with -vless-site or -vless-xhttp")
+			return 2
+		}
+		if _, _, err := net.SplitHostPort(*vlessMirror); err != nil {
+			fmt.Fprintln(stderr, "cbb: forward: -vless-mirror is host:port")
+			return 2
+		}
+		cfg.VLESS.Mirror = *vlessMirror
+	}
 	f, err := forward.Listen(cfg)
 	if err != nil {
 		return fail(stderr, err)
@@ -106,6 +119,9 @@ func cmdForward(args []string, stdout, stderr io.Writer) int {
 		logf("cbb forward: VLESS over XHTTP on %s, behind the web server of %s on TCP port %d, which passes the path %s to it; hubs ask for it with cbb global hub -vless", *vlessListen, v.XHTTP.Host, v.XHTTP.Port, v.XHTTP.Path)
 	} else if v != nil {
 		logf("cbb forward: VLESS on TCP %s, with the TLS of %s; hubs ask for it with cbb global hub -vless", *vlessListen, *vlessSite)
+	}
+	if *vlessMirror != "" {
+		logf("cbb forward: the clients of registered hubs reach the mirror at %s over VLESS", *vlessMirror)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

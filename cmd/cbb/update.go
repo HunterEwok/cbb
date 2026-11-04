@@ -9,7 +9,10 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +23,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/release"
 	"github.com/HunterEwok/cbb/internal/rootless"
 	"github.com/HunterEwok/cbb/internal/update"
@@ -200,6 +204,14 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 		if sources, err = update.Sources(st.Mirror); err != nil {
 			return fail(stderr, err)
 		}
+		if st.Mirror == "" {
+			var closeWay func()
+			sources, closeWay = mirrorOverVLESS(sources, out)
+			defer closeWay()
+		}
+		// The group's members passed the service the newest signed
+		// release: the last source, for a device that reaches no server.
+		sources = append(sources, update.Group{Held: heldRelease})
 	}
 	progs, err := update.Programs(exe)
 	if err != nil {
@@ -224,6 +236,7 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 	}
 	r := found.Release
 	shareRelease(found)
+	shareEntries(ctx, found)
 	if elevated {
 		st.Seen, st.CheckedMS, st.Available = found.Seen, time.Now().UnixMilli(), ""
 		if found.Newer && !found.Failed {
@@ -232,6 +245,9 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 		if code := saveUpdateState(dir, st, stderr); code != 0 {
 			return code
 		}
+	}
+	if elevated && !check {
+		archivesForGroup(ctx, u, found, out)
 	}
 	switch {
 	case !found.Newer && to == "":
@@ -269,6 +285,78 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// shareEntries fetches the signed entry points from the server the release
+// came from and hands them to the service, which checks them, keeps them
+// and passes them to the group (docs/protocol.md, section 16, "Entry
+// points"). A server without them, or a service that does not run, misses
+// them; the group passes them on.
+func shareEntries(ctx context.Context, found update.Found) {
+	if _, ok := found.Source.(update.Group); ok || len(found.Keys.Body) == 0 {
+		return
+	}
+	fctx, cancel := context.WithTimeout(ctx, time.Minute)
+	f, err := update.FetchEntries(fctx, found.Source)
+	cancel()
+	if err != nil {
+		return
+	}
+	data, err := json.Marshal(node.EntriesSet{Keys: found.Keys, Entries: f})
+	if err != nil {
+		return
+	}
+	c, err := control.DialFor(control.OpEntries)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+	c.Do(&control.Message{Header: control.Header{Op: control.OpEntries}, Payload: data})
+}
+
+// archivesForGroup downloads, on a hub, the archives the group's members
+// update from and its service does not hold yet, and hands them to it, so
+// that devices on networks that block the update servers get them through
+// the group and its tunnel (docs/protocol.md, section 16, "In the group").
+func archivesForGroup(ctx context.Context, u *update.Updater, found update.Found, log io.Writer) {
+	if _, ok := found.Source.(update.Group); ok {
+		return
+	}
+	c, err := control.DialFor(control.OpReleaseWant)
+	if err != nil {
+		return
+	}
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpReleaseWant}})
+	c.Close()
+	var names []string
+	if err != nil || json.Unmarshal(m.Payload, &names) != nil || len(names) == 0 {
+		return
+	}
+	if _, err := u.FetchFor(ctx, found.Source, found.Release, names); err != nil {
+		fmt.Fprintf(log, "Not every archive for the group came: %v\n", err)
+	}
+}
+
+// selfArchive names the release archive cbb update installs on this
+// device, for the hello's device, so that the group's hub fetches it
+// (docs/protocol.md, section 16, "In the group"); "" for a copy that
+// another tool updates, or a development build.
+func selfArchive() string {
+	if version.Version == "dev" {
+		return ""
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	dir, _ := update.Paths()
+	st, _ := update.LoadState(dir)
+	if update.DetectMethod(st.Method, exe) != update.MethodGet {
+		return ""
+	}
+	return update.ArchiveName()
+}
+
 // shareRelease hands the signed release that cbb update fetched from the
 // channel to the service, which passes it to the group (docs/protocol.md,
 // section 16, "In the group"). A service that does not run misses it.
@@ -287,6 +375,68 @@ func shareRelease(found update.Found) {
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(10 * time.Second))
 	c.Do(&control.Message{Header: control.Header{Op: control.OpRelease}, Payload: data})
+}
+
+// mirrorOverVLESS replaces the mirror on dl.cbb.tools with the way to it
+// over VLESS when sync away from home goes over VLESS: the forwarder on
+// the mirror's server lets the group's clients reach it, and the mirror is
+// then never asked directly (docs/protocol.md, section 16, "Where the
+// files are"). GitHub stays asked directly. It returns what stops the way.
+func mirrorOverVLESS(sources []update.Source, log io.Writer) ([]update.Source, func()) {
+	none := func() {}
+	c, err := control.DialFor(control.OpUpdateWay)
+	if err != nil {
+		return sources, none
+	}
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpUpdateWay}})
+	c.Close()
+	if err != nil || len(m.Payload) == 0 {
+		return sources, none
+	}
+	var v tunnel.VLESS
+	if err := json.Unmarshal(m.Payload, &v); err != nil {
+		return sources, none
+	}
+	way, err := vless.DialMirror(v)
+	if err != nil {
+		fmt.Fprintf(log, "The way to the mirror over VLESS could not start: %v\n", err)
+		return sources, none
+	}
+	addr := way.Addr().String()
+	through := update.MirrorThrough(func(ctx context.Context) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "tcp", addr)
+	})
+	out := make([]update.Source, 0, len(sources))
+	for _, src := range sources {
+		if src.String() == update.Mirror {
+			src = through
+		}
+		out = append(out, src)
+	}
+	return out, func() { way.Close() }
+}
+
+// heldRelease asks the service for the signed release it holds.
+func heldRelease(ctx context.Context) (keys, channel, rel release.File, err error) {
+	c, err := control.DialFor(control.OpReleaseHeld)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	stop := context.AfterFunc(ctx, func() { c.SetDeadline(time.Now()) })
+	defer stop()
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpReleaseHeld}})
+	if err != nil {
+		return
+	}
+	var r control.Release
+	if err = json.Unmarshal(m.Payload, &r); err != nil {
+		return
+	}
+	return r.Keys, r.Channel, r.Release, nil
 }
 
 // groupArchive asks the service for the archive a, which it holds or

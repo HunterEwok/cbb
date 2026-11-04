@@ -262,6 +262,39 @@ func (u *Updater) checkFrom(ctx context.Context, src Source, st State, version s
 	}, nil
 }
 
+// FetchFor downloads the archives of r named in names, for the group's
+// other members (docs/protocol.md, section 16, "In the group"), checks each
+// against r and hands it to Keep. It returns how many it kept and the first
+// error.
+func (u *Updater) FetchFor(ctx context.Context, src Source, r release.Release, names []string) (int, error) {
+	if u.Keep == nil {
+		return 0, nil
+	}
+	if err := os.MkdirAll(u.Work, 0o700); err != nil {
+		return 0, err
+	}
+	kept := 0
+	var first error
+	for _, name := range names {
+		asset, ok := r.Asset(name)
+		if !ok || filepath.Base(name) != name {
+			continue
+		}
+		path := filepath.Join(u.Work, "group-"+name)
+		open := func(ctx context.Context) (io.ReadCloser, error) { return src.Open(ctx, asset.Name, r.Version) }
+		u.logf("Downloading %s (%s) for the group...", name, r.Version)
+		err := download(ctx, open, asset, path)
+		if err == nil {
+			u.Keep(path, asset)
+			kept++
+		} else if first == nil {
+			first = fmt.Errorf("%s: %w", name, err)
+		}
+		os.Remove(path)
+	}
+	return kept, first
+}
+
 // Apply downloads the release's archive, checks it, installs it and waits
 // until the service reports the new version; when it does not, it puts the
 // previous programs back and adds the version to st.Failed. It returns the

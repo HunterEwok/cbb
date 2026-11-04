@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -213,7 +214,13 @@ func TestUserOfEachClient(t *testing.T) {
 // the group id.
 func behindWebServer(t *testing.T, path, id string) (*Server, tunnel.VLESS) {
 	t.Helper()
-	s, err := Listen(ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t)})
+	return behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t)}, id)
+}
+
+func behindWebServerWith(t *testing.T, cfg ServerConfig, id string) (*Server, tunnel.VLESS) {
+	t.Helper()
+	path := cfg.Path
+	s, err := Listen(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +228,12 @@ func behindWebServer(t *testing.T, path, id string) (*Server, tunnel.VLESS) {
 	back := net.JoinHostPort("127.0.0.1", strconv.Itoa(int(s.Port())))
 	web, cert := vlesstest.WebServer(t, path, func() string { return back })
 	TrustForTests(cert)
-	return s, tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id}
+	// A group's packets come under its own path.
+	const group = "a-group-of-its-own"
+	if err := s.AddPath(group); err != nil {
+		t.Fatal(err)
+	}
+	return s, tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path + "/" + group, ID: id}
 }
 
 func TestThroughXHTTP(t *testing.T) {
@@ -335,5 +347,174 @@ func TestXHTTPHoldsLittleForStrangers(t *testing.T) {
 	}
 	if !refused {
 		t.Errorf("a session with no client took more than %d uploads", MaxBufferedPosts)
+	}
+}
+
+// tcpEcho answers every TCP connection with what it sends, in the
+// mirror's place.
+func tcpEcho(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				io.Copy(c, c)
+			}()
+		}
+	}()
+	return ln.Addr().String()
+}
+
+// throughMirror sends a line through the way to the mirror and tells
+// whether it came back.
+func throughMirror(t *testing.T, l tunnel.VLESS) bool {
+	t.Helper()
+	m, err := DialMirror(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	for range 10 {
+		c, err := net.DialTimeout("tcp", m.Addr().String(), time.Second)
+		if err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		c.SetDeadline(time.Now().Add(3 * time.Second))
+		c.Write([]byte("a line\n"))
+		b := make([]byte, 7)
+		_, err = io.ReadFull(c, b)
+		c.Close()
+		if err == nil {
+			return string(b) == "a line\n"
+		}
+	}
+	return false
+}
+
+// A registered group's client reaches the mirror over VLESS, and only
+// the mirror; without one a TCP stream goes nowhere.
+func TestMirrorThroughXHTTP(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := tunnel.NewVLESSID()
+	s, l := behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t), Mirror: tcpEcho(t)}, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.Ready(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if throughMirror(t, l) {
+		t.Fatal("a group that was not let in reached the mirror")
+	}
+	if err := s.AddUser(id); err != nil {
+		t.Fatal(err)
+	}
+	if !throughMirror(t, l) {
+		t.Fatal("nothing came back from the mirror")
+	}
+	if !roundTrip(t, l) {
+		t.Fatal("the packets stopped with a mirror")
+	}
+
+	path2, _ := tunnel.NewVLESSPath()
+	none, l2 := behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path2, To: echo(t)}, id)
+	if err := none.AddUser(id); err != nil {
+		t.Fatal(err)
+	}
+	if throughMirror(t, l2) {
+		t.Fatal("a TCP stream went somewhere without a mirror")
+	}
+}
+
+// A registration stream reaches the forwarder's registrations, also with
+// the registrations' user ID, which reaches neither the mirror nor the
+// forwarder's UDP port.
+func TestRegistrationStream(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	streams := make(chan net.Conn, 4)
+	cfg := ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t), Mirror: tcpEcho(t),
+		Register: func(c net.Conn) {
+			defer c.Close()
+			b := make([]byte, 5)
+			if _, err := io.ReadFull(c, b); err == nil && string(b) == "hello" {
+				c.Write([]byte("hub!!"))
+			}
+			streams <- c
+		}}
+	_, l := behindWebServerWith(t, cfg, RegistrationID)
+	way, err := DialRegistration(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer way.Close()
+	got := ""
+	for range 10 {
+		c, err := net.DialTimeout("tcp", way.Addr().String(), time.Second)
+		if err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		c.SetDeadline(time.Now().Add(3 * time.Second))
+		c.Write([]byte("hello"))
+		b := make([]byte, 5)
+		io.ReadFull(c, b)
+		c.Close()
+		if got = string(b); got == "hub!!" {
+			break
+		}
+	}
+	if got != "hub!!" {
+		t.Fatalf("the registrations answered %q", got)
+	}
+	if throughMirror(t, l) {
+		t.Error("the registrations' user ID reached the mirror")
+	}
+	if roundTrip(t, l) {
+		t.Error("the registrations' user ID reached the forwarder's UDP port")
+	}
+}
+
+// Over XHTTP a group's packets pass only under a group's path: not under
+// the path every build carries, nor under a path that is not let in.
+func TestGroupPaths(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := tunnel.NewVLESSID()
+	s, l := behindWebServer(t, path, id)
+	if err := s.AddUser(id); err != nil {
+		t.Fatal(err)
+	}
+	base, other := l, l
+	base.Path = path
+	other.Path = path + "/not-a-group-path-at-all"
+	if roundTrip(t, base) {
+		t.Error("a group's packets passed under the registrations' path")
+	}
+	if roundTrip(t, other) {
+		t.Error("a group's packets passed under a path that is not let in")
+	}
+	s.RemovePath("a-group-of-its-own")
+	if roundTrip(t, l) {
+		t.Error("a group's packets passed under its path once it was taken back")
+	}
+	if err := s.AddPath("short"); err == nil {
+		t.Error("a short group path was taken")
 	}
 }

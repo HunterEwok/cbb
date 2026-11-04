@@ -573,6 +573,9 @@ func (s *Service) trackSeen(peers []node.Peer) {
 	for _, p := range peers {
 		online[p.ID] = true
 		s.seen[p.ID] = now
+		if p.Device.Archive != "" {
+			s.archives[p.ID] = p.Device.Archive
+		}
 		// A member with the lower device ID dials this one; when the
 		// connection came up only once this one dialed back, the member
 		// could not reach it, as a firewall here would do.

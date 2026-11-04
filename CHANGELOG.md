@@ -7,6 +7,24 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Updates on networks that block GitHub and the mirror: a device that syncs away from home
+  over VLESS reaches `dl.cbb.tools` inside VLESS, through its hub's forwarder, which lets
+  registered groups reach only the mirror on its own server (`cbb forward -vless-mirror`);
+  when no update server answers, `cbb update` takes the signed release its group passed to
+  the service, and the archive from the members, checking both as it checks a download. A
+  hub's `cbb update` downloads the archives its group's members install, as their hellos
+  name them, so that devices behind AmneziaWG get them inside the group's tunnel.
+- A hub of a forwarder that runs VLESS registers inside VLESS when TCP to the forwarder does
+  not answer, and then sends its own packets that way too, for a hub on a network that lets
+  only HTTPS through. The forwarder gives each group an XHTTP path of its own, derived from
+  its key and the group, and carries the group's packets only on it; the built-in path
+  serves only the registrations.
+- Signed entry points: `entries.json`, signed by the project beside `keys.json`, lists the
+  ways in to the project's forwarders, so that a blocked one is replaced without a release.
+  `cbb update` fetches it, the members pass it to each other, and `cbb global entries export`
+  and `import` carry it as a string or QR code; every device checks the signature, wherever
+  it came from. `release-sign entries` signs it, and `extend`, `take`, `due` and `mirror`
+  keep it (docs/maintaining.md, "Signed releases").
 - The website has the terms of the project's forwarder and relay at `cbb.tools` (Terms of the
   public servers, in every language of the site, linked from every page's footer): open to
   every group, free, as is without a promise of uptime, shared by the budget, and where to
@@ -1329,6 +1347,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- cbb for macOS, signed with the hardened runtime (the release's Developer ID build, and
+  `packaging/macos/sign.sh`), was killed by macOS 27 as soon as it loaded the Rust core,
+  so `cbb version` and the installer failed: wazero's compiled code needs executable memory
+  that no signature covers. cbb is now signed with the one entitlement that allows it.
 - The Android app could still show sync away from home as connected for a moment after it was
   turned off; it now shows it off at once.
 - On an X11 desktop cbb could crash now and then while it opened another connection to the X

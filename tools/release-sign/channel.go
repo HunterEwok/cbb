@@ -153,7 +153,7 @@ func extend(args []string) error {
 		}
 	}
 	fmt.Fprintf(stdout, "%s.json %d names %s until %s\n", stableChannel, next.Seq, next.Release, expiry(ch))
-	return nil
+	return renewEntries(*from, *out, keys, k)
 }
 
 // maxTakeStep is how far past the branch's channel file take accepts a
@@ -166,6 +166,7 @@ const maxTakeStep = 16
 func take(args []string) error {
 	fs := flag.NewFlagSet("take", flag.ExitOnError)
 	src := fs.String("new", renewedChannel, "the renewed channel file")
+	srcEntries := fs.String("new-entries", renewedEntries, "the renewed entry points")
 	releases := fs.String("releases", releaseFiles, "where each release's files are, under vX.Y.Z")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
@@ -187,7 +188,7 @@ func take(args []string) error {
 	switch {
 	case n.Seq <= c.Seq:
 		fmt.Fprintf(stdout, "the branch's %s.json %d is the newest\n", stableChannel, c.Seq)
-		return nil
+		return takeEntries(dir, *srcEntries)
 	case n.Seq > c.Seq+maxTakeStep:
 		// extend signs the branch's seq and one more; a file further ahead
 		// was not signed from the branch, and would hold every device that
@@ -207,7 +208,7 @@ func take(args []string) error {
 		return err
 	}
 	fmt.Fprintf(stdout, "took %s.json %d, valid until %s\n", stableChannel, n.Seq, expiry(ch))
-	return nil
+	return takeEntries(dir, *srcEntries)
 }
 
 // due prints what in a checkout of the branch channel needs the
@@ -226,8 +227,12 @@ func due(args []string) error {
 	}{
 		{"keys.json", "sign it again with a YubiKey: release-sign renew -new-keys", keysDue},
 		{stableChannel + ".json", "check the timer on cbb.tools, or sign it by hand: release-sign renew", channelDue},
+		{entriesName, "check the timer on cbb.tools, or sign it by hand: release-sign entries", channelDue},
 	} {
 		f, err := readFile(filepath.Join(dir, c.name))
+		if c.name == entriesName && errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			return err
 		}

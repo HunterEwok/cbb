@@ -26,7 +26,8 @@ struct ParseArgs {
 }
 
 /// The kinds of body `parse_body` reads.
-pub const KINDS: [&str; 7] = ["command", "credential", "keys", "release", "channel", "attest-status", "manifest"];
+pub const KINDS: [&str; 8] =
+    ["command", "credential", "keys", "release", "channel", "attest-status", "entries", "manifest"];
 
 /// Reads a body of the kind and gives it back as its value.
 fn read(kind: &str, body: &[u8]) -> Result<Value> {
@@ -35,7 +36,7 @@ fn read(kind: &str, body: &[u8]) -> Result<Value> {
     }
     // The release files carry their body inside an envelope of at most
     // this size, as Go's and the kits' readers check first.
-    let release = matches!(kind, "keys" | "release" | "channel" | "attest-status");
+    let release = matches!(kind, "keys" | "release" | "channel" | "attest-status" | "entries");
     if release && body.len() > crate::release::MAX_BODY {
         return Err(Error::msg("The file is too large."));
     }
@@ -46,6 +47,7 @@ fn read(kind: &str, body: &[u8]) -> Result<Value> {
         "release" => value(crate::release::decode_release(body)?),
         "channel" => value(crate::release::decode_channel(body)?),
         "attest-status" => value(crate::release::decode_status(body)?),
+        "entries" => value(crate::release::decode_entries(body)?),
         "manifest" => value(crate::media::Manifest::parse(body)?),
         _ => Err(Error::msg(alloc::format!("The core reads no body of the kind {kind:?}."))),
     }
@@ -233,6 +235,30 @@ mod tests {
         assert!(wrong.is_empty(), "{} vectors read otherwise:\n{}", wrong.len(), wrong.join("\n"));
     }
 
+    /// entries.json's body is read as Go's release package reads it: a
+    /// good one comes back, and each kind of bad one is refused.
+    #[test]
+    fn entries() {
+        let good = br#"{"v":1,"type":"entries","seq":3,"time_ms":1000,"expires_ms":2000,"forwarders":[{"name":"cbb.tools:8764","vless":[{"transport":"xhttp","server_name":"cbb.tools","port":443,"path":"/banMEJvnYJJap8S"}]}]}"#;
+        let got = ask("entries", good);
+        assert_eq!(got["ok"]["value"]["forwarders"][0]["vless"][0]["port"], 443, "{got}");
+        let s = core::str::from_utf8(good).unwrap();
+        for bad in [
+            s.replace(r#""seq":3"#, r#""seq":0"#),
+            s.replace("cbb.tools:8764", "cbb.tools:0"),
+            s.replace("cbb.tools:8764", "cbb.tools:65536"),
+            s.replace("cbb.tools:8764", "Cbb.tools:8764"),
+            s.replace(r#""server_name":"cbb.tools""#, r#""server_name":"cbb""#),
+            s.replace(r#""port":443"#, r#""port":0"#),
+            s.replace("/banMEJvnYJJap8S", "/short"),
+            s.replace(r#""xhttp""#, r#""reality""#),
+            s.replace(r#""expires_ms":2000"#, r#""expires_ms":999"#),
+            s.replace(r#"}]}]}"#, r#"}]},{"name":"cbb.tools:8764"}]}"#),
+        ] {
+            assert_eq!(ask("entries", bad.as_bytes())["error"]["name"], "signed", "{bad}");
+        }
+    }
+
     /// A good body comes back as its fields; an unknown kind is refused as
     /// a request.
     #[test]
@@ -243,7 +269,7 @@ mod tests {
         assert_eq!(got["ok"]["kind"], "command");
         assert!(got["ok"]["value"]["type"].is_string(), "{got}");
         assert_eq!(ask("nothing", b"{}")["error"]["name"], "request");
-        assert_eq!(KINDS.len(), 7);
+        assert_eq!(KINDS.len(), 8);
         for kind in KINDS {
             assert_eq!(ask(kind, b"{}")["error"]["name"], "signed", "{kind}");
         }

@@ -206,6 +206,7 @@ type Service struct {
 	pending        *node.Write                      // a write that no watcher got, for the next one
 	mediaWait      *node.Write                      // a copy of images or files the watchers that take them get once it has arrived
 	seen           map[group.DeviceID]time.Time     // when each peer was last seen connected
+	archives       map[group.DeviceID]string        // the release archive each peer's hello says it updates from
 	adminCAsUnder  map[group.DeviceID]group.KeyHash // the root this root last sent each admin a new admin CA under
 	pendingAdminCA []byte                           // an admin CA that came before the records that make it valid
 	// commands holds the IDs of the commands carried out, until they
@@ -257,6 +258,12 @@ type Service struct {
 	relMu  sync.Mutex
 	rel    *heldRelease
 	relRan bool // the file was read
+
+	// The newest signed entry points (entries.go); entMu guards them,
+	// taken alone.
+	entMu  sync.Mutex
+	ent    *heldEntries
+	entRan bool
 
 	// Images and files (media.go): the cache, which is nil until the
 	// service runs; mediaMu guards the rest, taken after mu, never before.
@@ -349,7 +356,7 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.runner = actions.System()
 	}
 	s := &Service{cfg: cfg, logf: cfg.Logf, dialers: map[group.DeviceID]*dialer{}, watchers: map[*watcher]bool{}, restart: make(chan struct{}, 1),
-		seen: map[group.DeviceID]time.Time{}, online: map[group.DeviceID]bool{}, unreached: map[group.DeviceID]bool{},
+		seen: map[group.DeviceID]time.Time{}, archives: map[group.DeviceID]string{}, online: map[group.DeviceID]bool{}, unreached: map[group.DeviceID]bool{},
 		startedMS: cfg.now().UnixMilli()}
 	if s.cfg.runner == nil {
 		// A Mac and Windows run the presets in the signed-in user's
@@ -505,7 +512,7 @@ func (s *Service) startGroup(id *group.Identity) error {
 		Content: s.nodeContent(), Identity: id, Role: s.cfg.Role, Name: s.cfg.Name, OS: s.cfg.OS, Device: s.cfg.Device, Engine: eng, KeyStore: s.keyStore(id), Actions: s.actionsOn,
 		OnWrite: s.write, OnRelay: s.relayed, Serves: s.serves, OnPeers: s.peersChanged, OnCert: s.certRenewed, OnAdmin: s.becomeAdmin, OnCommand: s.command,
 		Now: s.cfg.now, Logf: s.logf,
-		Records: recordStore{s}, Credentials: credentialStore{s}, Releases: releaseStore{s}, Allow: s.allow, NoSecrets: s.noSecretsTo,
+		Records: recordStore{s}, Credentials: credentialStore{s}, Releases: releaseStore{s}, Entries: entriesStore{s}, Allow: s.allow, NoSecrets: s.noSecretsTo,
 		TunnelKey: tunKey, TunnelPSK: tunPSK, OnTunnelKey: s.tunnelKeyOffered, OnTunnel: s.tunnelOffered, SealKey: s.sealPublic,
 		HubShare: s.hubShare, OnHubs: s.hubsShared, OnEvidence: s.evidenceReceived, Evidence: s.ownEvidence(id),
 	})

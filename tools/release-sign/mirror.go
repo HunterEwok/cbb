@@ -106,6 +106,9 @@ func mirror(args []string) error {
 	if best.channel {
 		top[stableChannel+".json"] = best.ch
 	}
+	if f, _, ok := newestEntries(append(strings.Split(*from, ","), *out), best.keys); ok {
+		top[entriesName] = f
+	}
 	for name, f := range top {
 		if err := replaceFile(filepath.Join(*out, name), f); err != nil {
 			return err

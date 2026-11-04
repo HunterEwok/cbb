@@ -38,6 +38,7 @@ const (
 	TypeRelease = "release"
 	TypeChannel = "channel"
 	TypeStatus  = "attest-status"
+	TypeEntries = "entries"
 )
 
 // The uses keys.json gives its keys. A key of a use the reader does not
@@ -157,6 +158,47 @@ type Status struct {
 	AndroidRevoked []string `json:"android_revoked"`
 }
 
+// Entries is the body of entries.json, signed by a release or channel key:
+// where the project's forwarders are entered, so that a blocked entry is
+// replaced without a release (docs/protocol.md, section 16, "Entry
+// points"). The keys of the forwarders stay in keys.json.
+type Entries struct {
+	V          int              `json:"v"`
+	Type       string           `json:"type"`
+	Seq        uint64           `json:"seq"`
+	TimeMS     int64            `json:"time_ms"`
+	ExpiresMS  int64            `json:"expires_ms"`
+	Forwarders []EntryForwarder `json:"forwarders"`
+}
+
+// EntryForwarder is one of the project's forwarders.
+type EntryForwarder struct {
+	// Name is its address as keys.json names its key, host:port, such as
+	// cbb.tools:8764.
+	Name string `json:"name"`
+	// VLESS are the ways in over VLESS for a hub's first registration, the
+	// one to try first first.
+	VLESS []EntryVLESS `json:"vless,omitempty"`
+}
+
+// EntryVLESS is a way in over VLESS: XHTTP behind the web server of a site.
+type EntryVLESS struct {
+	Transport  string `json:"transport"`   // "xhttp"
+	ServerName string `json:"server_name"` // the site's name, which its certificate carries
+	Port       uint16 `json:"port"`        // the web server's TCP port
+	Path       string `json:"path"`        // the path the registrations are taken on
+}
+
+// Forwarder returns the entry of the forwarder named name.
+func (e Entries) Forwarder(name string) (EntryForwarder, bool) {
+	for _, f := range e.Forwarders {
+		if f.Name == name {
+			return f, true
+		}
+	}
+	return EntryForwarder{}, false
+}
+
 // Revoked returns the serial numbers as a set.
 func (s Status) Revoked() map[string]bool {
 	m := make(map[string]bool, len(s.AndroidRevoked))
@@ -180,6 +222,10 @@ type Seen struct {
 	StatusSeq   uint64 `json:"status_seq,omitempty"`
 	ChannelKeys uint64 `json:"channel_keys_seq,omitempty"`
 	StatusKeys  uint64 `json:"status_keys_seq,omitempty"`
+	// EntriesSeq and EntriesKeys are entries.json's, which CheckEntries
+	// alone sets: a device keeps them in a Seen of their own.
+	EntriesSeq  uint64 `json:"entries_seq,omitempty"`
+	EntriesKeys uint64 `json:"entries_keys_seq,omitempty"`
 }
 
 // MaxSeqStep is the most a channel or status seq may rise past the one a
@@ -292,6 +338,8 @@ func checkBody(data []byte) error {
 		_, err = decodeChannel(data)
 	case TypeStatus:
 		_, err = decodeStatus(data)
+	case TypeEntries:
+		_, err = decodeEntries(data)
 	default:
 		err = fmt.Errorf("release: unknown type %q", b.Type)
 	}
@@ -524,6 +572,80 @@ func decodeStatus(data []byte) (Status, error) {
 		}
 	}
 	return s, nil
+}
+
+// The bounds of entries.json.
+const (
+	maxEntryForwarders = 16
+	maxEntryVLESS      = 8
+)
+
+var (
+	entryNameRE = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}:[1-9][0-9]{0,4}$`)
+	entrySiteRE = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
+	entryPathRE = regexp.MustCompile(`^/[A-Za-z0-9_-]{8,64}$`)
+)
+
+func decodeEntries(data []byte) (Entries, error) {
+	var e Entries
+	if err := decode(data, TypeEntries, &e, "seq", "time_ms", "expires_ms", "forwarders"); err != nil {
+		return e, err
+	}
+	if e.Seq == 0 {
+		return e, errors.New("release: entries.json has no sequence number")
+	}
+	if err := lifetime(e.TimeMS, e.ExpiresMS); err != nil {
+		return e, err
+	}
+	if e.Forwarders == nil || len(e.Forwarders) > maxEntryForwarders {
+		return e, errors.New("release: entries.json has no list of forwarders, or too long a one")
+	}
+	names := map[string]bool{}
+	for _, f := range e.Forwarders {
+		if !entryNameRE.MatchString(f.Name) || names[f.Name] {
+			return e, fmt.Errorf("release: %q is not a forwarder's name, or twice", f.Name)
+		}
+		names[f.Name] = true
+		if len(f.VLESS) > maxEntryVLESS {
+			return e, fmt.Errorf("release: %s has too many ways in", f.Name)
+		}
+		for _, v := range f.VLESS {
+			if v.Transport != "xhttp" || !entrySiteRE.MatchString(v.ServerName) || v.Port == 0 || !entryPathRE.MatchString(v.Path) {
+				return e, fmt.Errorf("release: a way in to %s is not usable", f.Name)
+			}
+		}
+	}
+	return e, nil
+}
+
+// CheckEntries verifies entries.json: keys.json under the roots, entries
+// under its release or channel keys, its expiry, and that neither is older
+// than seen, which keeps the entries' own floors. It returns the entries
+// and the new Seen to keep.
+func CheckEntries(keys, entries File, roots [][]byte, now time.Time, seen Seen) (Entries, Seen, error) {
+	k, err := VerifyKeys(keys, roots, now, seen)
+	if err != nil {
+		return Entries{}, seen, fmt.Errorf("keys.json: %w", err)
+	}
+	if err := entries.verify(append(k.spkis(UseRelease), k.spkis(UseChannel)...)); err != nil {
+		return Entries{}, seen, fmt.Errorf("entries.json: %w", err)
+	}
+	e, err := decodeEntries(entries.Body)
+	if err != nil {
+		return Entries{}, seen, fmt.Errorf("entries.json: %w", err)
+	}
+	if now.UnixMilli() >= e.ExpiresMS {
+		return Entries{}, seen, fmt.Errorf("entries.json: %w", ErrExpired)
+	}
+	if signedAhead(e.TimeMS, now) {
+		return Entries{}, seen, fmt.Errorf("entries.json: %w", ErrJump)
+	}
+	if err := checkSeq(e.Seq, floor(seen.EntriesSeq, seen.EntriesKeys, seen.KeysSeq, k.Seq)); err != nil {
+		return Entries{}, seen, fmt.Errorf("entries.json: %w", err)
+	}
+	next := seen
+	next.KeysSeq, next.EntriesSeq, next.EntriesKeys = k.Seq, e.Seq, k.Seq
+	return e, next, nil
 }
 
 // serialLess orders serial numbers as numbers: the shorter first, then

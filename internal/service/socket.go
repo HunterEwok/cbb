@@ -202,6 +202,58 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			return
 		}
 		reply(c, control.Header{Done: true}, nil)
+	case control.OpEntries:
+		var e node.EntriesSet
+		if err := json.Unmarshal(m.Payload, &e); err != nil {
+			fail(c, fmt.Errorf("the request carries no entry points: %w", err))
+			return
+		}
+		if err := s.putEntries(e); err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Done: true}, nil)
+	case control.OpEntriesGet:
+		h := s.heldEntries()
+		if h == nil {
+			fail(c, errors.New("this device holds no signed entry points"))
+			return
+		}
+		data, err := json.Marshal(h.set)
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Done: true}, data)
+	case control.OpReleaseHeld:
+		h := s.heldRelease()
+		if h == nil {
+			fail(c, errors.New("this device holds no signed release"))
+			return
+		}
+		data, err := json.Marshal(h.set)
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Done: true}, data)
+	case control.OpUpdateWay:
+		var data []byte
+		if v := s.updateVLESS(); v != nil {
+			var err error
+			if data, err = json.Marshal(v); err != nil {
+				fail(c, err)
+				return
+			}
+		}
+		reply(c, control.Header{Done: true}, data)
+	case control.OpReleaseWant:
+		data, err := json.Marshal(s.wantedReleaseFiles())
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Done: true}, data)
 	case control.OpReleaseFile:
 		if err := s.receiveReleaseFile(r, m); err != nil {
 			fail(c, err)

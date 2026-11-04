@@ -267,6 +267,17 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   changes no `stable.json`. `published.yml` then checks what GitHub serves and updates the
   Homebrew tap. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
   `verify` (the comment in `tools/release-sign/main.go`).
+- **The entry points** (docs/protocol.md, section 16, "Entry points"): the ways in to the
+  project's servers that are not built in. On the Mac, in a checkout of the branch `channel`,
+  `release-sign entries -key se:~/.config/cbb-release/release.se -in in.json channel`, where
+  `in.json` is `{"forwarders": [{"name": "cbb.tools:8764", "vless": [{"transport": "xhttp",
+  "server_name": "cbb.tools", "port": 443, "path": "/banMEJvnYJJap8S"}]}]}`, signs
+  `entries.json` numbered above the branch's, valid for 30 days (`-days`, at most 100), and
+  checks it under the pinned roots; commit and push it. From then on `release-sign extend`
+  on cbb.tools signs it again with the channel key, the same forwarders and a higher number,
+  `take` brings that into the branch only when it names the same forwarders, `due` reminds
+  when it runs out, and `mirror` serves the newest copy that checks out. A blocked way in is
+  replaced by signing a new list with another `in.json`, without a release.
 - **Reminders**: the `channel` workflow opens the issue "Release channel: renewal due" when
   the branch's `keys.json` expires within 21 days (run `release-sign renew -new-keys` on the
   Mac with a YubiKey) or its `stable.json` within 10, which means cbb.tools stopped renewing
@@ -484,7 +495,11 @@ Connect API key), so that Gatekeeper opens it without a warning. Without the sec
 program is signed ad hoc, as before. The certificates live in a keychain of the run's own
 (`packaging/macos/keychain.sh`), removed when the step ends. CI's build job signs every pull
 request's build ad hoc with the same flags and runs `cbb version`, which loads the Rust core
-under the hardened runtime.
+under the hardened runtime. `cbb` carries one entitlement,
+`com.apple.security.cs.allow-unsigned-executable-memory` (`packaging/macos/cbb.entitlements`):
+wazero compiles the core to machine code at run time, and a Mac that enforces the hardened
+runtime's memory rules (macOS 27) kills a `cbb` without it as it loads the core. sign.sh
+refuses a signature without it, since a runner that does not enforce them passes the run.
 
 The same secrets make the Mac's installer package, `cbb-X.Y.Z.pkg` (the job "the Mac app
 and the .pkg"): `cbb` for Apple silicon and Intel in one program (`lipo` of the two signed

@@ -114,7 +114,12 @@ func overXHTTP(t *testing.T, port uint16) string {
 	if err := s.AddUser(id); err != nil {
 		t.Fatal(err)
 	}
-	b, err := json.Marshal(tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id})
+	// A group's packets come on a path of its own under the base one.
+	const group = "a-group-of-its-own"
+	if err := s.AddPath(group); err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path + "/" + group, ID: id})
 	if err != nil {
 		t.Fatal(err)
 	}

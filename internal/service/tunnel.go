@@ -878,6 +878,39 @@ func (s *Service) awayOnLocked(tag string) (*tunnel.State, error) {
 	return st, nil
 }
 
+// updateVLESS returns the VLESS settings by which cbb update reaches the
+// mirror on the forwarder (docs/protocol.md, section 16, "Where the files
+// are"): the hub's own on a hub that set VLESS, else those of the hub in
+// use or first to try; nil while sync away from home is off or has no
+// VLESS.
+func (s *Service) updateVLESS() *tunnel.VLESS {
+	s.tunMu.Lock()
+	defer s.tunMu.Unlock()
+	st := s.tunnel
+	if st == nil {
+		return nil
+	}
+	if st.IsHub {
+		if fw := st.Forwarder; fw != nil && fw.VLESS != nil && fw.VLESSID != "" {
+			v := *fw.VLESS
+			v.ID = fw.VLESSID
+			return &v
+		}
+		return nil
+	}
+	using := st.Hub(s.tunUsing)
+	if using == nil {
+		if hubs := hubsToTry(s.hubOrder(), s.tunSelf, st); len(hubs) > 0 {
+			using = &hubs[0]
+		}
+	}
+	if using == nil || using.VLESS == nil {
+		return nil
+	}
+	v := *using.VLESS
+	return &v
+}
+
 // awayStatus describes sync away from home for status; nil while it is
 // off.
 func (s *Service) awayStatus() *control.Away {
