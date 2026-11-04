@@ -320,8 +320,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// Makes this phone the root once the records make its claim's new root
     /// the current root, and signs what a new root starts with: its own
     /// device that holds the root, the admins it keeps, and a removal of
-    /// the lost root's device and the shortcuts. rootSigner is the new
-    /// root's key. A phone that claimed with the recovery key has no device
+    /// the lost root's device. rootSigner is the new root's key. A phone that claimed with the recovery key has no device
     /// record yet: the new root signs one, under name, with seal. This
     /// phone's member certificate is reissued from the new root, as a root
     /// admits only with a certificate of its own, after which the TLS
@@ -352,7 +351,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         }
         var revoke: [Data] = []
         for d in list where d.id != device {
-            if d.id == lost || d.role == "shortcut" {
+            if d.id == lost {
                 revoke += d.keys
             } else if let admin = d.adminKey, !d.frozen {
                 out.append(try record(device: d.id, name: d.name, role: d.role, os: d.os, key: d.key, admin: admin, powers: d.powers,

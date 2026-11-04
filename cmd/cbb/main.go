@@ -84,7 +84,6 @@ Commands:
   pair                    In a group: show a code for a new computer. In none: join one,
                           by the phone's QR code or the code from cbb pair on the group.
   pair -code [address]    Join with the code from cbb pair on the root or an admin.
-  pair -phone             Pair an iPhone or iPad with the shortcut.
   pair -invite file       Join from afar with an invitation from cbb invite.
   invite [-for 1h]        Invite a device from afar: run on the group's hub.
   update [-check | -to VERSION]
@@ -95,8 +94,6 @@ Commands:
   help                    Print this help.
 
 Rarely needed:
-  holder [auto|first|fallback|never]
-                          Show or set whether this computer holds cbb.local.
   network                 Take the network this computer is on now as one where the group
                           is: it publishes itself and takes connections only on those.
   install [options]       Windows, after winget: install the service from this copy
@@ -177,8 +174,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdPair(rest, stdin, stdout, stderr)
 	case "invite":
 		return cmdInvite(rest, stdin, stdout, stderr)
-	case "holder":
-		return cmdHolder(rest, stdout, stderr)
 	case "mode":
 		return cmdMode(rest, stdout, stderr)
 	case "config":

@@ -544,9 +544,6 @@ if ($method -eq 'get') {
 }
 
 Write-Host "CBB $v is running on TCP port $Port; $user may use it."
-if ($Port -ne 8764) {
-	Write-Host 'The iPhone shortcut works only with port 8764; the CBB app takes any port.'
-}
 # An update of a device in a group keeps its group: no need to join.
 if (Test-Path (Join-Path $dataDir 'state\identity.json')) {
 	Write-Host 'It stays in its group.'

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9165921fa4f0 -->
+<!-- source: 36fba21437d1 -->
 # Kifaa kikipotea au kuibwa
 
 Kwa yeyote ambaye simu, kompyuta au kifaa kingine cha kikundi chake kimepotea. Kiondoe kwenye kikundi haraka iwezekanavyo; vifaa vingine hubaki kwenye kikundi na kuendelea kusawazisha.
@@ -31,7 +31,7 @@ Mzizi hushikilia ufunguo wa mzizi wa kikundi. Ukipotea, msimamizi anakuwa mzizi,
 - kwa simu: kwenye simu nyingine, ambayo ni msimamizi, ondoa iliyopotea; programu huchukua kikundi katika hatua ile ile;
 - kwa kompyuta: kwenye kompyuta ya msimamizi, `sudo cbb takeover NAME`, ambapo NAME ni mzizi aliyepotea.
 
-iPhone zinazotumia njia ya mkato huoanishwa tena baada ya kuchukua kikundi. Kama kikundi hakikuwa na msimamizi mwingine, hakiwezi kuchukuliwa: tengeneza kikundi kipya na uongeze vifaa tena. Ndiyo maana programu hupendekeza simu ya pili ya msimamizi, au kompyuta ya msimamizi, mara kikundi kinapokuwa na msimamizi mmoja tu.
+Kama kikundi hakikuwa na msimamizi mwingine, hakiwezi kuchukuliwa: tengeneza kikundi kipya na uongeze vifaa tena. Ndiyo maana programu hupendekeza simu ya pili ya msimamizi, au kompyuta ya msimamizi, mara kikundi kinapokuwa na msimamizi mmoja tu.
 
 ## 4. Zima kile kilichoweza kufikia
 

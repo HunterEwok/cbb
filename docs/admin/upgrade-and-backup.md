@@ -37,7 +37,7 @@ phones and computers pass them on. What a backup can add is a way back for the g
 | Device | Back it up? | Why |
 |---|---|---|
 | The root phone | no | its root key is in the Secure Enclave or the Keystore and cannot be copied; keep a second admin phone instead (below) |
-| The root computer (a group made with `cbb new`) | yes, encrypted, or keep an admin | its state folder holds the group's root key and the iPhone CA |
+| The root computer (a group made with `cbb new`) | yes, encrypted, or keep an admin | its state folder holds the group's root key |
 | An admin computer | no, if the root or another admin remains | the root makes a new admin in a minute |
 | Any other device | no | pairing it again is quicker than a restore, and a copied key is a risk |
 | A forwarder or a relay | its key file | a new key means giving every hub the new one; see [running your own servers](self-hosting.md#updating) |

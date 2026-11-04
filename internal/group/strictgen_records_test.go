@@ -206,7 +206,7 @@ func recordKinds() []genKind {
 			genMember{"os", `"linux"`}, genMember{"key", hash}, genMember{"admin", nine}),
 		genField{"device", jString, true, devID},
 		genField{"name", jString, true, name},
-		genField{"role", jString, true, genEnum([]string{"full", "phone", "lite", "watch", "shortcut"}, "linux", "mac", "iphone", "server", "", "Full")},
+		genField{"role", jString, true, genEnum([]string{"full", "phone", "lite", "watch"}, "linux", "mac", "iphone", "server", "", "Full")},
 		genField{"os", jString, false, genEnum([]string{"linux", "windows", "macos", "ios", "android", "watchos", "wearos", "none"}, "", "beos", "Linux", "mac", "iphone")},
 		genField{"key", jString, true, genHashValues()},
 		genField{"admin", jString, false, genHashValues()},

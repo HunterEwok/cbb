@@ -70,7 +70,7 @@ final class LiveGroup: GroupController {
         #endif
     }
     /// How recent a computer's copy must be for the button to fetch it
-    /// first, as for the shortcut (internal/phone/sync.go).
+    /// first, as on Android (SyncRule).
     static let recentCopyMS: Int64 = 45_000
     /// How long the button waits for a computer to connect before it says
     /// none is.
@@ -1996,9 +1996,9 @@ final class LiveGroup: GroupController {
         }
     }
 
-    /// The one button, by the rule of the shortcut: a computer's copy of a
-    /// moment ago comes to the phone; otherwise a new text on the phone goes
-    /// to the computers; otherwise the computers' latest text comes.
+    /// The one button, by the rule of Android's SyncRule: a computer's copy
+    /// of a moment ago comes to the phone; otherwise a new text on the phone
+    /// goes to the computers; otherwise the computers' latest text comes.
     func sync() async throws -> AppModel.SyncResult {
         guard let node, let g = state else { throw PendingGroup.Failure.noComputers }
         online = await node.connected

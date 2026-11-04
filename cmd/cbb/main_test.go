@@ -29,7 +29,6 @@ func TestRun(t *testing.T) {
 		{name: "takeover -h", args: []string{"takeover", "-help"}, code: 2, stderr: "usage: cbb takeover"},
 		{name: "freeze -h", args: []string{"freeze", "--help"}, code: 2, stderr: "usage: cbb freeze"},
 		{name: "unfreeze -h", args: []string{"unfreeze", "-h"}, code: 2, stderr: "usage: cbb unfreeze"},
-		{name: "holder -h", args: []string{"holder", "-h"}, code: 2, stderr: "usage: cbb holder"},
 		{name: "service with an argument", args: []string{"service", "extra"}, code: 2, stderr: "takes only flags"},
 	}
 	for _, tt := range tests {

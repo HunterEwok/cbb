@@ -205,10 +205,9 @@ Fail: it expires or sync stops.
 1. On the hub (root) `cbb admin WIN` is refused, since its keys sit in a file; `cbb admin
    -allow-file-key WIN` makes it one, and `cbb status` marks the Windows member as admin.
 2. On the Windows admin `cbb pair` and admit a new device; then revoke it there.
-3. Turn the hub off; the Windows admin still admits a device and serves the shortcut.
+3. Turn the hub off; the Windows admin still admits a device.
 4. Turn the hub on; on it `cbb remove WIN`.
-Pass: each step works; after step 4 the iPhone CA is replaced (shortcut iPhones pair again) and
-nothing else re-pairs. Fail: an admin cannot admit, or a non-admin can.
+Pass: each step works; after step 4 nothing re-pairs. Fail: an admin cannot admit, or a non-admin can.
 
 **L6. Takeover (layout A).** Runs: manual.
 1. Turn the hub (root) off.
@@ -216,20 +215,12 @@ nothing else re-pairs. Fail: an admin cannot admit, or a non-admin can.
 3. Copy on each remaining device; it arrives everywhere. On the new root `cbb admin
    -allow-file-key` another computer.
 4. Turn the old root on.
-Pass: the Windows computer is root; nobody but the shortcut iPhones pairs again; the old root is
+Pass: the Windows computer is root; nobody pairs again; the old root is
 refused by every member. Fail: any member follows the old root.
 
 **L7. Remove an ordinary member.** Runs: manual (Linux), auto (R3 for the others).
 1. On the root revoke a Linux member, the Windows member and the Mac in turn.
 Pass: the group stays, the others keep syncing, nobody pairs again.
-
-**L8. The holder of `cbb.local`.** Runs: manual.
-1. On the hub `cbb status` shows it holds the name; resolve it on another member
-   (`avahi-resolve -n cbb.local`, `Resolve-DnsName` on Windows).
-2. Stop the hub's service.
-3. Within 30 s resolve again.
-Pass: another member with the iPhone key holds it and `cbb status` there says so. Fail: no one
-holds it.
 
 **L9. Upgrade from the previous release.** Runs: manual, before each release.
 1. Every device on the previous release in one group; copy a marker.
@@ -421,11 +412,6 @@ Pass: the report records whether the agent's reading asks the user; text keeps s
 2. Copy elsewhere; paste into the editor without clicking another window.
 3. Right after sign-in, before any X11 app started XWayland, repeat 1 and 2.
 Pass: each within the usual latency.
-
-**P25. The Mac holds `cbb.local`.** Runs: manual.
-1. Turn the other full members off, or `cbb holder never` on them.
-2. `cbb status` on the Mac; resolve the name on the Linux and Windows members.
-Pass: the Mac says it holds the name; both resolve it to the Mac.
 
 **P26. The Mac blocks all incoming.** Runs: manual.
 1. Set the application firewall to "Block all incoming connections".

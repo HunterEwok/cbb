@@ -72,13 +72,6 @@ Both are off on every device until its own user turns them on there.
 - **Networks that watch traffic.** AmneziaWG's obfuscation, or VLESS with REALITY on your
   forwarder, hides that the tunnel is WireGuard ([networks that block VPNs](../guide/blocked-networks.md)).
 
-## The iPhone shortcut
-
-The shortcut's token only syncs. When an iPhone that used it is lost, run
-`sudo cbb pair -phone -new-token` on the computer that serves it: every token so far stops
-working and the other iPhones pair again. Without iPhones that use the shortcut, keep the
-computer from answering for it: `sudo cbb holder never`.
-
 ## Updates and downloads
 
 - **Automatic updates on** (`sudo cbb update -auto on`): security fixes reach every

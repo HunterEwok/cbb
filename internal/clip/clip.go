@@ -116,7 +116,7 @@ type Via uint8
 
 const (
 	Copy      Via = iota // copied on that member
-	Phone                // sent from a phone: the app, or the iPhone shortcut
+	Phone                // sent from a phone's app
 	Universal            // reached a Mac through Universal Clipboard, from an iPhone or another Mac
 )
 

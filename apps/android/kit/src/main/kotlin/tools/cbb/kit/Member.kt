@@ -110,7 +110,7 @@ object Member {
     /** How a text reached the member that made the event. */
     enum class Via(val wire: String) {
         COPY("copy"),
-        /** Sent from a phone: the app, or the iPhone shortcut. */
+        /** Sent from a phone's app. */
         PHONE("phone"),
         UNIVERSAL_CLIPBOARD("universal-clipboard");
 

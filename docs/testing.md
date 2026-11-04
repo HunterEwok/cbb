@@ -75,9 +75,8 @@ becomes a vector here.
 - `internal/service` starts whole members in one test: sync, pairing, remote paste, quick
   actions, sync away from home through a hub, a forwarder (`TestAwayThroughForwarder`) and a
   relay (`TestAwayThroughRelay`), with obfuscation (`TestAwayObfuscated`).
-- `tools/e2e/e2e.sh` runs the built static binary as three members and an avahi resolver
-  in Docker containers: mDNS, pairing with codes, sync, the holder of
-  `cbb.local` and its handover, a wrong code.
+- `tools/e2e/e2e.sh` runs the built static binary as three members and an avahi browser
+  in Docker containers: mDNS, pairing with codes, sync, a wrong code.
 - The installer jobs install, run and remove the service on each system they cover.
 
 ## Bench scenarios

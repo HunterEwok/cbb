@@ -141,7 +141,7 @@ func TestPairWithACode(t *testing.T) {
 	}
 	// The code is never taken from the command line.
 	for _, args := range [][]string{{"pair", "-code", "123456"}, {"pair", "-code", "123", "456"}, {"pair", "192.168.1.5:4000"},
-		{"pair", "-phone", "-code"}, {"pair", "-invite", "x", "-code"}} {
+		{"pair", "-invite", "x", "-code"}} {
 		stderr.Reset()
 		if code := run(args, strings.NewReader(""), &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "usage") {
 			t.Errorf("%v: %d, %q", args, code, stderr.String())
@@ -237,7 +237,7 @@ func TestStatus(t *testing.T) {
 	}{
 		{control.Status{Role: "full", OS: "linux"}, "Run cbb new here to start one"},
 		{control.Status{Role: "full", OS: "macos"}, "Run cbb new here to start one"},
-		{control.Status{Role: "full", OS: "windows", Device: "d1", Group: "g1", Holder: true}, "Device d1 (Windows, full), group g1"},
+		{control.Status{Role: "full", OS: "windows", Device: "d1", Group: "g1"}, "Device d1 (Windows, full), group g1"},
 		{control.Status{Role: "full", OS: "macos", Device: "d2", Group: "g1", Removed: true}, "This device was removed from the group"},
 		{control.Status{Role: "full", OS: "linux", Device: "d2", Group: "g1", Frozen: true}, "froze this computer's admin key"},
 		{control.Status{Role: "full", OS: "linux", Device: "d3", Group: "g1", CertEndsMS: time.Now().Add(-time.Hour).UnixMilli()}, "This device's certificate ended on"},

@@ -110,7 +110,7 @@ func TestDeviceCommands(t *testing.T) {
 	})
 }
 
-func TestModeAndHolder(t *testing.T) {
+func TestModeAndNetwork(t *testing.T) {
 	inG := func(st control.Status) control.Header {
 		st.Role, st.OS, st.Group = "full", "linux", "g1"
 		return control.Header{Status: &st}
@@ -126,12 +126,6 @@ func TestModeAndHolder(t *testing.T) {
 			check: sent(control.OpMode, func(m *control.Message) bool { return m.Name == "own" && m.Device == "tv" }), stdout: "tv is in sync mode own now."},
 		{name: "mode -on without a mode", args: []string{"mode", "-on", "tv"}, code: 2, stderr: "usage: cbb mode"},
 		{name: "mode with two modes", args: []string{"mode", "own", "send"}, code: 2, stderr: "usage: cbb mode"},
-		{name: "holder", args: []string{"holder"}, answer: inG(control.Status{HoldSetting: "auto", Battery: true, HoldPriority: 2}),
-			check: sent(control.OpStatus, nil), stdout: "as a fallback when elected; another member does now (setting auto, a laptop)"},
-		{name: "holder set", args: []string{"holder", "first"}, answer: inG(control.Status{HoldSetting: "first", HoldPriority: 1, Holder: true}),
-			check: sent(control.OpHolder, func(m *control.Message) bool { return m.Name == "first" }), stdout: "Answers for cbb.local (first; setting first)"},
-		{name: "holder with no status", args: []string{"holder"}, check: sent(control.OpStatus, nil), code: 1, stderr: "sent no status"},
-		{name: "holder with two settings", args: []string{"holder", "a", "b"}, code: 2, stderr: "usage: cbb holder"},
 		{name: "network", args: []string{"network"}, check: sent(control.OpNetwork, nil), stdout: "publishes itself and takes connections here"},
 		{name: "network refused", args: []string{"network"}, answer: control.Header{Error: "this network is not known"}, check: sent(control.OpNetwork, nil), code: 1, stderr: "not known"},
 		{name: "network with an argument", args: []string{"network", "x"}, code: 2, stderr: "usage: cbb network"},

@@ -4,22 +4,14 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"net/netip"
-	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -76,7 +68,6 @@ type fakeDiscovery struct {
 	cfg    DiscoveryConfig
 	mu     sync.Mutex
 	txt    []string
-	holder bool
 	latest []mdns.Peer
 	fresh  bool
 	kick   chan struct{}
@@ -133,12 +124,6 @@ func (d *fakeDiscovery) SetTXT(txt []string) {
 	d.txt = slices.Clone(txt)
 	d.mu.Unlock()
 	d.h.update()
-}
-
-func (d *fakeDiscovery) SetHolder(hold bool) {
-	d.mu.Lock()
-	d.holder = hold
-	d.mu.Unlock()
 }
 
 // txtOf returns the TXT record that the member with this device ID
@@ -223,12 +208,11 @@ func (s *testService) logged(part string) bool {
 	return slices.ContainsFunc(s.lines, func(l string) bool { return strings.Contains(l, part) })
 }
 
-// addrs returns where the shortcut's HTTPS and the profile are: both on the
-// member port.
-func (s *testService) addrs() (phone, profile string) {
+// addr returns the member port's address.
+func (s *testService) addr() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.memberAddr, s.memberAddr
+	return s.memberAddr
 }
 
 func startService(t *testing.T, h *hub, name string) *testService {
@@ -294,9 +278,6 @@ func startIn(t *testing.T, h *hub, s *testService) *testService {
 		joinListen: func() (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") },
 		joinAddrs:  func(port uint16) []string { return []string{fmt.Sprintf("127.0.0.1:%d", port)} },
 		newMode:    &sharedMode,
-		// Not the host's battery: a laptop running the tests would change
-		// the holder priorities they expect.
-		battery: func() bool { return false },
 	}
 	if s.cfg != nil {
 		s.cfg(&cfg)
@@ -408,7 +389,7 @@ func pairWith(t *testing.T, admin, s *testService) {
 }
 
 // makeAdmin makes s an admin on the group's root and waits until it holds
-// its admin CA and the iPhone CA.
+// its admin CA.
 func makeAdmin(t *testing.T, root, s *testService) {
 	t.Helper()
 	waitFor(t, s.name+" is connected to the root", func() bool {
@@ -425,7 +406,7 @@ func makeAdmin(t *testing.T, root, s *testService) {
 	}
 	waitFor(t, s.name+" is an admin", func() bool {
 		id, err := group.Load(s.dir)
-		return err == nil && id.AdminCA != nil && id.ServesPhone()
+		return err == nil && id.AdminCA != nil
 	})
 }
 
@@ -487,33 +468,6 @@ func TestThreeMembers(t *testing.T) {
 	for _, s := range []*testService{a, b, c} {
 		waitFor(t, s.name+" has the text", func() bool { return s.paste(t) == "from alpha" })
 	}
-	// Exactly one member holds cbb.local: the lowest device ID
-	// of the two that hold the iPhone CA.
-	holders := func() []string {
-		var out []string
-		for _, s := range []*testService{a, b, c} {
-			if s.cancel != nil && s.status(t).Holder {
-				out = append(out, s.name)
-			}
-		}
-		return out
-	}
-	waitFor(t, "one holder", func() bool { return len(holders()) == 1 })
-	lowest := a
-	for _, s := range []*testService{b} {
-		if s.status(t).Device < lowest.status(t).Device {
-			lowest = s
-		}
-	}
-	if got := holders(); got[0] != lowest.name {
-		t.Errorf("holder %v, want %s", got, lowest.name)
-	}
-	// When it leaves, another takes over.
-	lowest.stop()
-	waitFor(t, "a new holder", func() bool {
-		hs := holders()
-		return len(hs) == 1 && hs[0] != lowest.name
-	})
 }
 
 func TestOneConnectionBetweenTwo(t *testing.T) {
@@ -640,20 +594,6 @@ func TestWatcherKeepsTheNewestWrite(t *testing.T) {
 	}
 }
 
-func TestAloneHoldsTheName(t *testing.T) {
-	// A single Linux member, with an iPhone and no other computer, answers
-	// for cbb.local.
-	var h hub
-	a := startService(t, &h, "alpha")
-	b := startService(t, &h, "beta")
-	pairWith(t, a, b)
-	b.stop()
-	waitFor(t, "alpha holds cbb.local alone", func() bool { return a.status(t).Holder })
-	a.stop()
-	a2 := restartService(t, &h, a)
-	waitFor(t, "alpha holds it right after a restart", func() bool { return a2.status(t).Holder })
-}
-
 func TestRestartWithANewPort(t *testing.T) {
 	// A member that restarts on a new port while discovery still lists it
 	// is dialed at the new port.
@@ -673,8 +613,7 @@ func TestRestartWithANewPort(t *testing.T) {
 
 func TestMac(t *testing.T) {
 	// A Mac joins through a Linux member, admits no devices until it is an
-	// admin, and syncs in both directions; until then it never holds
-	// cbb.local. Its rules must hold whichever device ID is
+	// admin, and syncs in both directions. Its rules must hold whichever device ID is
 	// lower, so the test runs once with the Mac's ID below the pi's and
 	// once above it.
 	for _, macLower := range []bool{true, false} {
@@ -711,9 +650,6 @@ func TestMac(t *testing.T) {
 			t.Fatal(err)
 		}
 		waitFor(t, "the Mac has it", func() bool { return mac.paste(t) == "from the pi" })
-		if mac.status(t).Holder || !pi.status(t).Holder {
-			t.Error("the Mac holds cbb.local, or the pi does not")
-		}
 		pi.stop()
 		mac.stop()
 	}
@@ -744,10 +680,6 @@ func TestRenewal(t *testing.T) {
 			return err == nil && id.Cert.NotAfter.After(before[s.name].Cert.NotAfter.AddDate(1, 0, 0))
 		})
 	}
-	id, _ := group.Load(pi.dir)
-	if !id.Phone.NotAfter.After(before["pi"].Phone.NotAfter) {
-		t.Error("the pi did not renew its cbb.local certificate")
-	}
 	// The renewed certificates work: the members connect again.
 	mac.stop()
 	mac = restartService(t, &h, mac)
@@ -762,10 +694,10 @@ func TestMacCreatesAGroup(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	pairWith(t, mac, pi)
 	id, err := group.Load(mac.dir)
-	if err != nil || !id.IsRoot() || !id.ServesPhone() {
+	if err != nil || !id.IsRoot() {
 		t.Fatalf("the Mac is not the group's root: %v", err)
 	}
-	if id, err := group.Load(pi.dir); err != nil || id.IsAdmin() || id.ServesPhone() || id.AdminKey == nil {
+	if id, err := group.Load(pi.dir); err != nil || id.IsAdmin() || id.AdminKey == nil {
 		t.Fatalf("the pi holds keys, or no admin key: %v", err)
 	}
 	makeAdmin(t, mac, pi)
@@ -1108,263 +1040,6 @@ func TestAdminOpsOnlyOnTheAdminSocket(t *testing.T) {
 	}
 }
 
-func TestIPhone(t *testing.T) {
-	var h hub
-	pi := startService(t, &h, "pi")
-	other := startService(t, &h, "other")
-	pairWith(t, pi, other) // creates the group
-	makeAdmin(t, pi, other)
-	waitFor(t, "one holder", func() bool { return pi.status(t).Holder != other.status(t).Holder })
-	holder, notHolder := pi, other
-	if other.status(t).Holder {
-		holder, notHolder = other, pi
-	}
-	// Only the holder of cbb.local pairs an iPhone.
-	if _, err := notHolder.do(t, control.Header{Op: control.OpPairPhone}, ""); err == nil || !strings.Contains(err.Error(), "does not answer for cbb.local") {
-		t.Errorf("pair -phone on a member that does not hold cbb.local: %v", err)
-	}
-	c := holder.dial(t)
-	defer c.Close()
-	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPairPhone}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := holder.do(t, control.Header{Op: control.OpPairPhone}, ""); err == nil || !strings.Contains(err.Error(), "already open") {
-		t.Errorf("a second iPhone window: %v", err)
-	}
-	phoneAddr, profileAddr := holder.addrs()
-
-	// 1. The iPhone downloads the profile over plain HTTP and trusts the
-	// CA in it, nothing else.
-	resp, err := http.Get("http://" + profileAddr + "/cbb.mobileconfig")
-	if err != nil {
-		t.Fatal(err)
-	}
-	profile, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	der := regexp.MustCompile(`<data>([A-Za-z0-9+/=]+)</data>`).FindSubmatch(profile)
-	if der == nil {
-		t.Fatalf("profile:\n%s", profile)
-	}
-	raw, _ := base64.StdEncoding.DecodeString(string(der[1]))
-	ca, err := x509.ParseCertificate(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if group.Fingerprint(ca) != m.Fingerprint {
-		t.Fatal("the printed fingerprint is not the profile's")
-	}
-	roots := x509.NewCertPool()
-	roots.AddCert(ca)
-	iphone := &http.Client{Timeout: 10 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "cbb.local"}}}
-
-	// 2. The pairing page, reached as cbb.local, takes the code.
-	resp, err = iphone.PostForm("https://"+phoneAddr+"/pair", url.Values{"code": {m.Code}})
-	if err != nil {
-		t.Fatalf("the iPhone could not reach the pairing page: %v", err)
-	}
-	page, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	tok := regexp.MustCompile(`<code>(cb1\.[A-Za-z0-9_-]+)</code>`).FindSubmatch(page)
-	if tok == nil {
-		t.Fatalf("pairing page:\n%s", page)
-	}
-	if m, err := c.Receive(); err != nil || !m.Done {
-		t.Fatalf("pair -phone ended with %+v, %v", m, err)
-	}
-	// The window and the profile port closed before the answer.
-	if _, err := http.Get("http://" + profileAddr + "/cbb.mobileconfig"); err == nil {
-		t.Error("the profile port is still open")
-	}
-
-	// 3. The button: the iPhone's text goes to every member.
-	sync := func(text string) map[string]any {
-		t.Helper()
-		body, _ := json.Marshal(map[string]any{"v": 1, "text": text})
-		req, _ := http.NewRequest(http.MethodPost, "https://"+phoneAddr+"/sync", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer "+string(tok[1]))
-		resp, err := iphone.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		var rep map[string]any
-		json.NewDecoder(resp.Body).Decode(&rep)
-		return rep
-	}
-	if rep := sync("from the iPhone"); rep["direction"] != "from_iphone" {
-		t.Fatalf("reply %v", rep)
-	}
-	for _, s := range []*testService{pi, other} {
-		waitFor(t, s.name+" has the iPhone's text", func() bool { return s.paste(t) == "from the iPhone" })
-	}
-	// A computer copies; the next press brings it to the iPhone.
-	if _, err := other.do(t, control.Header{Op: control.OpCopy}, "from the computer"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the holder has the copy", func() bool { return holder.paste(t) == "from the computer" })
-	if rep := sync("from the iPhone"); rep["direction"] != "to_iphone" || rep["copy"] != "from the computer" {
-		t.Errorf("reply %v", rep)
-	}
-	// A token from another group is refused, and the shortcut told to
-	// pair again.
-	req, _ := http.NewRequest(http.MethodPost, "https://"+phoneAddr+"/sync", strings.NewReader(`{"v":1,"text":"x"}`))
-	req.Header.Set("Authorization", "Bearer cb1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-	if resp, err := iphone.Do(req); err == nil {
-		var rep map[string]any
-		json.NewDecoder(resp.Body).Decode(&rep)
-		resp.Body.Close()
-		if rep["direction"] != "unpaired" {
-			t.Errorf("a forged token got %v", rep)
-		}
-	}
-
-	// A second iPhone pairs the way the shortcut does: the code as JSON.
-	c2 := holder.dial(t)
-	defer c2.Close()
-	m, err = c2.Do(&control.Message{Header: control.Header{Op: control.OpPairPhone}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp, err = iphone.Post("https://"+phoneAddr+"/pair", "application/json", strings.NewReader(`{"v":1,"code":"`+m.Code+`"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var paired struct {
-		OK    bool   `json:"ok"`
-		Token string `json:"token"`
-	}
-	json.NewDecoder(resp.Body).Decode(&paired)
-	resp.Body.Close()
-	if !paired.OK || !strings.HasPrefix(paired.Token, "cb1.") {
-		t.Fatalf("JSON pairing: %+v", paired)
-	}
-	if m, err := c2.Receive(); err != nil || !m.Done {
-		t.Fatalf("pair -phone ended with %+v, %v", m, err)
-	}
-	tok[1] = []byte(paired.Token)
-	if rep := sync("from the second iPhone"); rep["direction"] == "unpaired" || rep["direction"] == "error" {
-		t.Errorf("the second iPhone's token: %v", rep)
-	}
-}
-
-// shortcutPhone makes a group on pi and pairs an iPhone with the shortcut
-// the way the shortcut does; post sends a request to the shortcut's HTTPS
-// with a token and returns the status and the JSON reply, and pairAgain
-// pairs it again, with newToken revoking every shortcut's token first.
-func shortcutPhone(t *testing.T, pi *testService) (post func(path, token, body string) (int, map[string]any), pairAgain func(newToken bool) string, token string) {
-	t.Helper()
-	if _, err := pi.do(t, control.Header{Op: control.OpPairPhone}, ""); err == nil || !strings.Contains(err.Error(), "cbb new") {
-		t.Errorf("pair -phone in no group: %v", err)
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
-	}
-	var iphone *http.Client
-	var phoneAddr string
-	pairAgain = func(newToken bool) string {
-		t.Helper()
-		c := pi.dial(t)
-		defer c.Close()
-		m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPairPhone, NewToken: newToken}})
-		if err != nil {
-			t.Fatalf("pair -phone: %v", err)
-		}
-		if iphone == nil {
-			// The iPhone port starts with the group, just after it.
-			waitFor(t, "the iPhone port", func() bool { a, _ := pi.addrs(); return a != "" })
-			var profileAddr string
-			phoneAddr, profileAddr = pi.addrs()
-			resp, err := http.Get("http://" + profileAddr + "/cbb.mobileconfig")
-			if err != nil {
-				t.Fatal(err)
-			}
-			profile, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			der := regexp.MustCompile(`<data>([A-Za-z0-9+/=]+)</data>`).FindSubmatch(profile)
-			raw, _ := base64.StdEncoding.DecodeString(string(der[1]))
-			ca, err := x509.ParseCertificate(raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			roots := x509.NewCertPool()
-			roots.AddCert(ca)
-			shortcutTLS := &tls.Config{RootCAs: roots, ServerName: "cbb.local"}
-			// The shortcut's HTTPS takes the member port's connections a
-			// moment after the port opens; until then the member TLS
-			// answers them.
-			waitFor(t, "the shortcut's HTTPS", func() bool {
-				c, err := tls.Dial("tcp", phoneAddr, shortcutTLS)
-				if err == nil {
-					c.Close()
-				}
-				return err == nil
-			})
-			iphone = &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: shortcutTLS}}
-		}
-		resp, err := iphone.Post("https://"+phoneAddr+"/pair", "application/json", strings.NewReader(`{"v":1,"code":"`+m.Code+`"}`))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var paired struct{ Token string }
-		json.NewDecoder(resp.Body).Decode(&paired)
-		resp.Body.Close()
-		if _, err := c.Receive(); err != nil {
-			t.Fatal(err)
-		}
-		return paired.Token
-	}
-	token = pairAgain(false)
-	post = func(path, token, body string) (int, map[string]any) {
-		t.Helper()
-		req, _ := http.NewRequest(http.MethodPost, "https://"+phoneAddr+path, strings.NewReader(body))
-		req.Header.Set("Authorization", "Bearer "+token)
-		resp, err := iphone.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		var rep map[string]any
-		json.NewDecoder(resp.Body).Decode(&rep)
-		return resp.StatusCode, rep
-	}
-	return post, pairAgain, token
-}
-
-func TestShortcutTokenOnlySyncs(t *testing.T) {
-	// The shortcut's token syncs and does nothing else: there is no way to
-	// add a computer with it, and pair -phone -new-token revokes it.
-	var h hub
-	pi := startService(t, &h, "pi")
-	post, pairAgain, token := shortcutPhone(t, pi)
-	if code, rep := post("/sync", token, `{"v":1,"text":"from the iPhone"}`); code != http.StatusOK || rep["direction"] != "from_iphone" {
-		t.Fatalf("sync: %d %v", code, rep)
-	}
-	if code, _ := post("/admit", token, `{"v":1,"code":"cbb://join?code=246802&addr=127.0.0.1:1&fp=x"}`); code != http.StatusNotFound {
-		t.Errorf("/admit answered %d, want 404", code)
-	}
-	second := pairAgain(false)
-	fresh := pairAgain(true)
-	for _, old := range []string{token, second} {
-		if _, rep := post("/sync", old, `{"v":1,"text":"x"}`); rep["direction"] != "unpaired" {
-			t.Errorf("a token from before -new-token: %v", rep)
-		}
-	}
-	if _, rep := post("/sync", fresh, `{"v":1,"text":"again"}`); rep["direction"] != "from_iphone" {
-		t.Errorf("the new token: %v", rep)
-	}
-	shortcuts := 0
-	for _, d := range pi.devices(t) {
-		if d.Role == group.RoleShortcut {
-			shortcuts++
-		}
-	}
-	if shortcuts != 1 {
-		t.Errorf("%d shortcuts listed after -new-token, want 1", shortcuts)
-	}
-}
-
 func TestListenPreferring(t *testing.T) {
 	taken, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -1419,10 +1094,7 @@ func listBox(t *testing.T, dir string, admin *group.Identity, dev group.DeviceID
 
 func TestLinuxMemberWithoutCAKeys(t *testing.T) {
 	// A Linux member without the CA keys, as in a group whose root is the
-	// phone, connects and syncs, but never holds cbb.local, even
-	// with the lowest device ID, and admits nobody. (A group is either one
-	// or the other, so the pi gives the name up to the lower ID here; in a
-	// group whose root is the phone nobody holds it.)
+	// phone, connects and syncs, but admits nobody.
 	var h hub
 	pi := startService(t, &h, "pi")
 	c, _ := openWindow(t, pi) // creates the group
@@ -1460,14 +1132,8 @@ func TestLinuxMemberWithoutCAKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "from the box" })
-	if box.status(t).Holder {
-		t.Error("the member without CA keys holds cbb.local")
-	}
 	if _, err := box.do(t, control.Header{Op: control.OpPair}, ""); err == nil {
 		t.Error("a member without CA keys opened a pairing window")
-	}
-	if _, err := box.do(t, control.Header{Op: control.OpPairPhone}, ""); err == nil {
-		t.Error("a member without CA keys paired an iPhone")
 	}
 }
 
@@ -1550,17 +1216,11 @@ func TestDevicesAndRevoke(t *testing.T) {
 		})
 	}
 	waitFor(t, "the Mac is alone", func() bool { return len(mac.status(t).Peers) == 0 })
-	// The root removes the admin, which held the iPhone CA: the root makes
-	// a new one.
-	before, _ := group.Load(pi.dir)
+	// The root removes the admin.
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
 		t.Fatalf("revoke the admin: %v", err)
 	}
 	waitFor(t, "the pi is alone", func() bool { return listed(pi.devices(t)) == "pi" && len(pi.status(t).Peers) == 0 })
-	after, err := group.Load(pi.dir)
-	if err != nil || !after.ServesPhone() || after.PhoneCA.Cert.Equal(before.PhoneCA.Cert) {
-		t.Fatalf("the root did not replace the iPhone CA: %v", err)
-	}
 	// The records survive a restart.
 	pi.stop()
 	pi = restartService(t, &h, pi)
@@ -1569,10 +1229,10 @@ func TestDevicesAndRevoke(t *testing.T) {
 	}
 }
 
-// TestAdminsShareTheIPhoneCA checks that when the root removes an admin,
-// the iPhone CA it makes in place of the old one reaches the other admin,
-// and that an admin removed while it was off gets nothing new.
-func TestAdminsShareTheIPhoneCA(t *testing.T) {
+// TestOnlyTheRootRemovesAnAdmin checks that an admin computer does not
+// remove another admin, and that the other admin drops the one the root
+// removed.
+func TestOnlyTheRootRemovesAnAdmin(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")
@@ -1581,37 +1241,19 @@ func TestAdminsShareTheIPhoneCA(t *testing.T) {
 	pairWith(t, pi, b)
 	makeAdmin(t, pi, a)
 	makeAdmin(t, pi, b)
-	root, _ := group.Load(pi.dir)
-	for _, s := range []*testService{a, b} {
-		if id, _ := group.Load(s.dir); !id.PhoneCA.Cert.Equal(root.PhoneCA.Cert) {
-			t.Fatalf("%s holds another iPhone CA than the root", s.name)
-		}
-	}
 	b.stop()
-	// An admin computer does not remove another admin; the root does.
 	if _, err := a.do(t, control.Header{Op: control.OpRevoke, Name: "b"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
 		t.Errorf("an admin removed another admin: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "b"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "a takes the new iPhone CA", func() bool {
-		r, err1 := group.Load(pi.dir)
-		id, err2 := group.Load(a.dir)
-		return err1 == nil && err2 == nil && id.ServesPhone() && id.PhoneCA.Cert.Equal(r.PhoneCA.Cert) &&
-			!r.PhoneCA.Cert.Equal(root.PhoneCA.Cert)
-	})
-	b = restartService(t, &h, b)
-	time.Sleep(500 * time.Millisecond)
-	if id, _ := group.Load(b.dir); id.ServesPhone() && !id.PhoneCA.Cert.Equal(root.PhoneCA.Cert) {
-		t.Error("the removed admin got the new iPhone CA")
-	}
+	waitFor(t, "a drops b", func() bool { return listed(a.devices(t)) == "a pi" })
 }
 
 // TestTakeover checks that an admin takes a group over from its lost root
 // computer: it becomes the root, the devices that the root and the admin
-// admitted stay and keep syncing, the iPhone CA is replaced, the new root
-// admits a computer and makes admins, and the old root is refused when it
+// admitted stay and keep syncing, the new root admits a computer and makes admins, and the old root is refused when it
 // comes back.
 func TestTakeover(t *testing.T) {
 	var h hub
@@ -1639,20 +1281,19 @@ func TestTakeover(t *testing.T) {
 		t.Fatalf("takeover: %+v, %v", m, err)
 	}
 	// The claim takes effect as soon as a evaluates it, and a then makes
-	// itself the root and a new iPhone CA, just after the command returned.
+	// itself the root, just after the command returned.
 	var id *group.Identity
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		id, _ = group.Load(a.dir)
-		if id != nil && id.IsRoot() && len(id.Roots) == 1 && id.AdminCA == nil && id.ServesPhone() && !id.PhoneCA.Cert.Equal(old.PhoneCA.Cert) {
+		if id != nil && id.IsRoot() && len(id.Roots) == 1 && id.AdminCA == nil {
 			break
 		}
 		if time.Now().After(deadline) {
 			if id == nil {
 				t.Fatal("after the takeover a has no identity")
 			}
-			t.Fatalf("after the takeover a is root %v, with %d roots, an admin CA %v, a new iPhone CA %v", id.IsRoot(), len(id.Roots), id.AdminCA != nil,
-				id.ServesPhone() && !id.PhoneCA.Cert.Equal(old.PhoneCA.Cert))
+			t.Fatalf("after the takeover a is root %v, with %d roots, an admin CA %v", id.IsRoot(), len(id.Roots), id.AdminCA != nil)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -1702,10 +1343,6 @@ func TestTakeover(t *testing.T) {
 	}
 	waitFor(t, "c has the newcomer's copy", func() bool { return c.paste(t) == "from the newcomer" })
 	makeAdmin(t, a, b)
-	waitFor(t, "b takes the new iPhone CA", func() bool {
-		id, err := group.Load(b.dir)
-		return err == nil && id.ServesPhone() && !id.PhoneCA.Cert.Equal(old.PhoneCA.Cert)
-	})
 
 	restartService(t, &h, pi)
 	time.Sleep(500 * time.Millisecond)
@@ -1733,10 +1370,6 @@ func TestSecondTakeover(t *testing.T) {
 	pairWith(t, pi, c)
 	makeAdmin(t, pi, a)
 	makeAdmin(t, pi, b)
-	waitFor(t, "b serves the shortcut", func() bool {
-		id, err := group.Load(b.dir)
-		return err == nil && id.ServesPhone()
-	})
 	noClaimWait(t, pi, a, b, c)
 	pi.stop()
 	if _, err := a.do(t, control.Header{Op: control.OpTakeover, Name: "pi"}, ""); err != nil {
@@ -1745,7 +1378,7 @@ func TestSecondTakeover(t *testing.T) {
 	ra, _ := group.Load(a.dir)
 	waitFor(t, "b gets an admin CA from a's root", func() bool {
 		id, err := group.Load(b.dir)
-		return err == nil && len(id.Roots) == 1 && id.AdminCA != nil && id.AdminCA.CheckSignatureFrom(ra.Root()) == nil && id.ServesPhone()
+		return err == nil && len(id.Roots) == 1 && id.AdminCA != nil && id.AdminCA.CheckSignatureFrom(ra.Root()) == nil
 	})
 	// c takes the claim from a or b once it connects to one of them, which
 	// it may not have done yet.
@@ -1835,10 +1468,6 @@ func TestUnfrozenAfterTakeover(t *testing.T) {
 	pairWith(t, pi, b)
 	makeAdmin(t, pi, a)
 	makeAdmin(t, pi, b)
-	waitFor(t, "a serves the shortcut", func() bool {
-		id, err := group.Load(a.dir)
-		return err == nil && id.ServesPhone()
-	})
 	if _, err := pi.do(t, control.Header{Op: control.OpFreeze, Name: "b"}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1926,8 +1555,8 @@ func TestTakeoverUndone(t *testing.T) {
 	})
 	restartService(t, &h, pi)
 	waitFor(t, "the old root learns of the takeover", func() bool { return pi.status(t).TakenOverBy == "a" })
-	if id, err := group.Load(pi.dir); err != nil || !id.IsRoot() || !id.ServesPhone() {
-		t.Fatalf("the old root gave up its root key or its iPhone CA: %v", err)
+	if id, err := group.Load(pi.dir); err != nil || !id.IsRoot() {
+		t.Fatalf("the old root gave up its root key: %v", err)
 	}
 	for _, s := range []*testService{a, b} {
 		for _, p := range s.status(t).Peers {
@@ -2009,8 +1638,7 @@ func TestFreezeAnAdmin(t *testing.T) {
 
 // TestMacsListen checks that a Mac is a full member like the others: it
 // publishes no role and takes connections, so two Macs keep syncing when
-// no other computer is on. Without the iPhone CA key it publishes no holder
-// priority; the pi, which has it, does.
+// no other computer is on.
 func TestMacsListen(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -2018,14 +1646,11 @@ func TestMacsListen(t *testing.T) {
 	b := startRole(t, &h, "mac-b", group.OSMacOS)
 	pairWith(t, pi, a)
 	pairWith(t, pi, b)
-	for _, s := range []*testService{a, b} {
+	for _, s := range []*testService{pi, a, b} {
 		if txt := h.txtOf(s.status(t).Device); len(txt) != 2 {
 			t.Errorf("%s publishes %q, want only v and g", s.name, txt)
 		}
 		waitFor(t, s.name+" meets the pi and the other Mac", func() bool { return len(s.status(t).Peers) == 2 })
-	}
-	if txt := h.txtOf(pi.status(t).Device); !slices.Contains(txt, "h=1") {
-		t.Errorf("the pi publishes %q, want h=1", txt)
 	}
 
 	pi.stop()
@@ -2036,45 +1661,6 @@ func TestMacsListen(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the other Mac has it", func() bool { return b.paste(t) == "from one Mac" })
-}
-
-// TestHolderPriority checks that a machine without a battery holds
-// cbb.local before a laptop, whatever the device IDs, and that
-// the setting overrides the guess.
-func TestHolderPriority(t *testing.T) {
-	var h hub
-	laptop := startWith(t, &h, "laptop", group.OSLinux, func(c *Config) { c.battery = func() bool { return true } })
-	desktop := startService(t, &h, "desktop")
-	pairWith(t, laptop, desktop)
-	waitFor(t, "connected", func() bool { return len(laptop.status(t).Peers) == 1 })
-	makeAdmin(t, laptop, desktop)
-	waitFor(t, "the desktop holds the name", func() bool { return desktop.status(t).Holder && !laptop.status(t).Holder })
-	if st := laptop.status(t); st.HoldSetting != HolderAuto || st.HoldPriority != prioFallback || !st.Battery {
-		t.Errorf("the laptop's status: setting %q, priority %d, battery %v", st.HoldSetting, st.HoldPriority, st.Battery)
-	}
-	if txt := h.txtOf(laptop.status(t).Device); !slices.Contains(txt, "h=2") {
-		t.Errorf("the laptop publishes %q, want h=2", txt)
-	}
-
-	if _, err := desktop.do(t, control.Header{Op: control.OpHolder, Name: HolderNever}, ""); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the laptop holds the name", func() bool { return laptop.status(t).Holder && !desktop.status(t).Holder })
-	if _, err := desktop.do(t, control.Header{Op: control.OpHolder, Name: "sometimes"}, ""); err == nil {
-		t.Error("an unknown holder setting was taken")
-	}
-	// The setting stays across a restart.
-	desktop.stop()
-	desktop = restartService(t, &h, desktop)
-	if st := desktop.status(t); st.HoldSetting != HolderNever || st.HoldPriority != 0 {
-		t.Errorf("after a restart the desktop's setting is %q, priority %d", st.HoldSetting, st.HoldPriority)
-	}
-	if _, err := laptop.do(t, control.Header{Op: control.OpHolder, Name: HolderFirst}, ""); err != nil {
-		t.Fatal(err)
-	}
-	if st := laptop.status(t); st.HoldPriority != prioFirst || !st.Holder {
-		t.Errorf("the laptop set to first: priority %d, holder %v", st.HoldPriority, st.Holder)
-	}
 }
 
 // TestFallbackDial checks that the member with the higher device ID dials

@@ -18,8 +18,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
    socket, command line; Linux without a desktop and tmux.
 - **3.** macOS: the service as a LaunchDaemon and the pasteboard agent.
 - **4.** Desktop connector: Wayland data-control, X11, GNOME through XWayland.
-- **5.** iPhone: `/sync`, the pairing pages, the published shortcut.
-- **6.** Simpler setup: QR codes, the generated shortcuts, the phone as the main device.
+- **5.** The first iPhone support, without the app; replaced by the app (item 17).
+- **6.** Simpler setup: QR codes, the phone as the main device.
 - **8.** Windows: the service, the clipboard agent and the installers; CI on windows-latest, not
    yet run on a real PC.
 - **9.** Apps for iPhone and Android, which make the phone the group's root of trust
@@ -29,6 +29,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     blind relay, AmneziaWG and VLESS ([design](design.md#sync-away-from-home)).
 - **16.** Full members, admins and the device's system, in 0.3 and 0.4
     ([design](design.md#full-members-admins-and-the-operating-system)).
+- **17.** Every phone joins through its app, with a key of its own, in 0.6 (D-80;
+    [design](design.md#group-and-pairing)).
 - **18.** Remote paste, in 0.6 ([design](design.md#remote-paste)).
 - **19.** Sync modes, in 0.5 ([design](design.md#sync-modes)).
 - **20.** Images, files, folders and formatted text, in 0.6
@@ -128,8 +130,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 
 - **42.** **Points 1 to 6, 8 and 9 are being built for 0.6**
     ([protocol.md](protocol.md), section 10; [records-v2.md](records-v2.md)), without a migration from `v:1`: groups made before
-    are set up again; of point 4, the Welcome's format without a CA key is in 0.6 and the
-    legacy path goes with item 17. Everything that changes the rules core or a format it
+    are set up again; of point 4, the Welcome's format without a CA key is in 0.6, and since
+    item 17 no CA key passes between devices. Everything that changes the rules core or a format it
     reads or signs is done in 0.6, so 0.7 does not change the core: the Go service calls
     `cbb_core` too (natively on Linux, as WebAssembly elsewhere), for the records, every
     signed body and the certificate checks, and keeps its own code only as a test oracle. A simpler protocol for the group's authority, so that
@@ -161,7 +163,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
        the result defined as one state (devices, powers, revoked, frozen, the path of roots)
        that the vectors and the differential fuzzing compare whole.
     4. **No CA keys between devices**: legacy groups must upgrade, and the Welcome carries
-       no CA key (with item 17).
+       no CA key.
     5. **Features instead of versions**: the hello lists what the sender supports, each
        release names the oldest peer it takes, and the rules for members before that
        version go.
@@ -185,12 +187,6 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     on the text console (design.md, "3. Console helper"), and Shift+Insert after a copy from
     a phone through the uinput helper (design.md, "Auto-paste"). The helpers themselves are
     done, as remote paste targets.
-- **17.** **Removing the iPhone shortcut**, after TestFlight (the `shortcut` role), a legacy way,
-    once the owner's Apple developer account puts the app on real iPhones: with it go the
-    iPhone CA and its key on the admins, the shortcut endpoints and pages on the member port,
-    the configuration profile and its plain-HTTP port, the tokens, and the rule for who
-    holds `cbb.local`, which only the shortcut uses. The group then has one kind
-    of trust, the member certificates, and no key that cannot be revoked by a record.
 - **31.** **Key levels**: the user picks who may be the group's root, an admin or a hub: only
     devices whose hardware key is proven by attestation, devices with a key in hardware (the
     default), or, after a warning, devices with a key in a file too. The evidence and the
@@ -390,9 +386,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       0.6, with the short server credentials (item 32).
     - The guides that describe what is built but not yet run on real devices (device keys,
       sync away from home) link the README's status table; "each use asks for your face"
-      is said of the root's and the admins' keys only; the guide without the app says that
-      the shortcut keeps its token in iCloud Drive; "All traffic uses TLS" links the list of
-      what is not encrypted (mDNS, the profile page, Roku); winget is named once the package
+      is said of the root's and the admins' keys only; "All traffic uses TLS" links the list of
+      what is not encrypted (mDNS, Roku); winget is named once the package
       is in winget's repository; docs/security-audit.md says it is a plan.
     - One screen of the trust model in the README: who holds which key, who can read the
       copies, who can admit a device, what the hub and the forwarder see, and a picture of

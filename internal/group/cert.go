@@ -2,13 +2,9 @@
 // Copyright (C) 2026 HunterEwok
 
 // Package group holds the certificates and keys of a cbb group: the
-// group CA, which certifies the members, the iPhone CA, which certifies the
-// cbb.local address for the iPhone, and this device's own identity.
+// group CA, which certifies the members, and this device's own identity.
 //
-// Every certificate uses ECDSA P-256. The CAs have a path length of 0, so
-// they sign only end certificates. The iPhone CA carries critical name
-// constraints: an iPhone that trusts it accepts it for cbb.local
-// only, never for another site or an IP address.
+// Every certificate uses ECDSA P-256.
 package group
 
 import (
@@ -22,15 +18,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/benchtime"
 )
-
-// PhoneName is the DNS name the iPhone uses for the group.
-const PhoneName = "cbb.local"
 
 // Lifetimes of the certificates, and how long before its end a certificate
 // is renewed; the bench's time-scaled build runs them faster.
@@ -41,16 +33,12 @@ const (
 
 var (
 	memberRenewBefore = benchtime.D(240 * 24 * time.Hour)
-	phoneLifetime     = benchtime.D(397 * 24 * time.Hour) // below the 825 days iOS allows
-	phoneRenewBefore  = benchtime.D(60 * 24 * time.Hour)
 	backdate          = benchtime.D(24 * time.Hour) // for a device whose clock is a little behind
 )
 
 const (
-	phoneCAName        = "cbb iPhone CA"
-	groupCAName        = "cbb group CA"
-	rootCAName         = "cbb group root"
-	notPermittedDomain = "cbb.invalid"
+	groupCAName = "cbb group CA"
+	rootCAName  = "cbb group root"
 )
 
 // A DeviceID identifies a device: 128 random bits as 32 lowercase hex
@@ -126,25 +114,6 @@ func NewRootCA(now time.Time) (*CA, error) {
 	}, now)
 }
 
-// NewPhoneCA creates an iPhone CA. Its name constraints permit only the DNS
-// name cbb.local and its subdomains, and URI and e-mail names under
-// cbb.invalid, a domain that never exists; they exclude every IP
-// address. The constraints are critical, so a client that does not
-// understand them rejects the certificates instead of ignoring the limits.
-func NewPhoneCA(now time.Time) (*CA, error) {
-	return newCA(&x509.Certificate{
-		Subject:                     pkix.Name{CommonName: phoneCAName + " " + now.UTC().Format(time.DateOnly)},
-		PermittedDNSDomainsCritical: true,
-		PermittedDNSDomains:         []string{PhoneName},
-		PermittedEmailAddresses:     []string{notPermittedDomain},
-		PermittedURIDomains:         []string{notPermittedDomain},
-		ExcludedIPRanges: []*net.IPNet{
-			{IP: net.IPv4zero.To4(), Mask: net.CIDRMask(0, 32)},
-			{IP: net.IPv6zero, Mask: net.CIDRMask(0, 128)},
-		},
-	}, now)
-}
-
 func newCA(tmpl *x509.Certificate, now time.Time) (*CA, error) {
 	key, err := NewKey()
 	if err != nil {
@@ -176,19 +145,6 @@ func (ca *CA) IssueMember(id DeviceID, pub *ecdsa.PublicKey, now time.Time) (*x5
 		NotBefore:   ca.Cert.NotBefore,
 		NotAfter:    benchtime.Years(now, memberYears),
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-	}, pub, now)
-}
-
-// IssuePhone certifies the public key of a member that serves the shortcut
-// for cbb.local, for 397 days.
-func (ca *CA) IssuePhone(pub *ecdsa.PublicKey, now time.Time) (*x509.Certificate, error) {
-	notBefore := maxTime(now.Add(-backdate), ca.Cert.NotBefore)
-	return ca.issue(&x509.Certificate{
-		Subject:     pkix.Name{CommonName: PhoneName},
-		DNSNames:    []string{PhoneName},
-		NotBefore:   notBefore,
-		NotAfter:    notBefore.Add(phoneLifetime),
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}, pub, now)
 }
 
@@ -261,21 +217,6 @@ func maxTime(a, b time.Time) time.Time {
 		return a
 	}
 	return b
-}
-
-// Fingerprint returns the SHA-256 fingerprint of a certificate the way iOS
-// shows it under the details of a profile: upper-case hex bytes separated
-// by spaces.
-func Fingerprint(cert *x509.Certificate) string {
-	sum := sha256.Sum256(cert.Raw)
-	var b strings.Builder
-	for i, c := range sum {
-		if i > 0 {
-			b.WriteByte(' ')
-		}
-		fmt.Fprintf(&b, "%02X", c)
-	}
-	return b.String()
 }
 
 // Tag returns a short identifier of the group CA, 16 hex characters, which

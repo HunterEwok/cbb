@@ -90,7 +90,7 @@ The system context (C4 level 1): the group is the system; everything around it i
 | Linux without a desktop, FreeBSD, routers (OpenWrt, OPNsense) | service, optional tmux and console helpers | its own clipboard: tmux, `cbb copy`/`paste` |
 | Mac                     | service + pasteboard agent        | automatic                                                      |
 | Windows                 | service + clipboard agent         | automatic                                                      |
-| iPhone, iPad            | the app, or a shortcut            | the app: one tap or the Action button; the shortcut: one press |
+| iPhone, iPad            | the app                           | one tap or the Action button                                   |
 | Android phone           | the app                           | receives by itself; sends by itself (accessibility service) or with one tap |
 | Small Linux device      | the lite member, `cbb`            | `cbb copy`/`paste`/`watch`; no desktop clipboard               |
 | Apple Watch, Wear OS watch | the watch app, through its phone | shows the group, sends commands as an admin                 |
@@ -109,14 +109,10 @@ apps" below).
   compares the same way everywhere.
 - **Member port**: CBB's one port, TCP 8764 unless the installer was given another,
   advertised in the mDNS SRV record. Every computer and lite member listens there for mutual
-  TLS (Macs since D-46); phones only dial, except a phone that is the hub. The first bytes of a connection pick what it gets (docs/protocol.md, section 4):
+  TLS (Macs since D-46); phones only dial, except a phone that is the hub. The ALPN protocol of a connection picks
+  what it gets (docs/protocol.md, section 4):
   - members and the phone app, with the member ALPN protocol and mutual TLS;
-  - pairing, with its own ALPN protocol;
-  - the shortcut's HTTPS (`/sync` and the pairing page `/pair`), with no client
-    certificate, for any other ALPN protocol;
-  - plain HTTP that serves only the iPhone CA's configuration profile, and only while a
-    phone pairing window is open. The profile is public, and the user checks its
-    fingerprint before trusting it.
+  - pairing, with its own ALPN protocol.
 
   A computer that joins by QR code listens there too, since it is in no group yet. One port
   is one rule in a firewall, and changing it is one setting.
@@ -250,8 +246,7 @@ is not built yet (roadmap item 10); the design:
 - **Service**: the same service as on Linux, as a LaunchDaemon under a hidden service account.
   macOS grants local network access to daemons without a prompt. It listens on UDP 5353
   for mDNS (D-32), and dials and takes connections like the other full members, from the
-  home network only. It may hold `cbb.local`, a laptop only as a fallback
-  (D-53), create a group and be an admin. `install.sh` lists the
+  home network only. It may create a group and be an admin. `install.sh` lists the
   service in the application firewall (`socketfilterfw --add` and `--unblockapp`), and
   `uninstall.sh` takes it away; `CBB_FIREWALL=no` leaves the firewall alone.
 - **Pasteboard agent**: a LaunchAgent in the user's session, linked to the service over a
@@ -311,8 +306,7 @@ is not built yet (roadmap item 10); the design:
 
 ### The phone apps
 
-The shortcut can neither hold a key, sign, run CPace nor accept connections, so it only
-authorizes with its token. The phone apps can do all four, and in a group that an app
+The phone apps hold keys, sign, run CPace and accept connections, and in a group that an app
 creates the phone is the root of the group (D-33 to D-36; the wire side is section 9 of
 [protocol.md](protocol.md)):
 
@@ -325,10 +319,8 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
   scans it, dials the computer, checks the fingerprint and runs CPace with that code, with
   the phone in the admitting role, then issues its certificate. No profile for the user to
   check: the app trusts its own group's CA.
-- Every computer is then a member without CA keys; computers still publish themselves and
-  hold `cbb.local`. A phone group has no iPhone CA, so the shortcut is not used
-  there. A lite member
-  (Rust) takes part the same way.
+- Every computer is then a member without CA keys; computers still publish themselves. A
+  lite member (Rust) takes part the same way.
 - Certificate renewal (every two years) and revocation need an admin phone. Losing one is
   covered by a second admin phone, which is an equal admin with a key of its own; see
   "Admin phones, the devices list and revocation" below.
@@ -336,8 +328,8 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
   Action button on the iPhone); on Android a foreground service receives by itself, and an
   accessibility service or one tap sends ([apps.md](apps.md)). Background sync stays
   impossible on iOS.
-- A group that a computer created, with the shortcut for iPhones without the app, stays for
-  users without a phone app (["without the app"](guide/without-app.md)).
+- A group that a computer created stays for users without a phone app (["without the
+  app"](guide/without-app.md)).
 
 ### Watches
 
@@ -420,33 +412,19 @@ Not yet verified on a real watch: the Secure Enclave key on the watch, WatchConn
 waking the phone app in the background long enough to send a record, the Data Layer
 starting the Android app's listener for the Wear OS switch, and the delay of notifications.
 
-### The iPhone button
+### The one button
 
-The button is for an iPhone without the app; a phone with the app, iPhone or Android, is a
-member and sends from the app instead (see "The phone apps" below). One
-shortcut, published as an iCloud link with an import question for the token. It reads
-the iPhone clipboard and sends `POST https://cbb.local:8764/sync` with the JSON body
-`{"v": 1, "text": "…"}` (optionally `"secret": true`, which makes a secret event) and the
-header `Authorization: Bearer <token>`. The member that holds the name decides the direction:
+A phone app sends and fetches with one button (a tap, the Action button or Back Tap on the
+iPhone), and picks the direction by itself, with the group's events and the phone's
+clipboard (`LiveGroup.sync` on the iPhone, `SyncRule` on Android):
 
-1. A computer in the group copied something less than 45 seconds ago → the member returns
-   that text, and the shortcut puts it on the iPhone clipboard. The user most likely pressed
-   Ctrl+C or ⌘C a moment ago and picked up the phone. Text that came from the iPhone itself,
-   directly or through Universal Clipboard, does not count as a computer's copy.
-2. Otherwise, if the iPhone text is new, that is, neither the group's text nor the text of
-   the member's own clipboard → it becomes a group event, and it also goes to the member's
-   own clipboard (with auto-paste, if it is on).
-3. Otherwise, if the member's own clipboard holds another text → the member returns it. The
-   member's own clipboard, not the group state, follows the rules above, so a member that
-   returned with an old copy never sends that copy to the iPhone.
+1. A computer in the group copied something less than 45 seconds ago → that text comes to
+   the phone. The user most likely pressed Ctrl+C or ⌘C a moment ago and picked up the
+   phone. Text that came from the phone itself does not count as a computer's copy.
+2. Otherwise, if the phone's text is new, that is, not the group's current text → it
+   becomes a group event.
+3. Otherwise the group's latest text, when it differs from the phone's, comes to the phone.
 4. Otherwise there is nothing to transfer.
-
-The answer is always HTTP 200 with JSON, because the shortcut cannot read status codes:
-`{"v": 1, "direction": "to_iphone" | "from_iphone" | "none" | "error", "copy": "…",
-"expires_in": 0, "message": "…"}`. The shortcut writes `copy` with **Local Only** when
-`direction` is `to_iphone` (with an expiry for a secret) and shows `message` as a
-notification. Errors, such as a revoked token, come back as `direction: "error"` with a
-human message; a secret never appears in `message`.
 
 ### Build
 
@@ -476,16 +454,12 @@ sync away from home, the admins, and remote paste.
 
 ### Group and pairing
 
-- **The shortcut only syncs.** With the shortcut (no app), `cbb new` on the first computer
-  creates the group and `cbb pair -phone` pairs the phone; every further computer
-  joins with `cbb pair` on the root or an admin, which shows a six-digit code to type on the
-  new computer. The shortcut's token gives only `/sync`: a copied or stolen token can sync
-  the clipboard until it is revoked, but cannot add a device. `cbb pair -phone -new-token`
-  revokes every shortcut's token and pairs the iPhone again; `cbb remove` removes one. With
-  the phone app, the phone admits computers by their QR code (section 6 of the protocol,
-  "The joiner listens").
-- **Creating the group**: `cbb new`, or the first `cbb pair` or `cbb pair -phone`, on a
-  computer that is in no group creates it: the root CA and the iPhone CA. That computer is
+- **Who admits whom.** With the phone app, the phone admits computers by their QR code
+  (section 6 of the protocol, "The joiner listens"). In a group a computer created, `cbb new`
+  on the first computer creates it, and every further computer joins with `cbb pair` on the
+  root or an admin, which shows a six-digit code to type on the new computer.
+- **Creating the group**: `cbb new`, or the first `cbb pair`, on a
+  computer that is in no group creates it: the root CA. That computer is
   the group's root; any computer, a Mac included, may create a group.
 - **Root CA**: ECDSA P-256, valid 20 years, path length 1, so it certifies the admins' admin
   CAs (path length 0) as well as members.
@@ -497,13 +471,6 @@ sync away from home, the admins, and remote paste.
   admit new devices. TLS 1.3 only, with the ALPN protocol
   `cbb/2`; a client checks that the server's certificate names the device it found in
   discovery.
-- **iPhone CA**: ECDSA P-256, valid 20 years, path length 0, with critical name constraints
-  that permit only the DNS name `cbb.local` and names below it (and URI and e-mail
-  names under `cbb.invalid`) and exclude every IP address. The root and every
-  admin hold its key and their own `cbb.local` server certificate from it, valid 397 days from a day before it was
-  issued and renewed when less than 60 days remain, or at once if it starts in the future
-  because it was issued while the clock was ahead, so whichever member holds the name can
-  serve the iPhone.
 - **End of a CA's life**: certificates end no later than their CA. A member certificate that
   already ends with its CA is not renewed again; replacing a CA after 20 years works like
   the replacement after a revocation.
@@ -526,47 +493,17 @@ sync away from home, the admins, and remote paste.
   reaches the exchange and does not succeed counts as a failure. The new member then
   receives, over the TLS session that CPace authenticated, a certificate for the key it
   presented, the group CA and the group state, and checks the member's certificate against
-  that CA. A computer that is made an admin later receives the iPhone CA key with its admin
-  CA, and issues its own `cbb.local` certificate. Sending the certificate is the point of no return:
+  that CA. Sending the certificate is the point of no return:
   the window then records the device and closes, and reports whether the device confirmed
   that it stored its identity. Errors travel as short codes, never as text, so a device that
   has not proved it knows the code cannot put words in front of the user. The five minutes
   count the time the machine sleeps.
-- **Joining an iPhone or iPad**: `cbb pair -phone` asks the admin that holds
-  `cbb.local` to open a phone pairing window, with the same limits as for a computer,
-  and prints a QR code of the profile page, the first 64 bits of the iPhone CA's
-  fingerprint and a six-digit code. The user only scans, compares and types digits. No
-  secret travels before the iPhone trusts the CA:
-  1. The camera opens the profile page (plain HTTP, so no certificate warning is
-     ever accepted for HTTPS), which walks through the steps; the user installs the
-     configuration profile with the iPhone CA.
-  2. The user compares the fingerprint's first 64 bits under the profile's details with the
-     printed ones, and only then turns on full trust.
-  3. The user adds the shortcut from the same page and runs it. On its first run it asks for
-     the code and posts it to `https://cbb.local:8764/pair`, which only works once the
-     CA is trusted; the token comes back on that connection, and the shortcut keeps it in
-     iCloud Drive (Shortcuts/cbb/token.txt). Told later that its token is unknown, it
-     deletes it, so the next run pairs again. The same page also takes the code in Safari
-     and shows the token, for a shortcut built by hand.
-
-  The shortcut is a property list generated from the code (`tools/shortcut`) and signed on
-  a Mac with `shortcuts sign`, since iOS imports only signed shortcuts; the build embeds the
-  signed file. The profile cannot be signed so that iOS shows it as verified: it carries
-  the group's own CA, made on the member, and only a key that Apple's roots vouch for would
-  do, which a release cannot ship. The fingerprint comparison is what protects it.
-
-  A relay on the home network cannot present a certificate from the verified CA, so it sees
-  neither the code nor the token. The profile has a fixed identifier, so a new one replaces
-  the old. No list of tokens is stored: each is derived from the iPhone CA key, so the root
-  and every admin check any token (docs/protocol.md, section 7).
-- **Devices and revocation**: `cbb status` lists the members and iPhones;
+- **Devices and revocation**: `cbb status` lists the members;
   `cbb remove <name>` removes one. Revocations are signed records that only grow and
-  spread to every member, which then refuse the revoked keys. Removing an admin that held
-  the iPhone CA key also replaces the iPhone CA and revokes every token, so iPhones that use
-  the shortcut delete the old profile and pair again. The records and the list are
+  spread to every member, which then refuse the revoked keys. The records and the list are
   described in "Admin phones, the devices list and revocation" below.
 
-### Discovery and the shared address
+### Discovery
 
 - Full members advertise `<device ID>._cbb._tcp.local` with SRV, TXT (the protocol
   version `v=1`; the group tag `g=`, a short fingerprint of the group CA, so the members of
@@ -595,7 +532,7 @@ sync away from home, the admins, and remote paste.
   85, 90 and 95 percent of their lifetime, so they do not expire while the members are
   there. A received record lives no longer than CBB's own records of its type, and
   only names in the form of device IDs count as members. Names are not probed: device IDs
-  are random, and the election, not a probe, decides who holds `cbb.local`. Macs
+  are random. Macs
   publish and browse with the same code, as full members; a test on macOS showed that it shares port 5353 with
   mDNSResponder and that the system's `dns-sd` sees what it publishes, so no Bonjour
   binding is needed.
@@ -606,15 +543,6 @@ sync away from home, the admins, and remote paste.
   come up within 30 seconds, so a firewall that keeps the first out does not keep them
   apart; full members dial the lite members, and phones dial every member. With any one
   computer or lite member on, the phones sync with it.
-- The iPhone uses one address for the whole group: **`cbb.local`**, with a record
-  lifetime of 10 seconds. Among the live full members, a machine that does not sleep holds
-  it first and a laptop only when no other is on, then the lowest device ID; the service
-  guesses which it is from a battery, `cbb holder` overrides the guess, and the TXT key `h`
-  tells the others (D-53, "Full members, admins and the operating system").
-- **Handover**: a holder that leaves sends goodbye packets for the name first and then closes
-  its member connections with a goodbye; the member that is now the lowest sees that at
-  once and announces the name. After a power cut the others notice the missing member when
-  its connection falls silent and take the name over within about 15–20 seconds.
 - Only private IPv4, unique-local and link-local IPv6 addresses are published.
 - **Known networks** (D-63). A full member publishes itself, and takes connections on the
   member port, only on networks where it met its group: where it created or joined the
@@ -650,7 +578,7 @@ sync away from home, the admins, and remote paste.
 
 - A clipboard change on a member becomes an **event**: a random ID, the origin device, a
   hybrid timestamp, the age, the text, its kind (normal or secret) and how it arrived (a copy
-  on the member, sent from a phone (the app or the iPhone shortcut's button), or Universal
+  on the member, sent from a phone app, or Universal
   Clipboard relayed by a Mac, which carries
   copies from an iPhone, an iPad or another Mac).
 - Members forward every event the first time they see it to all members they are connected
@@ -691,8 +619,7 @@ sync away from home, the admins, and remote paste.
   recent. Local durations are measured on a clock that counts the time the machine slept and
   does not jump when the wall clock is set (`CLOCK_BOOTTIME` on Linux, `CLOCK_MONOTONIC` on
   macOS). Connections have heartbeats; the ones from before a sleep are closed when the
-  machine wakes (a sleeping holder of `cbb.local` is replaced after the 15-second
-  silence timeout, as it sends no goodbye), and an event
+  machine wakes, and an event
   that waited in a queue is sent with that time added to its age. The hybrid clock is never
   used to measure durations.
 - **Secrets** travel in a hello only as a mark without their text, so the group converges on
@@ -778,7 +705,7 @@ queue, so large content cannot simply go inside it.
 | Mac | `public.png`, `public.jpeg`, `public.tiff` (sent as PNG) | `public.file-url` items | `public.html` |
 | iPhone app | on the button and while the app runs, written to this phone only; HEIC is sent as JPEG (PNG with transparency) | Share sends images and files (up to 50 MB, the share extension's memory); the button saves received files in the app's folder in Files | later |
 | Android app | reads a `content://` image with the clipboard, writes one through its FileProvider; other formats are sent as PNG | Android file managers have no system copy, so files come through the share sheet; the button saves received files in Downloads, in a folder "CBB" | later |
-| iPhone shortcut, the lite member, ESP32, ZX Next | no | no | no |
+| The lite member, ESP32, ZX Next | no | no | no |
 
 Text-only devices take the event, so the group converges, but never fetch its content and
 keep their last text; a copy that carries text next to its image (a browser copies both)
@@ -1701,10 +1628,9 @@ in the pairing Info, in its hello and in its device record: `linux`, `windows`, 
 
 | Role     | Devices                                     | What it does                                                    |
 |----------|---------------------------------------------|-----------------------------------------------------------------|
-| `full`   | a computer with the service: Linux, Windows, macOS | listens on the member port, dials the other full members and the lite members, may hold `cbb.local`, may create a group and be an admin |
+| `full`   | a computer with the service: Linux, Windows, macOS | listens on the member port, dials the other full members and the lite members, may create a group and be an admin |
 | `lite`   | the lite member (`lite/`)                   | dials the full members, listens for phones; never holds keys     |
 | `phone`  | a phone with the app                        | dials every member, never listens for members                   |
-| `shortcut` | an iPhone without the app: a shortcut's token, not a member (legacy, below) | uses the endpoints of the member that holds `cbb.local` |
 
 The Mac is a full member like the others. A phone with the app, an iPhone or an Android phone, has its own
 key and member certificate and the role `phone`. `cbb status` and the Devices screens of the
@@ -1720,16 +1646,6 @@ between the same pair the one the lower ID dialed stays. Full members dial the l
 members; phones dial everyone. The installers open the member port in the system's
 firewall on every system, with the user's consent.
 
-**Who holds `cbb.local`.** Only a full member that can serve the shortcut, that
-is one that holds the iPhone CA key (the root and the admins of a group a computer created).
-Among those that are on, a device that does not sleep comes first and a laptop only when no
-other is on; then the lowest device ID, as today. This is a preference, not a requirement:
-no device has to stay on, and whichever of them is on holds the name. The service guesses which it is from
-whether the machine has a battery, and a setting overrides the guess (always first, only as
-a fallback, or never). The TXT record tells the others the member's priority. Whether the
-Mac's own mDNS code can hold the name next to mDNSResponder is an open question until it is
-tried on a Mac.
-
 **Keys: the creator and the admins.** Any full member can create a group, a Mac included.
 Every new group gets a root CA with path length 1, as a group a phone creates has, and the
 creating computer holds its key and is the group's **root**. Every other full member gets
@@ -1738,10 +1654,7 @@ admin key next to its identity and offers it in its hello, as a computer of a ph
 does today ("A computer as admin" above); the root makes a member an **admin** on request,
 with `cbb admin <name>` on the root computer or "Make it an admin" on a root phone, by
 certifying that key as an admin CA. An admin admits devices, renews certificates, signs
-records and removes devices; only the root makes admins. In a group a computer created an
-admin also receives the iPhone CA key with its admin CA, so the shortcut and the pairing of
-an iPhone without the app work while any admin is on. A group a phone created stays as it
-is: the phone is the root and the group has no iPhone CA. Lite members never hold keys and
+records and removes devices; only the root makes admins. Lite members never hold keys and
 are never admins.
 
 **Removing a device.** Every device except the root is removed with a revocation record, as
@@ -1750,24 +1663,12 @@ in a phone group, without a new group:
 - a member that is no admin: its member key is revoked, and that is all;
 - an admin: its member key and its admin key are revoked, and the listed devices are kept:
   those it admitted, and the others too, since any admin renews any device's certificate. Only the root or an admin phone removes an admin; another admin computer freezes it
-  ("Who may remove an admin" below). In a group a computer created, it also held the iPhone CA key, so the admin that
-  removes it replaces the iPhone CA as well: a new key, new `cbb.local`
-  certificates for the admins, and every token revoked; iPhones that use the shortcut
-  delete the old profile and pair again. The group's root stays;
+  ("Who may remove an admin" below). The group's root stays;
 - the root computer: another admin claims the group (a `claim` record, which takes effect
   after the root's delay unless the root cancels it), as an admin phone does when the root phone is lost (`cbb takeover <name>`). This
   is open to admin computers in a group whose root is a computer; in a phone group they
   still never take over. A group whose root is gone and has no other admin must be made
   anew, so `cbb pair` suggests making a second admin.
-
-**The shortcut is a legacy way.** An iPhone without the app joins through a shortcut and a
-token (section "The iPhone button"), never with a key of its own. It stays for now, since
-the app is not yet in TestFlight (it runs on a real iPhone only when built with a developer's
-own team, apps/ios/device.sh), but it is not developed further, and every user
-is expected to use the app. Everything it needs comes with it: the iPhone CA, its key on the
-admins, and the rule for who holds `cbb.local`. It is removed with all of these
-once the app runs on real iPhones through TestFlight (roadmap.md, item 17): the group is
-then simpler, with one kind of trust, and every key in it can be revoked by a record.
 
 ### Who may remove an admin
 
@@ -2188,7 +2089,7 @@ infrastructure, not a place to copy and paste:
   public address, so it needs no port forwarding: it opens the hub's UDP port on its own
   WAN.
 - **An always-on member at home.** Phones and lite members sync through it when no
-  computer is on, and it holds `cbb.local` (it is never on battery).
+  computer is on.
 - **A member on every subnet.** A router sits on the home network and the IoT subnet at
   once, so a device on the IoT subnet syncs with the router directly, and the router passes
   its events on as every member does. No rule from the IoT subnet into the home network is
@@ -2296,7 +2197,7 @@ NAS (Synology, QNAP, TrueNAS, Unraid), a home server, a VPS. Like a router, the 
 infrastructure, not a place to copy and paste:
 
 - **An always-on member, and the hub only by choice.** At home it keeps the group's events
-  while no computer is on and holds `cbb.local`. Only the root or an admin can be
+  while no computer is on. Only the root or an admin can be
   the hub, so a container is the hub for sync away from home only once the user made it an
   admin, with its keys in a file in the volume: the least safe of the key levels (roadmap item 31),
   which the user must allow explicitly. The service enforces it already: in the image
@@ -2480,10 +2381,9 @@ defence, is in [threat-model.md](threat-model.md). In short:
 |----------------------------------------------------------------|----------------------------------------------------------------------------|
 | Someone on the home network reads the traffic                  | TLS 1.3 everywhere                                                         |
 | Someone guesses or intercepts the pairing code of a computer   | CPace inside TLS: one online guess per attempt, at most three per pairing window, no offline attack; the joining device spends the code on one attempt, and never takes it from the command line |
-| Someone attacks the pairing of an iPhone                       | the same attempt limits; the profile comes over a separate plain-HTTP port, so no certificate warning is ever accepted for the pairing page; the user compares the iPhone CA fingerprint with the one in the terminal (never with the plain-HTTP page) before trusting it; the code and the token travel only over a connection that the trusted CA authenticates, so a relay sees neither |
-| A device impersonates a member (for example, a host that answers `cbb.local` on another network) | mutual TLS with the group CA; members dial discovered addresses and check the peer's certificate; the iPhone accepts only a certificate from the iPhone CA, so an impostor gets neither the token nor the text |
-| A device is lost or stolen                                     | `cbb remove` or "Remove" in the apps: a revocation record that every member and the hub obey at once; any admin freezes a stolen admin computer; an admin takes over from a lost root without pairing anything again; when an admin that held the iPhone CA goes, the iPhone CA and its tokens are replaced ([if a device is lost](guide/lost-device.md)) |
-| A member is compromised                                        | it can read the group clipboard, by design. It cannot read the iPhone's other HTTPS traffic: the iPhone CA is restricted by name constraints to `cbb.local` and names below it, and excludes IP addresses and other name forms. The Mac never changes its system trust |
+| A device impersonates a member                                 | mutual TLS with the group CA; members and phones dial discovered addresses and check the peer's certificate, so an impostor gets no text |
+| A device is lost or stolen                                     | `cbb remove` or "Remove" in the apps: a revocation record that every member and the hub obey at once; any admin freezes a stolen admin computer; an admin takes over from a lost root without pairing anything again ([if a device is lost](guide/lost-device.md)) |
+| A member is compromised                                        | it can read the group clipboard, by design. No device changes its system trust for the group |
 | A bug in the network code                                      | memory-safe language; the service runs as an unprivileged user in a systemd sandbox (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateDevices`, no capabilities, restricted address families and system calls) |
 | A local user abuses the console helper                         | the helper listens on nothing; the control socket admits only root and the `cbb` group; single-line injection by default with control characters removed |
 | Requests from outside the home network                         | the service accepts connections only from private, unique-local and link-local addresses, checked in the program and by systemd; away from home only through the group's WireGuard tunnel, whose port drops every packet without a key from the group's records |
@@ -2515,7 +2415,7 @@ service. The rest of the plan is in [roadmap.md](roadmap.md#device-keys-in-hardw
   again without the mark. The engine remembers secret texts, including the marked items it
   skipped, and such an offer makes no event (see the sync model).
 - Explicit actions may carry a secret: "send even if secret" on the Mac and the console
-  paste; the shortcut may mark a text as secret. Secret events are kept only in memory and
+  paste. Secret events are kept only in memory and
   expire 60 seconds after the copy, judged by the event's age. When a secret that a connector
   wrote expires, the connector gives up the clipboard, so the desktop does not keep it.
 - Secrets stay out of swap where the system allows it: on Linux the service's unit sets
@@ -2579,9 +2479,6 @@ which case of the test bench ([testbench.md](testbench.md)) answers it.
   socket on UDP 5353 (it is not mDNSResponder)? The installer already lists the service in
   the firewall; what remains is the mode "Block all incoming connections", which lets only
   the system's services through and ignores that list (P26).
-- Can the Mac's own mDNS code hold `cbb.local` next to mDNSResponder (D-53)? The
-  code lets a Mac hold the name since step 3 of "Full members, admins and the operating
-  system"; whether the others resolve it is untried (P25).
 - The console helper (`cbb paste-helper console`): does its injection work in `sudo` and in
   vim on Ubuntu and Raspberry Pi OS, and does it refuse at an agetty login prompt? The
   double-tap trigger (roadmap item 10) is not built; its latency and CPU on a Pi Zero W
@@ -2589,11 +2486,6 @@ which case of the test bench ([testbench.md](testbench.md)) answers it.
 - Images and files: which applications on each system
   paste images and file lists that another program wrote (Android keyboards and apps,
   Windows Explorer with `CF_HDROP` from the agent, iOS apps)?
-- Only while the shortcut lasts (it goes after TestFlight, roadmap item 17): on iOS 18, 26
-  and 27, does Shortcuts trust the name-constrained iPhone CA and reach
-  `cbb.local` (Local Network prompt, first-run prompts, behaviour from the Lock
-  Screen), how fast does it notice a handover of the name, and does it reach a Mac that
-  holds the name?
 
 ## 12. Glossary
 

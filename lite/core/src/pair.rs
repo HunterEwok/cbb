@@ -7,8 +7,8 @@
 //! frames (see [`Exchange`]).
 //!
 //! A lite member joins as a Mac does, without CA keys: either it listens and
-//! shows a QR code that the phone app scans (the phone, or a Linux member
-//! for the shortcut, dials it and confirms first), or it dials a Linux
+//! shows a QR code that the phone app scans (the phone dials it and
+//! confirms first), or it dials a Linux
 //! member's open pairing window with the code that cbb pair shows.
 
 use alloc::format;

@@ -124,8 +124,8 @@ environment secret**.
   with cgo, for the pasteboard agent (see the Build section of [the design](design.md#build));
 - **mdns with avahi**: the mDNS tests on real sockets, beside avahi-daemon, in a Debian
   container;
-- **e2e**: the built binary as three members and an avahi resolver in Docker containers:
-  pairing, sync, the holder of `cbb.local` and its handover, a wrong code
+- **e2e**: the built binary as three members and an avahi browser in Docker containers:
+  pairing, sync, mDNS as avahi sees it, a wrong code
   ([tools/e2e/e2e.sh](../tools/e2e/e2e.sh));
 - **desktop clipboards**: the Wayland data-control client under a headless sway and the X11
   client under Xvfb, against wl-clipboard and xclip;
@@ -189,13 +189,6 @@ Rules for workflows:
   and Go itself, written by `packaging/archive.sh`) and `packaging/`. The
   `cbb-lite-linux-*` archives hold `cbb-lite/` in the same way (`lite/packaging/archive.sh`), with the crates'
   licenses (`lite/packaging/notices.sh`), the same Linux installer and the lite member's unit.
-- The iPhone shortcuts are the one exception: iOS imports only shortcuts signed with an
-  Apple ID, which needs a Mac. When `go run ./tools/shortcut` changes `cbb.plist` or
-  `cbb-add.plist`, sign each changed one (here `NAME`) on a Mac:
-  `plutil -convert binary1 -o /tmp/NAME-unsigned.shortcut internal/phone/shortcut/NAME.plist`
-  (`shortcuts sign` reads only the binary form) and
-  `shortcuts sign --mode anyone --input /tmp/NAME-unsigned.shortcut --output internal/phone/shortcut/NAME.shortcut`,
-  check the result by importing it on an iPhone, and commit the signed file.
 - Published with `SHA256SUMS` and a build provenance attestation
   (`actions/attest-build-provenance`), which users can check with `gh attestation verify`.
 - What a release is built from: a software bill of materials in CycloneDX 1.6 JSON for each

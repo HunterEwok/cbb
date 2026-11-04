@@ -22,7 +22,7 @@ For anyone with a phone or a computer, in plain words.
 | [Privacy](guide/privacy.md) | who outside the group sees what: networks, servers, updates, stores |
 | [Keys and attestation](guide/keys.md) | where each device keeps its keys, how devices prove it, the three levels |
 | [If a device is lost](guide/lost-device.md) | remove it, freeze an admin, take the group over |
-| [Without the app](guide/without-app.md) | a group held by a computer, the iPhone shortcut, joining over SSH or a VPN |
+| [Without the app](guide/without-app.md) | a group held by a computer, joining over SSH or a VPN |
 | [Troubleshooting](guide/troubleshooting.md) | logs, the firewall, pairing, other networks |
 
 ## Running servers and many devices

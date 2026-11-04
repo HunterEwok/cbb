@@ -4,7 +4,6 @@
 package service
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -22,13 +21,12 @@ import (
 
 // Admins of a group a computer created (docs/design.md, "Full members,
 // admins and the operating system"): the root makes a full member an admin
-// by certifying the admin key its hello offers, and the admins share the
-// iPhone CA, which an admin that removes another admin replaces.
+// by certifying the admin key its hello offers.
 
 // makeAdmin makes the device that target names an admin, on the group's
 // root: it issues the admin CA for the admin key the device's hello
-// offers, records it in the device's record and sends it, followed by the
-// iPhone CA. The device must be connected. A device whose keys sit in a
+// offers, records it in the device's record and sends it. The device must
+// be connected. A device whose keys sit in a
 // file becomes an admin only with allowFileKey, which the user gives after
 // a warning (docs/protocol.md, section 17).
 func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
@@ -80,8 +78,6 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// The device record names the admin CA first, so the iPhone CA that
-	// follows the admin message goes to a listed admin.
 	adminKey := group.KeyHashOf(adminCA)
 	// Its connection still shows no admin CA, and its hello the admin
 	// key: renewAdminCAs, which may run as soon as the record below is in
@@ -239,130 +235,8 @@ func underRoot(id *group.Identity, c *x509.Certificate) bool {
 	return false
 }
 
-// phoneCAFor returns the iPhone CA to send the peer dev, whose hello names
-// the iPhone CA key hash theirs: this member's, when it holds one that is
-// not revoked, the peer holds another and the peer is the root or an
-// admin.
-func (s *Service) phoneCAFor(dev group.DeviceID, chain []*x509.Certificate, theirs []byte) *group.CA {
-	s.mu.Lock()
-	id := s.id
-	s.mu.Unlock()
-	if id == nil || !id.ServesPhone() {
-		return nil
-	}
-	mine := group.KeyHashOf(id.PhoneCA.Cert)
-	if bytes.Equal(theirs, mine[:]) || s.revoked(mine) || !s.adminPeer(dev, chain) {
-		return nil
-	}
-	ca := *id.PhoneCA
-	return &ca
-}
-
-func (s *Service) revoked(k group.KeyHash) bool {
-	s.recMu.Lock()
-	defer s.recMu.Unlock()
-	return s.records != nil && s.records.Revoked(k)
-}
-
-// phoneCAReceived takes the iPhone CA and its key that the root or an
-// admin sent. An admin keeps it when it holds none, when the records revoke
-// the one it holds, or when both stand and the new one's key hash is the
-// smaller, so that two admins that replaced it at once agree; otherwise it
-// keeps it aside in case the records revoke its own.
-func (s *Service) phoneCAReceived(from group.DeviceID, chain []*x509.Certificate, certDER, keyDER []byte) error {
-	if !s.adminPeer(from, chain) {
-		return errors.New("only the group's root or an admin sends the iPhone CA")
-	}
-	ca := group.CA{}
-	var err error
-	if ca.Cert, err = x509.ParseCertificate(certDER); err != nil {
-		return fmt.Errorf("the iPhone CA: %w", err)
-	}
-	k, err := x509.ParsePKCS8PrivateKey(keyDER)
-	key, ok := k.(*ecdsa.PrivateKey)
-	if err != nil || !ok {
-		return errors.New("the iPhone CA key is no ECDSA key")
-	}
-	ca.Key = key
-	h := group.KeyHashOf(ca.Cert)
-	if s.revoked(h) {
-		return errors.New("the records revoke this iPhone CA")
-	}
-	s.mu.Lock()
-	id := s.id
-	switch {
-	case id == nil || (!id.IsRoot() && id.AdminCA == nil):
-		s.mu.Unlock()
-		return errors.New("this member is no admin of a group a computer created")
-	case id.ServesPhone():
-		cur := group.KeyHashOf(id.PhoneCA.Cert)
-		if cur == h {
-			s.mu.Unlock()
-			return nil
-		}
-		if !s.revoked(cur) && bytes.Compare(h[:], cur[:]) > 0 {
-			s.pendingPhoneCA = &ca
-			s.mu.Unlock()
-			return nil
-		}
-	}
-	err = s.takePhoneCALocked(ca)
-	nd := s.nd
-	s.mu.Unlock()
-	if err != nil {
-		return err
-	}
-	// The other admins that this member is connected to may not have it yet.
-	if nd != nil {
-		nd.SharePhoneCA()
-	}
-	return nil
-}
-
-// takePhoneCALocked starts serving the shortcut with the iPhone CA ca.
-// s.mu is held.
-func (s *Service) takePhoneCALocked(ca group.CA) error {
-	next, err := s.id.WithPhoneCA(ca, s.cfg.now())
-	if err != nil {
-		return err
-	}
-	if err := s.setIdentityLocked(next); err != nil {
-		return err
-	}
-	s.pendingPhoneCA = nil
-	s.logf("cbb: this admin holds the group's iPhone CA %s and serves the shortcut", group.Fingerprint(ca.Cert)[:23])
-	return nil
-}
-
-// dropRevokedPhoneCA stops serving the shortcut with an iPhone CA that the
-// records revoke, as after another admin removed an admin and replaced the
-// iPhone CA; it takes the new one if it arrived first.
-func (s *Service) dropRevokedPhoneCA() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	id := s.id
-	if id == nil || !id.ServesPhone() || !s.revoked(group.KeyHashOf(id.PhoneCA.Cert)) {
-		return
-	}
-	if _, _, taken := s.takenOver(id); taken {
-		// A root taken over keeps it, for when it undoes the takeover.
-		return
-	}
-	if p := s.pendingPhoneCA; p != nil && !s.revoked(group.KeyHashOf(p.Cert)) {
-		if err := s.takePhoneCALocked(*p); err == nil {
-			return
-		}
-	}
-	s.pendingPhoneCA = nil
-	if err := s.setIdentityLocked(id.WithoutPhoneCA()); err != nil {
-		s.logf("cbb: dropping the revoked iPhone CA: %v", err)
-		return
-	}
-	s.logf("cbb: the group replaced its iPhone CA; this admin serves the shortcut again once another admin sends the new one")
-}
-
 // computerRooted reports whether the group's root is a computer, from the
-// records: then its admins hold the iPhone CA.
+// records.
 func (s *Service) computerRooted() bool {
 	s.recMu.Lock()
 	defer s.recMu.Unlock()
@@ -413,7 +287,7 @@ func (s *Service) findDevice(target string) (control.Device, error) {
 // root record that its admin CA signs. Under the new root it then revokes
 // the old root's key and the lost root's own key, keeping every device the
 // old root admitted and every other admin, records itself as the group's
-// root, and replaces the iPhone CA, which the lost root held.
+// root.
 // setTakeoverDelay signs, on the group's root, a settings record with how
 // long an admin's claim waits on each member before it takes effect: a
 // duration from 0 to 7 days (docs/protocol.md, section 10, "Handing the group
@@ -514,8 +388,6 @@ func (s *Service) takeOver(target string) (string, error) {
 		return "", errors.New("the group's root is a phone: an admin phone takes the group over, never a computer")
 	case d.ID != string(root):
 		return "", fmt.Errorf("%s is not the group's root; cbb status shows which device is", d.Name)
-	case !id.ServesPhone():
-		return "", errors.New("this admin does not hold the iPhone CA yet, which the new root replaces; connect it to another admin first, or take the group over on another admin")
 	case id.Claim != nil:
 		return "", errors.New("this admin's claim to take the group over is waiting already; cbb status shows the time left")
 	case id.StaleAdminCA():
@@ -577,7 +449,7 @@ func (s *Service) finishTakeoverLocked(roots []*x509.Certificate) (bool, error) 
 		if err := s.setIdentityLocked(next); err != nil {
 			return false, err
 		}
-		go s.afterTakeover(oldRoot, id.PhoneCA)
+		go s.afterTakeover(oldRoot)
 		return true, nil
 	}
 	s.recMu.Lock()
@@ -602,10 +474,8 @@ func (s *Service) finishTakeoverLocked(roots []*x509.Certificate) (bool, error) 
 // afterTakeover signs, on the admin whose claim made it the group's root,
 // the records a new root starts with (docs/protocol.md, section 10, "Handing the
 // group over"): its own device that holds the root, the admins it keeps
-// under the new root, and a removal of the old root's device, the
-// shortcut's tokens and the old iPhone CA (oldPhoneCA); a new iPhone CA
-// replaces it.
-func (s *Service) afterTakeover(oldRoot group.KeyHash, oldPhoneCA *group.CA) {
+// under the new root, and a removal of the old root's device.
+func (s *Service) afterTakeover(oldRoot group.KeyHash) {
 	s.mu.Lock()
 	id, nd := s.id, s.nd
 	s.mu.Unlock()
@@ -618,16 +488,13 @@ func (s *Service) afterTakeover(oldRoot group.KeyHash, oldPhoneCA *group.CA) {
 	s.recMu.Unlock()
 	var revoke group.RecordBody
 	revoke.Type = group.RecordRevoke
-	if oldPhoneCA != nil {
-		revoke.Keys = append(revoke.Keys, group.KeyHashOf(oldPhoneCA.Cert))
-	}
 	var bodies []group.RecordBody
 	name := s.cfg.Name
 	for _, dev := range devs {
 		switch {
 		case dev.ID == id.ID:
 			name = dev.Name
-		case dev.ID == lost || dev.Role == group.RoleShortcut:
+		case dev.ID == lost:
 			revoke.Keys = append(revoke.Keys, dev.Keys...)
 		case dev.AdminKey != nil && !dev.Frozen:
 			bodies = append(bodies, group.RecordBody{Type: group.RecordDevice, Device: string(dev.ID), Name: dev.Name, Role: dev.Role, OS: dev.OS,
@@ -660,20 +527,10 @@ func (s *Service) afterTakeover(oldRoot group.KeyHash, oldPhoneCA *group.CA) {
 		s.addRecords("", []group.Record{r})
 		rs = append(rs, r)
 	}
-	if phoneCA, err := group.NewPhoneCA(s.cfg.now()); err == nil {
-		s.mu.Lock()
-		err = s.takePhoneCALocked(*phoneCA)
-		s.mu.Unlock()
-		if err != nil {
-			s.logf("cbb: replacing the iPhone CA: %v", err)
-		}
-	}
 	nd.SendRecords(rs)
 	s.settleRecords(rs)
-	nd.SharePhoneCA()
 	// The other admins' CAs are from the old root: each gets one from the
 	// new root, so that a takeover by it later stays on this root.
 	s.renewAdminCAs(nd.Peers())
 	s.logf("cbb: the claim took effect; this device is the group's root now")
-	s.logf("cbb: replaced the group's iPhone CA; the iPhones that use the shortcut must pair again (cbb pair -phone)")
 }

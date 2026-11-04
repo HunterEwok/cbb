@@ -36,5 +36,4 @@ page that explains it.
 | **agent** | The program in the user's desktop session that links the desktop's clipboard to the service (`cbb agent`); also called the desktop connector on Linux. |
 | **paste helper** | A small program a target needs to press keys for remote paste: `uinput`, `tmux` or `console` (`cbb paste-helper`). |
 | **control socket**, **admin socket** | The local sockets `cbb` and the apps talk to the service through; only an administrator of the computer may use the admin socket. |
-| **shortcut** | The iPhone shortcut that syncs with a computer holding `cbb.local`, for a group without the iPhone app. See [without the app](../guide/without-app.md). |
 | **release keys** | The project's keys that sign each release (`keys.json`, `release.json`, `stable.json`), checked by the installers and by updates. |

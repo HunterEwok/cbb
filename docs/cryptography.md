@@ -20,8 +20,8 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 - TLS 1.3 only (RFC 8446), never an earlier version, on every TCP connection.
 - Randomness from the operating system's generator only (`crypto/rand`, `getrandom`,
   `SecRandomCopyBytes`, `SecureRandom`).
-- Keys never leave the device that made them, with two exceptions the protocol names:
-  the iPhone CA key, which the root passes to the admins (`phone_ca_key`, section 10), and the one-time WireGuard key a hub makes for a guest and puts in its invitation (section 12). A device's key in
+- Keys never leave the device that made them, with one exception the protocol names:
+  the one-time WireGuard key a hub makes for a guest and puts in its invitation (section 12). A device's key in
   hardware cannot leave it.
 
 ## Primitives
@@ -31,11 +31,10 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 | Every TCP connection | TLS 1.3, mutual between members | RFC 8446 | 4, 6, 13, 14 |
 | Key exchange in TLS | X25519MLKEM768 first on Go members (Go 1.27's default), then X25519; X25519 on the lite member; what the system offers on the phones | RFC 8446, draft-ietf-tls-ecdhe-mlkem | 4 |
 | TLS cipher suites | Go: the three of TLS 1.3; the lite member: TLS_CHACHA20_POLY1305_SHA256 and TLS_AES_128_GCM_SHA256 | RFC 8446 | 4 |
-| Certificates | X.509 v3, ECDSA P-256 with SHA-256, name constraints on the iPhone CA | RFC 5280 | 2 |
+| Certificates | X.509 v3, ECDSA P-256 with SHA-256 | RFC 5280 | 2 |
 | Device records, revocations, commands, server credentials, release files, evidence | ECDSA P-256 over SHA-256 of the exact signed bytes, ASN.1 DER signatures | FIPS 186-5 | 10, 15, 16, 17, 18 |
 | Pairing | CPace, suite CPACE-X25519-SHA512, bound to the TLS exporter | draft-irtf-cfrg-cpace-21, RFC 5705 | 6 |
 | Channel binding | TLS exporter (32 bytes) with the labels of section 19 | RFC 8446, section 7.5 | 6, 13, 14 |
-| iPhone shortcut tokens | HKDF-SHA-256 from the iPhone CA key | RFC 5869 | 7 |
 | Content addresses, key hashes, group tag, fingerprints | SHA-256 | FIPS 180-4 | 1, 4, 10 |
 | Forwarder hellos and state | HMAC-SHA-256 | RFC 2104 | 13 |
 | Masking of the forwarder's hellos | ChaCha20 key stream (no authentication; the MAC inside does that) | RFC 8439 | 13 |
@@ -63,9 +62,7 @@ CPace exchange, so the four implementations cannot drift apart ([testing](testin
 |---|---|---|---|---|
 | Group root CA | ECDSA P-256 | the root phone, or `cbb new` on a computer | the phone's Secure Enclave or Keystore, signs only after Face ID, the fingerprint or the passcode; on a computer a file readable only by the service | the certificate 20 years |
 | Admin CA | ECDSA P-256 | each admin | a phone's Secure Enclave or Keystore, behind the user's face, fingerprint or passcode; on a computer the TPM on Linux when there is one, else a file | the certificate ends with the root's |
-| iPhone CA | ECDSA P-256 | the root | with the root and the admins | 20 years; name constraints to `cbb.local` |
 | Member key | ECDSA P-256 | each device | the TPM on Linux when there is one, the Secure Enclave or Keystore on phones, else a file readable only by the service | the certificate 2 years, renewed 240 days before its end |
-| `cbb.local` server key | ECDSA P-256 | the root and each admin | as the iPhone CA | the certificate 397 days, renewed 60 days before its end |
 | Tunnel key | X25519 | each device that syncs away from home | sealed in the TPM on Linux when there is one, else a file of the service; the phone's keychain or app storage | until the device leaves the group |
 | Preshared key | 32 random bytes | each tunnel client | as the tunnel key | as the tunnel key |
 | Server key | ECDSA P-256 | each hub | the TPM on Linux when there is one, else a file of the service | until the hub leaves; each credential it gets lasts a period of 35 days |
@@ -74,7 +71,6 @@ CPace exchange, so the four implementations cannot drift apart ([testing](testin
 | Release and status keys | ECDSA P-256 | the maintainer | the maintainer's Secure Enclave, never CI | named in `keys.json`, at most 100 days per signature |
 | Pairing secrets | the six-digit code, CPace's scalars | for one attempt | memory only | the window, 5 minutes |
 | Invitation secret | at least 16 random bytes | the hub, for `cbb invite` | the invitation file (`.cbbinvite`, mode 0600) and the hub's memory | the invitation, 1 hour by default, at most 24 hours |
-| Token key | 32 bytes from HKDF | derived when needed | never stored | as the iPhone CA |
 
 The lifetimes are in [limits](reference/limits.md#certificates-and-keys); where each system keeps the
 files is in [devices, ports and files](reference/devices.md). The key levels (which keys
@@ -85,8 +81,6 @@ protocol, section 17.
 
 - mDNS announcements: the device ID, the group tag and the port are public on the home
   network (protocol, section 3).
-- The iPhone shortcut's profile and its page, `GET /`, are plain HTTP; they carry no secret,
-  and the shortcut checks the iPhone CA's fingerprint, which the page does not show.
 - WireGuard and AmneziaWG hide content, not size and timing: only chunk frames are padded,
   to 16 KiB (threat 6 of the [threat model](threat-model.md)).
 

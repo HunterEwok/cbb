@@ -33,9 +33,7 @@ var ErrOldGroup = errors.New("group: this device's group was made before 0.4 and
 
 // An Identity is this device's place in a group: its device ID, its key,
 // its member certificate and the group CA. The computer that created the
-// group holds the root key; it and the admins it made hold the iPhone CA
-// key and their own cbb.local certificates, so they can serve
-// the shortcut. Every other full member holds an admin key that waits for
+// group holds the root key. Every other full member holds an admin key that waits for
 // an admin CA (docs/design.md, "Full members, admins and the operating
 // system").
 //
@@ -59,12 +57,6 @@ type Identity struct {
 	// group over with it (TakenOver), which is the group's root from then
 	// on; nil elsewhere.
 	RootKey crypto.Signer
-	// PhoneCA is the iPhone CA with its key, and Phone the
-	// cbb.local certificate for Key, on a member that serves
-	// the shortcut: the root computer and its admins. Both are nil
-	// elsewhere.
-	PhoneCA *CA
-	Phone   *x509.Certificate
 	// AdminKey is the key a full member signs with once the root makes it
 	// an admin: the hello offers it until AdminCA, from the root,
 	// certifies it (docs/protocol.md, section 10). Both are nil on the
@@ -88,7 +80,7 @@ type Identity struct {
 }
 
 // Create creates a new group on this device, its root: a device ID, a key,
-// the root CA, the iPhone CA and the device's certificates.
+// the root CA and the device's certificate.
 func Create(now time.Time) (*Identity, error) {
 	key, err := NewDeviceKey()
 	if err != nil {
@@ -98,20 +90,12 @@ func Create(now time.Time) (*Identity, error) {
 	if err != nil {
 		return nil, err
 	}
-	phoneCA, err := NewPhoneCA(now)
-	if err != nil {
-		return nil, err
-	}
 	id := NewDeviceID()
 	cert, err := groupCA.IssueMember(id, PublicKey(key), now)
 	if err != nil {
 		return nil, err
 	}
-	phone, err := phoneCA.IssuePhone(PublicKey(key), now)
-	if err != nil {
-		return nil, err
-	}
-	return &Identity{ID: id, Key: key, Cert: cert, GroupCA: *groupCA, PhoneCA: phoneCA, Phone: phone}, nil
+	return &Identity{ID: id, Key: key, Cert: cert, GroupCA: *groupCA}, nil
 }
 
 // Root returns the group's current root: the last of Roots, or the group
@@ -141,12 +125,6 @@ func (id *Identity) RootCA() *CA {
 		return &CA{Cert: id.Root(), Key: id.RootKey}
 	}
 	return nil
-}
-
-// ServesPhone reports whether this device holds the iPhone CA key and its
-// cbb.local certificate, so it can serve the shortcut.
-func (id *Identity) ServesPhone() bool {
-	return id.PhoneCA != nil && id.PhoneCA.Key != nil && id.Phone != nil
 }
 
 // IsAdmin reports whether this device admits devices, signs records and
@@ -255,17 +233,6 @@ func (id *Identity) TakenOver(root *CA, roots []*x509.Certificate, now time.Time
 		return nil, err
 	}
 	next.Issuer = nil
-	// The root serves the shortcut: a member that claimed with the
-	// recovery key held no iPhone CA, so it makes one; the new root
-	// replaces it anyway once it took over.
-	if next.PhoneCA == nil {
-		if next.PhoneCA, err = NewPhoneCA(now); err != nil {
-			return nil, err
-		}
-		if next.Phone, err = next.PhoneCA.IssuePhone(PublicKey(id.Key), now); err != nil {
-			return nil, err
-		}
-	}
 	if err := next.Check(); err != nil {
 		return nil, err
 	}
@@ -287,47 +254,17 @@ func (id *Identity) WithClaim(ca *CA) (*Identity, error) {
 
 // WithRoots returns the identity trusting roots, the roots the records lead
 // to after a root record. A device that held the root it replaces no longer
-// is the root, and gives up the iPhone CA with it.
+// is the root.
 func (id *Identity) WithRoots(roots []*x509.Certificate) (*Identity, error) {
 	next := *id
 	next.Roots = roots
 	if id.RootKey != nil && (len(roots) == 0 || !SameKey(id.RootKey, roots[len(roots)-1].PublicKey)) {
-		next.RootKey, next.PhoneCA, next.Phone = nil, nil, nil
+		next.RootKey = nil
 	}
 	if err := next.Check(); err != nil {
 		return nil, err
 	}
 	return &next, nil
-}
-
-// WithPhoneCA returns the identity with the iPhone CA ca, its key
-// included, and a new cbb.local certificate from it: for an
-// admin of a group a computer created, which serves the shortcut with it.
-func (id *Identity) WithPhoneCA(ca CA, now time.Time) (*Identity, error) {
-	if ca.Key == nil {
-		return nil, errors.New("group: the iPhone CA comes without its key")
-	}
-	if err := checkCA(&ca, "iPhone CA", 0); err != nil {
-		return nil, err
-	}
-	phone, err := ca.IssuePhone(PublicKey(id.Key), now)
-	if err != nil {
-		return nil, err
-	}
-	next := *id
-	next.PhoneCA, next.Phone = &ca, phone
-	if err := next.Check(); err != nil {
-		return nil, err
-	}
-	return &next, nil
-}
-
-// WithoutPhoneCA returns the identity without the iPhone CA and its
-// cbb.local certificate, after the records revoked that CA.
-func (id *Identity) WithoutPhoneCA() *Identity {
-	next := *id
-	next.PhoneCA, next.Phone = nil, nil
-	return &next
 }
 
 // AdminName is the subject CN of the admin CA of a device.
@@ -396,34 +333,7 @@ func (id *Identity) Check() error {
 	if !hasUsage(id.Cert, x509.ExtKeyUsageServerAuth) || !hasUsage(id.Cert, x509.ExtKeyUsageClientAuth) {
 		return errors.New("group: the member certificate is not for client and server use")
 	}
-	if err := id.checkAdmin(); err != nil {
-		return err
-	}
-	// The iPhone CA comes with its key and the cbb.local
-	// certificate. The root holds it, an admin may.
-	serves := id.PhoneCA != nil
-	if serves != (id.Phone != nil) || serves && id.PhoneCA.Key == nil {
-		return errors.New("group: the identity holds only some of the iPhone CA, its key and the cbb.local certificate")
-	}
-	switch {
-	case id.IsRoot() && !serves:
-		return errors.New("group: the root holds no iPhone CA")
-	case !id.IsRoot() && serves && id.AdminCA == nil:
-		return errors.New("group: only an admin holds the iPhone CA")
-	}
-	if !serves {
-		return nil
-	}
-	if err := checkCA(id.PhoneCA, "iPhone CA", 0); err != nil {
-		return err
-	}
-	if err := checkLeaf(id.Phone, id.PhoneCA.Cert, id.Key, "cbb.local certificate"); err != nil {
-		return err
-	}
-	if err := id.Phone.VerifyHostname(PhoneName); err != nil {
-		return fmt.Errorf("group: %w", err)
-	}
-	return nil
+	return id.checkAdmin()
 }
 
 // checkAdmin checks the admin key and the admin CA: not on the root, the CA for that key, under one of the group's
@@ -510,11 +420,9 @@ func hasUsage(c *x509.Certificate, u x509.ExtKeyUsage) bool {
 }
 
 // Renew returns an identity with new certificates for those that end
-// within their renewal period (240 days for the member certificate, 60 days
-// for the cbb.local one), and reports whether anything changed. A
-// cbb.local certificate that starts in the future, issued while the
-// clock was ahead, is replaced too, since the iPhone would reject it. A
-// certificate that already ends with its CA is kept: a new one could not
+// within their renewal period (240 days for the member certificate), and
+// reports whether anything changed. A certificate that already ends with its
+// CA is kept: a new one could not
 // last longer. Only a device that holds the CA keys, or an admin CA, renews
 // its own certificates; others get theirs from a member that does
 // (RenewMember).
@@ -535,13 +443,6 @@ func (id *Identity) Renew(now time.Time) (*Identity, bool, error) {
 			return id, false, err
 		}
 		next.Cert, next.Issuer, changed = cert, id.AdminCA, true
-	}
-	if id.Phone != nil && id.PhoneCA.Key != nil && renewable(id.Phone, id.PhoneCA.Cert, now, phoneRenewBefore) {
-		cert, err := id.PhoneCA.IssuePhone(PublicKey(id.Key), now)
-		if err != nil {
-			return id, false, err
-		}
-		next.Phone, changed = cert, true
 	}
 	return &next, changed, nil
 }
@@ -641,9 +542,6 @@ type identityFile struct {
 	Roots      [][]byte `json:"roots,omitempty"`
 	GroupCAKey []byte   `json:"group_ca_key,omitempty"`
 	RootKey    []byte   `json:"root_key,omitempty"`
-	PhoneCA    []byte   `json:"phone_ca,omitempty"`
-	PhoneCAKey []byte   `json:"phone_ca_key,omitempty"`
-	Phone      []byte   `json:"phone,omitempty"`
 	AdminKey   []byte   `json:"admin_key,omitempty"`
 	AdminCA    []byte   `json:"admin_ca,omitempty"`
 	PrevCert   []byte   `json:"prev_cert,omitempty"`
@@ -694,14 +592,6 @@ func (id *Identity) Save(dir string) error {
 	if id.RootKey != nil {
 		if f.RootKey, err = x509.MarshalPKCS8PrivateKey(id.RootKey); err != nil {
 			return err
-		}
-	}
-	if id.PhoneCA != nil {
-		f.PhoneCA, f.Phone = id.PhoneCA.Cert.Raw, id.Phone.Raw
-		if id.PhoneCA.Key != nil {
-			if f.PhoneCAKey, err = x509.MarshalPKCS8PrivateKey(id.PhoneCA.Key); err != nil {
-				return err
-			}
 		}
 	}
 	if id.AdminKey != nil {
@@ -783,16 +673,6 @@ func parseIdentity(data []byte) (*Identity, error) {
 	}
 	if f.RootKey != nil {
 		if id.RootKey, err = parseKey(f.RootKey); err != nil {
-			return nil, err
-		}
-	}
-	if f.PhoneCA != nil || f.PhoneCAKey != nil || f.Phone != nil {
-		phoneCA, err := parseCA(f.PhoneCA, f.PhoneCAKey)
-		if err != nil {
-			return nil, err
-		}
-		id.PhoneCA = &phoneCA
-		if id.Phone, err = x509.ParseCertificate(f.Phone); err != nil {
 			return nil, err
 		}
 	}

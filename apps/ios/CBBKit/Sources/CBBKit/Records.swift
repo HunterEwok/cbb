@@ -214,7 +214,7 @@ public struct RecordSet: Codable, Equatable, Sendable {
     public struct Device: Decodable, Equatable, Sendable, Identifiable {
         public var id: String
         public var name: String
-        /// "full", "phone", "lite", "shortcut" or "watch".
+        /// "full", "phone", "lite" or "watch".
         public var role: String
         /// Its operating system; nil when its record does not tell.
         public var os: String?

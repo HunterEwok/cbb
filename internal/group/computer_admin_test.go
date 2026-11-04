@@ -129,27 +129,20 @@ func TestComputerAdmin(t *testing.T) {
 }
 
 // TestComputerRoot checks a group a computer created: the root makes a
-// member an admin with IssueAdmin, and the admin takes the iPhone CA and
-// serves the shortcut with it; a member that is no admin never holds it.
+// member an admin with IssueAdmin, and the admin keeps its admin CA across a
+// save.
 func TestComputerRoot(t *testing.T) {
 	root := newGroup(t)
 	m := join(t, root, t0)
-	if !m.NeedsAdminKey() || m.IsAdmin() || m.ServesPhone() || m.IsRoot() {
+	if !m.NeedsAdminKey() || m.IsAdmin() || m.IsRoot() {
 		t.Fatal("a new member is not a plain member waiting for an admin key")
 	}
 	pending, err := m.WithAdminKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pending.WithPhoneCA(*root.PhoneCA, t0); err == nil {
-		t.Error("a member that is no admin took the iPhone CA")
-	}
-	key, _ := NewKey()
 	if _, err := (&CA{Cert: root.GroupCA.Cert}).IssueAdmin(pending.ID, PublicKey(pending.AdminKey), t0); err == nil {
 		t.Error("issued an admin CA without the root key")
-	}
-	if _, err := root.PhoneCA.IssueAdmin(pending.ID, &key.PublicKey, t0); err == nil {
-		t.Error("the iPhone CA issued an admin CA")
 	}
 	adminCA, err := root.GroupCA.IssueAdmin(pending.ID, PublicKey(pending.AdminKey), t0)
 	if err != nil {
@@ -162,32 +155,16 @@ func TestComputerRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !admin.IsAdmin() || admin.IsRoot() || admin.ServesPhone() {
-		t.Error("the new admin is not an admin without the iPhone CA")
-	}
-	if _, err := admin.WithPhoneCA(CA{Cert: root.PhoneCA.Cert}, t0); err == nil {
-		t.Error("took the iPhone CA without its key")
-	}
-	if _, err := admin.WithPhoneCA(root.GroupCA, t0); err == nil {
-		t.Error("took the root as the iPhone CA")
-	}
-	serving, err := admin.WithPhoneCA(*root.PhoneCA, t0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !serving.ServesPhone() || serving.Phone.VerifyHostname(PhoneName) != nil || !SameKey(serving.Key, serving.Phone.PublicKey) {
-		t.Error("the admin does not serve the shortcut with its own cbb.local certificate")
+	if !admin.IsAdmin() || admin.IsRoot() {
+		t.Error("the new admin is not an admin")
 	}
 	dir := t.TempDir()
-	if err := serving.Save(dir); err != nil {
+	if err := admin.Save(dir); err != nil {
 		t.Fatal(err)
 	}
 	got, err := Load(dir)
-	if err != nil || !got.ServesPhone() || !SameKey(got.PhoneCA.Key, root.PhoneCA.Key.Public()) || got.AdminCA == nil {
-		t.Fatalf("the admin's iPhone CA was not kept: %v", err)
-	}
-	if back := serving.WithoutPhoneCA(); back.ServesPhone() || back.Check() != nil || !back.IsAdmin() {
-		t.Error("an admin without the iPhone CA does not check")
+	if err != nil || !got.IsAdmin() || got.AdminCA == nil || !got.AdminCA.Equal(admin.AdminCA) {
+		t.Fatalf("the admin's admin CA was not kept: %v", err)
 	}
 }
 
@@ -205,9 +182,6 @@ func TestTakenOver(t *testing.T) {
 		t.Fatal(err)
 	}
 	admin, err := m.WithAdminCA(adminCA.Raw, t0)
-	if err == nil {
-		admin, err = admin.WithPhoneCA(*root.PhoneCA, t0)
-	}
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1101,16 +1101,6 @@
         }
       }
     },
-    "Shortcut": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Быстрая команда"
-          }
-        }
-      }
-    },
     "Open at login": {
       "localizations": {
         "ru": {

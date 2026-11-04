@@ -346,8 +346,7 @@ if [ -n "$user" ] && [ "$user" != root ]; then
 fi
 if [ "$port" != 8764 ]; then
 	echo "CBB uses TCP port $port instead of 8764. If a firewall on the network limits"
-	echo "incoming connections, allow TCP $port from the home network. The iPhone shortcut works only"
-	echo "with 8764; the CBB app takes any port."
+	echo "incoming connections, allow TCP $port from the home network."
 fi
 # An update of a device in a group keeps its group: no need to join.
 if [ -f "/Library/Application Support/cbb/state/identity.json" ]; then
