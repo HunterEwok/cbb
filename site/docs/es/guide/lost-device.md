@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 36fba21437d1 -->
+<!-- source: 61154bf5c46c -->
 # Si se pierde o roban un dispositivo
 
 Para quien ha perdido un teléfono, un ordenador u otro dispositivo del grupo. Quítalo del grupo en cuanto puedas; los demás dispositivos siguen en el grupo y continúan sincronizando.
@@ -30,6 +30,8 @@ La raíz guarda la clave raíz del grupo. Cuando desaparece, un administrador pa
 
 - con teléfonos: en el otro teléfono, que es administrador, quita el perdido; la app asume el grupo en el mismo paso;
 - con ordenadores: en un ordenador administrador, `sudo cbb takeover NAME`, donde NAME es la raíz perdida.
+
+Si otra persona tiene el dispositivo de un administrador quitado, puede detener el grupo un tiempo firmando reclamaciones propias: los dispositivos dicen que el grupo está detenido. Entonces lo termina la raíz antigua, si aún la tienes; en 0.6 la raíz nueva no puede, y un grupo cuya raíz antigua también se perdió se crea de nuevo ([protocolo](../protocol.md), sección 10, "Known limits in 0.6").
 
 Si el grupo no tenía otro administrador, no se puede asumir: crea un grupo nuevo y añade de nuevo los dispositivos. Por eso las apps sugieren un segundo teléfono administrador, o un ordenador administrador, en cuanto el grupo tiene un solo administrador.
 

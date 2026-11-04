@@ -18,6 +18,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/version"
 )
 
@@ -73,9 +74,9 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"                                      on the hub: make DEVICE, an admin computer with sync away from\n" +
 		"                                      home on, the hub in its place, reached through this hub's\n" +
 		"                                      forwarder unless others are given; its clients move with it\n" +
-		"       cbb global relay address:port -key KEY [-yes]\n" +
+		"       cbb global relay default|address:port -key KEY [-yes]\n" +
 		"                                      meet the group's other devices at a blind relay, for a group\n" +
-		"                                      without a hub\n" +
+		"                                      without a hub: the project's (" + relay.ProjectHost + ") or this one\n" +
 		"       cbb global hubs DEVICE...      on the root, or an admin that may be a hub: the group's main\n" +
 		"                                      hubs, in the order they serve, before the others\n" +
 		"       cbb global allow               let this computer's service reach the group's servers as they\n" +
@@ -243,6 +244,14 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			addr = fs.Arg(0)
 		} else if fs.NArg() != 0 {
 			addr = ""
+		}
+		if addr == relay.Project {
+			// The project's relay: cbb knows its key.
+			if *key != "" {
+				fmt.Fprintln(stderr, "cbb: the project's relay (cbb global relay default) takes no -key: cbb knows it")
+				return 2
+			}
+			addr, *key = relay.ProjectHost, relay.ProjectPin
 		}
 		if addr == "" || *key == "" {
 			fmt.Fprintln(stderr, usage)

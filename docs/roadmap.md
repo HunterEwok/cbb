@@ -111,8 +111,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     the Apple account.
 - **28.** The blind relay: the open relay (`cbb relay -open`) with its limits, the choice in `cbb
     global relay` and in both phone apps, and the guide ([running your own
-    servers](admin/self-hosting.md)) are done. Next: the project's relay on `cbb.tools`
-    open to everyone, and AmneziaWG and VLESS on the relay.
+    servers](admin/self-hosting.md)) and the project's open relay on `cbb.tools` (`cbb global
+    relay default`) are done. Next: AmneziaWG and VLESS on the relay.
 - **29.** Secure updates: `cbb update`, automatic updates, the release passed through the group,
     the Android APK's own updates and the lite member's on Linux and OpenWrt are done
     ([design](design.md#secure-updates)); the project's root and release keys wait for the
@@ -373,49 +373,36 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     one.
 - **53.** **Planned for 0.6, before the launch.** What a sceptical reader checks first,
     found by reading the project as one would (2026-11-02):
-    - Android's automatic sending skips a copy that carries
+    - Done in 0.6: Android's automatic sending skips a copy that carries
       `android.content.extra.IS_SENSITIVE`, as the computers skip the password managers'
-      marks; today only received secrets get the flag. Until then the README's "Items that
-      password managers mark as secret are not synced automatically" holds on computers
-      only.
-    - No "end to end" for the clipboard: every device of the group, the hub included,
-      reads what is copied and passes it on, over mutual TLS 1.3; no server can read it.
-      The guides (privacy, how it works) and the README say exactly that; only sealed
-      commands (item 41) are encrypted to their receiver.
-    - The site's privacy page: the forwarder sees the addresses, the timing and the sizes
-      of encrypted packets, not "no". The guide's "not which group or device" holds from
-      0.6, with the short server credentials (item 32).
-    - The guides that describe what is built but not yet run on real devices (device keys,
-      sync away from home) link the README's status table; "each use asks for your face"
-      is said of the root's and the admins' keys only; "All traffic uses TLS" links the list of
-      what is not encrypted (mDNS, Roku); winget is named once the package
-      is in winget's repository; docs/security-audit.md says it is a plan.
-    - One screen of the trust model in the README: who holds which key, who can read the
-      copies, who can admit a device, what the hub and the forwarder see, and a picture of
-      the keys. The pairing code is the only secret: show it only to people who may join.
-    - The README for a newcomer: the step `sudo cbb mode shared` (computers sync both ways
-      only in shared mode), one line on what is tested today, a short security section with
-      links, how it differs from the closest tools (facts with sources, weak points too),
-      screenshots, an install that checks SHA256SUMS before running, a glossary (group,
-      root, admin, hub, lite member, relay), ports, Docker and uninstalling, the other
-      projects of the old name, and how the project is built: with heavy use of AI coding
-      tools (Claude Code), the author directing the work, deciding, running the security
-      audits and testing on real devices.
+      marks.
+    - Done in 0.6: no "end to end" for the clipboard in the guides (privacy, how it works,
+      networks that block VPNs) and the README, which say that every device of the group,
+      the hub included, reads what is copied, and that only commands are sealed to their
+      receiver; the forwarder's addresses, timing and sizes on the site and in the guides;
+      the status notes and the README's status link in the guides of keys and away from
+      home; "each signature" of the root's and the admins' keys only; "only over TLS" linking what is not encrypted; winget named only where
+      it says "once the package is in winget's repository"; docs/security-audit.md says it
+      is a plan.
+    - Done in 0.6: the README's trust model ("Who can read what": who holds which key, who
+      reads the copies, who admits devices, what the hub, the forwarder and the relay see;
+      the pairing code as the only secret), the step `sudo cbb mode shared`, one line on what
+      is tested, a security section with links, the comparison with KDE Connect, ClipCascade
+      and Universal Clipboard with its weak points, an install that checks SHA256SUMS first,
+      links to the ports and to removing it, and how the project is built. Still to do: a
+      picture of the keys, screenshots.
     - The repository's description and topics on GitHub, so that a search for "clipboard
-      sync" finds it.
-    - The website, from a read of its sources and translations (2026-11-02): the first
-      screen says what it does with a verb ("Copy on one device, paste on another", the
-      text the social image already uses) and shows why to trust it (open source, no
-      account, no telemetry) above the fold, and the iPhone in the list of platforms says
-      the app waits for TestFlight; no "trademarks" (the names belong to their owners), no
-      "the one that does all of it", no "simpler" for the recommended computer, no "any
-      desktop" while GNOME on Wayland is untested, no "runs on a Raspberry Pi Zero" before
-      it is run on one, the privacy page's keys on Linux with a TPM; the translations'
-      errors the read found (Chinese "全程" reads as end to end; Swahili "haimripoti" says
-      the opposite, and "huru"/"huria" are swapped; Hebrew's gender and prepositions before
-      links; Hindi's "जोड़ी" for pairing and mixed terms), links placed so that no
-      sentence wraps a whole page title, `dir="ltr"` on code, no letter spacing on Arabic
-      and Hebrew headings, and a native speaker's read of each language before the launch.
+      sync" finds it (the owner sets them).
+    - Done in 0.6 on the website: the first screen's title says what it does ("Copy on one
+      device, paste on another", also in the link picture), the iPhone card says the app
+      comes with TestFlight, no "trademarks", no "the one that does all of it", no "simpler"
+      for the recommended computer, X11 and Wayland instead of "any desktop", the privacy
+      page's keys in a TPM or Secure Enclave and the forwarder's addresses, timing and
+      sizes; the Chinese "全程", the Swahili "haimripoti" and "huru"/"huria", Hindi's
+      pairing and Hebrew's mixed singular and plural fixed; `dir="ltr"` on code and no
+      letter spacing in Arabic and Hebrew. Still to do: the trust facts above the fold,
+      Hebrew's prepositions before links, Hindi's mixed terms, links that wrap a whole page
+      title, and a native speaker's read of each language before the launch.
 - **54.** **Planned for 0.6, before the launch.** Support for the project: a
     `.github/FUNDING.yml` and a `funding.json` (the format FLOSS/fund reads), once the
     author's GitHub Sponsors and Liberapay accounts exist, and a short "Support" section in
@@ -698,6 +685,11 @@ The user picks one of three levels for the group, at its root:
    watched. A group of computers only, while they have no TPM or Secure Enclave support
    (D-44), works only at this level.
 
+- A computer that is the group's root counts as a key in a file, whatever its TPM or Secure
+  Enclave holds, since the group's CA key, which signs the records and the certificates, is
+  kept in its identity file; `cbb new` therefore starts its group at level 3. Next: make the
+  root's CA key in the TPM or the Secure Enclave, as the member and admin keys are, and
+  count such a root as hardware.
 - A device that shows signs of being broken into (a jailbreak or root, an unlocked
   bootloader, a Keystore in software, which attestation reports) counts as a key in a file,
   and the devices list marks it. A custom system whose bootloader is locked again with its
@@ -924,18 +916,22 @@ signature (apps/zxnext/README.md, "Install"):
 
 - The files for the Next are published on `cbb.tools` over plain HTTP, since NextZXOS's
   `.http` has no TLS: `CBB`, `CBB.DRV`, the Pi's `cbb` for ARMv6, and a list
-  with each file's size, CRC-32 and MD5 (`packaging/zxnext/site.sh`, the release's
-  `cbb-zxnext.tar.gz`).
+  with each file's size, CRC-32 and SHA-256 (`packaging/zxnext/site.sh`, the release's
+  `cbb-zxnext.tar.gz`). Each `CBB` carries the size and SHA-256 of the driver and the Pi's
+  `cbb` built with it (`apps/zxnext/pins.sh`) and installs only those (0.6).
 - One line fetches `.cbb`: `.http -h cbb.tools -u /zxnext -f CBB`, then `../CBB install` fetches
   the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
   list before it replaces the old one, a download that broke goes on from where it
   stopped, and a line shows the percentage, the kilobytes, the speed and the time left;
   SPACE stops it.
 - The Pi's `cbb` goes from the card to `/NextPi/nextpi` through the UART with the same line,
-  and the Pi checks its MD5 before it swaps the binary. `.cbb update` does the same for
-  newer files.
-- Next: the list signed with the release key, the Next checking the signature (Ed25519 on
-  the Z80 takes seconds for a list) and the Pi checking it before it runs a new `cbb`.
+  and the Pi checks its SHA-256 before it swaps the binary. `.cbb update` tells of a newer
+  `CBB`, which its user fetches as at the start.
+- `CBB` itself is as trustworthy as the network `.http` fetched it over; one taken from the
+  signed release and copied to the card is not. Next (0.7): `.cbb update` checks a newer
+  `CBB` and its files against the release's signed `release.json` through the `cbb` already
+  on the Pi, which checks releases for its own `cbb update`, so that an update needs no
+  trust in the network either.
 
 **Open questions, for the bench.**
 

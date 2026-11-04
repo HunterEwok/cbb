@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 275c61dcc36f -->
+<!-- source: 50a2bc3652f5 -->
 # Redes que bloquean las VPN
 
 Fuera de casa, tus dispositivos llegan al hub por el túnel WireGuard del propio grupo. Algunas redes bloquean WireGuard: el Wi-Fi de hoteles y oficinas, algunos operadores móviles y países enteros que filtran las VPN. Copy Beyond Borders tiene dos formas de sortearlo. Ambas se activan en el hub, y los dispositivos las toman la próxima vez que se encuentran con el hub en casa.
@@ -10,7 +10,7 @@ Fuera de casa, tus dispositivos llegan al hub por el túnel WireGuard del propio
 | **AmneziaWG** (`-obfuscate`) | paquetes UDP que no se parecen a nada en particular | el hub o un reenviador | ordenadores, teléfonos |
 | **VLESS** (`-vless`) | una conexión HTTPS a un sitio web | un reenviador con VLESS activado (el del proyecto lo tiene) | ordenadores, teléfonos |
 
-Elijas lo que elijas, el portapapeles permanece dentro del túnel del grupo y del TLS propio de los dispositivos, cifrado de extremo a extremo. El disfraz solo cambia el aspecto de los paquetes en la red.
+Elijas lo que elijas, el portapapeles permanece dentro del túnel del grupo y del TLS propio de los dispositivos, así que nada entre tus dispositivos puede leerlo. El disfraz solo cambia el aspecto de los paquetes en la red.
 
 ## Cuál usar
 

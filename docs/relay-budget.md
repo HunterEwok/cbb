@@ -131,6 +131,30 @@ What the forwarder guarantees:
   10 KiB), unless the strangers are in the group's own provider
   (`TestMemoryKeepsGroupsThatAreAway`).
 
+### XHTTP
+
+VLESS over XHTTP behind a web server (`cbb forward -vless-xhttp`) is the one place where a
+stranger spends memory before any check of the forwarder's: Xray queues a session's uploads
+before it knows the VLESS user, keeps a session that no client opens for 30 seconds, and
+behind the web server every request comes from the loopback address, so the forwarder
+cannot tell sources apart. Its limits are therefore in two places:
+
+| What | Limit | Where |
+|---|---|---|
+| One upload | 32 KiB (`MaxPostBytes`) | the forwarder; the web server's `client_max_body_size` |
+| Uploads a session holds | 8 (`MaxBufferedPosts`), so 256 KiB a session, for 30 s | the forwarder |
+| Requests | 150 a second from an address, bursts of 300 | the web server |
+| Requests open at once | 16 from an address, 1024 in all | the web server |
+
+A request that finds its session's queue full waits for a place, so the requests open at
+once bound those too. What an address makes the forwarder hold is then at most its requests
+of 30 seconds, about 140 MiB at the full rate, and less the more of them wait; this is the
+accepted bound, since a session costs nothing to make and Xray has no cap on sessions. The
+unit's memory limits (`GOMEMLIMIT` and `MemoryMax` in `packaging/linux/cbb-forward.service`)
+keep the server's other work safe from many addresses at once: past them the forwarder
+starts again, and hubs register again. Our clients send at most 32 KiB an upload, so the limits never cut
+them off. Xray's defaults, 1 MB an upload and 30 of them, let one session hold about 30 MB.
+
 ## Tests
 
 The guarantees above are tested, in Go:
@@ -147,7 +171,9 @@ The guarantees above are tested, in Go:
   `TestMemoryChargesTheSource`,
   `TestMemoryKeepsGroupsThatAreAway`,
   `TestRecordBytesChargedToTheSource`, `TestRequestsBoundByWideNetwork`,
-  `TestVLESSUsersLeaveTheScanBudget`, `TestKnownClientKeepsItsGroup`.
+  `TestVLESSUsersLeaveTheScanBudget`, `TestKnownClientKeepsItsGroup`;
+- XHTTP takes no upload over its limit and queues no more than its limit for a session
+  that no client opened: `TestXHTTPHoldsLittleForStrangers`.
 
 A new limit goes into this page and into `internal/budget` first: a cap added alone, in one
 file, is one a neighbouring state can go around.

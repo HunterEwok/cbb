@@ -304,6 +304,10 @@ nav a[aria-current] { color: var(--accent); }
 }
 .button.go::after { content: "→"; display: inline-block; }
 [dir="rtl"] .button.go::after { content: "←"; }
+/* Arabic and Hebrew: letter spacing breaks Arabic's joined letters and reads oddly in Hebrew,
+   and code stays left to right inside a right-to-left line. */
+[dir="rtl"] :is(h1, h2, h3, nav a, .brand, .platforms, .facts strong, .button, .copy) { letter-spacing: 0; }
+[dir="rtl"] code, [dir="rtl"] pre { direction: ltr; unicode-bidi: isolate; }
 .button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
 .skip { position: absolute; inset-inline-start: 16px; top: -100px; z-index: 30; }

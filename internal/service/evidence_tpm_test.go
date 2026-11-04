@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/group/grouptest"
 	"github.com/HunterEwok/cbb/internal/node"
@@ -129,5 +130,40 @@ func TestTPMCredentialOnlyFromRoot(t *testing.T) {
 	s.tpmOpening.Unlock()
 	if err := (&Service{}).tpmCredential(root.ID, root.Cert, cred); err == nil || !strings.Contains(err.Error(), notRoot) {
 		t.Errorf("in no group: %v", err)
+	}
+}
+
+// TestRootInTPMCountsAsFiles checks that a computer root whose member key
+// is in the TPM still counts as keys in a file, since its group CA key is
+// a file: cbb new starts the group at the level files, the devices list
+// says files, and the level hardware is refused.
+func TestRootInTPMCountsAsFiles(t *testing.T) {
+	tpmtest.Start(t)
+	group.ReopenTPM()
+	t.Cleanup(group.ReopenTPM)
+
+	var h hub
+	pi := startService(t, &h, "pi")
+	m, err := pi.do(t, control.Header{Op: control.OpNew}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := group.Load(pi.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := id.Key.(*tpmkey.Key); !ok {
+		t.Fatal("the root's member key is not in the TPM")
+	}
+	if m.Status == nil || m.Status.KeyLevel != LevelFiles {
+		t.Fatalf("the new group's key level: %+v", m.Status)
+	}
+	for _, d := range pi.devices(t) {
+		if d.Name == "pi" && d.Store != group.StoreFile {
+			t.Errorf("the root's keys are listed as %s", d.Store)
+		}
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: LevelHardware}, ""); err == nil {
+		t.Error("a root with its CA key in a file set the level hardware")
 	}
 }

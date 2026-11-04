@@ -311,12 +311,12 @@
         }
       }
     },
-    "On the computer that created the group, run cbb pair, then type the six-digit code it shows. Keep this phone on the same network.": {
+    "On the computer that created the group, run cbb pair -admin, then type the six-digit code it shows. Keep this phone on the same network.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "На компьютере, который создал группу, выполните cbb pair и введите шестизначный код, который он покажет. Телефон должен быть в той же сети."
+            "value": "На компьютере, который создал группу, выполните cbb pair -admin и введите шестизначный код, который он покажет. Телефон должен быть в той же сети."
           }
         }
       }
@@ -351,12 +351,12 @@
         }
       }
     },
-    "No computer is waiting for a phone. Run cbb pair on the computer that created the group, then try again.": {
+    "No computer is waiting for a phone. Run cbb pair -admin on the computer that created the group, then try again.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ни один компьютер не ждёт телефон. Выполните cbb pair на компьютере, который создал группу, и попробуйте снова."
+            "value": "Ни один компьютер не ждёт телефон. Выполните cbb pair -admin на компьютере, который создал группу, и попробуйте снова."
           }
         }
       }
@@ -371,12 +371,12 @@
         }
       }
     },
-    "This computer cannot add a phone. Run cbb pair on the computer that created the group.": {
+    "This computer did not open its window for a phone. Run cbb pair -admin on the computer that created the group.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Этот компьютер не может добавить телефон. Выполните cbb pair на компьютере, который создал группу."
+            "value": "Этот компьютер не открыл окно для телефона. Выполните cbb pair -admin на компьютере, который создал группу."
           }
         }
       }
@@ -391,12 +391,12 @@
         }
       }
     },
-    "The computer's group could not be joined. Run cbb pair on it again.": {
+    "The computer's group could not be joined. Run cbb pair -admin on it again.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Не удалось войти в группу компьютера. Выполните на нём cbb pair ещё раз."
+            "value": "Не удалось войти в группу компьютера. Выполните на нём cbb pair -admin ещё раз."
           }
         }
       }

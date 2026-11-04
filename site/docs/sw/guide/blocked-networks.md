@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 275c61dcc36f -->
+<!-- source: 50a2bc3652f5 -->
 # Mitandao inayozuia VPN
 
 Ukiwa mbali na nyumbani, vifaa vyako hufikia kitovu kupitia handaki la WireGuard la kikundi chenyewe. Baadhi ya mitandao huzuia WireGuard: Wi-Fi ya hoteli na ofisi, baadhi ya waendeshaji wa simu, na nchi nzima zinazochuja VPN. Copy Beyond Borders ina njia mbili za kukwepa hilo. Zote mbili huwashwa kwenye kitovu, na vifaa huzipokea wakati ujao vitakapokutana na kitovu nyumbani.
@@ -10,7 +10,7 @@ Ukiwa mbali na nyumbani, vifaa vyako hufikia kitovu kupitia handaki la WireGuard
 | **AmneziaWG** (`-obfuscate`) | pakiti za UDP zisizofanana na kitu chochote hasa | kitovu au kisambazaji | kompyuta, simu |
 | **VLESS** (`-vless`) | muunganisho wa HTTPS kwenye tovuti | kisambazaji chenye VLESS imewashwa (cha mradi kinayo) | kompyuta, simu |
 
-Chochote utakachochagua, ubao wa kunakili hubaki ndani ya handaki la kikundi na TLS ya vifaa vyenyewe, umesimbwa mwisho hadi mwisho. Ufichaji hubadilisha tu jinsi pakiti zinavyoonekana kwenye waya.
+Chochote utakachochagua, ubao wa kunakili hubaki ndani ya handaki la kikundi na TLS ya vifaa vyenyewe, kwa hiyo hakuna kitu kati ya vifaa vyako kinachoweza kuusoma. Ufichaji hubadilisha tu jinsi pakiti zinavyoonekana kwenye waya.
 
 ## Ipi ya kutumia
 

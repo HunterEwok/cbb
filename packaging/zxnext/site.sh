@@ -8,11 +8,14 @@
 #   sh packaging/zxnext/site.sh BUILD PI_CBB OUTDIR
 #
 # BUILD is apps/zxnext/build (CBB, CBB.DRV), PI_CBB the lite
-# member for the Pi Zero (arm-unknown-linux-musleabihf). OUTDIR gets
+# member for the Pi Zero (arm-unknown-linux-musleabihf), the one CBB was
+# built with (make PI_CBB=...). OUTDIR gets
 #
 #   zxnext/CBB, zxnext/CBB.DRV, zxnext/cbb
-#   zxnext/LIST  a line NAME SIZE CRC32 MD5 for each, which .cbb checks
-#                each download against (CRC-32 on the Next, MD5 on the Pi)
+#   zxnext/LIST  a line NAME SIZE CRC32 SHA256 for each. CBB checks the
+#                driver and the Pi's cbb against its own copy of their
+#                SHA-256 (apps/zxnext/pins.sh), never the list's; .cbb
+#                update reads the list only to tell of a newer CBB
 #
 # The site serves zxnext/CBB at /zxnext as well, which
 # `.http -h cbb.tools -u /zxnext -f CBB` fetches (docs/maintaining.md).
@@ -39,7 +42,7 @@ cp "$pi" "$out/zxnext/cbb"
 for f in CBB CBB.DRV cbb; do
     p=$out/zxnext/$f
     size=$(wc -c <"$p" | tr -d ' ')
-    md5=$(md5sum <"$p" | cut -c1-32)
-    printf '%s %s %s %s\n' "$f" "$size" "$(crc32 "$p")" "$md5" >>"$out/zxnext/LIST"
+    sha=$(sha256sum <"$p" | cut -c1-64)
+    printf '%s %s %s %s\n' "$f" "$size" "$(crc32 "$p")" "$sha" >>"$out/zxnext/LIST"
 done
 cat "$out/zxnext/LIST"

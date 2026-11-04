@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 4c42c72db35b -->
+<!-- source: 1a79497966a1 -->
 # Быстрый старт
 
 Copy Beyond Borders даёт телефону и компьютерам один общий буфер обмена: скопировали на одном,
@@ -48,7 +48,7 @@ irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 Установщик проверяет загрузку, запускает Copy Beyond Borders и задаёт два вопроса: открыть ли
 для него брандмауэр (ответьте `y`) и обновляться ли автоматически (`y` тоже хороший ответ).
 Затем один раз выйдите из системы и войдите снова, а в Windows откройте новый терминал.
-Homebrew, winget, Docker и подробности — в разделе [Установка](install.md).
+Homebrew, Docker и подробности — в разделе [Установка](install.md).
 
 ## 3. Добавьте компьютер
 

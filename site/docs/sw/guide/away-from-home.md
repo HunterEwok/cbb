@@ -1,8 +1,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e1c2123fe696 -->
+<!-- source: abe1226503bd -->
 # Mbali na nyumbani
 
 Nyumbani vifaa vyako husawazisha vyenyewe. Ili kuendelea kusawazisha laptopu au simu inapokuwa mahali pengine, kompyuta moja nyumbani huwa **kitovu** cha kikundi, na vifaa vinavyosafiri hukifikia kupitia handaki lililosimbwa la kikundi chenyewe. Picha za kila hali ziko katika [Jinsi inavyofanya kazi](how-it-works.md#away-from-home-the-hub).
+
+> Kati ya kompyuta hili limejengwa na kujaribiwa katika CI, bado si kwenye vifaa halisi; iPhone imesawazisha kwa data ya simu kupitia kitovu kwenye Mac na kisambazaji cha mradi. [Jedwali la hali](../../README.md#status) katika README linaonyesha nini kimejaribiwa wapi.
 
 Usawazishaji ukiwa mbali na nyumbani umezimwa hadi uuwashe, kwenye kitovu na kwenye kila kifaa kinachopaswa kuutumia. Uweke **vifaa vyote vikiwa nyumbani**: hapo ndipo vinapokabidhiana funguo za handaki.
 

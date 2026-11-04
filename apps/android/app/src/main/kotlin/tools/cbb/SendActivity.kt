@@ -50,6 +50,11 @@ open class SendActivity : Activity() {
         if (!hasFocus || started || isFinishing) return
         started = true
         if (!outside) {
+            // A copy CopyWatcher sends by itself stays on the phone when it is marked sensitive.
+            if (intent.getBooleanExtra(AUTO, false) && Clipboard.sensitive(this)) {
+                finish()
+                return
+            }
             send(null)
             return
         }
@@ -170,8 +175,14 @@ open class SendActivity : Activity() {
     }
 
     companion object {
-        fun intent(context: Context): Intent =
-            Intent(context, SendActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        /** Whether CopyWatcher opened it for a copy it sends by itself. */
+        private const val AUTO = "tools.cbb.extra.AUTO"
+
+        /** The button; auto when CopyWatcher sends a copy by itself, which skips a sensitive one. */
+        fun intent(context: Context, auto: Boolean = false): Intent =
+            Intent(context, SendActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                .putExtra(AUTO, auto)
 
         /** The images or files of Share, by their content URIs. */
         @Suppress("DEPRECATION") // the typed getters are API 33+

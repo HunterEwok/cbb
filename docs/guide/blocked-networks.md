@@ -13,7 +13,7 @@ at the hub, and the devices pick them up the next time they meet the hub at home
 | **VLESS** (`-vless`) | an HTTPS connection to a website | a forwarder with VLESS on (the project's has it) | computers, phones |
 
 Whatever you choose, the clipboard stays inside the group's tunnel and the devices' own TLS,
-encrypted end to end. The disguise only changes how the packets look on the wire.
+so nothing between your devices can read it. The disguise only changes how the packets look on the wire.
 
 ## Which one to use
 

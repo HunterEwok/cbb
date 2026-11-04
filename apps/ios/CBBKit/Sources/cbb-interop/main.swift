@@ -178,7 +178,8 @@ func joinTLS(host: String, port: UInt16, code: String) async throws {
           let sid = tls.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else {
         throw TLSTransport.Failure.notReady("no peer certificate or exporter")
     }
-    let info = Pairing.Info(name: "iPhone", os: "ios", adminKey: SoftwareSigner().publicKeyDER)
+    let admin = SoftwareSigner()
+    let info = try Pairing.Info(name: "iPhone", os: "ios", adminKey: admin.publicKeyDER).proving(sessionID: sid, with: admin)
     let joined = try await PairingJoiner.join(over: tls, code: code, info: info, memberCert: leaf, joinerCert: cert,
                                               sessionID: sid, now: Date()) { _ = PhoneGroup.joined($0) }
     tls.close()

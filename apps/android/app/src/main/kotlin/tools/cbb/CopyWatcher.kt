@@ -123,7 +123,7 @@ class CopyWatcher : AccessibilityService() {
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
                 if (hasWindowFocus) {
-                    val text = Clipboard.read(context)
+                    val text = Clipboard.readForAutoSend(context)
                     removeOverlay()
                     if (text != null) send(text)
                 }
@@ -137,7 +137,7 @@ class CopyWatcher : AccessibilityService() {
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or Gravity.START }
         if (runCatching { wm.addView(view, params) }.isFailure) {
-            startActivity(SendActivity.intent(this))
+            startActivity(SendActivity.intent(this, auto = true))
             return
         }
         overlay = view
@@ -145,7 +145,7 @@ class CopyWatcher : AccessibilityService() {
             if (overlay === view) {
                 // No focus: the transparent activity gets it instead.
                 removeOverlay()
-                startActivity(SendActivity.intent(this))
+                startActivity(SendActivity.intent(this, auto = true))
             }
         }, 700)
     }
@@ -207,7 +207,7 @@ class CopyWatcher : AccessibilityService() {
         val cm = getSystemService(ClipboardManager::class.java)
         val prev = runCatching { cm.primaryClip }.getOrNull()
         val clip = ClipData.newPlainText("cbb", text)
-        if (secret) clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+        if (secret) clip.description.extras = PersistableBundle().apply { putBoolean(Clipboard.SENSITIVE, true) }
         pastingUntil = SystemClock.elapsedRealtime() + 2_000
         cm.setPrimaryClip(clip)
         val ok = node.performAction(AccessibilityNodeInfo.ACTION_PASTE) || insert(node, text)

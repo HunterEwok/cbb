@@ -23,3 +23,9 @@ require (
 
 // The app speaks the service's control socket with the service's own code.
 replace github.com/HunterEwok/cbb => ../..
+
+// Wails asks for godbus 5.2.2, and godbus 5.2.0 to 5.2.4 stop the program
+// on a message with an array of file descriptors, which any peer on the
+// session bus may send (.github/dependabot.yml); 5.1.0, as the service
+// uses, has the same API. Drop this once a fixed 5.2 is out.
+replace github.com/godbus/dbus/v5 => github.com/godbus/dbus/v5 v5.1.0

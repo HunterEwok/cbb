@@ -100,7 +100,9 @@ With firewalld: `sudo firewall-cmd --permanent --add-port=8764/udp --add-port=87
 ## A forwarder
 
 Without a forwarder of your own, a hub without addresses uses the project's at `cbb.tools`
-([Sync away from home](../guide/away-from-home.md#5-when-the-internet-cannot-reach-your-home-a-forwarder)).
+([Sync away from home](../guide/away-from-home.md#5-when-the-internet-cannot-reach-your-home-a-forwarder)),
+open to every group under the [terms of the public servers](https://cbb.tools/en/terms.html):
+free, as is, with no promise of uptime, and shared by the [budget](../relay-budget.md).
 Once yours runs, give the hub its address and key instead:
 
 ```sh
@@ -134,10 +136,21 @@ sudo systemctl restart cbb-forward
 sudo journalctl -u cbb-forward | grep XHTTP     # the path the web server passes
 ```
 
-Then give that path to the web server, in the site's `server` block for TCP 443 (nginx):
+Then give that path to the web server (nginx): the limits in the `http` block, the location
+in the site's `server` block for TCP 443:
 
 ```nginx
+limit_req_zone $binary_remote_addr zone=cbb_vless_addr:10m rate=150r/s;
+limit_conn_zone $binary_remote_addr zone=cbb_vless_conn:10m;
+limit_conn_zone $server_name zone=cbb_vless_all:1m;
+
 location /PATH-FROM-THE-LOG {
+    client_max_body_size 32k;
+    limit_req zone=cbb_vless_addr burst=300 nodelay;
+    limit_conn cbb_vless_conn 16;
+    limit_conn cbb_vless_all 1024;
+    limit_req_status 429;
+    limit_conn_status 429;
     proxy_pass http://127.0.0.1:3276;
     proxy_http_version 1.1;
     proxy_buffering off;
@@ -150,6 +163,9 @@ location /PATH-FROM-THE-LOG {
 }
 ```
 
+- The limits bound what strangers, who need no VLESS user to send uploads, make the
+  forwarder hold ([the servers' budget](../relay-budget.md#xhttp)); the clients' uploads are
+  never larger than 32 KiB.
 - The path is made at random once and kept in the forwarder's key file; `-vless-path /PATH`
   sets one of your own (a slash and 8 to 64 letters, digits, `-` or `_`). It keeps scanners
   off the forwarder; the groups' security does not rely on it.
@@ -219,9 +235,9 @@ group there.
 The devices then meet at the relay whenever they are not on one network. Both must be
 online at once, since the relay stores nothing. It speaks plain WireGuard only.
 
-Planned ([roadmap](../roadmap.md), item 28): the project's relay at `cbb.tools` for groups
-that do not want to run their own, and AmneziaWG and VLESS on the relay, as on the
-forwarder.
+Groups that do not want to run their own can use the project's open relay at `cbb.tools:8765`:
+`sudo cbb global relay default` knows its address and key. Planned ([roadmap](../roadmap.md),
+item 28): AmneziaWG and VLESS on the relay, as on the forwarder.
 
 ## What the server keeps
 

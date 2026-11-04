@@ -105,7 +105,7 @@ private fun joinTLS(host: String, port: Int, code: String) {
     val joined = try {
         val leaf = tls.peerCertificate ?: fail("no peer certificate")
         val sid = tls.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
-        val info = Pairing.Info("android", "android", admin.publicKeyDER)
+        val info = Pairing.Info("android", "android", admin.publicKeyDER).proving(sid, admin)
         PairingJoiner.join(tls, code, info, leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it) }
     } finally {
         tls.close()

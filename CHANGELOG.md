@@ -7,6 +7,15 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The website has the terms of the project's forwarder and relay at `cbb.tools` (Terms of the
+  public servers, in every language of the site, linked from every page's footer): open to
+  every group, free, as is without a promise of uptime, shared by the budget, and where to
+  report abuse (abuse@cbb.tools).
+- `cbb global relay default` meets the group at the project's open relay on `cbb.tools:8765`,
+  whose address and key cbb knows.
+- The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
+  their certificates, the forwarder's and the relay's ports, and the expiry of the signed files devices fetch
+  (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").
 - The mirror of the releases at `dl.cbb.tools`, which `cbb update`, the installers, the
   Android app and the lite member fall back to when GitHub does not answer: `release-sign
   mirror` on cbb.tools takes every hour the newest `keys.json` and `stable.json` that check
@@ -914,6 +923,35 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The README and the guides say exactly who can read the copies: every device of the group,
+  a hub included, over TLS between each two devices, with only commands sealed to their
+  receiver, and not "end to end"; the README has a trust model ("Who can read what"), the
+  step `sudo cbb mode shared`, a comparison with similar tools and their weak points, and a
+  way to check the installer against `SHA256SUMS` before running it. The website's first
+  screen says "Copy on one device, paste on another", and its translations are corrected.
+- Android's automatic sending ("Send my copies by themselves") leaves a copy marked sensitive
+  (`android.content.extra.IS_SENSITIVE`, as password managers and the app's received secrets
+  mark it) on the phone, as the computers leave the password managers' marks; the button still
+  sends it.
+- A phone with the app joins a computer's group as an admin only through `cbb pair -admin`
+  on the group's root, which first says what an admin may do; a plain `cbb pair` and an
+  invitation refuse a phone that asks to be an admin, and the apps name the new command.
+  The service logs an admission as an admin with its powers.
+- A phone that joins with an admin key proves it holds the key: the pairing's first frame
+  carries `admin_proof`, the key's signature over the connection's session ID, which the root
+  computer and an admin phone check before they make an admin CA (docs/protocol.md, section
+  6); the root computer also refuses an admin key its records name already. On Android the
+  proof asks for the fingerprint or the screen lock once more.
+- `cbb recovery` reads the recovery key without showing it, and takes the key's admin CA only
+  as a root of the group issued it.
+- `cbb pair -app` opens the app's file once, refusing a link, and writes through that handle.
+- The iPhone app deletes the recovery sheet's PDF when it goes to the background and at
+  launch, and hides the sheet in the app switcher; the Android app keeps the restore screen
+  out of screenshots and the recent apps.
+- docs/protocol.md section 10 and the lost device guide describe the two takeover cases that
+  only the old root ends in 0.6.
+- An Apple TV added without `-name` (`cbb remote add -appletv`) takes the name it announces on
+  the home network, the one in its Settings, instead of its address.
 - On Android the root and admin keys sign once per authentication: each signature asks for
   the fingerprint, the face or the screen lock in a prompt that carries it (BiometricPrompt
   with a CryptoObject), instead of for a short time after one. Adding the first
@@ -935,7 +973,9 @@ All notable changes to cbb are documented in this file. The format follows
   (`cbb-linux-amd64.tar.gz` and the others), the Homebrew formula and the OpenWrt package
   `cbb`, the protocol's names (`_cbb._tcp`, the ALPN protocols, the `cbb://` links
   and QR codes, the signature labels), the Swift package `CBBKit` and the Kotlin package
-  `tools.cbb`. An install of 0.5 is not moved: remove it with its own uninstaller.
+  `tools.cbb`. An install of 0.5 is not moved: remove it with its own uninstaller, with
+  `--purge`, before installing 0.6, since that uninstaller also removes `/usr/local/bin/cbb`;
+  then remove its service account and its polkit rule in `/etc/polkit-1` by hand.
 - What earlier versions left behind is gone, as nothing before 0.6 is read: the installers no
   longer remove or move installs under earlier names, `get.sh` no longer finds the lite
   member's archives of 0.4 and earlier, members refuse the event `via` `iphone`, the tunnel
@@ -1192,6 +1232,30 @@ All notable changes to cbb are documented in this file. The format follows
 - When the root signed two own device records at the same time, the phones take the one
   with the greater record ID as its own device, as the computers and the lite member do, so
   every member agrees which device holds the root and whether it is a phone or a computer.
+- VLESS over XHTTP takes uploads of at most 32 KiB and keeps at most 8 of a session until
+  its client opens it, and the site's nginx location limits the requests of each address
+  (docs/relay-budget.md, "XHTTP"; site/README.md and docs/admin/self-hosting.md give the
+  lines). The forwarder's unit sets `GOMEMLIMIT` and `MemoryMax`.
+- `cbb next link` drops an ESP block that names no link of its own or is longer than the
+  ESP sends.
+- A computer that is the group's root says its keys are in a file, whatever its TPM or
+  Secure Enclave holds, since its group CA key is a file; `cbb new` starts its group at the
+  level files, `cbb keys hardware` is refused there, and `cbb new` says why this
+  computer's own key went to a file when its TPM failed (docs/guide/keys.md).
+- `install.sh` on Linux and FreeBSD refuses an existing account or group named `cbb` that an
+  earlier install did not make. `uninstall.sh` removes the quick actions' polkit rule, and
+  with `--purge` the service's account too.
+- The keyboard's host list takes the signal that a host forgot its pairing only from BlueZ.
+- The tray app on Linux uses godbus 5.1.0, as the service does, in place of the 5.2.2 that
+  Wails asks for.
+- On Windows, an image written to the clipboard frees its decoded pixels before the PNG is
+  made, so the memory it takes stays within the count of the image budget.
+- `.cbb install` on the ZX Spectrum Next installs only the `CBB.DRV` and the Pi's `cbb` that
+  its `CBB` was built with: `CBB` carries their size and SHA-256, the Next checks the driver,
+  and the Pi checks its `cbb` with `sha256sum`. The site's `LIST` now gives SHA-256 instead of
+  MD5, and `.cbb update` only tells of a newer `CBB`, which is fetched as at the start. A
+  `CBB` copied from the signed release needs no trust in the network
+  (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
 
@@ -1216,8 +1280,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
-- The Android app shows sync away from home off as soon as it is turned off, not only once it
-  stops trying the hub it was reaching.
+- The Android app could still show sync away from home as connected for a moment after it was
+  turned off; it now shows it off at once.
 - On an X11 desktop cbb could crash now and then while it opened another connection to the X
   server or first used XTEST or the screen saver extension: xgb's extensions write tables that
   every connection reads. Each extension now starts once, before any connection takes events.
@@ -1733,6 +1797,8 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Added
 
+- `cbb global relay default` meets the group at the project's open relay on `cbb.tools:8765`,
+  whose address and key cbb knows.
 - The bench's `phone` suite: the Android app on an emulator in a group with members of the
   fleet, driven by instrumented tests (`apps/android/app/src/androidTest`) through a helper
   that runs cbb on the members: the phone makes its own group, admits computers, syncs both

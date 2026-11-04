@@ -781,7 +781,7 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 | PRS (password) | the six ASCII digits of the code, or a remote invitation's secret (its raw bytes) |
 | CI (channel identifier) | `"cbb pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
 | sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-cbb-pair-v2`, empty context |
-| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER); a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits `ios` and `android` joiners as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, and, only on the group's root, `ios` and `android` joiners as phones ("A phone joins a computer's group" below) |
+| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits `ios` and `android` joiners as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, and, only on the group's root, `ios` and `android` joiners as phones ("A phone joins a computer's group" below) |
 | ADb (member) | JSON `{"device":"<member device ID>","group":"<group tag>"}` |
 | Ya, Yb | 32-byte X25519 u-coordinates |
 | Tags Ta, Tb | HMAC-SHA-512, 64 bytes |
@@ -789,7 +789,8 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 The AD bytes are used exactly as they travel in the `ad` field. The member MUST check ADa: `os`
 is `linux`, `windows` or `macos`, or `none` with `role` `lite` (an admin phone also takes
 `ios` and `android`); `name` is 1 to 64 bytes of
-printable UTF-8; `admin_key`, when present, comes with `ios` or `android` and is a P-256 key; `role`,
+printable UTF-8; `admin_key`, when present, comes with `ios` or `android` and is a P-256 key, and
+`admin_proof` comes with it; `role`,
 when present, is `lite`; `seal`, when present, comes from no phone and is 1216 bytes. A lite member (a Linux device without CA keys) gets
 no CA keys and is recorded with role `lite`. Go members
 take no `ios` joiner: only admin phones admit phones.
@@ -870,13 +871,19 @@ plus the browse time.
 ### A phone joins a computer's group
 
 A phone joins a group that a computer created through the group's root, as a computer joins
-(the joiner dials, above): `cbb pair` on the root opens a window, and the phone finds it by mDNS
-(`p=1`) and takes the six-digit code the user types. Its ADa says `ios` or `android` and carries
-`admin_key`; the root's Welcome then carries `admin_ca` for that key, and the root signs the
-phone's `device` record with role `phone` that names the admin key in `admin` with the powers of
-an admin, `takeover` among them. An admin computer that is not the root refuses a phone after the
-key confirmation, with `{"error": "refused"}`. A phone that offers no admin key, as a TV, joins
-as a member. This is how a new phone takes over a computer's group, as after `cbb recovery`:
+(the joiner dials, above): `cbb pair -admin` on the root opens a window that may make admins,
+and the phone finds it by mDNS (`p=1`) and takes the six-digit code the user types. Its ADa says
+`ios` or `android` and carries `admin_key`; the root's Welcome then carries `admin_ca` for that
+key, and the root signs the phone's `device` record with role `phone` that names the admin key
+in `admin` with the powers of an admin, `takeover` among them (the table in section 10, "Who
+signs what"). The user chooses that the window makes an admin, never the joiner: any other
+window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
+confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
+phone that offers no admin key, as a TV, joins any window as a member. Before it certifies an
+admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
+`sid` of this connection, so that a key the joiner does not hold, or a proof made for another
+connection, never becomes an admin; the root computer also refuses a key its records name already
+(a device's key, an admin key, the recovery key). Both answer `{"error": "refused"}`. This is how a new phone takes over a computer's group, as after `cbb recovery`:
 it joins, the root names its admin key in a `handover` record (`cbb handover`, section 10,
 "Handing the group over"), and its claim takes effect at once.
 
@@ -1026,6 +1033,7 @@ Header fields (all omitted when empty):
 | `part` | object | `copy-media`'s `part` messages and `paste-media`'s answers: `{type?, path?, dir?, size?}`, a part of images or files without its hash; `release-file` and `release-get`: the archive's `size` |
 | `value` | string | `config`: the setting's new value; `remote add`: the TV's kind, `androidtv` (the default), `appletv` or `roku`; `remote pastes`: `on` or `off` |
 | `detail` | string | with `error`: the underlying error, which the client shows with error details on (`CBB_DEBUG=1`) |
+| `admins` | bool | `pair`, on the group's root: the window may make a phone with the app an admin (`cbb pair -admin`) |
 | `forwarder`, `forwarder_key` | strings | `away hub`: the forwarder's address and its key, 44 characters of base64 |
 | `relay`, `relay_key` | strings | `away relay`: the relay's address and its key; needs `consent` |
 | `obfuscate` | bool | `away hub`: speak AmneziaWG instead of plain WireGuard (section 11) |
@@ -1407,7 +1415,8 @@ write:
 
 | Admin | `powers` | `commands` |
 |-------|----------|-----------|
-| a phone | all eight | all |
+| a phone, admitted by a phone | all eight | all |
+| a phone, admitted by a root computer (`cbb pair -admin`) | `admit`, `renew`, `remove`, `freeze`, `hub`, `takeover` | all |
 | a computer | `admit`, `renew`, `remove`, `freeze`, `hub`, and `takeover` when the root is a computer | all |
 | a watch | `remove`, `freeze` | `paste-off`, `actions-off`, `away-off`, `action` |
 
@@ -1670,6 +1679,18 @@ once a new root removes it, nothing it signs counts under that root. What it can
 the root, by pretending it had not seen a record or by removing the claimant under its old
 admin CA, is stop the group: never take it.
 
+**Known limits in 0.6.** Two cases are accepted for 0.6; the apps and `cbb status` show a
+stop:
+
+- A removed admin that signs a claim pretending not to have seen another claim, or a removal
+  the old root signs late, after a new root that had not seen the removed admin's claim took
+  over, leaves the group with one root and a full stop. Nobody is removed by it, but the
+  taker's takeover is undone, and the new root's `resolve` does not end the stop: only the
+  old root's does. When the old root is lost too, the group is set up again.
+- A removal that the old root signs after a handover took effect is cut: it does not count,
+  and the removed admin stays until the new root removes it: after a handover, remove on the
+  new root.
+
 #### The recovery key
 
 A recovery key lets the user take the group back when every phone with the root or
@@ -1886,11 +1907,11 @@ beyond) and check the same bytes.
 |------|---------|---------|
 | `devices` | none | `{devices: [{id, name, role, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only |
 | `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"), reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins, in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none. Members connect again afterwards, so their hellos carry the change (section 11) |
-| `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`); removing an admin of a group a computer created replaces the iPhone CA ("Admins") and needs the iPhone CA key |
+| `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`) |
 | `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected full member an admin ("Admins") |
 | `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
 | `takeover-delay` | `{value}`: a duration from `0s` to `168h` | `{done}` or an error. Only on the group's root: signs a `settings` record with `takeover_delay_ms`, how long a claim waits on each member, and the `key_level` its newest one had |
-| `key-level` | `{value}`: `proven`, `hardware` or `files` | `{below, done}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the `takeover_delay_ms` its newest one had; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root key is in a file |
+| `key-level` | `{value}`: `proven`, `hardware` or `files` | `{below, done}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the `takeover_delay_ms` its newest one had; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root's keys are in a file, as a computer's CA keys are (section 17) |
 | `hubs` | `{hubs}`: 1 to 16 names or device IDs of computers and phones, in the order they serve | `{done}` or an error. On the group's root or an admin with `hub`: signs a `hubs` record, the group's main hubs |
 | `freeze` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on an admin that is not frozen: freezes another admin without `remove-admins`, never the root or an admin phone ("Removals and freezes keep what the author saw") |
 | `thaw` | `{name}` | `{name, done}` or an error. Only on the root computer (a computer's admin has no `thaw`): ends every freeze of that admin ("Removals and freezes keep what the author saw") |
@@ -2142,7 +2163,10 @@ carries:
   `server_name`. Its HTTP connections are reused as Xray's own client configuration does
   by default (three at once, each dropped after 600 to 900 requests or 1800 to 3000
   seconds, at random), and the gap between two uploads is 10 to 50 ms at random; each
-  request carries Xray's padding of random length. The forwarder passes every UDP packet that comes over VLESS to its own UDP
+  request carries Xray's padding of random length.
+  Each upload carries at most 32 KiB, and the forwarder refuses a larger one
+  and keeps at most 8 uploads of a session that no client has opened
+  ([relay-budget.md](relay-budget.md#xhttp)). The forwarder passes every UDP packet that comes over VLESS to its own UDP
   port, so the packets are forwarded as in section 13; VLESS carries nothing else.
 - A receiver MUST refuse settings that do not have this form, or a `transport` it does not
   know, and not start the tunnel; it never falls back to plain WireGuard.
@@ -3105,8 +3129,11 @@ far.
   `store` `file`. Moving the hub to such a computer makes it an admin only through that
   dialog.
 - **The root.** `cbb new` on a computer warns that its root key is a file: the group's CA
-  keys are not in the TPM or the Secure Enclave yet (roadmap, D-44). Making a group or an
-  admin with keys in a file asks first too.
+  keys are not in the TPM or the Secure Enclave yet (roadmap, D-44). A computer that holds
+  the current root's CA key in a file therefore says `file` for its keys, in its hello and
+  `cbb status`, whatever its member key, and `cbb new` signs the level `files` for its
+  group; `key-level` refuses `hardware` and `proven` there. Making a group or an admin with
+  keys in a file asks first too.
 - **The attestation challenge.** An Android key is made with the attestation challenge
   `SHA-256("cbb attest v1" || field(group tag) || field(member key) || salt)`, where
   `field` is a two-byte big-endian length followed by the bytes, the group tag is its

@@ -1,0 +1,52 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+{{define "title"}}{{t "Terms of the public servers"}}: Copy Beyond Borders{{end}}
+{{define "description"}}{{t "The terms of the forwarder and the blind relay at cbb.tools, which every group may use: free, as is, shared fairly."}}{{end}}
+
+{{define "content"}}
+<section class="wrap page">
+  <h1>{{t "Terms of the public servers"}}</h1>
+  <p class="lead">{{t "The project runs a forwarder and a blind relay at %s that every group may use, with no account and at no cost. These are the terms of using them." (code "cbb.tools")}}</p>
+
+  <h2 id="what">{{t "What they are"}}</h2>
+  <ul>
+    <li>{{t "The forwarder passes the encrypted packets of your group's tunnel between your devices away from home and your hub, when the internet cannot reach the hub directly."}}</li>
+    <li>{{t "The blind relay lets the devices of a group without a hub meet away from home. It joins their encrypted connections and cannot read them."}}</li>
+    <li>{{t "Both are open to every group. Nobody is refused for who they are, where they are or what they use it for, within these terms."}}</li>
+  </ul>
+
+  <h2 id="as-is">{{t "As is"}}</h2>
+  <ul>
+    <li>{{t "The servers are offered as they are, without any warranty and without a promise that they are up. They may stop, move or change at any time, and their software is the project's own, in its early development."}}</li>
+    <li>{{t "If your group depends on them, run your own forwarder or relay, or forward a port to your hub: %s." (link "https://github.com/HunterEwok/cbb/blob/main/docs/admin/self-hosting.md" (t "running your own servers"))}}</li>
+    <li>{{t "Your devices check the servers' keys, and what you copy stays encrypted between your devices whatever a server does."}}</li>
+  </ul>
+
+  <h2 id="budget">{{t "A fair share for everyone"}}</h2>
+  <ul>
+    <li>{{t "Each address, network and provider, and each group, gets a share of the servers' memory, connections and work. When a share is full, the server refuses what is new rather than take anything from the groups already on it."}}</li>
+    <li>{{t "So a busy group or a busy network may be refused for a while; the others go on. How the shares are counted is public: %s." (link "https://github.com/HunterEwok/cbb/blob/main/docs/relay-budget.md" (t "the servers' budget"))}}</li>
+  </ul>
+
+  <h2 id="rules">{{t "What is not allowed"}}</h2>
+  <ul>
+    <li>{{t "Attacking the servers or anyone through them, or loading them on purpose to keep others out."}}</li>
+    <li>{{t "Using them for anything the law forbids where you are or where the servers stand."}}</li>
+  </ul>
+  <p>{{t "A source that breaks these terms may be refused, at the level of its address, network or provider."}}</p>
+
+  <h2 id="privacy">{{t "What they see and keep"}}</h2>
+  <p>{{t "The servers keep no logs and never see what you copy. What each one can see while it works, and how to avoid even that: %s." (link "privacy.html" (t "Security and privacy"))}}</p>
+
+  <h2 id="contact">{{t "Reports and changes"}}</h2>
+  <ul>
+    <li>{{t "To report abuse of the servers, write to %s; a vulnerability goes privately, as %s describes." (link "mailto:abuse@cbb.tools" "abuse@cbb.tools") (link "https://github.com/HunterEwok/cbb/blob/main/SECURITY.md" "SECURITY.md")}}</li>
+    <li>{{t "The servers are run by the project's maintainer, %s; there is no company behind them. Every change to this page is public in %s." (link "https://github.com/HunterEwok" "HunterEwok") (link "https://github.com/HunterEwok/cbb/commits/main/site/templates/terms.html" (t "its history"))}}</li>
+  </ul>
+
+  <div class="final">
+    <h2>{{t "Try it on your devices"}}</h2>
+    <p>{{t "It takes a few minutes and costs nothing."}}</p>
+    <p class="actions"><a class="button accent go" href="download.html">{{t "Download for free"}}</a></p>
+  </div>
+</section>
+{{end}}

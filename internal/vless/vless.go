@@ -144,7 +144,7 @@ func Listen(cfg ServerConfig) (*Server, error) {
 	if cfg.Path != "" {
 		// Plain HTTP: the web server in front has ended the TLS. Any host
 		// it passes is taken; what matters is the path.
-		stream = xhttpStream(&splithttp.Config{Path: cfg.Path}, nil)
+		stream = xhttpStream(&splithttp.Config{Path: cfg.Path, Mode: "packet-up", ScMaxBufferedPosts: MaxBufferedPosts}, nil)
 	} else {
 		sid, _ := hex.DecodeString(ShortID(cfg.Key))
 		stream = realityStream(&reality.Config{
@@ -352,7 +352,24 @@ func xhttpClient(host, path string) *splithttp.Config {
 	}
 }
 
+// The uploads that XHTTP's packet-up holds for a session before a client
+// that owns it shows up (docs/relay-budget.md): each POST carries at most
+// MaxPostBytes, and a session keeps at most MaxBufferedPosts of them for the
+// 30 s that Xray waits. Xray's own defaults, 1 MB and 30, let a stranger
+// with no VLESS user make the server hold about 30 MB a session. The web
+// server in front refuses a larger body (site/README.md, "VLESS").
+const (
+	MaxPostBytes     = 32 << 10
+	MaxBufferedPosts = 8
+)
+
+// xhttpStream is XHTTP with c's settings and, unless c sets its own, the
+// upload size above: the client splits its uploads to fit it, and the
+// server takes no more.
 func xhttpStream(c *splithttp.Config, t *xtls.Config) *internet.StreamConfig {
+	if c.ScMaxEachPostBytes == nil {
+		c.ScMaxEachPostBytes = &splithttp.RangeConfig{From: MaxPostBytes, To: MaxPostBytes}
+	}
 	sc := &internet.StreamConfig{ProtocolName: "splithttp", TransportSettings: []*internet.TransportConfig{{ProtocolName: "splithttp", Settings: serial.ToTypedMessage(c)}}}
 	if t != nil {
 		tm := serial.ToTypedMessage(t)

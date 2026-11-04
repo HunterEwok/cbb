@@ -307,7 +307,11 @@ func TestSwiftJoinsComputerRoot(t *testing.T) {
 		{"an admin computer", true, false, ErrPhoneNeedsRoot},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFixture(t)
+			root, err := group.Create(t0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := fixtureWith(t, root, true)
 			if tc.admin {
 				admin, _ := computerAdmin(t)
 				f = fixtureFor(t, admin)

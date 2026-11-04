@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 4c42c72db35b -->
+<!-- source: 1a79497966a1 -->
 # Kuanza haraka
 
 Copy Beyond Borders huipa simu yako na kompyuta zako ubao mmoja wa kunakili: unanakili kwenye kimoja na kubandika kwenye kingine. Vifaa huunda **kikundi** kwenye mtandao wako wa nyumbani. Simu hushikilia ufunguo wa kikundi na kuruhusu kila kifaa kipya kuingia, kwa hiyo hakuna anayeweza kujiunga bila wewe.
@@ -33,7 +33,7 @@ Kwenye **Windows** 10 au 11, kwenye PowerShell iliyofunguliwa kwa "Run as admini
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-Kisakinishi huangalia faili ulizopakua, huanzisha Copy Beyond Borders na kuuliza maswali mawili: kama kifungue ngome ya moto kwa ajili yake (jibu `y`) na kama kijisasishe chenyewe kiotomatiki (`y` pia ni jibu zuri). Kisha toka na uingie tena mara moja, au fungua terminal mpya kwenye Windows. Homebrew, winget, Docker na maelezo yote yako katika [Kusakinisha](install.md).
+Kisakinishi huangalia faili ulizopakua, huanzisha Copy Beyond Borders na kuuliza maswali mawili: kama kifungue ngome ya moto kwa ajili yake (jibu `y`) na kama kijisasishe chenyewe kiotomatiki (`y` pia ni jibu zuri). Kisha toka na uingie tena mara moja, au fungua terminal mpya kwenye Windows. Homebrew, Docker na maelezo yote yako katika [Kusakinisha](install.md).
 
 ## 3. Ongeza kompyuta
 

@@ -39,6 +39,11 @@ other device stays in the group:
 - with computers: on an admin computer, `sudo cbb takeover NAME`, where NAME is the lost
   root.
 
+If someone else holds a removed admin's device, they can stop the group for a while by
+signing claims of their own: the devices say the group is stopped. Then the old root ends it,
+if you still have it; in 0.6 the new root cannot, and a group whose old root is lost too is
+set up again ([protocol](../protocol.md), section 10, "Known limits in 0.6").
+
 If the group had no other admin, it cannot be taken over: make a new group and add the devices again. That is why the apps
 suggest a second admin phone, or an admin computer, as soon as the group has a single admin.
 

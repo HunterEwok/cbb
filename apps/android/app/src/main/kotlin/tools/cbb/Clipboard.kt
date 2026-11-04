@@ -41,6 +41,37 @@ object Clipboard {
     }
 
     /**
+     * Whether the clipboard's copy is marked sensitive
+     * (`android.content.extra.IS_SENSITIVE`), as password managers and the
+     * keyboards' password fields mark it, and as this app marks a received
+     * secret. Automatic sending leaves such a copy on the phone, as the
+     * computers leave the password managers' marks; the button still sends
+     * it, since the user asks for it.
+     */
+    fun sensitive(context: Context): Boolean {
+        val cm = context.getSystemService(ClipboardManager::class.java)
+        return runCatching { cm.primaryClipDescription?.let(::sensitive) == true }.getOrDefault(false)
+    }
+
+    /** Whether a clip's description carries the sensitive mark. */
+    fun sensitive(d: ClipDescription): Boolean =
+        d.extras?.getBoolean(SENSITIVE) == true
+
+    /** The extra that marks a copy sensitive (ClipDescription.EXTRA_IS_SENSITIVE on Android 13). */
+    const val SENSITIVE = "android.content.extra.IS_SENSITIVE"
+
+    /**
+     * The text on the clipboard for automatic sending: null when there is
+     * none, the app may not read it now, or the copy is marked sensitive.
+     */
+    fun readForAutoSend(context: Context): String? {
+        val cm = context.getSystemService(ClipboardManager::class.java)
+        return runCatching {
+            cm.primaryClip?.takeIf { it.itemCount > 0 && !sensitive(it.description) }?.getItemAt(0)?.text?.toString()
+        }.getOrNull()
+    }
+
+    /**
      * The clipboard holds something the app could not read as text: it may
      * not read it now, or it is not text. The button leaves it as it is
      * rather than put an older text over it.
@@ -118,7 +149,7 @@ object Clipboard {
         val cm = context.getSystemService(ClipboardManager::class.java)
         val clip = ClipData.newPlainText("cbb", text)
         if (kind == Member.Kind.SECRET) {
-            clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+            clip.description.extras = PersistableBundle().apply { putBoolean(SENSITIVE, true) }
         }
         cm.setPrimaryClip(clip)
         changed()

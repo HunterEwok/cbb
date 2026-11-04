@@ -279,11 +279,11 @@ class AwayFromHome(
         lock.notifyAll()
     }
 
-    // Off as soon as it is turned off or stopped, not only once the loop
-    // comes round from a hub it was still trying.
-    @Volatile var status: Status = Status.OFF
-        get() = synchronized(lock) { if (stopped || state == null) Status.OFF else field }
-        private set
+    // What the loop last found; it notices a turn off only on its next round.
+    @Volatile private var loopStatus: Status = Status.OFF
+
+    /** Where the phone is with the hubs: off at once when it is turned off, else what the loop last found. */
+    val status: Status get() = if (isOn) loopStatus else Status.OFF
 
     @Volatile var lastError: Throwable? = null
         private set
@@ -408,14 +408,14 @@ class AwayFromHome(
                     state
                 }
                 if (s == null) {
-                    status = Status.OFF
+                    loopStatus = Status.OFF
                     synchronized(lock) { using = null }
                     idle(0)
                     continue
                 }
                 val hubs = hubsToTry(order(), s)
                 if (hubs.isEmpty()) {
-                    status = Status.WAITING_FOR_HUB
+                    loopStatus = Status.WAITING_FOR_HUB
                     synchronized(lock) {
                         using = null
                         closeTunnelLocked()
@@ -426,7 +426,7 @@ class AwayFromHome(
                 val home = hubs.firstOrNull { atHome(it.first) }
                 if (home != null) {
                     // At home with a hub: the phone dials the members directly.
-                    status = Status.AT_HOME
+                    loopStatus = Status.AT_HOME
                     synchronized(lock) {
                         using = home.first
                         closeTunnelLocked()
@@ -454,7 +454,7 @@ class AwayFromHome(
         } catch (e: InterruptedException) {
             // stopped
         } finally {
-            status = Status.OFF
+            loopStatus = Status.OFF
         }
     }
 
@@ -465,7 +465,7 @@ class AwayFromHome(
      * the connection, in milliseconds, or null when it did not reach the hub.
      */
     private fun tryHub(s: AwayState, hub: String, offer: Member.TunnelOffer, up: Boolean): Long? {
-        status = Status.CONNECTING
+        loopStatus = Status.CONNECTING
         val slot = hub + ":" + java.util.Base64.getEncoder().encodeToString(offer.hubKey)
         val n = synchronized(lock) { endpointOf[slot] ?: 0 }
         // With VLESS the hub's endpoints are tried over UDP only when it
@@ -522,7 +522,7 @@ class AwayFromHome(
             return null
         }
         synchronized(lock) { using = hub }
-        status = Status.CONNECTED
+        loopStatus = Status.CONNECTED
         lastError = null
         // On a hub below the first, the connection ends after upCheckMS.
         val timer = if (up) {

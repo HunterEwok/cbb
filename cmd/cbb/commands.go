@@ -327,9 +327,12 @@ func cmdNew(args []string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Created the group %s; this computer is its root.\n", m.Status.Group)
-	// Until the service keeps its keys in the TPM or the Secure Enclave
-	// (docs/protocol.md, section 17), the root key is a file.
+	// Until the service keeps the group's CA key in the TPM or the Secure
+	// Enclave (docs/roadmap.md, "Key levels"), the root key is a file.
 	fmt.Fprintln(stdout, "Its root key is a file here: guard this computer, since whoever copies the file can act as the group's root. A group made on a phone keeps its root key in the phone's hardware.")
+	if m.Status.KeyProblem != "" {
+		fmt.Fprintf(stdout, "This computer's own key is in a file too, although it has a TPM: %s.\n", m.Status.KeyProblem)
+	}
 	if m.Status.KeyLevel == "files" {
 		fmt.Fprintln(stdout, "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).")
 	}
@@ -344,6 +347,7 @@ func cmdNew(args []string, stdout, stderr io.Writer) int {
 func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	adminPhone := fs.Bool("admin", false, "on the group's root: let the window make a phone with the app an admin")
 	typed := fs.Bool("code", false, "join with the code that cbb pair shows on the group's root or an admin, read from standard input")
 	invitation := fs.String("invite", "", "join from afar with the invitation file that cbb invite made on the group's hub")
 	forApp := fs.String("app", "", "for the desktop apps: join by the phone's QR code, write its text to this file, which must exist, and stop when the file is removed")
@@ -354,6 +358,7 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	switch {
 	case *invitation != "" && (*typed || len(rest) != 0),
 		*forApp != "" && (*typed || *invitation != "" || len(rest) != 0),
+		*adminPhone && (*typed || *invitation != "" || *forApp != "" || len(rest) != 0),
 		len(rest) > 1 || len(rest) == 1 && (!*typed || !strings.Contains(rest[0], ":")):
 		fmt.Fprintln(stderr, pairUsage)
 		return 2
@@ -384,12 +389,16 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return joinByQR(stdin, stdout, stderr)
 	case *forApp != "":
 		return fail(stderr, errors.New("this device is in a group already (cbb status lists it)"))
+	case *adminPhone && st.Group == "":
+		return fail(stderr, errors.New("this device is in no group: cbb pair -admin runs on the group's root"))
 	}
-	return admit(stdout, stderr)
+	return admit(*adminPhone, stdout, stderr)
 }
 
 const pairUsage = `usage: cbb pair                  in a group: show a code for a new computer;
                                 in no group: join by the phone's QR code or a typed code
+       cbb pair -admin          on the group's root: show a code for a phone with the app,
+                                which joins as an admin
        cbb pair -code [address:port]   join with the code, read from standard input
        cbb pair -invite file    join from afar with an invitation
        cbb pair -app file       for the desktop apps: join by the QR code they show`
@@ -409,19 +418,32 @@ func serviceStatus() (*control.Status, error) {
 }
 
 // admit opens a pairing window and waits until a device joins, the window
-// closes, or the user presses Ctrl+C.
-func admit(stdout, stderr io.Writer) int {
+// closes, or the user presses Ctrl+C. With admins, the window makes a
+// phone with the app an admin, and the user reads what that lets it do
+// before the code.
+func admit(admins bool, stdout, stderr io.Writer) int {
 	c, err := control.DialFor(control.OpPair)
 	if err != nil {
 		return fail(stderr, err)
 	}
 	defer c.Close()
-	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPair}})
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPair, Admins: admins}})
 	if err != nil {
 		return fail(stderr, err)
 	}
+	if admins {
+		fmt.Fprintln(stdout, "The phone that joins with this code becomes an admin of the group. It may then")
+		fmt.Fprintln(stdout, "add, remove and renew devices, freeze other admins, choose the hub, and take")
+		fmt.Fprintln(stdout, "the group over from this computer after the takeover delay. Give the code only")
+		fmt.Fprintln(stdout, "to your own phone.")
+		fmt.Fprintln(stdout)
+	}
 	fmt.Fprintf(stdout, "Pairing code: %s %s\n\n", m.Code[:3], m.Code[3:])
-	fmt.Fprintln(stdout, "On the new computer run cbb pair and type the code.")
+	if admins {
+		fmt.Fprintln(stdout, "In the phone's app, choose to join a computer's group and type the code.")
+	} else {
+		fmt.Fprintln(stdout, "On the new computer run cbb pair and type the code.")
+	}
 	if m.Address != "" {
 		fmt.Fprintf(stdout, "If it cannot find this one: cbb pair -code %s\n", m.Address)
 	}

@@ -19,8 +19,9 @@ each other, always encrypted (TLS). Each device has a role:
 | **Rootless member** | a Linux computer installed without `sudo` | syncs like a member, never the root, an admin or a hub ([below](#rootless-members)) |
 | **Hub** | an admin computer at home, or a phone while its app is open, if you want one | lets your devices sync when they are away from home |
 
-The phone's key is made in its security chip (the Secure Enclave, Android's Keystore) and
-never leaves it; each use asks for your face, fingerprint or passcode. A computer keeps its
+The phone's keys are made in its security chip (the Secure Enclave, Android's Keystore) and
+never leave it; each signature with the group's root key or an admin key asks for your face,
+fingerprint or passcode, while the key it syncs with works without asking. A computer keeps its
 keys in files that only Copy Beyond Borders reads.
 
 ### Rootless members
@@ -95,7 +96,7 @@ hub dials out to the forwarder, so nothing at home has to be opened.
 ![The hub behind the provider's NAT dials out to a forwarder, which passes the tunnel from the devices away](../images/forwarder.svg)
 
 The forwarder holds no keys and cannot read anything: it only sees encrypted packets going
-to your hub. Two kinds:
+to your hub, where they come from, when, and how large they are. Two kinds:
 
 - **Your own**: `cbb forward` on any server with a public address, a cheap virtual server
   for example ([running your own servers](../admin/self-hosting.md)).
@@ -147,7 +148,7 @@ yourself.
 | Server | Reads the clipboard | Knows which of your devices talk, and when | Whose it is |
 |---|---|---|---|
 | Hub | yes, it is your device | yes | yours |
-| Forwarder | no | no: it sees the addresses encrypted packets come from and go to your hub | yours, or the project's at `cbb.tools` |
+| Forwarder | no | no: it sees the addresses encrypted packets come from and go to your hub, when, and their sizes | yours, or the project's at `cbb.tools` |
 | Blind relay | no | yes | yours (one at `cbb.tools` is planned) |
 
 Nothing else is involved: no accounts, no cloud, no telemetry. Everyone else who can see

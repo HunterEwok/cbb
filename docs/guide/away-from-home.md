@@ -6,6 +6,10 @@ somewhere else, one computer at home becomes the group's **hub**, and the device
 travel reach it through the group's own encrypted tunnel. The pictures of each case are in
 [How it works](how-it-works.md#away-from-home-the-hub).
 
+> Between computers this is built and tested in CI, not yet on real devices; the iPhone has
+> synced on mobile data through a Mac hub and the project's forwarder. The README's
+> [status table](../../README.md#status) says what has been tried where.
+
 Sync away from home is off until you turn it on, on the hub and on each device that should
 use it. Set it up **while all the devices are at home**: that is when they hand each other
 the tunnel's keys.
@@ -127,7 +131,8 @@ devices meet at a **blind relay** on a server of your own instead of a hub: the 
 clipboard but sees which devices talk, when and how much. See
 [running your own servers](../admin/self-hosting.md#a-blind-relay).
 
-Coming later: a blind relay at `cbb.tools` that any group can use.
+The project runs a blind relay at `cbb.tools` that any group can use: `sudo cbb global relay default`
+knows its address and key.
 
 ## Turning it off
 

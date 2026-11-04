@@ -1,8 +1,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1972e378f0c2 -->
+<!-- source: e105316b2bdb -->
 # Funguo na uthibitisho
 
 Kila kifaa katika kikundi kina funguo: kimoja huthibitisha kwa vingine kifaa ni nani, na funguo za mzizi na wasimamizi huongeza na kuondoa vifaa. Mahali kifaa kinapoweka funguo zake huamua mwizi anapata nini pamoja na kifaa. Ukurasa huu unasema kila aina ya kifaa huziweka wapi, kikundi kinawezaje kukagua, na kiwango gani cha ukali cha kuchagua. Kanuni kamili ziko katika [itifaki](../protocol.md), sehemu ya 17.
+
+> Imejengwa na kujaribiwa katika CI dhidi ya TPM ya programu; kwenye vifaa halisi hadi sasa ni Secure Enclave ya iPhone tu na Windows katika mashine pepe. [Jedwali la hali](../../README.md#status) katika README linaonyesha nini kimejaribiwa wapi.
 
 ## Funguo ziko wapi
 

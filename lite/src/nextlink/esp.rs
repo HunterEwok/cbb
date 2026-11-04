@@ -19,6 +19,10 @@ pub const LINKS: u8 = 5;
 const SEND_MAX: usize = 512;
 /// The most bytes one AT+CIPSEND takes (a datagram goes whole).
 const DATAGRAM_MAX: usize = 2048;
+/// The most bytes one `+IPD` block carries: the ESP passes a TCP segment
+/// or a datagram at a time, and neither is longer. A header that says more
+/// came from bytes taken as AT output after the framing was lost.
+const IPD_MAX: usize = 4096;
 
 /// What happened on the ESP.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -301,6 +305,12 @@ impl Esp {
             self.buf.drain(..=colon);
             return true;
         };
+        // Not a block of a link of ours, or longer than any: a header after
+        // all, dropped with the bytes up to its colon.
+        if id >= LINKS || len > IPD_MAX {
+            self.buf.drain(..=colon);
+            return true;
+        }
         if self.buf.len() < colon + 1 + len {
             return false;
         }
@@ -528,6 +538,18 @@ mod tests {
             e.input(&[*b]);
         }
         assert_eq!(e.take_events(), vec![Event::Data(1, b"da\x7et".to_vec())]);
+    }
+
+    /// A header for a link that does not exist, or longer than the ESP
+    /// sends, is dropped rather than taken.
+    #[test]
+    fn impossible_ipd_is_dropped() {
+        let mut e = ready();
+        e.input(b"+IPD,9,2:ab\r\n");
+        e.input(b"+IPD,0,18446744073709551615:x\r\n");
+        e.input(b"+IPD,0,99999:x\r\n");
+        e.input(b"+IPD,2,1:z");
+        assert_eq!(e.take_events(), vec![Event::Data(2, b"z".to_vec())]);
     }
 
     #[test]
