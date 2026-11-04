@@ -27,7 +27,8 @@ tools. Test them on the machine before relying on them.
 .cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below)
 .cbb update           the same, for the files the site has newer
-.cbb -d paste         the same, with the cause under each error (debug mode)
+.cbb -d paste         the same, with the cause under each error and, at the end, the
+                      bytes of the stack never used (debug mode)
 ```
 
 SPACE stops a command that waits, such as `pair` while the phone has not scanned yet.
