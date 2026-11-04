@@ -1439,8 +1439,10 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 static const char in_group_cmd[] = "test -e " PI_DIR "/cbb-state/identity.json && echo CBB$((1))IN; echo CBB$((1))END\n";
 static const char in_group_yes[] = "CBB1IN", in_group_end[] = "CBB1END";
 static const char in_group[] = "the Pi is in a group\nalready: ../CBB leave first";
+static const char in_none[] = "the Pi is in no group:\nnothing to leave";
 
-// Not static: far_pair_check() (far.asm) calls it, with the network off.
+// Not static: far_pair_check() (far.asm) calls it, with the network off:
+// for .cbb leave, the Pi must be in a group, for .cbb pair in none.
 int pair_check(void)
 {
     uint8_t in = 0;
@@ -1450,6 +1452,7 @@ int pair_check(void)
         if (strcmp(line, in_group_yes) == 0) in = 1;
     }
     link_prompt();
+    if (far_argv[0][0] == 'l') return in ? 0 : fail(in_none, 0);
     return in ? fail(in_group, 0) : 0;
 }
 
@@ -2015,10 +2018,26 @@ int paste_receive(void)
 }
 
 // Not static: far_uninstall() (far.asm) calls it, for leave too.
+// The network stops, for the Pi's shell.
+static void un_net(void)
+{
+    if (net_on()) {
+        driver(DRV_SWITCH, 0);
+        link_quit();
+        esp_speed(ESP_SPEED);
+        link_use(LINK_PI);
+    }
+}
+
 int uninstall(void)
 {
     uint8_t i, leave = far_argv[0][0] == 'l';
     const char *p;
+    // Leaving needs a group to leave, which the Pi's shell tells.
+    if (leave) {
+        un_net();
+        if (far_pair_check()) return 1;
+    }
     printf(leave ? lv_ask : un_ask);
     // Y is in the half-row of P to Y, port 0xDFFE, bit 4.
     in_wait_nokey();
@@ -2029,12 +2048,7 @@ int uninstall(void)
         printf(un_none);
         return 0;
     }
-    if (net_on()) {
-        driver(DRV_SWITCH, 0);
-        link_quit();
-        esp_speed(ESP_SPEED);
-        link_use(LINK_PI);
-    }
+    un_net();
     if (!leave && driver(DRV_STATE, 0) == 0) printf(drv_uninstall(drv_bank()) ? un_drv_stays : un_drv_gone);
     if (link_shell()) {
         printf(un_pi_silent);

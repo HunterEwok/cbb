@@ -711,8 +711,8 @@ fn leaves_the_group_after_y() {
     let (card, mut pi) = installed(&kit, "leave");
     pi.in_group = true;
     let y = vec![Key {
-        from: 500_000,
-        until: 800_000,
+        from: 3_000_000,
+        until: 3_300_000,
         row: 0xDF,
         bit: 4,
     }];
@@ -723,6 +723,25 @@ fn leaves_the_group_after_y() {
     // Only the group goes: the Pi's cbb and the card's files stay.
     assert!(!pi.in_group && pi.cbb_sha.is_some(), "{:?}", pi.log);
     assert!(card.join("cbb/NET.CFG").exists() || card.join("cbb/PASTE.CFG").exists());
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn says_when_there_is_no_group_to_leave() {
+    let Some(kit) = kit("leavenone") else { return };
+    let (card, pi) = installed(&kit, "leavenone");
+    let mut run = run_on(
+        &kit,
+        &card,
+        "leave",
+        Esp::new(kit.site.clone()),
+        pi,
+        Vec::new(),
+    );
+    let s = run.hw.screen_text();
+    assert!(s.contains("nothing to leave") && !s.contains("Y/N"), "{s}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(!pi.log.iter().any(|l| l.contains("rm -rf")), "{:?}", pi.log);
     let _ = std::fs::remove_dir_all(&card);
 }
 
