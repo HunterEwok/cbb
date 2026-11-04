@@ -971,6 +971,8 @@ int net_pair(void)
     link_prompt();
     quiet = 1;
     if (net_start(0, 0)) return 1;
+    // The code stays for the phone after .cbb ends, under what comes next.
+    printf("Scan it in the phone app;\nCLS clears it then.\n");
     return 0;
 }
 
