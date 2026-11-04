@@ -15,6 +15,9 @@ enum {
     LINK_BREAK    // the user pressed SPACE
 };
 
+// Whether a link call has seen SPACE, for a caller that only knows it failed.
+extern uint8_t link_stopped;
+
 // The two UARTs, as the select port's bit 6 names them.
 #define LINK_ESP 0x00
 #define LINK_PI 0x40
@@ -25,6 +28,9 @@ void link_open(void);
 
 // Sets the ESP8266's UART to speed and leaves it selected.
 void link_open_esp(uint32_t speed);
+
+// Sets the selected UART's speed.
+void link_speed(uint32_t speed);
 
 // Selects the UART that the calls below use (LINK_ESP or LINK_PI); each
 // keeps its own speed and receive buffer.

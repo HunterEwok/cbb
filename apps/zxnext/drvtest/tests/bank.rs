@@ -240,7 +240,11 @@ fn hello_clock_and_the_esp_both_ways() {
     assert_eq!(d.next.select, 0x40, "the UART it found is selected again");
     d.call(0xE000, 0x0400, 0);
     let r = d.cpu.registers();
-    assert_eq!((r.get16(Reg16::BC), r.get16(Reg16::DE)), (4, 7), "bytes to and from the ESP");
+    assert_eq!(
+        (r.get16(Reg16::BC), r.get16(Reg16::DE)),
+        (4, 7),
+        "bytes to and from the ESP"
+    );
     // Nothing new: no frames.
     d.interrupt();
     assert!(d.pi_frames().is_empty());
@@ -353,7 +357,11 @@ fn quit_turns_it_off() {
     assert_eq!(d.cpu.registers().get16(Reg16::DE), 0);
     d.on();
     d.call(0xE000, 0x0300, 0);
-    assert_eq!(d.cpu.registers().get16(Reg16::DE), 1, "the state in DE for M_DRVAPI");
+    assert_eq!(
+        d.cpu.registers().get16(Reg16::DE),
+        1,
+        "the state in DE for M_DRVAPI"
+    );
 }
 
 /// The Pi's bytes come a few at a time, between interrupts, after the
@@ -391,5 +399,9 @@ fn turned_on_again_counts_from_zero() {
     d.interrupt();
     let f = d.pi_frames();
     assert_eq!(kinds(&f), "AHT", "{f:?}");
-    assert_eq!(f[0].1, 1u16.to_le_bytes(), "the first ack counts this run only");
+    assert_eq!(
+        f[0].1,
+        1u16.to_le_bytes(),
+        "the first ack counts this run only"
+    );
 }

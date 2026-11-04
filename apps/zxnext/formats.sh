@@ -4,7 +4,7 @@
 #
 # formats.sh FILE...: the zcc flags that build z88dk's printf and scanf
 # with only the conversions the C files use (%s, %u, %lu, ...), which
-# keeps some 1.4K of the divMMC page, where the stack is, free. Each
+# keeps some 1.4K of the divMMC page, where the library is, free. Each
 # conversion found goes in both, so a format string never loses one
 # whichever function takes it; one z88dk does not offer, or does not
 # build (%f, %ll...), fails here rather than printing wrong on the Next.

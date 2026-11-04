@@ -100,4 +100,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_NFC` | `apps/ios/device.sh` | `1` signs that build with NFC (`Nfc.entitlements`), for the recovery key on a YubiKey, where the team's profile may carry it. |
 | `CBB_DERIVED` | `apps/ios/device.sh` | Where the build goes, `/tmp/cbb-device.noindex` by default: a folder the Mac empties at a restart, and Spotlight skips it, so the built apps never show up in a search. |
 | `CBB_LOCK_CHILD`, `CBB_MDNS_CHILD` | Go tests | Set by a test for the child process it starts; never set them yourself. |
+| `CBB_MAP` | the ZX Next's `drvtest` example `run` | The map of the `CBB` it runs (`apps/zxnext/build/cbb.map`), for the overlays' pages ([apps/zxnext/README.md](../../apps/zxnext/README.md#testing-on-a-played-next)). |
+| `CBB_PI` | the ZX Next's `drvtest` install tests | The Pi's cbb that `build/CBB` was built with, when it is not `build/PIBRIDGE`. |
+| `CBB_UNLINKED` | the ZX Next's played card | A directory where a file `.cbb` deletes from the card is copied first, to look at it. |
 | `CBB_RELEASE_SIGN_DIR` | `tools/release-sign` | Another directory for the release signing tool's files than `tools/release-sign`. |

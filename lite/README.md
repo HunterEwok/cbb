@@ -298,6 +298,12 @@ cbb service -peer 127.0.0.1:8769
   `cbb service -tunnel-via 127.0.0.1:local-port`, the tunnel of sync away from home sends its
   packets there instead of to the hub's own addresses, so the Pi syncs away from home
   through the ESP too; WireGuard's keys stay on the Pi.
+- `-join code`: join the group with the code of `cbb pair` on the full member at `-to`,
+  through a connection to the link's own port, once the Pi's clock is set; the service
+  starts after it has joined. `.cbb pair CODE` on the Next runs the link with it.
+- `-paste on|on-enter|off`: tells the service, once it answers, whether the group's admins
+  may paste on the Next (`cbb paste-receive`), as `.cbb paste-receive` on the Next set it:
+  the Next's user is the Pi's.
 - `-zone`: the Next's clock (the DS1307) keeps local time without a zone; the link sets
   the Pi's clock, which NextPi only saves across a power cut, from it in UTC.
 - `-log`: standard error is the UART too, so the link writes its log to a file or
