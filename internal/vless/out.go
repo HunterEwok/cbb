@@ -39,12 +39,14 @@ const (
 // from a port of its own for each flow, and the answers back. It remembers
 // which VLESS user each of those ports serves, so that the forwarder can
 // tell the clients of one group from those of another though all of them
-// come from its own address (Server.User). A TCP stream goes only to the
+// come from its own address (Server.User). A TCP stream goes to the
+// forwarder's registrations when it names RegistrationPort, else to the
 // mirror, when there is one, never where the client asked: it would reach
-// the forwarder's registrations, or the internet.
+// the internet. RegistrationID reaches the registrations and nothing else.
 type toForwarder struct {
-	to     netip.AddrPort
-	mirror string // host:port, or ""
+	to       netip.AddrPort
+	mirror   string         // host:port, or ""
+	register func(net.Conn) // or nil
 
 	mu      sync.Mutex
 	users   map[netip.AddrPort]string // by the address each flow is sent from
@@ -83,10 +85,17 @@ func (o *toForwarder) carry(ctx context.Context, link *transport.Link) error {
 		return net.ErrClosed
 	}
 	target := outs[len(outs)-1].Target
-	if target.Network == xnet.Network_TCP && o.mirror != "" {
-		return o.toMirror(ctx, link, in.User.Email)
+	user := in.User.Email
+	if target.Network == xnet.Network_TCP {
+		switch {
+		case target.Port == RegistrationPort && o.register != nil:
+			return o.toRegister(link)
+		case user != RegistrationID && o.mirror != "":
+			return o.toMirror(ctx, link, user)
+		}
+		return net.ErrClosed
 	}
-	if target.Network != xnet.Network_UDP {
+	if target.Network != xnet.Network_UDP || user == RegistrationID {
 		return net.ErrClosed
 	}
 	conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(o.to))
@@ -100,7 +109,7 @@ func (o *toForwarder) carry(ctx context.Context, link *transport.Link) error {
 	if o.users == nil {
 		o.users = map[netip.AddrPort]string{}
 	}
-	o.users[from] = in.User.Email
+	o.users[from] = user
 	o.mu.Unlock()
 	defer func() {
 		o.mu.Lock()
@@ -202,6 +211,29 @@ func (o *toForwarder) toMirror(ctx context.Context, link *transport.Link, user s
 	}()
 	err = buf.Copy(buf.NewReader(conn), link.Writer, buf.UpdateActivity(timer))
 	cancel()
+	if uerr := <-up; err == nil {
+		err = uerr
+	}
+	return err
+}
+
+// toRegister hands a hub's registration stream to the forwarder, which
+// bounds the registrations and their setup itself, and carries it while
+// the registration lasts: it has no idle limit, as a registration sends
+// little once it is set up.
+func (o *toForwarder) toRegister(link *transport.Link) error {
+	ours, theirs := net.Pipe()
+	defer ours.Close()
+	go o.register(theirs)
+	up := make(chan error, 1)
+	go func() {
+		err := buf.Copy(link.Reader, buf.NewWriter(ours))
+		ours.Close()
+		up <- err
+	}()
+	err := buf.Copy(buf.NewReader(ours), link.Writer)
+	ours.Close()
+	common.Interrupt(link.Reader)
 	if uerr := <-up; err == nil {
 		err = uerr
 	}

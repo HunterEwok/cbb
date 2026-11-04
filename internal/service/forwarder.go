@@ -40,6 +40,7 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 		Key:         st.ServingKey(),
 		Obfuscation: st.Obfuscation,
 		VLESSID:     fw.VLESSID,
+		VLESS:       hubVLESS(fw),
 		Cert: func() tls.Certificate {
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -58,7 +59,7 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 			if s.tunRun == nil || s.tunRun.hub != h {
 				return
 			}
-			f := &control.Forwarder{Endpoint: fw.Endpoint.String(), Registered: r.Registered}
+			f := &control.Forwarder{Endpoint: fw.Endpoint.String(), Registered: r.Registered, OverVLESS: r.OverVLESS}
 			if r.Seen.IsValid() {
 				f.Seen = r.Seen.String()
 			}
@@ -68,7 +69,11 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 					s.logf("cbb: sync away from home: the forwarder at %v: %v", fw.Endpoint, r.Err)
 				}
 			} else if f.Seen != "" && (s.tunFwd == nil || s.tunFwd.Seen != f.Seen) {
-				s.logf("cbb: sync away from home: registered with the forwarder at %v, which reaches this hub at %s", fw.Endpoint, f.Seen)
+				how := ""
+				if r.OverVLESS {
+					how = " over VLESS"
+				}
+				s.logf("cbb: sync away from home: registered with the forwarder at %v%s, which reaches this hub at %s", fw.Endpoint, how, f.Seen)
 			}
 			s.tunFwd = f
 			if r.VLESS != nil && s.tunnel != nil && s.tunnel.Forwarder != nil && !s.tunnel.Forwarder.VLESS.Equal(r.VLESS) {
@@ -81,6 +86,22 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 		defer s.wg.Done()
 		forward.Register(ctx, cfg)
 	}()
+}
+
+// hubVLESS returns how the hub reaches its forwarder over VLESS when the
+// forwarder's TCP port does not answer: what an earlier registration told
+// it, else the project's forwarder's built-in settings; nil for a hub
+// without VLESS, or with a forwarder of its own it has not yet reached.
+func hubVLESS(fw *tunnel.ForwarderLink) *tunnel.VLESS {
+	switch {
+	case fw.VLESSID == "":
+		return nil
+	case fw.VLESS != nil:
+		return fw.VLESS
+	case fw.Project:
+		return forward.ProjectVLESS(fw.Endpoint.Addr())
+	}
+	return nil
 }
 
 // projectPins returns the pins this device accepts from the project's

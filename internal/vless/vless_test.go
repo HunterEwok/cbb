@@ -432,3 +432,54 @@ func TestMirrorThroughXHTTP(t *testing.T) {
 		t.Fatal("a TCP stream went somewhere without a mirror")
 	}
 }
+
+// A registration stream reaches the forwarder's registrations, also with
+// the registrations' user ID, which reaches neither the mirror nor the
+// forwarder's UDP port.
+func TestRegistrationStream(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	streams := make(chan net.Conn, 4)
+	cfg := ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t), Mirror: tcpEcho(t),
+		Register: func(c net.Conn) {
+			defer c.Close()
+			b := make([]byte, 5)
+			if _, err := io.ReadFull(c, b); err == nil && string(b) == "hello" {
+				c.Write([]byte("hub!!"))
+			}
+			streams <- c
+		}}
+	_, l := behindWebServerWith(t, cfg, RegistrationID)
+	way, err := DialRegistration(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer way.Close()
+	got := ""
+	for range 10 {
+		c, err := net.DialTimeout("tcp", way.Addr().String(), time.Second)
+		if err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		c.SetDeadline(time.Now().Add(3 * time.Second))
+		c.Write([]byte("hello"))
+		b := make([]byte, 5)
+		io.ReadFull(c, b)
+		c.Close()
+		if got = string(b); got == "hub!!" {
+			break
+		}
+	}
+	if got != "hub!!" {
+		t.Fatalf("the registrations answered %q", got)
+	}
+	if throughMirror(t, l) {
+		t.Error("the registrations' user ID reached the mirror")
+	}
+	if roundTrip(t, l) {
+		t.Error("the registrations' user ID reached the forwarder's UDP port")
+	}
+}

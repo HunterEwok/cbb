@@ -2528,6 +2528,19 @@ Either way:
   gives no way to anywhere else. Its TLS runs inside, between the device and the mirror,
   with the mirror's certificate. One VLESS user ID has at most 4 such streams at a time,
   and one is closed after 2 minutes with nothing sent either way.
+- A hub that cannot reach the forwarder's TCP port registers over VLESS: a TCP stream to
+  port 8764, whatever the address, goes to the forwarder's registrations, which take it
+  as one on the TCP port. The hub opens it with the registrations' user ID
+  `0cbb0000-7e91-4000-8000-000000008764`, which is no secret and reaches nothing else (no
+  mirror, no UDP), and no group may take as its own. The TLS of the registration goes
+  inside, with the forwarder's key pinned. Once registered, the hub sends its own packets,
+  its hellos and its answers to its clients, over VLESS with the group's user ID: the
+  forwarder learns from the hellos that the hub is reached at the port its side of VLESS
+  sends them from, and passes the clients' packets to the hub through it. The settings
+  for the first time are those an earlier registration gave the hub, or, for the project's
+  forwarder, the built-in ones: XHTTP on port 443 of `cbb.tools`, the path `/banMEJvnYJJap8S`.
+  The registrations over VLESS, held or being set up, all come from the forwarder's own
+  address, so they are bounded together, at 1024, instead of by address.
   The forwarder knows which group's ID each of those ports serves, and the per-source
   handshake limit and the per-network budget of "Limits" count what comes over VLESS by
   that ID, as one source and one network for each group; a client's own group's limits

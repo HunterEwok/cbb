@@ -23,6 +23,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/netguard"
 	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless"
 )
 
 // Link is a hub's forwarder: its address, the same for UDP and TCP, and the
@@ -59,6 +60,13 @@ type HubConfig struct {
 	// VLESSID is the group's VLESS user ID, for a hub whose clients come
 	// over VLESS; empty without.
 	VLESSID string
+	// VLESS, if set with VLESSID, is how the hub reaches the forwarder over
+	// VLESS when its TCP port does not answer: the settings it learned from
+	// an earlier registration, or the project's forwarder's built-in ones.
+	// The registration then goes inside VLESS with vless.RegistrationID,
+	// and the hub's own packets with VLESSID (docs/protocol.md, section
+	// 13, "VLESS").
+	VLESS *tunnel.VLESS
 	// Cert returns the hub's member certificate with its chain to the
 	// group's root; it is asked at each registration, so a renewed
 	// certificate is taken.
@@ -91,6 +99,7 @@ type Report struct {
 	Registered bool
 	Seen       netip.AddrPort // where the forwarder reaches the hub's WireGuard port
 	VLESS      *tunnel.VLESS  // how the hub's clients reach the forwarder over VLESS
+	OverVLESS  bool           // the hub itself reaches the forwarder over VLESS
 	Err        error          // why the hub is not registered
 }
 
@@ -168,8 +177,21 @@ func TLSVerifiedByPin(cert tls.Certificate, protocol, what string, pins ...strin
 func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error {
 	d := net.Dialer{Timeout: setupTimeout, KeepAlive: 30 * time.Second, Control: netguard.Control}
 	raw, err := d.DialContext(ctx, "tcp", cfg.Link.Endpoint.String())
+	over := false
 	if err != nil {
-		return fmt.Errorf("reaching the forwarder: %w", err)
+		if cfg.VLESS == nil || cfg.VLESSID == "" {
+			return fmt.Errorf("reaching the forwarder: %w", err)
+		}
+		way, verr := vless.DialRegistration(*cfg.VLESS)
+		if verr != nil {
+			return fmt.Errorf("reaching the forwarder: %w; over VLESS: %w", err, verr)
+		}
+		defer way.Close()
+		lo := net.Dialer{Timeout: setupTimeout}
+		if raw, verr = lo.DialContext(ctx, "tcp", way.Addr().String()); verr != nil {
+			return fmt.Errorf("reaching the forwarder: %w; over VLESS: %w", err, verr)
+		}
+		over = true
 	}
 	defer raw.Close()
 	stop := context.AfterFunc(ctx, func() { raw.Close() })
@@ -255,7 +277,24 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 		}
 	}
 	raw.SetDeadline(time.Time{})
-	report(Report{Registered: true, VLESS: vl})
+	// Over VLESS the hub's own packets go there too, with the group's user
+	// ID, which the forwarder lets in now: from the hub's WireGuard port to
+	// a local port that leads to the forwarder's UDP port.
+	helloTo := cfg.Link.Endpoint
+	if over {
+		v := *cfg.VLESS
+		if vl != nil {
+			v = *vl
+		}
+		v.ID = cfg.VLESSID
+		c, err := vless.Dial(v)
+		if err != nil {
+			return fmt.Errorf("the hub's packets over VLESS: %w", err)
+		}
+		defer c.Close()
+		helloTo = c.Addr()
+	}
+	report(Report{Registered: true, VLESS: vl, OverVLESS: over})
 	var key [32]byte
 	hk, err := cs.ExportKeyingMaterial(helloLabel, nil, 32)
 	if err != nil {
@@ -293,7 +332,7 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 		case a := <-answers:
 			if ep, err := netip.ParseAddrPort(a.Seen); err == nil && ep != seen {
 				seen, every = ep, helloEvery
-				report(Report{Registered: true, Seen: seen, VLESS: vl})
+				report(Report{Registered: true, Seen: seen, VLESS: vl, OverVLESS: over})
 			}
 		case <-t.C:
 			if creds != nil {
@@ -303,7 +342,7 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 			}
 			counter = max(counter+1, uint64(time.Now().UnixNano()))
 			// A hello that cannot go out now goes with the next one.
-			_ = cfg.Send(cfg.Link.Endpoint, hello(&mask, &key, a.ID, counter))
+			_ = cfg.Send(helloTo, hello(&mask, &key, a.ID, counter))
 			t.Reset(every)
 		}
 	}

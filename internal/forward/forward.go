@@ -66,6 +66,10 @@ type Limits struct {
 	// zero. PerProvider bounds them from one IPv6 /32, which holds tens of
 	// thousands of /48s; 1024 if zero.
 	PerAddress, PerNetwork, PerWide, PerProvider int
+	// OverVLESS bounds the registrations, held or being set up, that came
+	// over VLESS, which all come from the forwarder's own address; 1024 if
+	// zero.
+	OverVLESS int
 }
 
 // DefaultLimits are generous for clipboard texts and small enough that a
@@ -83,6 +87,7 @@ var DefaultLimits = Limits{
 	PerNetwork:  64,
 	PerWide:     256,
 	PerProvider: 1024,
+	OverVLESS:   1024,
 }
 
 // How long the forwarder remembers a handshake and a session. WireGuard
@@ -118,6 +123,7 @@ type Forwarder struct {
 	netScans  *lru[scanKey, *bucket]          // NetworkScanRate
 	from      *budget.Count                   // registrations held or being set up, by source
 	setting   int                             // registrations being set up
+	overVLESS int                             // registrations over VLESS, held or being set up
 	mask      [32]byte                        // the key of the hellos' mask, given to every hub
 	vless     *vless.Server
 	vlessUser func(netip.AddrPort) (string, bool) // vless.Server.User
@@ -368,7 +374,7 @@ func Listen(cfg Config) (*Forwarder, error) {
 		if to.Addr().IsUnspecified() {
 			to = netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), to.Port())
 		}
-		sc.To, sc.Mirror = to, v.Mirror
+		sc.To, sc.Mirror, sc.Register = to, v.Mirror, f.registrationOverVLESS
 		if f.vless, err = vless.Listen(sc); err != nil {
 			udp.Close()
 			tcp.Close()

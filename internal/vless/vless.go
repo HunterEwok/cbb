@@ -80,7 +80,21 @@ type ServerConfig struct {
 	// there and nowhere else (docs/protocol.md, section 13, "VLESS").
 	// Without it a TCP stream goes nowhere.
 	Mirror string
+	// Register, if set, takes a hub's registration that came over VLESS:
+	// a TCP stream to RegistrationPort, from any user let in, the
+	// RegistrationID too, which is let in for nothing else.
+	Register func(net.Conn)
 }
+
+// RegistrationID is the VLESS user ID by which a hub that reaches its
+// forwarder only over VLESS registers (docs/protocol.md, section 13,
+// "VLESS"): it is no secret, and it reaches nothing but the forwarder's
+// registrations, as its TCP port does.
+const RegistrationID = "0cbb0000-7e91-4000-8000-000000008764"
+
+// RegistrationPort is the port a client names for a stream to the
+// forwarder's registrations; any other TCP stream goes to the mirror.
+const RegistrationPort = 8764
 
 // ShortID returns the REALITY short ID of the private key: it needs no
 // keeping, and it tells nothing about the key.
@@ -166,7 +180,7 @@ func Listen(cfg ServerConfig) (*Server, error) {
 	// Whatever a client asks for, its packets go to the forwarder's UDP
 	// port and nowhere else, and a TCP stream only to the mirror, never to
 	// the forwarder's registrations (toForwarder).
-	out := &toForwarder{to: cfg.To, mirror: cfg.Mirror}
+	out := &toForwarder{to: cfg.To, mirror: cfg.Mirror, register: cfg.Register}
 	inst, err := start(inboundHandler(inboundTag, listen, stream, &vlessin.Config{Decryption: "none"}), nil)
 	if err != nil {
 		return nil, err
@@ -202,6 +216,12 @@ func Listen(cfg ServerConfig) (*Server, error) {
 	if s.users, ok = gi.GetInbound().(proxy.UserManager); !ok {
 		inst.Close()
 		return nil, errors.New("vless: the inbound has no users")
+	}
+	if cfg.Register != nil {
+		if err := s.addUser(RegistrationID); err != nil {
+			inst.Close()
+			return nil, err
+		}
 	}
 	return s, nil
 }
@@ -246,6 +266,13 @@ func (s *Server) AddUser(id string) error {
 	if err := tunnel.CheckVLESSID(id); err != nil {
 		return err
 	}
+	if id == RegistrationID {
+		return errors.New("vless: the registrations' user ID is no group's")
+	}
+	return s.addUser(id)
+}
+
+func (s *Server) addUser(id string) error {
 	u, err := (&protocol.User{Email: id, Account: serial.ToTypedMessage(&xvless.Account{Id: id, Encryption: "none"})}).ToMemoryUser()
 	if err != nil {
 		return fmt.Errorf("vless: %w", err)
@@ -255,6 +282,9 @@ func (s *Server) AddUser(id string) error {
 
 // RemoveUser shuts out the clients of a group.
 func (s *Server) RemoveUser(id string) error {
+	if id == RegistrationID {
+		return nil
+	}
 	return s.users.RemoveUser(context.Background(), id)
 }
 
@@ -295,17 +325,27 @@ func Dial(l tunnel.VLESS) (*Client, error) {
 	return &Client{inst: inst, addr: addr}, nil
 }
 
-// Mirror is a client's way to the mirror of the releases on its
-// forwarder's server, over VLESS: a local TCP port whose connections the
-// forwarder passes to the mirror. TLS with the mirror's own name goes
-// inside, so the mirror's certificate is checked as on any other way.
-type Mirror struct {
+// Stream is a client's way, over VLESS, to the mirror of the releases on
+// its forwarder's server or to the forwarder's registrations: a local TCP
+// port whose connections the forwarder passes there. TLS goes inside, the
+// mirror's with its own name or the registration's with the forwarder's
+// key pinned, so it is checked as on any other way.
+type Stream struct {
 	inst *core.Instance
 	addr netip.AddrPort
 }
 
 // DialMirror starts the client's way to the mirror for the link.
-func DialMirror(l tunnel.VLESS) (*Mirror, error) {
+func DialMirror(l tunnel.VLESS) (*Stream, error) { return dialStream(l, 443) }
+
+// DialRegistration starts a hub's way to its forwarder's registrations for
+// the link, whose ID it replaces with RegistrationID.
+func DialRegistration(l tunnel.VLESS) (*Stream, error) {
+	l.ID = RegistrationID
+	return dialStream(l, RegistrationPort)
+}
+
+func dialStream(l tunnel.VLESS, port uint32) (*Stream, error) {
 	if err := l.Check(); err != nil {
 		return nil, err
 	}
@@ -315,25 +355,25 @@ func DialMirror(l tunnel.VLESS) (*Mirror, error) {
 	}
 	addr := ln.Addr().(*net.TCPAddr).AddrPort()
 	ln.Close()
-	// The address means nothing: the forwarder sends every stream to its
-	// mirror.
+	// Only the port means something: the forwarder sends a stream to its
+	// registrations or its mirror.
 	in := &dokodemo.Config{
 		RewriteAddress:  xnet.NewIPOrDomain(xnet.LocalHostIP),
-		RewritePort:     443,
+		RewritePort:     port,
 		AllowedNetworks: []xnet.Network{xnet.Network_TCP},
 	}
 	inst, err := startClient(l, addr, in)
 	if err != nil {
 		return nil, err
 	}
-	return &Mirror{inst: inst, addr: addr}, nil
+	return &Stream{inst: inst, addr: addr}, nil
 }
 
-// Addr returns the local TCP address that leads to the mirror.
-func (m *Mirror) Addr() netip.AddrPort { return m.addr }
+// Addr returns the local TCP address that leads there.
+func (m *Stream) Addr() netip.AddrPort { return m.addr }
 
-// Close stops the way to the mirror.
-func (m *Mirror) Close() error { return m.inst.Close() }
+// Close stops the way.
+func (m *Stream) Close() error { return m.inst.Close() }
 
 // startClient runs a client's side for the link with the local inbound in
 // on addr.
