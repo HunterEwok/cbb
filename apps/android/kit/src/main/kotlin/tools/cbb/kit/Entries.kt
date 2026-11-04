@@ -39,7 +39,7 @@ class EntriesFile(
     /** The ways in over VLESS the list names for the forwarder [name] (host:port). */
     fun ways(name: String): List<Releases.EntryVLESS> = current?.forwarder(name)?.vless.orEmpty()
 
-    override val order: Pair<Long, Long>? get() = synchronized(lock) { held?.let { it.seen.keysSeq to it.entries.seq } }
+    override val order: Pair<Long, Long>? get() = synchronized(lock) { live()?.let { it.seen.keysSeq to it.entries.seq } }
 
     override fun add(set: Releases.EntriesSet) {
         synchronized(lock) {

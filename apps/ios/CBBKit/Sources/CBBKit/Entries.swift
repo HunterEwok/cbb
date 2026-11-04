@@ -46,7 +46,11 @@ public final class EntriesFile: EntriesKeeper, @unchecked Sendable {
     public func ways(for name: String) -> [Releases.EntryVLESS] { current?.forwarder(name)?.vless ?? [] }
 
     public var order: (keys: UInt64, seq: UInt64)? {
-        lock.withLock { held.map { ($0.seen.keys_seq, $0.entries.seq) } }
+        lock.withLock {
+            held.flatMap { h -> (keys: UInt64, seq: UInt64)? in
+                nowMS < h.entries.expires_ms ? (h.seen.keys_seq, h.entries.seq) : nil
+            }
+        }
     }
 
     public func add(_ set: Releases.EntriesSet) {
