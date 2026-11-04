@@ -42,33 +42,26 @@ static uint8_t debug;
 
 // The usage, in the far data page.
 #pragma constseg PAGE_15
-static const char usage_text[] = "CBB " VERSION "\n\n"
-           "paste [FILE]  show the group's\n"
+// 32 columns, the commands' words from column 14 (a tab), and few
+// enough lines that nothing asks "scroll?".
+static const char usage_text[] = "CBB " VERSION "  ../CBB COMMAND\n\n"
+           "paste [FILE]\tshow the group's\n"
            "\ttext, or save it\n"
-           "copy FILE     send a file\n"
-           "text WORDS    send the words\n"
-           "copy -s FILE  send a secret,\n"
-           "text -s WORDS such as a password\n"
-           "pair [CODE]   join the group:\n"
-           "\tscan the code with\n"
-           "\tthe phone app, or\n"
-           "\tCODE of cbb pair on\n"
-           "\ta computer\n"
-           "net on [HOST]\n"
-           "\tthe Pi's network\n"
-           "\tthrough the ESP,\n"
-           "\tin the background\n"
-           "net off       stop it\n"
-           "net           how it stands\n"
-           "install       fetch the rest\n"
-           "\tfrom cbb.tools,\n"
-           "\tthe Pi's cbb too\n"
-           "update        tell of a newer\n"
-           "\tCBB, or install\n"
+           "copy FILE\tsend a file\n"
+           "text WORDS\tsend the words\n"
+           "copy -s FILE\tsend a password\n"
+           "text -s WORDS\tor any secret\n"
+           "pair [CODE]\tjoin: scan the QR\n"
+           "\tor cbb pair CODE\n"
+           "net on [HOST]\tthe network\n"
+           "net [off]\tstate, or stop it\n"
+           "install\tfetch the rest\n"
+           "update\tget a newer CBB\n"
            "paste-receive on|off\n"
-           "leave         leave the group\n"
-           "uninstall     remove it all\n"
-           "-d ...        show error details\n";
+           "\tremote paste\n"
+           "leave\tleave the group\n"
+           "uninstall\tremove it all\n"
+           "-d ...\terror details\n";
 #pragma constseg rodata_compiler
 
 // usage_run() prints it, in its page (far.asm: far_usage()).
@@ -1959,18 +1952,18 @@ int install_run(void)
 
 // The usage: each line after the first two a command's, but for a tab,
 // which stands for the column of the commands' words.
-static const char usage_pad[] = "%19s", usage_cbb[] = ".cbb ";
-
 // Not static: far_usage() (far.asm) calls it.
 void usage_run(void)
 {
     const char *p;
-    uint8_t start = 0;
+    uint8_t col = 0;
     for (p = usage_text; *p; p++) {
-        if (start && *p != '\t' && *p != '\n') printf(usage_cbb);
-        start = *p == '\n';
-        if (*p == '\t') printf(usage_pad, usage_pad + 4);
-        else putchar(*p);
+        if (*p == '\t') {
+            for (; col < 14; col++) putchar(' ');
+            continue;
+        }
+        col = *p == '\n' ? 0 : col + 1;
+        putchar(*p);
     }
 }
 

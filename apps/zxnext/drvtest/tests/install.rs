@@ -496,10 +496,11 @@ fn shows_the_usage() {
     let Some(kit) = kit("usage") else { return };
     let run = run_plain(&kit, "", Pi::new());
     let s = run.hw.screen_text();
-    assert!(s.contains(".cbb install"), "{s}");
-    // The commands' words, and a tab for their column.
-    assert!(s.contains(".cbb leave         leave the gr"), "{s}");
-    assert!(s.contains("|                   the Pi's cbb"), "{s}");
+    // Two columns in 32, every line whole, and no "scroll?".
+    assert!(s.contains("|install       fetch the rest"), "{s}");
+    assert!(s.contains("|              or cbb pair CODE"), "{s}");
+    assert!(s.contains("|leave         leave the group"), "{s}");
+    assert!(!s.contains("scroll?"), "{s}");
 }
 
 #[test]
