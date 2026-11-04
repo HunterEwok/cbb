@@ -200,8 +200,8 @@ func TestEmbassyJoiner(t *testing.T) {
 
 // dialJoiner plays the phone that scanned a listening joiner's QR code: it
 // opens a window with the identity in dir, dials the addresses in the QR
-// code and admits the device with the certificate it names. The service no
-// longer dials for the shortcut, so the test does it as the phone kits do.
+// code and admits the device with the certificate it names, as the phone
+// kits do.
 func dialJoiner(t *testing.T, dir, qr string) *pair.Result {
 	t.Helper()
 	jc, ok := phone.ParseJoinQR(qr)
@@ -249,7 +249,7 @@ func joinLite(t *testing.T, bin string, pi *testService) string {
 	t.Helper()
 	c, code := openWindow(t, pi)
 	defer c.Close()
-	pa, _ := pi.addrs()
+	pa := pi.addr()
 	dir := t.TempDir()
 	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "lite", "-code", pa)
 	join.Stdin = strings.NewReader(code + "\n")
@@ -287,13 +287,13 @@ func TestLiteMember(t *testing.T) {
 	pairWith(t, pi, laptop)
 
 	dir := joinLite(t, bin, pi)
-	pa, _ := pi.addrs()
+	pa := pi.addr()
 
 	// The lite member dials the computers, a Mac too, and syncs with them.
 	mac := startRole(t, &h, "mac", group.OSMacOS)
 	pairWith(t, pi, mac)
-	la, _ := laptop.addrs()
-	ma, _ := mac.addrs()
+	la := laptop.addr()
+	ma := mac.addr()
 	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -445,7 +445,7 @@ func TestLiteRemotePaste(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinLite(t, bin, pi)
-	pa, _ := pi.addrs()
+	pa := pi.addr()
 	lite := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
 	waitFor(t, "the lite member connected", func() bool {
 		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
@@ -552,7 +552,7 @@ func TestLiteQuickActions(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinLite(t, bin, pi)
-	pa, _ := pi.addrs()
+	pa := pi.addr()
 	lite := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
 	waitFor(t, "the lite member connected", func() bool {
 		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
@@ -664,7 +664,7 @@ func TestLiteMemberAway(t *testing.T) {
 	piID := pi.status(t).Device
 
 	// At home: off until the user agrees, then the hub's offer comes.
-	pa, _ := pi.addrs()
+	pa := pi.addr()
 	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
 	waitFor(t, "the lite member at home", func() bool {
 		st, err := home.do(t, control.Header{Op: control.OpStatus}, "")
@@ -747,7 +747,7 @@ func TestLiteRootless(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := joinLite(t, bin, pi)
-	pa, _ := pi.addrs()
+	pa := pi.addr()
 	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

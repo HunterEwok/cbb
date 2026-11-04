@@ -21,8 +21,8 @@ devices).
 - **Android** 10 or later: download `cbb-X.Y.Z.apk` from the
   [latest release](https://github.com/HunterEwok/cbb/releases/latest) on the
   phone and open it; allow the browser to install apps when Android asks.
-- **iPhone**: the app comes with TestFlight, which is not open yet. Until then an iPhone
-  uses a shortcut, and a computer holds the group: see [Without the app](without-app.md).
+- **iPhone**: the app comes with TestFlight, which is not open yet. Until then a group
+  starts on Android, or on a computer: see [Without the app](without-app.md).
 
 Open the app. You will add the first computer in step 3.
 
@@ -111,5 +111,5 @@ first. The first phone makes it an admin.
 - [How it works](how-it-works.md): the group, the roles, and pictures of every way the
   devices connect, at home and away.
 - [Away from home](away-from-home.md): sync from anywhere through a hub.
-- [Without the app](without-app.md): a group held by a computer, and the iPhone shortcut.
+- [Without the app](without-app.md): a group held by a computer.
 - [Troubleshooting](troubleshooting.md), when something does not work.

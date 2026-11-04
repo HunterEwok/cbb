@@ -31,12 +31,9 @@ const (
 	fallbackDial = 30 * time.Second
 )
 
-// serveMember runs one connection to the member port (see demux.go): plain
-// HTTP goes to the profile while an iPhone pairing window is open; over TLS
-// the ALPN protocol that the client offers picks pairing, the member
-// protocol, or, for any other, the shortcut's HTTPS. release gives up the
-// connection's handshake slot: after the handshake for a member or the
-// shortcut, after the attempt for pairing.
+// serveMember runs one connection to the member port: the ALPN protocol that the client offers picks pairing or the member protocol.
+// release gives up the connection's handshake slot: after the handshake for
+// a member, after the attempt for pairing.
 func (s *Service) serveMember(ctx context.Context, raw net.Conn, release func()) {
 	released := false
 	defer func() {
@@ -44,44 +41,21 @@ func (s *Service) serveMember(ctx context.Context, raw net.Conn, release func())
 			release()
 		}
 	}()
-	raw.SetReadDeadline(time.Now().Add(handshakeTimeout))
-	raw, first, err := peek(raw)
-	raw.SetReadDeadline(time.Time{})
-	if err != nil {
-		raw.Close()
-		return
-	}
-	if first != recordHandshake {
-		s.mu.Lock()
-		profile := s.profileConns
-		s.mu.Unlock()
-		if profile == nil {
-			raw.Close()
-			return
-		}
-		release()
-		released = true
-		profile.pass(raw) // the server's own timeouts bound it from here
-		return
-	}
 	cfg := &tls.Config{GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		switch {
-		case slices.Contains(hello.SupportedProtos, pair.Protocol):
+		if slices.Contains(hello.SupportedProtos, pair.Protocol) {
 			if s.window != nil {
 				return s.window.ServerTLS(), nil
 			}
 			// Also without a window, so the joiner hears that it is closed.
 			return pair.ServerTLS(s.id), nil
-		case !slices.Contains(hello.SupportedProtos, group.MemberProtocol) && s.phoneTLS != nil:
-			return s.phoneTLS, nil
 		}
 		return s.nd.ServerTLS(), nil
 	}}
 	tc := tls.Server(raw, cfg)
 	hctx, cancel := context.WithTimeout(ctx, handshakeTimeout)
-	err = tc.HandshakeContext(hctx)
+	err := tc.HandshakeContext(hctx)
 	cancel()
 	if err != nil {
 		tc.Close()
@@ -102,16 +76,7 @@ func (s *Service) serveMember(ctx context.Context, raw net.Conn, release func())
 		}
 		return
 	default:
-		s.mu.Lock()
-		phone := s.phoneConns
-		s.mu.Unlock()
-		if phone == nil {
-			tc.Close()
-			return
-		}
-		release()
-		released = true
-		phone.pass(tc)
+		tc.Close()
 		return
 	}
 	release()
@@ -139,8 +104,7 @@ type dialer struct {
 // may keep the first from reaching it; node keeps the connection the lower
 // ID dialed. The lite members (TXT r=lite) dial the full members, and the
 // phones dial everyone. A member's dialer takes its new addresses or port on
-// its next round. found also notes the holder priority each member
-// publishes (TXT h) and elects the holder of cbb.local again.
+// its next round.
 func (s *Service) found(peers []mdns.Peer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -155,7 +119,6 @@ func (s *Service) found(peers []mdns.Peer) {
 	want := map[group.DeviceID]target{}
 	found := s.nearby
 	s.nearby = map[group.DeviceID]time.Duration{}
-	s.prio = map[group.DeviceID]int{}
 	for _, p := range peers {
 		id, err := group.ParseDeviceID(p.ID)
 		if err != nil || id == s.id.ID {
@@ -168,11 +131,6 @@ func (s *Service) found(peers []mdns.Peer) {
 			s.nearby[id] = at
 		} else {
 			s.nearby[id] = uptime.Now()
-		}
-		if h, ok := p.TXTValue("h"); ok {
-			if n := parsePriority(h); n > 0 {
-				s.prio[id] = n
-			}
 		}
 		if r, _ := p.TXTValue("r"); strings.EqualFold(r, "lite") || strings.EqualFold(r, "phone") {
 			continue // it dials the full members
@@ -198,7 +156,6 @@ func (s *Service) found(peers []mdns.Peer) {
 			s.dial(ctx, id, t.later)
 		}()
 	}
-	s.electLocked()
 }
 
 // nearGrace is how long a member that discovery finds counts as on this
@@ -409,11 +366,10 @@ func (s *Service) keepUntil(ctx context.Context, id group.DeviceID, where string
 	}
 }
 
-// peersChanged elects the holder of cbb.local again (see
-// electLocked).
+// peersChanged learns from the members connected now: their names, when
+// they were seen, the listing of this device and the admin CAs to renew.
 func (s *Service) peersChanged() {
 	s.mu.Lock()
-	s.electLocked()
 	nd := s.nd
 	s.mu.Unlock()
 	if nd == nil {
@@ -424,32 +380,6 @@ func (s *Service) peersChanged() {
 	s.trackSeen(peers)
 	s.ensureListed()
 	s.renewAdminCAs(peers)
-}
-
-// electLocked elects the holder of cbb.local among this member
-// and the full members it is connected to that discovery finds with a
-// holder priority: the lowest priority number, then the lowest device ID.
-// A member without the iPhone CA key, as in a group whose root is a phone,
-// or set to never, does not take part.
-func (s *Service) electLocked() {
-	if s.id == nil || s.responder == nil || s.stopping {
-		return // a stopping member keeps what it had until its goodbye
-	}
-	me := s.priorityLocked(s.id)
-	hold := me > 0
-	for _, p := range s.nd.Peers() {
-		if !hold {
-			break
-		}
-		if q := s.prio[p.ID]; p.Role == node.Full && q > 0 && (q < me || q == me && p.ID < s.id.ID) {
-			hold = false
-		}
-	}
-	if hold != s.holder {
-		s.holder = hold
-		s.responder.SetHolder(hold)
-		s.logf("cbb: holds cbb.local: %v", hold)
-	}
 }
 
 // watchSleep tells the node when the machine slept: the clock that counts

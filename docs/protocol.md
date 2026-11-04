@@ -44,9 +44,7 @@ these words depends on it.
   percent escapes, never a `+` as a space. Three kinds of value stay in lowercase hex: the
   identifiers (device IDs, event and command IDs, group and period tags), which compare as
   strings; the SHA-256 of a file (release files, Docker digests), which `sha256sum` prints;
-  and the REALITY short ID (section 13), whose form Xray sets. The iPhone shortcut's token
-  and the iPhone CA's fingerprint (sections 2 and 7) keep their forms until the shortcut goes
-  ([roadmap](roadmap.md), item 17).
+  and the REALITY short ID (section 13), whose form Xray sets.
 - **Fingerprints.** A key has one fingerprint: SHA-256 over its SubjectPublicKeyInfo (DER),
   in standard base64, 44 characters, the same as a record's key hash (section 10). The
   join QR code, the confirmation of a joining device, a forwarder's or a relay's pin and a
@@ -153,24 +151,21 @@ these words depends on it.
 |------|-------|--------|
 | Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `internal/group/cert.go` |
 | Event ID | same format as a device ID, random per event | `internal/clip/clip.go` |
-| Phone ID | 16 random bytes, shown as 32 lowercase hex characters; embedded in the token | `internal/phone/token.go` |
 | Group tag | first 8 bytes of SHA-256 over the group CA certificate (DER), as 16 lowercase hex characters | `group.Tag` |
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
-| Shared iPhone name | `cbb.local` | `group.PhoneName` |
-| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Full and lite members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, the iPhone endpoints and the profile (section 7), and a listening join waits there | `internal/service/service.go`, `internal/service/demux.go` |
+| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Full and lite members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, and a listening join waits there | `internal/service/service.go`, `internal/service/members.go` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
 | Member ALPN | `cbb/2` | `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/2` | `pair.Protocol` |
 | Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
 | Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `internal/relay` |
 | Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
-| Join QR text | `cbb://join?code=` followed by the six-digit code; unknown query fields are ignored | `phone.JoinQR`, `phone.ParseJoinQR` |
+| Join QR text | `cbb://join?code=` followed by the six-digit code (section 7) | `phone.JoinQR`, `phone.ParseJoinQR` |
 
 Device IDs, event IDs and group tags compare as byte strings. Accepting peers: the member
 port MUST accept TCP connections only from addresses that mDNS would publish (private IPv4,
-unique-local IPv6, link-local IPv6) or loopback, and close others (the iPhone endpoints
-also answer HTTP 403 to them); a member with an interface list (`CBB_INTERFACES`) MUST also
+unique-local IPv6, link-local IPv6) or loopback, and close others; a member with an interface list (`CBB_INTERFACES`) MUST also
 close a connection that did not arrive on such an interface from its own networks. At most
 32 connections to the member port may be in their TLS handshake or in a pairing attempt at
 once; more are closed at accept. An implementation SHOULD bound them likewise.
@@ -184,22 +179,14 @@ rely on them. Source: `internal/group/cert.go`, `internal/group/tls.go`, `intern
 | Certificate | Subject CN | SAN | Validity | Extensions |
 |-------------|-----------|-----|----------|------------|
 | Group root CA | `cbb group root YYYY-MM-DD` (UTC creation date) | none | NotBefore = creation - 24 h; NotAfter = creation + 20 years | CA, path length 1 (MaxPathLen 1); key usage certSign, cRLSign |
-| iPhone CA | `cbb iPhone CA YYYY-MM-DD` | none | as the root CA | CA, path length 0; key usage certSign, cRLSign; plus critical name constraints (below) |
 | Member certificate (from the group CA) | the device ID | DNS `cb-<device ID>.local`, exactly one | NotBefore = the group CA's NotBefore; NotAfter = min(issue + 2 years, CA NotAfter) | key usage digitalSignature; EKU serverAuth and clientAuth; not a CA |
-| `cbb.local` server certificate (from the iPhone CA) | `cbb.local` | DNS `cbb.local` | NotBefore = max(issue - 24 h, CA NotBefore); NotAfter = min(NotBefore + 397 days, CA NotAfter) | key usage digitalSignature; EKU serverAuth; not a CA |
 | Joiner's self-signed certificate (pairing only) | the joiner's new device ID | none | 1970-01-01T00:00:00Z to 9999-12-31T23:59:59Z | none set |
 
-iPhone CA name constraints, marked critical: permitted DNS domains `cbb.local` (the
-name and names below it); permitted e-mail and URI domains `cbb.invalid` (a domain
-that never exists, so no such name is valid); excluded IP ranges `0.0.0.0/0` and `::/0`.
-
-A device has one key. The member certificate and, on a member that serves the shortcut, the
-`cbb.local` certificate certify the same key. A CA MUST NOT issue when the local
-clock is outside its own validity. The computer that creates a group is its **root**: it
-makes the group root CA (the `group_ca` that names the group, as a phone does, section 9) and
-the iPhone CA and holds both keys. The admins it makes (section 10, "Admins") hold an admin
-CA under the root and the iPhone CA key; every other member holds neither and has no
-`cbb.local` certificate. A group CA MUST have path length 1. A group made before
+A device has one key, which its member certificate certifies. A CA MUST NOT issue when the
+local clock is outside its own validity. The computer that creates a group is its **root**:
+it makes the group root CA (the `group_ca` that names the group, as a phone does, section 9)
+and holds its key. The admins it makes (section 10, "Admins") hold an admin CA under the
+root; every other member holds neither. A group CA MUST have path length 1. A group made before
 0.4 had a group CA with path length 0 (`cbb group CA YYYY-MM-DD`), whose key every
 Linux and Windows member held; such groups went with records of version 1, and a member that
 finds one leaves it at start, as section 10 says of version 1, and the group is set up again. The joiner's certificate carries the key that the member certifies in the welcome
@@ -211,8 +198,7 @@ it, while an expired certificate is rejected. The subject CN MUST be a device ID
 certificate MUST carry exactly one DNS name, `cb-<that ID>.local`.
 
 Renewal rules (`Identity.Renew`): a member certificate SHOULD be renewed when less than 240 days
-remain, a `cbb.local` certificate when less than 60 days remain or when its NotBefore
-is in the future; neither is renewed when it already ends with its CA.
+remain; it is not renewed when it already ends with its CA.
 
 When renewal runs: a member that holds a CA key (the root or an admin) checks its own certificates when the group
 starts and every 12 hours, saves renewed ones and presents them on new connections at once
@@ -229,22 +215,18 @@ devices its removal keeps, but it renews none); otherwise it MUST ignore it, and
 that. A certificate that has
 already expired cannot be renewed this way, since the handshake fails; the device pairs again.
 
-Fingerprint (shown to the user): SHA-256 over the certificate DER as upper-case hex bytes
-separated by spaces; the short form is the first 8 bytes (23 characters).
-
 ## 3. Discovery (mDNS)
 
 Full members (Linux, FreeBSD, Windows and macOS computers) and lite members publish and browse;
 phones and joining devices only browse, except a phone that is the group's hub, which
 publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
-hub"). Only a full member that holds the iPhone CA key
-publishes a holder priority (`h`) and may hold `cbb.local`.
+hub").
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
 [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns`; a lite
 member publishes and browses with the `mdns-sd` crate (`lite/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=lite`), with the addresses of its interfaces except
-loopback, and never holds `cbb.local`.
+loopback.
 
 A full member SHOULD publish, answer queries and take connections on the member port only on
 an interface whose network it knows (design.md, "Known networks"); elsewhere it only
@@ -260,8 +242,6 @@ window is open. The lite member publishes on every interface.
 | `<id>._cbb._tcp.local` | TXT | see below | 4500 s | yes |
 | `cb-<id>.local` | A / AAAA | the addresses of the interface | 120 s | yes |
 | `cb-<id>.local` | NSEC | see below | 120 s | yes |
-| `cbb.local` (holder only) | A / AAAA | the addresses of the interface | 10 s | yes |
-| `cbb.local` (holder only) | NSEC | see below | 10 s | yes |
 | `_services._dns-sd._udp.local` | PTR | `_cbb._tcp.local` | 4500 s | no; only in answers, never announced |
 
 TXT strings (each at most 255 bytes):
@@ -272,15 +252,13 @@ TXT strings (each at most 255 bytes):
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
 | `p` | `1` | present only while a computer pairing window is open |
 | `r` | `lite` or `phone` | `lite` on a lite member, which the full members do not dial (section 4); `phone` on a phone that is the group's hub while its app is open, which the full and lite members do not dial, since it dials them; the other phones dial it |
-| `h` | `1` or `2` | the holder priority, present only on a full member that may hold `cbb.local`: `1` first, `2` only as a fallback |
 
-The Go code publishes them in the order `v=1`, `g=<tag>`, `h=<priority>` (if any), `p=1`; a
-lite member publishes `v=1`, `g=<tag>`, `r=lite`. A receiver MUST treat an unknown `h` value as absent,
-MUST match keys without regard to case, and MUST take as the value what follows the first `=`.
+The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
+lite member publishes `v=1`, `g=<tag>`, `r=lite`. A receiver MUST ignore keys it does not
+know, MUST match keys without regard to case, and MUST take as the value what follows the first `=`.
 A member MUST NOT dial a peer whose `g` is not its group's tag.
 
-Note: browsers check only `g` (when dialing), `r` (when dialing, on full and lite members),
-`h` (in the election, on full members)
+Note: browsers check only `g` (when dialing), `r` (when dialing, on full and lite members)
 and `p` (when joining); nothing checks `v` (`internal/service/members.go`,
 `internal/service/socket.go`, `lite/src/discovery.rs`).
 
@@ -301,8 +279,7 @@ rescanned every 10 s.
   alone. At most 32 questions of a query are answered.
 - A PTR question for `_cbb._tcp.local` gets the PTR as answer and SRV, TXT, A/AAAA
   and NSEC of the host as additionals. A question for the instance gets SRV (with the host
-  addresses as additionals) and/or TXT. A question for the host name, or for
-  `cbb.local` on the holder, gets its A or AAAA records, or the NSEC record when the
+  addresses as additionals) and/or TXT. A question for the host name gets its A or AAAA records, or the NSEC record when the
   name has no address of the asked type. Type ANY gets everything that matches.
 - Known-answer suppression: a record listed in the query with at least half of its TTL is
   left out. A record already multicast on the interface within the last second is left out.
@@ -311,16 +288,13 @@ rescanned every 10 s.
 - A legacy unicast query (source port not 5353) gets a unicast answer that repeats the ID and
   the questions, TTLs capped at 10 s, no cache-flush bits, at most 5 answers a second per
   source. An answer over 9000 bytes drops its additionals.
-- Names are never probed: device IDs are random, and the election below decides who holds
-  `cbb.local`.
+- Names are never probed: device IDs are random.
 
 ### Announcements and goodbyes
 
 - All records are announced twice, one second apart, at start, on a new interface or new
-  addresses, after a TXT change and when the member becomes the holder.
-- Addresses that go away get a goodbye (TTL 0) for the host name and, on the holder, for
-  `cbb.local`.
-- Giving up `cbb.local` sends a goodbye for its A/AAAA and NSEC records.
+  addresses and after a TXT change.
+- Addresses that go away get a goodbye (TTL 0) for the host name.
 - On stop, every record gets a goodbye. Goodbyes never carry the cache-flush bit, so they end
   only their own record. A service that stops sends its mDNS goodbyes before the member
   goodbyes (section 4).
@@ -341,24 +315,6 @@ rescanned every 10 s.
   1 s.
 - A member is found when a live PTR names an instance that has a live SRV; its addresses
   are the live A/AAAA records of the SRV target that would be published. TXT is optional.
-
-### The holder of `cbb.local`
-
-Election (`electLocked`, `internal/service/members.go`): a full member takes part when it
-holds the iPhone CA key and its holder setting is not `never`; its priority is `1` (first)
-or `2` (fallback), and it publishes it as `h`. With the setting `auto`, the default, a
-machine with a battery of its own (a laptop: on Linux a power supply of type `Battery` whose
-scope is not `Device`, on macOS `pmset -g batt` listing `InternalBattery`, on Windows
-`GetSystemPowerStatus` with a system battery) gets `2` and any other `1`; `first` and
-`fallback` set it, and `cbb holder` changes the setting (state file `holder`). It holds
-`cbb.local` when no connected peer with role `full` whose discovered TXT has an
-`h` comes before it: a lower priority number, or the same with a lower device ID. A member
-alone holds it at once. Members without the iPhone CA key never hold it: in a group whose
-root is the phone none has it. The election runs whenever the set of connected peers or
-what discovery finds changes, so a holder that leaves with a goodbye is
-replaced at once and one that falls silent after the 15-second timeout. Two holders for a
-moment are harmless. Only a member that holds the iPhone CA key MAY publish `h` or answer for
-`cbb.local`.
 
 ## 4. Member protocol
 
@@ -422,16 +378,10 @@ Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
   an implementation SHOULD close one that does not.
 - A lite member listens on the member port for the member protocol only: TLS with ALPN
   `cbb/2`, from home network addresses, at most 16 handshakes at once. It has
-  no pairing window and no iPhone endpoints.
-- The member port tells its connections apart by their first bytes. One that does not start
-  with a TLS handshake record (0x16) is plain HTTP for the profile (section 7) while an
-  iPhone pairing window is open, and is closed otherwise. Over TLS, a ClientHello that
-  offers `cbb-pair/2` gets the pairing configuration (section 6), whether or not a
-  window is open; one that offers `cbb/2` the member configuration; any other, on a
-  member that serves the iPhone, the iPhone endpoints' (section 7, ALPN `http/1.1`).
-  The connections passed on to the iPhone endpoints and to the profile are bounded while they
-  are open: 32 at a time, at most 4 from one IP address; a connection over a limit is closed
-  at once, and one idle for 30 s is closed.
+  no pairing window.
+- The member port takes TLS only. A ClientHello that offers `cbb-pair/2` gets the pairing
+  configuration (section 6), whether or not a window is open; any other the member
+  configuration, and a connection that does not negotiate `cbb/2` is closed.
 
 ### Framing
 
@@ -449,7 +399,7 @@ Message object:
 
 | Field | Type | In | Meaning |
 |-------|------|----|---------|
-| `t` | string | all | `hello`, `event`, `ping`, `bye`, `cert`, `records`, `admin`, `phone_ca`, `tunnel` or `hubs` (section 11), `command` or `result` (section 15), `evidence` (section 17), `credentials` (section 18), `release` (section 16), `get` or `missing` ("Content", below) |
+| `t` | string | all | `hello`, `event`, `ping`, `bye`, `cert`, `records`, `admin`, `tunnel` or `hubs` (section 11), `command` or `result` (section 15), `evidence` (section 17), `credentials` (section 18), `release` (section 16), `get` or `missing` ("Content", below) |
 | `role` | string | hello | `full` (a computer with the service: Linux, FreeBSD, Windows or macOS), `phone` (a phone app) or `lite` (a lite member) |
 | `hello` | object | hello | Hello (below) |
 | `event` | object | event | Event (below) |
@@ -457,8 +407,6 @@ Message object:
 | `issuer` | string | cert | from an admin phone or computer: its admin CA, which issued `cert`, DER in base64; absent when a root did (section 10) |
 | `records` | array | records | signed records (section 10) |
 | `admin_ca` | string | admin | from the group's root, a phone or a computer: the receiver's admin CA, for the admin key its hello offered, DER in base64 (section 10, "Admins") |
-| `phone_ca` | string | phone_ca | from the root or an admin of a group a computer created: the group's iPhone CA, DER in base64 (section 10, "Admins") |
-| `phone_ca_key` | string | phone_ca | with `phone_ca`: its key, PKCS #8 DER in base64 |
 | `evidence` | object | evidence | an attestation of one of the sender's keys (section 17, "Evidence") |
 | `credentials` | array | credentials | the group's server credentials the sender keeps (section 18) |
 | `release` | object | release | the newest signed release the sender holds: `keys`, `channel` and `release`, each a file of section 16 as published (section 16, "In the group") |
@@ -480,7 +428,7 @@ Message object:
 
 1. After the TLS handshake each side MUST send its hello first, without waiting for the other's.
 2. Then events follow, in any number, interleaved with pings, records messages, `admin`,
-   `phone_ca`, `tunnel`, `hubs`, `credentials` (section 18), `command` and `result`
+   `tunnel`, `hubs`, `credentials` (section 18), `command` and `result`
    messages, `evidence` (section 17), `release` (section 16), `get`, `missing` and `chunk`
    frames ("Content", below), and at most one `cert`.
 3. A side that has written nothing for 5 s MUST send `ping`. Every frame written resets that
@@ -510,10 +458,9 @@ Roles: a `phone` member dials every member, publishes nothing and is never diale
 while it is the group's hub: it then publishes `r=phone` (section 3) and other phones dial
 it. A `lite`
 member publishes itself with `r=lite`, dials the full members and accepts phones and lite
-members with a lower device ID (above, "Who dials whom"); it never holds
-`cbb.local`. A `full` member is any computer with the service, a Mac included:
-any of them can create a group and be its root, or be made an admin. Only the root and the
-admins admit devices, and only a member with the iPhone CA key holds the name.
+members with a lower device ID (above, "Who dials whom"). A `full` member is any computer
+with the service, a Mac included: any of them can create a group and be its root, or be made
+an admin. Only the root and the admins admit devices.
 
 ### Hello
 
@@ -532,7 +479,6 @@ depends on a version number.
 | `name` | string or absent | the sender's device name, 1-64 bytes; a receiver ignores an invalid one |
 | `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos` or `wearos` (section 10) |
 | `admin_key` | string or absent | from a full member that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
-| `phone_ca` | string or absent | from a member that holds the iPhone CA key: SHA-256 of that CA's SubjectPublicKeyInfo, in base64, so another admin knows whether to send it a newer one (section 10, "Admins") |
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
 | `mode` | string or absent | the sender's sync mode: `own`, `shared`, `receive` or `send` (design.md, "Sync modes"); shown, never trusted; a receiver ignores an unknown one. It changes only what the sender itself does with its clipboard, so a receiver handles the sender's events the same in every mode |
@@ -565,7 +511,7 @@ and of the program.
 |-------|------|---------|
 | `id` | string | event ID, 32 lowercase hex characters |
 | `origin` | string | device ID of the member that made the event |
-| `via` | string | `copy` (copied on that member), `phone` (sent from a phone: the app, iPhone or Android, or the iPhone shortcut's button) or `universal-clipboard` (reached a Mac through Universal Clipboard). Omitted for `copy`; absent means `copy`. |
+| `via` | string | `copy` (copied on that member), `phone` (sent from a phone's app, iPhone or Android) or `universal-clipboard` (reached a Mac through Universal Clipboard). Omitted for `copy`; absent means `copy`. |
 | `time` | string | hybrid timestamp `"<wall>.<logical>"` (section 5) |
 | `age_ms` | integer | milliseconds since the copy, as of the moment the frame is written |
 | `kind` | string | `text`, `secret` or `media` (images or files, from 0.6); always present |
@@ -904,14 +850,12 @@ verifies to one of them, through `issuer` when present; `roots` are exactly the 
 root of its own; the joiner keeps `records` in its record set before it keeps the identity, keeps
 `roots`, and keeps `issuer` to send in its handshakes.
 
-The Welcome carries no CA key: no device gets the key of the group CA or of the iPhone CA by
-joining. A new computer is a member without CA keys: it publishes and listens, but admits
-nobody until the root makes it an admin (section 10, "Admins"), and until then serves no
-iPhone and never holds `cbb.local`. A joiner reads a Welcome by the fields of this
+The Welcome carries no CA key: no device gets the key of the group CA by joining. A new
+computer is a member without CA keys: it publishes and listens, but admits nobody until the
+root makes it an admin (section 10, "Admins"). A joiner reads a Welcome by the fields of this
 table only.
 
-The Welcome carries no group state and no token hashes: tokens need no hashes (section 7),
-and the group state arrives in the first hello.
+The Welcome carries no group state: it arrives in the first hello.
 
 A phone that joins MUST check the same, and also: `group_ca` is a phone's root (path length 1);
 there are no CA keys; `admin_ca`, when present, is an admin CA under `group_ca` for the key
@@ -954,8 +898,7 @@ the QR code dials the computer, and nothing is announced:
   5 minutes, and shows the QR code
   `cbb://join?code=<code>&addr=<host:port>&fp=<fingerprint>` (section 7): its
   addresses that mDNS would publish, IPv4 first, without link-local ones, at most four; and
-  the fingerprint of its self-signed certificate's key (Conventions, "Fingerprints"),
-  percent-encoded.
+  the fingerprint of its self-signed certificate's key (Conventions, "Fingerprints").
 - The member dials and is the TLS client. It presents its member certificate and MUST
   check that the server sent exactly one certificate whose fingerprint is `fp`, with a
   P-256 key and a device ID as CN. The joiner (server) requires any client certificate and
@@ -983,122 +926,28 @@ the QR code dials the computer, and nothing is announced:
   phone, when the user makes the new phone an admin (the default), answers with `admin_ca`.
   A phone that is not the root makes no admins, so its welcome has no `admin_ca`.
 
-## 7. iPhone endpoints
+## 7. The join QR code
 
-Source: `internal/phone`, `internal/service/iphone.go`.
+Source: `internal/phone/joinqr.go`, the kits' `JoinCode`.
 
-These endpoints serve the iPhone shortcut, for an iPhone without the app, so their names keep
-the word: the iPhone CA, `to_iphone` and `from_iphone`. A phone
-with the app, iPhone or Android, is a member (section 4) and uses none of them.
-
-### iPhone endpoints on the member port
-
-The shortcuts name `https://cbb.local:8764`, so they work only with the default
-member port; up to 0.2.0 these endpoints had their own port, 8765.
-
-HTTPS, TLS 1.3 only, no client certificate; the server presents the `cbb.local`
-certificate followed by the iPhone CA certificate. Server timeouts: 10 s for the request
-header, 30 s for reading and writing; headers at most 16 KiB. The client MUST trust only the
-iPhone CA for `cbb.local`. Paths are exact; others get 404.
-
-### Tokens
+The QR code that a joining device shows (section 6, "The joiner listens"), and that the
+phone apps scan, carries a URL:
 
 ```
-token = "cb1." base64url_nopad( phone_id[16] || HMAC-SHA-256(K, phone_id)[0:16] )
-K     = HKDF-SHA-256(IKM = iPhone CA private scalar (32 bytes, big-endian),
-                     salt = SHA-256(iPhone CA certificate DER),
-                     info = "cbb iPhone token v1", length 32)
+cbb://join?code=123456&addr=192.168.1.20:8764&addr=[fd00::20]:8764&fp=<fingerprint>
 ```
 
-The root and every admin of a group a computer created hold the iPhone CA key, so each
-checks any token without a stored list: trim spaces, require the prefix `cb1.`, decode to
-exactly 32 bytes, and compare the MAC in constant time, which a server MUST do. A new iPhone CA ends every token. The Authorization header carries
-`Bearer <token>` (scheme in any case) or the bare token.
+| Field | Count | Meaning |
+|-------|-------|---------|
+| `code` | one, first | the six-digit pairing code |
+| `addr` | zero to four | where the joiner listens, `host:port`, best first; an IPv6 host in brackets |
+| `fp` | one | the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints") |
 
-### POST /sync
-
-Request body (at most 7 MiB), with `Authorization`:
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `v` | number or string | MUST be `1` |
-| `text` | string | the iPhone clipboard; may be empty |
-| `secret` | bool, optional | make a secret event |
-
-Reply, always HTTP 200, `Content-Type: application/json`, `Cache-Control: no-store`:
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `v` | integer | 1 |
-| `direction` | string | `to_iphone`, `from_iphone`, `none`, `unpaired` or `error` |
-| `copy` | string | the text for the iPhone clipboard; omitted when empty |
-| `expires_in` | integer | seconds a secret copy may stay: max(1, floor((60 s - age) / 1 s)); 0 for normal text; always present |
-| `message` | string | a human message for a notification; never contains a secret |
-
-```json
-{"v":1,"direction":"to_iphone","copy":"some text","expires_in":0,"message":"Copied to the iPhone"}
-```
-
-Order of checks: not POST gives `error`; a missing or unknown token gives `unpaired` (the
-client MUST delete its token, so the next run pairs again); a body over 7 MiB, invalid JSON
-or `v` other than 1 gives `error`. Then the direction, in order (`phone.decide`):
-
-1. The group's current event is live, has `via` `copy`, is younger than 45 s and differs from
-   `text`: `to_iphone` with that text (and its kind's expiry).
-2. `text` is non-empty and differs from both the current event's text and the member's own
-   clipboard text: a deliberate event with `via` `phone` (secret if `secret` is true, or if
-   the text is a remembered secret), also written to the member's own clipboard;
-   `from_iphone`.
-3. The member's own clipboard holds a live text that differs from `text`: `to_iphone` with it.
-4. Otherwise `none`.
-
-The client writes `copy` to its clipboard only on `to_iphone`, for this device only (not
-through Universal Clipboard). A server MUST NOT put a secret's text in `message`.
-
-### GET and POST /pair
-
-Needs no token. An iPhone pairing window is opened by `pair-phone` on the control socket, on
-the holder of `cbb.local` only; it has the limits of a computer window (5 minutes,
-one success, three wrong codes; any code that is not six digits counts as wrong).
-
-- `GET /pair`: an HTML form that posts the field `code`.
-- `POST /pair` with a `Content-Type` that does not contain `json`: the form field `code`;
-  the answer is an HTML page that shows the token or the error.
-- `POST /pair` with a `Content-Type` that contains `json`: body (at most 4096 bytes)
-  `{"v": 1, "code": "123456"}`; `v` may be a number or a string; `code` may be a string or a
-  number (a number is left-padded with zeros to six digits). Reply, always HTTP 200:
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `v` | integer | 1 |
-| `ok` | bool | the iPhone is paired |
-| `token` | string | the new token; only when `ok` |
-| `message` | string | a human message |
-
-The shortcut's token gives only `/sync`. Up to 0.4 a `POST /admit` let a paired shortcut add
-a computer; it is gone, and requests to it get HTTP 404. Computers join through the phone
-apps or `cbb pair`. `cbb pair -phone -new-token` revokes the token of every shortcut (one
-revocation record naming their keys, section 10) before it opens the window, so a copied
-token stops working and the iPhone gets a new one.
-
-### Profile on the member port
-
-Plain HTTP on the member port (up to 0.2.0 its own port, 8766), only while an iPhone
-pairing window is open, same address restriction:
-
-| Path | Content |
-|------|---------|
-| `GET /` | an HTML page with the steps; it sends the user to the terminal of `cbb pair -phone` for the iPhone CA fingerprint and does not show it, since it comes over plain HTTP |
-| `GET /cbb.mobileconfig` | the configuration profile, `application/x-apple-aspen-config` |
-| `GET /cbb.shortcut` | the signed sync shortcut, `application/octet-stream` (404 if the build has none) |
-
-The profile has the fixed identifier `tools.cbb` with one payload of
-type `com.apple.security.root` (identifier `tools.cbb.ca`) carrying
-the iPhone CA certificate. Its UUIDs are derived from SHA-256 of the CA certificate, so a new
-CA's profile replaces the old one.
-
-Requests from outside the home network get HTTP 403 with a text body, not a JSON reply with
-status 200 (`internal/service/iphone.go`).
+The values are percent-encoded (Conventions, "Bytes"). A reader matches the scheme and the
+host `join` without regard to case, decodes only percent escapes, never a `+` as a space,
+ignores fields it does not know, keeps at most the first four addresses and drops an address
+without a port; a text without `code` is not a join QR code. The same text, pasted, joins a
+phone without a camera.
 
 ## 8. Local control socket
 
@@ -1129,8 +978,7 @@ connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket t
 `copy`, `paste`, `copy-media`, `copied-media`, `paste-media`, `config`, `status`, `devices`, `release`, `release-get`, `keys` (from root only) and `watch` (with
 the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
 all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
-rename, freeze or make admin a device, take over, or change sync away from home and
-the holder setting. `cbb` dials the socket each operation needs. The lite member does the same
+rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
 with its own two sockets, but its control socket takes fewer: no `copy-media`, `copied-media`,
 `paste-media`, `config`, `release`, `release-get` or `keys`, and of the watcher's reports no
 `acted`.
@@ -1152,9 +1000,9 @@ Header fields (all omitted when empty):
 | `error` | string | a failed request, human text |
 | `done` | bool | the last answer to a request |
 | `code` | string | pairing code |
-| `fingerprint` | string | iPhone CA fingerprint |
+| `fingerprint` | string | the fingerprint of this device's key: for the join QR code, or for the admin to compare (`invite`) |
 | `address` | string | `host:port` |
-| `name` | string | a device name, or a phone ID |
+| `name` | string | a device name |
 | `expires` | integer | seconds a window stays open; for a listening `join`, seconds to wait (at most 300) |
 | `listen` | bool | `join`: listen for a member instead of dialing one |
 | `addrs` | array of strings | the first answer of a listening `join`: where it listens |
@@ -1185,7 +1033,6 @@ Header fields (all omitted when empty):
 | `part` | object | `copy-media`'s `part` messages and `paste-media`'s answers: `{type?, path?, dir?, size?}`, a part of images or files without its hash; `release-file` and `release-get`: the archive's `size` |
 | `value` | string | `config`: the setting's new value; `remote add`: the TV's kind, `androidtv` (the default), `appletv` or `roku`; `remote pastes`: `on` or `off` |
 | `detail` | string | with `error`: the underlying error, which the client shows with error details on (`CBB_DEBUG=1`) |
-| `new_token` | bool | `pair-phone`: revoke every shortcut's token first |
 | `admins` | bool | `pair`, on the group's root: the window may make a phone with the app an admin (`cbb pair -admin`) |
 | `forwarder`, `forwarder_key` | strings | `away hub`: the forwarder's address and its key, 44 characters of base64 |
 | `relay`, `relay_key` | strings | `away relay`: the relay's address and its key; needs `consent` |
@@ -1209,10 +1056,9 @@ A connection carries one request: the service reads the first message and dispat
 | `copied-media` | as `copy-media` | as `copy-media`, but a watcher's report that its clipboard changed: the copy goes to the group as an event when the engine decides so (section 5) and is not written back to the member's own clipboard |
 | `paste-media` | none | once every part of the member's own images or files (in mode `own` the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
 | `config` | `{name?, value?}`: `max-copy` or `max-copy-away` and a size such as `200MiB` | `{status, done}`, with the setting saved first when `name` is given; `status.media` = `{max_copy, max_copy_away, fetching?, fetched?, from?, failed?}`, in bytes, also in `status` |
-| `status` | none | `{status, done}`; `status` = `{device, group, role, os, holder, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
+| `status` | none | `{status, done}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
 | `new` | none | `{status, done}`: the device creates a group and is its root (section 10). Only on a device in no group |
 | `pair` | none | first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
-| `pair-phone` | none | first `{code, expires: 300, fingerprint, address}` (the member port, where the profile is), then `{name: <phone ID>, done}` or an error. Only on a member that holds the iPhone CA (in a group a computer created, the root or an admin) and answers for `cbb.local`. Hanging up closes the window |
 | `join` | `{code, address?}`, `{code, listen, expires}` or `{invite, consent}` | `{done}` or an error. Without `address` it browses for `p=1`. With `listen` it first answers `{addrs, fingerprint}` for the QR code, then `{done}` or an error when a member admitted it, or after `expires` seconds. With `invite`, the text of a remote invitation (section 12), it needs `consent` (sync away from home is turned on, and the device keeps its keys in files), first answers `{fingerprint}` (of this device's key, for the admin to compare), then `{done}` or an error. Hanging up cancels |
 | `invite` | `{expires?}`: seconds, 3600 if absent, at most 86 400 | Only on the group's hub, when it can admit devices. First `{invite, expires}`: the invitation's text. Then, for each device that used it and proved it knows the secret, `{joining: {id, name, os, fingerprint}}`, which the client answers with `{"op": "answer", consent}` (`true` admits it); last `{name, done}` or an error. Hanging up cancels the invitation |
 | `mode` | `{name, device?}`: `name` the sync mode, `own`, `shared`, `receive` or `send`; `device`, a name or device ID, for another device (on an admin) | without `device`: `{status, done}`, the mode saved and in effect; with it: `{done}` once that device answered `done` to the command (section 15), or an error with its reason. Only on the admin socket |
@@ -1221,7 +1067,6 @@ A connection carries one request: the service reads the first message and dispat
 | `keyboard` | `{name?, keyboard?}` + payload for `type`: `name` `on`, `off`, `pair`, `type` or none | `{status, done}`: `on` saves the Bluetooth keyboard's settings and registers it with BlueZ (Linux only), `off` takes it off, `pair` makes it discoverable for two minutes, `type` types the payload on the connected device and answers once it is typed, none only answers the status. Only on the admin socket |
 | `remote` | `{name?, address?, value?, new_name?, consent?, code?, device?}` + payload for `type`: `name` `add`, `code`, `cancel`, `remove`, `pastes`, `type` or none | `{status, done}`: `add` pairs with the TV at `address` (an Android TV or a Google TV shows a code; a Roku, `value` `roku`, needs `consent`, as its control is plain HTTP), `code` finishes that pairing within two minutes, `cancel` ends it, `remove` forgets the TV `device`, `pastes` sends the group's remote pastes to it or not, `type` types the payload into the field open on the TV, none only answers the status; `status.tvs` = `[{name?, kind, host, pastes?, pairing?}]`. An address outside the home network fails. Only on the admin socket |
 | `rename` | `{name, new_name}`: `name` the device, by name or device ID | `{name, done}` with the old name: an admin signs a `device` record like the device's newest one with the new name (section 10). Only on the admin socket |
-| `holder` | `{name}`: `auto`, `first`, `fallback` or `never` | `{status, done}`: the holder setting of `cbb.local` saved (state file `holder`), its priority published and the holder elected again (section 3, "The holder of `cbb.local`"). Only on the admin socket |
 | `network` | none | `{status, done}`: the networks this device is on now become known ones, where it publishes itself and takes connections (`cbb network`). Only on the admin socket |
 | `answer` | `{consent?}` | none: during a request that asks the user, such as a listening `join` waiting for a phone or an `invite` asking whether to admit a device, the client's answer; `consent` is yes |
 | `action-set` | `{actions: [action]}`, exactly one | `{status, done}`: this device's user turns the quick action on or off and says who may run it (section 15); an action of the user's own carries its `command`. Only on the admin socket |
@@ -1320,9 +1165,8 @@ The `devices` and `revoke` operations are in section 10.
 ## 9. The phone as the root
 
 In a group that a phone app creates, the phone is the root of trust ("The phone apps" in
-[design.md](design.md)). Sections 1-8 hold for it too. A group a computer creates (`cbb pair`,
-`cbb pair -phone`) has a root of the same form, which the computer holds in a file, and an
-iPhone CA as well (section 10, "Admins").
+[design.md](design.md)). Sections 1-8 hold for it too. A group a computer creates (`cbb new`)
+has a root of the same form, which the computer holds in a file (section 10, "Admins").
 
 - **Group CA.** The app creates the group root CA: a P-256 key in the Secure Enclave or
   StrongBox that cannot be exported, with the certificate profile of section 2 except
@@ -1331,8 +1175,7 @@ iPhone CA as well (section 10, "Admins").
   CA key only when the root phone makes it an admin (section 10, "A computer as admin").
   A phone MUST ask for the user's presence (Face ID, the fingerprint or the passcode) before
   it signs with the root or an admin key. A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
-  6). There is no iPhone
-  CA in such a group, so no member of it holds `cbb.local`.
+  6).
 - **The app is a member.** It holds a member certificate of its own group with role
   `phone` and speaks the member protocol of section 4. It dials and never listens for
   members (a phone cannot accept connections in the background), so members MUST NOT dial a
@@ -1343,13 +1186,11 @@ iPhone CA as well (section 10, "Admins").
 - **Join QR code and pairing direction.** `cbb pair` listens and shows its addresses and
   certificate fingerprint; the app dials it as the admitting side, confirms first (section
   6, "The joiner listens") and sends a Welcome with a member certificate signed by its CA.
-- **No profile, no token.** The app trusts its own CA, so it needs no configuration
-  profile, no iPhone CA and no token; it finds members through mDNS browsing.
+- **Finding the members.** The app trusts its own CA and finds members through mDNS browsing.
   It keeps the home network addresses (private IPv4, unique local IPv6) of the QR code of
   each computer it admitted, the one that answered first, and dials a computer of the
   group's list at them while browsing does not find it, as one in another subnet that
   mDNS does not reach. TLS checks the peer as for a found member.
-  The shortcut endpoints of section 7 stay for phones without the app.
 - **Renewal and revocation.** The admin phones renew certificates with `cert` messages, as
   an admin computer does (CBBKit's
   `GroupCertificates.renewal` and `MemberNode`'s `renew`; the app also renews its own
@@ -1433,30 +1274,9 @@ removes it.
   those of the computers it is connected to. It never removes the root or another admin and
   makes no admins; when the root computer is lost, it claims the group (below, "Handing the
   group over").
-- **The iPhone CA.** In a group a computer created, the root holds the iPhone CA, and so does
-  every admin, so the shortcut works while any of them is on. A member that holds its key
-  says so in its hello (`phone_ca`). When a member that holds a key that is not revoked meets
-  the root or an admin whose hello names another key or none, it sends `{"t":"phone_ca",
-  "phone_ca":..., "phone_ca_key":...}`; the root sends it right after the `admin` message
-  too. A peer counts as the root or an admin when its TLS chain carries its own admin CA, or
-  the records list it as the root or as an admin with the key it presented. The receiver
-  MUST take it only from the root or an admin, only when it is the root or an admin itself, and
-  only when the records do not revoke the new CA's key; it keeps it when it holds none, when
-  the records revoke the one it holds, or when both stand and the new one's SHA-256 is the
-  smaller (so two replacements at once settle on one); otherwise it keeps it aside, in case
-  the records revoke its own later. It then issues itself a `cbb.local`
-  certificate and passes the CA on to the admins it is connected to. A member whose iPhone CA
-  key the records revoke deletes it and its `cbb.local` certificate, and serves
-  the shortcut again only once another admin sends the new one. A group a phone created has
-  no iPhone CA, and its admins never get one.
 - It is removed as an admin phone is: a revocation of its member key and its admin key,
   which keeps what it signed before the remover saw it ("Removals and freezes keep what the
-  author saw"). In a group a computer created it held the iPhone CA, so the
-  member that removes it, the root or an admin with the iPhone CA, makes a new iPhone CA,
-  revokes in the same record the old one's key and the key of every `shortcut` device (their
-  tokens stop working), takes the new CA itself and sends it to the admins as above; the
-  iPhones that use the shortcut pair again with the new profile. An admin without the iPhone
-  CA does not remove another admin of such a group.
+  author saw").
 - In the member handshake (section 4) a member MUST send its certificate followed by its
   issuer when the issuer is not the group CA. Checking a peer: the chain MUST verify to the
   group CA through at most one intermediate that is a CA with path length 0, with the time
@@ -1535,9 +1355,9 @@ and `a`-`f`.
 |-------|-----------|-----------|--------|
 | `device` | string | `device` | a device ID |
 | `name` | string | `device` | 1 to 64 bytes of UTF-8, no control character (U+0000 to U+001F, U+007F to U+009F) |
-| `role` | string | `device` | `full`, `phone`, `lite`, `watch` or `shortcut` |
+| `role` | string | `device` | `full`, `phone`, `lite` or `watch` |
 | `os` | string | none | `linux`, `windows`, `macos`, `ios`, `android`, `watchos`, `wearos` or `none` |
-| `key` | string | `device` | a key hash: the member key (for a watch, its admin key; for `shortcut`, the phone ID) |
+| `key` | string | `device` | a key hash: the member key (for a watch, its admin key) |
 | `admin` | string | `recovery`, `handover` | a key hash: the admin key its admin CA certifies; only in a record a root's own key signed |
 | `powers` | array of strings | none | sorted; from `admit`, `renew`, `remove`, `remove-admins`, `freeze`, `thaw`, `takeover`, `hub`; only with `admin` |
 | `commands` | array of strings | none | sorted; the command types (section 15) the admin may sign; only with `admin` |
@@ -1578,7 +1398,7 @@ those of the newest such record (the highest `seq` of that root) that names it.
 |--------|-----------|
 | `device` naming `admin`, or with role `phone` or `watch` | a root's own key |
 | other `device` | a root's own key, or an admin with `admit` |
-| `revoke` of member keys and phone IDs | a root's own key, or an admin with `remove` |
+| `revoke` of member keys | a root's own key, or an admin with `remove` |
 | `revoke` of an admin key, or of the member key of a device whose newest root record names an admin key | a root's own key, or an admin with `remove-admins` |
 | `revoke` of a root key, or of the root's own device | nobody: a root is replaced only by a claim |
 | `freeze` | a root's own key, or an admin with `freeze`; each key it names is an admin key without `remove-admins` |
@@ -2059,8 +1879,8 @@ beyond) and check the same bytes.
   state stops the exchange with it ("Stopping the exchange"), gets a connection that
   carries records only: each side sends its hello with no current event and nothing but its
   records digest, sends its records when the digests differ, takes `records` from the peer,
-  and sends and takes nothing else (no events, credentials, commands, tunnel keys, hubs or
-  iPhone CA). It closes the connection once the records let the peer in, and the side that
+  and sends and takes nothing else (no events, credentials, commands, tunnel keys or
+  hubs). It closes the connection once the records let the peer in, and the side that
   dialed connects again at once as a member, or when no records came for 5 seconds. Every
   member keeps such a connection while the state stops the exchange with the peer, so that
   the root's decision reaches it; for the other cases only full members keep it, and the
@@ -2076,12 +1896,10 @@ beyond) and check the same bytes.
   stops the exchange ("Stopping the exchange"), a member applies it to every connection at
   once.
 - A member that holds the root's key records every device it admits (its name and `os` from
-  the pairing Info, role `full` or `lite`) and every iPhone it pairs (`shortcut`, `os` `ios`,
-  name `iPhone`, device = the phone ID), and itself and every connected peer that has no
+  the pairing Info, role `full` or `lite`), and itself and every connected peer that has no
   record yet, with the name and `os` from the peer's hello (or the role and the first 8
   characters of its ID). When a computer's hello states an `os` that its record does not, it
   signs a new record for it with that `os` and the rest of the record unchanged.
-- The iPhone endpoints (section 7) treat the token of a revoked iPhone as unknown.
 
 ### Control operations
 
@@ -2089,9 +1907,9 @@ beyond) and check the same bytes.
 |------|---------|---------|
 | `devices` | none | `{devices: [{id, name, role, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only |
 | `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"), reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins, in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none. Members connect again afterwards, so their hellos carry the change (section 11) |
-| `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`); removing an admin of a group a computer created replaces the iPhone CA ("Admins") and needs the iPhone CA key |
+| `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`) |
 | `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected full member an admin ("Admins") |
-| `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer, and holding the iPhone CA: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
+| `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
 | `takeover-delay` | `{value}`: a duration from `0s` to `168h` | `{done}` or an error. Only on the group's root: signs a `settings` record with `takeover_delay_ms`, how long a claim waits on each member, and the `key_level` its newest one had |
 | `key-level` | `{value}`: `proven`, `hardware` or `files` | `{below, done}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the `takeover_delay_ms` its newest one had; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root's keys are in a file, as a computer's CA keys are (section 17) |
 | `hubs` | `{hubs}`: 1 to 16 names or device IDs of computers and phones, in the order they serve | `{done}` or an error. On the group's root or an admin with `hub`: signs a `hubs` record, the group's main hubs |
@@ -2349,8 +2167,7 @@ carries:
 - The hub runs WireGuard in user space on UDP `listen_port` (8764 when 0), with one peer per
   admitted device: its key, its preshared key, and its tunnel address as the only allowed
   address. Inside the tunnel the hub MUST listen only on TCP 8764 at its own tunnel
-  address, for the member protocol (section 4) and nothing else: no pairing, no shortcut,
-  and no forwarding of packets between peers.
+  address, for the member protocol (section 4) and nothing else: no pairing and no forwarding of packets between peers.
 - After the member TLS handshake the hub MUST check that the device ID of the client
   certificate gives the tunnel address the connection came from, and close it otherwise,
   so a device cannot use another device's tunnel key.
@@ -3571,7 +3388,6 @@ does not know unless its section says it refuses it.
 |---|---|---|
 | `EXPERIMENTAL-cbb-pair-v2` | TLS exporter label: CPace's `sid` | 6 |
 | `cbb pair v2` + `0x00` | CPace's channel identifier prefix | 6 |
-| `cbb iPhone token v1` | HKDF `info` of the token key | 7 |
 | `cbb forwarder key` | TLS exporter label: a hub's proof of its WireGuard key | 13 |
 | `cbb forwarder admin` | TLS exporter label: the root's or an admin's signature of a registration | 13 |
 | `cbb forwarder hello` | TLS exporter label: the MAC key of a hub's hellos | 13 |
@@ -3591,17 +3407,15 @@ within version 1, and a new ALPN version would rename them.
 |---|---|---|
 | `cbb group root YYYY-MM-DD` | a group root CA | 2, 9 |
 | `cbb group CA YYYY-MM-DD` | the group CA of a group made before 0.4, refused | 2 |
-| `cbb iPhone CA YYYY-MM-DD` | the iPhone CA | 2 |
 | `cbb admin <device ID>` | an admin CA | 10 |
 | `<device ID>` | a member certificate, DNS name `cb-<device ID>.local` | 2 |
-| `cbb.local` | the shortcut's server certificate | 2, 7 |
 | `cbb server` | a server key's certificate | 13, 18 |
 | `cbb forwarder` | a forwarder's or relay's own certificate | 13, 14 |
 
 ### Member protocol messages (`t`)
 
 `hello`, `event`, `ping`, `bye`, `cert` (section 4); `get`, `missing` and binary `chunk`
-frames (section 4, "Content"); `records`, `admin`, `phone_ca` (section 10); `tunnel`, `hubs`
+frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 (section 11); `command`, `result` (section 15); `release` (section 16); `evidence` (section
 17); `credentials` (section 18).
 
@@ -3610,7 +3424,7 @@ frames (section 4, "Content"); `records`, `admin`, `phone_ca` (section 10); `tun
 | Name | Values | Section |
 |---|---|---|
 | Role (hello) | `full`, `lite`, `phone` | 4 |
-| Role (device record) | `full`, `lite`, `phone`, `shortcut`, `watch` | 10 |
+| Role (device record) | `full`, `lite`, `phone`, `watch` | 10 |
 | System (`os`) | `linux`, `windows`, `macos`, `ios`, `android`, `watchos`, `wearos`, `none` | 4, 10 |
 | Device form | `laptop`, `desktop`, `phone`, `tablet`, `tv`, `board`, `server`, `router`, `console`, `watch`, `retro`, `other` | 4 |
 | Event `kind` | `text`, `secret`, `media` | 4 |
@@ -3618,14 +3432,13 @@ frames (section 4, "Content"); `records`, `admin`, `phone_ca` (section 10); `tun
 | Media part `type` | `image/png`, `image/jpeg`, `text/html` | 4 |
 | Sync mode | `own`, `shared`, `receive`, `send` | 4, 15 |
 | Key store | `file`, `hardware`, `rootless`, `proven` (records only); proof kinds `android-tee`, `android-strongbox`, `tpm` | 17 |
-| mDNS TXT keys | `v`, `g`, `p`, `r` (`lite`, `phone`), `h` (`1`, `2`) | 3 |
+| mDNS TXT keys | `v`, `g`, `p`, `r` (`lite`, `phone`) | 3 |
 | Record `type` | `device`, `revoke`, `root`, `freeze`, `thaw` | 10 |
 | Command `type` | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off` | 15 |
 | Command result `status` | `done`, `refused`, `failed` | 15 |
 | Quick action presets | `lock`, `sleep`, `reboot`, `shutdown`, `cancel-shutdown`, `restart`, `keyboard-layout` | 15 |
 | Signer kinds of an action | `root`, `phone`, `computer`, `watch` | 15 |
 | Pairing errors | `wrong-code`, `closed`, `busy`, `expired`, `too-many`, `refused`, `declined`, `taken` | 6 |
-| iPhone `direction` | `to_iphone`, `from_iphone`, `none`, `unpaired`, `error` | 7 |
 | Evidence `format` | `android-key`, `tpm`, `tpm-credential`, `tpm-activated` | 17 |
 | Release file `type` | `keys`, `release`, `channel`, `attest-status` | 16 |
 | Release key `use` | `release`, `status`, `channel` | 16 |
@@ -3640,7 +3453,6 @@ frames (section 4, "Content"); `records`, `admin`, `phone_ca` (section 10); `tun
 | A relay's own tunnel address | `fd00:cbb::1` | 14 |
 | Join QR code | `cbb://join?code=...&addr=...&fp=...` | 6, 7 |
 | Remote invitation | `cbb://invite#...`, file `.cbbinvite` | 12 |
-| Token | `cb1.` followed by base64url | 7 |
 
 ## 20. Security considerations
 
@@ -3648,7 +3460,7 @@ The threats, the defences and their code are in the [threat model](threat-model.
 section lists what an implementation must not get wrong, by section.
 
 - **Authentication is the certificate, never the address or the name** (sections 3, 4). mDNS
-  and `cbb.local` can be answered by anyone on the network; only the member TLS
+  can be answered by anyone on the network; only the member TLS
   handshake, checked against the group's CAs and the records, says who a peer is.
 - **The records decide, the same way everywhere** (section 10). An implementation that
   evaluates the records differently from the others splits the group: a removed device

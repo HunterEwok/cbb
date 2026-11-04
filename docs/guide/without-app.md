@@ -1,16 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Without the app
 
-A group does not need the phone app. A computer can hold the group instead, and an iPhone
-without the app joins with a shortcut. This is also the way while the iPhone app waits for
-TestFlight.
+A group of computers does not need the phone app: a computer can hold the group instead.
 
-![A Linux computer holds the group and adds the Mac and Windows by a six-digit code, the iPhone by a profile and the shortcut](../images/without-app.svg)
+![A Linux computer holds the group and adds the Mac and Windows by a six-digit code](../images/without-app.svg)
 
 ## 1. Make the group on a computer
 
 [Install](install.md) Copy Beyond Borders on a computer that is often on: Linux, Windows, a
-Mac or FreeBSD. It holds the group and serves the iPhone shortcut. Then:
+Mac or FreeBSD. It holds the group. Then:
 
 ```sh
 sudo cbb new
@@ -35,32 +33,7 @@ digits there. The new computer joins within seconds.
 Then turn on sharing on each computer, as in the [quick start](quickstart.md#4-share-the-computers-clipboard):
 `sudo cbb mode shared`.
 
-## 3. Add an iPhone with the shortcut
-
-On the root, or an admin computer that answers for `cbb.local` (`cbb status`
-says whether it does):
-
-```sh
-sudo cbb pair -phone
-```
-
-It prints a QR code, the start of a fingerprint and a six-digit code.
-
-1. Scan the QR code with the iPhone's camera and follow the page: install the profile.
-2. Check that the profile's fingerprint starts with the printed one (Settings, General,
-   VPN & Device Management, "CBB", More Details), then turn on full trust for it
-   (Settings, General, About, Certificate Trust Settings).
-3. Add the shortcut "cbb" from the same page and run it once; it asks for the
-   six-digit code. It then keeps its token, which lets it sync and nothing else, in iCloud
-   Drive (Shortcuts/cbb/token.txt), where your other Apple devices can read it; a lost
-   token is revoked by `sudo cbb pair -phone -new-token`, which pairs the iPhone again.
-4. Put the shortcut on the Action button, or on Back Tap (Settings, Accessibility, Touch,
-   Back Tap, Double Tap).
-
-One press then picks the direction by itself: something copied on a computer a moment ago
-comes to the iPhone; otherwise a new copy on the iPhone goes to the computers.
-
-## 4. Do not depend on one computer
+## 3. Do not depend on one computer
 
 Make a second computer an admin, so it can add and remove devices too:
 
@@ -80,7 +53,7 @@ If the root is lost or broken, the admin takes the group over, and every other d
 sudo cbb takeover NAME       # on the admin; NAME is the lost root
 ```
 
-iPhones with the shortcut pair again after a takeover. More in [if a device is lost or stolen](lost-device.md).
+More in [if a device is lost or stolen](lost-device.md).
 
 ## Joining from another network
 

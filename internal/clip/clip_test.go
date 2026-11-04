@@ -674,8 +674,7 @@ func TestReofferOfLocalText(t *testing.T) {
 }
 
 func TestSendFromThePhone(t *testing.T) {
-	// The member that holds cbb.local gets the iPhone's text on its own
-	// clipboard too.
+	// The member a phone sends to gets the text on its own clipboard too.
 	w := newWorld()
 	holder := w.member(idA)
 	join(t, w, holder, idB, nil)

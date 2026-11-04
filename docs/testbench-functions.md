@@ -130,7 +130,6 @@ line here with every new function, and a case for it in the catalogue.
 | G.48 | Removing an admin keeps the devices it admitted | G23 |
 | G.49 | Removing a phone (both keys) | G23 |
 | G.50 | Connections of a removed device closed at once | G23 |
-| G.51 | The iPhone CA replaced after an admin is removed | G24 |
 | G.52 | A removal reaching a device that was off | G25 |
 | G.53 | `cbb takeover` | G26 |
 | G.54 | A takeover undone | G27 |
@@ -160,7 +159,6 @@ line here with every new function, and a case for it in the catalogue.
 | K.1 | Member certificates renewed under 240 days | K1 |
 | K.2 | The `cert` message and its `issuer` | K1, K3 |
 | K.3 | A renewal from an admin phone | K1 |
-| K.4 | The `cbb.local` certificate renewed at 60 days | K2 |
 | K.5 | Checks on a renewal | K3 |
 | K.6 | Expiry when no admin renews | K4 |
 | K.7 | Certificates that end with their CA; the CA's end | K5 |
@@ -180,8 +178,6 @@ line here with every new function, and a case for it in the catalogue.
 | K.21 | TPM EK chains, offline and fetched | K10, K13 |
 | K.22 | The revocation list of attestations | K10 |
 | K.23 | Warnings for old groups with file keys | K11 |
-| K.24 | The shortcut's token kept hashed and passed on | K12 |
-| K.25 | `-new-token` | K12 |
 | K.26 | The TPM evidence flow and its status | K13 |
 | K.27 | Chains through an admin CA | K14 |
 
@@ -198,9 +194,6 @@ line here with every new function, and a case for it in the catalogue.
 | D.7 | One connection per pair | D2 |
 | D.8 | Full members dial lite members | D3 |
 | D.9 | Phones dial; a phone hub listens | D3 |
-| D.10 | The holder of `cbb.local` | D4 |
-| D.11 | `cbb holder` | D4 |
-| D.12 | The holder's handover | D5 |
 | D.13 | Known networks and quiet interfaces | D6 |
 | D.14 | `cbb network` | D6 |
 | D.15 | Only private addresses published and accepted | D7 |
@@ -248,7 +241,7 @@ line here with every new function, and a case for it in the catalogue.
 | Y.26 | Received secrets carry the marks | Y32 |
 | Y.27 | Secrets in hellos are marks | Y33 |
 | Y.28 | The memory of skipped secrets | Y34 |
-| Y.29 | Secrets from the phones and the shortcut | Y35 |
+| Y.29 | Secrets from the phones | Y35 |
 | Y.30 | `cbb copy` reads standard input | Y1 |
 | Y.31 | `cbb paste` prints the clipboard | Y1, M3 |
 | Y.32 | `cbb paste -terminal`, `-lines`, `-secret` | Y35, H3 |
@@ -413,18 +406,6 @@ line here with every new function, and a case for it in the catalogue.
 | W.44 | The push sender | W41 |
 | W.45 | Phones away: cbbtun and the loopback port | W42 |
 | W.46 | Away on Android in the background | W42 |
-
-## X. The iPhone shortcut
-
-| ID | Function | Cases |
-|---|---|---|
-| X.1 | `cbb pair -phone` and the profile | X1 |
-| X.2 | `POST /sync`: computer to phone | X2 |
-| X.3 | `POST /sync`: phone to group | X2 |
-| X.4 | The 45 s rule | X2 |
-| X.5 | Errors with `direction: error` | X3 |
-| X.6 | The iPhone CA's name constraints | X4 |
-| X.7 | `GET` and `POST /pair` | X1 |
 
 ## U. The command line, the control socket and errors
 

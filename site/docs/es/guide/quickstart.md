@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f031187fad1e -->
+<!-- source: 1a79497966a1 -->
 # Inicio rápido
 
 Copy Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
@@ -13,7 +13,7 @@ Un grupo puede tener un ordenador en su centro o estar formado solo por teléfon
 ## 1. Instala la app en el teléfono
 
 - **Android** 10 o posterior: descarga `cbb-X.Y.Z.apk` desde la [última versión](https://github.com/HunterEwok/cbb/releases/latest) en el propio teléfono y ábrelo; cuando Android lo pida, permite que el navegador instale aplicaciones.
-- **iPhone**: la app llegará con TestFlight, que todavía no está abierto. Hasta entonces, un iPhone usa un atajo y un ordenador lleva el grupo: consulta [Sin la app](without-app.md).
+- **iPhone**: la app llegará con TestFlight, que todavía no está abierto. Hasta entonces, un grupo empieza en Android o en un ordenador: consulta [Sin la app](without-app.md).
 
 Abre la app. Añadirás el primer ordenador en el paso 3.
 
@@ -79,5 +79,5 @@ Añade también un segundo teléfono, para que perder uno no te haga perder nada
 
 - [Cómo funciona](how-it-works.md): el grupo, los roles e imágenes de todas las formas en que se conectan los dispositivos, en casa y fuera.
 - [Fuera de casa](away-from-home.md): sincroniza desde cualquier sitio a través de un hub.
-- [Sin la app](without-app.md): un grupo llevado por un ordenador, y el atajo del iPhone.
+- [Sin la app](without-app.md): un grupo llevado por un ordenador.
 - [Solución de problemas](troubleshooting.md), cuando algo no funciona.

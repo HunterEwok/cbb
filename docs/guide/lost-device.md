@@ -44,8 +44,7 @@ signing claims of their own: the devices say the group is stopped. Then the old 
 if you still have it; in 0.6 the new root cannot, and a group whose old root is lost too is
 set up again ([protocol](../protocol.md), section 10, "Known limits in 0.6").
 
-iPhones that use the shortcut pair again after a takeover. If the group had no other admin,
-it cannot be taken over: make a new group and add the devices again. That is why the apps
+If the group had no other admin, it cannot be taken over: make a new group and add the devices again. That is why the apps
 suggest a second admin phone, or an admin computer, as soon as the group has a single admin.
 
 ## 4. Turn off what it could reach

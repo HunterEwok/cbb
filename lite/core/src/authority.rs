@@ -90,7 +90,7 @@ pub const STOP_NONE: &str = "none";
 pub const STOP_SECRETS: &str = "secrets";
 pub const STOP_FULL: &str = "full";
 
-const ROLES: [&str; 5] = ["full", "phone", "lite", "watch", "shortcut"];
+const ROLES: [&str; 4] = ["full", "phone", "lite", "watch"];
 const OSES: [&str; 8] = ["linux", "windows", "macos", "ios", "android", "watchos", "wearos", "none"];
 
 /// A key hash (SHA-256 of a SubjectPublicKeyInfo) or a record ID (SHA-256

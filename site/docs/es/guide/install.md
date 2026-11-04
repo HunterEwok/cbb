@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 95a9f0f2e940 -->
+<!-- source: 951f5919aba6 -->
 # Instalación
 
 Copy Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
@@ -131,7 +131,7 @@ Copy Beyond Borders necesita un puerto TCP, el 8764, y mDNS (UDP 5353), ambos so
 
 nftables e iptables reciben siempre solo los comandos, porque las reglas añadidas en tiempo de ejecución no sobreviven a un reinicio. En FreeBSD, pf recibe las reglas en un ancla propia, que pf lee mediante tres líneas marcadas que el instalador añade al final de `/etc/pf.conf` y vuelve a quitar; ipfw las recibe en el conjunto de reglas 17, añadidas de nuevo en cada arranque. Si activas un cortafuegos más tarde, ejecuta de nuevo el instalador.
 
-**Otro puerto**, si el 8764 está ocupado: `... | sudo sh -s -- --port 9000` (en Windows, `$env:CBB_PORT = "9000"` antes del instalador). La app del teléfono conoce el puerto por el código QR; el atajo del iPhone solo funciona con el 8764.
+**Otro puerto**, si el 8764 está ocupado: `... | sudo sh -s -- --port 9000` (en Windows, `$env:CBB_PORT = "9000"` antes del instalador). La app del teléfono conoce el puerto por el código QR.
 
 Todas las opciones del instalador están en la [referencia de comandos](../reference/cli.md#installers).
 

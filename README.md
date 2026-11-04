@@ -127,7 +127,7 @@ software, with Android and Windows not yet tried on real devices.
 | FreeBSD 15; x86-64, ARM64 | service |
 | OpenWrt 25.12 and later; ARM64, ARMv7, MIPS, x86-64 | service, as an always-on member and the hub |
 | Android | the app (an APK in every release) |
-| iOS and iPadOS | the app, or a shortcut in the Shortcuts app |
+| iOS and iPadOS | the app |
 | Apple Watch, Wear OS | a watch app, through the phone |
 | Small Linux devices (routers, boards) | the lite member, also `cbb` ([lite/README.md](lite/README.md)) |
 
@@ -140,7 +140,6 @@ software, with Android and Windows not yet tried on real devices.
 | Windows service, clipboard agent, installer | built, CI on windows-latest | in a Windows 11 virtual machine (Arm), not yet on a PC |
 | FreeBSD service and installer | built, CI in a FreeBSD 15.1 virtual machine | not yet |
 | OpenWrt service and installer | built, CI on OpenWrt in QEMU | not yet |
-| iPhone shortcut (Action button, Back Tap) | works | yes |
 | iPhone app (the phone as the root, admin phones, devices list) | built, CI on a simulator | yes, on an iPhone 12 Pro Max: the root key in the Secure Enclave with Face ID, admitting computers, making a computer an admin, sync both ways; not yet a second phone or the takeover |
 | Android app | built, CI; APK in every release | not yet |
 | Mac app (menu bar) and the tray app for Linux and Windows | built, CI; the tray app in the Windows and Linux releases | the Mac app on a Mac; the tray app in the Windows 11 virtual machine |

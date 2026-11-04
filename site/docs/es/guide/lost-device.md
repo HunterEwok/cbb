@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: df8b33f2dd74 -->
+<!-- source: 61154bf5c46c -->
 # Si se pierde o roban un dispositivo
 
 Para quien ha perdido un teléfono, un ordenador u otro dispositivo del grupo. Quítalo del grupo en cuanto puedas; los demás dispositivos siguen en el grupo y continúan sincronizando.
@@ -33,7 +33,7 @@ La raíz guarda la clave raíz del grupo. Cuando desaparece, un administrador pa
 
 Si otra persona tiene el dispositivo de un administrador quitado, puede detener el grupo un tiempo firmando reclamaciones propias: los dispositivos dicen que el grupo está detenido. Entonces lo termina la raíz antigua, si aún la tienes; en 0.6 la raíz nueva no puede, y un grupo cuya raíz antigua también se perdió se crea de nuevo ([protocolo](../protocol.md), sección 10, "Known limits in 0.6").
 
-Los iPhone que usan el atajo se vuelven a emparejar tras una toma de control. Si el grupo no tenía otro administrador, no se puede asumir: crea un grupo nuevo y añade de nuevo los dispositivos. Por eso las apps sugieren un segundo teléfono administrador, o un ordenador administrador, en cuanto el grupo tiene un solo administrador.
+Si el grupo no tenía otro administrador, no se puede asumir: crea un grupo nuevo y añade de nuevo los dispositivos. Por eso las apps sugieren un segundo teléfono administrador, o un ordenador administrador, en cuanto el grupo tiene un solo administrador.
 
 ## 4. Desactiva lo que podía alcanzar
 

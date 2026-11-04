@@ -47,7 +47,7 @@ var faq = []struct{ Q, A string }{
 	{"Does it work away from home?", "Yes. Your devices reach the group through its hub, a computer of yours or a phone while its app is open, over an encrypted tunnel. For now this takes a port forward on your router or a small server of your own."},
 	{"Why does the iPhone need a gesture?", "iOS does not let apps read the clipboard in the background. You send a copy with the Action button or a double tap on the back of the phone."},
 	{"Are my passwords synced?", "What password managers mark as secret is not synced automatically."},
-	{"Where is the iPhone app?", "It comes with TestFlight, which is not open yet. Until then an iPhone joins with a shortcut, and a computer holds the group."},
+	{"Where is the iPhone app?", "It comes with TestFlight, which is not open yet."},
 	{"Does it need the internet?", "No. At home your devices need only your own network, with or without the internet."},
 	{"What if I lose my phone?", "Remove it from the group on another device that can admit devices. If the lost phone made the group, another phone of yours that is an admin takes the group over."},
 	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Copy Beyond Borders joins iPhone, Android, Windows, Mac and Linux, at home and away, with no account."},

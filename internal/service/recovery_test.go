@@ -130,10 +130,6 @@ func TestRecovery(t *testing.T) {
 	// The new root waits 72 hours for a claim, but hands the group to an
 	// admin at once.
 	makeAdmin(t, b, a)
-	waitFor(t, "a holds the iPhone CA", func() bool {
-		id, err := group.Load(a.dir)
-		return err == nil && id.ServesPhone()
-	})
 	if _, err := b.do(t, control.Header{Op: control.OpHandover, Name: "pi"}, ""); err == nil {
 		t.Error("handed the group to a device that is no admin")
 	}

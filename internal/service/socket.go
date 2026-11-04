@@ -282,8 +282,6 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		reply(c, control.Header{Status: s.statusWithRemoved(), Done: true}, nil)
 	case control.OpPair:
 		s.pair(ctx, c, r, m.Admins)
-	case control.OpPairPhone:
-		s.pairPhone(ctx, c, r, m.NewToken)
 	case control.OpJoin:
 		s.join(ctx, c, r, m)
 	case control.OpInvite:
@@ -305,12 +303,6 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		reply(c, control.Header{Status: s.status(), Done: true}, nil)
 	case control.OpNetwork:
 		s.learnNetworks()
-		reply(c, control.Header{Status: s.status(), Done: true}, nil)
-	case control.OpHolder:
-		if err := s.setHolder(m.Name); err != nil {
-			fail(c, err)
-			return
-		}
 		reply(c, control.Header{Status: s.status(), Done: true}, nil)
 	case control.OpAdmin:
 		name, err := s.makeAdmin(m.Name, m.Consent)
@@ -449,8 +441,7 @@ func (s *Service) withNode(f func(*node.Node) error) error {
 func (s *Service) status() *control.Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := &control.Status{Role: string(s.cfg.Role), OS: s.cfg.OS, Version: version.String(), Holder: s.holder,
-		HoldSetting: s.holdSetting, HoldPriority: s.priorityLocked(s.id), Battery: s.battery}
+	st := &control.Status{Role: string(s.cfg.Role), OS: s.cfg.OS, Version: version.String()}
 	st.Release, st.Update = s.releaseStatus()
 	st.TVs = s.tvStatus()            // a TV's remote needs no group
 	st.Keyboard = s.keyboardStatus() // nor does the Bluetooth keyboard

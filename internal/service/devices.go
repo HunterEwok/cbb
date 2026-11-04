@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/x509"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -215,7 +214,6 @@ func (s *Service) afterRevocation() {
 		nd.Recheck()
 	}
 	s.pruneTunnel()
-	s.dropRevokedPhoneCA()
 	if id != nil {
 		switch err := s.allow(id.ID, ownChain(id)); {
 		case errors.Is(err, group.ErrStopped):
@@ -425,13 +423,9 @@ func (s *Service) publish(nd *node.Node, rs ...group.Record) {
 	s.settleRecords(rs)
 }
 
-// recordDevice records a device this member admitted, if it is an admin.
-func (s *Service) recordDevice(dev group.DeviceID, name, role, os string, key group.KeyHash, sealKey []byte) {
-	s.recordDeviceAdmin(dev, name, role, os, key, sealKey, nil)
-}
-
-// recordDeviceAdmin is recordDevice for a device that is an admin with the
-// admin CA adminCA too, as a phone the root admitted; nil for none.
+// recordDeviceAdmin records a device this member admitted, if it is an
+// admin; adminCA is the device's admin CA when it is an admin too, as a
+// phone the root admitted, and nil for none.
 func (s *Service) recordDeviceAdmin(dev group.DeviceID, name, role, os string, key group.KeyHash, sealKey []byte, adminCA *x509.Certificate) {
 	s.mu.Lock()
 	id, nd := s.id, s.nd
@@ -473,15 +467,6 @@ func (s *Service) recordAdmitted(res *pair.Result) {
 		role = group.RolePhone
 	}
 	s.recordDeviceAdmin(res.Device, res.Info.Name, role, res.Info.OS, group.KeyHashOf(res.Cert), res.Info.Seal, res.AdminCA)
-}
-
-// recordPhone records an iPhone that paired for the shortcut.
-func (s *Service) recordPhone(phoneID string) {
-	raw, err := hex.DecodeString(phoneID)
-	if err != nil {
-		return
-	}
-	s.recordDevice(group.DeviceID(phoneID), "iPhone", group.RoleShortcut, group.OSiOS, group.PhoneKeyHash(raw), nil)
 }
 
 // defaultName names a device that has no valid name: its role and the start
@@ -702,9 +687,6 @@ func (s *Service) revoke(target string) (string, error) {
 	if undoing {
 		admin = &undoCA
 	}
-	// An admin of a group whose root is a computer held the iPhone CA,
-	// which goes with it; a watch never held it.
-	replace := admin != nil && d.Role != group.RoleWatch && (id.IsRoot() || s.computerRooted())
 	switch {
 	case !id.IsAdmin():
 		return "", errNotAdmin
@@ -716,8 +698,6 @@ func (s *Service) revoke(target string) (string, error) {
 		return "", fmt.Errorf("%s holds the group's root; run cbb takeover %s on an admin, which takes the group over and removes it", d.Name, d.Name)
 	case admin != nil && !id.IsRoot():
 		return "", fmt.Errorf("%s is an admin; only the group's root or an admin phone removes an admin, since this computer's admin key sits in a file", d.Name)
-	case replace && !id.ServesPhone():
-		return "", fmt.Errorf("%s is an admin and holds the iPhone CA, which goes with it, but this device does not hold it yet; remove it on the root or on another admin", d.Name)
 	}
 	keys := s.keysOf(group.DeviceID(d.ID), nd)
 	if len(keys) == 0 {
@@ -731,41 +711,13 @@ func (s *Service) revoke(target string) (string, error) {
 	if admin != nil {
 		body.Keys = append(body.Keys, *admin)
 	}
-	var phoneCA *group.CA
-	if replace {
-		// A new iPhone CA, and the old one and every shortcut's token
-		// revoked: the iPhones pair again with the new profile.
-		if phoneCA, err = group.NewPhoneCA(s.cfg.now()); err != nil {
-			return "", err
-		}
-		body.Keys = append(body.Keys, group.KeyHashOf(id.PhoneCA.Cert))
-		s.recMu.Lock()
-		for _, dev := range s.records.Devices() {
-			if dev.Role == group.RoleShortcut {
-				body.Keys = append(body.Keys, dev.Key)
-			}
-		}
-		s.recMu.Unlock()
-	}
 	body.Keys = uniqueKeys(body.Keys)
 	s.awaitRecords(id)
 	r, err := s.signRecord(id, body)
 	if err != nil {
 		return "", err
 	}
-	if phoneCA != nil {
-		s.mu.Lock()
-		err = s.takePhoneCALocked(*phoneCA)
-		s.mu.Unlock()
-		if err != nil {
-			return "", fmt.Errorf("replacing the iPhone CA: %w", err)
-		}
-	}
 	s.publish(nd, r)
-	if phoneCA != nil {
-		nd.SharePhoneCA()
-		s.logf("cbb: replaced the group's iPhone CA; the iPhones that use the shortcut must pair again (cbb pair -phone)")
-	}
 	s.logf("cbb: removed %s (%s) from the group", d.Name, d.ID)
 	return d.Name, nil
 }
@@ -930,17 +882,6 @@ func (s *Service) idTaken(dev group.DeviceID) bool {
 		return known
 	}
 	return slices.ContainsFunc(nd.Peers(), func(p node.Peer) bool { return p.ID == dev })
-}
-
-// PhoneRevoked reports whether the iPhone with this phone ID was removed.
-func (g phoneGroup) PhoneRevoked(phoneID string) bool {
-	raw, err := hex.DecodeString(phoneID)
-	if err != nil {
-		return true
-	}
-	g.s.recMu.Lock()
-	defer g.s.recMu.Unlock()
-	return g.s.records != nil && g.s.records.Revoked(group.PhoneKeyHash(raw))
 }
 
 // deviceRecord returns the devices list's entry for dev, or nil.

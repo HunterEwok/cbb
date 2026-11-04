@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 95a9f0f2e940 -->
+<!-- source: 951f5919aba6 -->
 # 安装
 
 Copy Beyond Borders 在每台电脑上作为一个小型后台服务运行，它的命令是 `cbb`。下面每种方式安装的都是同一个程序，选你喜欢的即可。
@@ -130,7 +130,7 @@ Copy Beyond Borders 需要一个 TCP 端口 8764 和 mDNS（UDP 5353），两者
 
 nftables 和 iptables 总是只给出命令，因为运行时添加的规则在重启后不会保留。在 FreeBSD 上，pf 的规则放在它自己的锚点中，pf 通过安装程序在 `/etc/pf.conf` 末尾添加（并会再移除）的三行带标记的内容来读取它；ipfw 的规则放在规则集 17 中，每次启动时重新添加。如果你之后才打开防火墙，请再运行一次安装程序。
 
-**使用其他端口**，如果 8764 被占用：`... | sudo sh -s -- --port 9000`（在 Windows 上，先设置 `$env:CBB_PORT = "9000"` 再运行安装程序）。手机应用从二维码中获知端口；iPhone 快捷指令只能使用 8764。
+**使用其他端口**，如果 8764 被占用：`... | sudo sh -s -- --port 9000`（在 Windows 上，先设置 `$env:CBB_PORT = "9000"` 再运行安装程序）。手机应用从二维码中获知端口。
 
 所有安装程序选项见[命令参考](../reference/cli.md#installers)。
 

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f031187fad1e -->
+<!-- source: 1a79497966a1 -->
 # Kuanza haraka
 
 Copy Beyond Borders huipa simu yako na kompyuta zako ubao mmoja wa kunakili: unanakili kwenye kimoja na kubandika kwenye kingine. Vifaa huunda **kikundi** kwenye mtandao wako wa nyumbani. Simu hushikilia ufunguo wa kikundi na kuruhusu kila kifaa kipya kuingia, kwa hiyo hakuna anayeweza kujiunga bila wewe.
@@ -13,7 +13,7 @@ Kikundi kinaweza kuwa na kompyuta moyoni mwake au kuundwa na simu pekee: njia zo
 ## 1. Sakinisha programu kwenye simu yako
 
 - **Android** 10 au mpya zaidi: pakua `cbb-X.Y.Z.apk` kutoka [toleo la hivi karibuni](https://github.com/HunterEwok/cbb/releases/latest) kwenye simu yenyewe na uifungue; ruhusu kivinjari kusakinisha programu Android inapouliza.
-- **iPhone**: programu itakuja kupitia TestFlight, ambayo bado haijafunguliwa. Hadi hapo, iPhone hutumia njia ya mkato, na kompyuta hushikilia kikundi: tazama [Bila programu](without-app.md).
+- **iPhone**: programu itakuja kupitia TestFlight, ambayo bado haijafunguliwa. Hadi hapo, kikundi huanza kwenye Android au kwenye kompyuta: tazama [Bila programu](without-app.md).
 
 Fungua programu. Utaongeza kompyuta ya kwanza katika hatua ya 3.
 
@@ -79,5 +79,5 @@ Ongeza pia simu ya pili, ili kupoteza simu moja kusipoteze chochote: kwenye simu
 
 - [Jinsi inavyofanya kazi](how-it-works.md): kikundi, majukumu, na picha za kila njia ambayo vifaa huunganishwa, nyumbani na mbali.
 - [Mbali na nyumbani](away-from-home.md): sawazisha kutoka popote kupitia kitovu.
-- [Bila programu](without-app.md): kikundi kinachoshikiliwa na kompyuta, na njia ya mkato ya iPhone.
+- [Bila programu](without-app.md): kikundi kinachoshikiliwa na kompyuta.
 - [Utatuzi wa matatizo](troubleshooting.md), kitu kisipofanya kazi.

@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: d6502212925b -->
+<!-- source: 3f404cb443bd -->
 # 不用应用
 
-群组并不需要手机应用。群组可以由一台电脑来持有，没有应用的 iPhone 则通过快捷指令加入。在 iPhone 应用还在等待 TestFlight 的这段时间，这也是可行的办法。
+由电脑组成的群组不需要手机应用：可以由一台电脑来持有群组。
 
-![一台 Linux 电脑持有群组，用六位数字码添加 Mac 和 Windows，用描述文件和快捷指令添加 iPhone](../images/without-app.svg)
+![一台 Linux 电脑持有群组，用六位数字码添加 Mac 和 Windows](../images/without-app.svg)
 
 ## 1. 在电脑上创建群组
 
-在一台经常开机的电脑上[安装](install.md) Copy Beyond Borders：Linux、Windows、Mac 或 FreeBSD 均可。它持有群组，并为 iPhone 快捷指令提供服务。然后运行：
+在一台经常开机的电脑上[安装](install.md) Copy Beyond Borders：Linux、Windows、Mac 或 FreeBSD 均可。它持有群组。然后运行：
 
 ```sh
 sudo cbb new
@@ -28,24 +28,7 @@ sudo cbb pair
 
 然后在每台电脑上开启共享，方法见[快速入门](quickstart.md#4-share-the-computers-clipboard)：`sudo cbb mode shared`。
 
-## 3. 用快捷指令添加 iPhone
-
-在根上，或在能响应 `cbb.local` 的管理员电脑上（`cbb status` 会告诉你它是否响应）：
-
-```sh
-sudo cbb pair -phone
-```
-
-它会打印一个二维码、指纹的开头部分和一个六位数字码。
-
-1. 用 iPhone 的相机扫描二维码，然后按页面提示操作：安装描述文件。
-2. 检查描述文件的指纹是否以打印出来的开头一致（设置、通用、VPN 与设备管理，“CBB”，更多详细信息），然后为它开启完全信任（设置、通用、关于本机、证书信任设置）。
-3. 从同一页面添加快捷指令“cbb”并运行一次；它会要求输入六位数字码。之后它把自己的令牌（只能用于同步）保存在 iCloud 云盘（Shortcuts/cbb/token.txt）中，你的其他 Apple 设备也能读取；丢失的令牌可用 `sudo cbb pair -phone -new-token` 吊销，它会重新配对 iPhone。
-4. 把快捷指令放到操作按钮上，或放到轻点背面上（设置、辅助功能、触控、轻点背面、轻点两下）。
-
-之后只需按一下，它会自己判断方向：如果刚刚在电脑上复制了内容，就传到 iPhone；否则，iPhone 上的新复制内容会传到电脑。
-
-## 4. 不要依赖一台电脑
+## 3. 不要依赖一台电脑
 
 让第二台电脑成为管理员，这样它也能添加和移除设备：
 
@@ -62,7 +45,7 @@ sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure
 sudo cbb takeover NAME       # on the admin; NAME is the lost root
 ```
 
-使用快捷指令的 iPhone 在接管后需要重新配对。详见[设备丢失或被盗时](lost-device.md)。
+详见[设备丢失或被盗时](lost-device.md)。
 
 ## 从其他网络加入
 

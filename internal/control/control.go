@@ -35,7 +35,6 @@ const (
 	OpStatus      = "status"         // client → service: ask for the status
 	OpNew         = "new"            // client → service: create a group with this device as its root
 	OpPair        = "pair"           // client → service: open a pairing window; answers follow
-	OpPairPhone   = "pair-phone"     // client → service: open an iPhone pairing window; answers follow
 	OpJoin        = "join"           // client → service: join a group with a code
 	OpDevices     = "devices"        // client → service: list the group's devices
 	OpRevoke      = "revoke"         // client → service: remove the device Name names (a name or a device ID)
@@ -44,7 +43,6 @@ const (
 	OpThaw        = "thaw"           // client → service: on the root, unfreeze the admin computer Name names
 	OpResolve     = "resolve"        // client → service: on the root, void both histories of every key that signed two; Name answers whose
 	OpAway        = "away"           // client → service: Name "on", "off", "hub", "move" (to Device) or "relay": sync away from home
-	OpHolder      = "holder"         // client → service: Name "auto", "first", "fallback" or "never": the holder setting
 	OpMode        = "mode"           // client → service: Name "own", "shared", "receive" or "send": the sync mode
 	OpNetwork     = "network"        // client → service: take the networks this device is on now as known
 	OpAdmin       = "admin"          // client → service: on the root, make the device Name names an admin
@@ -94,7 +92,7 @@ const (
 	KindSecret   = "secret"
 	KindMedia    = "media"               // images or files
 	ViaCopy      = "copy"                // copied on the member
-	ViaPhone     = "phone"               // sent from a phone: the app, or the iPhone shortcut
+	ViaPhone     = "phone"               // sent from a phone's app
 	ViaUniversal = "universal-clipboard" // reached a Mac through Universal Clipboard
 )
 
@@ -156,11 +154,10 @@ type Header struct {
 	Keyboard *Keyboard `json:"keyboard,omitempty"`
 
 	Code         string   `json:"code,omitempty"`        // pairing code
-	Fingerprint  string   `json:"fingerprint,omitempty"` // of the iPhone CA, for the user to compare; of the joiner's certificate, for its QR code
+	Fingerprint  string   `json:"fingerprint,omitempty"` // of the joiner's certificate, for its QR code
 	Address      string   `json:"address,omitempty"`     // a member's address for join
 	Addrs        []string `json:"addrs,omitempty"`       // where a listening join waits, for its QR code
 	Listen       bool     `json:"listen,omitempty"`      // join: wait for a member to dial this device
-	NewToken     bool     `json:"new_token,omitempty"`   // pair-phone: revoke every shortcut's token first
 	Admins       bool     `json:"admins,omitempty"`      // pair: the window may make a phone an admin (on the root)
 	Name         string   `json:"name,omitempty"`        // a device name
 	NewName      string   `json:"new_name,omitempty"`    // rename: the device's new name
@@ -279,17 +276,10 @@ type Status struct {
 	// renews it before.
 	CertEndsMS int64  `json:"cert_ends_ms,omitempty"`
 	Role       string `json:"role"`
-	OS         string `json:"os,omitempty"`     // this device's operating system
-	Holder     bool   `json:"holder,omitempty"` // answers for cbb.local
-	// HoldSetting is the holder setting: auto, first, fallback or never.
-	HoldSetting string `json:"hold_setting,omitempty"`
-	// HoldPriority is the holder priority it publishes: 1 first, 2 as a
-	// fallback, 0 never, as without the iPhone CA key.
-	HoldPriority int `json:"hold_priority,omitempty"`
+	OS         string `json:"os,omitempty"` // this device's operating system
 	// Mode is the sync mode: own, shared, receive or send; "" when in no group.
-	Mode    string   `json:"mode,omitempty"`
-	Battery bool     `json:"battery,omitempty"` // the machine has a battery, as the service guesses
-	Peers   []Device `json:"peers,omitempty"`
+	Mode  string   `json:"mode,omitempty"`
+	Peers []Device `json:"peers,omitempty"`
 	// Unreached lists the members at home that could not connect to this
 	// device's member port and sync with it only because it dials them:
 	// a firewall here likely drops the port.

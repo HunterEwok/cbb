@@ -47,7 +47,7 @@ extension Control.Device {
     var kind: DeviceKind {
         if let form, let k = DeviceKind(rawValue: form) { return k }
         return switch (role, os) {
-        case ("phone", _), ("shortcut", _): .phone
+        case ("phone", _): .phone
         case ("lite", _): .board
         case ("watch", _): .watch
         case (_, "macos"): .laptop
@@ -91,7 +91,6 @@ extension Control.Device {
         switch role {
         case "phone": "Phone app"
         case "lite": "Lite member"
-        case "shortcut": "Shortcut"
         case "watch": "Watch"
         default: "Full member"
         }

@@ -194,7 +194,7 @@ firewall on later, run the installer again.
 
 **Another port**, if 8764 is taken: `... | sudo sh -s -- --port 9000` (on Windows,
 `$env:CBB_PORT = "9000"` before the installer). The phone app learns the port from the QR
-code; the iPhone shortcut works only with 8764.
+code.
 
 All installer options are in the [command reference](../reference/cli.md#installers).
 

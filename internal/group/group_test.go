@@ -10,11 +10,8 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/asn1"
 	"encoding/json"
 	"errors"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -82,13 +79,10 @@ func TestCAs(t *testing.T) {
 	if ca := id.GroupCA.Cert; ca.MaxPathLen != 1 || ca.MaxPathLenZero || !strings.HasPrefix(ca.Subject.CommonName, "cbb group root ") {
 		t.Errorf("%s: not a root with path length 1", ca.Subject.CommonName)
 	}
-	if ca := id.PhoneCA.Cert; ca.MaxPathLen != 0 || !ca.MaxPathLenZero {
-		t.Errorf("%s: not a CA with path length 0", ca.Subject.CommonName)
-	}
-	if !id.IsRoot() || !id.IsAdmin() || !id.ServesPhone() || id.NeedsAdminKey() {
+	if !id.IsRoot() || !id.IsAdmin() || id.NeedsAdminKey() {
 		t.Error("the creator of a group is not its root")
 	}
-	for _, ca := range []*x509.Certificate{id.GroupCA.Cert, id.PhoneCA.Cert} {
+	for _, ca := range []*x509.Certificate{id.GroupCA.Cert} {
 		if !ca.IsCA || !ca.BasicConstraintsValid {
 			t.Errorf("%s: not a CA", ca.Subject.CommonName)
 		}
@@ -108,97 +102,11 @@ func TestCAs(t *testing.T) {
 			t.Errorf("%s: signed with %v", ca.Subject.CommonName, ca.SignatureAlgorithm)
 		}
 	}
-	if !strings.HasPrefix(id.PhoneCA.Cert.Subject.CommonName, "cbb iPhone CA 2026-10-21") {
-		t.Errorf("iPhone CA name %q", id.PhoneCA.Cert.Subject.CommonName)
-	}
 	if len(id.GroupCA.Cert.PermittedDNSDomains) != 0 {
 		t.Errorf("the group CA has name constraints")
 	}
 	if Tag(id.GroupCA.Cert) == Tag(newGroup(t).GroupCA.Cert) || len(Tag(id.GroupCA.Cert)) != 16 {
 		t.Errorf("Tag = %q", Tag(id.GroupCA.Cert))
-	}
-	fp := Fingerprint(id.PhoneCA.Cert)
-	if len(fp) != 32*3-1 || strings.ToUpper(fp) != fp || strings.Count(fp, " ") != 31 {
-		t.Errorf("Fingerprint = %q, want 32 upper-case hex bytes separated by spaces", fp)
-	}
-}
-
-func TestPhoneCANameConstraints(t *testing.T) {
-	ca := newGroup(t).PhoneCA.Cert
-	if !ca.PermittedDNSDomainsCritical {
-		t.Error("the name constraints are not critical")
-	}
-	var critical bool
-	for _, ext := range ca.Extensions {
-		if ext.Id.Equal(asn1.ObjectIdentifier{2, 5, 29, 30}) {
-			critical = ext.Critical
-		}
-	}
-	if !critical {
-		t.Error("the name constraints extension is missing or not critical")
-	}
-	if got := ca.PermittedDNSDomains; len(got) != 1 || got[0] != PhoneName {
-		t.Errorf("permitted DNS domains %v", got)
-	}
-	if got := ca.PermittedEmailAddresses; len(got) != 1 || got[0] != "cbb.invalid" {
-		t.Errorf("permitted e-mail addresses %v", got)
-	}
-	if got := ca.PermittedURIDomains; len(got) != 1 || got[0] != "cbb.invalid" {
-		t.Errorf("permitted URI domains %v", got)
-	}
-	if got := ca.ExcludedIPRanges; len(got) != 2 || got[0].String() != "0.0.0.0/0" || got[1].String() != "::/0" {
-		t.Errorf("excluded IP ranges %v", got)
-	}
-}
-
-// TestPhoneCACannotCertifyOtherSites shows that even a member that holds the
-// iPhone CA key, for example a compromised one, cannot make a certificate
-// that a client trusting the CA accepts for another site.
-func TestPhoneCACannotCertifyOtherSites(t *testing.T) {
-	phoneCA := newGroup(t).PhoneCA
-	roots := x509.NewCertPool()
-	roots.AddCert(phoneCA.Cert)
-	key, err := NewKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	evil, _ := url.Parse("https://www.example.com/")
-	tests := []struct {
-		name string
-		tmpl x509.Certificate
-		ok   bool
-	}{
-		{name: "cbb.local", tmpl: x509.Certificate{DNSNames: []string{PhoneName}}, ok: true},
-		{name: "another site", tmpl: x509.Certificate{DNSNames: []string{"www.example.com"}}},
-		{name: "another site next to ours", tmpl: x509.Certificate{DNSNames: []string{PhoneName, "mail.example.com"}}},
-		{name: "a similar name", tmpl: x509.Certificate{DNSNames: []string{"evilcbb.local"}}},
-		{name: "an IPv4 address", tmpl: x509.Certificate{DNSNames: []string{PhoneName}, IPAddresses: []net.IP{net.IPv4(192, 168, 1, 1)}}},
-		{name: "an IPv6 address", tmpl: x509.Certificate{DNSNames: []string{PhoneName}, IPAddresses: []net.IP{net.ParseIP("fe80::1")}}},
-		{name: "an e-mail address", tmpl: x509.Certificate{DNSNames: []string{PhoneName}, EmailAddresses: []string{"someone@example.com"}}},
-		{name: "a URI", tmpl: x509.Certificate{DNSNames: []string{PhoneName}, URIs: []*url.URL{evil}}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpl := tt.tmpl
-			tmpl.Subject = pkix.Name{CommonName: "www.example.com"}
-			tmpl.NotBefore, tmpl.NotAfter = t0, t0.Add(24*time.Hour)
-			tmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-			der, err := x509.CreateCertificate(rand.Reader, &tmpl, phoneCA.Cert, &key.PublicKey, phoneCA.Key)
-			if err != nil {
-				t.Fatal(err)
-			}
-			leaf, err := x509.ParseCertificate(der)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = leaf.Verify(x509.VerifyOptions{Roots: roots, CurrentTime: t0.Add(time.Hour)})
-			if tt.ok && err != nil {
-				t.Errorf("rejected: %v", err)
-			}
-			if !tt.ok && err == nil {
-				t.Error("a certificate outside the name constraints verified")
-			}
-		})
 	}
 }
 
@@ -229,42 +137,6 @@ func TestMemberCertificate(t *testing.T) {
 	if !last.NotAfter.Equal(admin.GroupCA.Cert.NotAfter) {
 		t.Errorf("a certificate issued a day before the CA ends lasts until %v, after the CA", last.NotAfter)
 	}
-	// The phone certificate is not a member certificate.
-	if _, err := DeviceOf(admin.Phone); err == nil {
-		t.Error("DeviceOf accepted the cbb.local certificate")
-	}
-}
-
-func TestPhoneCertificate(t *testing.T) {
-	admin := newGroup(t)
-	p := admin.Phone
-	if err := p.VerifyHostname(PhoneName); err != nil {
-		t.Error(err)
-	}
-	if p.NotBefore.Before(admin.PhoneCA.Cert.NotBefore) {
-		t.Errorf("starts at %v, before its CA at %v", p.NotBefore, admin.PhoneCA.Cert.NotBefore)
-	}
-	if life := p.NotAfter.Sub(p.NotBefore); life > 397*24*time.Hour || life < 390*24*time.Hour {
-		t.Errorf("valid for %v, want 397 days", life)
-	}
-	if len(p.ExtKeyUsage) != 1 || p.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth {
-		t.Errorf("ExtKeyUsage = %v", p.ExtKeyUsage)
-	}
-	// Issued later, it starts a day back, for a phone whose clock is behind.
-	key, _ := NewKey()
-	later := t0.AddDate(1, 0, 0)
-	q, err := admin.PhoneCA.IssuePhone(&key.PublicKey, later)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := later.Add(-24 * time.Hour); !q.NotBefore.Equal(want) {
-		t.Errorf("NotBefore = %v, want %v", q.NotBefore, want)
-	}
-	roots := x509.NewCertPool()
-	roots.AddCert(admin.PhoneCA.Cert)
-	if _, err := q.Verify(x509.VerifyOptions{Roots: roots, DNSName: PhoneName, CurrentTime: later}); err != nil {
-		t.Errorf("the iPhone would reject the certificate: %v", err)
-	}
 }
 
 func TestIssueErrors(t *testing.T) {
@@ -280,11 +152,8 @@ func TestIssueErrors(t *testing.T) {
 		t.Error("issued a certificate with the clock after the CA")
 	}
 	other, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-	if _, err := admin.PhoneCA.IssuePhone(&other.PublicKey, t0); err == nil {
+	if _, err := admin.GroupCA.IssueMember(NewDeviceID(), &other.PublicKey, t0); err == nil {
 		t.Error("certified a P-384 key")
-	}
-	if _, err := admin.PhoneCA.IssuePhone(nil, t0); err == nil {
-		t.Error("certified a nil key")
 	}
 	noKey := CA{Cert: admin.GroupCA.Cert}
 	if _, err := noKey.IssueMember(NewDeviceID(), &key.PublicKey, t0); err == nil {
@@ -322,15 +191,14 @@ func TestSaveLoad(t *testing.T) {
 				!got.GroupCA.Cert.Equal(tt.id.GroupCA.Cert) {
 				t.Error("the loaded identity differs")
 			}
-			if got.ServesPhone() != tt.admin {
-				t.Errorf("ServesPhone() = %v, want %v", got.ServesPhone(), tt.admin)
+			if got.IsRoot() != tt.admin {
+				t.Errorf("IsRoot() = %v, want %v", got.IsRoot(), tt.admin)
 			}
-			if tt.admin && (!SameKey(got.GroupCA.Key, tt.id.GroupCA.Key.Public()) || !SameKey(got.PhoneCA.Key, tt.id.PhoneCA.Key.Public()) ||
-				!got.Phone.Equal(tt.id.Phone)) {
-				t.Error("the loaded CA keys or the cbb.local certificate differ")
+			if tt.admin && !SameKey(got.GroupCA.Key, tt.id.GroupCA.Key.Public()) {
+				t.Error("the loaded CA key differs")
 			}
-			if !tt.admin && (got.GroupCA.Key != nil || got.PhoneCA != nil || got.Phone != nil || got.PhoneTLS() != nil) {
-				t.Error("a member identity holds CA keys or a cbb.local certificate")
+			if !tt.admin && got.GroupCA.Key != nil {
+				t.Error("a member identity holds the CA key")
 			}
 		})
 	}
@@ -371,12 +239,7 @@ func TestLoadRejectsBadFiles(t *testing.T) {
 		{"a member certificate from another group", func(f *identityFile) { f.Cert = other.Cert.Raw }},
 		{"another group CA", func(f *identityFile) { f.GroupCA = other.GroupCA.Cert.Raw }},
 		{"the key of another CA", func(f *identityFile) { f.GroupCAKey = otherCAKey }},
-		{"the iPhone CA as the group CA", func(f *identityFile) { f.GroupCA, f.GroupCAKey = f.PhoneCA, f.PhoneCAKey }},
 		{"a member certificate as the group CA", func(f *identityFile) { f.GroupCA, f.GroupCAKey = f.Cert, nil }},
-		{"the iPhone CA without the cbb.local certificate", func(f *identityFile) { f.Phone = nil }},
-		{"a cbb.local certificate without its CA", func(f *identityFile) { f.PhoneCA, f.PhoneCAKey = nil, nil }},
-		{"the member certificate as the cbb.local one", func(f *identityFile) { f.Phone = f.Cert }},
-		{"a cbb.local certificate from another group", func(f *identityFile) { f.Phone = other.Phone.Raw }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -414,22 +277,9 @@ func TestRenew(t *testing.T) {
 	if next, changed, err := admin.Renew(t0.AddDate(0, 6, 0)); err != nil || changed || next.Cert != admin.Cert {
 		t.Errorf("Renew half a year in = changed %v, %v; want no change", changed, err)
 	}
-	// 11 months and 10 days in, the cbb.local certificate has less
-	// than 60 days left.
-	at := t0.AddDate(0, 11, 10)
-	next, changed, err := admin.Renew(at)
-	if err != nil || !changed {
-		t.Fatalf("Renew = %v, %v", changed, err)
-	}
-	if next.Phone == admin.Phone || next.Cert != admin.Cert {
-		t.Error("Renew did not renew just the cbb.local certificate")
-	}
-	if !next.Phone.NotAfter.After(at.Add(300 * 24 * time.Hour)) {
-		t.Errorf("the renewed certificate ends at %v", next.Phone.NotAfter)
-	}
 	// 18 months in, the member certificate has less than 240 days.
-	at = t0.AddDate(1, 6, 0)
-	next, changed, err = next.Renew(at)
+	at := t0.AddDate(1, 6, 0)
+	next, changed, err := admin.Renew(at)
 	if err != nil || !changed || !next.Cert.NotAfter.Equal(at.AddDate(2, 0, 0)) {
 		t.Fatalf("Renew = %v, %v; member certificate ends at %v", changed, err, next.Cert.NotAfter)
 	}
@@ -501,31 +351,6 @@ func TestRenewMember(t *testing.T) {
 	}
 }
 
-func TestRenewAfterTheClockWasAhead(t *testing.T) {
-	// The clock jumps three years ahead, Renew issues a cbb.local
-	// certificate that starts then, and the clock is corrected: the next
-	// Renew replaces the certificate, which the iPhone would reject.
-	admin := newGroup(t)
-	ahead := t0.AddDate(3, 0, 0)
-	wrong, changed, err := admin.Renew(ahead)
-	if err != nil || !changed || !wrong.Phone.NotBefore.After(t0.AddDate(2, 0, 0)) {
-		t.Fatalf("Renew with the clock ahead: %v, %v", changed, err)
-	}
-	now := t0.AddDate(0, 1, 0)
-	fixed, changed, err := wrong.Renew(now)
-	if err != nil || !changed {
-		t.Fatalf("Renew after the clock was corrected: %v, %v", changed, err)
-	}
-	roots := x509.NewCertPool()
-	roots.AddCert(fixed.PhoneCA.Cert)
-	if _, err := fixed.Phone.Verify(x509.VerifyOptions{Roots: roots, DNSName: PhoneName, CurrentTime: now}); err != nil {
-		t.Errorf("the renewed certificate does not verify: %v", err)
-	}
-	if _, changed, _ := fixed.Renew(now); changed {
-		t.Error("Renew renewed again at once")
-	}
-}
-
 func TestRenewNearTheEndOfTheCA(t *testing.T) {
 	// In the last months of the CA, certificates end with it; Renew must
 	// not issue a new one on every call.
@@ -540,38 +365,6 @@ func TestRenewNearTheEndOfTheCA(t *testing.T) {
 	}
 	if _, changed, err := next.Renew(late.Add(time.Hour)); changed || err != nil {
 		t.Errorf("second Renew near the end: %v, %v; want no change", changed, err)
-	}
-}
-
-func TestCheckRejectsPartialAdmins(t *testing.T) {
-	admin := newGroup(t)
-	tests := map[string]func(id *Identity){
-		"group CA key without the iPhone CA":             func(id *Identity) { id.PhoneCA, id.Phone = nil, nil },
-		"iPhone CA without its key":                      func(id *Identity) { id.PhoneCA = &CA{Cert: id.PhoneCA.Cert} },
-		"iPhone CA without the group CA key":             func(id *Identity) { id.GroupCA.Key = nil },
-		"no cbb.local certificate":                       func(id *Identity) { id.Phone = nil },
-		"cbb.local certificate only":                     func(id *Identity) { id.PhoneCA = nil },
-		"the iPhone CA certificate as the cbb.local one": func(id *Identity) { id.Phone = id.PhoneCA.Cert },
-	}
-	for name, change := range tests {
-		t.Run(name, func(t *testing.T) {
-			id := *admin
-			phoneCA := *admin.PhoneCA
-			id.PhoneCA = &phoneCA
-			change(&id)
-			if err := id.Check(); err == nil {
-				t.Error("Check accepted it")
-			}
-			if err := id.Save(t.TempDir()); err == nil {
-				t.Error("Save accepted it")
-			}
-		})
-	}
-	// A Mac holds no cbb.local certificate either.
-	mac := *join(t, admin, t0)
-	mac.Phone = admin.Phone
-	if err := mac.Check(); err == nil {
-		t.Error("Check accepted a Mac with a cbb.local certificate")
 	}
 }
 

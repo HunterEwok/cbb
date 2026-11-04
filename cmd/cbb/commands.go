@@ -272,7 +272,6 @@ func writeStatus(w io.Writer, st *control.Status, devs []control.Device, now tim
 	if st.Mode != "" {
 		fmt.Fprintln(w, modeLine(st.Mode))
 	}
-	fmt.Fprintln(w, holderLine(st))
 	if q := quietLine(st); q != "" {
 		fmt.Fprintln(w, q)
 	}
@@ -338,7 +337,6 @@ func cmdNew(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).")
 	}
 	fmt.Fprintln(stdout, "Add a computer: cbb pair here, then cbb pair on the new computer.")
-	fmt.Fprintln(stdout, "Add an iPhone with the shortcut: cbb pair -phone.")
 	return 0
 }
 
@@ -349,9 +347,7 @@ func cmdNew(args []string, stdout, stderr io.Writer) int {
 func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	phone := fs.Bool("phone", false, "pair an iPhone or iPad with the shortcut")
 	adminPhone := fs.Bool("admin", false, "on the group's root: let the window make a phone with the app an admin")
-	newToken := fs.Bool("new-token", false, "with -phone: revoke the token of every shortcut paired so far, and pair this iPhone with a new one")
 	typed := fs.Bool("code", false, "join with the code that cbb pair shows on the group's root or an admin, read from standard input")
 	invitation := fs.String("invite", "", "join from afar with the invitation file that cbb invite made on the group's hub")
 	forApp := fs.String("app", "", "for the desktop apps: join by the phone's QR code, write its text to this file, which must exist, and stop when the file is removed")
@@ -360,16 +356,12 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	rest := fs.Args()
 	switch {
-	case *phone && (*typed || *invitation != "" || len(rest) != 0),
-		*newToken && !*phone,
-		*invitation != "" && (*typed || len(rest) != 0),
-		*forApp != "" && (*phone || *typed || *invitation != "" || len(rest) != 0),
-		*adminPhone && (*phone || *typed || *invitation != "" || *forApp != "" || len(rest) != 0),
+	case *invitation != "" && (*typed || len(rest) != 0),
+		*forApp != "" && (*typed || *invitation != "" || len(rest) != 0),
+		*adminPhone && (*typed || *invitation != "" || *forApp != "" || len(rest) != 0),
 		len(rest) > 1 || len(rest) == 1 && (!*typed || !strings.Contains(rest[0], ":")):
 		fmt.Fprintln(stderr, pairUsage)
 		return 2
-	case *phone:
-		return cmdPairPhone(*newToken, stdout, stderr)
 	case *invitation != "":
 		return cmdJoinInvite(*invitation, stdin, stdout, stderr)
 	case *typed:
@@ -408,8 +400,6 @@ const pairUsage = `usage: cbb pair                  in a group: show a code for 
        cbb pair -admin          on the group's root: show a code for a phone with the app,
                                 which joins as an admin
        cbb pair -code [address:port]   join with the code, read from standard input
-       cbb pair -phone          pair an iPhone with the shortcut
-       cbb pair -phone -new-token   revoke every shortcut's token, then pair with a new one
        cbb pair -invite file    join from afar with an invitation
        cbb pair -app file       for the desktop apps: join by the QR code they show`
 
@@ -464,42 +454,6 @@ func admit(admins bool, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "%s joined the group.\n", m.Name)
 	adminHint(stdout)
-	return 0
-}
-
-// cmdPairPhone opens an iPhone pairing window and walks the user through
-// it: the profile first, the fingerprint, and only then the code. With
-// newToken the service first revokes the token of every shortcut.
-func cmdPairPhone(newToken bool, stdout, stderr io.Writer) int {
-	c, err := control.DialFor(control.OpPairPhone)
-	if err != nil {
-		return fail(stderr, err)
-	}
-	defer c.Close()
-	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPairPhone, NewToken: newToken}})
-	if err != nil {
-		return fail(stderr, err)
-	}
-	if newToken {
-		fmt.Fprintln(stdout, "The tokens of every shortcut paired so far are revoked; pair each iPhone again.")
-		fmt.Fprintln(stdout)
-	}
-	fmt.Fprintln(stdout, "Scan this with the iPhone's camera and follow the page:")
-	fmt.Fprintln(stdout)
-	if err := writeQR(stdout, "http://"+m.Address+"/"); err != nil {
-		return fail(stderr, err)
-	}
-	fmt.Fprintf(stdout, "\n  (or open http://%s/ in Safari)\n\n", m.Address)
-	fmt.Fprintf(stdout, "The profile's fingerprint must start with:  %s\n", shortFingerprint(m.Fingerprint))
-	fmt.Fprintln(stdout, "  Compare it on the iPhone before you trust the profile: Settings > General >")
-	fmt.Fprintln(stdout, "  VPN & Device Management > CBB > More Details. Only this terminal")
-	fmt.Fprintln(stdout, "  shows the right one; if it differs, remove the profile and stop.")
-	fmt.Fprintf(stdout, "The code the shortcut asks for:            %s %s\n", m.Code[:3], m.Code[3:])
-	fmt.Fprintf(stdout, "\nWaiting up to %d minutes. Press Ctrl+C to cancel.\n", m.Expires/60)
-	if _, err := c.Receive(); err != nil {
-		return fail(stderr, err)
-	}
-	fmt.Fprintln(stdout, "The iPhone is paired. Press the shortcut to sync.")
 	return 0
 }
 
@@ -565,8 +519,7 @@ func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	defer c.Close()
-	fmt.Fprintln(stdout, "In the CBB app, tap \"Connect a new device\" (or run the shortcut")
-	fmt.Fprintln(stdout, "\"cbb: add a computer\") and scan this:")
+	fmt.Fprintln(stdout, "In the CBB app, tap \"Connect a new device\" and scan this:")
 	fmt.Fprintln(stdout)
 	if err := writeQR(stdout, text); err != nil {
 		return fail(stderr, err)

@@ -299,19 +299,18 @@ def draw():
     d.save('relay')
 
     # 6. Without the app.
-    d = D(720, 300, "Without the app, a computer holds the group")
-    rt = d.card(130, 140, 'desktop', 'Linux computer', 'holds the group\'s key', w=210, cls='key', badge='ROOT')
+    d = D(720, 230, "Without the app, a computer holds the group")
+    rt = d.card(130, 95, 'desktop', 'Linux computer', 'holds the group\'s key', w=210, cls='key', badge='ROOT')
     mc = d.card(570, 50, 'laptop', 'Mac', w=170)
     wn = d.card(570, 140, 'desktop', 'Windows', w=170)
-    ip = d.card(570, 230, 'phone', 'iPhone', 'with the shortcut', w=170)
     bx = right(rt)[0] + 45  # the branch stands close to the root
     lx = (bx + left(wn)[0]) / 2
-    d.edge([right(rt), left(wn)], 'pair', label='six-digit code', at=(lx, 140))
-    d.edge([(bx, 140), (bx, 50), left(mc)], 'pair')
+    d.edge([right(rt), (bx, 95)], 'pair', end=False)
+    d.edge([(bx, 95), (bx, 50), left(mc)], 'pair')
     d.labels.append(((lx, 50), 'six-digit code', 'pair'))
-    d.edge([(bx, 140), (bx, 230), left(ip)], 'pair')
-    d.labels.append(((lx, 230), 'profile and shortcut', 'pair'))
-    d.note(360, 290, 'Then every device syncs with every other one, as in a group made on a phone.')
+    d.edge([(bx, 95), (bx, 140), left(wn)], 'pair')
+    d.labels.append(((lx, 140), 'six-digit code', 'pair'))
+    d.note(360, 215, 'Then every device syncs with every other one, as in a group made on a phone.')
     d.save('without-app')
 
 def draw_design():

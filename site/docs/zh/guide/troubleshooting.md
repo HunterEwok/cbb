@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 62cc1d41168b -->
+<!-- source: 671ad29a2563 -->
 # 出了问题怎么办
 
 先在出问题的设备上运行 `cbb status`：它会告诉你服务是否在运行、在哪个群组里、哪些成员已连接，以及离家同步的状态。每条消息都很简短；`CBB_DEBUG=1 cbb status`（在 Windows 上先运行 `$env:CBB_DEBUG = "1"`）会在它下面显示底层的错误。服务的日志里总有详细信息：在 Linux 上是 `journalctl -u cbb`，桌面连接器的日志在会话的日志里，用 `journalctl --user`；其他系统见[文件和日志](../reference/devices.md#files-and-logs)。包括应用和安装程序在内，每个部分的详细信息开关见[错误消息和详细信息](../reference/errors.md)。
@@ -21,7 +21,6 @@
 
 - **"wrong code"**：每个配对窗口允许尝试三次；再运行一次 `cbb pair` 获取新的数字码。
 - **扫描二维码后手机连不上电脑**：手机和电脑必须在同一个网络里，并且电脑的端口必须是开放的（见上文）。在 iOS 上，请允许该应用使用本地网络（设置、隐私与安全性、本地网络）。
-- **快捷指令连不上 `cbb.local`**：只有群组的根和管理员电脑提供它，且只在 8764 端口上；至少要有一台开着（在每台电脑上运行 `cbb status` 会告诉你它是否响应）。检查描述文件是否已安装并完全信任（[不用应用](without-app.md#3-add-an-iphone-with-the-shortcut)）。
 
 ## 离家同步
 

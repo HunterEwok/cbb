@@ -4,8 +4,7 @@
 
 # End-to-end test of the service on Linux, with Docker: three members in
 # containers on one network find each other with mDNS, pair with codes,
-# sync copies, and hand cbb.local over; a fourth container plays the
-# iPhone's resolver with avahi.
+# and sync copies; a fourth container browses them with avahi.
 #
 #   sh tools/e2e/e2e.sh path/to/cbb     # a static Linux binary
 #
@@ -39,7 +38,7 @@ fail() {
 	exit 1
 }
 cleanup() {
-	for c in $members phone; do docker stop -t 2 "$run-$c" >/dev/null 2>&1 || true; done
+	for c in $members avahi; do docker stop -t 2 "$run-$c" >/dev/null 2>&1 || true; done
 	docker network rm "$net" >/dev/null 2>&1 || true
 	[ -z "${emptycover:-}" ] || rmdir "$emptycover" 2>/dev/null || true
 }
@@ -107,39 +106,12 @@ done
 printf 'a secret' | cb c copy -secret
 eventually "a has the secret" sh -c "[ \"\$(docker exec $run-a /cb/cbb paste)\" = 'a secret' ]"
 
-say "one of the root and the admin holds cbb.local"
-holders() {
-	n=0
-	for m in $members; do
-		if docker inspect "$run-$m" >/dev/null 2>&1 && cb "$m" status | grep -q '^Answers for cbb.local ('; then
-			n=$((n + 1))
-			holder=$m
-		fi
-	done
-	[ $n -eq 1 ]
-}
-eventually "exactly one holder" holders
-holders
-first=$holder
-
-say "the iPhone's view: avahi resolves cbb.local to the holder"
-docker run -d --rm --name "$run-phone" --network "$net" "$image" sleep 600 >/dev/null
-docker exec "$run-phone" sh -c 'apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq avahi-daemon avahi-utils dbus >/dev/null' ||
+say "avahi browses the members"
+docker run -d --rm --name "$run-avahi" --network "$net" "$image" sleep 600 >/dev/null
+docker exec "$run-avahi" sh -c 'apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq avahi-daemon avahi-utils dbus >/dev/null' ||
 	fail "installing avahi"
-docker exec "$run-phone" sh -c 'mkdir -p /run/dbus && dbus-daemon --system --fork && avahi-daemon --daemonize --no-chroot'
-ip_of() { docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" "$run-$1"; }
-resolves_to() {
-	docker exec "$run-phone" avahi-resolve -4 -n cbb.local 2>/dev/null | grep -q "	$1\$"
-}
-eventually "cbb.local resolves to $first" resolves_to "$(ip_of "$first")"
-eventually "avahi browses the members" sh -c "[ \$(docker exec $run-phone avahi-browse -rtp _cbb._tcp | grep -c '^=') -ge 3 ]"
-
-say "the holder stops; another takes cbb.local over"
-docker stop -t 5 "$run-$first" >/dev/null
-members=$(echo "$members" | tr ' ' '\n' | grep -v "^$first\$" | tr '\n' ' ')
-eventually "a new holder" holders
-holders
-eventually "cbb.local follows to $holder" resolves_to "$(ip_of "$holder")"
+docker exec "$run-avahi" sh -c 'mkdir -p /run/dbus && dbus-daemon --system --fork && avahi-daemon --daemonize --no-chroot'
+eventually "avahi browses the members" sh -c "[ \$(docker exec $run-avahi avahi-browse -rtp _cbb._tcp | grep -c '^=') -ge 3 ]"
 
 say "a wrong code does not join"
 docker run -d --rm --name "$run-d" --network "$net" -e CBB_SOCKET=/tmp/c.sock \
