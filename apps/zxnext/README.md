@@ -219,8 +219,7 @@ for the rest. z88dk's `dotn` loader puts `.cbb` in these parts:
 | MAIN | 0x8000 up to 0xE000 | `run()`, the link, the frames, the driver's calls, the install screen's bars, the strings | 3K: 2K for the stack, which starts at 0xE000 and goes down (about 200 bytes used), 1K to grow |
 | PAGE_13 | 0xE000-0xFFFF | the install: fetching over the ESP, checking, sending to the Pi | 1K |
 | PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256 | 1K |
-| PAGE_17 | 0xE000-0xFFFF | `.cbb net` and `.cbb pair` through the ESP | 1K |
-| PAGE_19 | 0xE000-0xFFFF | `.cbb paste`, `copy`, `text` and `pair` through the Pi's own network | 1K |
+| PAGE_17 | 0xE000-0xFFFF | `.cbb net`, `paste`, `copy`, `text` and `pair` | 1K |
 
 The pages share 0xE000, the window of MMU7, so only one is there at a time. MAIN calls
 a page through its entry in `far.asm` (`far_install()`, `far_cmd()` and so on), which

@@ -3,9 +3,8 @@
 
 ; The dot command's far pages, kept out of MAIN's 32K (README.md,
 ; "Memory"): PAGE_15 holds the install screen with its logo, the usage
-; text and SHA-256; PAGE_13 the install itself, PAGE_17 .cbb net and pair through the
-; ESP, PAGE_19 .cbb paste, copy, text and pair through the Pi's own
-; network, each an overlay. z88dk's dotn loader puts each in a page that
+; text and SHA-256; PAGE_13 the install itself, PAGE_17 .cbb net, paste,
+; copy, text and pair, each an overlay. CBB stays under 64K (budget.sh). z88dk's dotn loader puts each in a page that
 ; NextZXOS allocates for the command and frees when it ends, as z88dk's
 ; own dot commands (ls) do with theirs. All have the addresses
 ; 0xE000-0xFFFF, the window of MMU7, which MAIN leaves empty (it ends below
@@ -42,7 +41,7 @@ EXTERN _sha_run
 FAR_DATA    equ 15
 FAR_INSTALL equ 13
 FAR_NET     equ 17
-FAR_CMD     equ 19
+FAR_CMD     equ 17
 
 ; MMU7's page now, in a (reads NextReg 0x57).
 mmu7_now:

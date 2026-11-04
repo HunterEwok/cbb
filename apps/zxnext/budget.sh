@@ -10,6 +10,7 @@
 #                                          the stack (about 200 bytes used),
 #                                          1K to grow
 #   each overlay page (0xE000-0xFFFF)      8K
+#   the whole file                         under 64K
 #
 # It prints what each part has free, and fails when one has less.
 set -eu
@@ -31,4 +32,12 @@ for f in "$b"/cbb_PAGE_*.bin; do
     page=${f##*_PAGE_}
     check "PAGE_${page%.bin}" "$f" 8192 1024
 done
+# The whole file stays under 64K: a CBB of exactly 64K, eight pages, did
+# not run on a real Next (it reset it), while the same code in seven did.
+size=$(wc -c <"$b/CBB")
+printf '%-8s %5d bytes, under 65536\n' CBB "$size"
+if [ "$size" -ge 65536 ]; then
+    echo "budget.sh: CBB is 64K or more, which a real Next did not run" >&2
+    fail=1
+fi
 exit $fail

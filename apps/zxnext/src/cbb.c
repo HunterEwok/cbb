@@ -348,11 +348,11 @@ extern uint32_t far_sha(void);
 static uint8_t secret;
 
 // .cbb paste, copy, text and pair (through the Pi's own network), from
-// here to cmd_run(), are an overlay as well (far.asm, far_cmd()).
-#pragma codeseg PAGE_19
-#pragma constseg PAGE_19
-#pragma bssseg PAGE_19
-#pragma dataseg PAGE_19
+// here to cmd_run(), share the net command's page (far.asm, far_cmd()).
+#pragma codeseg PAGE_17
+#pragma constseg PAGE_17
+#pragma bssseg PAGE_17
+#pragma dataseg PAGE_17
 
 // Eight lowercase hex digits, as the lite member writes a CRC-32.
 static void hex8(char *out, uint32_t v)
