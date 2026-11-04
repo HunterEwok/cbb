@@ -20,15 +20,15 @@ import (
 func TestHubDialsItsForwarder(t *testing.T) {
 	netguard.Set(false, nil)
 	t.Cleanup(func() { netguard.Set(false, nil) })
-	fw := netip.MustParseAddrPort("152.53.122.134:8764")
+	fw := netip.MustParseAddrPort("203.0.113.10:8764")
 	phone := HubConfig{Link: Link{Endpoint: fw}}.control()
 	if err := phone("tcp4", fw.String(), nil); err != nil {
 		t.Fatalf("a phone's hub may not dial its forwarder: %v", err)
 	}
-	if err := phone("tcp6", "[::ffff:152.53.122.134]:8764", nil); err != nil {
+	if err := phone("tcp6", "[::ffff:203.0.113.10]:8764", nil); err != nil {
 		t.Fatalf("a phone's hub may not dial its forwarder as a mapped address: %v", err)
 	}
-	for _, to := range []string{"152.53.122.135:8764", "1.1.1.1:443", "[2001:db8::1]:8764", "not an address"} {
+	for _, to := range []string{"203.0.113.11:8764", "1.1.1.1:443", "[2001:db8::1]:8764", "not an address"} {
 		if err := phone("tcp", to, nil); !errors.Is(err, netguard.ErrOutside) {
 			t.Errorf("a phone's hub dials %s: %v", to, err)
 		}
