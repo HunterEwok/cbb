@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+#
+# Keeps the mirror of the releases, dl.cbb.tools, and the ZX Spectrum
+# Next's files (docs/maintaining.md, "The mirror"):
+# /etc/systemd/system/cbb-mirror.service, run by cbb-mirror.timer. It holds
+# no key: it takes only files that check out under the pinned roots.
+
+[Unit]
+Description=Mirror the cbb releases
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cbb-mirror
+Group=cbb-mirror
+ExecStart=/usr/local/bin/release-sign mirror -out /srv/dl.cbb.tools -from https://raw.githubusercontent.com/HunterEwok/cbb/channel,/srv/cbb.tools/channel -zxnext /srv/cbb.tools/zxnext
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/dl.cbb.tools /srv/cbb.tools/zxnext
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service

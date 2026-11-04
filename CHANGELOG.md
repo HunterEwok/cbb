@@ -16,6 +16,12 @@ All notable changes to cbb are documented in this file. The format follows
 - The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
   their certificates, the forwarder's and the relay's ports, and the expiry of the signed files devices fetch
   (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").
+- The mirror of the releases at `dl.cbb.tools`, which `cbb update`, the installers, the
+  Android app and the lite member fall back to when GitHub does not answer: `release-sign
+  mirror` on cbb.tools takes every hour the newest `keys.json` and `stable.json` that check
+  out, the release they name and the `min_from` of each, checks every file as a device does
+  before it serves it, and unpacks the ZX Spectrum Next's files of the newest checked
+  release for `.cbb install` (docs/maintaining.md, "The mirror").
 - cbb for macOS is signed with the project's Developer ID and notarized by Apple, so that
   Gatekeeper opens it without a warning; it runs under the hardened runtime, and CI checks
   that every build still loads the Rust core there.
@@ -69,7 +75,9 @@ All notable changes to cbb are documented in this file. The format follows
   as a screen loads from tape), each file's state
   and progress bar on the right, the messages under them; and installs `CBB.DRV` itself through the driver API, as `.install` does;
   `.cbb net on` does the same after a reset, so `.install` is no longer needed. Not yet run
-  on a real Next.
+  on a real Next. The logo and the usage text, `.cbb install` and `.cbb net` sit in pages of
+  the dot command's own, which NextZXOS allocates for it while it runs, each shown only
+  while it is needed, so its main 32K keeps about 12K free (`apps/zxnext/src/far.asm`).
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own
