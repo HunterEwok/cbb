@@ -1766,7 +1766,9 @@ consent. The admins are the root and admin phones, the admin computers of a phon
 and in a group a computer created the root computer and the admins it made. Members that
 are not admins never send. Besides the switch, the target's user sets up only the
 permissions the operating system demands once (below); without them the system refuses the
-input, and the sender is told so.
+input, and the sender is told so. The ZX Spectrum Next is the one exception: its own user's
+`.cbb install` turns remote paste on there, Enter too, and says so (D-81); the Next holds
+no secrets and BASIC's lines need Enter.
 
 - **Enter and root consoles are off by default** even when remote paste is on: the `enter`
   flag is refused, and so are the Linux text console helper and a tmux session of root,

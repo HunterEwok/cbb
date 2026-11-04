@@ -25,7 +25,7 @@ use super::esp::{self, Esp, Event};
 use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
-pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-log file] [-trace]";
+pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-join code] [-paste on|on-enter|off] [-log file] [-trace]";
 
 /// The line the link writes once the UART is raw, which `.cbb net on`
 /// waits for before it turns the driver on.
@@ -52,6 +52,8 @@ const AWAY_ANSWER: Duration = Duration::from_secs(120);
 /// How long the link waits for the Next's clock before it starts the
 /// service without it.
 const SERVICE_WAIT: Duration = Duration::from_secs(10);
+/// How often the link checks that the service runs, after it started it.
+const SERVICE_CHECK: Duration = Duration::from_secs(20);
 /// How far the Pi's clock may be off before the Next's sets it.
 const CLOCK_SLACK: i64 = 2;
 /// The ESP's connection that carries the datagrams of `-udp`: the last, as
@@ -578,6 +580,8 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
     let mut trace = false;
     let mut udp = None;
+    let mut join = None;
+    let mut paste = None;
     let mut i = 0;
     while i < args.len() {
         if crate::flag(&args[i]) == Some("trace") {
@@ -598,6 +602,15 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
                     a.parse::<u16>().context("the ESP's port is a number")?,
                     b.parse::<u16>().context("the local port is a number")?,
                 ));
+            }
+            Some("join") => join = Some(value()?),
+            Some("paste") => {
+                paste = Some(match value()?.as_str() {
+                    "on" => (true, false),
+                    "on-enter" => (true, true),
+                    "off" => (false, false),
+                    _ => return Err(Error::msg(USAGE)),
+                })
             }
             Some("udp") => {
                 let v = value()?;
@@ -697,10 +710,18 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
         link.serve(a, b);
     }
     // The service starts once the Pi's clock is right, for its
-    // certificates' dates, or after SERVICE_WAIT without the Next's.
-    let mut service_at = Some(Instant::now() + SERVICE_WAIT);
+    // certificates' dates, or after SERVICE_WAIT without the Next's; with
+    // -join, once this member is in the group: it joins with the code from
+    // cbb pair on the full member at -to, through a connection to the
+    // link's own port, which the ESP carries there.
+    let mut service_at = join.is_none().then(|| Instant::now() + SERVICE_WAIT);
+    let mut join_at = join.as_ref().map(|_| Instant::now() + SERVICE_WAIT);
+    let (joined_tx, joined) = mpsc::channel::<bool>();
     while !link.quit {
         let now = Instant::now();
+        if joined.try_recv() == Ok(true) {
+            service_at = Some(now);
+        }
         match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(m) => link.handle(m, now),
             Err(mpsc::RecvTimeoutError::Timeout) => link.tick(now),
@@ -710,12 +731,35 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
         if let Some(secs) = clock {
             set_clock(secs, &mut *link.log);
         }
+        // The join checks certificates' dates too, so it waits as the
+        // service does.
+        if join_at.is_some_and(|at| clock.is_some() || now >= at) {
+            join_at = None;
+            let (g, log, done, code) = (g.clone(), tx.clone(), joined_tx.clone(), join.clone().unwrap_or_default());
+            std::thread::spawn(move || {
+                let res = TcpStream::connect(("127.0.0.1", port))
+                    .context("cannot reach the link's port")
+                    .and_then(|s| crate::join_with_code(&g, s, &code));
+                let line = match &res {
+                    Ok(id) => format!("joined the group {} as {}", id.tag(), id.id),
+                    Err(e) => format!("cannot join: {}", e.for_user()),
+                };
+                log.send(Msg::Log(line)).ok();
+                done.send(res.is_ok()).ok();
+            });
+        }
         if service_at.is_some_and(|at| clock.is_some() || now >= at) {
-            service_at = None;
+            // And again a while later: a service that stopped (.cbb pair
+            // stops it while cbb next pair waits on its port) starts again.
+            service_at = Some(now + SERVICE_CHECK);
             match start_service(g, port, udp_port, log_path.as_deref()) {
                 Ok(true) => (link.log)("started the service"),
                 Ok(false) => {}
                 Err(e) => (link.log)(&format!("cannot start the service: {}", e.for_user())),
+            }
+            if let Some((on, enter)) = paste.take() {
+                let (g, log) = (g.clone(), tx.clone());
+                std::thread::spawn(move || set_paste(&g, on, enter, &log));
             }
         }
         for (id, use_, mut s) in std::mem::take(&mut link.readers) {
@@ -739,6 +783,31 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Tells the service whether the group's admins may paste on the Next, as
+/// .cbb paste-receive set it (-paste): the Next's user is the Pi's, so
+/// the switch is theirs. The service may still be starting: it is asked
+/// again for a minute.
+fn set_paste(g: &crate::Global, on: bool, enter: bool, log: &mpsc::Sender<Msg>) {
+    let h = crate::control::Header {
+        op: "paste-receive".into(),
+        name: if on { "on" } else { "off" }.into(),
+        enter,
+        ..Default::default()
+    };
+    let mut last = String::new();
+    for _ in 0..30 {
+        std::thread::sleep(Duration::from_secs(2));
+        match crate::request(g, &crate::control::Message::new(h.clone(), Vec::new())) {
+            Ok(_) => {
+                log.send(Msg::Log(format!("remote paste is {} here (enter {enter})", h.name))).ok();
+                return;
+            }
+            Err(e) => last = e.for_user(),
+        }
+    }
+    log.send(Msg::Log(format!("cannot set remote paste: {last}"))).ok();
 }
 
 /// The wait after a failed dial of -to that follows wait; away is whether

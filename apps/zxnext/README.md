@@ -19,14 +19,24 @@ tools. Test them on the machine before relying on them.
 .cbb copy notes.txt   send a file (up to 8 KB)
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
-.cbb pair             join the group: scan the code on the screen with the phone app
-                      (through the ESP once .cbb net has its settings)
-.cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
-                      the Pi's network through the ESP, in the background
+.cbb pair             join the group through the ESP: scan the code on the screen with
+                      the phone app
+.cbb pair 123-456     or join with the code of sudo cbb pair on a computer of the group
+.cbb net on           the Pi's network through the ESP, in the background, to a
+                      computer of the group it finds (.cbb net on 192.168.0.10 names one)
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
-.cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below)
+.cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below),
+                      then start the network (a running one stops for it)
 .cbb update           the same, for the files the site has newer
+.cbb paste-receive on [-enter] | off
+                      whether the group's admins may type on the Next from the phone app;
+                      .cbb install turns it on with Enter, .cbb net on hands it to the Pi
+.cbb leave            after a Y: the Pi forgets its keys and its group; its cbb stays, and
+                      .cbb pair joins the same group or another one
+.cbb uninstall        after a Y: stop the network, uninstall CBB.DRV, remove the Pi's cbb
+                      and its group, and the files in /cbb; /cbb/CBB itself runs then and
+                      stays, with the folder: ERASE it after
 .cbb -d paste         the same, with the cause under each error and, at the end, the
                       bytes of the stack never used (debug mode)
 ```
@@ -165,8 +175,17 @@ To use it, put `CBB` and `CBB.DRV` in `/cbb` (`.cbb install` does), join the ESP
 tools do, and run:
 
 ```
-.cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
+.cbb net on
 ```
+
+It finds a computer of the group each time, as the lite members on a network of their own
+do with mDNS: the question for `_cbb._tcp.local` goes from the ESP's UDP port 5354, which the
+members answer to that port alone (a legacy unicast query, RFC 6762 section 6.7), and the first
+computer to answer (not a lite member nor a phone, TXT `r=lite` or `r=phone`) is the one the
+Pi dials, at the port of its SRV record. With more than one group at home, or a network that
+drops multicast, name the computer: `.cbb net on 192.168.0.10` is short for
+`.cbb net on -to "192.168.0.10:8764" -serve "8764:8764"`; the long form takes `-zone "+01:00"`
+too (the zone is UTC without it), and `"HOST:PORT"` another port.
 
 NextBASIC ends a statement at a colon, so each setting with one goes in quotes; the quotes
 do not reach the Pi. After a reset or a power cycle, which drop installed drivers, `.cbb net on` installs
@@ -181,15 +200,23 @@ flash): the driver hands the Pi 2400 of its bytes a second, and the ESP has no f
 at its stock 115200 a burst would overflow the Next's 512-byte buffer; `.cbb net off` puts it
 back at 115200. The lite member (`cbb service -peer 127.0.0.1:8769`) has to run on the Pi as well.
 While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
-`pair` ask for `.cbb net off` first.
+`pair` stop the network for the Pi's shell and start it again after (some 10 to 15 seconds),
+so a copy goes to the group at once.
 
-On a Pi without a radio, once `.cbb net` has its settings, `.cbb pair` joins the group through the ESP. It asks the ESP
+NextPi has no network of its own, so `.cbb pair` joins the group through the ESP, with the network's settings or their defaults. It asks the ESP
 for its address (`AT+CIFSR`), starts `cbb next pair` on the Pi in the background with that
 address and the ports of `-serve` (so the settings need `-serve`), draws the QR code, and
 starts the network under it, so the phone that scans the code reaches the Pi through the
 ESP. The phone app says when the Pi has joined; then `cbb service` starts on the Pi with the
 group. With `cbb next link -udp` and `cbb service -tunnel-via`, the Pi syncs away from home
 through the ESP as well (lite/README.md).
+
+Without the phone app, `sudo cbb pair` on a computer of the group shows a code, and
+`.cbb pair 123-456` on the Next joins with it: it finds the computer whose pairing window is
+open (TXT `p=1`), starts the network to it with `cbb next link -join 123-456`, and the
+computer's `cbb pair` says when the Pi has joined. Both ways, `.cbb pair` first asks the
+Pi whether its state holds an identity: a Pi in a group already does not join another, so
+the Next says so instead of waiting: `.cbb leave` first.
 
 ## Build
 
@@ -199,10 +226,68 @@ at its `lib/config`):
 ```sh
 make PI_CBB=cbb   # build/CBB, build/PIBRIDGE (copy them to C:/DOT) and build/CBB.DRV;
                   # cbb is the Pi's lite member, which CBB installs (pins.sh)
-make test         # the frame parser's and SHA-256's tests with the host's C compiler, and the driver's
-              # bank in a Z80 emulator against two played UARTs (drvtest, with cargo)
+make test         # the frame parser's and SHA-256's tests with the host's C compiler, the driver's
+                  # bank in a Z80 emulator against two played UARTs, and .cbb itself on a played
+                  # Next (drvtest, with cargo; below)
 ```
 
 CI's `ZX Spectrum Next` job builds z88dk from its release source, checked against a
 SHA-256, and runs both; the run keeps `CBB`, `PIBRIDGE` and `CBB.DRV` as its artifact
 `cbb-zxnext-dot`.
+
+## Memory
+
+A dot command gets 8K of its own in the divMMC's memory, and NextZXOS gives it 8K pages
+for the rest. z88dk's `dotn` loader puts `.cbb` in these parts:
+
+| Part | Where | What | Must leave free |
+|---|---|---|---|
+| CODE | divMMC, 0x2000-0x3FFF | the library, `far.asm`, `colour()`, the palette | 1K |
+| MAIN | 0x8000 up to 0xE000 | `run()`, the link, the frames, the driver's calls, the install screen's bars, the strings | 3K: 2K for the stack, which starts at 0xE000 and goes down (about 200 bytes used), 1K to grow |
+| PAGE_13 | 0xE000-0xFFFF | the install: fetching over the ESP, checking, sending to the Pi | 1K |
+| PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256, `.cbb uninstall` and `leave` | 1K |
+| PAGE_17 | 0xE000-0xFFFF | `.cbb net`, `paste`, `copy`, `text` and `pair` | 1K |
+
+The pages share 0xE000, the window of MMU7, so only one is there at a time. MAIN calls
+a page through its entry in `far.asm` (`far_install()`, `far_cmd()` and so on), which
+puts the page in MMU7 and the old one back after; a page calls MAIN and the divMMC's
+8K directly, and another page only through such an entry, never directly. `make` fails
+when a part has less free than the table says (`budget.sh`, which prints what each has),
+or when a function shares its address with its own static data (`mapcheck.sh`): z88dk
+puts a function's own `static const` there when code and data share a section, as in
+the pages, so tables in a page are at file scope. String literals always go to MAIN.
+
+NextZXOS's rules that `.cbb` keeps (its API documentation):
+
+- the stack is never in the divMMC's 8K during RST 0x10 or RST 0x18, which is why it
+  starts at 0xE000 (z88dk's default, the top of memory, is in MMU7, in the pages' window);
+- RST 0x10 runs with IY at 0x5C3A and MMU6 and MMU7 as BASIC left them (`rom_char()` in
+  `far.asm`);
+- M_P3DOS runs with MMU2 at its default, and M_DRVAPI's buffers are at 0x4000 or above.
+
+## Testing on a played Next
+
+`drvtest` plays a Next well enough to run the real `build/CBB` from start to end: the Z80N's
+own instructions, MMU paging, NextZXOS's calls (files on a directory as the card, pages,
+drivers, M_P3DOS), the ROM's printing, the keyboard and the interrupts, the two UARTs at
+their speeds with their 512-byte buffers, the ESP's AT commands and passthrough to a site
+like cbb.tools, and NextPi's shell. It fails a run on what would go wrong on a real Next
+even where it happens to work there: a write outside `.cbb`'s own pages and the screen, code
+run from 0xE000 with the wrong page there, the stack in the divMMC's 8K during a call, IY
+not 0x5C3A at an interrupt, an instruction it does not know.
+
+`make test` runs `tests/install.rs` when build/CBB is there: a clean install, the run after
+it with everything current, no Wi-Fi, a site without the files (404), a Pi that does not
+answer, a site that closes the connection, SPACE, the usage and a paste. With
+`make PI_CBB=build/PIBRIDGE`, the small PIBRIDGE stands in for the Pi's cbb, so that they
+take seconds. For a look at one run, with the screen before and after the key:
+
+```sh
+sh ../../packaging/zxnext/site.sh build build/PIBRIDGE /tmp/site
+cd drvtest && CBB_MAP=../build/cbb.map cargo run --release --example run -- \
+    ../build/CBB /tmp/site/zxnext 600 -d install
+```
+
+`FAULTS` plays failures (`nowifi`, `status=404`, `close=N`, `silent`, `pisilent`,
+`pisha=HEX`, `space=SECONDS`), `CARD=DIR` keeps the card between runs, and `PEER_LOG=1`
+prints what the ESP and the Pi were told.
