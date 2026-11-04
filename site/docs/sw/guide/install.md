@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 95a9f0f2e940 -->
+<!-- source: 951f5919aba6 -->
 # Kusakinisha
 
 Copy Beyond Borders huendeshwa kama huduma ndogo ya chinichini kwenye kila kompyuta. Amri yake ni `cbb`. Kila njia iliyo hapa chini husakinisha programu ile ile; chagua unayopenda.
@@ -131,7 +131,7 @@ Copy Beyond Borders inahitaji mlango mmoja wa TCP, 8764, na mDNS (UDP 5353), vyo
 
 nftables na iptables hupata amri tu kila mara, kwa kuwa kanuni zinazoongezwa wakati wa kuendesha hazinusuriki kuwashwa upya huko. Kwenye FreeBSD, pf hupata kanuni katika nanga yake yenyewe, ambayo pf huisoma kupitia mistari mitatu iliyotiwa alama ambayo kisakinishi huiongeza mwishoni mwa `/etc/pf.conf` na kuiondoa tena; ipfw huzipata katika seti ya kanuni 17, zinazoongezwa tena kila inapoanza. Ukiwasha ngome ya moto baadaye, endesha kisakinishi tena.
 
-**Mlango mwingine**, kama 8764 umekaliwa: `... | sudo sh -s -- --port 9000` (kwenye Windows, `$env:CBB_PORT = "9000"` kabla ya kisakinishi). Programu ya simu hujifunza mlango kutoka kwenye msimbo wa QR; njia ya mkato ya iPhone hufanya kazi na 8764 pekee.
+**Mlango mwingine**, kama 8764 umekaliwa: `... | sudo sh -s -- --port 9000` (kwenye Windows, `$env:CBB_PORT = "9000"` kabla ya kisakinishi). Programu ya simu hujifunza mlango kutoka kwenye msimbo wa QR.
 
 Chaguo zote za kisakinishi ziko katika [marejeo ya amri](../reference/cli.md#installers).
 

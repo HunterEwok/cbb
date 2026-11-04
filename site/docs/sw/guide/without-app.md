@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: dbcf5e524e51 -->
+<!-- source: 3f404cb443bd -->
 # Bila programu
 
-Kikundi hakihitaji programu ya simu. Kompyuta inaweza kushikilia kikundi, na iPhone isiyo na programu hujiunga kwa njia ya mkato. Hii pia ndiyo njia wakati programu ya iPhone inasubiri TestFlight.
+Kikundi cha kompyuta hakihitaji programu ya simu: kompyuta inaweza kushikilia kikundi.
 
-![Kompyuta ya Linux inashikilia kikundi na kuongeza Mac na Windows kwa msimbo wa tarakimu sita, na iPhone kwa wasifu na njia ya mkato](../images/without-app.svg)
+![Kompyuta ya Linux inashikilia kikundi na kuongeza Mac na Windows kwa msimbo wa tarakimu sita](../images/without-app.svg)
 
 ## 1. Tengeneza kikundi kwenye kompyuta
 
-[Sakinisha](install.md) Copy Beyond Borders kwenye kompyuta inayowashwa mara nyingi: Linux, Windows, Mac au FreeBSD. Inashikilia kikundi na kutoa njia ya mkato ya iPhone. Kisha:
+[Sakinisha](install.md) Copy Beyond Borders kwenye kompyuta inayowashwa mara nyingi: Linux, Windows, Mac au FreeBSD. Inashikilia kikundi. Kisha:
 
 ```sh
 sudo cbb new
@@ -28,24 +28,7 @@ Huonyesha msimbo wa tarakimu sita na kusubiri. Kwenye kompyuta mpya, endesha pia
 
 Kisha washa ushirikiano kwenye kila kompyuta, kama katika [mwanzo wa haraka](quickstart.md#4-share-the-computers-clipboard): `sudo cbb mode shared`.
 
-## 3. Ongeza iPhone kwa njia ya mkato
-
-Kwenye mzizi, au kwenye kompyuta ya msimamizi inayojibu `cbb.local` (`cbb status` inasema kama inajibu):
-
-```sh
-sudo cbb pair -phone
-```
-
-Huchapisha msimbo wa QR, mwanzo wa alama ya kidole na msimbo wa tarakimu sita.
-
-1. Changanua msimbo wa QR kwa kamera ya iPhone na ufuate ukurasa: sakinisha wasifu.
-2. Hakikisha alama ya kidole ya wasifu inaanza kama ile iliyochapishwa (Mipangilio, Jumla, VPN na Usimamizi wa Kifaa, "CBB", Maelezo Zaidi), kisha uwashe uaminifu kamili kwake (Mipangilio, Jumla, Kuhusu, Mipangilio ya Kuaminiwa kwa Cheti).
-3. Ongeza njia ya mkato "cbb" kutoka ukurasa uleule na uiendeshe mara moja; inauliza msimbo wa tarakimu sita.
-4. Weka njia ya mkato kwenye kitufe cha Kitendo, au kwenye Gusa Nyuma (Mipangilio, Ufikivu, Mguso, Gusa Nyuma, Gusa Mara Mbili).
-
-Mbonyezo mmoja kisha huchagua mwelekeo wenyewe: kilichonakiliwa kwenye kompyuta muda mfupi uliopita huja kwenye iPhone; la sivyo nakala mpya kwenye iPhone huenda kwenye kompyuta.
-
-## 4. Usitegemee kompyuta moja
+## 3. Usitegemee kompyuta moja
 
 Fanya kompyuta ya pili kuwa msimamizi, ili iweze pia kuongeza na kuondoa vifaa:
 
@@ -62,7 +45,7 @@ Mzizi ukipotea au kuharibika, msimamizi huchukua kikundi, na kila kifaa kingine 
 sudo cbb takeover NAME       # on the admin; NAME is the lost root
 ```
 
-iPhone zenye njia ya mkato huoanishwa tena baada ya kuchukua. Zaidi katika [kifaa kikipotea au kuibiwa](lost-device.md).
+Zaidi katika [kifaa kikipotea au kuibiwa](lost-device.md).
 
 ## Kujiunga kutoka mtandao mwingine
 

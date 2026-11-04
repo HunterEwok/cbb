@@ -318,7 +318,6 @@ func TestMemberCertVectors(t *testing.T) {
 			{Name: "expired", Cert: g.Cert.Raw, NowMS: at(3 * 365 * 24 * time.Hour)},
 			{Name: "another group", Cert: other.Cert.Raw, NowMS: at(24 * time.Hour)},
 			{Name: "the group CA itself", Cert: g.GroupCA.Cert.Raw, NowMS: at(24 * time.Hour)},
-			{Name: "the cbb.local certificate", Cert: g.Phone.Raw, NowMS: at(24 * time.Hour)},
 		}}
 		for i := range v.Cases {
 			c, _ := x509.ParseCertificate(v.Cases[i].Cert)

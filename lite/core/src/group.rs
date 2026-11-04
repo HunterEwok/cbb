@@ -51,7 +51,7 @@ struct File {
 pub struct Device {
     pub id: String,
     pub name: String,
-    /// `full`, `phone`, `lite`, `shortcut` or `watch`.
+    /// `full`, `phone`, `lite` or `watch`.
     pub role: String,
     /// Its operating system; empty when its record does not tell.
     pub os: String,

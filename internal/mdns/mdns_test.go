@@ -428,69 +428,6 @@ func TestAnswersOnTheArrivalInterface(t *testing.T) {
 	}
 }
 
-func TestHolder(t *testing.T) {
-	var l fakeLink
-	a := l.host("192.168.1.10")
-	client := l.host("192.168.1.20")
-	clock := newClock()
-	ra := start(t, a, idA, 4001, clock)
-	if m := ask(t, client, Port, q(PhoneName, dnsmessage.TypeA)); m != nil {
-		t.Fatalf("answered for cbb.local without holding it: %v", m)
-	}
-	ra.r.SetHolder(true)
-	time.Sleep(3 * tick)
-	settle(clock)
-	drain(client)
-	m := ask(t, client, Port, q(PhoneName, dnsmessage.TypeA))
-	if m == nil {
-		t.Fatal("no answer for cbb.local")
-	}
-	ans := m.Answers[0]
-	if a, ok := ans.Body.(*dnsmessage.AResource); !ok || netip.AddrFrom4(a.A) != netip.MustParseAddr("192.168.1.10") ||
-		ans.Header.TTL != 10 || ans.Header.Class != classIN|cacheFlush {
-		t.Errorf("answer %v, want A 192.168.1.10 with TTL 10 and the cache-flush bit", ans.GoString())
-	}
-	// A question for AAAA gets the NSEC record, which says there is none.
-	settle(clock)
-	m = ask(t, client, Port, q(PhoneName, dnsmessage.TypeAAAA))
-	if m == nil || typeOf(m.Answers[0]) != typeNSEC {
-		t.Errorf("AAAA question: %v, want NSEC", m)
-	}
-	// Giving it up sends a goodbye.
-	drain(client)
-	ra.r.SetHolder(false)
-	if !waitFor(client, func(m *dnsmessage.Message) bool {
-		return len(m.Answers) > 0 && sameName(m.Answers[0].Header.Name, PhoneName) && m.Answers[0].Header.TTL == 0
-	}) {
-		t.Error("no goodbye for cbb.local")
-	}
-}
-
-func TestHolderGoodbyeOnStop(t *testing.T) {
-	// A holder that stops says goodbye for cbb.local, even when it
-	// gave the name up just before and the change was not applied yet.
-	for _, release := range []bool{false, true} {
-		var l fakeLink
-		a := l.host("192.168.1.10")
-		client := l.host("192.168.1.20")
-		ra := start(t, a, idA, 4001, nil)
-		ra.r.SetHolder(true)
-		time.Sleep(300 * time.Millisecond)
-		drain(client)
-		if release {
-			ra.r.SetHolder(false)
-		}
-		ra.stop()
-		if !waitFor(client, func(m *dnsmessage.Message) bool {
-			return slices.ContainsFunc(m.Answers, func(r dnsmessage.Resource) bool {
-				return sameName(r.Header.Name, PhoneName) && r.Header.TTL == 0
-			})
-		}) {
-			t.Errorf("release=%v: no goodbye for cbb.local on stop", release)
-		}
-	}
-}
-
 func TestLegacyUnicast(t *testing.T) {
 	var l fakeLink
 	a := l.host("192.168.1.10")
@@ -573,20 +510,20 @@ func TestDottedNamesDoNotHideQuestions(t *testing.T) {
 	a := l.host("192.168.1.10")
 	client := l.host("192.168.1.20")
 	clock := newClock()
-	ra := start(t, a, idA, 4001, clock)
-	ra.r.SetHolder(true)
+	start(t, a, idA, 4001, clock)
 	time.Sleep(3 * tick)
 	settle(clock)
 	drain(client)
+	host := "cb-" + idA + ".local."
 	msg := dnsmessage.Message{Header: dnsmessage.Header{ID: 77}, Questions: []dnsmessage.Question{
-		q(PhoneName, dnsmessage.TypeA), q("_companion-link._tcp.local.", dnsmessage.TypePTR)}}
+		q(host, dnsmessage.TypeA), q("_companion-link._tcp.local.", dnsmessage.TypePTR)}}
 	data, err := msg.Pack()
 	if err != nil {
 		t.Fatal(err)
 	}
 	data = appendDottedPTR(data)
-	if m := askRaw(t, client, Port, data, PhoneName); m == nil {
-		t.Error("a dotted known answer hid the question for cbb.local")
+	if m := askRaw(t, client, Port, data, host); m == nil {
+		t.Error("a dotted known answer hid the question for the host name")
 	}
 }
 
@@ -612,7 +549,7 @@ func appendDottedPTR(msg []byte) []byte {
 }
 
 func TestParseSkipsWhatItCannotRead(t *testing.T) {
-	msg := dnsmessage.Message{Questions: []dnsmessage.Question{q(PhoneName, dnsmessage.TypeA)}}
+	msg := dnsmessage.Message{Questions: []dnsmessage.Question{q("cb-"+idA+".local.", dnsmessage.TypeA)}}
 	data, _ := msg.Pack()
 	m, err := parse(appendDottedPTR(data))
 	if err != nil || len(m.Questions) != 1 || len(m.Answers) != 0 {
@@ -1140,7 +1077,7 @@ func TestAnswer(t *testing.T) {
 	if ans, _ = query(nil, q(servicesName, dnsmessage.TypePTR)); len(ans) != 1 {
 		t.Error("no answer to service enumeration")
 	}
-	if ans, _ = query(nil, q("other.local.", dnsmessage.TypeA), q(PhoneName, dnsmessage.TypeA)); len(ans) != 0 {
+	if ans, _ = query(nil, q("other.local.", dnsmessage.TypeA), q("cbb.local.", dnsmessage.TypeA)); len(ans) != 0 {
 		t.Errorf("answered for names it does not own: %v", ans)
 	}
 	if ans, _ = z.answer(&dnsmessage.Message{Questions: []dnsmessage.Question{q(ServiceName, dnsmessage.TypePTR)}}, nil); len(ans) != 0 {

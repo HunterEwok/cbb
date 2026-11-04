@@ -6,15 +6,13 @@
 // and a device about to join only browse (D-32).
 //
 // A member publishes its service instance <device ID>._cbb._tcp.local
-// with SRV and TXT records, its own host name cb-<device ID>.local and, while
-// the group elected it, cbb.local with a lifetime of 10 seconds. It
+// with SRV and TXT records and its own host name cb-<device ID>.local. It
 // finds the other members by browsing for _cbb._tcp.local.
 //
 // It shares UDP port 5353 with avahi-daemon or systemd-resolved, publishes
 // only private IPv4, unique-local and link-local IPv6 addresses, and answers
 // each query with the addresses of the interface the query arrived on.
-// Names are not probed: device IDs are random, and the group's election, not
-// a probe, decides who holds cbb.local.
+// Names are not probed: device IDs are random.
 package mdns
 
 import (
@@ -106,10 +104,8 @@ type Responder struct {
 	addrGen atomic.Uint64
 }
 
-// change is a set of records to announce: the new ones twice, and, for
-// records given up, a goodbye.
+// change is what to announce again.
 type change struct {
-	goodbye []func(ips []netip.Addr) []rr
 	fresh   bool // announce the whole zone again
 	recheck bool // ask Publish again for every interface
 }
@@ -155,28 +151,6 @@ func (r *Responder) SetTXT(txt []string) {
 	z.txt = slices.Clone(txt)
 	r.z = &z
 	r.pending = append(r.pending, change{fresh: true})
-	r.mu.Unlock()
-	r.wake()
-}
-
-// SetHolder makes the member answer for cbb.local, or stop doing so
-// with a goodbye, so the iPhone forgets the old address at once.
-func (r *Responder) SetHolder(hold bool) {
-	r.mu.Lock()
-	if r.z.holder == hold {
-		r.mu.Unlock()
-		return
-	}
-	z := *r.z
-	z.holder = hold
-	r.z = &z
-	if hold {
-		r.pending = append(r.pending, change{fresh: true})
-	} else {
-		r.pending = append(r.pending, change{goodbye: []func([]netip.Addr) []rr{
-			func(ips []netip.Addr) []rr { return addrs(PhoneName, phoneTTL, ips) },
-		}})
-	}
 	r.mu.Unlock()
 	r.wake()
 }
@@ -256,8 +230,8 @@ func (r *Responder) Run(ctx context.Context) error {
 		s.timers(now)
 		select {
 		case <-ctx.Done():
-			// Changes not applied yet still count: a SetHolder(false)
-			// just before stopping must send its goodbye.
+			// Changes not applied yet go in first, so that the goodbye
+			// covers every interface the member publishes on.
 			r.mu.Lock()
 			pending := r.pending
 			r.pending = nil
@@ -417,9 +391,6 @@ func (s *state) rescan(now time.Time) {
 			if len(gone) > 0 {
 				z := s.r.zone()
 				rrs := addrRecords(z.host, hostTTL, gone)
-				if z.holder {
-					rrs = append(rrs, addrRecords(PhoneName, phoneTTL, gone)...)
-				}
 				s.sendRecords(*ifc, rrs, 0)
 			}
 		}
@@ -434,18 +405,6 @@ func (s *state) rescan(now time.Time) {
 func (s *state) apply(c change, now time.Time) {
 	if c.recheck {
 		s.rescan(now)
-	}
-	for _, ifc := range s.ifaces {
-		if !ifc.publish {
-			continue
-		}
-		var rrs []rr
-		for _, g := range c.goodbye {
-			rrs = append(rrs, g(ifc.addrs)...)
-		}
-		if len(rrs) > 0 {
-			s.sendRecords(ifc, rrs, 0)
-		}
 	}
 	if c.fresh {
 		s.announce = append(s.announce, announcement{at: now, left: announceCount})

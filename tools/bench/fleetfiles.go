@@ -230,7 +230,7 @@ func files(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 // usage for -h without doing anything.
 var usageCommands = []string{"copy", "paste", "paste-receive", "action", "status", "remove", "rename", "admin",
 	"takeover", "upgrade", "freeze", "unfreeze", "global", "forward", "relay", "new", "mode", "config", "pair",
-	"invite", "update", "version", "holder", "network", "service", "agent", "paste-helper", "install"}
+	"invite", "update", "version", "network", "service", "agent", "paste-helper", "install"}
 
 // commandLine (U2): cbb version and help, each command's -h, and unknown
 // commands and flags, on a member whose service runs.

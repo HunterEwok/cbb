@@ -44,10 +44,6 @@ in again (on Windows, open a new terminal); until then, `sudo cbb ...` works.
 - **The phone cannot reach the computer after scanning its QR code**: the phone and the
   computer must be on the same network, and the computer's port must be open (above). On
   iOS, allow Local Network for the app (Settings, Privacy & Security, Local Network).
-- **The shortcut cannot reach `cbb.local`**: only the group's root and admin
-  computers serve it, on port 8764 only; at least one must be on (`cbb status` on each
-  computer says whether it answers). Check that the profile is installed and fully
-  trusted ([Without the app](without-app.md#3-add-an-iphone-with-the-shortcut)).
 
 ## Sync away from home
 

@@ -122,7 +122,7 @@ func loadNetworksWith(dir string, inGroup bool, logf func(string, ...any), gatew
 // window is open, which the user opens where the group is.
 func (s *Service) takesOn(a net.Addr) bool {
 	s.mu.Lock()
-	open := s.window != nil || s.profileConns != nil
+	open := s.window != nil
 	s.mu.Unlock()
 	if open {
 		return true

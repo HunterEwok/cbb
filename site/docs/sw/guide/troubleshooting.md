@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 62cc1d41168b -->
+<!-- source: 671ad29a2563 -->
 # Wakati kitu hakifanyi kazi
 
 Anza na `cbb status` kwenye kifaa chenye tatizo: kinasema kama huduma inaendesha, kiko kwenye kikundi gani, ni wanachama gani wameunganishwa na hali ya usawazishaji nje ya nyumbani. Kila ujumbe ni mfupi; `CBB_DEBUG=1 cbb status` (kwenye Windows kwanza `$env:CBB_DEBUG = "1"`) huonyesha kosa la msingi chini yake. Kumbukumbu ya huduma daima ina maelezo: kwenye Linux `journalctl -u cbb`, na ya kiunganishi cha eneo-kazi iko kwenye jarida la kikao, `journalctl --user`; mifumo mingine iko katika [faili na kumbukumbu](../reference/devices.md#files-and-logs). Swichi ya maelezo ya kila sehemu, ikiwemo programu na visakinishi, iko katika [ujumbe wa makosa na maelezo](../reference/errors.md).
@@ -21,7 +21,6 @@ Anza na `cbb status` kwenye kifaa chenye tatizo: kinasema kama huduma inaendesha
 
 - **"wrong code"**: kila dirisha la uoanishaji huruhusu majaribio matatu; endesha `cbb pair` tena upate msimbo mpya.
 - **Simu haifikii kompyuta baada ya kuchanganua msimbo wake wa QR**: simu na kompyuta lazima ziwe kwenye mtandao mmoja, na mlango wa kompyuta lazima uwe wazi (juu). Kwenye iOS, ruhusu Mtandao wa Ndani kwa programu (Mipangilio, Faragha na Usalama, Mtandao wa Ndani).
-- **Njia ya mkato haifikii `cbb.local`**: ni kompyuta za mzizi na za wasimamizi wa kikundi tu zinazoitoa, na kwenye mlango 8764 tu; angalau moja lazima iwe imewashwa (`cbb status` kwenye kila kompyuta inasema kama inajibu). Hakikisha wasifu umesakinishwa na unaaminiwa kikamilifu ([Bila programu](without-app.md#3-add-an-iphone-with-the-shortcut)).
 
 ## Usawazishaji nje ya nyumbani
 

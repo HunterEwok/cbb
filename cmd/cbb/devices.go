@@ -288,7 +288,7 @@ func cmdAdmin(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
-	fmt.Fprintf(stdout, "%s is an admin now: it can admit and remove devices and pair iPhones for the shortcut.\n", m.Name)
+	fmt.Fprintf(stdout, "%s is an admin now: it can admit and remove devices.\n", m.Name)
 	if *allow {
 		fmt.Fprintf(stdout, "If it keeps its keys in a file, guard it: whoever copies that file acts as an admin until another admin removes %s.\n", m.Name)
 	}
@@ -315,7 +315,7 @@ func cmdTakeover(args []string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Claimed the group from %s. This device becomes its root when the waiting time ends (72 hours unless the root set another), unless the root cancels the claim; cbb status shows the time left.\n", m.Name)
-	fmt.Fprintln(stdout, "Then it removes the old root and makes a new iPhone CA: iPhones that use the shortcut pair again with cbb pair -phone.")
+	fmt.Fprintln(stdout, "Then it removes the old root.")
 	return 0
 }
 

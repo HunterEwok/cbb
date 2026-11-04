@@ -86,7 +86,7 @@ const kinds = {
 
 export function kindOf(d) {
   if (d.form && kinds[d.form]) return d.form;
-  if (d.role === "phone" || d.role === "shortcut") return "phone";
+  if (d.role === "phone") return "phone";
   if (d.role === "lite") return "board";
   if (d.role === "watch") return "watch";
   if (d.os === "macos") return "laptop";
@@ -607,7 +607,7 @@ function renderDetail() {
   if (d.version) lines.push(["CBB", d.version, true]);
   if (d.mac) lines.push([t("MAC address"), d.mac, true]);
   else if (kind === "phone" || kind === "tablet") lines.push([t("MAC address"), t("hidden by the system")]);
-  lines.push([t("Role"), t({ phone: "Phone app", lite: "Lite member", shortcut: "Shortcut" }[d.role] ?? "Full member")]);
+  lines.push([t("Role"), t({ phone: "Phone app", lite: "Lite member" }[d.role] ?? "Full member")]);
   const standing = d.self ? (d.admin ? t("This computer · admin") : t("This computer"))
     : d.frozen ? t("frozen") : d.root ? t("root") : d.admin ? t("admin") : "";
   if (standing) lines.push([t("In the group"), standing]);

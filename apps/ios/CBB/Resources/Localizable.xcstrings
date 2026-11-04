@@ -2524,16 +2524,6 @@
         }
       }
     },
-    "Shortcut": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Быстрая команда"
-          }
-        }
-      }
-    },
     "Show error details": {
       "localizations": {
         "ru": {

@@ -50,7 +50,7 @@ public enum Member {
     /// How a text reached the member that made the event.
     public enum Via: String, Codable, Sendable {
         case copy
-        /// Sent from a phone: the app, or the iPhone shortcut.
+        /// Sent from a phone's app.
         case phone
         case universalClipboard = "universal-clipboard"
 

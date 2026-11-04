@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9165921fa4f0 -->
+<!-- source: 36fba21437d1 -->
 # Si se pierde o roban un dispositivo
 
 Para quien ha perdido un teléfono, un ordenador u otro dispositivo del grupo. Quítalo del grupo en cuanto puedas; los demás dispositivos siguen en el grupo y continúan sincronizando.
@@ -31,7 +31,7 @@ La raíz guarda la clave raíz del grupo. Cuando desaparece, un administrador pa
 - con teléfonos: en el otro teléfono, que es administrador, quita el perdido; la app asume el grupo en el mismo paso;
 - con ordenadores: en un ordenador administrador, `sudo cbb takeover NAME`, donde NAME es la raíz perdida.
 
-Los iPhone que usan el atajo se vuelven a emparejar tras una toma de control. Si el grupo no tenía otro administrador, no se puede asumir: crea un grupo nuevo y añade de nuevo los dispositivos. Por eso las apps sugieren un segundo teléfono administrador, o un ordenador administrador, en cuanto el grupo tiene un solo administrador.
+Si el grupo no tenía otro administrador, no se puede asumir: crea un grupo nuevo y añade de nuevo los dispositivos. Por eso las apps sugieren un segundo teléfono administrador, o un ordenador administrador, en cuanto el grupo tiene un solo administrador.
 
 ## 4. Desactiva lo que podía alcanzar
 

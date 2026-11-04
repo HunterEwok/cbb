@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: dbcf5e524e51 -->
+<!-- source: 3f404cb443bd -->
 # Sin la app
 
-Un grupo no necesita la app del teléfono. Un ordenador puede sostener el grupo, y un iPhone sin la app se une con un atajo. Este es también el camino mientras la app del iPhone espera a TestFlight.
+Un grupo de ordenadores no necesita la app del teléfono: un ordenador puede sostener el grupo.
 
-![Un ordenador Linux sostiene el grupo y añade el Mac y Windows con un código de seis dígitos, y el iPhone con un perfil y el atajo](../images/without-app.svg)
+![Un ordenador Linux sostiene el grupo y añade el Mac y Windows con un código de seis dígitos](../images/without-app.svg)
 
 ## 1. Crea el grupo en un ordenador
 
-[Instala](install.md) Copy Beyond Borders en un ordenador que esté encendido a menudo: Linux, Windows, un Mac o FreeBSD. Sostiene el grupo y sirve el atajo del iPhone. Después:
+[Instala](install.md) Copy Beyond Borders en un ordenador que esté encendido a menudo: Linux, Windows, un Mac o FreeBSD. Sostiene el grupo. Después:
 
 ```sh
 sudo cbb new
@@ -28,24 +28,7 @@ Muestra un código de seis dígitos y espera. En el ordenador nuevo, ejecuta tam
 
 Después activa el uso compartido en cada ordenador, como en el [inicio rápido](quickstart.md#4-share-the-computers-clipboard): `sudo cbb mode shared`.
 
-## 3. Añade un iPhone con el atajo
-
-En la raíz, o en un ordenador administrador que responda por `cbb.local` (`cbb status` dice si lo hace):
-
-```sh
-sudo cbb pair -phone
-```
-
-Imprime un código QR, el comienzo de una huella digital y un código de seis dígitos.
-
-1. Escanea el código QR con la cámara del iPhone y sigue la página: instala el perfil.
-2. Comprueba que la huella digital del perfil empieza por la impresa (Ajustes, General, VPN y gestión de dispositivos, «CBB», Más detalles), y luego activa la confianza total para él (Ajustes, General, Información, Ajustes de confianza de certificados).
-3. Añade el atajo «cbb» desde la misma página y ejecútalo una vez; te pide el código de seis dígitos.
-4. Pon el atajo en el botón de acción, o en Tocar atrás (Ajustes, Accesibilidad, Tocar, Tocar atrás, Doble toque).
-
-Una sola pulsación elige entonces la dirección por sí misma: lo que se copió en un ordenador hace un momento llega al iPhone; si no, una copia nueva en el iPhone va a los ordenadores.
-
-## 4. No dependas de un solo ordenador
+## 3. No dependas de un solo ordenador
 
 Haz administrador a un segundo ordenador, para que también pueda añadir y quitar dispositivos:
 
@@ -62,7 +45,7 @@ Si la raíz se pierde o se estropea, el administrador toma el control del grupo,
 sudo cbb takeover NAME       # on the admin; NAME is the lost root
 ```
 
-Los iPhone con el atajo se vuelven a emparejar tras una toma de control. Más en [si un dispositivo se pierde o te lo roban](lost-device.md).
+Más en [si un dispositivo se pierde o te lo roban](lost-device.md).
 
 ## Unirse desde otra red
 

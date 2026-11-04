@@ -39,8 +39,7 @@ other device stays in the group:
 - with computers: on an admin computer, `sudo cbb takeover NAME`, where NAME is the lost
   root.
 
-iPhones that use the shortcut pair again after a takeover. If the group had no other admin,
-it cannot be taken over: make a new group and add the devices again. That is why the apps
+If the group had no other admin, it cannot be taken over: make a new group and add the devices again. That is why the apps
 suggest a second admin phone, or an admin computer, as soon as the group has a single admin.
 
 ## 4. Turn off what it could reach

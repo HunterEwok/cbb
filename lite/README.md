@@ -10,8 +10,6 @@ protocol of [docs/protocol.md](../docs/protocol.md), but unlike a full member it
   publishes itself in mDNS
   and listens on the member port, TCP 8764, so that phones and other lite members
   dial it: a phone syncs with it directly, with no computer on;
-- never holds `cbb.local` or serves the shortcut, the Apple Shortcuts action an
-  iPhone without the app uses (a phone with the app, iPhone or Android, needs neither);
 - has no desktop clipboard of its own: other programs use `copy`, `paste` and `watch`.
 
 Full members list it with role `lite`. Away from home, or on another subnet where mDNS does
@@ -127,7 +125,7 @@ sudo -u cbb cbb pair -name pi
 ```
 
 It shows a QR code: in the Copy Beyond Borders app (iPhone or Android) tap "Connect a new device"
-(or, on an iPhone with the shortcut, run "cbb: add a computer") and scan it. The phone reaches the device on
+and scan it. The phone reaches the device on
 TCP port 8764 (`-port` to change it), while it joins and afterwards to sync. In a group
 without a phone, run `cbb pair` on the group's root or an admin and
 `sudo -u cbb cbb pair -code <that member>:8764` here, then type the code.

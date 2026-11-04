@@ -307,7 +307,7 @@ func TestUpgraded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id.GroupCA, id.PhoneCA, id.Phone = *ca, nil, nil
+	id.GroupCA = *ca
 	if id.Cert, err = ca.IssueMember(id.ID, PublicKey(id.Key), t0); err != nil {
 		t.Fatal(err)
 	}

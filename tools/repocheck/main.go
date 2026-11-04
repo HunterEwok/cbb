@@ -23,7 +23,8 @@
 //     committed: build output belongs outside the repository, and a large
 //     file stays in git's history for good;
 //   - with -tests-since COMMIT, every test function of Go, Rust, Swift and
-//     Kotlin that COMMIT has is still there (tests.go).
+//     Kotlin that COMMIT has is still there, unless the change lists it in
+//     removed-tests.txt with a decision (tests.go).
 //
 // Run it anywhere inside the repository:
 //
