@@ -144,8 +144,12 @@ impl Esp {
     /// The datagram the Next sent: to 224.0.0.251:5353, the members answer.
     fn datagram(&mut self, now: u64) {
         let d = std::mem::take(&mut self.datagram);
-        self.out.push(now + 2_000, format!("\r\nRecv {} bytes\r\n\r\nSEND OK\r\n", d.len()).as_bytes());
-        self.log.push(format!("{:.3}s UDP: {} bytes", now as f64 / 1e6, d.len()));
+        self.out.push(
+            now + 2_000,
+            format!("\r\nRecv {} bytes\r\n\r\nSEND OK\r\n", d.len()).as_bytes(),
+        );
+        self.log
+            .push(format!("{:.3}s UDP: {} bytes", now as f64 / 1e6, d.len()));
         if d.len() < 12 || !find(&d, b"\x04_cbb\x04_tcp\x05local\x00").is_some() {
             return;
         }
@@ -190,9 +194,11 @@ impl Esp {
             self.cipdinfo = false;
             self.cipmode = 0;
             self.reply(now, "\r\nOK\r\n");
-            self.out.push(now + 100_000, b"\x8a\xf3 ets Jan  8 2013\r\n\r\nready\r\n");
+            self.out
+                .push(now + 100_000, b"\x8a\xf3 ets Jan  8 2013\r\n\r\nready\r\n");
             self.wifi_at = now + 3_000_000;
-            self.out.push(self.wifi_at, b"WIFI CONNECTED\r\nWIFI GOT IP\r\n");
+            self.out
+                .push(self.wifi_at, b"WIFI CONNECTED\r\nWIFI GOT IP\r\n");
             self.pending_baud = Some((now + 5_000, 115_200));
             return;
         }
@@ -287,7 +293,11 @@ impl Esp {
             let req: Vec<u8> = self.request.drain(..end + 4).collect();
             let text = String::from_utf8_lossy(&req).to_string();
             self.requests += 1;
-            self.log.push(format!("{:.3}s HTTP: {}", now as f64 / 1e6, text.lines().next().unwrap_or("")));
+            self.log.push(format!(
+                "{:.3}s HTTP: {}",
+                now as f64 / 1e6,
+                text.lines().next().unwrap_or("")
+            ));
             if std::env::var("PEER_LOG").is_ok() {
                 eprintln!("{}", self.log.last().unwrap());
             }
@@ -370,7 +380,12 @@ fn find(h: &[u8], n: &[u8]) -> Option<usize> {
 impl Peer for Esp {
     fn rx(&mut self, now: u64, b: u8, baud: u32) {
         if std::env::var("PEER_LOG").as_deref() == Ok("2") {
-            eprintln!("{:.4}s esp< {:02x} {:?} at {baud}", now as f64 / 1e6, b, b as char);
+            eprintln!(
+                "{:.4}s esp< {:02x} {:?} at {baud}",
+                now as f64 / 1e6,
+                b,
+                b as char
+            );
         }
         if self.passthrough {
             // +++ alone, with quiet before it, leaves transparent mode.
@@ -493,16 +508,34 @@ impl Pi {
         }
         if let Some(rest) = cmd.strip_prefix("s=$(stty -g); stty ") {
             let speed: u32 = rest.split(' ').next().unwrap().parse().unwrap();
-            let n: usize = cmd.split("head -c ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+            let n: usize = cmd
+                .split("head -c ")
+                .nth(1)
+                .unwrap()
+                .split(' ')
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap();
             if !self.fast && speed != 115_200 {
-                self.say(now + 10_000, &format!("stty: invalid argument '{speed}'\r\n"));
+                self.say(
+                    now + 10_000,
+                    &format!("stty: invalid argument '{speed}'\r\n"),
+                );
                 return self.prompt(now + 10_000);
             }
             self.pending_baud = Some((now + 5_000, speed));
             // After stty raw the tty adds no CR to an LF, as a real one:
             // printf gives what it is given.
-            let sleep = if cmd.contains(" && sleep 1 && ") { 1_000_000 } else { 0 };
-            let next = cmd.split(" && ").find(|p| p.starts_with("printf")).unwrap_or("");
+            let sleep = if cmd.contains(" && sleep 1 && ") {
+                1_000_000
+            } else {
+                0
+            };
+            let next = cmd
+                .split(" && ")
+                .find(|p| p.starts_with("printf"))
+                .unwrap_or("");
             let out = next
                 .strip_prefix("printf '")
                 .and_then(|t| t.strip_suffix('\''))
@@ -514,7 +547,11 @@ impl Pi {
             return;
         }
         if cmd.starts_with("test -e /NextPi/nextpi/cbb-state/identity.json && echo CBB$((1))IN") {
-            let s = if self.in_group { "CBB1IN\r\nCBB1END\r\n" } else { "CBB1END\r\n" };
+            let s = if self.in_group {
+                "CBB1IN\r\nCBB1END\r\n"
+            } else {
+                "CBB1END\r\n"
+            };
             self.say(now + 20_000, s);
             return self.prompt(now + 20_000);
         }

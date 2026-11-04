@@ -173,15 +173,30 @@ pub struct Screen {
 
 impl Screen {
     fn new() -> Screen {
-        Screen { chars: [[b' '; 32]; 24], attrs: [[0x38; 32]; 24], row: 0, col: 0, pending: Vec::new(), scrolls: 0 }
+        Screen {
+            chars: [[b' '; 32]; 24],
+            attrs: [[0x38; 32]; 24],
+            row: 0,
+            col: 0,
+            pending: Vec::new(),
+            scrolls: 0,
+        }
     }
 
     /// The rows as text.
     pub fn text(&self) -> String {
         let mut s = String::new();
         for r in 0..24 {
-            let line: String =
-                self.chars[r].iter().map(|&c| if (32..127).contains(&c) { c as char } else { '?' }).collect();
+            let line: String = self.chars[r]
+                .iter()
+                .map(|&c| {
+                    if (32..127).contains(&c) {
+                        c as char
+                    } else {
+                        '?'
+                    }
+                })
+                .collect();
             s.push_str(&format!("{r:2} |{line}|\n"));
         }
         s
@@ -200,7 +215,11 @@ pub fn pixel_offset(row: usize, line: usize, col: usize) -> usize {
 /// The ROM's glyphs, played: line 1 holds the character, line 2 its
 /// complement, the rest blank; a space is all blank.
 fn glyph(c: u8) -> [u8; 8] {
-    if c == b' ' { [0; 8] } else { [0, c, !c, 0, 0, 0, 0, 0] }
+    if c == b' ' {
+        [0; 8]
+    } else {
+        [0, c, !c, 0, 0, 0, 0, 0]
+    }
 }
 
 impl Next {
@@ -211,11 +230,17 @@ impl Next {
         for r in 0..24 {
             let mut line = String::new();
             for k in 0..32 {
-                let cell: Vec<u8> = (0..8).map(|l| self.ram[10 * PAGE + pixel_offset(r, l, k)]).collect();
+                let cell: Vec<u8> = (0..8)
+                    .map(|l| self.ram[10 * PAGE + pixel_offset(r, l, k)])
+                    .collect();
                 let c = cell[1];
                 line.push(if cell.iter().all(|&b| b == 0) {
                     ' '
-                } else if cell[0] == 0 && cell[2] == !c && cell[3..].iter().all(|&b| b == 0) && (32..127).contains(&c) {
+                } else if cell[0] == 0
+                    && cell[2] == !c
+                    && cell[3..].iter().all(|&b| b == 0)
+                    && (32..127).contains(&c)
+                {
                     c as char
                 } else if c == 143 || c == 138 {
                     '='
@@ -289,7 +314,11 @@ impl Next {
     fn slot_addr(&self, a: u16) -> (Option<u8>, usize) {
         let slot = (a >> 13) as usize;
         let off = (a as usize) & (PAGE - 1);
-        if slot < 2 { (None, off) } else { (Some(self.mmu[slot]), off) }
+        if slot < 2 {
+            (None, off)
+        } else {
+            (Some(self.mmu[slot]), off)
+        }
     }
 
     pub fn read(&self, a: u16) -> u8 {
@@ -305,8 +334,12 @@ impl Next {
     /// A write as the command's code makes it, checked.
     fn write(&mut self, a: u16, v: u8) {
         if Some(a) == self.watch {
-            let line =
-                format!("{:.3}s watch {a:#06x} = {v} from {:#06x} (mmu7 {})", self.now / 1e6, self.pc, self.mmu[7]);
+            let line = format!(
+                "{:.3}s watch {a:#06x} = {v} from {:#06x} (mmu7 {})",
+                self.now / 1e6,
+                self.pc,
+                self.mmu[7]
+            );
             self.log.push(line);
         }
         let slot = (a >> 13) as usize;
@@ -320,10 +353,16 @@ impl Next {
                     self.screen_writes.push((self.pc, a));
                 } else if page == 10 && (off as u16) < SYSVARS_END - 0x4000 {
                     // the system variables
-                } else if a < self.basic_sp && a >= self.basic_sp.wrapping_sub(512) && slot == 7 && page == 1 {
+                } else if a < self.basic_sp
+                    && a >= self.basic_sp.wrapping_sub(512)
+                    && slot == 7
+                    && page == 1
+                {
                     // BASIC's machine stack, which the command runs on at first
                 } else if !self.ours.get(page as usize).copied().unwrap_or(false) {
-                    self.breach(format!("wrote {v:#04x} to page {page} at {a:#06x}, not the command's"));
+                    self.breach(format!(
+                        "wrote {v:#04x} to page {page} at {a:#06x}, not the command's"
+                    ));
                 }
                 self.ram[page as usize * PAGE + off] = v;
             }
@@ -357,7 +396,11 @@ impl Next {
     }
 
     fn uart(&mut self) -> &mut Uart {
-        if self.select & 0x40 != 0 { &mut self.pi } else { &mut self.esp }
+        if self.select & 0x40 != 0 {
+            &mut self.pi
+        } else {
+            &mut self.esp
+        }
     }
 
     /// The CPU's clock from NR 0x07.
@@ -407,7 +450,9 @@ impl Next {
                 }
             }
             0x07 | 0x08 | 0x43 | 0xA0 | 0x7F => {}
-            _ => self.log.push(format!("{:#06x}: NR {r:#04x} = {v:#04x}", self.pc)),
+            _ => self
+                .log
+                .push(format!("{:#06x}: NR {r:#04x} = {v:#04x}", self.pc)),
         }
         self.nr[r as usize] = v;
     }
@@ -550,7 +595,8 @@ impl Run {
         div_rom[DONE as usize] = 0x76;
         div_rom[EXX as usize] = 0xD9;
         // NextZXOS enters the command in IM 1 with interrupts on.
-        div_rom[START as usize..START as usize + 6].copy_from_slice(&[0xED, 0x56, 0xFB, 0xC3, 0x00, 0x20]);
+        div_rom[START as usize..START as usize + 6]
+            .copy_from_slice(&[0xED, 0x56, 0xFB, 0xC3, 0x00, 0x20]);
         let mut div_ram = vec![0u8; PAGE];
         div_ram[..PAGE].copy_from_slice(&file[..PAGE]);
         let mut hw = Next {
@@ -585,7 +631,9 @@ impl Run {
             card_write_us: 20_000.0,
             basic_sp: 0xFF3E,
             printed: String::new(),
-            watch: std::env::var("WATCH").ok().map(|w| u16::from_str_radix(&w, 16).unwrap()),
+            watch: std::env::var("WATCH")
+                .ok()
+                .map(|w| u16::from_str_radix(&w, 16).unwrap()),
         };
         hw.nr[0x00] = 10; // the Next
         hw.nr[0x01] = 0x32; // core 3.02
@@ -636,7 +684,11 @@ impl Run {
         r.set16(Reg16::IY, ERR_NR);
         r.set_pc(START);
         // The rest of the file, as M_GETHANDLE gives it.
-        hw.files.push(Some(File { path: dot.to_path_buf(), pos: PAGE as u64, write: false }));
+        hw.files.push(Some(File {
+            path: dot.to_path_buf(),
+            pos: PAGE as u64,
+            write: false,
+        }));
         Run {
             cpu,
             hw,
@@ -668,7 +720,11 @@ impl Run {
 
     fn carry(&mut self, c: bool) {
         let r = self.cpu.registers();
-        if c { r.set_flag(Flag::C) } else { r.clear_flag(Flag::C) }
+        if c {
+            r.set_flag(Flag::C)
+        } else {
+            r.clear_flag(Flag::C)
+        }
     }
 
     fn ok(&mut self) {
@@ -756,7 +812,11 @@ impl Run {
                 }
                 self.hw.log.push(format!("open {name} mode {mode:#04x}"));
                 let h = self.hw.files.len();
-                self.hw.files.push(Some(File { path, pos: 0, write }));
+                self.hw.files.push(Some(File {
+                    path,
+                    pos: 0,
+                    write,
+                }));
                 self.cpu.registers().set_a(h as u8);
                 self.ok();
             }
@@ -793,7 +853,8 @@ impl Run {
                     if data.len() < pos {
                         data.resize(pos, 0);
                     }
-                    let bytes: Vec<u8> = (0..bc).map(|i| self.hw.read(hl.wrapping_add(i))).collect();
+                    let bytes: Vec<u8> =
+                        (0..bc).map(|i| self.hw.read(hl.wrapping_add(i))).collect();
                     let end = pos + bytes.len();
                     if data.len() < end {
                         data.resize(end, 0);
@@ -839,7 +900,11 @@ impl Run {
                 // F_RMDIR: an empty folder only.
                 let name = self.string(hl);
                 let path = self.host(&name);
-                if !path.is_dir() || std::fs::read_dir(&path).map(|mut d| d.next().is_some()).unwrap_or(true) {
+                if !path.is_dir()
+                    || std::fs::read_dir(&path)
+                        .map(|mut d| d.next().is_some())
+                        .unwrap_or(true)
+                {
                     return self.err(5);
                 }
                 std::fs::remove_dir(&path).unwrap();
@@ -871,7 +936,8 @@ impl Run {
             0x92 => self.drvapi(),
             0x94 => self.p3dos(),
             _ => {
-                self.hw.breach(format!("RST $8 hook {code:#04x}, not played here"));
+                self.hw
+                    .breach(format!("RST $8 hook {code:#04x}, not played here"));
                 self.err(2);
             }
         }
@@ -883,7 +949,8 @@ impl Run {
         let hl = self.reg(Reg16::HL);
         let (id, call) = (bc as u8, (bc >> 8) as u8);
         if hl != 0 && hl < 0x4000 {
-            self.hw.breach(format!("M_DRVAPI with a buffer at {hl:#06x}, under 0x4000"));
+            self.hw
+                .breach(format!("M_DRVAPI with a buffer at {hl:#06x}, under 0x4000"));
         }
         if id == 0 {
             match call {
@@ -903,7 +970,13 @@ impl Run {
                 }
                 4 => {
                     let drv = de as u8 & 0x7F;
-                    let Some(code) = self.hw.drivers.iter().find(|d| d.0 == drv).map(|d| d.1.clone()) else {
+                    let Some(code) = self
+                        .hw
+                        .drivers
+                        .iter()
+                        .find(|d| d.0 == drv)
+                        .map(|d| d.1.clone())
+                    else {
                         return self.err(5);
                     };
                     for (i, b) in code.iter().enumerate() {
@@ -912,7 +985,8 @@ impl Run {
                     self.ok();
                 }
                 _ => {
-                    self.hw.breach(format!("M_DRVAPI driver 0 call {call}, not played here"));
+                    self.hw
+                        .breach(format!("M_DRVAPI driver 0 call {call}, not played here"));
                     self.err(2);
                 }
             }
@@ -958,7 +1032,8 @@ impl Run {
     fn p3dos(&mut self) {
         let de = self.reg(Reg16::DE);
         if self.hw.mmu[2] != 10 {
-            self.hw.breach(format!("M_P3DOS with MMU2 at page {}", self.hw.mmu[2]));
+            self.hw
+                .breach(format!("M_P3DOS with MMU2 at page {}", self.hw.mmu[2]));
         }
         let iy = self.reg(Reg16::IY);
         if iy != ERR_NR {
@@ -970,7 +1045,8 @@ impl Run {
         let e = self.reg(Reg16::DE) as u8;
         self.exx();
         if de != 0x01BD {
-            self.hw.breach(format!("M_P3DOS call {de:#06x}, not played here"));
+            self.hw
+                .breach(format!("M_P3DOS call {de:#06x}, not played here"));
             return self.carry(false);
         }
         let (kind, reason) = ((hl >> 8) as u8, hl as u8);
@@ -980,7 +1056,9 @@ impl Run {
         match reason {
             1 => {
                 // The free pages from the top.
-                let page = (18..PAGES).rev().find(|&p| !self.hw.ours[p] && !self.hw.overlays.contains(&(p as u8)));
+                let page = (18..PAGES)
+                    .rev()
+                    .find(|&p| !self.hw.ours[p] && !self.hw.overlays.contains(&(p as u8)));
                 match page {
                     Some(p) => {
                         self.hw.ours[p] = true;
@@ -1010,7 +1088,9 @@ impl Run {
     fn print(&mut self, c: u8) -> Option<Fault> {
         let sp = self.reg(Reg16::SP);
         if (0x2000..0x4000).contains(&sp) {
-            self.hw.breach(format!("RST $10 with the stack at {sp:#06x}, in the divMMC"));
+            self.hw.breach(format!(
+                "RST $10 with the stack at {sp:#06x}, in the divMMC"
+            ));
         }
         if c == 0x80 {
             self.hw.breach("RST $10 with A = $80".into());
@@ -1018,14 +1098,20 @@ impl Run {
         let s = &mut self.hw.screen;
         if !s.pending.is_empty() {
             s.pending.push(c);
-            let want = if s.pending[0] == 22 || s.pending[0] == 23 { 3 } else { 2 };
+            let want = if s.pending[0] == 22 || s.pending[0] == 23 {
+                3
+            } else {
+                2
+            };
             if s.pending.len() < want {
                 return None;
             }
             let p = std::mem::take(&mut s.pending);
             match p[0] {
                 22 => {
-                    self.hw.printed.push_str(&format!("\n[AT {},{}]", p[1], p[2]));
+                    self.hw
+                        .printed
+                        .push_str(&format!("\n[AT {},{}]", p[1], p[2]));
                     if p[1] > 21 || p[2] > 31 {
                         return Some(Fault::Basic(4)); // 5 Out of screen
                     }
@@ -1049,11 +1135,13 @@ impl Run {
                 }
                 19 => {
                     let a = self.hw.read(23695);
-                    self.hw.os_write(23695, if p[1] == 1 { a | 0x40 } else { a & !0x40 });
+                    self.hw
+                        .os_write(23695, if p[1] == 1 { a | 0x40 } else { a & !0x40 });
                 }
                 18 => {
                     let a = self.hw.read(23695);
-                    self.hw.os_write(23695, if p[1] == 1 { a | 0x80 } else { a & !0x80 });
+                    self.hw
+                        .os_write(23695, if p[1] == 1 { a | 0x80 } else { a & !0x80 });
                 }
                 _ => {}
             }
@@ -1088,7 +1176,11 @@ impl Run {
                         return Some(f);
                     }
                 }
-                self.hw.printed.push(if (32..127).contains(&c) { c as char } else { '~' });
+                self.hw.printed.push(if (32..127).contains(&c) {
+                    c as char
+                } else {
+                    '~'
+                });
                 let s = &mut self.hw.screen;
                 let (r, k) = (s.row as usize, s.col as usize);
                 s.chars[r][k] = c;
@@ -1126,12 +1218,20 @@ impl Run {
             for r in 0..22 {
                 for line in 0..8 {
                     for k in 0..32 {
-                        let v = if r < 21 { self.hw.ram[10 * PAGE + pixel_offset(r + 1, line, k)] } else { 0 };
+                        let v = if r < 21 {
+                            self.hw.ram[10 * PAGE + pixel_offset(r + 1, line, k)]
+                        } else {
+                            0
+                        };
                         self.hw.ram[10 * PAGE + pixel_offset(r, line, k)] = v;
                     }
                 }
                 for k in 0..32 {
-                    let v = if r < 21 { self.hw.ram[10 * PAGE + 0x1800 + (r + 1) * 32 + k] } else { 0x38 };
+                    let v = if r < 21 {
+                        self.hw.ram[10 * PAGE + 0x1800 + (r + 1) * 32 + k]
+                    } else {
+                        0x38
+                    };
                     self.hw.ram[10 * PAGE + 0x1800 + r * 32 + k] = v;
                 }
             }
@@ -1144,9 +1244,12 @@ impl Run {
     fn rom_call(&mut self, addr: u16) {
         let sp = self.reg(Reg16::SP);
         if (0x2000..0x4000).contains(&sp) {
-            self.hw.breach(format!("RST $18 with the stack at {sp:#06x}, in the divMMC"));
+            self.hw.breach(format!(
+                "RST $18 with the stack at {sp:#06x}, in the divMMC"
+            ));
         }
-        self.hw.breach(format!("RST $18 to {addr:#06x}, not played here"));
+        self.hw
+            .breach(format!("RST $18 to {addr:#06x}, not played here"));
     }
 
     /// The IM1 interrupt: FRAMES and the keyboard, with the system
@@ -1155,14 +1258,18 @@ impl Run {
         let sp = self.reg(Reg16::SP);
         let iy = self.reg(Reg16::IY);
         if iy != ERR_NR {
-            self.hw.breach(format!("an interrupt with IY at {iy:#06x}: the ROM writes there"));
+            self.hw.breach(format!(
+                "an interrupt with IY at {iy:#06x}: the ROM writes there"
+            ));
         }
         // z88dk's exit moves the stack to the top of the dot command's
         // divMMC memory (DOTN_REGISTER_SP, 0x4000) while it puts the pages
         // back, interrupts on: the handler's few bytes land in the space
         // CODE leaves free (budget.sh keeps 1K).
         if sp < 0x3F00 {
-            self.hw.breach(format!("an interrupt with the stack at {sp:#06x}, in the divMMC"));
+            self.hw.breach(format!(
+                "an interrupt with the stack at {sp:#06x}, in the divMMC"
+            ));
         }
         // The handler pushes AF and HL, and the ROM's KEYBOARD a few more.
         for i in 3..=10u16 {
@@ -1172,9 +1279,9 @@ impl Run {
                 Some(p) if self.hw.ours[p as usize] || p == 10 || p == 11 => {}
                 // BASIC's own stack, as the startup and the exit run on it.
                 Some(1) if a < self.hw.basic_sp && a >= self.hw.basic_sp.wrapping_sub(512) => {}
-                Some(p) => {
-                    self.hw.breach(format!("an interrupt's pushes at {a:#06x} land in page {p}, not the command's"))
-                }
+                Some(p) => self.hw.breach(format!(
+                    "an interrupt's pushes at {a:#06x} land in page {p}, not the command's"
+                )),
                 None => {}
             }
             self.hw.os_write(a, 0xEE);
@@ -1225,8 +1332,11 @@ impl Run {
                     match self.print(a) {
                         None => self.cpu.registers().set_pc(ret),
                         Some(Fault::Basic(code)) => {
-                            self.hw.log.push(format!("BASIC error {} in RST $10", code + 1));
-                            self.hw.breach(format!("BASIC error {} in RST $10", code + 1));
+                            self.hw
+                                .log
+                                .push(format!("BASIC error {} in RST $10", code + 1));
+                            self.hw
+                                .breach(format!("BASIC error {} in RST $10", code + 1));
                             if self.hw.errh == 0 {
                                 self.done = true;
                                 return;
@@ -1256,10 +1366,15 @@ impl Run {
         }
         if pc >= 0xE000 {
             let page = self.hw.mmu[7];
-            let overlays: Vec<u8> =
-                self.overlay_logical.iter().map(|&l| self.hw.read(self.page_table + l as u16)).collect();
+            let overlays: Vec<u8> = self
+                .overlay_logical
+                .iter()
+                .map(|&l| self.hw.read(self.page_table + l as u16))
+                .collect();
             if !overlays.contains(&page) {
-                self.hw.breach(format!("ran code at {pc:#06x} from page {page}, not an overlay"));
+                self.hw.breach(format!(
+                    "ran code at {pc:#06x} from page {page}, not an overlay"
+                ));
                 self.done = true;
                 return;
             }
@@ -1363,7 +1478,14 @@ impl Run {
                         self.hw.write(de, v);
                     }
                     let down = op == 0xAC || op == 0xBC;
-                    self.set(Reg16::HL, if down { hl.wrapping_sub(1) } else { hl.wrapping_add(1) });
+                    self.set(
+                        Reg16::HL,
+                        if down {
+                            hl.wrapping_sub(1)
+                        } else {
+                            hl.wrapping_add(1)
+                        },
+                    );
                     self.set(Reg16::DE, de.wrapping_add(1));
                     self.set(Reg16::BC, bc.wrapping_sub(1));
                     self.tick(16);

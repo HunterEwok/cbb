@@ -50,14 +50,23 @@ fn main() {
     let pi = Box::new(pi);
     let mut run = Run::new(&dot, &card, &args, esp, pi);
     // The overlays' pages, from the map that zcc -m writes beside the file.
-    let map = std::fs::read_to_string(std::env::var("CBB_MAP").expect("CBB_MAP: the map of CBB")).unwrap();
-    let table = map.lines().find(|l| l.starts_with("__z_page_table ")).expect("__z_page_table");
+    let map = std::fs::read_to_string(std::env::var("CBB_MAP").expect("CBB_MAP: the map of CBB"))
+        .unwrap();
+    let table = map
+        .lines()
+        .find(|l| l.starts_with("__z_page_table "))
+        .expect("__z_page_table");
     let hex = table.split('$').nth(1).unwrap().split(' ').next().unwrap();
     run.page_table = u16::from_str_radix(hex, 16).unwrap();
     run.overlay_logical = vec![13, 15, 17, 19];
     if let Some(t) = space {
         let t = (t * 1e6) as u64;
-        run.hw.keys.push(cbb_drvtest::next::Key { from: t, until: t + 300_000, row: 0x7F, bit: 0 });
+        run.hw.keys.push(cbb_drvtest::next::Key {
+            from: t,
+            until: t + 300_000,
+            row: 0x7F,
+            bit: 0,
+        });
     }
     let mut shown = 0;
     let mut t = 0.0;
@@ -66,22 +75,46 @@ fn main() {
         t += 1.0;
         let b = &run.hw.breaches;
         for x in &b[shown..] {
-            println!("{:7.2}s BREACH at {:#06x}: {}", run.hw.now / 1e6, x.pc, x.what);
+            println!(
+                "{:7.2}s BREACH at {:#06x}: {}",
+                run.hw.now / 1e6,
+                x.pc,
+                x.what
+            );
         }
         shown = b.len();
     }
     // A key for "press a key", as the user would.
     if !run.done && run.hw.screen_text().contains("PRESS A KEY") {
         for x in &run.hw.breaches[shown..] {
-            println!("{:7.2}s BREACH at {:#06x}: {}", run.hw.now / 1e6, x.pc, x.what);
+            println!(
+                "{:7.2}s BREACH at {:#06x}: {}",
+                run.hw.now / 1e6,
+                x.pc,
+                x.what
+            );
         }
         shown = run.hw.breaches.len();
-        println!("--- before the key, {:.2}s\n{}", run.hw.now / 1e6, run.hw.screen_text());
+        println!(
+            "--- before the key, {:.2}s\n{}",
+            run.hw.now / 1e6,
+            run.hw.screen_text()
+        );
         let now = run.hw.now as u64;
-        run.hw.keys.push(cbb_drvtest::next::Key { from: now + 500_000, until: now + 700_000, row: 0xBF, bit: 0 });
+        run.hw.keys.push(cbb_drvtest::next::Key {
+            from: now + 500_000,
+            until: now + 700_000,
+            row: 0xBF,
+            bit: 0,
+        });
         run.run(5.0);
         for x in &run.hw.breaches[shown..] {
-            println!("{:7.2}s BREACH at {:#06x}: {}", run.hw.now / 1e6, x.pc, x.what);
+            println!(
+                "{:7.2}s BREACH at {:#06x}: {}",
+                run.hw.now / 1e6,
+                x.pc,
+                x.what
+            );
         }
     }
     if run.done && run.result.is_none() {
@@ -89,10 +122,18 @@ fn main() {
             println!("trace {pc:04x} sp {sp:04x} mmu7 {p7}");
         }
     }
-    println!("--- after {:.2}s, done {}, result {:?}", run.hw.now / 1e6, run.done, run.result);
+    println!(
+        "--- after {:.2}s, done {}, result {:?}",
+        run.hw.now / 1e6,
+        run.done,
+        run.result
+    );
     println!("{}", run.hw.screen_text());
     let kept: Vec<usize> = (0..run.hw.ours.len()).filter(|&p| run.hw.ours[p]).collect();
-    println!("pages still taken: {kept:?}, drivers {:?}", run.hw.drivers.iter().map(|d| d.0).collect::<Vec<_>>());
+    println!(
+        "pages still taken: {kept:?}, drivers {:?}",
+        run.hw.drivers.iter().map(|d| d.0).collect::<Vec<_>>()
+    );
     println!(
         "border {}, frames {}, esp overflows {}, pi overflows {}",
         run.hw.border, run.frames, run.hw.esp.overflows, run.hw.pi.overflows
@@ -100,7 +141,11 @@ fn main() {
     let mut sw: Vec<u16> = run.hw.screen_writes.iter().map(|w| w.0).collect();
     sw.sort();
     sw.dedup();
-    println!("screen written from {} places: {:04x?}", sw.len(), &sw[..sw.len().min(40)]);
+    println!(
+        "screen written from {} places: {:04x?}",
+        sw.len(),
+        &sw[..sw.len().min(40)]
+    );
     if std::env::var("PRINTED").is_ok() {
         println!("printed: {}", run.hw.printed);
     }
