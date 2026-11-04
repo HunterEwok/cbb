@@ -287,6 +287,13 @@ func (d *Desk) Remove(id string)       { d.admin([]string{"remove", id}, false, 
 func (d *Desk) MakeAdmin(id string) {
 	d.admin([]string{"admin", "-allow-file-key", id}, false, "It is an admin now.")
 }
+
+// Leave takes this computer out of its group (cbb leave, D-83): its keys
+// and the group's files go, its settings stay, and it may join again.
+func (d *Desk) Leave() {
+	d.admin([]string{"leave", "-yes"}, false, "Left the group. This computer can join a group again.")
+}
+
 func (d *Desk) Freeze(id string)   { d.admin([]string{"freeze", id}, false, "Frozen.") }
 func (d *Desk) Unfreeze(id string) { d.admin([]string{"unfreeze", id}, false, "Unfrozen.") }
 
