@@ -184,7 +184,12 @@ final class AppModel: ObservableObject {
     struct Computer: Identifiable, Equatable {
         let id: String
         var name: String
+        /// Connected to this phone, or to a computer that is (throughHub).
         var online: Bool
+        /// Online only through a connected computer, the hub away from
+        /// home, which passes commands on to it (docs/protocol.md, section
+        /// 4, "Reach"); a hub command still needs it connected here.
+        var throughHub = false
         /// "full", "phone", "lite" or "watch".
         var role = "full"
         /// Its operating system; nil when its record does not tell.

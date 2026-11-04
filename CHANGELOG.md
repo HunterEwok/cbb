@@ -1347,6 +1347,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Away from home, the phone apps showed the devices behind the hub as offline, although
+  pastes and other commands reached them through it. A computer now tells the phones
+  connected to it which members it reaches (`reach`, docs/protocol.md section 4), and the
+  apps show those as online through the hub.
 - cbb for macOS, signed with the hardened runtime (the release's Developer ID build, and
   `packaging/macos/sign.sh`), was killed by macOS 27 as soon as it loaded the Rust core,
   so `cbb version` and the installer failed: wazero's compiled code needs executable memory

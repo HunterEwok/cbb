@@ -115,6 +115,8 @@ final class LiveGroup: GroupController {
     /// The hub's changes, one after another.
     private var hubWork: Task<Void, Never>?
     private var online: Set<String> = []
+    /// The devices the connected computers reach, not connected here.
+    private var reached: Set<String> = []
     /// The admin keys the connected computers offer, by device ID.
     private var offers: [String: Data] = [:]
     /// Where the connected members' hellos say their keys live.
@@ -308,7 +310,8 @@ final class LiveGroup: GroupController {
         guard let g = state else { return [] }
         let root = g.records.rootDevice
         return g.devices.map {
-            .init(id: $0.id, name: $0.name, online: $0.id == g.device || online.contains($0.id), role: $0.role, os: $0.os,
+            .init(id: $0.id, name: $0.name, online: $0.id == g.device || online.contains($0.id) || reached.contains($0.id),
+                  throughHub: $0.id != g.device && !online.contains($0.id) && reached.contains($0.id), role: $0.role, os: $0.os,
                   isSelf: $0.id == g.device,
                   admin: $0.admin || $0.id == root, isRoot: $0.id == root,
                   canMakeAdmin: g.isRoot && !$0.admin && !$0.frozen && $0.role == "full" && offers[$0.id] != nil,
@@ -321,6 +324,7 @@ final class LiveGroup: GroupController {
 
     func refresh() async {
         online = await node?.connected ?? []
+        reached = await node?.reached ?? []
         infos = await node?.devices ?? [:]
         modes = await node?.modes ?? [:]
         actions = await node?.actions ?? [:]
@@ -1398,7 +1402,7 @@ final class LiveGroup: GroupController {
         // The computers show without a forwarder too, so that the user sees
         // where the hub can go; Settings asks for the forwarder first.
         if hub.isOn {
-            let movable = computers.filter { $0.online && $0.role == "full" && ($0.admin || $0.canMakeAdmin) }
+            let movable = computers.filter { $0.online && !$0.throughHub && $0.role == "full" && ($0.admin || $0.canMakeAdmin) }
             h.computers = movable.map { .init(id: $0.id, name: $0.name) }
             if !UserDefaults.standard.bool(forKey: Self.keepsPhoneHubKey),
                let s = movable.first(where: { Self.alwaysOn.contains($0.device?.form ?? "") }) {
@@ -2048,7 +2052,8 @@ final class LiveGroup: GroupController {
             } else {
                 await node.send(text: t, kind: .text)
             }
-            return .sent(to: devices.filter { online.contains($0.id) && !$0.isSelf }.map(\.name).sorted())
+            reached = await node.reached
+            return .sent(to: devices.filter { $0.online && !$0.isSelf }.map(\.name).sorted())
         }
         if let u = usable, u.text != board {
             return try await fetch()

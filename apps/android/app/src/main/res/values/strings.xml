@@ -40,6 +40,7 @@
     <string name="nothing_new">Nothing new to send or fetch.</string>
     <string name="no_computers">No computers connected.</string>
     <string name="online">online</string>
+    <string name="online_through_hub">online through the hub</string>
     <string name="offline">offline</string>
     <string name="this_phone">This phone</string>
     <string name="this_phone_admin">This phone · admin</string>

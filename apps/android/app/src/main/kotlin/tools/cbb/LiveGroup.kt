@@ -105,6 +105,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     data class Device(
         val id: String,
         val name: String,
+        /** Connected to this phone, or to a computer that is (throughHub). */
         val online: Boolean,
         val role: String = "full",
         /** Its system: linux, windows, macos, ios, android or none; null if unknown. */
@@ -132,6 +133,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val mayHub: Boolean = false,
         /** Where it stands among the group's hubs, as this phone knows: null when it is none. */
         val hub: HubMark? = null,
+        /**
+         * Online only through a connected computer, the hub away from home, which
+         * passes commands on to it (docs/protocol.md, section 4, "Reach"); a hub
+         * command still needs it connected here.
+         */
+        val throughHub: Boolean = false,
     )
 
     /** A device as one of the group's hubs: this phone while it is the hub, or a hub whose offer the phone keeps. */
@@ -273,6 +280,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             // The node calls back into the group under its own lock, so it is asked outside this one.
             val (g, n) = synchronized(lock) { (state ?: return emptyList()) to node }
             val online = n?.connected.orEmpty()
+            val reached = n?.reached.orEmpty()
             val offers = n?.offeredAdminKeys.orEmpty()
             val stores = n?.keyStores.orEmpty()
             val infos = n?.devices.orEmpty()
@@ -287,7 +295,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val selfHub = phoneHub?.isOn == true
             return g.devices.map {
                 Device(
-                    id = it.id, name = it.name, online = it.id == g.device || it.id in online, role = it.role, os = it.os, isSelf = it.id == g.device,
+                    id = it.id, name = it.name, online = it.id == g.device || it.id in online || it.id in reached, role = it.role, os = it.os, isSelf = it.id == g.device,
                     admin = it.admin || it.id == root, isRoot = it.id == root,
                     canMakeAdmin = g.isRoot && !it.admin && !it.frozen && it.role == "full" && offers[it.id] != null,
                     keysInFile = KitRecords.storeOf(stores[it.id] ?: it.store, it.role) == KitRecords.FILE,
@@ -303,6 +311,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                         it.id in hubs -> HubMark.HUB
                         else -> null
                     },
+                    throughHub = it.id != g.device && it.id !in online && it.id in reached,
                 )
             }
         }
@@ -1385,7 +1394,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     val suggestedHub: Device?
         get() {
             if (phoneHub?.isOn != true) return null
-            return computers.firstOrNull { it.online && it.role == "full" && it.device?.form in ALWAYS_ON && (it.admin || it.canMakeAdmin) }
+            return computers.firstOrNull { it.online && !it.throughHub && it.role == "full" && it.device?.form in ALWAYS_ON && (it.admin || it.canMakeAdmin) }
         }
 
     /**
