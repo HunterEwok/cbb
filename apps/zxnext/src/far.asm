@@ -10,8 +10,10 @@
 ; have the addresses 0xE000-0xFFFF, the window of MMU7, which MAIN leaves
 ; empty (it ends below 0xE000; the Makefile checks).
 ;
-; This code runs from the divMMC page (code_dot), where the stack is too,
-; so changing MMU7 never pulls the ground from under it.
+; This code runs from the divMMC page (code_dot), and the stack is below
+; 0xE000 too (REGISTER_SP in the Makefile; z88dk's own default, the top of
+; memory, is in MMU7), so changing MMU7 never pulls the ground from under
+; either.
 
 SECTION code_dot
 

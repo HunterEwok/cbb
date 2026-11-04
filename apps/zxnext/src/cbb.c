@@ -984,8 +984,7 @@ static void logo_draw(void)
     zx_border(INK_BLACK);
 }
 
-// palette() runs from the dot command's own 8K, as MAIN has no room left;
-// the 8K keeps the rest for the stack.
+// palette() runs from the dot command's own 8K, as MAIN has no room left.
 #pragma codeseg code_dot
 
 // The logo's own colours, in the Next's palette while the screen shows: the
