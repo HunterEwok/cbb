@@ -121,7 +121,8 @@ The service waits until the device joins a group. Since a small device often has
 and you install it to pair it, the installer starts pairing by itself when the device is in no
 group and its output is a terminal (over SSH too): it shows the QR code at once. An update, or
 a reinstall that keeps the group, skips it; `--no-pair` (or `CBB_PAIR=no`) skips it for a
-scripted install; Ctrl+C stops the pairing but not the installer. Joining still takes the code
+scripted install, which a script needs whenever it runs the installer with a terminal (`ssh -t`
+too), or it waits up to 5 minutes for a phone; Ctrl+C stops the pairing but not the installer. Joining still takes the code
 shown on the device. To pair later, join as the service's user, so that it can read its keys:
 
 ```sh
