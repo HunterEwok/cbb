@@ -30,7 +30,6 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/tunnel"
@@ -150,9 +149,11 @@ func Listen(cfg ServerConfig) (*Server, error) {
 // listenTries is how many times Listen picks free ports.
 const listenTries = 3
 
-// addrInUse reports whether err is a port that another socket took.
+// addrInUse reports whether err is a port that another socket took; Xray
+// may give it as text only.
 func addrInUse(err error) bool {
-	return errors.Is(err, syscall.EADDRINUSE) || strings.Contains(err.Error(), "address already in use")
+	return errors.Is(err, errAddrInUse) || strings.Contains(err.Error(), "address already in use") ||
+		strings.Contains(err.Error(), "Only one usage of each socket address")
 }
 
 func listenOnce(cfg ServerConfig) (*Server, error) {
