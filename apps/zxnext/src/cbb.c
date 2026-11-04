@@ -10,6 +10,7 @@
 #include <arch/zxn/esxdos.h>
 #include <ctype.h>
 #include <errno.h>
+#include <input.h>
 #include <intrinsic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1062,13 +1063,20 @@ static void screen_open(void)
     printf("SPACE STOPS");
 }
 
-// Leaves the screen: the border and the palette as they were, the print
-// position under the messages, from where the screen scrolls as usual.
+// Leaves the screen once a key is pressed: until then it keeps its own
+// colours and the messages; then the border and the palette as they were,
+// on a clear screen in BASIC's colours (ATTR_P), where the logo would
+// show in the wrong ones.
 static void screen_close(void)
 {
+    say("Press a key.");
+    in_wait_nokey();
+    in_wait_key();
+    in_wait_nokey();
     zx_border(border_old);
     palette(1);
-    at(screen_row > 23 ? 23 : screen_row, 0);
+    zx_cls(*(uint8_t *)23693);
+    at(0, 0);
     screen_row = 0;
 }
 
