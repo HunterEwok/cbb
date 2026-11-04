@@ -1524,7 +1524,7 @@ those of the newest such record (the highest `seq` of that root) that names it.
 | Record | Signed by |
 |--------|-----------|
 | `device` naming `admin`, or with role `phone` or `watch` | a root's own key |
-| `device` with `forward_only`, or without it for a device whose newest record has it | a root's own key, or an admin with `hub` |
+| `device` with `forward_only` | a root's own key, or an admin with `admit` and `hub` |
 | other `device` | a root's own key, or an admin with `admit` |
 | `revoke` of member keys | a root's own key, or an admin with `remove` |
 | `revoke` of an admin key, or of the member key of a device whose newest root record names an admin key | a root's own key, or an admin with `remove-admins` |
@@ -2211,7 +2211,7 @@ passes them between. A group has two kinds of hub, chosen when a device is made 
   reads the copies as every reader does, and as an admin it admits devices; the group's key
   level (section 17) applies to it as to every admin.
 - A hub that **only passes copies on** is a computer whose newest device record has
-  `forward_only` (section 10), signed by the root or an admin with `hub`. No copy is sealed to
+  `forward_only` (section 10), signed by the root or an admin with `admit` and `hub`. No copy is sealed to
   it, so it reads none; it makes no copies, writes none to a clipboard and takes no `paste`
   or `action` command. It holds no CA key, so it makes no remote invitation (section 12): a
   device far away joins through a trusted hub, or at home. No key level applies to it, since
@@ -2223,7 +2223,8 @@ An admin makes a computer such a hub by signing it a device record with `forward
 then sending it a `hub` command (`cbb global hub -on DEVICE -forward-only`; the apps' "Make
 it a hub", "Only passes copies on"). A hub of one kind becomes the other: to trust it, the root
 makes it an admin, which checks the key level then, and the record that names its admin key
-leaves `forward_only` out; to make a trusted hub only pass copies on, an admin with
+leaves `forward_only` out (any admin with `admit` may sign it a record without it, as it may
+admit a device that reads copies anyway); to make a trusted hub only pass copies on, an admin with
 `remove-admins` revokes its admin key and signs it a record with `forward_only`. From the
 next copy on, the copies are sealed to it, or no longer.
 
