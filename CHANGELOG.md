@@ -107,7 +107,9 @@ All notable changes to cbb are documented in this file. The format follows
   text and pair share the page of `.cbb net`. The Pi says it is ready for its cbb with
   `printf 'CBBGO\r\n'`: after `stty raw` its `echo` ends the line without the CR that
   `.cbb` waits for. The install screen's rows are CBB.DRV, SERVICE (fetching the Pi's cbb)
-  and TO PI (sending it), then the total. `make test` runs the real `CBB` on a
+  and TO PI (sending it), then the total. It fetches at 230400 baud instead of 115200
+  (about twice as fast; 460800 overflowed the UART on the played Next) and puts the ESP
+  back at 115200 after, and finds the ESP at any of its three speeds. `make test` runs the real `CBB` on a
   played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
   cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
   silent Pi, a closed connection, SPACE, the usage and a paste, each failed on what would

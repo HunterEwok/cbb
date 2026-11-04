@@ -112,7 +112,15 @@ uint8_t link_stopped;
 
 uint8_t link_recv(uint8_t *c, uint16_t seconds)
 {
-    uint32_t rounds = seconds * ROUNDS_PER_SECOND;
+    uint32_t rounds;
+    // A byte that is there goes at once, through the ports themselves:
+    // .cbb install reads 23K a second (230400 baud), and the UART keeps
+    // only 512 bytes.
+    if (IO_UART_STATUS & STATUS_RX_AVAIL) {
+        *c = IO_UART_RX;
+        return LINK_OK;
+    }
+    rounds = seconds * ROUNDS_PER_SECOND;
     for (;;) {
         if (z80_inp(PORT_TX_STATUS) & STATUS_RX_AVAIL) {
             *c = z80_inp(PORT_RX_BAUD);

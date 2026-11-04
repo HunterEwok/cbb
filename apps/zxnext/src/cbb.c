@@ -577,6 +577,13 @@ static void link_quit(void)
 // overflows the Next's 512-byte buffer. 19200 is 1920 bytes a second.
 #define ESP_SPEED 115200UL
 #define ESP_NET_SPEED 19200UL
+// .cbb install's speed for the site's files: 23K a second, which .cbb at
+// 28 MHz reads as it comes (at 460800 the played Next's UART overflowed);
+// it asks for each chunk, so nothing more than one answer comes at a time.
+#define ESP_FETCH_SPEED 230400UL
+
+// The speeds the ESP may be at, which esp_answers() tries.
+static const uint32_t esp_speeds[] = {ESP_SPEED, ESP_NET_SPEED, ESP_FETCH_SPEED};
 
 // Whether the ESP answers AT at speed; leaves it selected. The CR LF first
 // ends whatever an earlier try at the other speed left in its line.
@@ -608,18 +615,23 @@ static void esp_escape(uint32_t speed)
     link_send_str("AT+CIPMODE=0\r\n");
 }
 
-// Puts the ESP's UART at speed, from either speed it may be at; 1 if it
+// Puts the ESP's UART at speed, from any speed it may be at; 1 if it
 // answers, the ESP selected.
 static uint8_t esp_answers(uint32_t speed)
 {
+    uint8_t i;
     if (esp_at(speed)) return 1;
-    if (!esp_at(speed == ESP_SPEED ? ESP_NET_SPEED : ESP_SPEED)) return 0;
-    link_send_str(speed == ESP_SPEED ? "AT+UART_CUR=115200,8,1,0,0\r\n" : "AT+UART_CUR=19200,8,1,0,0\r\n");
-    // The OK comes at the old speed; then the ESP switches.
-    while (link_line(line, sizeof line, 2) == LINK_OK) {
-        if (strcmp(line, "OK") == 0) break;
+    for (i = 0; i < sizeof esp_speeds / sizeof esp_speeds[0]; i++) {
+        if (esp_speeds[i] == speed || !esp_at(esp_speeds[i])) continue;
+        sprintf(line, "AT+UART_CUR=%lu,8,1,0,0\r\n", speed);
+        link_send_str(line);
+        // The OK comes at the old speed; then the ESP switches.
+        while (link_line(line, sizeof line, 2) == LINK_OK) {
+            if (strcmp(line, "OK") == 0) break;
+        }
+        return esp_at(speed);
     }
-    return esp_at(speed);
+    return 0;
 }
 
 // The same, first from the speed the ESP is at (a reset of the Next leaves
@@ -627,11 +639,13 @@ static uint8_t esp_answers(uint32_t speed)
 // cycle brings back 115200), then out of a transparent connection at each.
 static uint8_t esp_speed(uint32_t speed)
 {
+    uint8_t i;
     if (esp_answers(speed)) return 1;
-    esp_escape(ESP_NET_SPEED);
-    if (esp_answers(speed)) return 1;
-    esp_escape(ESP_SPEED);
-    return esp_answers(speed);
+    for (i = 0; i < sizeof esp_speeds / sizeof esp_speeds[0]; i++) {
+        esp_escape(esp_speeds[i]);
+        if (esp_answers(speed)) return 1;
+    }
+    return 0;
 }
 
 
@@ -960,7 +974,7 @@ static const char *const http_cmds[] = {"AT+CIPMODE=0", "AT+CIPCLOSE", "AT+CIPMU
 static uint8_t http_open(void)
 {
     uint8_t i, c;
-    if (!esp_speed(ESP_SPEED)) return 1;
+    if (!esp_speed(ESP_FETCH_SPEED)) return 1;
     for (i = 0; i < sizeof http_cmds / sizeof http_cmds[0]; i++) {
         link_send_str(http_cmds[i]);
         link_send_str("\r\n");
@@ -988,10 +1002,12 @@ static uint8_t http_open(void)
 // Leaves the passthrough connection: a second of quiet, +++, a second.
 static void http_close(void)
 {
-    esp_escape(ESP_SPEED);
+    esp_escape(ESP_FETCH_SPEED);
     link_send_str("AT+CIPCLOSE\r\n");
     while (link_line(line, sizeof line, 2) == LINK_OK) {
     }
+    // Back to the stock speed, which the other commands expect.
+    esp_speed(ESP_SPEED);
 }
 
 // The install screen, on black: the logo on the left (tools/icon), the
