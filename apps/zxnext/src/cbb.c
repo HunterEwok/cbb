@@ -1957,6 +1957,8 @@ void usage_run(void)
 {
     const char *p;
     uint8_t col = 0;
+    // 19 lines fit the 22 of the upper screen; no "scroll?" all the same.
+    SCR_CT = 255;
     for (p = usage_text; *p; p++) {
         if (*p == '\t') {
             for (; col < 14; col++) putchar(' ');
