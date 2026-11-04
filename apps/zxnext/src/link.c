@@ -144,15 +144,16 @@ static void drain(void)
 }
 
 // Waits for "SUP>" within seconds.
+static const char prompt[] = "SUP>";
+
 static uint8_t wait_prompt(uint16_t seconds)
 {
-    static const char want[] = "SUP>";
     uint8_t got = 0, c;
     while (link_recv(&c, seconds) == LINK_OK) {
-        if (c == want[got]) {
+        if (c == prompt[got]) {
             if (++got == 4) return 1;
         } else {
-            got = c == want[0];
+            got = c == prompt[0];
         }
     }
     return 0;

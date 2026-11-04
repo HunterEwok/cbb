@@ -83,11 +83,15 @@ static void usage(void)
 #define MESSAGE_ROW 18
 static uint8_t screen_row;
 
+// A byte straight to the ROM's RST $10 (far.asm): stdout's driver turns
+// 10 into 13 and drops 13, which AT's row and column must not have.
+extern void rom_char(uint8_t c) __z88dk_fastcall;
+
 static void at(uint8_t row, uint8_t col)
 {
-    putchar(22); // the ROM's AT
-    putchar(row);
-    putchar(col);
+    rom_char(22); // the ROM's AT
+    rom_char(row);
+    rom_char(col);
 }
 
 // Puts the print position on the next message row for a text of len
@@ -101,7 +105,7 @@ static void message_at(uint16_t len)
     uint8_t *p;
     if (!screen_row) return;
     while (screen_row + lines > 22 && screen_row > MESSAGE_ROW) {
-        p = (uint8_t *)0x5000 + (MESSAGE_ROW - 16) * 32;
+        p = (uint8_t *)(0x5000 + (MESSAGE_ROW - 16) * 32);
         for (k = 0; k < 8; k++, p += 256) {
             memmove(p, p + 32, (21 - MESSAGE_ROW) * 32);
             memset(p + (21 - MESSAGE_ROW) * 32, 0, 32);
@@ -328,6 +332,23 @@ static uint8_t expect(uint8_t want, uint32_t *len, uint32_t *crc, uint16_t secon
     }
 }
 
+// The words of the command an overlay runs, which run() leaves in MAIN for
+// it (cmd_run(), net_cmd()), and whether install runs as .cbb update.
+static int far_argc;
+static char **far_argv;
+static uint8_t install_update;
+
+// Whether copy and text send a secret: the group's devices keep it out of
+// their histories and clear it from their clipboards after a while.
+static uint8_t secret;
+
+// .cbb paste, copy, text and pair (through the Pi's own network), from
+// here to cmd_run(), are an overlay as well (far.asm, far_cmd()).
+#pragma codeseg PAGE_19
+#pragma constseg PAGE_19
+#pragma bssseg PAGE_19
+#pragma dataseg PAGE_19
+
 // Eight lowercase hex digits, as the lite member writes a CRC-32.
 static void hex8(char *out, uint32_t v)
 {
@@ -383,10 +404,6 @@ static int paste(const char *file)
     printf("%u bytes saved to %s\n", got, file);
     return 0;
 }
-
-// Whether copy and text send a secret: the group's devices keep it out of
-// their histories and clear it from their clipboards after a while.
-static uint8_t secret;
 
 static int copy(uint16_t len)
 {
@@ -476,6 +493,22 @@ static int pair(void)
     return 0;
 }
 
+// Not static: far_cmd() (far.asm) calls it, with far_argc and far_argv
+// set; run() has checked the number of words.
+int cmd_run(void)
+{
+    char **argv = far_argv;
+    if (strcmp(argv[0], "paste") == 0) return paste(far_argc == 2 ? argv[1] : 0);
+    if (strcmp(argv[0], "copy") == 0) return copy_file(argv[1]);
+    if (strcmp(argv[0], "text") == 0) return copy_words(far_argc - 1, argv + 1);
+    return pair();
+}
+
+#pragma codeseg code_compiler
+#pragma constseg rodata_compiler
+#pragma bssseg bss_compiler
+#pragma dataseg data_compiler
+
 // The link's settings: the -to, -serve and -zone of `cbb next link`.
 static char net_args[120];
 
@@ -522,9 +555,13 @@ static uint8_t plain(const char *s)
 }
 
 // Sends cbb next link the quit frame: the start byte, Q, no data, the sum.
+// Constant tables are kept outside the functions: zcc puts a function's own
+// static data at the function's address when both go to one section, as
+// they do in the overlay pages, and a call then runs the data (mapcheck.sh).
+static const uint8_t quit[] = {0x7E, 'Q', 0, 'Q'};
+
 static void link_quit(void)
 {
-    static const uint8_t quit[] = {0x7E, 'Q', 0, 'Q'};
     uint8_t i;
     for (i = 0; i < sizeof quit; i++) link_send(quit[i]);
 }
@@ -592,11 +629,6 @@ static uint8_t esp_speed(uint32_t speed)
     return esp_answers(speed);
 }
 
-// The net command's words, which run() leaves in MAIN for net_cmd().
-static int net_argc;
-static char **net_argv;
-// Whether install() runs as .cbb update, which run() leaves in MAIN too.
-static uint8_t install_update;
 
 // .cbb net and .cbb pair through the ESP, from here to net_cmd(), are an
 // overlay of their own, as .cbb install is (far.asm, far_net()).
@@ -675,9 +707,10 @@ static int net_start(int argc, char **argv)
 }
 
 // The ESP's address on the Wi-Fi network, from AT+CIFSR, into ip.
+static const char cifsr_ip[] = "+CIFSR:STAIP,\"";
+
 static uint8_t esp_address(char *ip, uint8_t max)
 {
-    static const char want[] = "+CIFSR:STAIP,\"";
     uint8_t i, found = 0;
     if (!esp_speed(ESP_SPEED)) {
         link_use(LINK_PI);
@@ -685,8 +718,8 @@ static uint8_t esp_address(char *ip, uint8_t max)
     }
     link_send_str("AT+CIFSR\r\n");
     while (link_line(line, sizeof line, 3) == LINK_OK) {
-        if (strncmp(line, want, sizeof want - 1) == 0) {
-            const char *a = line + sizeof want - 1;
+        if (strncmp(line, cifsr_ip, sizeof cifsr_ip - 1) == 0) {
+            const char *a = line + sizeof cifsr_ip - 1;
             for (i = 0; i + 1 < max && a[i] && a[i] != '"'; i++) ip[i] = a[i];
             ip[i] = 0;
             found = i > 0;
@@ -803,7 +836,7 @@ static int net(int argc, char **argv)
 // Not static: far_net() (far.asm) calls it.
 int net_cmd(void)
 {
-    return net(net_argc, net_argv);
+    return net(far_argc, far_argv);
 }
 
 #pragma codeseg code_compiler
@@ -881,6 +914,11 @@ static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
             if (strncmp(line, "HTTP/1.", 7) != 0 || strlen(line) < 12) goto out;
             status = (uint16_t)strtoul(line + 9, 0, 10);
         } else if (!line[0]) {
+            // link_line stops at the empty line's CR: its LF comes before
+            // the body.
+            err = link_recv(&c, 10);
+            if (!err && c != '\n') err = 252;
+            if (err) goto out;
             break;
         } else if (strncasecmp(line, "Content-Length:", 15) == 0) {
             length = strtoul(line + 15, 0, 10);
@@ -904,14 +942,15 @@ out:
 }
 
 // Opens a passthrough connection to the site through the ESP; 0 when open.
+static const char *const http_cmds[] = {"AT+CIPMODE=0", "AT+CIPCLOSE", "AT+CIPMUX=0", "AT+CIPMODE=1",
+                                        "AT+CIPSTART=\"TCP\",\"" SITE "\",80", "AT+CIPSEND"};
+
 static uint8_t http_open(void)
 {
-    static const char *const cmds[] = {"AT+CIPMODE=0", "AT+CIPCLOSE", "AT+CIPMUX=0", "AT+CIPMODE=1",
-                                       "AT+CIPSTART=\"TCP\",\"" SITE "\",80", "AT+CIPSEND"};
     uint8_t i, c;
     if (!esp_speed(ESP_SPEED)) return 1;
-    for (i = 0; i < sizeof cmds / sizeof cmds[0]; i++) {
-        link_send_str(cmds[i]);
+    for (i = 0; i < sizeof http_cmds / sizeof http_cmds[0]; i++) {
+        link_send_str(http_cmds[i]);
         link_send_str("\r\n");
         if (i == 1) {
             // No connection to close answers ERROR: either will do.
@@ -961,7 +1000,9 @@ static void http_close(void)
 #define NOW_ROW 13
 #define BAR_CELLS 12
 
-// The ROM's colour codes, for what .cbb prints meanwhile.
+// The ROM's colour codes, for what .cbb prints meanwhile; in the divMMC
+// page, as both the install screen's page and the install's use it.
+#pragma codeseg code_dot
 static void colour(uint8_t ink)
 {
     putchar(17); // PAPER
@@ -971,52 +1012,7 @@ static void colour(uint8_t ink)
     putchar(19); // BRIGHT
     putchar(1);
 }
-
-// Unpacks the logo (PackBits, tools/icon) into text[].
-static void logo_unpack(void)
-{
-    const uint8_t *p = logo_packed;
-    uint8_t *out = text, n, k;
-    while (out < text + LOGO_BYTES) {
-        n = far_byte(p++);
-        if (n < 128) {
-            for (k = 0; k <= n; k++) *out++ = far_byte(p++);
-        } else {
-            memset(out, far_byte(p++), 257 - n);
-            out += 257 - n;
-        }
-    }
-}
-
-// Draws the logo as a screen loads from tape: the pixel rows in the
-// screen's own order (each third, the first row of every cell, then the
-// second, ...), in black on white with the border striped, then the
-// colours at once.
-static void logo_draw(void)
-{
-    uint8_t third, line, cell, x, y, border = INK_BLUE;
-    uint16_t frame;
-    for (third = 0; third < 3; third++) {
-        for (line = 0; line < 8; line++) {
-            for (cell = 0; cell < 8; cell++) {
-                y = third * 64 + cell * 8 + line;
-                if (y >= LOGO_ROWS * 8) continue;
-                for (x = 0; x < LOGO_COLS; x++) *zx_pxy2saddr(x * 8, y) = text[y * LOGO_COLS + x];
-            }
-            // A frame for each row of cells' line, with stripes.
-            frame = FRAMES_LO;
-            while (FRAMES_LO == frame) {
-                border ^= INK_BLUE ^ INK_YELLOW;
-                zx_border(border);
-                for (x = 0; x < 40; x++) {
-                }
-            }
-        }
-    }
-    for (y = 0; y < LOGO_ROWS; y++)
-        for (x = 0; x < LOGO_COLS; x++) *zx_cxy2aaddr(x, y) = text[LOGO_ROWS * 8 * LOGO_COLS + y * LOGO_COLS + x];
-    zx_border(INK_BLACK);
-}
+#pragma codeseg PAGE_13
 
 // palette() runs from the dot command's own 8K, as MAIN has no room left.
 #pragma codeseg code_dot
@@ -1060,52 +1056,6 @@ static void palette(uint8_t restore)
 }
 
 #pragma codeseg PAGE_13
-
-// The border's colour before the screen, which the ROM keeps in BORDCR.
-static uint8_t border_old;
-
-static void screen_open(void)
-{
-    border_old = (*(uint8_t *)23624 >> 3) & 7;
-    zx_border(INK_BLACK);
-    palette(0);
-    zx_cls(PAPER_BLACK | INK_WHITE | BRIGHT);
-    logo_unpack();
-    logo_draw();
-    screen_row = MESSAGE_ROW;
-    // No "scroll?", should anything scroll still.
-    SCR_CT = 255;
-    // The name centred over the bars, 17 columns.
-    colour(INK_BLUE);
-    at(0, PANEL + 3);
-    printf("COPY BEYOND");
-    at(1, PANEL + 5);
-    printf("BORDERS");
-    colour(INK_WHITE);
-    at(2, PANEL);
-    put_text(VERSION ", " SITE);
-    at(NOW_ROW + 2, PANEL);
-    printf("SPACE STOPS");
-}
-
-// Leaves the screen once a key is pressed: until then it keeps its own
-// colours and the messages; then the border and the palette as they were,
-// on a clear screen in BASIC's colours (ATTR_P), where the logo would
-// show in the wrong ones.
-static void screen_close(void)
-{
-    at(NOW_ROW + 2, PANEL);
-    printf("PRESS A KEY");
-    in_wait_nokey();
-    in_wait_key();
-    in_wait_nokey();
-    zx_border(border_old);
-    palette(1);
-    zx_cls(*(uint8_t *)23693);
-    at(0, 0);
-    screen_row = 0;
-}
-
 
 // Shows a file's state on its row: "current", "fetching" and so on.
 static void file_state(uint8_t row, const char *name, const char *state)
@@ -1318,7 +1268,11 @@ static int read_list(uint32_t *cbb_size, uint32_t *cbb_crc)
         err = link_line(line, sizeof line, 10);
         if (err) return fail("the site did not answer", "no list");
         if (i == 0 && strncmp(line, "HTTP/1.1 200", 12) != 0) return fail("the site has no files for the Next yet", line);
-        if (!line[0]) break;
+        if (!line[0]) {
+            // The empty line's LF, before the body.
+            if (link_recv((uint8_t *)line, 10) || line[0] != '\n') return fail("the list is damaged", "no LF");
+            break;
+        }
         if (strncasecmp(line, "Content-Length:", 15) == 0) len = (uint16_t)strtoul(line + 15, 0, 10);
     }
     if (len == 0 || len >= CHUNK) return fail("the list is damaged", 0);
@@ -1371,7 +1325,6 @@ static uint8_t pi_sha(char *sha)
 // wrapper that NextPi's shell runs is written unless there is one.
 static int to_pi(struct item *it, uint8_t row)
 {
-    static char check[300];
     uint8_t fh, err;
     uint16_t n, start = FRAMES_LO;
     uint32_t sent = 0;
@@ -1401,12 +1354,11 @@ static int to_pi(struct item *it, uint8_t row)
     esx_f_close(fh);
     link_prompt();
     // The digest is pins.h's, 64 hex digits, never the site's.
-    snprintf(check, sizeof check,
-             "cd " PI_DIR " && if ! command -v sha256sum >/dev/null; then rm -f cbb.new; echo CBBNOSHA; "
-             "elif [ \"$(sha256sum <cbb.new | cut -c1-64)\" = '%s' ]; then chmod 755 cbb.new && "
-             "mv -f cbb.new cbb.bin && echo CBBOK; else rm -f cbb.new; echo CBBERR; fi\n",
-             it->sha256);
-    link_send_str(check);
+    link_send_str("cd " PI_DIR " && if ! command -v sha256sum >/dev/null; then rm -f cbb.new; echo CBBNOSHA; "
+                  "elif [ \"$(sha256sum <cbb.new | cut -c1-64)\" = '");
+    link_send_str(it->sha256);
+    link_send_str("' ]; then chmod 755 cbb.new && mv -f cbb.new cbb.bin && echo CBBOK; else rm -f cbb.new; "
+                  "echo CBBERR; fi\n");
     for (;;) {
         if (link_line(line, sizeof line, 60)) return fail("the Pi did not answer", "no CBBOK");
         if (strcmp(line, "CBBNOSHA") == 0) return fail("the Pi has no sha256sum to check its cbb with", 0);
@@ -1556,14 +1508,109 @@ static int install_files(uint8_t update)
 }
 
 // Not static: far_install() (far.asm) calls it, with install_update set.
-int install(void)
+int install_run(void)
 {
-    int err;
-    if (net_on()) return fail(net_runs, 0);
-    screen_open();
-    err = install_files(install_update);
-    screen_close();
-    return err;
+    return install_files(install_update);
+}
+
+// The install screen, opened and closed around the install's own page,
+// is in the logo's page (far.asm, far_screen_open(), far_screen_close()).
+#pragma codeseg PAGE_15
+#pragma constseg PAGE_15
+#pragma bssseg PAGE_15
+#pragma dataseg PAGE_15
+
+// Unpacks the logo (PackBits, tools/icon) into text[].
+static void logo_unpack(void)
+{
+    const uint8_t *p = logo_packed;
+    uint8_t *out = text, n, k;
+    while (out < text + LOGO_BYTES) {
+        n = *p++;
+        if (n < 128) {
+            for (k = 0; k <= n; k++) *out++ = *p++;
+        } else {
+            memset(out, *p++, 257 - n);
+            out += 257 - n;
+        }
+    }
+}
+
+// Draws the logo as a screen loads from tape: the pixel rows in the
+// screen's own order (each third, the first row of every cell, then the
+// second, ...), in black on white with the border striped, then the
+// colours at once.
+static void logo_draw(void)
+{
+    uint8_t third, line, cell, x, y, border = INK_BLUE;
+    uint16_t frame;
+    for (third = 0; third < 3; third++) {
+        for (line = 0; line < 8; line++) {
+            for (cell = 0; cell < 8; cell++) {
+                y = third * 64 + cell * 8 + line;
+                if (y >= LOGO_ROWS * 8) continue;
+                for (x = 0; x < LOGO_COLS; x++) *zx_pxy2saddr(x * 8, y) = text[y * LOGO_COLS + x];
+            }
+            // A frame for each row of cells' line, with stripes.
+            frame = FRAMES_LO;
+            while (FRAMES_LO == frame) {
+                border ^= INK_BLUE ^ INK_YELLOW;
+                zx_border(border);
+                for (x = 0; x < 40; x++) {
+                }
+            }
+        }
+    }
+    for (y = 0; y < LOGO_ROWS; y++)
+        for (x = 0; x < LOGO_COLS; x++) *zx_cxy2aaddr(x, y) = text[LOGO_ROWS * 8 * LOGO_COLS + y * LOGO_COLS + x];
+    zx_border(INK_BLACK);
+}
+
+// The border's colour before the screen, which the ROM keeps in BORDCR.
+static uint8_t border_old;
+
+// Not static: far_screen_open() (far.asm) calls it.
+void screen_open(void)
+{
+    border_old = (*(uint8_t *)23624 >> 3) & 7;
+    zx_border(INK_BLACK);
+    palette(0);
+    zx_cls(PAPER_BLACK | INK_WHITE | BRIGHT);
+    logo_unpack();
+    logo_draw();
+    screen_row = MESSAGE_ROW;
+    // No "scroll?", should anything scroll still.
+    SCR_CT = 255;
+    // The name centred over the bars, 17 columns.
+    colour(INK_BLUE);
+    at(0, PANEL + 3);
+    printf("COPY BEYOND");
+    at(1, PANEL + 5);
+    printf("BORDERS");
+    colour(INK_WHITE);
+    at(2, PANEL);
+    put_text(VERSION ", " SITE);
+    at(NOW_ROW + 2, PANEL);
+    printf("SPACE STOPS");
+}
+
+// Not static, as screen_open: far_screen_close() calls it. Leaves the
+// screen once a key is pressed: until then it keeps its own
+// colours and the messages; then the border and the palette as they were,
+// on a clear screen in BASIC's colours (ATTR_P), where the logo would
+// show in the wrong ones.
+void screen_close(void)
+{
+    at(NOW_ROW + 2, PANEL);
+    printf("PRESS A KEY");
+    in_wait_nokey();
+    in_wait_key();
+    in_wait_nokey();
+    zx_border(border_old);
+    palette(1);
+    zx_cls(*(uint8_t *)23693);
+    at(0, 0);
+    screen_row = 0;
 }
 
 #pragma codeseg code_compiler
@@ -1575,6 +1622,20 @@ int install(void)
 extern int far_install(void);
 extern int far_net(void);
 extern int far_net_pair(void);
+extern int far_cmd(void);
+extern void far_screen_open(void);
+extern void far_screen_close(void);
+
+// .cbb install and .cbb update: the screen in its page, the install in its.
+static int install(void)
+{
+    int err;
+    if (net_on()) return fail(net_runs, 0);
+    far_screen_open();
+    err = far_install();
+    far_screen_close();
+    return err;
+}
 
 static int run(int argc, char **argv)
 {
@@ -1594,19 +1655,22 @@ static int run(int argc, char **argv)
         argv[i + 1] = argv[i];
         i++;
     }
-    if (strcmp(argv[i], "paste") == 0 && argc - i <= 2) return paste(argc - i == 2 ? argv[i + 1] : 0);
-    if (strcmp(argv[i], "copy") == 0 && argc - i == 2) return copy_file(argv[i + 1]);
-    if (strcmp(argv[i], "text") == 0 && argc - i >= 2) return copy_words(argc - i - 1, argv + i + 1);
+    far_argc = argc - i;
+    far_argv = argv + i;
+    if ((strcmp(argv[i], "paste") == 0 && argc - i <= 2) || (strcmp(argv[i], "copy") == 0 && argc - i == 2) ||
+        (strcmp(argv[i], "text") == 0 && argc - i >= 2)) {
+        return far_cmd();
+    }
     // With the network's settings, the Pi has no network but the ESP's.
-    if (strcmp(argv[i], "pair") == 0 && argc - i == 1) return net_load() ? pair() : far_net_pair();
+    if (strcmp(argv[i], "pair") == 0 && argc - i == 1) return net_load() ? far_cmd() : far_net_pair();
     if (strcmp(argv[i], "net") == 0) {
-        net_argc = argc - i - 1;
-        net_argv = argv + i + 1;
+        far_argc = argc - i - 1;
+        far_argv = argv + i + 1;
         return far_net();
     }
     if ((strcmp(argv[i], "install") == 0 || strcmp(argv[i], "update") == 0) && argc - i == 1) {
         install_update = argv[i][0] == 'u';
-        return far_install();
+        return install();
     }
     usage();
     return 1;

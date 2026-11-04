@@ -1,14 +1,16 @@
 ; SPDX-License-Identifier: AGPL-3.0-only
 ; Copyright (C) 2026 HunterEwok
 
-; The dot command's far pages, kept out of MAIN's 32K: PAGE_15 holds data
-; that only some commands need (the install screen's logo, the usage
-; text); PAGE_13 the whole of .cbb install and PAGE_17 .cbb net and pair
-; through the ESP, each an overlay. z88dk's dotn
-; loader puts each in a page that NextZXOS allocates for the command and
-; frees when it ends, as z88dk's own dot commands (ls) do with theirs. Both
-; have the addresses 0xE000-0xFFFF, the window of MMU7, which MAIN leaves
-; empty (it ends below 0xE000; the Makefile checks).
+; The dot command's far pages, kept out of MAIN's 32K (README.md,
+; "Memory"): PAGE_15 holds the install screen with its logo and the usage
+; text; PAGE_13 the install itself, PAGE_17 .cbb net and pair through the
+; ESP, PAGE_19 .cbb paste, copy, text and pair through the Pi's own
+; network, each an overlay. z88dk's dotn loader puts each in a page that
+; NextZXOS allocates for the command and frees when it ends, as z88dk's
+; own dot commands (ls) do with theirs. All have the addresses
+; 0xE000-0xFFFF, the window of MMU7, which MAIN leaves empty (it ends below
+; 0xE000; budget.sh checks). An overlay calls MAIN and this page, never
+; another overlay.
 ;
 ; This code runs from the divMMC page (code_dot), and the stack is below
 ; 0xE000 too (REGISTER_SP in the Makefile; z88dk's own default, the top of
@@ -18,18 +20,26 @@
 SECTION code_dot
 
 PUBLIC _far_byte
+PUBLIC _rom_char
 PUBLIC _far_install
 PUBLIC _far_net
 PUBLIC _far_net_pair
+PUBLIC _far_cmd
+PUBLIC _far_screen_open
+PUBLIC _far_screen_close
 
 EXTERN __z_page_table
-EXTERN _install
+EXTERN _install_run
 EXTERN _net_cmd
 EXTERN _net_pair
+EXTERN _cmd_run
+EXTERN _screen_open
+EXTERN _screen_close
 
 FAR_DATA    equ 15
 FAR_INSTALL equ 13
 FAR_NET     equ 17
+FAR_CMD     equ 19
 
 ; MMU7's page now, in a (reads NextReg 0x57).
 mmu7_now:
@@ -65,13 +75,29 @@ off:
    ld h,0
    ret
 
-; int far_install(void), int far_net(void), int far_net_pair(void)
+; int far_install(void), int far_net(void), int far_net_pair(void),
+; int far_cmd(void), void far_screen_open(void), void far_screen_close(void)
 ;
 ; Each runs its function with its overlay's page in MMU7, then puts back
 ; what was there; the function's result stays in hl.
 _far_install:
    ld a,FAR_INSTALL
-   ld hl,_install
+   ld hl,_install_run
+   jr far_call
+
+_far_cmd:
+   ld a,FAR_CMD
+   ld hl,_cmd_run
+   jr far_call
+
+_far_screen_open:
+   ld a,FAR_DATA
+   ld hl,_screen_open
+   jr far_call
+
+_far_screen_close:
+   ld a,FAR_DATA
+   ld hl,_screen_close
    jr far_call
 
 _far_net:
@@ -101,3 +127,48 @@ far_call:
 
 call_hl:
    jp (hl)
+
+; void rom_char(uint8_t c) __z88dk_fastcall
+;
+; c to the ROM's RST $10 as it is. stdout's driver (z88dk's
+; zx_00_output_rom_rst) turns 10 into 13 and drops 13, which is right for
+; text but not for AT's row and column. As that driver does, IY holds
+; ERR_NR for the ROM, the alternate registers are kept, and MMU6 and MMU7
+; are put back after.
+_rom_char:
+   ld a,l
+   push ix
+   push iy
+   exx
+   push bc
+   push de
+   push hl
+   exx
+   ld e,a
+   ld bc,0x243b
+   ld a,0x56
+   out (c),a
+   inc b
+   in l,(c)                   ; MMU6
+   dec b
+   inc a
+   out (c),a
+   inc b
+   in h,(c)                   ; MMU7
+   push hl
+   ld a,e
+   ld iy,0x5c3a
+   rst 0x10
+   pop hl
+   ld a,l
+   nextreg 0x56,a
+   ld a,h
+   nextreg 0x57,a
+   exx
+   pop hl
+   pop de
+   pop bc
+   exx
+   pop iy
+   pop ix
+   ret
