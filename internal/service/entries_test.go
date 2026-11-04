@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"net"
 	"net/netip"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/release"
+	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // signEntries signs entry points with seq whose ways in to the project's
@@ -105,6 +107,32 @@ func TestProjectVLESS(t *testing.T) {
 	ways := s.projectVLESS(addr)
 	if len(ways) != 1 || ways[0].Path != "/the-new-path-1" || ways[0].Endpoint != netip.AddrPortFrom(addr, 8443) || ways[0].ServerName != "cbb.tools" {
 		t.Fatalf("with entry points: %+v", ways)
+	}
+}
+
+// A hub of the project's forwarder that does not register is told the list
+// is out of date only while it holds none that has not expired.
+func TestEntriesStale(t *testing.T) {
+	signer := newReleaseSigner(t)
+	s := &Service{cfg: Config{StateDir: t.TempDir(), ReleaseRoots: signer.roots(t), Logf: t.Logf, now: time.Now}}
+	project := &tunnel.ForwarderLink{Project: true}
+	failed := errors.New("no answer")
+	if !s.entriesStale(project, failed) || s.entriesStale(project, nil) || s.entriesStale(&tunnel.ForwarderLink{}, failed) {
+		t.Fatal("without entry points")
+	}
+	var set node.EntriesSet
+	if err := json.Unmarshal([]byte(signer.signEntries(t, 1, "/the-new-path-1")), &set); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.takeEntries(set); err != nil {
+		t.Fatal(err)
+	}
+	if s.entriesStale(project, failed) {
+		t.Error("with entry points held")
+	}
+	s.cfg.now = func() time.Time { return time.Now().Add(60 * 24 * time.Hour) }
+	if !s.entriesStale(project, failed) {
+		t.Error("with entry points that have expired")
 	}
 }
 

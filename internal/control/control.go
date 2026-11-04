@@ -405,8 +405,12 @@ type Forwarder struct {
 	Registered bool   `json:"registered,omitempty"`
 	Seen       string `json:"seen,omitempty"`       // where the forwarder reaches the hub's port
 	OverVLESS  bool   `json:"over_vless,omitempty"` // the hub reaches the forwarder only over VLESS
-	Error      string `json:"error,omitempty"`      // why the hub is not registered
-	Detail     string `json:"detail,omitempty"`     // the underlying error, for debugging
+	// EntriesStale: the project's forwarder does not answer and this
+	// device holds no signed entry points that have not expired, so a new
+	// list may be what it needs (docs/protocol.md, section 16).
+	EntriesStale bool   `json:"entries_stale,omitempty"`
+	Error        string `json:"error,omitempty"`  // why the hub is not registered
+	Detail       string `json:"detail,omitempty"` // the underlying error, for debugging
 }
 
 // Relay describes a device's link to its blind relay.

@@ -319,6 +319,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** The phone as the group's hub: null without a group, or on a phone that is no admin, which cannot be the hub. */
     val phoneHub: HubOnPhone? get() = synchronized(lock) { hub?.takeIf { state?.isAdmin == true } }
 
+    /** Whether this phone holds no signed entry points that have not expired (docs/protocol.md, section 16). */
+    val entriesStale: Boolean get() = entries.current == null
+
     /** Whether the app is in front now, so the hub's status says it waits for it. */
     val inForeground: Boolean get() = foreground
 

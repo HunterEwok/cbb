@@ -1452,6 +1452,7 @@ final class LiveGroup: GroupController {
         let (status, error) = hub.status(paused: !foreground)
         var h = AppModel.Hub(on: hub.isOn, status: status, error: error, forwarder: hub.forwarder,
                              home: hub.isHome(network), clients: hub.clients.count, disguise: hub.disguise)
+        h.entriesStale = status == .failed && hub.forwarder?.isProject == true && entries.current == nil
         // The computers show without a forwarder too, so that the user sees
         // where the hub can go; Settings asks for the forwarder first.
         if hub.isOn {

@@ -35,7 +35,9 @@ All notable changes to cbb are documented in this file. The format follows
   keep it (docs/maintaining.md, "Signed releases"). The iPhone and Android take the list
   from the computers of their group and keep it, and a phone that is the hub registers with
   the project's forwarder over VLESS through the ways it names, then through the built-in
-  ones.
+  ones. The lite member takes the list and passes it on. A hub of the project's forwarder
+  that does not register and holds no list that has not expired says so in `cbb global`,
+  the tray app, the Mac app and the phones, with where to get a new one.
 - The website has the terms of the project's forwarder and relay at `cbb.tools` (Terms of the
   public servers, in every language of the site, linked from every page's footer): open to
   every group, free, as is without a promise of uptime, shared by the budget, and where to

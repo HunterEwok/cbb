@@ -166,6 +166,8 @@ class AppModel(private val app: Context) {
         val status: HubOnPhone.Status,
         val error: Note? = null,
         val forwarder: HubState.Forwarder? = null,
+        /** The project's forwarder does not take it and the phone holds no signed entry points that have not expired: a new list may be what it needs. */
+        val entriesStale: Boolean = false,
         val background: Boolean = false,
         val home: Boolean = false,
         val clients: Int = 0,
@@ -498,6 +500,7 @@ class AppModel(private val app: Context) {
                     },
                     suggested = group.suggestedHub?.takeIf { h.isOn && !settings.keepsPhoneHub }?.let { it.id to it.name },
                     disguise = h.disguise,
+                    entriesStale = status == HubOnPhone.Status.FAILED && h.forwarder?.isProject == true && group.entriesStale,
                 )
             }
         }

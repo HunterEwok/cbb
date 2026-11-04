@@ -3146,8 +3146,13 @@ For now it lists, for each forwarder of the project, its ways in over VLESS (sec
   above, keeps it and sends it on to its other peers; it drops one that fails, and logs why.
   A phone takes it the same way and keeps it in its own files, but passes none on: its hello
   carries the seqs it holds, so that a computer does not send the same list again, and its
-  hub registers through the ways it names (section 13). A member that does not know
-  `entries` ignores it; the lite member does not read it yet.
+  hub registers through the ways it names (section 13). The lite member, which is no hub,
+  takes it, keeps it and passes it on as a computer does. A member that does not know
+  `entries` ignores it.
+- A hub of the project's forwarder that does not register, and holds no list that has not
+  expired, says so where it shows the forwarder (`cbb global`, the apps; control status
+  `away.forwarder.entries_stale`) and where to get a new one: `cbb update` on a computer of
+  the group, or `cbb global entries import` there.
 - Between devices that share no group, the list goes as a string: `cbb-entries:` and the
   JSON `{keys, entries}` in base64url without padding, which `cbb global entries export`
   gives (`-qr` as a QR code) and `cbb global entries import` takes.
