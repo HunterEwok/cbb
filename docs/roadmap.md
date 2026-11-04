@@ -462,7 +462,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     as they are. To check on a device: whether the extension may put the text in the
     clipboard without a tap, and whether Back Tap's 5 seconds are enough away from home
     over VLESS (iOS allows about 30).
-- **58.** **Planned for 0.6 (the owner, 2026-11-04).** Sync away from home by consent (D-81):
+- **58.** **Planned for 0.6 (the owner, 2026-11-04).** Sync away from home by consent (D-82):
     the device's user consents once, at install, at pairing or in the app, and the root or an
     admin then turns it on and makes hubs from the app, without a command on each computer
     (see [Consent to sync away from home](#consent-to-sync-away-from-home)).
@@ -957,7 +957,7 @@ counters on the bench; then the keys; then the shell and copying.
 
 ## Consent to sync away from home
 
-Planned for 0.6 (item 58, D-81). Today a computer turns sync away from home on only with
+Planned for 0.6 (item 58, D-82). Today a computer turns sync away from home on only with
 `cbb global on` typed on it, so the root phone's "Make it a hub" is refused on a computer
 where nobody did that yet (D-45). The owner asked for one consent per device instead, given
 when the device is installed or joins, after which the group's root and admins switch it
@@ -969,7 +969,7 @@ from their apps, at home or away from home.
   `--global on|off` (or `CBB_GLOBAL`) in `get.sh` and `install.sh` on Linux, macOS and
   FreeBSD, and `-Global on|off` in `get.ps1` and `install.ps1`, answer ahead; the lite
   member's installers ask the same, `.cbb install` on the ZX Spectrum Next asks Y or N, and
-  the ESP32's console has a setting. Without an answer it stays off.
+  the ESP32's console has a setting. The question is `[y/N]`: without an answer it stays off.
 - Given or taken back later: `cbb global consent [on|off]` on a computer (with root or as
   administrator, as every change of the group), a switch in the phone apps' settings and on
   their first screen, the tray and Mac apps' settings.
@@ -985,7 +985,8 @@ from their apps, at home or away from home.
 1. A device with the consent turns sync away from home on by itself once it is in a group
    (after pairing, or at once when the consent comes later): it makes its tunnel key and
    offers it to the group's hubs as `cbb global on` does now. A group with no hub yet only
-   keeps the key.
+   keeps the key. This holds for devices that are never a hub or an admin too (keys in a
+   file, rootless, a lite member): they go online at once and keep their role, whoever asks.
 2. A new signed command `away-on` (protocol section 15) from the root or an admin turns it on
    again on a device that has the consent, for example after an `away-off`; without the
    consent the device refuses it and says so. A watch never signs it.
@@ -996,18 +997,30 @@ from their apps, at home or away from home.
    again at the next start; only `away-on`, a `hub` command or its user do.
 
 **What the others see.** The hello gets `away_consent` (`true` from a device whose user
-consented, for its kind of keys), shown and never trusted, so the apps show "Turn on sync
+consented, for its kind of keys), shown and never trusted, and the device record carries it too, copied from the hello when an
+admin signs the record (at admission and at each renewal), so the apps show "Turn on sync
 away from home" and "Make it a hub" only where they will work, and say why elsewhere.
 `cbb status` shows the consent on each device.
 
-**The system's limit.** On Linux and Windows the service cannot widen the second line of
-defence outside the program (the systemd drop-in, the `cbb-home-only` rule) by itself;
-today `sudo cbb global allow` follows the group's servers. With the consent the installer
-adds a small part that runs as root only for that: on Linux a path unit that starts
-`cbb global allow` when the service's tunnel state changes, on Windows a scheduled task as
-SYSTEM on the same change, so a device switched on from an app reaches its hub and forwarder
-at once. Without the consent neither is installed. A Mac keeps the program's limit only, as
-now; the lite member has none of its own.
+**The system's limit.** On Linux and Windows the second line of defence outside the program
+(the systemd drop-in, the `cbb-home-only` rule) is widened only with root, so it is widened
+where root is at hand and nothing of ours runs as root for it later:
+
+- With the consent the installer (with `sudo`, or as administrator) writes the project's
+  forwarder and relay at once, `cbb.tools` by the built-in entry points, as
+  `cbb global allow` does now; `cbb pair`, which runs with root as well, adds the group's
+  hubs, forwarder and relay from the Welcome. A device switched on from an app then reaches
+  its hub through the forwarder at once.
+- When the group's servers change later (a hub reached at its own address that moves, a
+  self-hosted forwarder or relay), the program's limit follows by itself and the system's
+  lags behind: `cbb status` and the apps say so and ask for `sudo cbb global allow` (on
+  Windows, as administrator), as they do now.
+- A `hub` command makes a hub that its clients reach through the group's forwarder, which
+  the limit already allows. A hub at its own address needs its UDP port open to everyone (on
+  Windows the inbound rule, on Linux a unit that allows every address), so that stays
+  `sudo cbb global hub` on the device.
+- Without the consent the installers write nothing beyond the home network. A Mac keeps the
+  program's limit only, as now; the lite member has none of its own.
 
 **Steps.** The protocol (the hello field, `away-on`, the interop vectors) and the Rust
 core's checks of the command; the Go service, its control operation and the installers; the
