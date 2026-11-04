@@ -136,7 +136,11 @@ func startHubWith(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer,
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: pin}, Key: key, Obfuscation: obf, VLESSID: hc.VLESSID,
+		link := Link{Endpoint: f.Addr(), Pin: pin}
+		if hc.Link.Endpoint.IsValid() {
+			link.Endpoint = hc.Link.Endpoint
+		}
+		Register(ctx, HubConfig{Link: link, Key: key, Obfuscation: obf, VLESSID: hc.VLESSID, VLESS: hc.VLESS,
 			Cert: func() tls.Certificate { return cert }, Authority: rootAuthority(ca), Send: h.Send, Report: func(r Report) {
 				select {
 				case hs.reports <- r:
@@ -159,7 +163,12 @@ func startHubWith(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer,
 				hs.vless = r.VLESS
 			}
 			if r.Seen.IsValid() {
-				if r.Seen.Port() != uint16(h.UDPPort()) {
+				if r.OverVLESS != (hc.VLESS != nil && hc.Link.Endpoint.IsValid()) {
+					t.Fatalf("over VLESS: %v", r.OverVLESS)
+				}
+				// Over VLESS the forwarder sees the hub at the port its
+				// side of VLESS sends the hub's packets from.
+				if !r.OverVLESS && r.Seen.Port() != uint16(h.UDPPort()) {
 					t.Fatalf("the forwarder sees the hub at %v, not on its port %d", r.Seen, h.UDPPort())
 				}
 				return hs
@@ -847,7 +856,12 @@ func TestThroughXHTTP(t *testing.T) {
 	id, _ := tunnel.NewVLESSID()
 	key, peer := newClient(t)
 	hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{VLESSID: id})
-	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id}
+	// The group's packets come under a path of its own below the path.
+	group, ok := strings.CutPrefix(hs.vless.Path, path+"/")
+	if !ok || tunnel.CheckGroupPath(group) != nil {
+		t.Fatalf("the hub learned the path %q", hs.vless.Path)
+	}
+	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: hs.vless.Path, ID: id}
 	if !hs.vless.Equal(&want) {
 		t.Fatalf("the hub learned %+v, want %+v", hs.vless, want)
 	}
@@ -858,6 +872,80 @@ func TestThroughXHTTP(t *testing.T) {
 	defer vc.Close()
 	if err := roundTripTo(t, vc.Addr(), hs, key, peer); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestHubOverXHTTP checks a hub that reaches its forwarder only over VLESS:
+// its TCP port does not answer, so the hub registers inside VLESS with the
+// settings it was given, its own packets go there too, and a client gets
+// through to it.
+func TestHubOverXHTTP(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back atomic.Value
+	back.Store("127.0.0.1:9")
+	web, cert := vlesstest.WebServer(t, path, func() string { return back.Load().(string) })
+	vless.TrustForTests(cert)
+	f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0",
+		XHTTP: &XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	back.Store(net.JoinHostPort("127.0.0.1", strconv.Itoa(int(f.vless.Port()))))
+	closed, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := closed.Addr().(*net.TCPAddr).AddrPort()
+	closed.Close()
+	id, _ := tunnel.NewVLESSID()
+	given := &tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: vless.RegistrationID}
+	key, peer := newClient(t)
+	// A way in that leads nowhere first: the hub tries the next.
+	nowhere := *given
+	nowhere.Path = "/nowhere-at-all"
+	ways := func() []tunnel.VLESS { return []tunnel.VLESS{nowhere, *given} }
+	hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{VLESSID: id, VLESS: ways, Link: Link{Endpoint: dead}})
+	// The group's packets come under a path of its own below the path.
+	group, ok := strings.CutPrefix(hs.vless.Path, path+"/")
+	if !ok || tunnel.CheckGroupPath(group) != nil {
+		t.Fatalf("the hub learned the path %q", hs.vless.Path)
+	}
+	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: hs.vless.Path, ID: id}
+	if !hs.vless.Equal(&want) {
+		t.Fatalf("the hub learned %+v, want %+v", hs.vless, want)
+	}
+	vc, err := vless.Dial(*hs.vless)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer vc.Close()
+	if err := roundTripTo(t, vc.Addr(), hs, key, peer); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The registrations' user ID reaches nothing but the registrations, and
+// no group may take it as its own.
+func TestRegistrationIDIsNoGroups(t *testing.T) {
+	f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0", Site: vlesstest.Site, Dest: "127.0.0.1:9"}})
+	cert, _, ca := member(t)
+	key, _ := tunnel.NewPrivateKey()
+	reports := make(chan Report, 4)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: pin}, Key: key, VLESSID: vless.RegistrationID,
+		Cert: func() tls.Certificate { return cert }, Authority: rootAuthority(ca), Send: func(netip.AddrPort, []byte) error { return nil },
+		Report: func(r Report) { reports <- r }})
+	select {
+	case r := <-reports:
+		if r.Err == nil || !strings.Contains(r.Err.Error(), "not usable") {
+			t.Fatalf("a hub taking the registrations' user ID: %+v", r)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no answer")
+	}
+	if err := f.vless.AddUser(vless.RegistrationID); err == nil {
+		t.Error("the registrations' user ID was added as a group's")
 	}
 }
 
@@ -1213,5 +1301,24 @@ func TestVLESSScansApart(t *testing.T) {
 	}
 	if _, ok := f.route(netip.MustParseAddrPort("203.0.113.10:4000"), initiation(pub, 2), now); !ok {
 		t.Fatal("a client's handshake was dropped after a flood over VLESS")
+	}
+}
+
+// A group's XHTTP path is the same after a restart, with the same key, and
+// another forwarder's key gives it another one.
+func TestGroupPathKept(t *testing.T) {
+	cert, _ := NewCert()
+	other, _ := NewCert()
+	path := func(c tls.Certificate) string {
+		f, err := Listen(Config{Listen: "127.0.0.1:0", Cert: c})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		return f.groupPath("a group")
+	}
+	a, b, c := path(cert), path(cert), path(other)
+	if a != b || a == c || tunnel.CheckGroupPath(a) != nil {
+		t.Fatalf("paths %q, %q, %q", a, b, c)
 	}
 }

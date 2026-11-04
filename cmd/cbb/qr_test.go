@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/release"
 	"rsc.io/qr"
 )
 
@@ -39,6 +41,23 @@ func TestWriteQR(t *testing.T) {
 					t.Fatalf("module %d,%d: black %v, want %v", mx, my, got, want)
 				}
 			}
+		}
+	}
+}
+
+func TestEntriesString(t *testing.T) {
+	set := node.EntriesSet{Keys: release.File{Body: []byte(`{"a":1}`)}, Entries: release.File{Body: []byte(`{"b":2}`)}}
+	s, err := entriesString(set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := parseEntries("  " + s + "\n")
+	if err != nil || string(got.Keys.Body) != `{"a":1}` || string(got.Entries.Body) != `{"b":2}` {
+		t.Fatalf("got %+v: %v", got, err)
+	}
+	for _, bad := range []string{"", "entries:" + s, entriesPrefix + "!!", entriesPrefix + "e30x"} {
+		if _, err := parseEntries(bad); err == nil {
+			t.Errorf("%q was taken", bad)
 		}
 	}
 }

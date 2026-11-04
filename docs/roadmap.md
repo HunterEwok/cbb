@@ -413,7 +413,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     after the launch: the GitHub Secure Open Source Fund, then FLOSS/fund once the project
     has users; NLnet's calls since 20 October 2026 do not fund code written with generative
     AI.
-- **55.** **Planned for 0.6 (the owner, 2026-11-03).** Updates through the group's ways
+- **55.** **Built for 0.6 (the owner, 2026-11-03): the mirror over VLESS, the release from the group, and the hub fetching the archives its members install; the lite member and the Android APK do not take them from the group yet.** Updates through the group's ways
     out, for devices on networks that block GitHub or the mirror. GitHub stays reached
     directly, as now. Where the user switched AmneziaWG or VLESS on, the mirror on cbb.tools
     is reached only through them: over VLESS the forwarder lets a group's registered VLESS
@@ -425,7 +425,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
     Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
     with this item, on the same server.
-- **56.** **Planned for 0.6 (the owner, 2026-11-03).** A hub that reaches its forwarder
+- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phone kits and the lite member do not read the list yet, a phone hub does not register over VLESS yet, and no app says yet that the list is stale.** A hub that reaches its forwarder
     only over VLESS, for a phone hub on a trip in a network that lets nothing else through.
     The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
     into `cbb` and the kits beside its key, as they are no secret the design relies on; a

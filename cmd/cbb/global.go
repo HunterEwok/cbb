@@ -80,7 +80,10 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       cbb global hubs DEVICE...      on the root, or an admin that may be a hub: the group's main\n" +
 		"                                      hubs, in the order they serve, before the others\n" +
 		"       cbb global allow               let this computer's service reach the group's servers as they\n" +
-		"                                      are now, after the hub's addresses changed"
+		"                                      are now, after the hub's addresses changed\n" +
+		"       cbb global entries [export [-qr] | import STRING]\n" +
+		"                                      the signed entry points of the project's servers: show them,\n" +
+		"                                      give them to another device, or take them from one"
 	if len(args) == 0 {
 		return cmdGlobalStatus(stdout, stderr)
 	}
@@ -146,6 +149,8 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 	case "hubs":
 		return cmdHubs(args[1:], stdout, stderr)
+	case "entries":
+		return cmdGlobalEntries(args[1:], stdout, stderr)
 	case "allow":
 		if len(args) != 1 {
 			fmt.Fprintln(stderr, usage)

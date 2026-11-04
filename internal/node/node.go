@@ -134,6 +134,9 @@ type Config struct {
 	// Releases, if set, keeps the newest signed release, which goes to
 	// every peer whose hello names an older one.
 	Releases ReleaseStore
+	// Entries, if set, keeps the newest signed list of the project's entry
+	// points, which goes to every peer whose hello names an older one.
+	Entries EntriesStore
 
 	// SealKey, if set, is this member's public key for sealed messages
 	// (internal/seal), which its hello offers so that the group's root or
@@ -210,6 +213,15 @@ type ReleaseStore interface {
 	// Add takes a release a peer sent and reports whether it checks out
 	// and is newer than the one held, and so goes on to the other peers.
 	Add(from group.DeviceID, r ReleaseSet) bool
+}
+
+// An EntriesStore keeps the newest signed list of the project's entry
+// points the group passes around (docs/protocol.md, section 16, "Entry
+// points"), as a ReleaseStore does; its order is the seq of its keys.json,
+// then that of entries.json.
+type EntriesStore interface {
+	Current() (*EntriesSet, ReleaseOrder)
+	Add(from group.DeviceID, e EntriesSet) bool
 }
 
 // Write is a text, or images or files, to put into the member's own
@@ -1181,6 +1193,20 @@ func (n *Node) sendRelease(r *ReleaseSet, from *conn) {
 	}
 }
 
+// SendEntries sends a signed list of entry points this member took, from
+// cbb update, to the peers.
+func (n *Node) SendEntries(e *EntriesSet) { n.sendEntries(e, nil) }
+
+func (n *Node) sendEntries(e *EntriesSet, from *conn) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for _, c := range n.conns {
+		if c != from && takesRelease(c.role()) {
+			c.enqueue(outgoing{entries: e})
+		}
+	}
+}
+
 // takesRelease reports whether a peer of the role gets the group's
 // release: the computers and the lite members; the phones' apps update
 // from their stores.
@@ -1306,6 +1332,7 @@ type outgoing struct {
 	records []group.Record
 	creds   []group.Credential
 	release *ReleaseSet
+	entries *EntriesSet
 	tunnel  *TunnelOffer
 	admin   *x509.Certificate // an admin CA for the peer
 	command *group.Record     // a command for the peer
@@ -1465,6 +1492,10 @@ func (c *conn) message(o outgoing) (*message, error) {
 			_, o := st.Current()
 			out.ReleaseKeys, out.ReleaseSeq = o.Keys, o.Channel
 		}
+		if st := c.n.cfg.Entries; st != nil {
+			_, o := st.Current()
+			out.EntriesKeys, out.EntriesSeq = o.Keys, o.Channel
+		}
 		if k := c.n.tunnelKey.Load(); k != nil {
 			out.TunnelKey, out.TunnelPSK = k[0], k[1]
 		}
@@ -1486,6 +1517,8 @@ func (c *conn) message(o outgoing) (*message, error) {
 		return &message{Type: typeCreds, Credentials: o.creds}, nil
 	case o.release != nil:
 		return &message{Type: typeRelease, Release: o.release}, nil
+	case o.entries != nil:
+		return &message{Type: typeEntries, Entries: o.entries}, nil
 	case o.tunnel != nil:
 		return &message{Type: typeTun, Tunnel: o.tunnel}, nil
 	case o.admin != nil:
@@ -1679,6 +1712,11 @@ func (c *conn) reader() error {
 					c.enqueue(outgoing{release: r})
 				}
 			}
+			if st := c.n.cfg.Entries; st != nil {
+				if e, o := st.Current(); e != nil && o.After(ReleaseOrder{extra.EntriesKeys, extra.EntriesSeq}) && takesRelease(c.role()) {
+					c.enqueue(outgoing{entries: e})
+				}
+			}
 			c.n.offerTunnel(c, extra.TunnelKey, extra.TunnelPSK)
 			for i := range c.n.cfg.Evidence {
 				c.enqueue(outgoing{evid: &c.n.cfg.Evidence[i]})
@@ -1750,6 +1788,10 @@ func (c *conn) reader() error {
 		case typeRelease:
 			if st := c.n.cfg.Releases; st != nil && m.Release != nil && st.Add(c.id, *m.Release) {
 				c.n.sendRelease(m.Release, c)
+			}
+		case typeEntries:
+			if st := c.n.cfg.Entries; st != nil && m.Entries != nil && st.Add(c.id, *m.Entries) {
+				c.n.sendEntries(m.Entries, c)
 			}
 		case typeCommand:
 			if m.Command != nil {

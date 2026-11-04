@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -507,5 +508,115 @@ func TestInstallFailure(t *testing.T) {
 	}
 	if got := installFailure("a\nb\nc\nd\ne\nf\n", "install.sh"); got != "b\nc\nd\ne\nf" {
 		t.Errorf("without the line: %q", got)
+	}
+}
+
+// With no server answering, the signed release the group passed the
+// service is checked and taken as a server's would be; a tampered one is
+// refused.
+func TestReleaseFromGroup(t *testing.T) {
+	f := newFixture(t)
+	data := goodArchive(t, "0.6.1")
+	f.publish(t, "0.6.1", data, nil, 30*24*time.Hour)
+	read := func(name string) release.File {
+		var file release.File
+		b, err := os.ReadFile(filepath.Join(f.dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(b, &file); err != nil {
+			t.Fatal(err)
+		}
+		return file
+	}
+	keys, ch, rel := read("keys.json"), read(Channel+".json"), read("release.json")
+	sys := &system{running: "0.6.0"}
+	u := f.updater(t, sys)
+	down := Dir(filepath.Join(t.TempDir(), "none"))
+	u.Sources = []Source{down, Group{Held: func(context.Context) (release.File, release.File, release.File, error) {
+		return keys, ch, rel, nil
+	}}}
+	u.Group = func(context.Context, release.Asset) (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(data)), nil
+	}
+	found, err := u.Check(context.Background(), State{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found.Newer || found.Release.Version != "0.6.1" || found.Source.String() != "the group" {
+		t.Fatalf("found %+v from %v", found.Release, found.Source)
+	}
+	if _, err := u.Apply(context.Background(), found.Source, State{}, found.Release); err != nil || sys.running != "0.6.1" {
+		t.Fatalf("running %s: %v", sys.running, err)
+	}
+
+	bad := rel
+	bad.Body = append(slices.Clone(rel.Body[:len(rel.Body)-1]), ' ')
+	u.Sources = []Source{down, Group{Held: func(context.Context) (release.File, release.File, release.File, error) {
+		return keys, ch, bad, nil
+	}}}
+	if _, err := u.Check(context.Background(), State{}, ""); err == nil {
+		t.Fatal("a release.json changed in the group was taken")
+	}
+}
+
+// The mirror reached through another way still names dl.cbb.tools in its
+// requests and checks the certificate: the dial only carries the bytes.
+func TestMirrorThrough(t *testing.T) {
+	var asked string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = r.Host + r.URL.Path
+		w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+	addr := srv.Listener.Addr().String()
+	src := MirrorThrough(func(ctx context.Context) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "tcp", addr)
+	})
+	if _, err := src.Fetch(context.Background(), "keys.json", "", maxManifest); err == nil {
+		t.Fatal("a certificate that is not the mirror's was taken")
+	}
+	src.(*through).client.Transport.(*http.Transport).TLSClientConfig = srv.Client().Transport.(*http.Transport).TLSClientConfig
+	src.(*through).client.Transport.(*http.Transport).TLSClientConfig.ServerName = "example.com"
+	if _, err := src.Fetch(context.Background(), "keys.json", "", maxManifest); err != nil {
+		t.Fatal(err)
+	}
+	if asked != "dl.cbb.tools/keys.json" {
+		t.Errorf("asked for %q", asked)
+	}
+	if src.String() != Mirror+" over VLESS" {
+		t.Errorf("named %q", src.String())
+	}
+}
+
+// A hub downloads the archives its group's members update from and hands
+// each, checked against release.json, to its service.
+func TestFetchFor(t *testing.T) {
+	f := newFixture(t)
+	data := goodArchive(t, "0.6.1")
+	f.publish(t, "0.6.1", data, nil, 30*24*time.Hour)
+	u := f.updater(t, &system{running: "0.6.1"})
+	var kept [][]byte
+	u.Keep = func(path string, a release.Asset) {
+		b, err := os.ReadFile(path)
+		if err != nil || a.Name != archive {
+			t.Errorf("kept %s: %v", a.Name, err)
+		}
+		kept = append(kept, b)
+	}
+	found, err := u.Check(context.Background(), State{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := u.FetchFor(context.Background(), found.Source, found.Release, []string{archive, "cbb-plan9-amd64.tar.gz", "../" + archive})
+	if err != nil || n != 1 || len(kept) != 1 || !bytes.Equal(kept[0], data) {
+		t.Fatalf("kept %d (%d): %v", n, len(kept), err)
+	}
+	if err := os.WriteFile(filepath.Join(f.dir, archive), append(slices.Clone(data), 0), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := u.FetchFor(context.Background(), found.Source, found.Release, []string{archive}); err == nil || n != 0 || len(kept) != 1 {
+		t.Fatalf("a changed archive was kept (%d): %v", n, err)
 	}
 }

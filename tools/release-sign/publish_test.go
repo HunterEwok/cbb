@@ -416,3 +416,64 @@ func TestDropAChannelKey(t *testing.T) {
 		t.Error("a dropped channel key renewed the channel")
 	}
 }
+
+// TestEntries signs the entry points into the branch, renews them on
+// cbb.tools with the channel file, takes the renewal into the branch and
+// mirrors them; a renewal that names other forwarders is refused.
+func TestEntries(t *testing.T) {
+	g := newFakeGitHub(t)
+	k := testKeys(t)
+	g.draft("v0.6.0")
+	if err := publish([]string{"-root", "file:" + k.root1, "-release-key", "file:" + k.release,
+		"-version", "0.6.0", "-channel", "cbb.tools=" + k.channelPub}); err != nil {
+		t.Fatal(err)
+	}
+	in := write(t, filepath.Join(t.TempDir(), "in.json"), []byte(`{"forwarders":[{"name":"cbb.tools:8764",
+		"vless":[{"transport":"xhttp","server_name":"cbb.tools","port":443,"path":"/banMEJvnYJJap8S"}]}]}`))
+	if out := string(call(t, entries, "-key", "file:"+k.channel, "-in", in, g.channel())); !strings.Contains(out, "entries.json 1") {
+		t.Errorf("entries printed %q", out)
+	}
+	var e release.Entries
+	g.file(g.channel(), entriesName, &e)
+	if e.Seq != 1 || len(e.Forwarders) != 1 || e.Forwarders[0].VLESS[0].Port != 443 {
+		t.Fatalf("signed %+v", e)
+	}
+	bad := write(t, filepath.Join(t.TempDir(), "bad.json"), []byte(`{"forwarders":[{"name":"cbb.tools"}]}`))
+	if entries([]string{"-key", "file:" + k.channel, "-in", bad, g.channel()}) == nil {
+		t.Error("signed a forwarder without a port")
+	}
+
+	served := t.TempDir()
+	advance(7 * 24 * time.Hour)
+	if out := string(call(t, extend, "-key", "file:"+k.channel, "-out", served, "-from", g.channel(), "-releases", g.dir)); !strings.Contains(out, "entries.json 2") {
+		t.Errorf("extend printed %q", out)
+	}
+	takeArgs := []string{"-new", filepath.Join(served, "stable.json"), "-new-entries", filepath.Join(served, entriesName), "-releases", g.dir, g.channel()}
+	if out := string(call(t, take, takeArgs...)); !strings.Contains(out, "took entries.json 2") {
+		t.Errorf("take printed %q", out)
+	}
+	if out := call(t, due, g.channel()); len(out) != 0 {
+		t.Errorf("due printed %q", out)
+	}
+	advance(25 * 24 * time.Hour)
+	if out := string(call(t, due, g.channel())); !strings.Contains(out, entriesName) {
+		t.Errorf("due printed %q", out)
+	}
+
+	other := t.TempDir()
+	g.file(served, entriesName, &e)
+	e.Seq++
+	e.Forwarders[0].VLESS[0].Path = "/another-path-1"
+	write(t, filepath.Join(other, entriesName), must(json.Marshal(must(signWith(must(signer("file:"+k.channel)), e)))))
+	if takeEntries(g.channel(), filepath.Join(other, entriesName)) == nil {
+		t.Error("took a renewal that names other forwarders")
+	}
+
+	m := t.TempDir()
+	call(t, mirror, "-out", m, "-from", g.channel(), "-releases", g.dir)
+	var me release.Entries
+	g.file(m, entriesName, &me)
+	if me.Seq != 2 {
+		t.Errorf("the mirror holds entries.json %d", me.Seq)
+	}
+}

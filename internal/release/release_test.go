@@ -519,3 +519,53 @@ func TestForwarderKeys(t *testing.T) {
 		t.Error("a forwarder's key signed a release")
 	}
 }
+
+func entriesBody(seq uint64, at int64, life time.Duration) Entries {
+	return Entries{V: 1, Type: TypeEntries, Seq: seq, TimeMS: at, ExpiresMS: at + life.Milliseconds(),
+		Forwarders: []EntryForwarder{{Name: "cbb.tools:8764",
+			VLESS: []EntryVLESS{{Transport: "xhttp", ServerName: "cbb.tools", Port: 443, Path: "/banMEJvnYJJap8S"}}}}}
+}
+
+// entries.json passes under a release or channel key, not older than seen
+// and not expired, and its bad forms are refused.
+func TestCheckEntries(t *testing.T) {
+	root, rel, ch, other := newSigner(t), newSigner(t), newSigner(t), newSigner(t)
+	kb := keysBody(2, nowMS-1000, 90*24*time.Hour, rel)
+	kb.Keys = append(kb.Keys, Key{Key: ch.spki, Name: "channel key", Use: UseChannel})
+	keys := sign(t, kb, root)
+	roots := [][]byte{root.spki}
+	now := time.UnixMilli(nowMS)
+	e, seen, err := CheckEntries(keys, sign(t, entriesBody(5, nowMS-1000, 30*24*time.Hour), ch), roots, now, Seen{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f, ok := e.Forwarder("cbb.tools:8764"); !ok || f.VLESS[0].Path != "/banMEJvnYJJap8S" || seen.EntriesSeq != 5 || seen.EntriesKeys != 2 {
+		t.Fatalf("took %+v, seen %+v", e, seen)
+	}
+	if _, _, err := CheckEntries(keys, sign(t, entriesBody(6, nowMS-1000, 30*24*time.Hour), rel), roots, now, seen); err != nil {
+		t.Errorf("under the release key: %v", err)
+	}
+	if _, _, err := CheckEntries(keys, sign(t, entriesBody(4, nowMS-1000, 30*24*time.Hour), ch), roots, now, seen); !errors.Is(err, ErrRollback) {
+		t.Errorf("an older one: %v", err)
+	}
+	if _, _, err := CheckEntries(keys, sign(t, entriesBody(6, nowMS-1000, 30*24*time.Hour), other), roots, now, seen); err == nil {
+		t.Error("one under another key was taken")
+	}
+	if _, _, err := CheckEntries(keys, sign(t, entriesBody(6, nowMS-3000, time.Second), ch), roots, now, seen); !errors.Is(err, ErrExpired) {
+		t.Errorf("an expired one: %v", err)
+	}
+	for _, bad := range []func(*Entries){
+		func(e *Entries) { e.Forwarders[0].Name = "cbb.tools" },
+		func(e *Entries) { e.Forwarders[0].VLESS[0].Transport = "reality" },
+		func(e *Entries) { e.Forwarders[0].VLESS[0].Path = "/short" },
+		func(e *Entries) { e.Forwarders[0].VLESS[0].Port = 0 },
+		func(e *Entries) { e.Forwarders = append(e.Forwarders, e.Forwarders[0]) },
+		func(e *Entries) { e.Forwarders = nil },
+	} {
+		b := entriesBody(7, nowMS-1000, 30*24*time.Hour)
+		bad(&b)
+		if _, _, err := CheckEntries(keys, sign(t, b, ch), roots, now, seen); err == nil {
+			t.Errorf("a bad one was taken: %+v", b)
+		}
+	}
+}

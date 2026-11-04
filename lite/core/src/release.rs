@@ -126,6 +126,36 @@ pub struct Status {
     pub android_revoked: Vec<String>,
 }
 
+/// The body of entries.json, signed by a release or channel key: where the
+/// project's forwarders are entered (docs/protocol.md, section 16, "Entry
+/// points"); their keys stay in keys.json.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Entries {
+    pub seq: u64,
+    pub time_ms: i64,
+    pub expires_ms: i64,
+    pub forwarders: Vec<EntryForwarder>,
+}
+
+/// One of the project's forwarders in entries.json.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct EntryForwarder {
+    /// Its address as keys.json names its key, host:port.
+    pub name: String,
+    /// The ways in over VLESS for a hub's first registration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vless: Vec<EntryVless>,
+}
+
+/// A way in over VLESS: XHTTP behind the web server of a site.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct EntryVless {
+    pub transport: String,
+    pub server_name: String,
+    pub port: u16,
+    pub path: String,
+}
+
 fn is_zero_i64(n: &i64) -> bool {
     *n == 0
 }
@@ -239,6 +269,78 @@ fn is_channel(s: &str) -> bool {
         && b.len() <= 32
         && b.first().is_some_and(u8::is_ascii_lowercase)
         && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+}
+
+/// Whether s is a site's name: labels of lowercase letters, digits and
+/// inner hyphens, at most 63 bytes each, and a last one of 2 to 63 letters.
+fn is_site(s: &str) -> bool {
+    let labels: Vec<&str> = s.split('.').collect();
+    labels.len() >= 2
+        && labels.iter().enumerate().all(|(i, l)| {
+            let b = l.as_bytes();
+            if i.checked_add(1) == Some(labels.len()) {
+                (2..=63).contains(&b.len()) && b.iter().all(u8::is_ascii_lowercase)
+            } else {
+                (1..=63).contains(&b.len())
+                    && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+                    && b.first() != Some(&b'-')
+                    && b.last() != Some(&b'-')
+            }
+        })
+}
+
+/// Whether s is a forwarder's name, host:port.
+fn is_entry_name(s: &str) -> bool {
+    match s.rsplit_once(':') {
+        Some((host, port)) => {
+            is_site(host)
+                && !port.is_empty()
+                && port.len() <= 5
+                && !port.starts_with('0')
+                && port.bytes().all(|c| c.is_ascii_digit())
+                && port.parse::<u32>().is_ok_and(|p| p <= 65535)
+        }
+        None => false,
+    }
+}
+
+/// Whether s is the path of a way in: a slash and 8 to 64 letters, digits,
+/// '-' or '_'.
+fn is_entry_path(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.first() == Some(&b'/')
+        && (9..=65).contains(&b.len())
+        && b.get(1..).is_some_and(|r| r.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'-' || *c == b'_'))
+}
+
+/// The bounds of entries.json.
+const MAX_ENTRY_FORWARDERS: usize = 16;
+const MAX_ENTRY_VLESS: usize = 8;
+
+pub(crate) fn decode_entries(body: &[u8]) -> Result<Entries> {
+    let e: Entries = decode(body, "entries")?;
+    if e.seq == 0 {
+        return Err(Error::msg("entries.json has no sequence number"));
+    }
+    lifetime(e.time_ms, e.expires_ms)?;
+    if e.forwarders.len() > MAX_ENTRY_FORWARDERS {
+        return Err(Error::msg("entries.json has too long a list of forwarders"));
+    }
+    let mut names = BTreeSet::new();
+    for f in &e.forwarders {
+        if !is_entry_name(&f.name) || !names.insert(f.name.as_str()) {
+            return Err(Error::msg(format!("{:?} is not a forwarder's name, or twice", f.name)));
+        }
+        if f.vless.len() > MAX_ENTRY_VLESS {
+            return Err(Error::msg(format!("{} has too many ways in", f.name)));
+        }
+        for v in &f.vless {
+            if v.transport != "xhttp" || !is_site(&v.server_name) || v.port == 0 || !is_entry_path(&v.path) {
+                return Err(Error::msg(format!("a way in to {} is not usable", f.name)));
+            }
+        }
+    }
+    Ok(e)
 }
 
 fn name_ok(s: &str, max: usize, slash: bool) -> bool {

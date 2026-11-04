@@ -75,7 +75,26 @@ type ServerConfig struct {
 	Key        [32]byte // the REALITY private key, X25519
 	// To is the forwarder's own UDP port, where every packet goes.
 	To netip.AddrPort
+	// Mirror, if set, is the TCP address, host:port, of the mirror of the
+	// releases on the forwarder's own server: a client's TCP streams go
+	// there and nowhere else (docs/protocol.md, section 13, "VLESS").
+	// Without it a TCP stream goes nowhere.
+	Mirror string
+	// Register, if set, takes a hub's registration that came over VLESS:
+	// a TCP stream to RegistrationPort, from any user let in, the
+	// RegistrationID too, which is let in for nothing else.
+	Register func(net.Conn)
 }
+
+// RegistrationID is the VLESS user ID by which a hub that reaches its
+// forwarder only over VLESS registers (docs/protocol.md, section 13,
+// "VLESS"): it is no secret, and it reaches nothing but the forwarder's
+// registrations, as its TCP port does.
+const RegistrationID = "0cbb0000-7e91-4000-8000-000000008764"
+
+// RegistrationPort is the port a client names for a stream to the
+// forwarder's registrations; any other TCP stream goes to the mirror.
+const RegistrationPort = 8764
 
 // ShortID returns the REALITY short ID of the private key: it needs no
 // keeping, and it tells nothing about the key.
@@ -96,58 +115,67 @@ func PublicKey(key [32]byte) ([]byte, error) {
 
 // Server is the forwarder's side, running.
 type Server struct {
-	inst  *core.Instance
-	users proxy.UserManager
-	out   *toForwarder
-	port  uint16
-	site  string // REALITY's key for what it learns of the site: Dest and server name
+	inst     *core.Instance
+	users    proxy.UserManager // the groups' inbound
+	regUsers proxy.UserManager // the registrations' inbound; users for REALITY, which has one
+	out      *toForwarder
+	port     uint16
+	site     string // REALITY's key for what it learns of the site: Dest and server name
+	front    *front // XHTTP: the paths in front of the inbounds; nil for REALITY
 }
 
-const inboundTag = "vless-in"
+const (
+	inboundTag    = "vless-in"
+	regInboundTag = "vless-registrations"
+)
 
 // Listen starts the forwarder's side with no users; AddUser lets a
-// group's clients in.
+// group's clients in. Over XHTTP, the path itself takes only registrations
+// (RegistrationID), and a group's packets come under a path of its own
+// below it (AddPath), so that the path every build carries reaches nothing
+// but the registrations (docs/protocol.md, section 13, "VLESS").
 func Listen(cfg ServerConfig) (*Server, error) {
 	if cfg.Path != "" {
 		if err := tunnel.CheckVLESSPath(cfg.Path); err != nil {
 			return nil, err
 		}
+		if tunnel.RegistrationPath(cfg.Path) != cfg.Path {
+			return nil, fmt.Errorf("vless: %q has a group's part", cfg.Path)
+		}
 	} else if err := tunnel.CheckServerName(cfg.ServerName); err != nil {
 		return nil, err
 	}
-	host, port, err := net.SplitHostPort(cfg.Listen)
+	listen, err := listenAddr(cfg.Listen)
 	if err != nil {
-		return nil, fmt.Errorf("vless: %w", err)
+		return nil, err
 	}
-	if port == "0" || port == "" {
-		// Xray needs the port; take a free one.
-		l, err := net.Listen("tcp", cfg.Listen)
-		if err != nil {
-			return nil, fmt.Errorf("vless: %w", err)
-		}
-		_, port, _ = net.SplitHostPort(l.Addr().String())
-		l.Close()
-	}
-	if host == "" {
-		host = "0.0.0.0"
-	}
-	p, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		return nil, fmt.Errorf("vless: %w", err)
-	}
-	ip, err := netip.ParseAddr(host)
-	if err != nil {
-		return nil, fmt.Errorf("vless: %w", err)
-	}
-	listen := netip.AddrPortFrom(ip, uint16(p))
-	var stream *internet.StreamConfig
+	// Whatever a client asks for, its packets go to the forwarder's UDP
+	// port and nowhere else, and a TCP stream only to the registrations or
+	// the mirror (toForwarder).
+	out := &toForwarder{to: cfg.To, mirror: cfg.Mirror, register: cfg.Register}
+	vin := &vlessin.Config{Decryption: "none"}
+	var ins []*core.InboundHandlerConfig
+	var fr *front
 	if cfg.Path != "" {
 		// Plain HTTP: the web server in front has ended the TLS. Any host
-		// it passes is taken; what matters is the path.
-		stream = xhttpStream(&splithttp.Config{Path: cfg.Path, Mode: "packet-up", ScMaxBufferedPosts: MaxBufferedPosts}, nil)
+		// it passes is taken; what matters is the path. Two inbounds on
+		// the loopback, behind the paths.
+		stream := func() *internet.StreamConfig {
+			return xhttpStream(&splithttp.Config{Path: cfg.Path, Mode: "packet-up", ScMaxBufferedPosts: MaxBufferedPosts}, nil)
+		}
+		groups, err := listenAddr("127.0.0.1:0")
+		if err != nil {
+			return nil, err
+		}
+		regs, err := listenAddr("127.0.0.1:0")
+		if err != nil {
+			return nil, err
+		}
+		ins = []*core.InboundHandlerConfig{inboundHandler(inboundTag, groups, stream(), vin), inboundHandler(regInboundTag, regs, stream(), vin)}
+		fr = &front{path: cfg.Path, groups: groups, regs: regs, paths: map[string]int{}}
 	} else {
 		sid, _ := hex.DecodeString(ShortID(cfg.Key))
-		stream = realityStream(&reality.Config{
+		stream := realityStream(&reality.Config{
 			Dest:        cfg.Dest,
 			Type:        "tcp",
 			ServerNames: []string{cfg.ServerName},
@@ -157,12 +185,9 @@ func Listen(cfg ServerConfig) (*Server, error) {
 			LimitFallbackUpload:   &reality.LimitFallback{},
 			LimitFallbackDownload: &reality.LimitFallback{},
 		})
+		ins = []*core.InboundHandlerConfig{inboundHandler(inboundTag, listen, stream, vin)}
 	}
-	// Whatever a client asks for, its packets go to the forwarder's UDP
-	// port and nowhere else, and no TCP stream, which would reach the
-	// forwarder's registrations (toForwarder).
-	out := &toForwarder{to: cfg.To}
-	inst, err := start(inboundHandler(inboundTag, listen, stream, &vlessin.Config{Decryption: "none"}), nil)
+	inst, err := start(ins, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -175,30 +200,82 @@ func Listen(cfg ServerConfig) (*Server, error) {
 		inst.Close()
 		return nil, fmt.Errorf("vless: %w", err)
 	}
-	s := &Server{inst: inst, out: out, port: listen.Port()}
+	s := &Server{inst: inst, out: out, port: listen.Port(), front: fr}
 	if cfg.Path == "" {
 		s.site = cfg.Dest + " " + cfg.ServerName
 	}
+	if s.users, err = usersOf(inst, inboundTag); err != nil {
+		inst.Close()
+		return nil, err
+	}
+	s.regUsers = s.users
+	if fr != nil {
+		if s.regUsers, err = usersOf(inst, regInboundTag); err != nil {
+			inst.Close()
+			return nil, err
+		}
+		if err := fr.start(listen); err != nil {
+			inst.Close()
+			return nil, err
+		}
+	}
+	if cfg.Register != nil {
+		if err := addUser(s.regUsers, RegistrationID); err != nil {
+			s.Close()
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
+// listenAddr resolves a TCP address to listen on, a free port for port 0,
+// as Xray needs the port.
+func listenAddr(addr string) (netip.AddrPort, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return netip.AddrPort{}, fmt.Errorf("vless: %w", err)
+	}
+	if port == "0" || port == "" {
+		l, err := net.Listen("tcp", addr)
+		if err != nil {
+			return netip.AddrPort{}, fmt.Errorf("vless: %w", err)
+		}
+		_, port, _ = net.SplitHostPort(l.Addr().String())
+		l.Close()
+	}
+	if host == "" {
+		host = "0.0.0.0"
+	}
+	p, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return netip.AddrPort{}, fmt.Errorf("vless: %w", err)
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.AddrPort{}, fmt.Errorf("vless: %w", err)
+	}
+	return netip.AddrPortFrom(ip, uint16(p)), nil
+}
+
+// usersOf returns the users of an inbound.
+func usersOf(inst *core.Instance, tag string) (proxy.UserManager, error) {
 	m, _ := inst.GetFeature(inbound.ManagerType()).(inbound.Manager)
 	if m == nil {
-		inst.Close()
 		return nil, errors.New("vless: no inbound manager")
 	}
-	h, err := m.GetHandler(context.Background(), inboundTag)
+	h, err := m.GetHandler(context.Background(), tag)
 	if err != nil {
-		inst.Close()
 		return nil, fmt.Errorf("vless: %w", err)
 	}
 	gi, ok := h.(proxy.GetInbound)
 	if !ok {
-		inst.Close()
 		return nil, errors.New("vless: the inbound has no users")
 	}
-	if s.users, ok = gi.GetInbound().(proxy.UserManager); !ok {
-		inst.Close()
+	um, ok := gi.GetInbound().(proxy.UserManager)
+	if !ok {
 		return nil, errors.New("vless: the inbound has no users")
 	}
-	return s, nil
+	return um, nil
 }
 
 // Ready waits until REALITY has learned how the site it borrows ends its
@@ -241,20 +318,63 @@ func (s *Server) AddUser(id string) error {
 	if err := tunnel.CheckVLESSID(id); err != nil {
 		return err
 	}
+	if id == RegistrationID {
+		return errors.New("vless: the registrations' user ID is no group's")
+	}
+	return addUser(s.users, id)
+}
+
+func addUser(um proxy.UserManager, id string) error {
 	u, err := (&protocol.User{Email: id, Account: serial.ToTypedMessage(&xvless.Account{Id: id, Encryption: "none"})}).ToMemoryUser()
 	if err != nil {
 		return fmt.Errorf("vless: %w", err)
 	}
-	return s.users.AddUser(context.Background(), u)
+	return um.AddUser(context.Background(), u)
+}
+
+// AddPath lets a group's packets in under its own path below the XHTTP
+// path, a segment that CheckGroupPath takes; each AddPath needs its
+// RemovePath. Without XHTTP it does nothing.
+func (s *Server) AddPath(p string) error {
+	if s.front == nil {
+		return nil
+	}
+	if err := tunnel.CheckGroupPath(p); err != nil {
+		return err
+	}
+	s.front.mu.Lock()
+	s.front.paths[p]++
+	s.front.mu.Unlock()
+	return nil
+}
+
+// RemovePath takes back an AddPath.
+func (s *Server) RemovePath(p string) {
+	if s.front == nil {
+		return
+	}
+	s.front.mu.Lock()
+	if s.front.paths[p]--; s.front.paths[p] <= 0 {
+		delete(s.front.paths, p)
+	}
+	s.front.mu.Unlock()
 }
 
 // RemoveUser shuts out the clients of a group.
 func (s *Server) RemoveUser(id string) error {
+	if id == RegistrationID {
+		return nil
+	}
 	return s.users.RemoveUser(context.Background(), id)
 }
 
 // Close stops the server.
-func (s *Server) Close() error { return s.inst.Close() }
+func (s *Server) Close() error {
+	if s.front != nil {
+		s.front.close()
+	}
+	return s.inst.Close()
+}
 
 // Client is a client's side, running: a local UDP port whose packets go to
 // the forwarder inside VLESS.
@@ -276,6 +396,76 @@ func Dial(l tunnel.VLESS) (*Client, error) {
 	}
 	addr := pc.LocalAddr().(*net.UDPAddr).AddrPort()
 	pc.Close()
+	// The address means nothing: the forwarder sends every packet to its
+	// own port.
+	in := &dokodemo.Config{
+		RewriteAddress:  xnet.NewIPOrDomain(xnet.LocalHostIP),
+		RewritePort:     9,
+		AllowedNetworks: []xnet.Network{xnet.Network_UDP},
+	}
+	inst, err := startClient(l, addr, in)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{inst: inst, addr: addr}, nil
+}
+
+// Stream is a client's way, over VLESS, to the mirror of the releases on
+// its forwarder's server or to the forwarder's registrations: a local TCP
+// port whose connections the forwarder passes there. TLS goes inside, the
+// mirror's with its own name or the registration's with the forwarder's
+// key pinned, so it is checked as on any other way.
+type Stream struct {
+	inst *core.Instance
+	addr netip.AddrPort
+}
+
+// DialMirror starts the client's way to the mirror for the link.
+func DialMirror(l tunnel.VLESS) (*Stream, error) { return dialStream(l, 443) }
+
+// DialRegistration starts a hub's way to its forwarder's registrations for
+// the link, whose ID it replaces with RegistrationID.
+func DialRegistration(l tunnel.VLESS) (*Stream, error) {
+	l.ID = RegistrationID
+	if l.Transport == tunnel.TransportXHTTP {
+		l.Path = tunnel.RegistrationPath(l.Path)
+	}
+	return dialStream(l, RegistrationPort)
+}
+
+func dialStream(l tunnel.VLESS, port uint32) (*Stream, error) {
+	if err := l.Check(); err != nil {
+		return nil, err
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("vless: %w", err)
+	}
+	addr := ln.Addr().(*net.TCPAddr).AddrPort()
+	ln.Close()
+	// Only the port means something: the forwarder sends a stream to its
+	// registrations or its mirror.
+	in := &dokodemo.Config{
+		RewriteAddress:  xnet.NewIPOrDomain(xnet.LocalHostIP),
+		RewritePort:     port,
+		AllowedNetworks: []xnet.Network{xnet.Network_TCP},
+	}
+	inst, err := startClient(l, addr, in)
+	if err != nil {
+		return nil, err
+	}
+	return &Stream{inst: inst, addr: addr}, nil
+}
+
+// Addr returns the local TCP address that leads there.
+func (m *Stream) Addr() netip.AddrPort { return m.addr }
+
+// Close stops the way.
+func (m *Stream) Close() error { return m.inst.Close() }
+
+// startClient runs a client's side for the link with the local inbound in
+// on addr.
+func startClient(l tunnel.VLESS, addr netip.AddrPort, in *dokodemo.Config) (*core.Instance, error) {
 	var stream *internet.StreamConfig
 	if l.Transport == tunnel.TransportXHTTP {
 		// HTTPS to the site, its certificate checked against the public
@@ -301,20 +491,9 @@ func Dial(l tunnel.VLESS) (*Client, error) {
 			SpiderY:     make([]int64, 10),
 		})
 	}
-	// The address means nothing: the forwarder sends every packet to its
-	// own port.
-	in := &dokodemo.Config{
-		RewriteAddress:  xnet.NewIPOrDomain(xnet.LocalHostIP),
-		RewritePort:     9,
-		AllowedNetworks: []xnet.Network{xnet.Network_UDP},
-	}
 	server := endpoint(l.Endpoint)
 	server.User = &protocol.User{Account: serial.ToTypedMessage(&xvless.Account{Id: l.ID, Encryption: "none"})}
-	inst, err := start(inboundHandler("", addr, nil, in), &vlessout.Config{Vnext: server}, stream)
-	if err != nil {
-		return nil, err
-	}
-	return &Client{inst: inst, addr: addr}, nil
+	return start([]*core.InboundHandlerConfig{inboundHandler("", addr, nil, in)}, &vlessout.Config{Vnext: server}, stream)
 }
 
 // Addr returns the local UDP address WireGuard sends to.
@@ -403,9 +582,9 @@ func inboundHandler(tag string, listen netip.AddrPort, stream *internet.StreamCo
 	}
 }
 
-// start runs Xray with one inbound and one outbound, or none for one that
+// start runs Xray with the inbounds and one outbound, or none for one that
 // is added afterwards, logging nothing.
-func start(in *core.InboundHandlerConfig, out proto.Message, outStream ...*internet.StreamConfig) (*core.Instance, error) {
+func start(ins []*core.InboundHandlerConfig, out proto.Message, outStream ...*internet.StreamConfig) (*core.Instance, error) {
 	sender := &proxyman.SenderConfig{}
 	if len(outStream) > 0 {
 		sender.StreamSettings = outStream[0]
@@ -417,7 +596,7 @@ func start(in *core.InboundHandlerConfig, out proto.Message, outStream ...*inter
 			serial.ToTypedMessage(&proxyman.InboundConfig{}),
 			serial.ToTypedMessage(&proxyman.OutboundConfig{}),
 		},
-		Inbound: []*core.InboundHandlerConfig{in},
+		Inbound: ins,
 	}
 	if out != nil {
 		cfg.Outbound = []*core.OutboundHandlerConfig{{SenderSettings: serial.ToTypedMessage(sender), ProxySettings: serial.ToTypedMessage(out)}}

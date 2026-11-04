@@ -1113,7 +1113,13 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   networks"); the forwarder then tries them only on handshakes of the size that group's
   have, and on the packets of addresses that already have a session with it. In VLESS mode
   the forwarder lets in only the VLESS user IDs of registered groups and routes what comes
-  inside the same way.
+  inside the same way. Each group's packets come on an XHTTP path of its own, which the
+  forwarder derives from its key and the group and gives the hub when it registers; the
+  path built into the programs serves only a hub's registration, which a hub on a network
+  that lets only HTTPS through makes inside VLESS too. Those built-in ways in are backed by
+  a signed list, `entries.json`, that the project renews beside `keys.json` and every member
+  passes on, so a blocked way in is replaced without a release ([protocol.md](protocol.md),
+  section 16, "Entry points").
 - **Fallback: a port computed by the group.** If `mac1` routing does not hold up, the hub and
   its clients compute the group's port themselves, from a secret of the group and the current
   hour, as an authenticator app computes its codes; there is no request that names the group.
@@ -1978,6 +1984,14 @@ docs/protocol.md, section 16.
   trusted.
 - Members pass the signed manifest and the archives to each other inside the group, so about
   one device per group asks the internet; each still checks the signatures itself.
+- A device that syncs away from home over VLESS reaches the mirror only inside VLESS, through
+  its hub's forwarder, which lets a registered group's VLESS user ID reach the mirror on its
+  own server and nothing else, so the server gives no way to the internet. When neither
+  GitHub nor the mirror answers, `cbb update` takes the signed release the group passed to
+  its service, and the archive from the members. With AmneziaWG, whose devices reach the
+  internet through no server of the project, the hub's `cbb update` downloads the archives
+  its group's members install, as their hellos name them, and its service serves them inside
+  the tunnel.
 - An update check tells the server the device's address, its system and its version. It is
   at most once a day, sends no group data and works with sync away from home off. The
   documentation says so, and the check can be turned off.

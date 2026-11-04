@@ -267,6 +267,17 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   changes no `stable.json`. `published.yml` then checks what GitHub serves and updates the
   Homebrew tap. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
   `verify` (the comment in `tools/release-sign/main.go`).
+- **The entry points** (docs/protocol.md, section 16, "Entry points"): the ways in to the
+  project's servers that are not built in. On the Mac, in a checkout of the branch `channel`,
+  `release-sign entries -key se:~/.config/cbb-release/release.se -in in.json channel`, where
+  `in.json` is `{"forwarders": [{"name": "cbb.tools:8764", "vless": [{"transport": "xhttp",
+  "server_name": "cbb.tools", "port": 443, "path": "/banMEJvnYJJap8S"}]}]}`, signs
+  `entries.json` numbered above the branch's, valid for 30 days (`-days`, at most 100), and
+  checks it under the pinned roots; commit and push it. From then on `release-sign extend`
+  on cbb.tools signs it again with the channel key, the same forwarders and a higher number,
+  `take` brings that into the branch only when it names the same forwarders, `due` reminds
+  when it runs out, and `mirror` serves the newest copy that checks out. A blocked way in is
+  replaced by signing a new list with another `in.json`, without a release.
 - **Reminders**: the `channel` workflow opens the issue "Release channel: renewal due" when
   the branch's `keys.json` expires within 21 days (run `release-sign renew -new-keys` on the
   Mac with a YubiKey) or its `stable.json` within 10, which means cbb.tools stopped renewing
