@@ -928,11 +928,15 @@ static uint8_t esp_address(char *ip, uint8_t max)
 // phone, at the ESP's address and the port -serve leads to, while the
 // network runs under the QR code the phone scans.
 // Not static: far_net_pair() (far.asm) calls it.
+static int net_stop(void);
+
 int net_pair(void)
 {
     char ip[40], cmd[160], *serve, *colon = 0, *end;
     uint32_t len, crc;
-    if (net_on()) return fail(net_runs, 0);
+    // The network holds the Pi's line: it stops for the pairing, and
+    // starts again after it.
+    if (net_on() && net_stop()) return 1;
     // Without settings, the defaults, as .cbb net on saves them.
     if (net_load()) {
         strcpy(net_args, net_serve + 1);

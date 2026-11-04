@@ -268,6 +268,8 @@ pub struct Next {
     files: Vec<Option<File>>,
     pub errh: u16,
     pub drivers: Vec<(u8, Vec<u8>)>,
+    /// Whether cbb.drv runs the network (its call 2 switches it).
+    pub net: bool,
     /// The palette's 9-bit colours as written (NR 0x40/0x41/0x44), per index.
     pub palette: Vec<u16>,
     pal_index: u8,
@@ -575,6 +577,7 @@ impl Run {
             files: Vec::new(),
             errh: 0,
             drivers: Vec::new(),
+            net: false,
             palette: (0..256).map(|i| i as u16 * 2).collect(),
             pal_index: 0,
             pal_second: false,
@@ -919,10 +922,14 @@ impl Run {
             self.cpu.registers().set_a(0);
             return self.carry(true);
         }
-        // cbb.drv: the network is off; its counters are zero.
+        // cbb.drv: the network's state; its counters are zero.
         match call {
+            2 => {
+                self.hw.net = de != 0;
+                self.ok();
+            }
             3 => {
-                self.set(Reg16::DE, 0);
+                self.set(Reg16::DE, self.hw.net as u16);
                 self.ok();
             }
             _ => {

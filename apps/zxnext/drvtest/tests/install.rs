@@ -267,7 +267,10 @@ fn run_plain(kit: &Kit, args: &str, pi: Pi) -> Run {
 
 /// The same with this ESP, and CBB.DRV on the card.
 fn run_with(kit: &Kit, args: &str, esp: Esp, pi: Pi) -> Run {
-    let card = card(&format!("plain-{}", args.replace(' ', "-")));
+    // Tests run at once, some with the same arguments: a card each.
+    static CARDS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = CARDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let card = card(&format!("plain-{}-{n}", args.replace(' ', "-")));
     std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
     std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
     let run = run_on(kit, &card, args, esp, pi, Vec::new());
@@ -277,8 +280,23 @@ fn run_with(kit: &Kit, args: &str, esp: Esp, pi: Pi) -> Run {
 
 /// Runs .cbb ARGS on this card, with these keys, until it ends.
 fn run_on(kit: &Kit, card: &Path, args: &str, esp: Esp, pi: Pi, keys: Vec<Key>) -> Run {
+    run_after(kit, card, args, esp, pi, keys, |_| {})
+}
+
+/// The same, on a Next that `before` sets up (a driver installed before).
+fn run_after(
+    kit: &Kit,
+    card: &Path,
+    args: &str,
+    esp: Esp,
+    pi: Pi,
+    keys: Vec<Key>,
+    before: impl FnOnce(&mut Run),
+) -> Run {
     let mut run = Run::new(&kit.dot, card, args, Box::new(esp), Box::new(pi));
     run.hw.keys = keys;
+    before(&mut run);
+    let earlier = run.hw.drivers.len();
     let table = kit.map.lines().find(|l| l.starts_with("__z_page_table ")).expect("__z_page_table");
     run.page_table = u16::from_str_radix(table.split('$').nth(1).unwrap().get(..4).unwrap(), 16).unwrap();
     run.overlay_logical = kit.pages.clone();
@@ -298,7 +316,7 @@ fn run_on(kit: &Kit, card: &Path, args: &str, esp: Esp, pi: Pi, keys: Vec<Key>) 
         .collect();
     assert!(breaches.is_empty(), "breaches:\n{}", breaches.join("\n"));
     // Only an installed driver keeps its bank.
-    assert_eq!(run.hw.ours.iter().filter(|&&p| p).count(), run.hw.drivers.len(), "pages still taken");
+    assert_eq!(run.hw.ours.iter().filter(|&&p| p).count(), run.hw.drivers.len() - earlier, "pages still taken");
     run
 }
 
@@ -441,4 +459,24 @@ fn finds_a_computer_with_a_client_left_on_the_server() {
     let run = run_with(&kit, "net on", esp, Pi::new());
     let s = run.hw.screen_text();
     assert!(s.contains("192.168.0.175:8764"), "{s}");
+}
+
+#[test]
+fn pairs_while_the_network_runs() {
+    let Some(kit) = kit("pairnet") else { return };
+    let (card, pi) = installed(&kit, "pairnet");
+    let mut esp = Esp::new(kit.site.clone());
+    esp.mux = true;
+    esp.server = true;
+    esp.members = vec![("192.168.0.175".into(), 8764, "p=1".into())];
+    let mut run = run_after(&kit, &card, "pair 123-456", esp, pi, Vec::new(), |run| {
+        run.hw.drivers.push((124, vec![0; 512]));
+        run.hw.net = true;
+    });
+    // The played Pi has no link: it is asked for, after the network stopped.
+    let s = run.hw.screen_text();
+    assert!(s.contains("The network stopped.") && s.contains("Found 192.168.0.175:8764"), "{s}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(pi.log.iter().any(|l| l.contains("-join 123-456 ")), "{:?}", pi.log);
+    let _ = std::fs::remove_dir_all(&card);
 }

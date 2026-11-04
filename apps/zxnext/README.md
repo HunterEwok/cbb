@@ -192,8 +192,9 @@ ESP8266"). While the network runs, the ESP's UART is at 19200 (`AT+UART_CUR`, no
 flash): the driver hands the Pi 2400 of its bytes a second, and the ESP has no flow control, so
 at its stock 115200 a burst would overflow the Next's 512-byte buffer; `.cbb net off` puts it
 back at 115200. The lite member (`cbb service -peer 127.0.0.1:8769`) has to run on the Pi as well.
-While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
-`pair` ask for `.cbb net off` first.
+While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy` and `text` ask
+for `.cbb net off` first, and `.cbb pair` stops the network itself and starts it again after
+the code.
 
 NextPi has no network of its own, so `.cbb pair` joins the group through the ESP, with the network's settings or their defaults. It asks the ESP
 for its address (`AT+CIFSR`), starts `cbb next pair` on the Pi in the background with that
