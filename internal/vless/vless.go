@@ -29,6 +29,8 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/tunnel"
@@ -135,6 +137,25 @@ const (
 // below it (AddPath), so that the path every build carries reaches nothing
 // but the registrations (docs/protocol.md, section 13, "VLESS").
 func Listen(cfg ServerConfig) (*Server, error) {
+	// The free ports are picked before Xray binds them, so another program
+	// can take one in between: then it picks others.
+	for try := 1; ; try++ {
+		s, err := listenOnce(cfg)
+		if err == nil || try == listenTries || !addrInUse(err) {
+			return s, err
+		}
+	}
+}
+
+// listenTries is how many times Listen picks free ports.
+const listenTries = 3
+
+// addrInUse reports whether err is a port that another socket took.
+func addrInUse(err error) bool {
+	return errors.Is(err, syscall.EADDRINUSE) || strings.Contains(err.Error(), "address already in use")
+}
+
+func listenOnce(cfg ServerConfig) (*Server, error) {
 	if cfg.Path != "" {
 		if err := tunnel.CheckVLESSPath(cfg.Path); err != nil {
 			return nil, err
