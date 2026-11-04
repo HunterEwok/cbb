@@ -1019,6 +1019,18 @@ where root is at hand and nothing of ours runs as root for it later:
   the limit already allows. A hub at its own address needs its UDP port open to everyone (on
   Windows the inbound rule, on Linux a unit that allows every address), so that stays
   `sudo cbb global hub` on the device.
+- **"Hub on its own address" in the computers' apps (the owner, 2026-11-04).** The Mac app
+  and the tray app on Linux and Windows offer it on their own computer, never on a phone,
+  which has no public address. It says plainly what it needs: a public IP address on the
+  router (not behind carrier-grade NAT, which many mobile and some home providers use), the
+  hub's UDP port forwarded on the router to this computer, and that port open to the whole
+  internet, though only the group's devices get an answer. Before it may be turned on, the
+  app checks that the address really is public and reachable: the hub asks `cbb.tools` to
+  send a packet back to its public address and port, and only when that packet arrives does
+  the switch turn on. Otherwise it says why (no public address, or the port not forwarded)
+  and suggests a hub through the forwarder, which needs neither. With the user's yes it
+  runs `cbb global hub` elevated, as the pair QR button runs `cbb pair` (pkexec, UAC, the
+  administrator's password on a Mac), which opens the port in the system's firewall.
 - Without the consent the installers write nothing beyond the home network. A Mac keeps the
   program's limit only, as now; the lite member has none of its own.
 

@@ -502,6 +502,19 @@ sync away from home, the admins, and remote paste.
   `cbb remove <name>` removes one. Revocations are signed records that only grow and
   spread to every member, which then refuse the revoked keys. The records and the list are
   described in "Admin phones, the devices list and revocation" below.
+- **Leaving the group** (D-83): `sudo cbb leave` takes a computer out of its group. The
+  service stops the group, deletes the group's files from its state directory
+  (`identity.json` with the keys, or the TPM's and the Secure Enclave's blobs of them, which
+  open nothing without the file; the records, the credentials and the keys for the servers,
+  `seal.json`, `tunnel.json`, the entry points, the known networks, the cache of images and
+  files, the logs of remote pastes and actions, `attest-status.json`, a group left before
+  0.6), turns remote paste and the quick actions off, and restarts in no group, from which
+  `cbb pair` or `cbb new` goes on. The sync mode, the limits, the TVs and the update
+  settings stay. The group's root leaves only alone; otherwise it hands the group over
+  first. A removed device (`cbb status` says so) and one whose group file is damaged leave
+  the same way. The lite member's `cbb leave` does the same through its service, or by
+  itself when the service does not run. The group keeps the device's entry until an admin
+  removes it.
 
 ### Discovery
 

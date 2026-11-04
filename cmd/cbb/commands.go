@@ -230,7 +230,7 @@ func certLine(endsMS int64, now time.Time) string {
 	end := time.UnixMilli(endsMS)
 	switch {
 	case !now.Before(end):
-		return fmt.Sprintf("This device's certificate ended on %s, before an admin renewed it: the group's members refuse it. If this device's date (%s) is wrong, set it right; otherwise, to join again, remove CBB with its keys (uninstall --purge), install it again and join.", end.Local().Format(time.DateOnly), now.Local().Format(time.DateOnly))
+		return fmt.Sprintf("This device's certificate ended on %s, before an admin renewed it: the group's members refuse it. If this device's date (%s) is wrong, set it right; otherwise, to join again, leave the group here (sudo cbb leave) and join.", end.Local().Format(time.DateOnly), now.Local().Format(time.DateOnly))
 	case end.Sub(now) < certWarning:
 		return fmt.Sprintf("This device's certificate ends on %s and no admin has renewed it: connect it to the group's root or an admin before then, or it must join again.", end.Local().Format(time.DateOnly))
 	}
@@ -258,7 +258,7 @@ func writeStatus(w io.Writer, st *control.Status, devs []control.Device, now tim
 		fmt.Fprintln(w, l)
 	}
 	if st.Removed {
-		fmt.Fprintln(w, "This device was removed from the group: its members refuse it. To join again, remove CBB with its keys (uninstall --purge), install it again and join.")
+		fmt.Fprintln(w, "This device was removed from the group: its members refuse it. To join this group again or another one, leave it here first: sudo cbb leave, then cbb pair.")
 	} else if st.Frozen {
 		fmt.Fprintln(w, "Another admin froze this computer's admin key: its members refuse it until the group's root or an admin phone unfreezes it (cbb unfreeze on the root).")
 	} else if st.TakenOverBy != "" {

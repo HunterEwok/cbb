@@ -19,6 +19,7 @@ mod error;
 mod files;
 mod identity;
 mod interfaces;
+mod leave;
 mod next;
 mod nextlink;
 mod node;
@@ -70,6 +71,10 @@ Commands:
                        characters, only the first line unless -lines, and
                        no secret unless -secret.
   status               Show this device, its group and the group's devices.
+  leave [-yes]         Leave the group: delete this device's keys and the
+                       group's files, keep the settings, turn remote paste
+                       and the quick actions off; then cbb pair joins this
+                       group or another one.
   mode [own|shared|receive|send]
                        Show or change the sync mode: what moves between this
                        device's clipboard and the group (a new device keeps
@@ -176,6 +181,7 @@ fn main() {
                 "copy" => cmd_copy(&g, rest),
                 "paste" => cmd_paste(&g, rest),
                 "status" => cmd_status(&g, rest),
+                "leave" => cmd_leave(&g, rest),
                 "global" => cmd_global(&g, rest),
                 "watch" => cmd_watch(&g, rest),
                 "mode" => cmd_mode(&g, rest),
@@ -611,6 +617,11 @@ fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
         "secrets" => println!("The group sends no secrets until its root decides."),
         _ => {}
     }
+    if s.removed {
+        println!(
+            "This device was removed from the group: its members refuse it. To join this group again or another one, leave it here first: sudo cbb leave, then cbb pair."
+        );
+    }
     if s.peers.is_empty() {
         println!("no members connected");
     }
@@ -630,6 +641,51 @@ fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
             marks.push(format!("clock {:+} ms", p.skew_ms));
         }
         println!("{}  {:<24} {:<8} {:<8} {}", d.id, d.name, os_name(&d.os), d.role, marks.join(", "));
+    }
+    Ok(())
+}
+
+/// The question cbb leave asks before it deletes the keys.
+const LEAVE_QUESTION: &str =
+    "This device leaves its group: its keys and the group's files here are deleted, remote paste
+and the quick actions are turned off, and the rest of the settings stay. It can then join this
+group again or another one (cbb pair). The group keeps listing it until an admin removes it.
+Leave the group? [y/N] ";
+
+/// cbb leave (D-83): through the service, or by itself when the service
+/// does not run, as cbb pair joins.
+fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
+    let yes = match args {
+        [] => false,
+        [a] if flag(a) == Some("yes") => true,
+        _ => return Err(Error::msg("usage: cbb leave [-yes]")),
+    };
+    if !yes {
+        print!("{LEAVE_QUESTION}");
+        std::io::stdout().flush().ok();
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).ok();
+        if !matches!(line.trim().to_lowercase().as_str(), "y" | "yes") {
+            println!("Nothing changed. (cbb leave -yes leaves without the question.)");
+            std::process::exit(1);
+        }
+    }
+    let running = UnixStream::connect(control::admin_socket(&g.socket))
+        .map(|_| true)
+        .or_else(|e| match e.kind() {
+            std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused => Ok(false),
+            _ => Err(e),
+        })
+        .unwrap_or(true);
+    if running {
+        request(g, &control::Message::new(control::Header { op: "leave".into(), ..Default::default() }, Vec::new()))?;
+        println!("Left the group. The service restarts in no group: cbb pair joins one.");
+    } else {
+        if identity::Identity::load(&g.state).ok().flatten().is_none() && !g.state.join(records::FILE_NAME).exists() {
+            return Err(Error::msg("this device is in no group"));
+        }
+        leave::leave_group(&g.state)?;
+        println!("Left the group: cbb pair joins one.");
     }
     Ok(())
 }

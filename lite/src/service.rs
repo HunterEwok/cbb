@@ -144,6 +144,9 @@ static STOP: AtomicBool = AtomicBool::new(false);
 /// An admin had the service restart: it stops with an error, after which
 /// systemd starts it again.
 static RESTART: AtomicBool = AtomicBool::new(false);
+/// The device left its group (cbb leave): the service stops as for a
+/// restart, and starts again in no group.
+static LEFT: AtomicBool = AtomicBool::new(false);
 
 extern "C" fn on_signal(_: libc::c_int) {
     STOP.store(true, Ordering::SeqCst);
@@ -278,6 +281,9 @@ pub fn run(cfg: Config) -> Result<()> {
     std::thread::sleep(Duration::from_millis(500));
     let _ = std::fs::remove_file(&cfg.socket);
     let _ = std::fs::remove_file(&admin_socket);
+    if LEFT.load(Ordering::SeqCst) {
+        return Err(Error::msg("restarting after leaving the group"));
+    }
     if RESTART.load(Ordering::SeqCst) {
         return Err(Error::msg("restarting at an admin's request"));
     }
@@ -1064,6 +1070,7 @@ impl Service {
                     paste: self.paste_status(),
                     actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
                     stop: node.stop(),
+                    removed: node.removed(),
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
             }
@@ -1132,6 +1139,24 @@ impl Service {
                 Err(Error::msg("a lite member admits and removes no devices; use the phone app or a Linux member"))
             }
             "join" => Err(Error::msg("run cbb pair on this device, with the service stopped or running")),
+            "leave" => {
+                // The node stops first, so nothing writes the group's files
+                // again; the service then restarts in no group.
+                self.node()?.close();
+                let res = crate::leave::leave_group(&self.state_dir);
+                match &res {
+                    Ok(()) => (self.log)(
+                        "cbb: this device left its group: its keys and the group's files are deleted; it restarts in no group",
+                    ),
+                    Err(e) => (self.log)(&format!("cbb: {}", e.for_log())),
+                }
+                std::thread::spawn(|| {
+                    std::thread::sleep(RESTART_AFTER);
+                    LEFT.store(true, Ordering::SeqCst);
+                    STOP.store(true, Ordering::SeqCst);
+                });
+                res.map(|()| control::reply(Header::default(), Vec::new()))
+            }
             op => Err(Error::msg(format!("unknown operation {op:?}"))),
         }
     }

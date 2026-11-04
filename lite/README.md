@@ -115,7 +115,9 @@ Running it again updates. It refuses to replace a full member, whose keys the li
 cannot use. Without curl, or for a binary you
 built, unpack the archive (or make one with `sh packaging/archive.sh`) and run
 `sudo sh cbb-lite/packaging/linux/install.sh cbb-lite/cbb`. To remove it:
-`sudo sh /usr/local/share/cbb/uninstall.sh` (`--purge` also deletes the keys).
+`sudo sh /usr/local/share/cbb/uninstall.sh` (`--purge` also deletes the keys). To leave the
+group and keep the lite member, for example after the group removed it: `sudo cbb leave`,
+then join again.
 
 The service waits until the device joins a group. Join as the service's user, so that it
 can read its keys:

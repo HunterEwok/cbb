@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Leaving the group (D-83): `sudo cbb leave` on a computer or a lite member deletes the
+  device's keys and the group's files, keeps CBB and its settings, turns remote paste and the
+  quick actions off, and lets it join this group or another one with `cbb pair`; before, the
+  only way was to uninstall with `--purge` and install again. The group's root leaves only
+  when it is alone. `cbb status` tells a removed device to leave, and a device whose group
+  file is damaged leaves too.
 - Updates on networks that block GitHub and the mirror: a device that syncs away from home
   over VLESS reaches `dl.cbb.tools` inside VLESS, through its hub's forwarder, which lets
   registered groups reach only the mirror on its own server (`cbb forward -vless-mirror`);
