@@ -1578,11 +1578,16 @@ static uint8_t percent(uint32_t got, uint32_t size)
 // Draws a file's bar, and the numbers of the one under way.
 static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 {
-    uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50;
+    uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50, left;
     uint32_t rate = secs ? got / secs : 0;
-    uint16_t left = rate ? (uint16_t)((size - got) / rate) : 0;
     char speed[8];
-    bar(FILE_ROW + 2 * row + 1, bar_size ? percent(bar_base + got, bar_size) : percent(got, size), bar_ink[row]);
+    // One bar for more than one file: their sum.
+    if (bar_size) {
+        got += bar_base;
+        size = bar_size;
+    }
+    left = rate ? (uint16_t)((size - got) / rate) : 0;
+    bar(FILE_ROW + 2 * row + 1, percent(got, size), bar_ink[row]);
     at(NOW_ROW, PANEL);
     printf("%5luK OF %5luK", got >> 10, size >> 10);
     if (rate < 10240) sprintf(speed, "%u.%uK/S", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));

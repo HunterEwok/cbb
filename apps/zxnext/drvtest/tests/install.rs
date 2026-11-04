@@ -1091,6 +1091,8 @@ fn updates_itself_in_dot() {
         None,
     );
     assert!(o.has("CBB AND ITS FILES ARE NEW"), "{}", o.screen);
+    // The new CBB and its CBB.OVL on one bar, their sizes summed.
+    assert!(o.has("64K OF    64K"), "{}", o.screen);
     assert_eq!(std::fs::read(card.join("dot/CBB")).unwrap(), newer);
     assert!(!card.join("dot/CBB.NEW").exists());
     let _ = std::fs::remove_dir_all(&card);
