@@ -67,7 +67,12 @@ pub struct Esp {
     /// and the TXT's r (empty for a computer).
     pub members: Vec<(String, u16, String)>,
     cipdinfo: bool,
+    /// Connection 4, UDP, in CIPMUX=1.
     udp: bool,
+    /// CIPMUX=1, and a server, which the network's link leaves; the old
+    /// firmware keeps CIPMUX=1 with a server until AT+RST.
+    pub mux: bool,
+    pub server: bool,
     /// Non-transparent AT+CIPSEND: bytes still to take.
     sending: usize,
     datagram: Vec<u8>,
@@ -125,6 +130,8 @@ impl Esp {
             pending_baud: None,
             members: Vec::new(),
             cipdinfo: false,
+            mux: false,
+            server: false,
             udp: false,
             sending: 0,
             datagram: Vec::new(),
@@ -142,9 +149,9 @@ impl Esp {
         for (k, (ip, port, r)) in self.members.clone().iter().enumerate() {
             let m = mdns_answer(&d, ip, *port, r);
             let head = if self.cipdinfo {
-                format!("\r\n+IPD,{},{ip},5353:", m.len())
+                format!("\r\n+IPD,4,{},{ip},5353:", m.len())
             } else {
-                format!("\r\n+IPD,{}:", m.len())
+                format!("\r\n+IPD,4,{}:", m.len())
             };
             let at = now + 20_000 + 10_000 * k as u64;
             self.out.push(at, head.as_bytes());
@@ -162,15 +169,41 @@ impl Esp {
             eprintln!("{}", self.log.last().unwrap());
         }
         let c = cmd.trim();
-        if c == "AT" || c == "ATE0" || c == "ATE1" || c == "AT+CIPMUX=0" && !self.connected {
+        if c == "AT" || c == "ATE0" || c == "ATE1" {
             return self.reply(now, "\r\nOK\r\n");
+        }
+        if c == "AT+CIPMUX=0" || c == "AT+CIPMUX=1" {
+            if self.connected || self.udp || self.server && c.ends_with('0') {
+                return self.reply(now, "\r\nERROR\r\n");
+            }
+            self.mux = c.ends_with('1');
+            return self.reply(now, "\r\nOK\r\n");
+        }
+        if c == "AT+RST" {
+            self.mux = false;
+            self.server = false;
+            self.connected = false;
+            self.udp = false;
+            self.cipdinfo = false;
+            self.cipmode = 0;
+            self.reply(now, "\r\nOK\r\n");
+            self.out.push(now + 100_000, b"\x8a\xf3 ets Jan  8 2013\r\n\r\nready\r\n");
+            self.pending_baud = Some((now + 5_000, 115_200));
+            return;
         }
         if let Some(m) = c.strip_prefix("AT+CIPMODE=") {
             self.cipmode = m.parse().unwrap_or(0);
             return self.reply(now, "\r\nOK\r\n");
         }
+        if c == "AT+CIPCLOSE=4" {
+            if self.mux && self.udp {
+                self.udp = false;
+                return self.reply(now, "4,CLOSED\r\n\r\nOK\r\n");
+            }
+            return self.reply(now, "\r\nERROR\r\n");
+        }
         if c == "AT+CIPCLOSE" {
-            if self.connected {
+            if self.connected && !self.mux {
                 self.connected = false;
                 self.udp = false;
                 return self.reply(now, "CLOSED\r\n\r\nOK\r\n");
@@ -181,24 +214,33 @@ impl Esp {
             self.cipdinfo = v == "1";
             return self.reply(now, "\r\nOK\r\n");
         }
-        if c.starts_with("AT+CIPSTART=\"UDP\"") {
-            if self.connected {
+        if c.starts_with("AT+CIPSTART=4,\"UDP\"") {
+            if !self.mux {
+                return self.reply(now, "\r\nERROR\r\n");
+            }
+            if self.udp {
                 return self.reply(now, "ALREADY CONNECTED\r\n\r\nERROR\r\n");
             }
-            self.connected = true;
             self.udp = true;
-            return self.reply(now, "CONNECT\r\n\r\nOK\r\n");
+            return self.reply(now, "4,CONNECT\r\n\r\nOK\r\n");
         }
-        if let Some(n) = c.strip_prefix("AT+CIPSEND=") {
-            if !self.connected || self.cipmode != 0 {
+        if let Some(n) = c.strip_prefix("AT+CIPSEND=4,") {
+            if !self.udp || self.cipmode != 0 {
                 return self.reply(now, "\r\nERROR\r\n");
             }
             self.sending = n.parse().unwrap();
             self.datagram.clear();
             return self.reply(now, "\r\nOK\r\n> ");
         }
+        if let Some(port) = c.strip_prefix("AT+CIPSERVER=1,") {
+            if !self.mux || port.is_empty() {
+                return self.reply(now, "\r\nERROR\r\n");
+            }
+            self.server = true;
+            return self.reply(now, "\r\nOK\r\n");
+        }
         if c.starts_with("AT+CIPSTART=") {
-            if self.connected {
+            if self.connected || self.mux {
                 return self.reply(now, "ALREADY CONNECTED\r\n\r\nERROR\r\n");
             }
             if !self.wifi {

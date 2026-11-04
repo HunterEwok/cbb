@@ -116,7 +116,10 @@ All notable changes to cbb are documented in this file. The format follows
   HOST` names one: the port 8764 and `-serve 8764:8764` are the defaults. `.cbb uninstall`
   removes, after a Y, what `.cbb install` and `.cbb net` put anywhere: the network and
   `CBB.DRV`, the Pi's cbb and its group, and the files in `/cbb`. `.cbb pair` always goes
-  through the ESP, with the default settings when there are none. `make test` runs the real `CBB` on a
+  through the ESP, with the default settings when there are none. The ESP stays in CIPMUX=1 with a
+  server after the network, which its firmware keeps until it restarts: finding a computer
+  asks on connection 4 in that mode, and `.cbb install` restarts the ESP (`AT+RST`) when it
+  refuses CIPMUX=0. `make test` runs the real `CBB` on a
   played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
   cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
   silent Pi, a Pi without the fast speed, finding a computer, uninstalling, a closed connection, SPACE, the usage and a paste, each failed on what would

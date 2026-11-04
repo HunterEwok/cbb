@@ -657,8 +657,11 @@ static uint8_t quiet;
 // gives its address (the ESP names the sender) and port (its SRV record).
 static const uint8_t mdns_query[] = {0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 4, '_', 'c', 'b', 'b', 4, '_', 't', 'c',
                                      'p', 5, 'l', 'o', 'c', 'a', 'l', 0, 0, 12, 0, 1};
-static const char *const mdns_cmds[] = {"AT+CIPMODE=0", "AT+CIPMUX=0", "AT+CIPDINFO=1",
-                                        "AT+CIPSTART=\"UDP\",\"224.0.0.251\",5353,5354,2"};
+// Several connections at once (CIPMUX=1), the ESP's mode while the
+// network runs: a server on it keeps that mode until the ESP restarts, and
+// the question goes on connection 4, which the network leaves alone.
+static const char *const mdns_cmds[] = {"AT+CIPMODE=0", "AT+CIPMUX=1", "AT+CIPCLOSE=4", "AT+CIPDINFO=1",
+                                        "AT+CIPSTART=4,\"UDP\",\"224.0.0.251\",5353,5354,2"};
 static const char ipd[] = "+IPD,";
 static char net_to[32];
 
@@ -701,11 +704,11 @@ static uint16_t srv_port(uint16_t n)
     return 8764;
 }
 
-// One +IPD of the ESP: "+IPD,LEN,IP,PORT:" then the bytes. 0 with net_to
-// set when it is a computer's answer.
+// One +IPD of the ESP: "+IPD,ID,LEN,IP,PORT:" then the bytes. 0 with
+// net_to set when it is a computer's answer.
 static uint8_t mdns_answer(void)
 {
-    char head[40], *ip, *end;
+    char head[40], *ip, *end, *p;
     uint8_t c, k = 0;
     uint16_t n, i;
     while (k < sizeof head - 1) {
@@ -714,12 +717,15 @@ static uint8_t mdns_answer(void)
         head[k++] = c;
     }
     head[k] = 0;
-    for (n = 0, i = 0; head[i] >= '0' && head[i] <= '9'; i++) n = n * 10 + head[i] - '0';
+    p = strchr(head, ',');
+    if (!p) return 2;
+    for (n = 0, p++; *p >= '0' && *p <= '9'; p++) n = n * 10 + *p - '0';
     if (n > sizeof text) return 2;
     for (i = 0; i < n; i++) {
         if (link_recv(text + i, 3)) return 2;
     }
-    ip = strchr(head, ',');
+    if (head[0] != '4') return 1;
+    ip = strchr(p, ',');
     if (!ip) return 1;
     end = strchr(++ip, ',');
     if (!end) return 1;
@@ -739,6 +745,8 @@ static int net_find(void)
         link_use(LINK_PI);
         return fail("the ESP does not answer AT", line);
     }
+    // A transparent connection of .cbb install's, if one is left; in
+    // CIPMUX=1 this answers ERROR.
     link_send_str("AT+CIPCLOSE\r\n");
     while (link_line(line, sizeof line, 1) == LINK_OK && strcmp(line, "OK") && strcmp(line, "ERROR")) {
     }
@@ -747,11 +755,12 @@ static int net_find(void)
         link_send_str("\r\n");
         for (;;) {
             if (link_line(line, sizeof line, 5)) goto failed;
-            if (strcmp(line, "OK") == 0) break;
+            // A connection 4 left over is closed; none answers ERROR.
+            if (strcmp(line, "OK") == 0 || (i == 2 && strcmp(line, "ERROR") == 0)) break;
             if (strcmp(line, "ERROR") == 0 || strncmp(line, "FAIL", 4) == 0) goto failed;
         }
     }
-    sprintf(line, "AT+CIPSEND=%u\r\n", sizeof mdns_query);
+    sprintf(line, "AT+CIPSEND=4,%u\r\n", sizeof mdns_query);
     link_send_str(line);
     while (link_recv(&c, 3) == LINK_OK && c != '>') {
     }
@@ -768,7 +777,7 @@ static int net_find(void)
     }
     // NextZXOS's own tools read +IPD without the sender.
     for (i = 0; i < 2; i++) {
-        link_send_str(i ? "AT+CIPDINFO=0\r\n" : "AT+CIPCLOSE\r\n");
+        link_send_str(i ? "AT+CIPDINFO=0\r\n" : "AT+CIPCLOSE=4\r\n");
         while (link_line(line, sizeof line, 1) == LINK_OK && strcmp(line, "OK") && strcmp(line, "ERROR")) {
         }
     }
@@ -1115,8 +1124,9 @@ static const char *const http_cmds[] = {"AT+CIPMODE=0", "AT+CIPCLOSE", "AT+CIPMU
 
 static uint8_t http_open(void)
 {
-    uint8_t i, c;
+    uint8_t i, c, reset = 0;
     if (!esp_speed(ESP_FETCH_SPEED)) return 1;
+again:
     for (i = 0; i < sizeof http_cmds / sizeof http_cmds[0]; i++) {
         link_send_str(http_cmds[i]);
         link_send_str("\r\n");
@@ -1135,6 +1145,16 @@ static uint8_t http_open(void)
         for (;;) {
             if (link_line(line, sizeof line, i == 4 ? 15 : 3)) return 1;
             if (strcmp(line, "OK") == 0 || strcmp(line, "ALREADY CONNECTED") == 0) break;
+            if (i == 2 && !reset && strcmp(line, "ERROR") == 0) {
+                // The network's server keeps CIPMUX=1 until the ESP
+                // restarts, at its stock speed.
+                reset = 1;
+                link_send_str("AT+RST\r\n");
+                while (link_line(line, sizeof line, 5) == LINK_OK && strcmp(line, "ready")) {
+                }
+                if (!esp_speed(ESP_FETCH_SPEED)) return 1;
+                goto again;
+            }
             if (strcmp(line, "ERROR") == 0 || strncmp(line, "FAIL", 4) == 0) return 1;
         }
     }

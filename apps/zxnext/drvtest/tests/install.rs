@@ -387,3 +387,28 @@ fn keeps_everything_without_y() {
     assert!(card.join("cbb/CBB.DRV").exists() && card.join("cbb/NET.CFG").exists());
     let _ = std::fs::remove_dir_all(&card);
 }
+
+#[test]
+fn finds_a_computer_after_the_network_ran() {
+    let Some(kit) = kit("findmux") else { return };
+    let mut esp = Esp::new(kit.site.clone());
+    esp.mux = true;
+    esp.server = true;
+    esp.members = vec![("192.168.0.175".into(), 8764, String::new())];
+    let run = run_with(&kit, "net on", esp, Pi::new());
+    let s = run.hw.screen_text();
+    assert!(s.contains("192.168.0.175:8764"), "{s}");
+}
+
+#[test]
+fn installs_after_the_network_ran() {
+    let Some(kit) = kit("installmux") else { return };
+    let card = card("installmux");
+    let mut esp = Esp::new(kit.site.clone());
+    esp.mux = true;
+    esp.server = true;
+    let mut o = run(&kit, &card, "install", esp, Pi::new(), 600.0, None);
+    assert!(o.has("DONE."), "{}", o.screen);
+    assert!(o.esp().log.iter().any(|l| l.contains("AT+RST")));
+    let _ = std::fs::remove_dir_all(&card);
+}
