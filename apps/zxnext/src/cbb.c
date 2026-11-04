@@ -1337,7 +1337,7 @@ static int to_pi(struct item *it, uint8_t row)
     if (errno) return fail("the Pi's cbb is not on the card", it->card);
     // Raw: every byte as it is, none taken as a key or echoed.
     sprintf(line,
-            "stty raw -echo -iexten; echo CBBGO; timeout 1800 head -c %lu >" PI_DIR "/cbb.new; stty sane\n",
+            "stty raw -echo -iexten; printf 'CBBGO\\r\\n'; timeout 1800 head -c %lu >" PI_DIR "/cbb.new; stty sane\n",
             it->size);
     link_send_str(line);
     for (;;) {
@@ -1389,11 +1389,12 @@ static int to_pi(struct item *it, uint8_t row)
 
 // .cbb install and .cbb update: the Next's files to /cbb, the Pi's cbb
 // through the card to the Pi; each only when the one in place is not the
-// one built with this CBB. The rows of the screen: this CBB, which runs
-// and so is current, then CBB.DRV and the Pi's cbb (ITEM_ROW), each in
-// its stripe's colour. The Pi's cbb goes on in its row: fetched, then sent.
-#define ITEM_ROW(i) ((i) + 1)
-#define PI_ROW ITEM_ROW(ITEMS - 1)
+// one built with this CBB. The rows of the screen, each in its stripe's
+// colour: fetching CBB.DRV and the Pi's cbb (ITEM_ROW; the user fetched
+// this CBB before), then sending the Pi's cbb to the Pi (SEND_ROW).
+#define ITEM_ROW(i) (i)
+#define SEND_ROW ITEMS
+#define SEND_LABEL "TO PI"
 
 static int install_files(uint8_t update)
 {
@@ -1406,14 +1407,13 @@ static int install_files(uint8_t update)
     drv_on = driver(DRV_STATE, 0) == 0;
     if (drv_on) old_bank = drv_bank();
     esx_f_mkdir("/cbb");
-    // Every bar shows from the start in its colour: this CBB's full, the
-    // files' empty.
-    file_state(0, "CBB", "CURRENT");
-    bar(FILE_ROW + 1, 100, bar_ink[0]);
+    // Every bar shows from the start in its colour, empty.
     for (i = 0; i < ITEMS; i++) {
         file_state(ITEM_ROW(i), items[i].label, "");
         bar(FILE_ROW + 2 * ITEM_ROW(i) + 1, 0, bar_ink[ITEM_ROW(i)]);
     }
+    file_state(SEND_ROW, SEND_LABEL, "");
+    bar(FILE_ROW + 2 * SEND_ROW + 1, 0, bar_ink[SEND_ROW]);
     file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "TOTAL", "");
     bar(TOTAL_ROW + 1, 0, 0xFF);
     pi_answers = !pi_sha(pisha);
@@ -1457,6 +1457,11 @@ static int install_files(uint8_t update)
         if (state) {
             file_state(ITEM_ROW(i), it->label, state);
             if (it != pi || pi_answers) bar(FILE_ROW + 2 * ITEM_ROW(i) + 1, 100, bar_ink[ITEM_ROW(i)]);
+            // The Pi has it, or no Pi to send it to.
+            if (it == pi && (!pi_answers || !strcmp(pisha, it->sha256))) {
+                file_state(SEND_ROW, SEND_LABEL, state);
+                if (pi_answers) bar(FILE_ROW + 2 * SEND_ROW + 1, 100, bar_ink[SEND_ROW]);
+            }
         } else {
             need[i] = 1;
             total_size += it->size;
@@ -1473,16 +1478,14 @@ static int install_files(uint8_t update)
     if (err) return 1;
     if (!pi_answers) {
         say("The Pi does not answer: its cbb comes with .cbb update later.");
-    } else if (strcmp(pisha, pi->sha256) == 0) {
-        file_state(PI_ROW, pi->label, "CURRENT");
-    } else {
-        file_state(PI_ROW, pi->label, "TO PI");
-        if (to_pi(pi, PI_ROW)) return 1;
+    } else if (strcmp(pisha, pi->sha256) != 0) {
+        file_state(SEND_ROW, SEND_LABEL, "SENDING");
+        if (to_pi(pi, SEND_ROW)) return 1;
         total_done += pi->size;
         bar(TOTAL_ROW + 1, 100, 0xFF);
         // The card keeps no copy of the Pi's program.
         esx_f_unlink(pi->card);
-        file_state(PI_ROW, pi->label, "ON PI");
+        file_state(SEND_ROW, SEND_LABEL, "DONE");
     }
     // A driver installed earlier runs from memory: a new one takes its
     // place, with its bank. Without one, the driver is installed now (and

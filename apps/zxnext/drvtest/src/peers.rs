@@ -326,9 +326,19 @@ impl Pi {
             self.say(now + 50_000, &format!("CBBS {s}\r\n"));
             return self.prompt(now + 50_000);
         }
-        if cmd.starts_with("stty raw -echo -iexten; echo CBBGO") {
+        if cmd.starts_with("stty raw -echo -iexten; ") {
             let n: usize = cmd.split("head -c ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
-            self.say(now + 10_000, "CBBGO\r\n");
+            // After stty raw the tty adds no CR to an LF, as a real one: echo
+            // ends its line with LF alone, printf with what it is given.
+            let next = cmd.split("; ").nth(1).unwrap_or("");
+            let out = if let Some(t) = next.strip_prefix("echo ") {
+                format!("{t}\n")
+            } else if let Some(t) = next.strip_prefix("printf '").and_then(|t| t.strip_suffix('\'')) {
+                t.replace("\\r", "\r").replace("\\n", "\n")
+            } else {
+                String::new()
+            };
+            self.say(now + 10_000, &out);
             self.raw = n;
             self.received.clear();
             return;

@@ -104,7 +104,10 @@ All notable changes to cbb are documented in this file. The format follows
   connects stops it instead of blaming the Wi-Fi. It runs at 28 MHz and puts BASIC's speed
   back after: at 3.5 MHz the site's answers overflowed the UART and no download got
   through. It stays under 64K (a CBB of exactly 64K reset a real Next), so paste, copy,
-  text and pair share the page of `.cbb net`. `make test` runs the real `CBB` on a
+  text and pair share the page of `.cbb net`. The Pi says it is ready for its cbb with
+  `printf 'CBBGO\r\n'`: after `stty raw` its `echo` ends the line without the CR that
+  `.cbb` waits for. The install screen's rows are CBB.DRV, SERVICE (fetching the Pi's cbb)
+  and TO PI (sending it), then the total. `make test` runs the real `CBB` on a
   played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
   cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
   silent Pi, a closed connection, SPACE, the usage and a paste, each failed on what would

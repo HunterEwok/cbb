@@ -152,7 +152,7 @@ fn installs_then_finds_all_current() {
     let card = card("clean");
     let mut o = run(&kit, &card, "install", Esp::new(kit.site.clone()), Pi::new(), 300.0, None);
     assert!(o.has("CBB.DRV FETCHED"), "{}", o.screen);
-    assert!(o.has("SERVICE ON PI"), "{}", o.screen);
+    assert!(o.has("SERVICE FETCHED") && o.has("TO PI   DONE"), "{}", o.screen);
     assert!(o.has("CBB.DRV IS INSTALLED.") && o.has("DONE."), "{}", o.screen);
     assert!(o.pi_cbb_is(&kit.pi_cbb));
     // The driver keeps its bank; every other page is back.
@@ -164,7 +164,7 @@ fn installs_then_finds_all_current() {
     let mut pi = Pi::new();
     pi.cbb_sha = Some(sha256::hex(&kit.pi_cbb));
     let mut o = run(&kit, &card, "install", Esp::new(kit.site.clone()), pi, 120.0, None);
-    assert!(o.has("CBB.DRV CURRENT") && o.has("SERVICE CURRENT") && o.has("DONE."), "{}", o.screen);
+    assert!(o.has("CBB.DRV CURRENT") && o.has("SERVICE CURRENT") && o.has("TO PI   CURRENT") && o.has("DONE."), "{}", o.screen);
     assert!(o.pi().received.is_empty());
     assert!(!o.esp().log.iter().any(|l| l.contains("HTTP: GET /zxnext/cbb ")));
     let _ = std::fs::remove_dir_all(&card);
@@ -203,7 +203,7 @@ fn installs_the_driver_without_the_pi() {
     let mut pi = Pi::new();
     pi.answers = false;
     let o = run(&kit, &card, "install", Esp::new(kit.site.clone()), pi, 300.0, None);
-    assert!(o.has("THE PI DOES NOT ANSWER") && o.has("CBB.DRV IS INSTALLED."), "{}", o.screen);
+    assert!(o.has("THE PI DOES NOT ANSWER") && o.has("TO PI   NO PI") && o.has("CBB.DRV IS INSTALLED."), "{}", o.screen);
     assert_eq!(o.run.hw.drivers.len(), 1);
     let _ = std::fs::remove_dir_all(&card);
 }
@@ -215,7 +215,7 @@ fn opens_the_connection_again_when_the_site_closes_it() {
     let mut esp = Esp::new(kit.site.clone());
     esp.faults.close_after = Some(2);
     let mut o = run(&kit, &card, "install", esp, Pi::new(), 600.0, None);
-    assert!(o.has("SERVICE ON PI") && o.has("DONE."), "{}", o.screen);
+    assert!(o.has("SERVICE FETCHED") && o.has("TO PI   DONE") && o.has("DONE."), "{}", o.screen);
     assert!(o.pi_cbb_is(&kit.pi_cbb));
     assert!(o.esp().log.iter().filter(|l| l.contains("CIPSTART")).count() > 1);
     let _ = std::fs::remove_dir_all(&card);
