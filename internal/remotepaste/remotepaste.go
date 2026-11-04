@@ -187,9 +187,9 @@ type Entry struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
-// logFile keeps the last LogSize pastes in the state directory.
+// LogFile keeps the last LogSize pastes in the state directory.
 const (
-	logFile = "pastes.json"
+	LogFile = "pastes.json"
 	LogSize = 100
 )
 
@@ -207,12 +207,12 @@ func Append(dir string, e Entry) error {
 	if err != nil {
 		return err
 	}
-	return atomicfile.Write(filepath.Join(dir, logFile), b, 0o600)
+	return atomicfile.Write(filepath.Join(dir, LogFile), b, 0o600)
 }
 
 // ReadLog returns the log in dir, oldest first.
 func ReadLog(dir string) ([]Entry, error) {
-	b, err := os.ReadFile(filepath.Join(dir, logFile))
+	b, err := os.ReadFile(filepath.Join(dir, LogFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -221,7 +221,7 @@ func ReadLog(dir string) ([]Entry, error) {
 	}
 	var es []Entry
 	if err := json.Unmarshal(b, &es); err != nil {
-		return nil, fmt.Errorf("%s: %w", logFile, err)
+		return nil, fmt.Errorf("%s: %w", LogFile, err)
 	}
 	return es, nil
 }

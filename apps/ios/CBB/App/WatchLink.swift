@@ -92,6 +92,7 @@ final class WatchLink: NSObject {
     static func state(_ model: AppModel) -> WatchState {
         var s = WatchState()
         s.hasGroup = model.phase == .home
+        s.group = s.hasGroup ? model.group.groupTag : nil
         // In the user's order, a collection's devices one after another.
         let arranged: [(AppModel.Computer, String?)] = model.arranged.flatMap { item -> [(AppModel.Computer, String?)] in
             switch item {

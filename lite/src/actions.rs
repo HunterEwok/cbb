@@ -53,7 +53,7 @@ pub struct Settings {
 }
 
 const SETTINGS_FILE: &str = "actions.json";
-const LOG_FILE: &str = "actions-log.json";
+pub const LOG_FILE: &str = "actions-log.json";
 /// How many actions the log keeps.
 pub const LOG_SIZE: usize = 100;
 /// How long a reboot waits, which cancel-shutdown stops, in minutes.

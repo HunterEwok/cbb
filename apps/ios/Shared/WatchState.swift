@@ -47,6 +47,10 @@ struct WatchState: Codable, Equatable {
     }
 
     var hasGroup = false
+    /// The group's tag; nil without a group. A watch whose admin key was
+    /// certified in another group, or whose phone left its group, forgets
+    /// the key.
+    var group: String?
     var devices: [Device] = []
     /// nil without a group.
     var away: Away?

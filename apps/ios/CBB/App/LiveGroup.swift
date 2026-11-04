@@ -25,7 +25,7 @@ private let imageLog = Logger(subsystem: "tools.cbb", category: "images")
 /// keeps a connection to each, and syncs with them.
 @MainActor
 final class LiveGroup: GroupController {
-    enum Failure: Error { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer }
+    enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer, noGroup, rootLeaves([String]) }
 
     /// The clipboard holds something the app could not read as text: the
     /// paste was not allowed, or it is not text. The button leaves it as it
@@ -857,6 +857,57 @@ final class LiveGroup: GroupController {
         groupChanged()
         await node?.sendRecords([r])
         await node?.close(peer: id)
+    }
+
+    /// Whether the group removed this phone: its records, once it has
+    /// some, no longer list it. The app then offers to leave.
+    var removed: Bool {
+        guard let g = state, !g.records.records.isEmpty else { return false }
+        return !g.devices.contains { $0.id == g.device }
+    }
+
+    /// Takes this phone out of its group (D-83, docs/design.md, "Leaving
+    /// the group"): it stops syncing and deletes its keys, the group's
+    /// files and the tunnel's settings; the sync mode stays. The phone can
+    /// then make a group or join one again. The root leaves only when the
+    /// group has no other devices than itself and its watch: nobody could
+    /// add or remove one after it. The group keeps listing the phone
+    /// until an admin removes it.
+    func leave() async throws {
+        guard let g = state else { throw Failure.noGroup }
+        if g.isRoot {
+            let others = g.devices.filter { $0.id != g.device && $0.role != "watch" }.map(\.name)
+            if !others.isEmpty { throw Failure.rootLeaves(others) }
+        }
+        await hubDone()
+        stopHub()
+        stopRelay()
+        (hub, blindRelay) = (nil, nil)
+        await away?.stop()
+        await dialer?.stop()
+        browser?.stop()
+        await node?.closeAll()
+        (node, browser, dialer, relay, recordBox, renewer, admins, away) = (nil, nil, nil, nil, nil, nil, nil, nil)
+        credentialBox = nil
+        memberIdentity = nil
+        forgetCredentials()
+        for label in [Self.caLabel, Self.adminLabel, Self.memberLabel] {
+            KeychainIdentity.removeKey(label: label)
+            KeychainIdentity.removePublicKeys(label: label)
+            KeychainIdentity.removeCertificates(label: label)
+        }
+        SealKey.remove()
+        try? AwayKeychain.save(nil)
+        try? HubKeychain.save(nil)
+        try? RelayKeychain.save(nil)
+        let dir = file.deletingLastPathComponent()
+        for url in [file, credentialsURL, dir.appendingPathComponent("attest-status")] {
+            try? FileManager.default.removeItem(at: url)
+        }
+        (online, offers, keyStores, infos, modes, actions) = ([], [:], [:], [:], [:], [:])
+        authorized = nil
+        state = nil
+        keysLog.notice("this phone left its group: its keys and the group's files are deleted")
     }
 
     /// Ends a conflict or cancels a claim (docs/protocol.md, section 10,

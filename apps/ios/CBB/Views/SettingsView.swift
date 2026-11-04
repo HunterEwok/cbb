@@ -76,6 +76,18 @@ struct SettingsView: View {
                 keyLevelSection(level)
             }
             NotificationSettings()
+            if model.phase == .home {
+                Section {
+                    LeaveButton()
+                } footer: {
+                    if model.isRoot {
+                        Text("This phone holds the group's root: it leaves only once the group has no other devices.")
+                    } else {
+                        Text("Deletes this phone's keys and the group's data here; the settings stay.")
+                    }
+                }
+                .listRowBackground(palette.surface)
+            }
             Section {
                 LabeledContent {
                     Text(version).font(.system(.body, design: .monospaced))

@@ -216,9 +216,11 @@ function render() {
   if (s.problem) {
     box.innerHTML = `<div class="notice"><div class="big">⚠</div><h2>${esc(t("The service does not answer"))}</h2><p class="dim">${esc(s.problem)}</p></div>`;
   } else if (s.status?.removed) {
-    // The service keeps a removed computer's group: joining again needs its keys gone first.
+    // The service keeps a removed computer's group: joining again needs it to leave first.
     box.innerHTML = `<div class="notice"><div class="big">⧉</div><h2>${esc(t("This computer was removed from the group"))}</h2>` +
-      `<p class="dim">${esc(t("Its members refuse it. To join a group again, remove CBB with its keys (uninstall --purge), install it again and join."))}</p></div>`;
+      `<p class="dim">${esc(t("Its members refuse it. Leave the group here to join this group again or another one."))}</p>` +
+      `<p><button class="accent" id="leave" ${state.busy ? "disabled" : ""}>${esc(t("Leave the group"))}</button></p>` +
+      (state.message ? `<p class="dim">${esc(state.message)}</p>` : "") + `</div>`;
   } else if (!inGroup) {
     box.innerHTML = `<div class="notice"><div class="big">⧉</div><h2>${esc(t("This computer is in no group yet"))}</h2>` +
       `<p class="dim">${esc(t("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new."))}</p>` +
@@ -628,6 +630,8 @@ function renderDetail() {
     if (d.may_hub && !d.frozen && d.role === "full" && (!d.self || (state.status?.away && !state.status.away.hub))) actions.push(["hub", t("Make it a hub")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
+  // Any computer leaves by itself; the root only when it is alone, which the service checks.
+  if (d.self) actions.push(["leave", t("Leave the group"), true]);
   pane.innerHTML = `<div class="detail-head">${glyph(d, 56)}<div><div class="name">${esc(d.name)}</div>` +
     `<div>${dot(d.online)} <span class="${d.online ? "" : "dim"}">${esc(d.online ? t("online") : t("offline"))}</span></div></div>` +
     `<button class="icon close" id="close" title="${esc(t("Close"))}" aria-label="${esc(t("Close"))}">${icon("close")}</button></div>` +
@@ -637,9 +641,9 @@ function renderDetail() {
     (me?.admin && !d.self && d.online && d.role === "full"
       ? `<div class="card"><div class="dim small">${esc(t("Sync mode"))}</div><div class="segmented">${modeButtons(d.mode, d.id)}</div></div>` : "") +
     hubCard(d) +
-    (me?.admin
-      ? `<div class="card actions">${actions.map(([a, label, danger]) => `<button data-action="${a}"${danger ? ' class="danger"' : ""} ${state.busy ? "disabled" : ""}>${esc(label)}</button>`).join("")}</div>`
-      : `<p class="dim small">${esc(t("This computer is no admin of the group: the phone or an admin computer adds and removes devices."))}</p>`);
+    (actions.length
+      ? `<div class="card actions">${actions.map(([a, label, danger]) => `<button data-action="${a}"${danger ? ' class="danger"' : ""} ${state.busy ? "disabled" : ""}>${esc(label)}</button>`).join("")}</div>` : "") +
+    (me?.admin ? "" : `<p class="dim small">${esc(t("This computer is no admin of the group: the phone or an admin computer adds and removes devices."))}</p>`);
 }
 
 // ask shows the confirmation dialog; it resolves to the typed text for a
@@ -671,6 +675,14 @@ async function act(method, ...args) {
   await refresh();
 }
 
+// leave asks, then takes this computer out of its group (D-83).
+async function leave() {
+  if (await ask(t("Leave the group?"), t("This computer's keys and the group's files here are deleted, and remote paste and the quick actions are turned off; the rest of the settings stay. It can then join this group or another one. The group lists it until an admin removes it."), t("Leave"))) {
+    selected = null;
+    await act("Leave");
+  }
+}
+
 async function deviceAction(action) {
   const d = state.devices.find((x) => x.id === selected);
   if (!d) return;
@@ -682,6 +694,9 @@ async function deviceAction(action) {
     }
     case "remove":
       if (await ask(t("Remove %s?", d.name), t("It will no longer sync with your devices. To add it again, pair it again."), t("Remove"))) await act("Remove", d.id);
+      break;
+    case "leave":
+      await leave();
       break;
     case "admin":
       if (await ask(t("Make %s an admin?", d.name), t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe."), t("Make it an admin"))) await act("MakeAdmin", d.id);
@@ -846,6 +861,7 @@ document.addEventListener("click", async (e) => {
     case "update": return act("Update");
     case "add": return $("add-dialog").showModal();
     case "join": return joinPhone();
+    case "leave": return leave();
     case "settings": renderSettings(); return $("settings-dialog").showModal();
   }
 });

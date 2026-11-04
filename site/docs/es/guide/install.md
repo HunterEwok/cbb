@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 951f5919aba6 -->
+<!-- source: 0dae45ee8ba4 -->
 # Instalación
 
 Copy Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
@@ -171,4 +171,4 @@ En SteamOS es `sudo sh /opt/cbb/share/uninstall.sh`. Con Homebrew, ejecuta despu
 
 En Windows: Configuración, Aplicaciones, «CBB», Desinstalar.
 
-Esto quita el programa, el servicio, las reglas de cortafuegos que añadió el instalador y, en un Mac, la app que instaló el `.pkg`. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb remove NAME`, o en el teléfono).
+Esto quita el programa, el servicio, las reglas de cortafuegos que añadió el instalador y, en un Mac, la app que instaló el `.pkg`. Las claves del dispositivo se conservan, así que al instalar de nuevo vuelve a su grupo. Para borrarlas también, añade `--purge` (`-Purge` en Windows, con `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`) y luego quita el dispositivo del grupo desde otro (`sudo cbb remove NAME`, o en el teléfono). Para salir del grupo y conservar CBB, ejecuta en su lugar `sudo cbb leave`: borra las claves y los archivos del grupo, y el dispositivo puede volver a unirse a un grupo.
