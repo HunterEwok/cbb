@@ -427,3 +427,18 @@ fn joins_with_a_computers_code() {
         pi.log
     );
 }
+
+#[test]
+fn finds_a_computer_with_a_client_left_on_the_server() {
+    let Some(kit) = kit("findclient") else { return };
+    let mut esp = Esp::new(kit.site.clone());
+    // After .cbb net off a computer still holds a connection to the
+    // server, and the ESP refuses AT+CIPMUX until it restarts.
+    esp.mux = true;
+    esp.server = true;
+    esp.connected = true;
+    esp.members = vec![("192.168.0.175".into(), 8764, String::new())];
+    let run = run_with(&kit, "net on", esp, Pi::new());
+    let s = run.hw.screen_text();
+    assert!(s.contains("192.168.0.175:8764"), "{s}");
+}

@@ -746,11 +746,12 @@ static uint8_t mdns_answer(void)
 
 static int net_find(void)
 {
-    uint8_t i, c, got = 0, match = 0;
+    uint8_t i, c, got = 0, match = 0, reset = 0;
     if (!esp_speed(ESP_SPEED)) {
         link_use(LINK_PI);
         return fail("the ESP does not answer AT", line);
     }
+again:
     // A transparent connection of .cbb install's, if one is left; in
     // CIPMUX=1 this answers ERROR.
     link_send_str("AT+CIPCLOSE\r\n");
@@ -792,7 +793,20 @@ static int net_find(void)
     if (!quiet) printf("Found %s\n", net_to + 4);
     return 0;
 failed:
+    // A mode the network or an earlier tool left that the ESP keeps until
+    // it restarts: once, a restart at its stock speed, then again.
+    if (!reset) {
+        reset = 1;
+        link_send_str("AT+RST\r\n");
+        while (link_line(line, sizeof line, 5) == LINK_OK && strcmp(line, "ready")) {
+        }
+        if (esp_speed(ESP_SPEED)) goto again;
+    }
     link_use(LINK_PI);
+    if (i < sizeof mdns_cmds / sizeof mdns_cmds[0]) {
+        sprintf((char *)text, "%s: %s", mdns_cmds[i], line);
+        return fail("the ESP cannot ask the network", (char *)text);
+    }
     return fail("the ESP cannot ask the network", line);
 }
 
