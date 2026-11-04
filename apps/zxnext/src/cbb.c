@@ -18,7 +18,7 @@
 #include <z80.h>
 
 #include "frame.h"
-// The logo lives in the far data page (far.asm): far_byte() reads it.
+// The logo lives in the far data page.
 #pragma constseg PAGE_15
 #include "logo.h"
 #pragma constseg rodata_compiler
@@ -40,44 +40,40 @@ static uint8_t text[MAX_TEXT];
 static char line[200];
 static uint8_t debug;
 
-extern uint8_t far_byte(const uint8_t *p) __z88dk_fastcall;
-
 // The usage, in the far data page.
 #pragma constseg PAGE_15
 static const char usage_text[] = "CBB " VERSION "\n\n"
-           ".cbb paste [FILE]  show the group's\n"
-           "                   text, or save it\n"
-           ".cbb copy FILE     send a file\n"
-           ".cbb text WORDS    send the words\n"
-           ".cbb copy -s FILE  send a secret,\n"
-           ".cbb text -s WORDS such as a password\n"
-           ".cbb pair [CODE]   join the group:\n"
-           "                   scan the code with\n"
-           "                   the phone app, or\n"
-           "                   CODE of cbb pair on\n"
-           "                   a computer\n"
-           ".cbb net on [HOST]\n"
-           "                   the Pi's network\n"
-           "                   through the ESP,\n"
-           "                   in the background\n"
-           ".cbb net off       stop it\n"
-           ".cbb net           how it stands\n"
-           ".cbb install       fetch the rest\n"
-           "                   from cbb.tools,\n"
-           "                   the Pi's cbb too\n"
-           ".cbb update        tell of a newer\n"
-           "                   CBB, or install\n"
-           ".cbb paste-receive on|off\n"
-           ".cbb uninstall     remove it all\n"
-           ".cbb -d ...        show error details\n";
+           "paste [FILE]  show the group's\n"
+           "\ttext, or save it\n"
+           "copy FILE     send a file\n"
+           "text WORDS    send the words\n"
+           "copy -s FILE  send a secret,\n"
+           "text -s WORDS such as a password\n"
+           "pair [CODE]   join the group:\n"
+           "\tscan the code with\n"
+           "\tthe phone app, or\n"
+           "\tCODE of cbb pair on\n"
+           "\ta computer\n"
+           "net on [HOST]\n"
+           "\tthe Pi's network\n"
+           "\tthrough the ESP,\n"
+           "\tin the background\n"
+           "net off       stop it\n"
+           "net           how it stands\n"
+           "install       fetch the rest\n"
+           "\tfrom cbb.tools,\n"
+           "\tthe Pi's cbb too\n"
+           "update        tell of a newer\n"
+           "\tCBB, or install\n"
+           "paste-receive on|off\n"
+           "leave         leave the group\n"
+           "uninstall     remove it all\n"
+           "-d ...        show error details\n";
 #pragma constseg rodata_compiler
 
-static void usage(void)
-{
-    const char *p = usage_text;
-    char c;
-    while ((c = far_byte((const uint8_t *)p++))) putchar(c);
-}
+// usage_run() prints it, in its page (far.asm: far_usage()).
+extern void far_usage(void);
+#define usage far_usage
 
 // While .cbb install's screen shows, messages go to its lower rows
 // (screen_row), one under the other, never scrolling the logo away: rows
@@ -1420,7 +1416,7 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 // Next would never show.
 static const char in_group_cmd[] = "test -e " PI_DIR "/cbb-state/identity.json && echo CBB$((1))IN; echo CBB$((1))END\n";
 static const char in_group_yes[] = "CBB1IN", in_group_end[] = "CBB1END";
-static const char in_group[] = "the Pi is in a group\nalready: remove it in the\napp, then ../CBB uninstall\nand install";
+static const char in_group[] = "the Pi is in a group\nalready: ../CBB leave first";
 
 // Not static: far_pair_check() (far.asm) calls it, with the network off.
 int pair_check(void)
@@ -1922,7 +1918,25 @@ int install_run(void)
 // The install screen, opened and closed around the install's own page,
 // is in the logo's page (far.asm, far_screen_open(), far_screen_close()).
 #pragma codeseg PAGE_15
+
 #pragma constseg PAGE_15
+
+// The usage: each line after the first two a command's, but for a tab,
+// which stands for the column of the commands' words.
+static const char usage_pad[] = "%19s", usage_cbb[] = ".cbb ";
+
+// Not static: far_usage() (far.asm) calls it.
+void usage_run(void)
+{
+    const char *p;
+    uint8_t start = 0;
+    for (p = usage_text; *p; p++) {
+        if (start && *p != '\t' && *p != '\n') printf(usage_cbb);
+        start = *p == '\n';
+        if (*p == '\t') printf(usage_pad, usage_pad + 4);
+        else putchar(*p);
+    }
+}
 
 // .cbb uninstall: everything .cbb install and .cbb net put anywhere, after
 // a Y: the network and the driver, the Pi's cbb and its state, the files
@@ -1930,19 +1944,26 @@ int install_run(void)
 // still lists the Next until it is removed there.
 // Its words are arrays of this page: zcc keeps string literals with the
 // main program's.
-static const char card_files[][16] = {"/cbb/CBB.DRV", "/cbb/NET.CFG", "/cbb/CBBPI.BIN", "/cbb/DRV.PRT",
-                                      "/cbb/CBBPI.PRT", "/cbb/PASTE.CFG", "/cbb/CBB"};
+// The Pi's commands in the divMMC page, which has the room.
+#pragma constseg code_dot
+static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm -rf cbb cbb.bin cbb.old cbb.new "
+                                "cbb-state /ram/link.log /ram/cbbjoin; cd; echo CBB$((1))GONE\n";
+static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; rm -rf " PI_DIR "/cbb-state /ram/cbbjoin; echo CBB$((1))GONE\n";
+#pragma constseg PAGE_15
+static const char card_names[] = "CBB.DRV\0NET.CFG\0CBBPI.BIN\0DRV.PRT\0CBBPI.PRT\0PASTE.CFG\0CBB\0";
 static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? Y/N\n";
 static const char un_none[] = "Nothing removed.\n";
 static const char un_drv_stays[] = "CBB.DRV stays: .uninstall it.\n";
 static const char un_drv_gone[] = "CBB.DRV is uninstalled.\n";
 static const char un_pi_silent[] = "The Pi did not answer: its cbb\nstays in " PI_DIR ".\n";
-static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm -rf cbb cbb.bin cbb.old cbb.new "
-                                "cbb-state /ram/link.log /ram/cbbjoin; cd; echo CBB$((1))GONE\n";
+// .cbb leave: only the Pi's group, after a Y; its cbb stays, and
+// .cbb pair joins this group or another one again.
+static const char lv_ask[] = "Leave the group: the Pi forgets\nits keys? Y/N\n";
+static const char lv_done[] = "Left. Remove the Next in the app\ntoo; ../CBB pair joins again.\n";
 static const char un_pi_gone[] = "CBB1GONE";
 static const char un_pi_quiet[] = "The Pi did not say it is done.\n";
 static const char un_pi_done[] = "The Pi's cbb is removed.\n";
-static const char un_dir[] = "/cbb";
+static const char un_dir[] = "/cbb/";
 // /cbb/CBB runs now, and NextZXOS keeps it: it stays, with the folder.
 static const char un_done[] = "Removed but CBB, which runs:\nCD \"/\": ERASE \"/cbb/CBB\"\nRemove the Next in the app too.\n";
 
@@ -1971,10 +1992,12 @@ int paste_receive(void)
     return 0;
 }
 
+// Not static: far_uninstall() (far.asm) calls it, for leave too.
 int uninstall(void)
 {
-    uint8_t i;
-    printf(un_ask);
+    uint8_t i, leave = far_argv[0][0] == 'l';
+    const char *p;
+    printf(leave ? lv_ask : un_ask);
     // Y is in the half-row of P to Y, port 0xDFFE, bit 4.
     in_wait_nokey();
     in_wait_key();
@@ -1990,11 +2013,12 @@ int uninstall(void)
         esp_speed(ESP_SPEED);
         link_use(LINK_PI);
     }
-    if (driver(DRV_STATE, 0) == 0) printf(drv_uninstall(drv_bank()) ? un_drv_stays : un_drv_gone);
+    if (!leave && driver(DRV_STATE, 0) == 0) printf(drv_uninstall(drv_bank()) ? un_drv_stays : un_drv_gone);
     if (link_shell()) {
         printf(un_pi_silent);
+        if (leave) return 1;
     } else {
-        link_send_str(un_pi_cmd);
+        link_send_str(leave ? lv_pi_cmd : un_pi_cmd);
         for (;;) {
             if (link_line(line, sizeof line, 30)) {
                 printf(un_pi_quiet);
@@ -2007,8 +2031,17 @@ int uninstall(void)
         }
         link_prompt();
     }
-    for (i = 0; i < sizeof card_files / sizeof card_files[0]; i++) esx_f_unlink(card_files[i]);
-    esx_f_rmdir(un_dir);
+    if (leave) {
+        printf(lv_done);
+        return 0;
+    }
+    strcpy(line, un_dir);
+    for (p = card_names; *p; p += strlen(p) + 1) {
+        strcpy(line + 5, p);
+        esx_f_unlink(line);
+    }
+    line[4] = 0;
+    esx_f_rmdir(line);
     printf(un_done);
     return 0;
 }
@@ -2216,7 +2249,7 @@ static int run(int argc, char **argv)
         far_argv = argv + i + 1;
         return far_paste_receive();
     }
-    if (strcmp(argv[i], "uninstall") == 0 && argc - i == 1) return far_uninstall();
+    if ((strcmp(argv[i], "uninstall") == 0 || strcmp(argv[i], "leave") == 0) && argc - i == 1) return far_uninstall();
     if ((strcmp(argv[i], "install") == 0 || strcmp(argv[i], "update") == 0) && argc - i == 1) {
         install_update = argv[i][0] == 'u';
         return install();

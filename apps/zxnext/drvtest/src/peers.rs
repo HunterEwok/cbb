@@ -555,6 +555,13 @@ impl Pi {
             self.say(now + 20_000, s);
             return self.prompt(now + 20_000);
         }
+        if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; rm -rf /NextPi/nextpi/cbb-state ")
+            && cmd.ends_with("echo CBB$((1))GONE")
+        {
+            self.in_group = false;
+            self.say(now + 50_000, "CBB1GONE\r\n");
+            return self.prompt(now + 50_000);
+        }
         if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; cd /NextPi/nextpi && rm -rf ")
             && cmd.ends_with("echo CBB$((1))GONE")
         {

@@ -19,7 +19,7 @@
 
 SECTION code_dot
 
-PUBLIC _far_byte
+PUBLIC _far_usage
 PUBLIC _rom_char
 PUBLIC _far_install
 PUBLIC _far_net
@@ -41,6 +41,7 @@ EXTERN _screen_open
 EXTERN _screen_close
 EXTERN _sha_run
 EXTERN _uninstall
+EXTERN _usage_run
 EXTERN _paste_receive
 EXTERN _pair_check
 
@@ -58,29 +59,6 @@ mmu7_now:
    inc b
    in a,(c)
    pop bc
-   ret
-
-; uint8_t far_byte(const uint8_t *p) __z88dk_fastcall
-;
-; The byte at p in the data page. MMU7 shows it only for the read, with
-; interrupts off, then shows what it showed before (the install overlay
-; when that calls).
-_far_byte:
-   ld a,i                     ; P/V: interrupts were on
-   push af
-   di
-   call mmu7_now
-   ld e,a
-   ld a,(__z_page_table + FAR_DATA)
-   nextreg 0x57,a
-   ld l,(hl)
-   ld a,e
-   nextreg 0x57,a
-   pop af
-   jp po,off
-   ei
-off:
-   ld h,0
    ret
 
 ; int far_install(void), int far_net(void), int far_net_pair(void),
@@ -125,6 +103,12 @@ _far_uninstall:
 _far_paste_receive:
    ld a,FAR_DATA
    ld hl,_paste_receive
+   jr far_call
+
+; void far_usage(void), in the logo's page.
+_far_usage:
+   ld a,FAR_DATA
+   ld hl,_usage_run
    jr far_call
 
 ; int far_pair_check(void), in the installer's page.

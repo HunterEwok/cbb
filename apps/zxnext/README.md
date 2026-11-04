@@ -32,6 +32,8 @@ tools. Test them on the machine before relying on them.
 .cbb paste-receive on [-enter] | off
                       whether the group's admins may type on the Next from the phone app;
                       .cbb install turns it on with Enter, .cbb net on hands it to the Pi
+.cbb leave            after a Y: the Pi forgets its keys and its group; its cbb stays, and
+                      .cbb pair joins the same group or another one
 .cbb uninstall        after a Y: stop the network, uninstall CBB.DRV, remove the Pi's cbb
                       and its group, and the files in /cbb; /cbb/CBB itself runs then and
                       stays, with the folder: ERASE it after
@@ -214,7 +216,7 @@ Without the phone app, `sudo cbb pair` on a computer of the group shows a code, 
 open (TXT `p=1`), starts the network to it with `cbb next link -join 123-456`, and the
 computer's `cbb pair` says when the Pi has joined. Both ways, `.cbb pair` first asks the
 Pi whether its state holds an identity: a Pi in a group already does not join another, so
-the Next says so instead of waiting.
+the Next says so instead of waiting: `.cbb leave` first.
 
 ## Build
 
@@ -243,7 +245,7 @@ for the rest. z88dk's `dotn` loader puts `.cbb` in these parts:
 | CODE | divMMC, 0x2000-0x3FFF | the library, `far.asm`, `colour()`, the palette | 1K |
 | MAIN | 0x8000 up to 0xE000 | `run()`, the link, the frames, the driver's calls, the install screen's bars, the strings | 3K: 2K for the stack, which starts at 0xE000 and goes down (about 200 bytes used), 1K to grow |
 | PAGE_13 | 0xE000-0xFFFF | the install: fetching over the ESP, checking, sending to the Pi | 1K |
-| PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256, `.cbb uninstall` | 1K |
+| PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256, `.cbb uninstall` and `leave` | 1K |
 | PAGE_17 | 0xE000-0xFFFF | `.cbb net`, `paste`, `copy`, `text` and `pair` | 1K |
 
 The pages share 0xE000, the window of MMU7, so only one is there at a time. MAIN calls

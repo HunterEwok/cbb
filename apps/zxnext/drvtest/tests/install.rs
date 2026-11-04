@@ -496,10 +496,10 @@ fn shows_the_usage() {
     let Some(kit) = kit("usage") else { return };
     let run = run_plain(&kit, "", Pi::new());
     let s = run.hw.screen_text();
-    assert!(
-        s.contains(".CBB INSTALL") || s.contains(".cbb install"),
-        "{s}"
-    );
+    assert!(s.contains(".cbb install"), "{s}");
+    // The commands' words, and a tab for their column.
+    assert!(s.contains(".cbb leave         leave the gr"), "{s}");
+    assert!(s.contains("|                   the Pi's cbb"), "{s}");
 }
 
 #[test]
@@ -696,13 +696,34 @@ fn says_when_the_pi_is_in_a_group_already() {
     pi.in_group = true;
     let mut run = run_with(&kit, "pair 123-456", Esp::new(kit.site.clone()), pi);
     let s = run.hw.screen_text();
-    assert!(s.contains("already: remove it"), "{s}");
+    assert!(s.contains("already: ../CBB leave first"), "{s}");
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(
         !pi.log.iter().any(|l| l.contains("next pair")),
         "{:?}",
         pi.log
     );
+}
+
+#[test]
+fn leaves_the_group_after_y() {
+    let Some(kit) = kit("leave") else { return };
+    let (card, mut pi) = installed(&kit, "leave");
+    pi.in_group = true;
+    let y = vec![Key {
+        from: 500_000,
+        until: 800_000,
+        row: 0xDF,
+        bit: 4,
+    }];
+    let mut run = run_on(&kit, &card, "leave", Esp::new(kit.site.clone()), pi, y);
+    let s = run.hw.screen_text();
+    assert!(s.contains("Left. Remove the Next"), "{s}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    // Only the group goes: the Pi's cbb and the card's files stay.
+    assert!(!pi.in_group && pi.cbb_sha.is_some(), "{:?}", pi.log);
+    assert!(card.join("cbb/NET.CFG").exists() || card.join("cbb/PASTE.CFG").exists());
+    let _ = std::fs::remove_dir_all(&card);
 }
 
 #[test]
