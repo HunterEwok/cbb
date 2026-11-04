@@ -166,8 +166,6 @@ class AppModel(private val app: Context) {
         val status: HubOnPhone.Status,
         val error: Note? = null,
         val forwarder: HubState.Forwarder? = null,
-        /** The project's forwarder does not take it and the phone holds no signed entry points that have not expired: a new list may be what it needs. */
-        val entriesStale: Boolean = false,
         val background: Boolean = false,
         val home: Boolean = false,
         val clients: Int = 0,
@@ -177,6 +175,8 @@ class AppModel(private val app: Context) {
         val computers: List<Pair<String, String>> = emptyList(),
         /** The computer that is always on which the app suggests as the hub, unless the user chose to keep the phone. */
         val suggested: Pair<String, String>? = null,
+        /** The project's forwarder does not take it and the phone holds no signed entry points that have not expired: a new list may be what it needs. */
+        val entriesStale: Boolean = false,
     )
 
     var hub by mutableStateOf<Hub?>(null)
