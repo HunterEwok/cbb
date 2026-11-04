@@ -13,6 +13,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/netguard"
 	"github.com/HunterEwok/cbb/internal/release"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 )
@@ -53,6 +54,7 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 		Credentials: s.hubCredentials,
 		HubCert:     s.hubCert,
 		Send:        h.Send,
+		Allowed:     netguard.Allowed,
 		Report: func(r forward.Report) {
 			stale := s.entriesStale(fw, r.Err)
 			s.tunMu.Lock()
