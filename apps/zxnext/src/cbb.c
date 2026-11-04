@@ -1391,9 +1391,11 @@ static int to_pi(struct item *it, uint8_t row)
 
 // .cbb install and .cbb update: the Next's files to /cbb, the Pi's cbb
 // through the card to the Pi; each only when the one in place is not the
-// one built with this CBB. The rows of the screen: CBB.DRV, the Pi's cbb
-// fetched, then sent. The Pi's cbb goes on in its row: fetched, then sent.
-#define PI_ROW (ITEMS - 1)
+// one built with this CBB. The rows of the screen: this CBB, which runs
+// and so is current, then CBB.DRV and the Pi's cbb (ITEM_ROW), each in
+// its stripe's colour. The Pi's cbb goes on in its row: fetched, then sent.
+#define ITEM_ROW(i) ((i) + 1)
+#define PI_ROW ITEM_ROW(ITEMS - 1)
 
 static int install_files(uint8_t update)
 {
@@ -1406,10 +1408,13 @@ static int install_files(uint8_t update)
     drv_on = driver(DRV_STATE, 0) == 0;
     if (drv_on) old_bank = drv_bank();
     esx_f_mkdir("/cbb");
-    // Every bar shows from the start, empty, in its colour.
+    // Every bar shows from the start in its colour: this CBB's full, the
+    // files' empty.
+    file_state(0, "CBB", "CURRENT");
+    bar(FILE_ROW + 1, 100, bar_ink[0]);
     for (i = 0; i < ITEMS; i++) {
-        file_state(i, items[i].label, "");
-        bar(FILE_ROW + 2 * i + 1, 0, bar_ink[i]);
+        file_state(ITEM_ROW(i), items[i].label, "");
+        bar(FILE_ROW + 2 * ITEM_ROW(i) + 1, 0, bar_ink[ITEM_ROW(i)]);
     }
     file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "TOTAL", "");
     bar(TOTAL_ROW + 1, 0, 0xFF);
@@ -1450,8 +1455,8 @@ static int install_files(uint8_t update)
             state = 0;
         }
         if (state) {
-            file_state(i, it->label, state);
-            if (it != pi || pi_answers) bar(FILE_ROW + 2 * i + 1, 100, bar_ink[i]);
+            file_state(ITEM_ROW(i), it->label, state);
+            if (it != pi || pi_answers) bar(FILE_ROW + 2 * ITEM_ROW(i) + 1, 100, bar_ink[ITEM_ROW(i)]);
         } else {
             need[i] = 1;
             total_size += it->size;
@@ -1459,7 +1464,7 @@ static int install_files(uint8_t update)
     }
     for (i = 0; i < ITEMS && !err; i++) {
         if (!need[i]) continue;
-        err = fetch(&items[i], i);
+        err = fetch(&items[i], ITEM_ROW(i));
         total_done += items[i].size;
         if (!items[i].pi) drv_new = 1;
     }
