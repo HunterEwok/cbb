@@ -156,7 +156,7 @@ these words depends on it.
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
 | Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Full and lite members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, and a listening join waits there | `internal/service/service.go`, `internal/service/members.go` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
-| Member ALPN | `cbb/2` | `group.MemberProtocol` |
+| Member ALPN | `cbb/3` | `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/2` | `pair.Protocol` |
 | Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
 | Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `internal/relay` |
@@ -358,7 +358,7 @@ Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
 ### TLS
 
 - TLS 1.3 only ([RFC 8446](https://www.rfc-editor.org/rfc/rfc8446)): an implementation MUST
-  NOT negotiate an earlier version. ALPN `cbb/2` on both sides. Both sides
+  NOT negotiate an earlier version. ALPN `cbb/3` on both sides. Both sides
   present their member certificate (leaf only), with the admin CA's certificate after it
   when an admin issued it (section 10).
 - Every implementation MUST support the key exchange group `x25519`, the cipher suite
@@ -372,16 +372,16 @@ Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
   where the peer ID is the one found in discovery, and MUST check that the certificate names
   exactly that device.
 - Both sides MUST check the peer as in section 2 and against the records (section 10), and
-  that the negotiated version is TLS 1.3 and the ALPN protocol is `cbb/2`. A
+  that the negotiated version is TLS 1.3 and the ALPN protocol is `cbb/3`. A
   connection to one's own device ID is closed.
 - The handshake must finish within 10 s, counted from its start rather than from each read;
   an implementation SHOULD close one that does not.
 - A lite member listens on the member port for the member protocol only: TLS with ALPN
-  `cbb/2`, from home network addresses, at most 16 handshakes at once. It has
+  `cbb/3`, from home network addresses, at most 16 handshakes at once. It has
   no pairing window.
 - The member port takes TLS only. A ClientHello that offers `cbb-pair/2` gets the pairing
   configuration (section 6), whether or not a window is open; any other the member
-  configuration, and a connection that does not negotiate `cbb/2` is closed.
+  configuration, and a connection that does not negotiate `cbb/3` is closed.
 
 ### Framing
 
@@ -410,15 +410,15 @@ Message object:
 | `evidence` | object | evidence | an attestation of one of the sender's keys (section 17, "Evidence") |
 | `credentials` | array | credentials | the group's server credentials the sender keeps (section 18) |
 | `release` | object | release | the newest signed release the sender holds: `keys`, `channel` and `release`, each a file of section 16 as published (section 16, "In the group") |
-| `get` | object | get, missing | a range of a part of images or files: Get ("Content", below) |
+| `get` | object | get, missing | a range of a copy's sealed blob of images or files: Get ("Content", below) |
 | `tunnel` | object | tunnel | from the group's hub: its offer for the tunnel key the receiver's hello carried (section 11) |
 | `hubs` | object | hubs | what a hub shares with the group's other hubs (section 11, "Several hubs") |
 | `command` | object | command | a record envelope: a command an admin signed for the receiver (section 15) |
 | `result` | object | result | the answer to a command (section 15) |
 
 ```json
-{"t":"hello","role":"full","hello":{"os":"linux","wall_ms":1761024000000,"current":{"id":"9f0c...","origin":"3b1e...","time":"1761023990000.0","age_ms":10000,"kind":"text","text":"hello"}}}
-{"t":"event","event":{"id":"77aa...","origin":"3b1e...","via":"phone","time":"1761024001234.2","age_ms":15,"kind":"secret","text":"hunter2"}}
+{"t":"hello","role":"full","hello":{"os":"linux","wall_ms":1761024000000,"current":{"id":"9f0c...","origin":"3b1e...","time":"1761023990000.0","age_ms":10000,"cert":"MIIB...","wraps":[...],"payload":"...","sig":"MEUC..."}}}
+{"t":"event","event":{"id":"77aa...","origin":"3b1e...","time":"1761024001234.2","age_ms":15,"cert":"MIIB...","wraps":[...],"payload":"...","sig":"MEQC..."}}
 {"t":"ping"}
 {"t":"bye"}
 {"t":"cert","cert":"MIIB..."}
@@ -465,7 +465,7 @@ an admin. Only the root and the admins admit devices.
 ### Hello
 
 A member speaks one version of the member protocol, the one its ALPN names
-(`cbb/2`); a release that changes the protocol so that an older member cannot
+(`cbb/3`); a release that changes the protocol so that an older member cannot
 read it takes the next ALPN version, which is the oldest peer it takes, and a peer of
 another version fails at the handshake. Within a version the hello says what the sender
 supports by its fields and by `features`, never by the sender's release, so no rule here
@@ -474,7 +474,7 @@ depends on a version number.
 | Field | Type | Meaning |
 |-------|------|---------|
 | `wall_ms` | integer | the sender's wall clock, milliseconds since the Unix epoch; for skew reports only (`cbb status` shows `skew_ms`); 0 or absent means unknown |
-| `current` | Event or absent | the sender's current event with its age as of sending; for a secret only its mark (text `""`), whatever its age; absent when there is none |
+| `current` | Event or absent | the sender's current event with its age as of sending; for a secret a reader sends only its mark (section 5, "Secrets"), whatever its age; absent when there is none |
 | `records` | string or absent | the digest of the sender's records (section 10) |
 | `name` | string or absent | the sender's device name, 1-64 bytes; a receiver ignores an invalid one |
 | `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos` or `wearos` (section 10) |
@@ -510,30 +510,123 @@ and of the program.
 
 ### Event
 
+Every copy travels sealed end to end (D-84): the device that makes it encrypts it once and
+seals the key to each device of the group that reads copies, so the members that pass it on,
+a hub among them, and the forwarder and relay outside the group carry it without reading or
+changing it. Only what every member needs to pass a copy on stays outside ("What the members
+in between see", below).
+
 | Field | Type | Meaning |
 |-------|------|---------|
 | `id` | string | event ID, 32 lowercase hex characters |
-| `origin` | string | device ID of the member that made the event |
-| `via` | string | `copy` (copied on that member), `phone` (sent from a phone's app, iPhone or Android) or `universal-clipboard` (reached a Mac through Universal Clipboard). Omitted for `copy`; absent means `copy`. |
+| `origin` | string | device ID of the member that made the event: the CN of `cert` |
 | `time` | string | hybrid timestamp `"<wall>.<logical>"` (section 5) |
-| `age_ms` | integer | milliseconds since the copy, as of the moment the frame is written |
-| `kind` | string | `text`, `secret` or `media` (images or files, from 0.6); always present |
-| `text` | string | the text; `""` only in the mark of a secret, and in media without a plain-text alternative |
-| `media` | object | in a `media` event only: its Manifest ("Media", below) |
+| `age_ms` | integer | milliseconds since the copy, as of the moment the frame is written; outside the signature, since it grows on the way |
+| `cert` | string | the origin's member certificate, DER in base64 |
+| `issuer` | string or absent | the admin CA that issued `cert`, DER in base64; absent when a root did |
+| `wraps` | array | 1 to 256 Wraps, sorted by `to`, each device once |
+| `payload` | string | the sealed Content ("The sealed content", below), base64; absent in a mark |
+| `payload_sha256` | string | in a mark only, in place of `payload`: the SHA-256 of the `payload` it stands for, 32 bytes in base64 |
+| `blob` | object or absent | in a copy with images or files that hold bytes: `size` and `sha256` (32 bytes, base64) of the sealed Blob (below) |
+| `sig` | string | the origin's signature over the copy (below), ECDSA P-256 with SHA-256, DER in base64 |
 
-Validation (`Event.Validate`), which a receiver MUST apply: `id` and `origin` are 32 lowercase hex characters; `time` is
-not `0.0` and its wall time is at most 253402300799999; `kind` and `via` are known;
-`age_ms` is not negative; a `media` event has a valid manifest and no other has one; and,
-unless the event is a mark (kind `secret` with empty text), `text` is non-empty, at most
-1 MiB (1 048 576 bytes) and valid UTF-8, except that in a `media` event it may be empty and is
-at most 256 KiB (262 144 bytes). Unknown fields are ignored.
+Wrap:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `to` | string | the device ID of a reader |
+| `key` | string | the copy's key sealed to that device's `seal` key (section 10), 1168 bytes in base64 |
+
+Validation (`Event.Validate`), which a receiver MUST apply before anything else: `id` and
+`origin` are 32 lowercase hex characters; `time` is not `0.0` and its wall time is at most
+253402300799999; `age_ms` is not negative; `cert` decodes and its CN is `origin`; `wraps`
+holds 1 to 256 entries in strictly increasing order of `to`, each `to` a device ID and each
+`key` exactly 1168 bytes; exactly one of `payload` and `payload_sha256` is there, `payload`
+of a length the steps allow ("The sealed content", below) and `payload_sha256` of 32 bytes; `blob.size`
+is a positive multiple of 65 552 and at most 1 074 003 968 (16 384 segments); `sig`
+decodes. A frame with `kind`, `text`, `via` or `media` in its event is refused: a copy in the
+open is never taken (no member sends one). Unknown fields are ignored.
+
+#### Sealing
+
+The origin makes a copy so:
+
+1. It picks the copy's key `K`, 32 random bytes, and derives two keys from it with
+   HKDF-SHA256 (no salt, 32 bytes): the payload key with info `cbb copy payload v1` and the
+   blob key with info `cbb copy blob v1`.
+2. With images or files that hold bytes, it seals the Blob (below) and so learns `blob`.
+3. It picks the readers ("Readers", below) and writes the **header**: the ASCII context `cbb
+   copy v1`; `id`, `origin` and `time`, each as its length in 4 bytes and its bytes; the
+   number of readers in 4 bytes and each reader's device ID, sorted, as its length and its
+   bytes; `blob.size` in 8 bytes and `blob.sha256` (zeros for both without a blob). Every
+   number is big-endian. The header hash `h` is the SHA-256 of the header.
+4. `payload` is the Content sealed with ChaCha20-Poly1305 under the payload key, a nonce of
+   12 zero bytes (the key seals nothing else) and `h` as associated data.
+5. Each wrap's `key` is `K` sealed to the reader's `seal` key with `h` as associated data:
+   X-Wing HPKE as for sealed commands (section 15, `internal/seal`), the encapsulated key
+   (1120 bytes), then `K` and its tag (48 bytes).
+6. `sig` signs the ASCII context `cbb copy sig v1`, `h`, the number of wraps in 4 bytes, each
+   wrap's `key` as its length in 4 bytes and its bytes, in the order of `wraps`, and the
+   SHA-256 of `payload` (the same bytes as `payload_sha256` in a mark), with the key of
+   `cert`: the member key, in hardware where the device has it (section 17).
+
+So no member in between can read a copy, give another device a key to it, take a reader
+off, move the copy to another `id`, time or origin, or make a copy in another member's
+name: the signature covers the header, every wrap and the payload, and the payload and the
+wraps open only under the header they were made with.
+
+#### Readers
+
+The origin seals every copy to each device of its state's `devices` list (section 10, "The
+state") that has a key that stands, a `seal` key, a role `full`, `phone` or `lite`, and no
+`forward_only`: itself too, so that a copy it gets back after a restart opens there. A watch
+reads the copies through its phone (design.md, "Watches"). A device that joins after a copy
+was made gets no wrap in it and reads the group's next copy. An origin whose records are
+behind may still seal to a device that has been removed, which no member lets connect.
+
+#### The sealed content
+
+The Content is what only the readers see, in binary: a version byte (`1`); the kind (`1`
+`text`, `2` `secret`, `3` `media`); `via` (`0` `copy`, `1` `phone`, `2`
+`universal-clipboard`); the text as its length in 4 bytes and its bytes; the manifest ("Media",
+below) as its length in 4 bytes and its JSON, length 0 unless the kind is `media`; then zero bytes up to the next step: 1 KiB, 4 KiB,
+16 KiB, 64 KiB, 256 KiB, 1 MiB, 2 MiB, 3 MiB or 4 MiB, so that the members in between learn the
+size only within a step. `payload` is that and its 16-byte tag. A reader MUST refuse a
+Content that does not fill its step with zeros, has a version, kind or `via` it does not
+know, or breaks the rules of a copy that held before sealing: unless the copy is a mark of a
+secret (no payload), the text is non-empty, at most 1 MiB (1 048 576 bytes) and valid UTF-8,
+except that a `media` copy may have an empty text of at most 256 KiB (262 144 bytes); a
+`media` copy has a valid manifest and `blob` whenever its manifest's `size` is not 0, and
+no other copy has either.
+
+#### Opening
+
+A member checks a copy whose `id` it has not seen before it passes it on or keeps it:
+`cert` chains to a root on the path of the group's records, through `issuer` when there is
+one, which is neither revoked nor frozen (section 10); its key's hash is among the `keys`
+of `origin`'s device in the state; and `sig` verifies with that key. It drops a copy that
+fails, and logs it. A member that reads copies then finds the wrap whose `to` is its own
+device ID, opens `K` with its `seal` secret and `h`, and opens `payload`. A copy that has
+no wrap for it, or that does not open, it still keeps and passes on by the rules of section
+5, since the others may read theirs, but never writes to its clipboard.
+
+#### What the members in between see
+
+They see that a device of the group sent a copy, when (`time`, and when it arrived), to
+which of the group's devices (`wraps`), its size within a step, and whether it has images
+or files, with their total size rounded up to 64 KiB. They do not see what the copy is (a
+text, a secret, an image or files), its text, its file names or their number, or its exact
+size. The first two cannot be hidden: the connection a copy comes on names its sender, and
+every member, one that only passes copies on too, orders the copies by `time` to give the
+newest to a peer that connects. The network outside the group sees less still: member TLS,
+and away from home the group's WireGuard tunnel around it, hide even this.
 
 ### Media
 
-A `media` event (design.md, "Images and files") carries a manifest of its content instead of
-the bytes, so it travels in events and hellos like a text and the sync model of section 5
-applies unchanged. Its `text` is a plain-text alternative, such as the text a browser copies
-next to an image, or `""`.
+A `media` copy (design.md, "Images and files") carries a manifest of its content instead of
+the bytes, inside its sealed Content, so it travels in events and hellos like a text and the
+sync model of section 5 applies unchanged. Its text is a plain-text alternative, such as the
+text a browser copies next to an image, or `""`.
 
 Manifest:
 
@@ -574,47 +667,68 @@ signed body, so only its numbers have the strict form),
 and MUST NOT follow or create links when it writes a copy of files. The Go code is
 `internal/clip/media.go`.
 
+Inside the Content the manifest is JSON such as
+`{"size":1234,"parts":[{"path":"trip","dir":true},{"path":"trip/a.jpg","size":1234,"sha256":"AQEB..."}]}`;
+on the wire the event shows only its `blob`:
+
 ```json
-{"t":"event","event":{"id":"77aa...","origin":"3b1e...","time":"1761024002000.0","age_ms":5,"kind":"media","text":"trip","media":{"size":1234,"parts":[{"path":"trip","dir":true},{"path":"trip/a.jpg","size":1234,"sha256":"AQEB..."}]}}}
+{"t":"event","event":{"id":"77aa...","origin":"3b1e...","time":"1761024002000.0","age_ms":5,"cert":"MIIB...","wraps":[{"to":"3b1e...","key":"..."},{"to":"9c40...","key":"..."}],"payload":"...","blob":{"size":65552,"sha256":"Zm9v..."},"sig":"MEUC..."}}
 ```
 
 A member that does not take images or files (the lite member) takes
-the event like any other, so the group converges, forwards it, and writes only its `text`, as
+the event like any other, so the group converges, forwards it, and writes only its text, as
 a text, to its clipboard; with no text it keeps its clipboard.
+
+#### The blob
+
+The bytes of a copy's parts travel as one **blob**: the parts that hold bytes one after
+another in the manifest's order, then zero bytes up to a whole segment of 64 KiB (65 536
+bytes). Each segment is sealed with ChaCha20-Poly1305 under the blob key (Sealing, above),
+the nonce 4 zero bytes and the segment's number from 0 in 8 bytes, big-endian, and as
+associated data the ASCII `cbb blob` and one byte, 1 for the last segment and 0 for the
+others, so that a blob cannot be cut short. The sealed blob is the sealed segments one after
+another, each 65 552 bytes; `blob.sha256` is its SHA-256 and `blob.size` its length. So the
+members in between learn neither the number of parts nor their sizes, only the total rounded
+up to 64 KiB, and a copy of the same image twice is two different blobs.
 
 ### Content
 
-A member that wants the bytes of a part asks a connected member whose hello says `media` for
-them, by hash, and gets them in binary frames. The Go code is `internal/node/content.go`.
+A member that wants the bytes of a copy asks a connected member whose hello says `media`
+for its sealed blob, by `blob.sha256`, and gets them in binary frames. Members fetch, keep and
+serve only sealed blobs, so a member that serves one, a hub that only passes copies on among
+them, never needs to read it. The Go code is `internal/node/content.go`.
 
 - `{"t":"get","get":{"sha256":"...","offset":0,"length":1048576}}` asks for `length` bytes
-  of the part from `offset`. `length` is 1 to 1 MiB; a receiver drops a get that is not
-  valid. A member MUST serve only parts it holds whole and has checked against their
-  `sha256`. `length` 0 cancels every get of that part from the sender: what is queued is
-  dropped and the range being served ends with its next chunk; a cancel of a part that is
+  of the blob from `offset`. `length` is 1 to 1 MiB; a receiver drops a get that is not
+  valid. A member MUST serve only blobs it holds whole and has checked against their
+  `sha256`. `length` 0 cancels every get of that blob from the sender: what is queued is
+  dropped and the range being served ends with its next chunk; a cancel of a blob that is
   neither queued nor served changes nothing, and a receiver MUST NOT keep anything of it. A receiver keeps at most 64
   gets per connection and closes a connection that asks for more.
-- `{"t":"missing","get":{...}}` answers a get for a part the member does not hold whole, or
+- `{"t":"missing","get":{...}}` answers a get for a blob the member does not hold whole, or
   that it could not read, and ends that fetch.
 - A `chunk` frame: the 4-byte length with its top bit set (the rest is the length of what
-  follows), the part's SHA-256 (32 bytes), the offset (8 bytes, big-endian), the data's
+  follows), the blob's SHA-256 (32 bytes), the offset (8 bytes, big-endian), the data's
   length (4 bytes, big-endian, at most 256 KiB), the data, and zeros up to a multiple of
-  16 KiB, so the network learns less of the parts' sizes. A frame longer than a chunk with
+  16 KiB. A frame longer than a chunk with
   its padding (278 528 bytes) closes the connection.
 - The server answers the gets of a connection in order, a chunk at a time, and writes a chunk
   only while no other message waits; chunks do not count against the 256-message queue, so
   events keep flowing during a large transfer.
 - A fetch asks for at most 4 MiB ahead, in gets of 1 MiB, more as chunks arrive. Chunks come
-  in order for each part; one at an offset the fetch does not wait for is left from a fetch
-  that was cancelled and is dropped. The receiver MUST check the whole part against its
-  `sha256` before it uses it, and MUST NOT write a copy to the clipboard until every part
-  has arrived and matched, and continues from what it has after a reconnect.
-- A fetch that ends before the part is whole, on a `missing`, its own cancel, or 15 seconds
+  in order for each blob; one at an offset the fetch does not wait for is left from a fetch
+  that was cancelled and is dropped. The receiver MUST check the whole blob against its
+  `sha256` before it keeps or serves it, and a reader MUST open every segment and check
+  every part against its `sha256` in the manifest before it writes the copy to its
+  clipboard; it continues from what it has after a reconnect.
+- A fetch that ends before the blob is whole, on a `missing`, its own cancel, or 15 seconds
   without a chunk, sends the cancel (`length` 0), so the ranges it asked for after that do not
   cross the next fetch; the member then asks again or asks another member.
-- The receiver's limit decides: by default 100 MiB a copy at home and 25 MiB from a member
-  reached through the group's tunnel (`cbb config max-copy` and `max-copy-away`, 1 MiB to
-  1 GiB). A copy over it is not fetched, and `cbb status` says so.
+- The receiver's limit decides, against `blob.size`: by default 100 MiB a copy at home and
+  25 MiB from a member reached through the group's tunnel (`cbb config max-copy` and
+  `max-copy-away`, 1 MiB to 1 GiB). A copy over it is not fetched, and `cbb status` says so.
+  A hub that only passes copies on (`forward_only`, section 10) fetches the blob of each new
+  copy within its limits as a reader would, so that its clients away from home can get it.
 
 Ages: a sender MUST add the time an event waited in its outgoing queue to `age_ms` (saturating at
 the largest int64). A receiver caps `age_ms` at 365 days and turns it into a local time:
@@ -672,13 +786,13 @@ A member remembers the last 4096 event IDs (at least that many SHOULD be kept). 
 or the `current` of a hello), after validation:
 
 1. If its ID was seen before: if it is the current event, the current event is a mark and the
-   received one has the text, the text is taken (and forwarded); otherwise nothing happens
-   (except the rejoin case below).
-2. Otherwise: observe its timestamp, record the ID, and forward it to every other connection
+   received one has the `payload` whose SHA-256 the mark carries, the payload is taken (and
+   forwarded); otherwise nothing happens (except the rejoin case below).
+2. Otherwise: check it (section 4, "Opening") and drop it when that fails; observe its timestamp, record the ID, and forward it to every other connection
    (also when it is older than the current event, and also a mark). A member MUST forward
    every new event so, whatever its sync mode: the mode decides only what it does with its
    own clipboard. If it is later than the
-   current event, it becomes the current event.
+   current event, it becomes the current event, also on a member that cannot read it.
 
 A member MUST send its current event in every hello, so a newly connected pair converges at
 once. A local event is sent to all connections; a mark (from a hello) travels in `event`
@@ -701,7 +815,7 @@ frames like any other event.
 ### Writing the member's own clipboard (local policy)
 
 When an event becomes current (or a mark gets its text) it is written to the local clipboard
-when all of these hold: the current event is live (it has a text, and a secret is younger
+when all of these hold: this member opened the current event (section 4, "Opening") and it is live (it has a text, and a secret is younger
 than the secret TTL); the local clipboard does not already hold the text; and either it was
 copied at most 60 s ago (live window), or the member is within 30 s of its last Rejoin
 (rejoin window) and made no copy of its own before it was back in sync. A write increments
@@ -723,10 +837,13 @@ the write sequence number (section 8).
 - Secret TTL: a secret event is usable for 60 s after the copy, judged by its age. After that
   it is neither the member's usable current text nor returned to the iPhone, but it stays the
   current event for ordering.
-- Marks (wire): a hello MUST carry a secret only as its mark: the event with `text` `""`. A
-  hello that carries a secret's text closes the connection. Full secret events travel in
-  `event` frames.
-- A member MUST NOT write a secret's text to disk, and SHOULD forget it 60 s after the copy.
+- Marks (wire): a reader MUST put a secret into a hello only as its mark: the event with
+  `payload_sha256` in place of `payload`, which the signature still covers. Full secret events
+  travel in `event` frames. A member that reads no copies (`forward_only`, or one without a
+  wrap in it) cannot tell a secret from a text and sends the event as it holds it; a reader
+  that gets a secret so takes it as it would from an `event` frame, by the rules above.
+- A reader MUST NOT write a secret's text, nor its `payload` (which its own key opens), to
+  disk, and SHOULD forget both 60 s after the copy.
 - Secret memory (local): each member remembers keyed hashes (HMAC-SHA-256 with a random
   per-process key, memory only) of secret texts it sent, received or was told about by a
   watcher, up to 4096 entries for 12 hours. Such a text reported again as `text` makes no
@@ -1346,7 +1463,7 @@ and `a`-`f`.
 
 | `type` | Fields | Meaning |
 |--------|--------|---------|
-| `device` | `device`, `name`, `role`, `os`, `key`, `admin`, `powers`, `commands`, `store`, `kind`, `proof`, `holds_root`, `seal` | a device in the group, or a change of its name or powers |
+| `device` | `device`, `name`, `role`, `os`, `key`, `admin`, `powers`, `commands`, `store`, `kind`, `proof`, `holds_root`, `seal`, `forward_only` | a device in the group, or a change of its name or powers |
 | `revoke` | `keys`, `seen` | removes keys from the group |
 | `freeze` | `keys`, `seen` | stops admins until the root or an admin with `thaw` ends it |
 | `thaw` | `records` | ends the `freeze` records it names |
@@ -1373,13 +1490,14 @@ and `a`-`f`.
 | `store`, `kind`, `proof` | string | none | as in section 17 |
 | `holds_root` | bool | none | `true`: this device holds the signer's root key; only in a record a root's own key signed |
 | `seal` | string | none | the device's public key for sealed messages, base64: 1216 bytes, an X-Wing key (HPKE KEM `0x647a`). The rules check only its size; a member checks the whole key before it seals a message to it |
+| `forward_only` | bool | none | `true`: the device passes the group's copies on as a hub but reads none, so no copy is sealed to it (section 4, "Readers"); only with role `full` and never with `admin`; absent means `false`, and `false` is written by leaving it out |
 | `keys` | array of strings | `revoke`, `freeze`, one at least | sorted key hashes |
 | `seen` | array of objects | `revoke`, `freeze`, `claim`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": the highest seq of that signer the author held, 0 or more}`; `seq` here is never left out, 0 included |
 | `records` | array of strings | `thaw`, `resolve`, one at least | sorted record IDs |
 | `root` | string | `claim` | the new root CA certificate, DER, base64: self-signed, a CA with path length 1, a P-256 key |
 | `cert` | string | `recovery` | the recovery key's admin CA certificate, DER, base64, whose key hash is `admin` |
 | `takeover_delay_ms` | integer | none | from 0 to 604 800 000 (7 days); absent means 259 200 000 (72 hours) |
-| `key_level` | string | none | `proven`, `hardware` or `files`: which devices may be the group's root, an admin or a hub ([roadmap](roadmap.md), "Key levels"); absent means `hardware`. The state carries it; the rules do not check it yet, the apps and `cbb` do when they make an admin or a hub |
+| `key_level` | string | none | `proven`, `hardware` or `files`: which devices may be the group's root, an admin or a trusted hub, which is an admin ([roadmap](roadmap.md), "Key levels"); absent means `hardware`. The state carries it; the rules do not check it yet, the apps and `cbb` do when they make an admin or a hub |
 | `heads` | array of objects | `checkpoint`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": 1 or more, "id": the ID of that signer's record with that seq}` |
 | `keep` | array of strings | none | sorted record IDs: the records below the heads that still count |
 | `hubs` | array of strings | `hubs`, one at least | 1 to 16 device IDs, each once, in the user's order (not sorted) |
@@ -1406,6 +1524,7 @@ those of the newest such record (the highest `seq` of that root) that names it.
 | Record | Signed by |
 |--------|-----------|
 | `device` naming `admin`, or with role `phone` or `watch` | a root's own key |
+| `device` with `forward_only`, or without it for a device whose newest record has it | a root's own key, or an admin with `hub` |
 | other `device` | a root's own key, or an admin with `admit` |
 | `revoke` of member keys | a root's own key, or an admin with `remove` |
 | `revoke` of an admin key, or of the member key of a device whose newest root record names an admin key | a root's own key, or an admin with `remove-admins` |
@@ -1561,8 +1680,9 @@ then the smaller signer, then the higher `seq`. Between admins this trusts each 
 clock: an admin whose clock runs ahead keeps its table until the root signs one, which beats
 any admin's. The state lists in `hubs` the devices of that table that are devices of the state
 with the role `full` or `phone`, in its order; a member puts first those of them that may be
-hubs by the records (the root's own device, or an admin with `hub`), so a table naming a
-removed device or one that lost `hub` does not stop the others. A device the table does not
+hubs by the records (the root's own device, an admin with `hub`, or a device with
+`forward_only`), so a table naming a removed device or one that lost `hub` does not stop the
+others. A device the table does not
 name still serves after the main hubs.
 
 #### Removals and freezes keep what the author saw
@@ -1803,8 +1923,8 @@ says how far:
 | Cause | `stop` | Effect |
 |-------|--------|--------|
 | two claims under one root; a disputed claim; a conflict between admins; a root that signed two histories | `full` | every member stops sync, events, media, commands and admissions with every peer; its connections carry records only ("Records only" in the exchange), so the root's decision reaches it |
-| an admin that signed two histories | `secrets` | no member sends a secret event's text (`kind` `secret`; it sends the event's mark) or takes a `secret` paste; the devices that admin alone admitted get nothing: their connections carry records only |
-| a pending claim | none | the claimant's devices get no secret's text and take no `secret` paste |
+| an admin that signed two histories | `secrets` | no reader sends a secret event's `payload` (it sends the event's mark), no origin seals a secret to a device that admin alone admitted, and no member takes a `secret` paste; the devices that admin alone admitted get nothing: their connections carry records only |
+| a pending claim | none | no origin seals a secret to the claimant's devices, no reader sends them a secret's `payload`, and they take no `secret` paste |
 
 A member applies it as soon as it holds the records, and lifts it as soon as it holds the
 root's records that end it: the check of a peer's certificate ("Certificates") lets a
@@ -1825,7 +1945,7 @@ and returns the state as one canonical JSON object:
 |-------|------|---------|
 | `roots` | array of strings | the path: the root certificates' key hashes from the group CA to the current root |
 | `root_device` | string | the root's own device ID; absent when there is none |
-| `devices` | array of objects | sorted by `device`: `device`, `name`, `role`, `os`, `keys` (sorted member key hashes that stand), the newest record's `store`, `kind`, `proof` and `seal` when it has them, and, for an admin, `admin`, `powers`, `commands`, `frozen` (true when frozen) |
+| `devices` | array of objects | sorted by `device`: `device`, `name`, `role`, `os`, `keys` (sorted member key hashes that stand), the newest record's `store`, `kind`, `proof`, `seal` and `forward_only` when it has them, and, for an admin, `admin`, `powers`, `commands`, `frozen` (true when frozen) |
 | `revoked` | array of strings | sorted key hashes the records remove |
 | `claims` | array of objects | sorted by `record`: `record`, `claimant` (admin key hash), `root` (new root key hash), `state` (`pending`, `effective`, `cancelled`, `void`, `competing` or `disputed`), `left_ms` while pending |
 | `conflicts` | array of objects | sorted by the first record ID: `kind` (`admins`, `claims`, `two_histories`), `records` (sorted record IDs), `signers` (sorted key hashes) |
@@ -1915,7 +2035,7 @@ beyond) and check the same bytes.
 | `op` | Request | Answers |
 |------|---------|---------|
 | `devices` | none | `{devices: [{id, name, role, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only |
-| `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"), reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins, in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none. Members connect again afterwards, so their hellos carry the change (section 11) |
+| `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins, in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none. Members connect again afterwards, so their hellos carry the change (section 11) |
 | `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`) |
 | `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected full member an admin ("Admins") |
 | `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
@@ -1975,15 +2095,16 @@ and then syncs at home only ("Through the tunnel" below).
   had, and makes a new one for a new key. It MUST refuse a key that another device or the hub
   itself has, and keeps at most 256 devices. It sends the offer on every connection whose
   hello carries a key, so a member learns new endpoints the next time it connects.
-- A member MUST keep an offer only from the group's root or an admin (by its records, or an
-  admin CA in its verified chain). The record that makes the peer the root or an admin must
-  name the key of the certificate it presented, not only its device ID, and never the role
-  its hello claims. It keeps one offer per hub, by the hub's device ID: the sender's, or the
-  one its `hub` names when the records make that device the root or an admin and it is not
-  the member itself, which it ignores. A new offer for a hub replaces that hub's earlier one;
+- A member MUST keep an offer only from a device that may be a hub: the group's root, an
+  admin (by its records, or an admin CA in its verified chain), or a device whose newest
+  record has `forward_only` ("Two kinds of hub" below). The record that makes the peer so
+  must name the key of the certificate it presented, not only its device ID, and never the
+  role its hello claims. It keeps one offer per hub, by the hub's device ID: the sender's, or
+  the one its `hub` names when the records make that device one that may be a hub and it is
+  not the member itself, which it ignores. A new offer for a hub replaces that hub's earlier one;
   `moved` also makes the member forget the sender's own. An offer that does not decode is
   ignored and changes nothing. Go, both kits and the lite member all apply these rules.
-  `cbb global hub` refuses on a device that is no admin. A phone that is the hub ignores
+  `cbb global hub` refuses on a device that may not be a hub. A phone that is the hub ignores
   offers. The tunnel addresses follow from the device IDs (fd00:cbb::/32 followed by the
   first 96 bits of the ID), so the offer does not carry them.
 - A phone can be the hub while its app is open ([design.md](design.md), "The phone as the
@@ -2011,8 +2132,8 @@ both apps; `TestMoveHub` moves a hub with a client away from home.
 1. The old hub sends the new one a `hub` command (section 15) with the new hub's forwarder
    and addresses, by default its own forwarder, and every client it keeps: device ID, public
    key and preshared key. It includes itself, with its own keys as a client.
-2. The new hub must be an admin with sync away from home on and without a relay; it refuses
-   otherwise. It becomes the hub with that forwarder and those addresses, takes each client
+2. The new hub must be an admin or a device with `forward_only`, with sync away from home on
+   and without a relay; it refuses otherwise. It becomes the hub with that forwarder and those addresses, takes each client
    whose device its records list, with the keys it was given and no certificate chain yet,
    and answers `done` with its offer (`tunnel` in the result, without `psk`). A client
    without a chain stays while the records list its device; its chain is filled in on its
@@ -2030,9 +2151,10 @@ its own hub on; the clients keep its offer as any hub's.
 
 ### Several hubs
 
-The group's root and admins with a hub set up are its hubs, in an order every member
-derives from the records alone: phones first (a phone is the hub while its app is open,
-so it serves whenever it is there), then computers; within each, the root first, then by
+The group's root, its admins with `hub` and its devices with `forward_only` are its hubs,
+in an order every member derives from the records alone: phones first (a phone is the hub
+while its app is open, so it serves whenever it is there), then the computers that are the
+root or admins, then the devices with `forward_only`; within each, the root first, then by
 device ID. The vectors in `testdata/interop/v2-hubs.json` (Go's `TestGoHubVectors`) give an
 order that Go (`Records.HubOrder`), both kits (`RecordSet.hubOrder`) and the lite member
 (`hub_order`) must all derive. The root, or an admin with `hub`, may sign a table of main
@@ -2055,7 +2177,7 @@ its hubs come first, in its order, then the others in the derived order (D-65 in
 | `offer` | object or absent | the sender's offer, without `psk` |
 | `clients` | array or absent | the sender's clients, each `device`, `key` and `psk`, the sender itself among them, without the receiver; at most 256 |
 
-- The receiver takes the message only from the group's root or an admin, by the same check
+- The receiver takes the message only from a device that may be a hub, by the same check
   as an offer. On a hub it takes each client its records list, other than itself, as it
   takes the clients a hub command hands over ("Moving the hub"): a client it met keeps its
   own keys. Every receiver keeps the sender's offer with its own preshared key, as that
@@ -2071,14 +2193,39 @@ its hubs come first, in its order, then the others in the derived order (D-65 in
   hubs above it, it tries them as a client every 15 minutes.
 - A hub passes the other hubs' offers on to its clients, each with the client's own
   preshared key and `hub`, so a client that met only one hub learns them all.
-- An admin makes another admin computer a hub with a `hub` command (section 15), as a hub
-  that moves does, but stays what it is: `cbb global hub -on DEVICE`, "Make it a hub" in the
+- An admin makes another admin computer, or a computer it has given `forward_only`, a hub
+  with a `hub` command (section 15), as a hub that moves does, but stays what it is: `cbb global hub -on DEVICE`, "Make it a hub" in the
   apps. A hub hands it its clients; a sender with sync away from home on hands itself too and
   keeps the new hub's offer from the result. The receiver takes it as in "Moving the hub" and
   refuses while sync away from home is off there, which only its own user turns on (D-45).
 - A phone that is the hub shares its clients, takes the others' and passes their offers on,
   but does not yet stop serving for a hub above it, nor become another hub's client; as
   phones come first in the order, the computers' hubs give way to it.
+
+### Two kinds of hub
+
+Copies are sealed end to end (section 4), so a hub needs no more trust than the members it
+passes them between. A group has two kinds of hub, chosen when a device is made one (D-84):
+
+- A **trusted hub** is the root or an admin with `hub`, as in the rest of this section. It
+  reads the copies as every reader does, and as an admin it admits devices; the group's key
+  level (section 17) applies to it as to every admin.
+- A hub that **only passes copies on** is a computer whose newest device record has
+  `forward_only` (section 10), signed by the root or an admin with `hub`. No copy is sealed to
+  it, so it reads none; it makes no copies, writes none to a clipboard and takes no `paste`
+  or `action` command. It holds no CA key, so it makes no remote invitation (section 12): a
+  device far away joins through a trusted hub, or at home. No key level applies to it, since
+  whoever takes its keys can hold copies back and learn what any member in between learns
+  (section 4, "What the members in between see"), and nothing more: an always-on board
+  whose keys sit in files serves as well as any.
+
+An admin makes a computer such a hub by signing it a device record with `forward_only` and
+then sending it a `hub` command (`cbb global hub -on DEVICE -forward-only`; the apps' "Make
+it a hub", "Only passes copies on"). A hub of one kind becomes the other: to trust it, the root
+makes it an admin, which checks the key level then, and the record that names its admin key
+leaves `forward_only` out; to make a trusted hub only pass copies on, an admin with
+`remove-admins` revokes its admin key and signs it a record with `forward_only`. From the
+next copy on, the copies are sealed to it, or no longer.
 
 ### The hub's key
 
@@ -2219,7 +2366,8 @@ computers, and made and served on a phone that is the group's hub (mobile/cbbtun
 ### The invitation
 
 Made on the hub, by the control operation `invite` (`cbb invite`), or in the app of a phone
-that is the hub, whose endpoints are its forwarder's. Its text is
+that is the hub, whose endpoints are its forwarder's; a hub that only passes copies on
+(section 11, "Two kinds of hub") holds no CA key and refuses. Its text is
 `cbb://invite#` followed by standard base64 of this JSON (byte strings
 in it as in the rest of this document):
 
@@ -2412,16 +2560,18 @@ together, and close the connection beyond that; a sender MUST stay below it.
      from an admin CA that such a root certified, so a member that is no admin cannot
      register its group.
    - A hub whose root or admin key signs only after the user, a phone hub (design.md, "The
-     phone as the hub", D-64), leaves `admin` and `admin_sig` out. The forwarder then takes
-     the hub when the records make its member certificate's device, with that
-     certificate's key, the group's root (the latest `device` record of its own that the
-     current root signed) or an admin that is not frozen (the devices list, section 10,
-     names it an admin with that key). Go hubs (`internal/forward`) and
+     phone as the hub", D-64), and a hub that only passes copies on, which holds no root or
+     admin key (section 11, "Two kinds of hub"), leave `admin` and `admin_sig` out. The
+     forwarder then takes the hub when the records make its member certificate's device,
+     with that certificate's key, the group's root (the latest `device` record of its own
+     that the current root signed), an admin that is not frozen (the devices list, section
+     10, names it an admin with that key), or a device whose newest record has
+     `forward_only`. Go hubs (`internal/forward`) and
      the phones' hub (`mobile/cbbtun`) do this; any other hub is refused as before.
    - `records` are the group's authority records: the path records (section 6, the Welcome; section 10, "The state"), every record
      that is not a `device` record, and of the `device` records a root signed with its own key
-     those of a root's own device and every record of each device a root made an admin, so
-     that a demotion counts. The records of the other devices, with their names, are not
+     those of a root's own device, every record of each device a root made an admin, so
+     that a demotion counts, and every record of a hub that only passes copies on. The records of the other devices, with their names, are not
      sent.
      The forwarder adds them to those it keeps for the group and refuses a hub whose signer
      or member certificate the records revoke or freeze. It keeps the merged authority
@@ -3167,8 +3317,8 @@ far.
   user's own service, keeps its keys in a file that every program of that user may read. Its
   hello says `rootless`; a computer that is the group's root records such a
   member with `store` `rootless`, without `admin`, `kind` or `proof`, also over a record that
-  said otherwise, and the phones go by its hello. Such a device MUST NOT be made the group's root, an admin or a hub, whatever
-  the key level and the user's consent; it makes no group, offers no admin key and takes no
+  said otherwise, and the phones go by its hello. Such a device MUST NOT be made the group's root, an admin or a trusted hub (it may be a hub
+  that only passes copies on, section 11, "Two kinds of hub"), whatever the key level and the user's consent; it makes no group, offers no admin key and takes no
   admin CA itself. A reader that does not know the value takes it as `file` (below), so an
   older member keeps it from being an admin unless its user allowed keys in files.
 - **Keys in a TPM.** A full member on Linux makes its member key and its admin key in the
@@ -3219,7 +3369,8 @@ far.
   as an admin until another admin removes it (`cbb admin -allow-file-key`, and the warning
   in the phones' "Make it an admin" dialog). The root then signs the device record with
   `store` `file`. Moving the hub to such a computer makes it an admin only through that
-  dialog.
+  dialog; a hub that only passes copies on is no admin, and no key store keeps a computer from
+  being one.
 - **The root.** `cbb new` on a computer warns that its root key is a file: the group's CA
   keys are not in the TPM or the Secure Enclave yet (roadmap, D-44). A computer that holds
   the current root's CA key in a file therefore says `file` for its keys, in its hello and
@@ -3474,7 +3625,7 @@ does not know unless its section says it refuses it.
 
 | ID | Port | Section |
 |---|---|---|
-| `cbb/2` | TCP 8764, the member port; TCP 8764 inside the tunnel | 4 |
+| `cbb/3` | TCP 8764, the member port; TCP 8764 inside the tunnel | 4 |
 | `cbb-pair/2` | the member port; a listening joiner's port; TCP 8764 inside a guest tunnel | 6, 12 |
 | `http/1.1` (or none) | the member port, on a member that serves the iPhone | 7 |
 | `cbb-forward/2` | TCP on the forwarder's port (8764 by default) | 13 |
@@ -3496,6 +3647,11 @@ does not know unless its section says it refuses it.
 | `cbb reality short id` | HMAC input: the forwarder's REALITY short ID | 13 |
 | `cbb relay key` | TLS exporter label: a device's proof of its WireGuard key | 14 |
 | `cbb attest v1` | the attestation challenge's prefix | 17 |
+| `cbb copy v1` | the start of a copy's header, whose hash binds its payload and wraps | 4 |
+| `cbb copy sig v1` | the start of what a copy's origin signs | 4 |
+| `cbb copy payload v1` | HKDF info: a copy's payload key | 4 |
+| `cbb copy blob v1` | HKDF info: a copy's blob key | 4 |
+| `cbb blob` | associated data of a blob's segments | 4 |
 
 Only the pairing label carries the `EXPERIMENTAL-` prefix that RFC 5705, section 4, asks of
 labels not registered with IANA; the forwarder's and the relay's labels do not, which is a
@@ -3571,6 +3727,12 @@ section lists what an implementation must not get wrong, by section.
   online guesses per code, on the code never leaving the joining device after it is spent,
   and on no free text from an unauthenticated peer. A remote invitation's secret is long
   because it crosses the internet.
+- **Copies are sealed end to end** (section 4). A member takes no copy in the open, checks
+  the origin's certificate and signature before it passes a copy on, and reads only through
+  its own wrap; a member that leaves a check out lets a member in between, a hub among them,
+  forge copies, and one that took a copy in the open would let it read them. The readers are
+  the devices the origin's records list, so the records decide who reads, as they decide who
+  connects.
 - **Secrets** (section 5) never go to disk, never into a hello, a log, a notification or a
   `message`, and expire 60 s after the copy.
 - **Remote paste and quick actions** (section 15) type into and act on a device. Their
@@ -3583,7 +3745,8 @@ section lists what an implementation must not get wrong, by section.
   between peers; a client never sends plain WireGuard where VLESS is set. A forwarder or
   relay holds no key that decrypts anything, and a relay sees which devices talk and when
   (section 14, "What it keeps"), which the user is told before it is used.
-- **Received content** (section 4) is checked against its SHA-256 before use; names are
+- **Received content** (section 4) is checked against the blob's SHA-256, each segment's tag
+  and each part's SHA-256 before use; names are
   cleaned so that a copy cannot write outside its folder, and no link is followed or made.
 - **Updates** (section 16) are taken only under the pinned root keys and never to an older
   version than the device has seen, so neither a server nor the network can hold a device

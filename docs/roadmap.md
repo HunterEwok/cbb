@@ -187,7 +187,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     on the text console (design.md, "3. Console helper"), and Shift+Insert after a copy from
     a phone through the uinput helper (design.md, "Auto-paste"). The helpers themselves are
     done, as remote paste targets.
-- **31.** **Key levels**: the user picks who may be the group's root, an admin or a hub: only
+- **31.** **Key levels**: the user picks who may be the group's root or an admin (a trusted hub is one): only
     devices whose hardware key is proven by attestation, devices with a key in hardware (the
     default), or, after a warning, devices with a key in a file too. The evidence and the
     marks are built, and so is the setting's format: `key_level` in the root's `settings`
@@ -666,14 +666,15 @@ watches, the Mac and the tray app.
 ## Key levels
 
 Partly built in 0.6 (D-66): each device's evidence, checked by the root, and where its key
-lives in `cbb status` (the KEYS column) and the apps; the group's setting below is next. The owner's rule: the root, the admins and the hub hold keys in
-hardware. A key in hardware cannot be copied, even from a device that is broken into; it
+lives in `cbb status` (the KEYS column) and the apps; the group's setting below is next. The owner's rule: the root and the admins hold keys in
+hardware. A trusted hub is an admin and follows it; a hub that only passes copies on reads
+no copy and needs no key in hardware (D-84). A key in hardware cannot be copied, even from a device that is broken into; it
 can only be misused on that device while the attacker holds it. A key in a file can be
 copied once and used anywhere, for as long as nobody removes the device.
 
 The user picks one of three levels for the group, at its root:
 
-1. **Proven hardware only.** A device may be the root, an admin or a hub only when
+1. **Proven hardware only.** A device may be the root or an admin only when
    attestation proves its key is in hardware: Android's Key Attestation, a TPM with its
    maker's certificate, the iPhone through App Attest. This asks outside servers, and the
    guide says which: Apple's for each iPhone that makes a key, Google's public list of
@@ -684,7 +685,7 @@ The user picks one of three levels for the group, at its root:
 2. **Hardware (the default).** The device's own word that its key is in hardware: the
    phones, a Mac's Secure Enclave, a TPM without its maker's certificate. Nothing about the
    device leaves the group, which is why it is the default (D-47).
-3. **Files allowed.** A device whose key is in a file may also be an admin or the hub, each
+3. **Files allowed.** A device whose key is in a file may also be an admin, each
    time after the user allows it, with a warning that the key can be copied and must be
    watched. A group of computers only, while they have no TPM or Secure Enclave support
    (D-44), works only at this level.
