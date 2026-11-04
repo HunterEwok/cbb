@@ -17,7 +17,7 @@ use cbb_core::clip;
 use crate::error::{Context, Error, Result};
 use crate::{Global, control, request};
 
-const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-log file] [-trace]";
+const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
 
 /// How long copy waits for the next byte from the Next.
 const READ_TIMEOUT_DECISECONDS: u8 = 100;

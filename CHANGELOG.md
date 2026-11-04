@@ -119,7 +119,9 @@ All notable changes to cbb are documented in this file. The format follows
   through the ESP, with the default settings when there are none. The ESP stays in CIPMUX=1 with a
   server after the network, which its firmware keeps until it restarts: finding a computer
   asks on connection 4 in that mode, and `.cbb install` restarts the ESP (`AT+RST`) when it
-  refuses CIPMUX=0. `make test` runs the real `CBB` on a
+  refuses CIPMUX=0. `.cbb pair CODE` joins with the code of `cbb pair` on a computer
+  of the group, without the phone app: the link joins through the ESP (`cbb next link
+  -join`) to the computer whose pairing window is open. `make test` runs the real `CBB` on a
   played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
   cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
   silent Pi, a Pi without the fast speed, finding a computer, uninstalling, a closed connection, SPACE, the usage and a paste, each failed on what would

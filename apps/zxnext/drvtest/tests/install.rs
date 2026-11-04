@@ -325,8 +325,8 @@ fn finds_a_computer_of_the_group_for_the_network() {
     let Some(kit) = kit("find") else { return };
     let mut esp = Esp::new(kit.site.clone());
     esp.members = vec![
-        ("192.168.0.50".into(), 8764, "lite".into()),
-        ("192.168.0.60".into(), 8764, "phone".into()),
+        ("192.168.0.50".into(), 8764, "r=lite".into()),
+        ("192.168.0.60".into(), 8764, "r=phone".into()),
         ("192.168.0.175".into(), 8770, String::new()),
     ];
     let mut run = run_with(&kit, "net on", esp, Pi::new());
@@ -342,7 +342,7 @@ fn finds_a_computer_of_the_group_for_the_network() {
 fn says_when_no_computer_answers() {
     let Some(kit) = kit("nofind") else { return };
     let mut esp = Esp::new(kit.site.clone());
-    esp.members = vec![("192.168.0.50".into(), 8764, "lite".into())];
+    esp.members = vec![("192.168.0.50".into(), 8764, "r=lite".into())];
     let run = run_with(&kit, "net on", esp, Pi::new());
     let s = run.hw.screen_text().to_uppercase();
     assert!(s.contains("FOUND NO COMPUTER"), "{s}");
@@ -411,4 +411,19 @@ fn installs_after_the_network_ran() {
     assert!(o.has("DONE."), "{}", o.screen);
     assert!(o.esp().log.iter().any(|l| l.contains("AT+RST")));
     let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn joins_with_a_computers_code() {
+    let Some(kit) = kit("paircode") else { return };
+    let mut esp = Esp::new(kit.site.clone());
+    // The VM answers first, but only the Mac's cbb pair has its window open.
+    esp.members = vec![("192.168.0.177".into(), 8764, String::new()), ("192.168.0.175".into(), 8764, "p=1".into())];
+    let mut run = run_with(&kit, "pair 123-456", esp, Pi::new());
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(
+        pi.log.iter().any(|l| l.contains("next link -to 192.168.0.175:8764 -serve 8764:8764 -join 123-456 ")),
+        "{:?}",
+        pi.log
+    );
 }

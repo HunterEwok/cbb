@@ -49,10 +49,11 @@ static const char usage_text[] = "CBB " VERSION "\n\n"
            ".cbb text WORDS    send the words\n"
            ".cbb copy -s FILE  send a secret,\n"
            ".cbb text -s WORDS such as a password\n"
-           ".cbb pair          join the group:\n"
+           ".cbb pair [CODE]   join the group:\n"
            "                   scan the code with\n"
-           "                   the phone app,\n"
-           "                   through the ESP\n"
+           "                   the phone app, or\n"
+           "                   CODE of cbb pair on\n"
+           "                   a computer\n"
            ".cbb net on [HOST]\n"
            "                   the Pi's network\n"
            "                   through the ESP,\n"
@@ -337,6 +338,8 @@ static uint8_t expect(uint8_t want, uint32_t *len, uint32_t *crc, uint16_t secon
 // it (cmd_run(), net_cmd()), and whether install runs as .cbb update.
 static int far_argc;
 static char **far_argv;
+// .cbb pair CODE: the code from cbb pair on a computer of the group.
+static char *pair_code;
 static uint8_t install_update;
 // sha_run()'s file, whether it takes the digest, and the digest in hex.
 static const char *sha_path;
@@ -734,6 +737,9 @@ static uint8_t mdns_answer(void)
     if (n < 12 || !(text[2] & 0x80) || !holds(text, n, "_cbb") || holds(text, n, "r=lite") ||
         holds(text, n, "r=phone") || !plain(ip) || strlen(ip) > 15)
         return 1;
+    // A code is for the computer whose cbb pair shows it: its window is
+    // open (TXT p=1).
+    if (pair_code && !holds(text, n, "p=1")) return 1;
     sprintf(net_to, "-to %s:%u ", ip, srv_port(n));
     return 0;
 }
@@ -843,6 +849,10 @@ static int net_start(int argc, char **argv)
     link_send_str(CBB_LITE " next link ");
     link_send_str(net_to);
     link_send_str(net_args);
+    if (pair_code) {
+        link_send_str(" -join ");
+        link_send_str(pair_code);
+    }
     link_send_str(" -log /ram/link.log\n");
     // The driver may only start once the link has made the UART raw: the
     // shell would echo its frames, and a byte of them taken as XOFF stops
@@ -913,6 +923,14 @@ int net_pair(void)
     if (net_load()) {
         strcpy(net_args, net_serve + 1);
         if (net_save()) return 1;
+    }
+    // With a computer's code, the link joins through the ESP to that
+    // computer, and the computer's cbb pair says when it is done.
+    if (pair_code) {
+        if (!plain(pair_code)) return fail("the code is digits and dashes", pair_code);
+        if (net_start(0, 0)) return 1;
+        printf("Joining with the code; cbb pair\non the computer says when it\nis done.\n");
+        return 0;
     }
     serve = strstr(net_args, "-serve ");
     if (serve) colon = strchr(serve + 7, ':');
@@ -2021,7 +2039,10 @@ static int run(int argc, char **argv)
         return far_cmd();
     }
     // NextPi has no network but the ESP's.
-    if (strcmp(argv[i], "pair") == 0 && argc - i == 1) return far_net_pair();
+    if (strcmp(argv[i], "pair") == 0 && argc - i <= 2) {
+        if (argc - i == 2) pair_code = argv[i + 1];
+        return far_net_pair();
+    }
     if (strcmp(argv[i], "net") == 0) {
         far_argc = argc - i - 1;
         far_argv = argv + i + 1;

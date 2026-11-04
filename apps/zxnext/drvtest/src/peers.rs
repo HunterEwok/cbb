@@ -64,7 +64,7 @@ pub struct Esp {
     /// A baud change after the OK goes out.
     pending_baud: Option<(u64, u32)>,
     /// The members on the Wi-Fi network that answer mDNS: address, port,
-    /// and the TXT's r (empty for a computer).
+    /// and their TXT's own strings, split by commas ("r=lite", "p=1").
     pub members: Vec<(String, u16, String)>,
     cipdinfo: bool,
     /// Connection 4, UDP, in CIPMUX=1.
@@ -80,7 +80,7 @@ pub struct Esp {
 
 /// A member's answer to the legacy unicast question, as Go's mdns packs
 /// it: the question again, the PTR, then SRV, TXT and A.
-fn mdns_answer(q: &[u8], ip: &str, port: u16, r: &str) -> Vec<u8> {
+fn mdns_answer(q: &[u8], ip: &str, port: u16, txt_own: &str) -> Vec<u8> {
     let mut m = vec![q[0], q[1], 0x84, 0, 0, 1, 0, 1, 0, 0, 0, 3];
     m.extend_from_slice(&q[12..]);
     let rec = |m: &mut Vec<u8>, name: &[u8], t: u16, data: &[u8]| {
@@ -97,8 +97,8 @@ fn mdns_answer(q: &[u8], ip: &str, port: u16, r: &str) -> Vec<u8> {
     srv.extend_from_slice(b"\x04host\x05local\x00");
     rec(&mut m, &instance, 33, &srv);
     let mut txt = Vec::new();
-    for t in ["v=1".to_string(), "g=abcdef".to_string(), format!("r={r}")] {
-        if t == "r=" {
+    for t in ["v=1", "g=abcdef"].into_iter().chain(txt_own.split(',')) {
+        if t.is_empty() {
             continue;
         }
         txt.push(t.len() as u8);

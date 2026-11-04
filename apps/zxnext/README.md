@@ -21,6 +21,7 @@ tools. Test them on the machine before relying on them.
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
 .cbb pair             join the group through the ESP: scan the code on the screen with
                       the phone app
+.cbb pair 123-456     or join with the code of sudo cbb pair on a computer of the group
 .cbb net on           the Pi's network through the ESP, in the background, to a
                       computer of the group it finds (.cbb net on 192.168.0.10 names one)
 .cbb net off          stop it
@@ -201,6 +202,11 @@ starts the network under it, so the phone that scans the code reaches the Pi thr
 ESP. The phone app says when the Pi has joined; then `cbb service` starts on the Pi with the
 group. With `cbb next link -udp` and `cbb service -tunnel-via`, the Pi syncs away from home
 through the ESP as well (lite/README.md).
+
+Without the phone app, `sudo cbb pair` on a computer of the group shows a code, and
+`.cbb pair 123-456` on the Next joins with it: it finds the computer whose pairing window is
+open (TXT `p=1`), starts the network to it with `cbb next link -join 123-456`, and the
+computer's `cbb pair` says when the Pi has joined.
 
 ## Build
 

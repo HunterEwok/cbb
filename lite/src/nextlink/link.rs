@@ -25,7 +25,7 @@ use super::esp::{self, Esp, Event};
 use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
-pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-log file] [-trace]";
+pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
 
 /// The line the link writes once the UART is raw, which `.cbb net on`
 /// waits for before it turns the driver on.
@@ -578,6 +578,7 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
     let mut trace = false;
     let mut udp = None;
+    let mut join = None;
     let mut i = 0;
     while i < args.len() {
         if crate::flag(&args[i]) == Some("trace") {
@@ -599,6 +600,7 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
                     b.parse::<u16>().context("the local port is a number")?,
                 ));
             }
+            Some("join") => join = Some(value()?),
             Some("udp") => {
                 let v = value()?;
                 let (a, rest) = v.split_once(':').ok_or_else(|| Error::msg(USAGE))?;
@@ -697,10 +699,18 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
         link.serve(a, b);
     }
     // The service starts once the Pi's clock is right, for its
-    // certificates' dates, or after SERVICE_WAIT without the Next's.
-    let mut service_at = Some(Instant::now() + SERVICE_WAIT);
+    // certificates' dates, or after SERVICE_WAIT without the Next's; with
+    // -join, once this member is in the group: it joins with the code from
+    // cbb pair on the full member at -to, through a connection to the
+    // link's own port, which the ESP carries there.
+    let mut service_at = join.is_none().then(|| Instant::now() + SERVICE_WAIT);
+    let mut join_at = join.as_ref().map(|_| Instant::now() + SERVICE_WAIT);
+    let (joined_tx, joined) = mpsc::channel::<bool>();
     while !link.quit {
         let now = Instant::now();
+        if joined.try_recv() == Ok(true) {
+            service_at = Some(now);
+        }
         match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(m) => link.handle(m, now),
             Err(mpsc::RecvTimeoutError::Timeout) => link.tick(now),
@@ -709,6 +719,23 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
         let clock = link.clock.take();
         if let Some(secs) = clock {
             set_clock(secs, &mut *link.log);
+        }
+        // The join checks certificates' dates too, so it waits as the
+        // service does.
+        if join_at.is_some_and(|at| clock.is_some() || now >= at) {
+            join_at = None;
+            let (g, log, done, code) = (g.clone(), tx.clone(), joined_tx.clone(), join.clone().unwrap_or_default());
+            std::thread::spawn(move || {
+                let res = TcpStream::connect(("127.0.0.1", port))
+                    .context("cannot reach the link's port")
+                    .and_then(|s| crate::join_with_code(&g, s, &code));
+                let line = match &res {
+                    Ok(id) => format!("joined the group {} as {}", id.tag(), id.id),
+                    Err(e) => format!("cannot join: {}", e.for_user()),
+                };
+                log.send(Msg::Log(line)).ok();
+                done.send(res.is_ok()).ok();
+            });
         }
         if service_at.is_some_and(|at| clock.is_some() || now >= at) {
             service_at = None;
