@@ -524,4 +524,13 @@
     <string name="error_yubikey_none">No YubiKey was held to the phone.</string>
     <string name="error_nfc_off">NFC is off. Turn it on in the phone\'s settings, then try again.</string>
     <string name="error_no_nfc">This phone has no NFC, which the YubiKey needs.</string>
+    <string name="leave_group">Leave the group</string>
+    <string name="leave_question">Leave the group?</string>
+    <string name="leave_text">This phone\'s keys and the group\'s data here are deleted, and remote paste is turned off; the other settings stay. It can then join this group again or another one. The group keeps listing it until an admin removes it.</string>
+    <string name="leave_footer">Deletes this phone\'s keys and the group\'s data here; the settings stay.</string>
+    <string name="leave_footer_root">This phone holds the group\'s root: it leaves only once the group has no other devices.</string>
+    <string name="removed_self_title">This phone was removed from the group</string>
+    <string name="removed_self_text">The group\'s devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</string>
+    <string name="error_nothing_to_leave">This phone is in no group, so there is nothing to leave.</string>
+    <string name="error_root_leaves">This phone holds the group\'s root, and the group has other devices. Remove them first, or let an admin phone take the group over.</string>
 </resources>

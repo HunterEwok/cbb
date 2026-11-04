@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 951f5919aba6 -->
+<!-- source: 0dae45ee8ba4 -->
 # 安装
 
 Copy Beyond Borders 在每台电脑上作为一个小型后台服务运行，它的命令是 `cbb`。下面每种方式安装的都是同一个程序，选你喜欢的即可。
@@ -170,4 +170,4 @@ sudo sh /usr/local/share/cbb/uninstall.sh
 
 在 Windows 上：设置，应用，“CBB”，卸载。
 
-这会移除程序、服务、安装程序添加的防火墙规则，以及 Mac 上由 `.pkg` 安装的应用。设备的密钥会保留，所以再次安装可让它回到原来的群组。要连密钥一起删除，请加上 `--purge`（Windows 上是 `-Purge`，命令为 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`），然后在另一台设备上把这台设备从群组中移除（`sudo cbb remove NAME`，或在手机上操作）。
+这会移除程序、服务、安装程序添加的防火墙规则，以及 Mac 上由 `.pkg` 安装的应用。设备的密钥会保留，所以再次安装可让它回到原来的群组。要连密钥一起删除，请加上 `--purge`（Windows 上是 `-Purge`，命令为 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`），然后在另一台设备上把这台设备从群组中移除（`sudo cbb remove NAME`，或在手机上操作）。要退出群组但保留 CBB，请改为运行 `sudo cbb leave`：它会删除密钥和群组的文件，之后设备可以重新加入群组。

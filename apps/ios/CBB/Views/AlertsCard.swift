@@ -12,6 +12,9 @@ struct AlertsCard: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        if model.removed {
+            RemovedCard()
+        }
         if model.handedOver {
             HandedCard()
         }

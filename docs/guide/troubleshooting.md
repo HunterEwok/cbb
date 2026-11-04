@@ -34,8 +34,10 @@ in again (on Windows, open a new terminal); until then, `sudo cbb ...` works.
 - **Guest Wi-Fi or client isolation** on the router keeps devices from talking to each
   other at all; put them on the main network.
 - **A different group.** `cbb status` shows the group; devices of two groups never
-  sync. To move a computer to the right one, remove it from the wrong group, uninstall it
-  with `--purge` ([removing it](install.md#removing-it)), install it again and pair it.
+  sync. To move a computer to the right one, run `sudo cbb leave` on it, then pair it with
+  the right group, and remove it from the wrong one there.
+- **Removed from the group.** `cbb status` says so, and its members refuse it. Run
+  `sudo cbb leave` on it (in the apps: Leave the group), then pair it again.
 
 ## Pairing fails
 

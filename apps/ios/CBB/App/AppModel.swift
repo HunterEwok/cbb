@@ -27,6 +27,11 @@ protocol GroupController: AnyObject {
     func prepare() throws
     /// Removes a device from the group.
     func remove(_ id: String) async throws
+    /// Whether the group removed this phone.
+    var removed: Bool { get }
+    /// Takes this phone out of its group: deletes its keys and the
+    /// group's files and keeps the settings.
+    func leave() async throws
     /// Makes a computer an admin; only the root phone does.
     func makeAdmin(_ id: String) async throws
     /// When the group's recovery key was made; nil without one.
@@ -130,6 +135,8 @@ extension GroupController {
     /// A stand-in tag for the tests' and previews' groups.
     var groupTag: String? { hasGroup ? "group" : nil }
     func unfreeze(_ id: String) async throws {}
+    var removed: Bool { false }
+    func leave() async throws { throw LiveGroup.Failure.noGroup }
     var isRoot: Bool { false }
     var alerts: [GroupAlert] { [] }
     var recoveryMade: Date? { nil }
@@ -264,6 +271,8 @@ final class AppModel: ObservableObject {
     /// Whether the group's root handed the group to this phone, which may
     /// take it now.
     @Published private(set) var handedOver = false
+    /// The group removed this phone; the app offers to leave.
+    @Published private(set) var removed = false
     /// The one-time note on the Start screen that this phone is ready.
     @Published private(set) var welcome = false
 
@@ -670,6 +679,7 @@ final class AppModel: ObservableObject {
         isRoot = group.isRoot
         alerts = group.alerts
         handedOver = group.handedOver
+        removed = group.removed
         recoveryMade = group.recoveryMade
         keyLevel = group.keyLevel
         await refreshAway()
@@ -898,6 +908,33 @@ final class AppModel: ObservableObject {
         computers = group.computers
         devices = group.devices
         isAdmin = group.isAdmin
+    }
+
+    /// Takes this phone out of its group (D-83) and goes back to the Start
+    /// screen, with a new key of its own for the next group. True when it
+    /// left.
+    func leave() async -> Bool {
+        busy = true
+        defer { busy = false }
+        do {
+            try await group.leave()
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+        if notifies { Notifier.shared.forget() }
+        do {
+            try group.prepare()
+        } catch {
+            log.error("no new key after leaving: \(String(reflecting: error), privacy: .public)")
+        }
+        phase = .start
+        message = nil
+        await refresh()
+        isAdmin = group.isAdmin
+        removed = false
+        if notifies { WatchLink.shared.update(self) }
+        return true
     }
 
     /// Gives a device another name.
@@ -1248,6 +1285,11 @@ final class AppModel: ObservableObject {
                 return String(localized: "This computer did not open its window for a phone. Run cbb pair -admin on the computer that created the group.", bundle: .app)
             case .noGroupComputer:
                 return String(localized: "No computer of the group was found on this network. Turn one on and keep this phone on its network, then try again.", bundle: .app)
+            case .noGroup:
+                return String(localized: "This phone is in no group, so there is nothing to leave.", bundle: .app)
+            case let .rootLeaves(others):
+                let names = others.formatted(.list(type: .and))
+                return String(localized: "This phone holds the group's root, and the group has other devices: \(names). Remove them first, or let an admin phone take the group over.", bundle: .app)
             default: break
             }
         }

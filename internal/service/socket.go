@@ -121,7 +121,7 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		fail(c, fmt.Errorf("%q changes the group, so the service takes it only on its admin socket, which only the administrator reaches", m.Op))
 		return
 	}
-	if s.broken != nil {
+	if s.broken != nil && m.Op != control.OpLeave {
 		reply(c, control.Header{Error: s.broken.Msg, Detail: s.broken.Detail, Done: true}, nil)
 		return
 	}
@@ -427,6 +427,12 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			return
 		}
 		reply(c, control.Header{Name: strings.Join(who, ", "), Done: true}, nil)
+	case control.OpLeave:
+		if err := s.leave(); err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Done: true}, nil)
 	case control.OpFreeze, control.OpThaw:
 		name, err := s.freeze(m.Name, m.Op == control.OpFreeze)
 		if err != nil {

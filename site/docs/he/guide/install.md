@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 951f5919aba6 -->
+<!-- source: 0dae45ee8ba4 -->
 # התקנה
 
 Copy Beyond Borders רץ כשירות קטן ברקע בכל מחשב. הפקודה שלו היא `cbb`. כל אחת מהדרכים שלהלן מתקינה את אותה תוכנה; בחרו את זו שנוחה לכם.
@@ -171,4 +171,4 @@ sudo sh /usr/local/share/cbb/uninstall.sh
 
 ב-Windows: הגדרות, אפליקציות, "CBB", הסרת התקנה.
 
-פעולה זו מסירה את התוכנה, את השירות, את כללי חומת האש שתוכנית ההתקנה הוסיפה, וב-Mac גם את האפליקציה שה-`.pkg` התקין. מפתחות המכשיר נשארים, ולכן התקנה מחדש מחזירה אותו לקבוצה שלו. כדי למחוק גם אותם, הוסיפו `--purge` (‏`-Purge` ב-Windows, עם `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), ואז הסירו את המכשיר מהקבוצה ממכשיר אחר (‏`sudo cbb remove NAME`, או בטלפון).
+פעולה זו מסירה את התוכנה, את השירות, את כללי חומת האש שתוכנית ההתקנה הוסיפה, וב-Mac גם את האפליקציה שה-`.pkg` התקין. מפתחות המכשיר נשארים, ולכן התקנה מחדש מחזירה אותו לקבוצה שלו. כדי למחוק גם אותם, הוסיפו `--purge` (‏`-Purge` ב-Windows, עם `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), ואז הסירו את המכשיר מהקבוצה ממכשיר אחר (‏`sudo cbb remove NAME`, או בטלפון). כדי לצאת מהקבוצה ולהשאיר את CBB, הריצו במקום זאת ‏`sudo cbb leave`: הוא מוחק את המפתחות ואת קובצי הקבוצה, והמכשיר יכול להצטרף שוב לקבוצה.

@@ -129,6 +129,41 @@ final class AppModelTests: XCTestCase {
             guard let i = computers.firstIndex(where: { $0.id == id && $0.canMakeAdmin }) else { throw PhoneGroup.Failure.notRoot }
             (computers[i].admin, computers[i].canMakeAdmin) = (true, false)
         }
+        var removed = false
+        var isRoot = false
+        func leave() async throws {
+            guard hasGroup else { throw LiveGroup.Failure.noGroup }
+            if isRoot, !computers.isEmpty { throw LiveGroup.Failure.rootLeaves(computers.map(\.name)) }
+            (hasGroup, computers, removed, isAdmin) = (false, [], false, true)
+        }
+    }
+
+    /// A removed phone leaves and is back on Start with a new key; the
+    /// root leaves only alone; a phone in no group has nothing to leave.
+    func testLeave() async {
+        let g = FakeGroup()
+        let m = AppModel(group: g)
+        let ok = await m.scanned(qr)
+        XCTAssertTrue(ok)
+        g.isRoot = true
+        var left = await m.leave()
+        XCTAssertFalse(left)
+        XCTAssertEqual(m.phase, .home)
+        XCTAssertTrue(m.message?.contains("pi") ?? false, m.message ?? "")
+        g.isRoot = false
+        g.removed = true
+        await m.refresh()
+        XCTAssertTrue(m.removed)
+        let prepared = g.prepared
+        left = await m.leave()
+        XCTAssertTrue(left)
+        XCTAssertEqual(m.phase, .start)
+        XCTAssertFalse(m.removed)
+        XCTAssertEqual(g.prepared, prepared + 1)
+        XCTAssertNil(m.message)
+        left = await m.leave()
+        XCTAssertFalse(left)
+        XCTAssertEqual(m.message, AppModel.describe(LiveGroup.Failure.noGroup, log: false))
     }
 
     func testRename() async {
@@ -370,6 +405,7 @@ final class AppModelTests: XCTestCase {
         s.devices = [.init(id: "a", name: "deck", symbol: "gamecontroller", online: true)]
         s.away = .connected
         s.events = ["deck joined the group."]
+        s.group = "tag"
         XCTAssertEqual(WatchState(s.data), s)
         XCTAssertNil(WatchState([:]))
     }

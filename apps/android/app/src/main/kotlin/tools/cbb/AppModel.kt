@@ -106,6 +106,10 @@ class AppModel(private val app: Context) {
     var handedOver by mutableStateOf(false)
         private set
 
+    /** The group removed this phone; the app offers to leave. */
+    var removed by mutableStateOf(false)
+        private set
+
     /** What the group's records stop and what ends it. */
     var alerts by mutableStateOf<List<GroupAlert>>(emptyList())
         private set
@@ -465,6 +469,7 @@ class AppModel(private val app: Context) {
         isRoot = root
         alerts = a
         handedOver = withContext(Dispatchers.IO) { group.handedOver }
+        removed = withContext(Dispatchers.IO) { group.removed }
         recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
         keyLevel = withContext(Dispatchers.IO) { group.keyLevel }
         notifier.observe(d)
@@ -691,6 +696,39 @@ class AppModel(private val app: Context) {
             describe(e)
         }
         update()
+    }
+
+    /**
+     * Takes this phone out of its group (D-83) and goes back to the Start
+     * screen, with a new key of its own for the next group. True when it
+     * left.
+     */
+    suspend fun leave(): Boolean {
+        busy = true
+        try {
+            withContext(Dispatchers.IO) { group.leave() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+            return false
+        } finally {
+            busy = false
+        }
+        SyncService.stop(app)
+        notifier.forget()
+        try {
+            withContext(Dispatchers.IO) { group.prepare() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "no new key after leaving", e)
+        }
+        phase = Phase.START
+        message = null
+        update()
+        WatchLink.update(app, this)
+        return true
     }
 
     /** Gives a device another name. */
@@ -1096,6 +1134,8 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.TWO_WINDOWS -> R.string.error_two_windows
                 LiveGroup.Failure.Kind.NEEDS_ROOT -> R.string.error_needs_root
                 LiveGroup.Failure.Kind.NO_GROUP_COMPUTER -> R.string.error_no_group_computer
+                LiveGroup.Failure.Kind.NO_GROUP -> R.string.error_nothing_to_leave
+                LiveGroup.Failure.Kind.ROOT_LEAVES -> R.string.error_root_leaves
             }
             is Restore.Failure -> when (e.kind) {
                 Restore.Kind.NEEDS_QR -> R.string.error_restore_needs_qr
