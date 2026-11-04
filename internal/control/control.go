@@ -52,6 +52,7 @@ const (
 	OpRecovery    = "recovery"       // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
 	OpHandover    = "handover"       // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
+	OpLeave       = "leave"          // client → service: leave the group: delete its keys and files, keep the settings, restart in no group
 	OpInvite      = "invite"         // client → service: make a remote invitation on the hub; answers and a question follow
 	OpAnswer      = "answer"         // client → service: Consent answers the service's question during a request
 	OpWatch       = "watch"          // watcher → service: start watching, with what the clipboard holds now

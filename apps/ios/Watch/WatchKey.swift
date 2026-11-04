@@ -74,6 +74,15 @@ enum WatchKey {
         return try SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: blob)
     }
 
+    /// Forgets the admin key, the pending one and the admission, as when
+    /// the phone left the group the root certified the key in.
+    static func forget() {
+        remove(account: adminAccount)
+        remove(account: pendingAccount)
+        UserDefaults.standard.removeObject(forKey: pendingDeviceKey)
+        UserDefaults.standard.removeObject(forKey: admissionKey)
+    }
+
     private static func query(_ account: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
     }

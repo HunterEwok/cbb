@@ -205,6 +205,7 @@ type Service struct {
 	pastes         remotepaste.Limiter // remote pastes per sender
 	actionLimit    remotepaste.Limiter // quick actions per sender, as remote pastes
 	restart        chan struct{}       // an admin had the service restart (actions.Restart)
+	left           chan struct{}       // the device left its group (cbb leave)
 	lastSeq        uint64
 	pending        *node.Write                      // a write that no watcher got, for the next one
 	mediaWait      *node.Write                      // a copy of images or files the watchers that take them get once it has arrived
@@ -363,7 +364,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.runner == nil && !cfg.actInSession {
 		cfg.runner = actions.System()
 	}
-	s := &Service{cfg: cfg, logf: cfg.Logf, dialers: map[group.DeviceID]*dialer{}, watchers: map[*watcher]bool{}, restart: make(chan struct{}, 1),
+	s := &Service{cfg: cfg, logf: cfg.Logf, dialers: map[group.DeviceID]*dialer{}, watchers: map[*watcher]bool{}, restart: make(chan struct{}, 1), left: make(chan struct{}, 1),
 		seen: map[group.DeviceID]time.Time{}, archives: map[group.DeviceID]string{}, online: map[group.DeviceID]bool{}, unreached: map[group.DeviceID]bool{},
 		startedMS: cfg.now().UnixMilli()}
 	if s.cfg.runner == nil {
@@ -454,12 +455,16 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.Logf("cbb: %v", ErrRestart)
 		s.stopGroup()
 		return ErrRestart
+	case <-s.left:
+		cfg.Logf("cbb: %v", ErrLeft)
+		s.stopGroup()
+		return ErrLeft
 	}
 }
 
 // errBroken is what the user sees when the device's group file cannot be
 // read.
-const errBroken = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or remove cbb with its keys (uninstall --purge, -Purge on Windows), install it again and join"
+const errBroken = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or leave the group (cbb leave) and join again"
 
 // engine returns the sync engine, or nil while the device is in no group.
 func (s *Service) engine() *clip.Engine {

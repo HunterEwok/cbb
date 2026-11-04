@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 951f5919aba6 -->
+<!-- source: 0dae45ee8ba4 -->
 # التثبيت
 
 يعمل Copy Beyond Borders كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.
@@ -171,4 +171,4 @@ sudo sh /usr/local/share/cbb/uninstall.sh
 
 على Windows: الإعدادات، التطبيقات، «CBB»، إلغاء التثبيت.
 
-يزيل هذا البرنامج والخدمة وقواعد جدار الحماية التي أضافها المثبّت، وعلى Mac التطبيق الذي ثبّته `.pkg`. وتبقى مفاتيح الجهاز، فيعيده التثبيت من جديد إلى مجموعته. ولحذفها أيضًا أضف `--purge` (`-Purge` على Windows، مع `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`)، ثم أزل الجهاز من المجموعة من جهاز آخر (`sudo cbb remove NAME`، أو على الهاتف).
+يزيل هذا البرنامج والخدمة وقواعد جدار الحماية التي أضافها المثبّت، وعلى Mac التطبيق الذي ثبّته `.pkg`. وتبقى مفاتيح الجهاز، فيعيده التثبيت من جديد إلى مجموعته. ولحذفها أيضًا أضف `--purge` (`-Purge` على Windows، مع `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`)، ثم أزل الجهاز من المجموعة من جهاز آخر (`sudo cbb remove NAME`، أو على الهاتف). ولمغادرة المجموعة مع الإبقاء على CBB، شغّل بدلًا من ذلك `sudo cbb leave`: فهو يحذف المفاتيح وملفات المجموعة، ويستطيع الجهاز الانضمام إلى مجموعة من جديد.

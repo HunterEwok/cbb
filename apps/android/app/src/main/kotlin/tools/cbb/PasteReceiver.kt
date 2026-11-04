@@ -83,6 +83,11 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
         Member.CommandResult("", "failed", e.message)
     }
 
+    /** Deletes the log of pastes, which names the group's devices, as when the phone leaves its group. */
+    fun forgetLog() {
+        logFile.delete()
+    }
+
     private fun inject(body: Commands.Body, text: String): Member.CommandResult {
         if (text.isEmpty()) return refused(body, "the text has nothing that may be pasted: only control characters")
         val k = keyboard.settings

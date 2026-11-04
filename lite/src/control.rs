@@ -119,6 +119,10 @@ pub struct Status {
     /// the exchange").
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub stop: String,
+    /// The group's records revoke this device: it joins again only after
+    /// cbb leave.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub removed: bool,
 }
 
 /// A quick action as the device's user set it, with the names of the Go

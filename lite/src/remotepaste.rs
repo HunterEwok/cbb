@@ -31,7 +31,7 @@ pub struct Settings {
 }
 
 const SETTINGS_FILE: &str = "paste-receive";
-const LOG_FILE: &str = "pastes.json";
+pub const LOG_FILE: &str = "pastes.json";
 /// How many pastes the log keeps.
 pub const LOG_SIZE: usize = 100;
 

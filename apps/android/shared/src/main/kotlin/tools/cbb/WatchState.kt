@@ -23,6 +23,8 @@ data class WatchState(
     val color: String = "terminal",
     /** Whether the phone shows the error under its messages (its Settings); the watch does as it does. */
     val details: Boolean = false,
+    /** The group's tag; null without a group. A watch whose admin key was certified in another group, or whose phone left its group, forgets the key. */
+    val group: String? = null,
 ) {
     /**
      * can: what this watch may do to it (the kit's PhoneGroup.WatchAction
@@ -202,6 +204,7 @@ data class WatchState(
         .put("events", JSONArray(events))
         .put("color", color)
         .put("details", details)
+        .put("group", group ?: JSONObject.NULL)
         .toString()
         .toByteArray()
 
@@ -259,6 +262,7 @@ data class WatchState(
                     events = (0 until es.length()).map { i -> es.getString(i) },
                     color = o.optString("color", "terminal"),
                     details = o.optBoolean("details"),
+                    group = if (o.isNull("group")) null else o.optString("group"),
                 )
             }.getOrNull()
         }

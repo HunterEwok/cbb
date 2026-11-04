@@ -90,8 +90,20 @@ class WearModel(private val context: Context, private val scope: CoroutineScope)
     }
 
     private fun take(bytes: ByteArray?) {
-        WatchState.decode(bytes)?.let { state = it }
+        WatchState.decode(bytes)?.let {
+            state = it
+            forgetIfLeft(it)
+        }
         reachable = true
+    }
+
+    /** Forgets the admin key once the phone is in no group or in another one than the root certified the key in: the phone left its group (D-83). */
+    private fun forgetIfLeft(s: WatchState) {
+        val a = WatchKey.admission(context) ?: return
+        if (s.hasGroup && (s.group == null || s.group == a.group)) return
+        WatchKey.forget(context)
+        admin = false
+        Log.i(TAG, "the phone left the group: the watch's admin key is deleted")
     }
 
     /** Turns the phone's sync away from home on or off, as its Settings do. */
