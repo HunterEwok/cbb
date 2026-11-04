@@ -21,9 +21,8 @@ tools. Test them on the machine before relying on them.
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
 .cbb pair             join the group: scan the code on the screen with the phone app
                       (through the ESP once .cbb net has its settings)
-.cbb net on 192.168.0.10
-                      the Pi's network through the ESP, in the background, to a
-                      computer of the group
+.cbb net on           the Pi's network through the ESP, in the background, to a
+                      computer of the group it finds (.cbb net on 192.168.0.10 names one)
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below)
@@ -166,11 +165,17 @@ To use it, put `CBB` and `CBB.DRV` in `/cbb` (`.cbb install` does), join the ESP
 tools do, and run:
 
 ```
-.cbb net on 192.168.0.10
+.cbb net on
 ```
 
-which is short for `.cbb net on -to "192.168.0.10:8764" -serve "8764:8764"`; the long form
-takes `-zone "+01:00"` too (the zone is UTC without it), and `"HOST:PORT"` another port.
+It finds a computer of the group each time, as the lite members on a network of their own
+do with mDNS: the question for `_cbb._tcp.local` goes from the ESP's UDP port 5354, which the
+members answer to that port alone (a legacy unicast query, RFC 6762 section 6.7), and the first
+computer to answer (not a lite member nor a phone, TXT `r=lite` or `r=phone`) is the one the
+Pi dials, at the port of its SRV record. With more than one group at home, or a network that
+drops multicast, name the computer: `.cbb net on 192.168.0.10` is short for
+`.cbb net on -to "192.168.0.10:8764" -serve "8764:8764"`; the long form takes `-zone "+01:00"`
+too (the zone is UTC without it), and `"HOST:PORT"` another port.
 
 NextBASIC ends a statement at a colon, so each setting with one goes in quotes; the quotes
 do not reach the Pi. After a reset or a power cycle, which drop installed drivers, `.cbb net on` installs

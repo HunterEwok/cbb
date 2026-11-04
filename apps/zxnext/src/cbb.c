@@ -663,6 +663,139 @@ static const char net_serve[] = " -serve 8764:8764";
 // net_pair starts the network under its QR code, without a word.
 static uint8_t quiet;
 
+// Finds a computer of the group on the home network, as the lite members
+// on a network of their own do with mDNS: the question for _cbb._tcp.local
+// goes from the ESP's UDP port 5354, which the members answer to that port
+// alone (a legacy unicast query, RFC 6762 section 6.7). The first answer
+// from a computer, not a lite member nor a phone (TXT r=lite, r=phone),
+// gives its address (the ESP names the sender) and port (its SRV record).
+static const uint8_t mdns_query[] = {0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 4, '_', 'c', 'b', 'b', 4, '_', 't', 'c',
+                                     'p', 5, 'l', 'o', 'c', 'a', 'l', 0, 0, 12, 0, 1};
+static const char *const mdns_cmds[] = {"AT+CIPMODE=0", "AT+CIPMUX=0", "AT+CIPDINFO=1",
+                                        "AT+CIPSTART=\"UDP\",\"224.0.0.251\",5353,5354,2"};
+static const char ipd[] = "+IPD,";
+static char net_to[32];
+
+// Whether the n bytes at p hold s.
+static uint8_t holds(const uint8_t *p, uint16_t n, const char *s)
+{
+    uint8_t k = strlen(s);
+    for (; n >= k; n--, p++) {
+        if (memcmp(p, s, k) == 0) return 1;
+    }
+    return 0;
+}
+
+// The end of the name at i in the answer of n bytes.
+static uint16_t skip_name(uint16_t i, uint16_t n)
+{
+    while (i < n) {
+        uint8_t b = text[i];
+        if (!b) return i + 1;
+        if ((b & 0xC0) == 0xC0) return i + 2;
+        i += b + 1;
+    }
+    return n;
+}
+
+// The port of the answer's SRV record, else 8764.
+static uint16_t srv_port(uint16_t n)
+{
+    uint16_t i = 12, records, q = text[5];
+    records = text[7] + text[9] + text[11];
+    while (q--) i = skip_name(i, n) + 4;
+    while (records-- && i < n) {
+        uint16_t len;
+        i = skip_name(i, n);
+        if (i + 10 > n) break;
+        len = (text[i + 8] << 8) | text[i + 9];
+        if (text[i + 1] == 33 && text[i] == 0 && i + 16 <= n) return (text[i + 14] << 8) | text[i + 15];
+        i += 10 + len;
+    }
+    return 8764;
+}
+
+// One +IPD of the ESP: "+IPD,LEN,IP,PORT:" then the bytes. 0 with net_to
+// set when it is a computer's answer.
+static uint8_t mdns_answer(void)
+{
+    char head[40], *ip, *end;
+    uint8_t c, k = 0;
+    uint16_t n, i;
+    while (k < sizeof head - 1) {
+        if (link_recv(&c, 3)) return 2;
+        if (c == ':') break;
+        head[k++] = c;
+    }
+    head[k] = 0;
+    for (n = 0, i = 0; head[i] >= '0' && head[i] <= '9'; i++) n = n * 10 + head[i] - '0';
+    if (n > sizeof text) return 2;
+    for (i = 0; i < n; i++) {
+        if (link_recv(text + i, 3)) return 2;
+    }
+    ip = strchr(head, ',');
+    if (!ip) return 1;
+    end = strchr(++ip, ',');
+    if (!end) return 1;
+    *end = 0;
+    // A response (QR bit) about _cbb, from a computer.
+    if (n < 12 || !(text[2] & 0x80) || !holds(text, n, "_cbb") || holds(text, n, "r=lite") ||
+        holds(text, n, "r=phone") || !plain(ip) || strlen(ip) > 15)
+        return 1;
+    sprintf(net_to, "-to %s:%u ", ip, srv_port(n));
+    return 0;
+}
+
+static int net_find(void)
+{
+    uint8_t i, c, got = 0, match = 0;
+    if (!esp_speed(ESP_SPEED)) {
+        link_use(LINK_PI);
+        return fail("the ESP does not answer AT", line);
+    }
+    link_send_str("AT+CIPCLOSE\r\n");
+    while (link_line(line, sizeof line, 1) == LINK_OK && strcmp(line, "OK") && strcmp(line, "ERROR")) {
+    }
+    for (i = 0; i < sizeof mdns_cmds / sizeof mdns_cmds[0]; i++) {
+        link_send_str(mdns_cmds[i]);
+        link_send_str("\r\n");
+        for (;;) {
+            if (link_line(line, sizeof line, 5)) goto failed;
+            if (strcmp(line, "OK") == 0) break;
+            if (strcmp(line, "ERROR") == 0 || strncmp(line, "FAIL", 4) == 0) goto failed;
+        }
+    }
+    sprintf(line, "AT+CIPSEND=%u\r\n", sizeof mdns_query);
+    link_send_str(line);
+    while (link_recv(&c, 3) == LINK_OK && c != '>') {
+    }
+    for (i = 0; i < sizeof mdns_query; i++) link_send(mdns_query[i]);
+    // The answers, for three seconds after the last byte.
+    while (!got && link_recv(&c, 3) == LINK_OK) {
+        match = c == ipd[match] ? match + 1 : c == ipd[0];
+        if (match == sizeof ipd - 1) {
+            match = 0;
+            i = mdns_answer();
+            if (i == 2) break;
+            got = !i;
+        }
+    }
+    // NextZXOS's own tools read +IPD without the sender.
+    for (i = 0; i < 2; i++) {
+        link_send_str(i ? "AT+CIPDINFO=0\r\n" : "AT+CIPCLOSE\r\n");
+        while (link_line(line, sizeof line, 1) == LINK_OK && strcmp(line, "OK") && strcmp(line, "ERROR")) {
+        }
+    }
+    link_use(LINK_PI);
+    if (!got) return fail("found no computer of the group; .cbb net on HOST names one", 0);
+    if (!quiet) printf("Found %s\n", net_to + 4);
+    return 0;
+failed:
+    link_use(LINK_PI);
+    return fail("the ESP cannot ask the network", line);
+}
+
+
 static int net_start(int argc, char **argv)
 {
     int i;
@@ -691,14 +824,17 @@ static int net_start(int argc, char **argv)
             strcpy(net_args + n, argv[i]);
             n += strlen(argv[i]);
         }
-        if (!strstr(net_args, "-to ")) return fail("the computer to dial is missing: .cbb net on HOST", 0);
         // The phones reach the Pi at the ESP's 8764 unless -serve says
         // otherwise.
         if (!strstr(net_args, "-serve ")) strcpy(net_args + n, net_serve);
         if (net_save()) return 1;
     } else if (net_load()) {
-        return fail("no settings yet: .cbb net on HOST", NET_CFG);
+        strcpy(net_args, net_serve + 1);
+        if (net_save()) return 1;
     }
+    // Without -to, a computer is found each time: its address may change.
+    net_to[0] = 0;
+    if (!strstr(net_args, "-to ") && net_find()) return 1;
     if (!esp_speed(ESP_NET_SPEED)) {
         link_use(LINK_PI);
         return fail("the ESP does not answer AT", line);
@@ -710,6 +846,7 @@ static int net_start(int argc, char **argv)
         return pi_silent();
     }
     link_send_str(CBB_LITE " next link ");
+    link_send_str(net_to);
     link_send_str(net_args);
     link_send_str(" -log /ram/link.log\n");
     // The driver may only start once the link has made the UART raw: the
@@ -777,7 +914,7 @@ int net_pair(void)
     char ip[40], cmd[160], *serve, *colon = 0, *end;
     uint32_t len, crc;
     if (net_on()) return fail(net_runs, 0);
-    if (net_load()) return fail("no settings yet: .cbb net on HOST", NET_CFG);
+    if (net_load()) return fail("no settings yet: .cbb net on", NET_CFG);
     serve = strstr(net_args, "-serve ");
     if (serve) colon = strchr(serve + 7, ':');
     if (!colon) return fail("the settings need -serve \"8764:8764\", where the phone reaches the Pi", net_args);

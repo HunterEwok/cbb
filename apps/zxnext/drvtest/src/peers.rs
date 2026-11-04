@@ -63,6 +63,46 @@ pub struct Esp {
     pub log: Vec<String>,
     /// A baud change after the OK goes out.
     pending_baud: Option<(u64, u32)>,
+    /// The members on the Wi-Fi network that answer mDNS: address, port,
+    /// and the TXT's r (empty for a computer).
+    pub members: Vec<(String, u16, String)>,
+    cipdinfo: bool,
+    udp: bool,
+    /// Non-transparent AT+CIPSEND: bytes still to take.
+    sending: usize,
+    datagram: Vec<u8>,
+}
+
+/// A member's answer to the legacy unicast question, as Go's mdns packs
+/// it: the question again, the PTR, then SRV, TXT and A.
+fn mdns_answer(q: &[u8], ip: &str, port: u16, r: &str) -> Vec<u8> {
+    let mut m = vec![q[0], q[1], 0x84, 0, 0, 1, 0, 1, 0, 0, 0, 3];
+    m.extend_from_slice(&q[12..]);
+    let rec = |m: &mut Vec<u8>, name: &[u8], t: u16, data: &[u8]| {
+        m.extend_from_slice(name);
+        m.extend_from_slice(&t.to_be_bytes());
+        m.extend_from_slice(&[0, 1, 0, 0, 0, 10]);
+        m.extend_from_slice(&(data.len() as u16).to_be_bytes());
+        m.extend_from_slice(data);
+    };
+    let instance = b"\x0bdev-0000001\xc0\x0c".to_vec();
+    rec(&mut m, b"\xc0\x0c", 12, &instance);
+    let mut srv = vec![0, 0, 0, 0];
+    srv.extend_from_slice(&port.to_be_bytes());
+    srv.extend_from_slice(b"\x04host\x05local\x00");
+    rec(&mut m, &instance, 33, &srv);
+    let mut txt = Vec::new();
+    for t in ["v=1".to_string(), "g=abcdef".to_string(), format!("r={r}")] {
+        if t == "r=" {
+            continue;
+        }
+        txt.push(t.len() as u8);
+        txt.extend_from_slice(t.as_bytes());
+    }
+    rec(&mut m, &instance, 16, &txt);
+    let a: Vec<u8> = ip.split('.').map(|o| o.parse::<u8>().unwrap()).collect();
+    rec(&mut m, b"\x04host\x05local\x00", 1, &a);
+    m
 }
 
 impl Esp {
@@ -83,6 +123,32 @@ impl Esp {
             wifi: true,
             log: Vec::new(),
             pending_baud: None,
+            members: Vec::new(),
+            cipdinfo: false,
+            udp: false,
+            sending: 0,
+            datagram: Vec::new(),
+        }
+    }
+
+    /// The datagram the Next sent: to 224.0.0.251:5353, the members answer.
+    fn datagram(&mut self, now: u64) {
+        let d = std::mem::take(&mut self.datagram);
+        self.out.push(now + 2_000, format!("\r\nRecv {} bytes\r\n\r\nSEND OK\r\n", d.len()).as_bytes());
+        self.log.push(format!("{:.3}s UDP: {} bytes", now as f64 / 1e6, d.len()));
+        if d.len() < 12 || !find(&d, b"\x04_cbb\x04_tcp\x05local\x00").is_some() {
+            return;
+        }
+        for (k, (ip, port, r)) in self.members.clone().iter().enumerate() {
+            let m = mdns_answer(&d, ip, *port, r);
+            let head = if self.cipdinfo {
+                format!("\r\n+IPD,{},{ip},5353:", m.len())
+            } else {
+                format!("\r\n+IPD,{}:", m.len())
+            };
+            let at = now + 20_000 + 10_000 * k as u64;
+            self.out.push(at, head.as_bytes());
+            self.out.push(at, &m);
         }
     }
 
@@ -106,9 +172,30 @@ impl Esp {
         if c == "AT+CIPCLOSE" {
             if self.connected {
                 self.connected = false;
+                self.udp = false;
                 return self.reply(now, "CLOSED\r\n\r\nOK\r\n");
             }
             return self.reply(now, "\r\nERROR\r\n");
+        }
+        if let Some(v) = c.strip_prefix("AT+CIPDINFO=") {
+            self.cipdinfo = v == "1";
+            return self.reply(now, "\r\nOK\r\n");
+        }
+        if c.starts_with("AT+CIPSTART=\"UDP\"") {
+            if self.connected {
+                return self.reply(now, "ALREADY CONNECTED\r\n\r\nERROR\r\n");
+            }
+            self.connected = true;
+            self.udp = true;
+            return self.reply(now, "CONNECT\r\n\r\nOK\r\n");
+        }
+        if let Some(n) = c.strip_prefix("AT+CIPSEND=") {
+            if !self.connected || self.cipmode != 0 {
+                return self.reply(now, "\r\nERROR\r\n");
+            }
+            self.sending = n.parse().unwrap();
+            self.datagram.clear();
+            return self.reply(now, "\r\nOK\r\n> ");
         }
         if c.starts_with("AT+CIPSTART=") {
             if self.connected {
@@ -252,6 +339,14 @@ impl Peer for Esp {
             if self.connected {
                 self.request.push(b);
                 self.http(now);
+            }
+            return;
+        }
+        if self.sending > 0 {
+            self.datagram.push(b);
+            self.sending -= 1;
+            if self.sending == 0 {
+                self.datagram(now);
             }
             return;
         }

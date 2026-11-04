@@ -262,9 +262,15 @@ impl Outcome {
 
 /// Runs .cbb ARGS that needs no key, until it ends.
 fn run_plain(kit: &Kit, args: &str, pi: Pi) -> Run {
+    run_with(kit, args, Esp::new(kit.site.clone()), pi)
+}
+
+/// The same with this ESP, and CBB.DRV on the card.
+fn run_with(kit: &Kit, args: &str, esp: Esp, pi: Pi) -> Run {
     let card = card(&format!("plain-{}", args.replace(' ', "-")));
     std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
-    let mut run = Run::new(&kit.dot, &card, args, Box::new(Esp::new(kit.site.clone())), Box::new(pi));
+    std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
+    let mut run = Run::new(&kit.dot, &card, args, Box::new(esp), Box::new(pi));
     let table = kit.map.lines().find(|l| l.starts_with("__z_page_table ")).expect("__z_page_table");
     run.page_table = u16::from_str_radix(table.split('$').nth(1).unwrap().get(..4).unwrap(), 16).unwrap();
     run.overlay_logical = kit.pages.clone();
@@ -283,7 +289,8 @@ fn run_plain(kit: &Kit, args: &str, pi: Pi) -> Run {
         .map(|b| format!("{:#06x}: {}", b.pc, b.what))
         .collect();
     assert!(breaches.is_empty(), "breaches:\n{}", breaches.join("\n"));
-    assert_eq!(run.hw.ours.iter().filter(|&&p| p).count(), 0, "pages still taken");
+    // Only an installed driver keeps its bank.
+    assert_eq!(run.hw.ours.iter().filter(|&&p| p).count(), run.hw.drivers.len(), "pages still taken");
     let _ = std::fs::remove_dir_all(&card);
     run
 }
@@ -304,4 +311,32 @@ fn says_when_the_pi_does_not_answer_a_paste() {
     let run = run_plain(&kit, "paste", pi);
     let s = run.hw.screen_text();
     assert!(s.to_uppercase().contains("CBB:"), "{s}");
+}
+
+#[test]
+fn finds_a_computer_of_the_group_for_the_network() {
+    let Some(kit) = kit("find") else { return };
+    let mut esp = Esp::new(kit.site.clone());
+    esp.members = vec![
+        ("192.168.0.50".into(), 8764, "lite".into()),
+        ("192.168.0.60".into(), 8764, "phone".into()),
+        ("192.168.0.175".into(), 8770, String::new()),
+    ];
+    let mut run = run_with(&kit, "net on", esp, Pi::new());
+    let s = run.hw.screen_text();
+    assert!(s.contains("192.168.0.175:8770"), "{s}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(pi.log.iter().any(|l| l.contains("next link -to 192.168.0.175:8770 -serve 8764:8764 ")), "{:?}", pi.log);
+    let esp: &mut Esp = run.hw.esp.peer.as_any().downcast_mut().unwrap();
+    assert!(esp.log.iter().any(|l| l.contains("AT+CIPDINFO=0")));
+}
+
+#[test]
+fn says_when_no_computer_answers() {
+    let Some(kit) = kit("nofind") else { return };
+    let mut esp = Esp::new(kit.site.clone());
+    esp.members = vec![("192.168.0.50".into(), 8764, "lite".into())];
+    let run = run_with(&kit, "net on", esp, Pi::new());
+    let s = run.hw.screen_text().to_uppercase();
+    assert!(s.contains("FOUND NO COMPUTER"), "{s}");
 }
