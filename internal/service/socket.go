@@ -224,6 +224,13 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			}
 		}
 		reply(c, control.Header{Done: true}, data)
+	case control.OpReleaseWant:
+		data, err := json.Marshal(s.wantedReleaseFiles())
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Done: true}, data)
 	case control.OpReleaseFile:
 		if err := s.receiveReleaseFile(r, m); err != nil {
 			fail(c, err)

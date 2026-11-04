@@ -589,3 +589,34 @@ func TestMirrorThrough(t *testing.T) {
 		t.Errorf("named %q", src.String())
 	}
 }
+
+// A hub downloads the archives its group's members update from and hands
+// each, checked against release.json, to its service.
+func TestFetchFor(t *testing.T) {
+	f := newFixture(t)
+	data := goodArchive(t, "0.6.1")
+	f.publish(t, "0.6.1", data, nil, 30*24*time.Hour)
+	u := f.updater(t, &system{running: "0.6.1"})
+	var kept [][]byte
+	u.Keep = func(path string, a release.Asset) {
+		b, err := os.ReadFile(path)
+		if err != nil || a.Name != archive {
+			t.Errorf("kept %s: %v", a.Name, err)
+		}
+		kept = append(kept, b)
+	}
+	found, err := u.Check(context.Background(), State{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := u.FetchFor(context.Background(), found.Source, found.Release, []string{archive, "cbb-plan9-amd64.tar.gz", "../" + archive})
+	if err != nil || n != 1 || len(kept) != 1 || !bytes.Equal(kept[0], data) {
+		t.Fatalf("kept %d (%d): %v", n, len(kept), err)
+	}
+	if err := os.WriteFile(filepath.Join(f.dir, archive), append(slices.Clone(data), 0), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := u.FetchFor(context.Background(), found.Source, found.Release, []string{archive}); err == nil || n != 0 || len(kept) != 1 {
+		t.Fatalf("a changed archive was kept (%d): %v", n, err)
+	}
+}

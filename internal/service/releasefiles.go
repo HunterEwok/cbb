@@ -123,6 +123,53 @@ func parseSum(v string) ([sha256.Size]byte, error) {
 	return [sha256.Size]byte(b), nil
 }
 
+// maxWanted bounds the archives a hub asks cbb update for at a time.
+const maxWanted = 16
+
+// wantedReleaseFiles returns, on a hub, the archives of the held release
+// that the group's members update from and this device does not hold whole
+// (OpReleaseWant): its cbb update downloads them, so that devices on
+// networks that block the update servers get them through the group, also
+// inside its tunnel (docs/protocol.md, section 16, "In the group").
+// Elsewhere it returns none.
+func (s *Service) wantedReleaseFiles() []string {
+	s.tunMu.Lock()
+	hub := s.tunnel != nil && s.tunnel.IsHub
+	s.tunMu.Unlock()
+	h := s.heldRelease()
+	if !hub || h == nil {
+		return nil
+	}
+	s.mu.Lock()
+	names := map[string]bool{}
+	for _, a := range s.archives {
+		names[a] = true
+	}
+	s.mu.Unlock()
+	return wantedFiles(h.release.Files, names, func(sum [sha256.Size]byte) bool {
+		f, _, ok := s.openReleaseFile(sum)
+		if ok {
+			f.Close()
+		}
+		return ok
+	})
+}
+
+// wantedFiles returns the names of the files that names lists and holds
+// does not, at most maxWanted.
+func wantedFiles(files []release.Asset, names map[string]bool, holds func([sha256.Size]byte) bool) []string {
+	var out []string
+	for _, a := range files {
+		if !names[a.Name] || len(out) == maxWanted {
+			continue
+		}
+		if sum, err := parseSum(a.SHA256); err == nil && !holds(sum) {
+			out = append(out, a.Name)
+		}
+	}
+	return out
+}
+
 // receiveReleaseFile takes an archive from cbb update (OpReleaseFile): it
 // must be a file of the held release, whole and matching its hash.
 func (s *Service) receiveReleaseFile(r *control.Reader, m *control.Message) error {

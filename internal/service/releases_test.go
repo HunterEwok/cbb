@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -262,4 +263,29 @@ func releaseJSON(t *testing.T, r *control.Release) string {
 		t.Fatal(err)
 	}
 	return string(data)
+}
+
+// A hub asks for the archives its members update from that it lacks, and
+// only the release lists; a member that is no hub asks for none.
+func TestWantedReleaseFiles(t *testing.T) {
+	a := release.Asset{Name: "cbb-linux-arm64.tar.gz", SHA256: hexSum([]byte("a"))}
+	b := release.Asset{Name: "cbb-windows-amd64.zip", SHA256: hexSum([]byte("b"))}
+	c := release.Asset{Name: "cbb-darwin-arm64.tar.gz", SHA256: hexSum([]byte("c"))}
+	held := map[string]bool{b.SHA256: true}
+	holds := func(sum [sha256.Size]byte) bool { return held[hex.EncodeToString(sum[:])] }
+	names := map[string]bool{a.Name: true, b.Name: true, "cbb-plan9-amd64.tar.gz": true}
+	if got := wantedFiles([]release.Asset{a, b, c}, names, holds); !slices.Equal(got, []string{a.Name}) {
+		t.Errorf("wanted %v", got)
+	}
+
+	signer := newReleaseSigner(t)
+	var h hub
+	pi := startWith(t, &h, "pi", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	if _, err := pi.do(t, control.Header{Op: control.OpRelease}, releaseJSON(t, signer.sign(t, "0.6.1", 2))); err != nil {
+		t.Fatal(err)
+	}
+	m, err := pi.do(t, control.Header{Op: control.OpReleaseWant}, "")
+	if err != nil || string(m.Payload) != "null" {
+		t.Fatalf("a member that is no hub wants %q: %v", m.Payload, err)
+	}
 }

@@ -244,6 +244,9 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 			return code
 		}
 	}
+	if elevated && !check {
+		archivesForGroup(ctx, u, found, out)
+	}
 	switch {
 	case !found.Newer && to == "":
 		fmt.Fprintf(out, "CBB %s is the newest release; this device runs %s.\n", r.Version, version.Version)
@@ -278,6 +281,50 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	return 0
+}
+
+// archivesForGroup downloads, on a hub, the archives the group's members
+// update from and its service does not hold yet, and hands them to it, so
+// that devices on networks that block the update servers get them through
+// the group and its tunnel (docs/protocol.md, section 16, "In the group").
+func archivesForGroup(ctx context.Context, u *update.Updater, found update.Found, log io.Writer) {
+	if _, ok := found.Source.(update.Group); ok {
+		return
+	}
+	c, err := control.DialFor(control.OpReleaseWant)
+	if err != nil {
+		return
+	}
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpReleaseWant}})
+	c.Close()
+	var names []string
+	if err != nil || json.Unmarshal(m.Payload, &names) != nil || len(names) == 0 {
+		return
+	}
+	if _, err := u.FetchFor(ctx, found.Source, found.Release, names); err != nil {
+		fmt.Fprintf(log, "Not every archive for the group came: %v\n", err)
+	}
+}
+
+// selfArchive names the release archive cbb update installs on this
+// device, for the hello's device, so that the group's hub fetches it
+// (docs/protocol.md, section 16, "In the group"); "" for a copy that
+// another tool updates, or a development build.
+func selfArchive() string {
+	if version.Version == "dev" {
+		return ""
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	dir, _ := update.Paths()
+	st, _ := update.LoadState(dir)
+	if update.DetectMethod(st.Method, exe) != update.MethodGet {
+		return ""
+	}
+	return update.ArchiveName()
 }
 
 // shareRelease hands the signed release that cbb update fetched from the

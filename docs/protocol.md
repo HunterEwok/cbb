@@ -504,6 +504,7 @@ and of the program.
 | `os_version` | string or absent | the system's version as the user knows it (`15.1`, `11 (build 26100)`, `Debian GNU/Linux 13 (trixie)`), 1-32 bytes without control characters |
 | `version` | string or absent | the sender's own version (`0.5.0`), the same limits |
 | `mac` | string or absent | the MAC address of the network card on the home network, six lowercase hex bytes with colons; phones send none, as their systems hide it |
+| `archive` | string or absent | the release archive this device installs with `cbb update` (`cbb-linux-arm64.tar.gz`, section 16), so that its group's hub fetches it: `cbb-` and two or three parts of 1-16 lowercase letters and digits joined by `-`, then `.tar.gz` or `.zip`; absent on a copy that another tool updates (Homebrew, winget, a package), on phones and on the lite member |
 
 ### Event
 
@@ -1077,6 +1078,7 @@ A connection carries one request: the service reads the first message and dispat
 | `release-file` | `{value, part}`: the archive's SHA-256 and its `size`, then its bytes in `data` messages | `{done}`: `cbb update` hands the service an archive of the release it holds (section 16), which keeps it only whole and matching its hash, to pass on to its peers. Only on the admin socket |
 | `keys` | `{name, value, keys}`: `paste` or `enter`, a user ID, and the grant of an `inject` | `{done}` when the service handed that inject to a `desktop` watcher of that user and it is not answered yet, and `name` is its paste keys the first time or, after them, its Enter the first time when the command set `enter`; otherwise an error. Only from root (the uinput helper), on the control socket |
 | `release-held` | none | payload = the release this device holds in JSON, `{keys, channel, release}`, or an error when it holds none: `cbb update` takes it when no update server answers, and checks it as it checks what it downloads (section 16) |
+| `release-want` | none | payload = the names of the held release's archives that the members' hellos name and this device does not hold whole, a JSON array, at most 16; `null` on a device that is no hub: its `cbb update` downloads them for the group (section 16). Only on the admin socket |
 | `update-way` | none | payload = the VLESS settings (section 11) of the hub this device reaches away from home, with the group's VLESS user ID, or none without VLESS: `cbb update` reaches the mirror through them (section 16). Only on the admin socket |
 | `release-get` | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{done}`: the archive of the held release, from this device or fetched from its peers |
 | `watch` | `{kind, via, inject?, paste_only?, act?, images?, files?}` + payload = what the clipboard holds now (may be empty) | `{"op":"reply"}` without `done`; then the watcher protocol below |
@@ -3072,6 +3074,13 @@ it checks what it downloads.
   no peer has it; it checks the archive against `release.json` either way. A member deletes
   the archives of a release once it holds a newer one, and serves them through the group's
   tunnel too.
+- A hub fetches the archives its group's members install, so that a device on a network that
+  blocks the update servers, as one that syncs over AmneziaWG may be on, gets them through
+  the group and its tunnel. Its `cbb update` (the daily timer, or by hand) asks its service
+  (control operation `release-want`) for the archives of the held release that the
+  members' hellos name in `device` `archive` (section 4) and it does not hold whole, at most
+  16, downloads each from the server it checked the release from, checks it against
+  `release.json` and hands it over as with `release-file`.
 - A member that does not know `release` ignores it, as it ignores every message of a type it does not know.
 
 ## 17. Key stores

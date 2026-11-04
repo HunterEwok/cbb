@@ -80,6 +80,7 @@ const (
 	OpReleaseGet  = "release-get"    // client → service: the archive of the held release whose SHA-256 is Value, from this device or its peers; a reply with Part, its bytes, then Done
 	OpReleaseHeld = "release-held"   // client → service: the signed release this device holds, a Release in JSON, for cbb update when no update server answers
 	OpUpdateWay   = "update-way"     // client → service: the VLESS settings, a tunnel.VLESS in JSON, by which cbb update reaches the mirror on the hub's forwarder; empty without VLESS
+	OpReleaseWant = "release-want"   // client → service: on a hub, the names of the held release's archives the group's members update from and it does not hold, in JSON, for cbb update to download
 	OpKeyboard    = "keyboard"       // client → service: Name "on" (Keyboard the settings), "off", "pair", "type" (the payload) or "" (status): this computer as a Bluetooth keyboard
 	OpKeys        = "keys"           // uinput helper (root) → service: may it press Name ("paste" or "enter") for the user Value, under the grant Keys of an inject
 	OpRemote      = "remote"         // client → service: Name "add" (Address, Value the kind, NewName, Consent), "code" (Code), "cancel", "remove", "pastes" (Value on or off), "type" (the payload), for the TV Device, or "" (status): this device as a TV's remote

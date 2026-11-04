@@ -206,6 +206,7 @@ type Service struct {
 	pending        *node.Write                      // a write that no watcher got, for the next one
 	mediaWait      *node.Write                      // a copy of images or files the watchers that take them get once it has arrived
 	seen           map[group.DeviceID]time.Time     // when each peer was last seen connected
+	archives       map[group.DeviceID]string        // the release archive each peer's hello says it updates from
 	adminCAsUnder  map[group.DeviceID]group.KeyHash // the root this root last sent each admin a new admin CA under
 	pendingAdminCA []byte                           // an admin CA that came before the records that make it valid
 	// commands holds the IDs of the commands carried out, until they
@@ -349,7 +350,7 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.runner = actions.System()
 	}
 	s := &Service{cfg: cfg, logf: cfg.Logf, dialers: map[group.DeviceID]*dialer{}, watchers: map[*watcher]bool{}, restart: make(chan struct{}, 1),
-		seen: map[group.DeviceID]time.Time{}, online: map[group.DeviceID]bool{}, unreached: map[group.DeviceID]bool{},
+		seen: map[group.DeviceID]time.Time{}, archives: map[group.DeviceID]string{}, online: map[group.DeviceID]bool{}, unreached: map[group.DeviceID]bool{},
 		startedMS: cfg.now().UnixMilli()}
 	if s.cfg.runner == nil {
 		// A Mac and Windows run the presets in the signed-in user's

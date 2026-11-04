@@ -19,9 +19,16 @@ type DeviceInfo struct {
 	OSVersion string `json:"os_version,omitempty"`
 	Version   string `json:"version,omitempty"`
 	MAC       string `json:"mac,omitempty"`
+	// Archive is the release archive this device updates from with cbb
+	// update (cbb-linux-arm64.tar.gz), for its group's hub to fetch.
+	Archive string `json:"archive,omitempty"`
 }
 
 var macPattern = regexp.MustCompile(`^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`)
+
+// archivePattern is the name of a release archive, as
+// packaging/archive.sh makes them.
+var archivePattern = regexp.MustCompile(`^cbb(-[a-z0-9]{1,16}){2,3}\.(tar\.gz|zip)$`)
 
 // Clean drops the fields that are not valid: an unknown form, a version of
 // more than 32 bytes or with control characters, a MAC address other than
@@ -39,6 +46,9 @@ func (d DeviceInfo) Clean() DeviceInfo {
 	d.OSVersion, d.Version = short(d.OSVersion), short(d.Version)
 	if !macPattern.MatchString(d.MAC) {
 		d.MAC = ""
+	}
+	if !archivePattern.MatchString(d.Archive) {
+		d.Archive = ""
 	}
 	return d
 }
