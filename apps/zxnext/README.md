@@ -71,6 +71,13 @@ the border blinks while it runs. SPACE stops it, and `.cbb install` goes on from
 download stopped or broke off. After the install's key, a Pi in no group goes on to pair: the
 QR code shows at once, as `.cbb pair` shows it.
 
+**At power-on.** NextZXOS runs `C:/NEXTZXOS/AUTOEXEC.BAS` when it starts: `.cbb install`
+adds `.cbb net on` to it as its last line, after the user's own lines (or writes one with
+only that line), and `.cbb uninstall` takes the line out again and leaves the rest as it
+was. A program that never ends, or ends in `.core`, never reaches it; then start the network
+by hand. In the first two minutes after power-on `.cbb net on` waits up to a minute and a
+half for NextPi, which takes about half a minute to start.
+
 A `CBB` fetched into `/cbb` by an earlier manual still works there as `../CBB`; `.cbb update`
 replaces the one it runs as, `C:/DOT/CBB` first.
 
@@ -92,7 +99,7 @@ SHA-256: the same trust as the `.http` that fetched `CBB` at the start. Last it 
 own file, which NextZXOS keeps open while a dot command over 8K runs (the API's "Large dot
 commands"), erases it and renames `CBB.NEW` in its place; the code in memory runs on. Should
 that fail, it says the `ERASE` and `RENAME` to type after it. The network, if it ran, it
-leaves off and asks for `.cbb net on`: starting it is the new `CBB`'s job, since the new
+leaves off and asks for `.cbb net on` or a restart: starting it is the new `CBB`'s job, since the new
 driver and the Pi's new `cbb` may want what the old one does not know.
 
 Over an earlier installation: `.cbb install` asks for `.cbb net off` first while the network

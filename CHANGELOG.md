@@ -168,7 +168,9 @@ All notable changes to cbb are documented in this file. The format follows
   `.cbb install`); everything else stays in `/cbb`. `.cbb update` says when there are no
   updates, and with a newer `CBB` on the site installs it and its files (checked against the
   site's list) and puts it in place of itself, closing the file NextZXOS keeps open for it;
-  `.cbb net on` then starts the network with the new one. `.cbb uninstall` leaves `C:/DOT/CBB` for the user to
+  `.cbb net on` then starts the network with the new one. `.cbb install` adds `.cbb net on`
+  to `C:/NEXTZXOS/AUTOEXEC.BAS` as its last line, so the network starts at power-on, where
+  `.cbb net on` waits for NextPi to start; `.cbb uninstall` takes the line out. `.cbb uninstall` leaves `C:/DOT/CBB` for the user to
   erase. The rarer commands (`paste`, `copy`, `text`, `leave`, `uninstall`,
   `paste-receive`) are in `/cbb/CBB.OVL`, read into a page NextZXOS allocates on their
   first call and checked against the stamp `CBB` carries (`apps/zxnext/ovl.sh`), so `CBB`

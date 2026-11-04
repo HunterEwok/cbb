@@ -680,7 +680,9 @@ impl Run {
         for (a, v) in sysvars {
             hw.os_write(a, v);
         }
-        hw.os_write16(FRAMES, 0);
+        // Ten minutes after power-on: .cbb net on waits for NextPi to
+        // start only in the first two (a test sets FRAMES lower for that).
+        hw.os_write16(FRAMES, 30_000);
         hw.os_write(FRAMES + 2, 0);
         // The command line, in BASIC's line, ended by ENTER.
         let line = format!("../CBB {args}\r");

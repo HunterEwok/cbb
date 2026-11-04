@@ -422,6 +422,10 @@ static uint32_t list_isize[LISTED];
 static char list_isha[LISTED][65];
 // Whether the CBB that cbb_swap() replaces is C:/DOT's.
 static uint8_t swap_dot;
+// What far_autoexec() does: 0 puts .cbb net on into AUTOEXEC.BAS, 1 takes
+// it out.
+static uint8_t ax_out;
+extern int far_autoexec(void);
 extern int far_cbb_swap(void);
 // For install_end(): whether the Pi answered, and which end word: 0
 // done, 1 no updates, 2 a newer CBB too, whose network this one does not
@@ -965,10 +969,19 @@ failed:
 }
 
 
+static const char pi_wait[] = "Waiting for the Pi to start\n";
+
 static int net_start(int argc, char **argv)
 {
     int i;
     uint16_t n = 0;
+    // Just after power-on (AUTOEXEC.BAS), NextPi takes half a minute to
+    // start: its shell is waited for, up to a minute and a half.
+    if (*(uint8_t *)23674 == 0 && FRAMES_LO < 50 * 120 && link_shell()) {
+        if (!quiet) printf(pi_wait);
+        for (i = 0; i < 10 && link_shell(); i++) {
+        }
+    }
     // After a reset the driver is gone: install it from the card.
     if (driver(DRV_STATE, 0) && (drv_install() || driver(DRV_STATE, 0))) {
         return fail("cannot install the driver: .install /cbb/CBB.DRV", DRV_FILE);
@@ -1322,7 +1335,7 @@ struct item {
 
 static struct item items[] = {
     {"CBB.DRV", "CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", PIN_DRV_SIZE, PIN_DRV_SHA256, 0},
-    {"CBB.OVL", "CBB.OVL", OVL_FILE, "/cbb/OVL.PRT", PIN_OVL_SIZE, PIN_OVL_SHA256, 0},
+    {"CBB.OVL", "CBB", OVL_FILE, "/cbb/OVL.PRT", PIN_OVL_SIZE, PIN_OVL_SHA256, 0},
     {"cbb", "SERVICE", PI_CARD, "/cbb/CBBPI.PRT", PIN_PI_SIZE, PIN_PI_SHA256, 1},
 };
 #define ITEMS (sizeof items / sizeof items[0])
@@ -1536,8 +1549,11 @@ static void file_state(uint8_t row, const char *name, const char *state)
 }
 
 // The bars' colours, a row each, from the first fetched to the last: the
-// Next's stripes, the Pi's cbb on its way in cyan, a newer CBB in white.
-static const uint8_t bar_ink[5] = {INK_RED, INK_YELLOW, INK_GREEN, INK_CYAN, INK_WHITE};
+// Next's stripes, and the Pi's cbb on its way in cyan.
+static const uint8_t bar_ink[4] = {INK_RED, INK_YELLOW, INK_GREEN, INK_CYAN};
+// A bar for more than one file (a newer CBB with its CBB.OVL): the bytes
+// before the one under way, and of all of them; 0 for a file's own bar.
+static uint32_t bar_base, bar_size;
 // Draws a bar in half cells at a screen row, with the percentage.
 static void bar(uint8_t screen_row, uint8_t pct, uint8_t ink)
 {
@@ -1566,7 +1582,7 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
     uint32_t rate = secs ? got / secs : 0;
     uint16_t left = rate ? (uint16_t)((size - got) / rate) : 0;
     char speed[8];
-    bar(FILE_ROW + 2 * row + 1, percent(got, size), bar_ink[row]);
+    bar(FILE_ROW + 2 * row + 1, bar_size ? percent(bar_base + got, bar_size) : percent(got, size), bar_ink[row]);
     at(NOW_ROW, PANEL);
     printf("%5luK OF %5luK", got >> 10, size >> 10);
     if (rate < 10240) sprintf(speed, "%u.%uK/S", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));
@@ -1912,7 +1928,8 @@ static int to_pi(struct item *it, uint8_t row)
 
 // A newer CBB, fetched next to the running one: dot or /cbb, CBB.NEW.
 static struct item cbb_new = {"CBB", "CBB", 0, 0, 0, 0, 0};
-#define CBB_ROW (SEND_ROW + 1)
+// It shares CBB.OVL's row, as the CBB part of the install.
+#define CBB_ROW ITEM_ROW(1)
 
 static int install_files(uint8_t update)
 {
@@ -1963,10 +1980,6 @@ static int install_files(uint8_t update)
             cbb_new.sha256 = list_isha[LISTED - 1];
         }
     }
-    if (newer) {
-        file_state(CBB_ROW, "CBB", "");
-        bar(FILE_ROW + 2 * CBB_ROW + 1, 0, bar_ink[CBB_ROW]);
-    }
     // What is to do: the files to fetch, then the Pi's cbb to send.
     for (i = 0; i < ITEMS && !err; i++) {
         struct item *it = &items[i];
@@ -1998,18 +2011,16 @@ static int install_files(uint8_t update)
     for (i = 0; i < ITEMS; i++)
         if (need[i]) nothing = 0;
     for (i = 0; i < ITEMS && !err; i++) {
-        if (!need[i]) continue;
-        err = fetch(&items[i], ITEM_ROW(i));
-        // CBB.DRV, which runs from memory once installed.
-        if (i == 0) drv_new = 1;
-    }
-    if (newer && !err) {
-        if (matches(&cbb_new, cbb_new.part)) {
-            file_state(CBB_ROW, "CBB", "FETCHED");
-            bar(FILE_ROW + 2 * CBB_ROW + 1, 100, bar_ink[CBB_ROW]);
-        } else {
-            err = fetch(&cbb_new, CBB_ROW);
+        // A newer CBB first, on one bar with its CBB.OVL.
+        if (i == 1 && newer) {
+            bar_size = cbb_new.size + (need[1] ? items[1].size : 0);
+            if (!matches(&cbb_new, cbb_new.part)) err = fetch(&cbb_new, CBB_ROW);
+            bar_base = cbb_new.size;
         }
+        if (need[i] && !err) err = fetch(&items[i], ITEM_ROW(i));
+        bar_size = 0;
+        // CBB.DRV, which runs from memory once installed.
+        if (i == 0 && need[i]) drv_new = 1;
     }
     http_close();
     link_use(LINK_PI);
@@ -2044,7 +2055,7 @@ static int install_files(uint8_t update)
     }
     if (newer) {
         swap_dot = dot;
-        if (!far_cbb_swap()) file_state(CBB_ROW, "CBB", "NEW");
+        far_cbb_swap();
     }
     // Two different CBBs: .cbb runs the one in C:/DOT, ../CBB in /cbb the
     // other.
@@ -2212,9 +2223,115 @@ int uninstall(void)
     }
     line[4] = 0;
     esx_f_rmdir(line);
+    ax_out = 1;
+    autoexec();
     if (card_has(CBB_CARD)) printf(un_card);
     else if (card_has(DOT_CBB)) printf(un_dot);
     printf(un_done);
+    return 0;
+}
+
+// NextZXOS runs C:/NEXTZXOS/AUTOEXEC.BAS at power-on: .cbb install puts
+// .cbb net on in it as its last line, after the user's own, which may
+// want the machine first, and .cbb uninstall takes it out. The file is a
+// +3DOS one: a 128-byte header (PLUS3DOS, the file's length at 11, the
+// program's with its variables at 16, its LINE at 18, where the variables
+// start at 20, the checksum of the 127 bytes before at 127), then the
+// lines, each its number (big-endian), its length, its text and 13, then
+// the variables.
+static const char ax_file[] = "c:/nextzxos/AUTOEXEC.BAS", ax_temp[] = "c:/nextzxos/AUTOEXEC.CBB";
+#define AX_FILE ax_file
+#define AX_TEMP ax_temp
+#define AX_HEAD 128
+static const char ax_cmd[] = ".cbb net on\r";
+static const char ax_magic[] = "PLUS3DOS\x1A\x01";
+static const char ax_cannot[] = "cannot write";
+static const char ax_own[] = "Add .cbb net on to C:/NEXTZXOS/AUTOEXEC.BAS for the network at power-on.";
+static const char ax_gone[] = ".cbb net on is out of C:/NEXTZXOS/AUTOEXEC.BAS.\n";
+
+static uint16_t ax_word(uint16_t at)
+{
+    return text[at] | (uint16_t)text[at + 1] << 8;
+}
+
+static void ax_set(uint16_t at, uint16_t v)
+{
+    text[at] = (uint8_t)v;
+    text[at + 1] = v >> 8;
+}
+
+// Writes the file of n bytes in text[], with the program's length d bytes
+// longer (or shorter), and its checksum; 0 when written.
+static int ax_write(uint16_t n, int d)
+{
+    uint8_t fh, sum = 0, i;
+    ax_set(11, n);
+    ax_set(13, 0);
+    ax_set(16, ax_word(16) + d);
+    ax_set(20, ax_word(20) + d);
+    for (i = 0; i < 127; i++) sum += text[i];
+    text[127] = sum;
+    errno = 0;
+    fh = esx_f_open(AX_TEMP, ESX_MODE_W | ESX_MODE_OPEN_CREAT_TRUNC);
+    if (errno) return 1;
+    i = esx_f_write(fh, text, n) != n;
+    esx_f_close(fh);
+    esx_f_unlink(AX_FILE);
+    return i || esx_f_rename(AX_TEMP, AX_FILE);
+}
+
+// Not static: far_autoexec() (far.asm) calls it, and uninstall().
+int autoexec(void)
+{
+    uint8_t fh;
+    uint16_t n, at, end, len, last = 0, k = sizeof ax_cmd - 1;
+    errno = 0;
+    fh = esx_f_open(AX_FILE, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) {
+        if (ax_out) return 0;
+        // None yet: one of our own, LINE 10.
+        memset(text, 0, AX_HEAD);
+        memcpy(text, ax_magic, 10);
+        ax_set(18, 10);
+        n = AX_HEAD;
+        last = 0;
+    } else {
+        n = esx_f_read(fh, text, sizeof text);
+        esx_f_close(fh);
+        if (n < AX_HEAD || n == sizeof text || memcmp(text, ax_magic, 8) || text[15] != 0) {
+            if (!ax_out) say(ax_own);
+            return 0;
+        }
+    }
+    // The lines end where the variables start.
+    end = AX_HEAD + ax_word(20);
+    if (end > n) end = n;
+    for (at = AX_HEAD; at + 4 <= end; at += len) {
+        len = ax_word(at + 2) + 4;
+        last = (uint16_t)text[at] << 8 | text[at + 1];
+        if (len == k + 4 && memcmp(text + at + 4, ax_cmd, k) == 0) {
+            if (!ax_out) return 0;
+            memmove(text + at, text + at + len, n - at - len);
+            n -= len;
+            // Ours alone: the file goes.
+            if (n == AX_HEAD) esx_f_unlink(AX_FILE);
+            else if (ax_write(n, -(int)len)) return fail(ax_cannot, AX_FILE);
+            printf(ax_gone);
+            return 0;
+        }
+    }
+    if (ax_out) return 0;
+    if (last > 9989 || n + k + 4 >= sizeof text) {
+        say(ax_own);
+        return 0;
+    }
+    last += 10;
+    memmove(text + end + k + 4, text + end, n - end);
+    text[end] = last >> 8;
+    text[end + 1] = (uint8_t)last;
+    ax_set(end + 2, k);
+    memcpy(text + end + 4, ax_cmd, k);
+    if (ax_write(n + k + 4, k + 4)) return fail(ax_cannot, AX_FILE);
     return 0;
 }
 
@@ -2249,7 +2366,7 @@ static const char paste_default[] = "on-enter";
 static const char paste_is_on[] = "Remote paste on. Off: the app or .cbb paste-receive off";
 static const char paste_is_off[] = "Remote paste off; on: .cbb paste-receive on";
 static const char *const end_words[] = {"Done.", "No updates: everything is current.",
-                                        "Done: CBB and its files are new; start the network with .cbb net on"};
+                                        "Done: CBB and its files are new. Start the network: .cbb net on, or restart the Next."};
 
 // The install's end, after its files: remote paste on with Enter after
 // the first install, as the user set it after that; then what was done.
@@ -2474,6 +2591,12 @@ static int install(void)
     if (was && net_do(net_off_word)) return 1;
     far_screen_open();
     err = far_install();
+    // The network at power-on, through AUTOEXEC.BAS; a newer CBB that
+    // update put in place has its own CBB.OVL, which this one cannot run.
+    if (!err && end_word != 2) {
+        ax_out = 0;
+        far_autoexec();
+    }
     far_screen_close();
     // After the first install, a Pi in no group joins one at once: the
     // pairing's QR code, under which the network starts.

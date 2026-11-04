@@ -114,6 +114,7 @@ fn card(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&card);
     std::fs::create_dir_all(card.join("cbb")).unwrap();
     std::fs::create_dir_all(card.join("dot")).unwrap();
+    std::fs::create_dir_all(card.join("nextzxos")).unwrap();
     card
 }
 
@@ -240,6 +241,11 @@ fn installs_then_finds_all_current() {
         None,
     );
     assert!(o.has("CBB.DRV FETCHED"), "{}", o.screen);
+    // AUTOEXEC.BAS, new: .cbb net on at power-on.
+    assert_eq!(
+        std::fs::read(card.join("nextzxos/AUTOEXEC.BAS")).unwrap(),
+        plus3_basic(&[(10, b".cbb net on")], b"", 10)
+    );
     assert!(
         o.has("SERVICE FETCHED") && o.has("TO PI   DONE"),
         "{}",
@@ -609,6 +615,67 @@ fn uninstalls_everything_after_y() {
         .map(|e| e.unwrap().file_name().into_string().unwrap())
         .collect();
     assert_eq!(left, ["CBB"]);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+/// A +3DOS BASIC file: its header, then the lines and the variables.
+fn plus3_basic(lines: &[(u16, &[u8])], vars: &[u8], line: u16) -> Vec<u8> {
+    let mut prog = Vec::new();
+    for (n, text) in lines {
+        prog.extend_from_slice(&n.to_be_bytes());
+        prog.extend_from_slice(&(text.len() as u16 + 1).to_le_bytes());
+        prog.extend_from_slice(text);
+        prog.push(13);
+    }
+    let plen = prog.len() as u16;
+    prog.extend_from_slice(vars);
+    let mut f = vec![0u8; 128];
+    f[..10].copy_from_slice(b"PLUS3DOS\x1A\x01");
+    f[11..15].copy_from_slice(&(128 + prog.len() as u32).to_le_bytes());
+    f[16..18].copy_from_slice(&(prog.len() as u16).to_le_bytes());
+    f[18..20].copy_from_slice(&line.to_le_bytes());
+    f[20..22].copy_from_slice(&plen.to_le_bytes());
+    f[127] = f[..127].iter().fold(0u8, |a, &b| a.wrapping_add(b));
+    f.extend_from_slice(&prog);
+    f
+}
+
+/// .cbb install puts .cbb net on last in the user's AUTOEXEC.BAS, before
+/// its variables, and .cbb uninstall takes it out again, leaving the file
+/// as it was.
+#[test]
+fn starts_the_network_from_autoexec() {
+    let Some(kit) = kit("autoexec") else { return };
+    let card = card("autoexec");
+    let user: &[(u16, &[u8])] = &[(10, b"\xF5\"hello\""), (20, b"\xF5\"world\"")];
+    let vars = b"\x80";
+    let before = plus3_basic(user, vars, 10);
+    let ax = card.join("nextzxos/AUTOEXEC.BAS");
+    std::fs::write(&ax, &before).unwrap();
+    let mut pi = Pi::new();
+    pi.in_group = true;
+    run(
+        &kit,
+        &card,
+        "install",
+        Esp::new(kit.site.clone()),
+        pi,
+        300.0,
+        None,
+    );
+    let mut ours = user.to_vec();
+    ours.push((30, b".cbb net on"));
+    assert_eq!(std::fs::read(&ax).unwrap(), plus3_basic(&ours, vars, 10));
+    let y = vec![Key {
+        from: 500_000,
+        until: 800_000,
+        row: 0xDF,
+        bit: 4,
+    }];
+    let mut pi = Pi::new();
+    pi.cbb_sha = Some(sha256::hex(&kit.pi_cbb));
+    run_on(&kit, &card, "uninstall", Esp::new(kit.site.clone()), pi, y);
+    assert_eq!(std::fs::read(&ax).unwrap(), before);
     let _ = std::fs::remove_dir_all(&card);
 }
 

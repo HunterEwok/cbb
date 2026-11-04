@@ -37,6 +37,7 @@ PUBLIC _far_uninstall
 PUBLIC _far_net_halt
 PUBLIC _far_read_list
 PUBLIC _far_cbb_swap
+PUBLIC _far_autoexec
 PUBLIC _far_install_end
 PUBLIC _far_net_restart
 
@@ -55,6 +56,7 @@ EXTERN _pair_check
 EXTERN _net_halt
 EXTERN _read_list
 EXTERN _cbb_swap
+EXTERN _autoexec
 EXTERN _install_end
 EXTERN _net_restart
 EXTERN _ovl_load
@@ -113,6 +115,12 @@ _far_sha:
 _far_uninstall:
    ld a,FAR_OVL
    ld hl,_uninstall
+   jr far_call
+
+; int far_autoexec(void), in CBB.OVL's.
+_far_autoexec:
+   ld a,FAR_OVL
+   ld hl,_autoexec
    jr far_call
 
 ; int far_paste_receive(void), in CBB.OVL's.
