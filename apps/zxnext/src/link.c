@@ -55,6 +55,11 @@ void link_open(void)
     set_speed(speed);
 }
 
+void link_speed(uint32_t speed)
+{
+    set_speed(speed);
+}
+
 void link_open_esp(uint32_t speed)
 {
     z80_outp(PORT_SELECT, LINK_ESP);

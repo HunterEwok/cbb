@@ -21,8 +21,9 @@ tools. Test them on the machine before relying on them.
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
 .cbb pair             join the group: scan the code on the screen with the phone app
                       (through the ESP once .cbb net has its settings)
-.cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
-                      the Pi's network through the ESP, in the background
+.cbb net on 192.168.0.10
+                      the Pi's network through the ESP, in the background, to a
+                      computer of the group
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below)
@@ -165,8 +166,11 @@ To use it, put `CBB` and `CBB.DRV` in `/cbb` (`.cbb install` does), join the ESP
 tools do, and run:
 
 ```
-.cbb net on -to "192.168.0.10:8764" -serve "8764:8764" -zone "+01:00"
+.cbb net on 192.168.0.10
 ```
+
+which is short for `.cbb net on -to "192.168.0.10:8764" -serve "8764:8764"`; the long form
+takes `-zone "+01:00"` too (the zone is UTC without it), and `"HOST:PORT"` another port.
 
 NextBASIC ends a statement at a colon, so each setting with one goes in quotes; the quotes
 do not reach the Pi. After a reset or a power cycle, which drop installed drivers, `.cbb net on` installs

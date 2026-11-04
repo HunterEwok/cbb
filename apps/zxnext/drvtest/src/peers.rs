@@ -293,6 +293,11 @@ pub struct Pi {
     pub cbb_sha: Option<String>,
     pub log: Vec<String>,
     pub answers: bool,
+    /// Whether the tty takes a speed above 115200 for the copy.
+    pub fast: bool,
+    baud: u32,
+    /// A speed stty sets, and when.
+    pending_baud: Option<(u64, u32)>,
 }
 
 impl Pi {
@@ -305,6 +310,18 @@ impl Pi {
             cbb_sha: None,
             log: Vec::new(),
             answers: true,
+            fast: true,
+            baud: 115_200,
+            pending_baud: None,
+        }
+    }
+
+    fn apply_baud(&mut self, now: u64) {
+        if let Some((t, baud)) = self.pending_baud {
+            if now >= t {
+                self.baud = baud;
+                self.pending_baud = None;
+            }
         }
     }
 
@@ -326,19 +343,24 @@ impl Pi {
             self.say(now + 50_000, &format!("CBBS {s}\r\n"));
             return self.prompt(now + 50_000);
         }
-        if cmd.starts_with("stty raw -echo -iexten; ") {
+        if let Some(rest) = cmd.strip_prefix("s=$(stty -g); stty ") {
+            let speed: u32 = rest.split(' ').next().unwrap().parse().unwrap();
             let n: usize = cmd.split("head -c ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
-            // After stty raw the tty adds no CR to an LF, as a real one: echo
-            // ends its line with LF alone, printf with what it is given.
-            let next = cmd.split("; ").nth(1).unwrap_or("");
-            let out = if let Some(t) = next.strip_prefix("echo ") {
-                format!("{t}\n")
-            } else if let Some(t) = next.strip_prefix("printf '").and_then(|t| t.strip_suffix('\'')) {
-                t.replace("\\r", "\r").replace("\\n", "\n")
-            } else {
-                String::new()
-            };
-            self.say(now + 10_000, &out);
+            if !self.fast && speed != 115_200 {
+                self.say(now + 10_000, &format!("stty: invalid argument '{speed}'\r\n"));
+                return self.prompt(now + 10_000);
+            }
+            self.pending_baud = Some((now + 5_000, speed));
+            // After stty raw the tty adds no CR to an LF, as a real one:
+            // printf gives what it is given.
+            let sleep = if cmd.contains(" && sleep 1 && ") { 1_000_000 } else { 0 };
+            let next = cmd.split(" && ").find(|p| p.starts_with("printf")).unwrap_or("");
+            let out = next
+                .strip_prefix("printf '")
+                .and_then(|t| t.strip_suffix('\''))
+                .map(|t| t.replace("\\r", "\r").replace("\\n", "\n"))
+                .unwrap_or_default();
+            self.say(now + 10_000 + sleep, &out);
             self.raw = n;
             self.received.clear();
             return;
@@ -366,6 +388,7 @@ impl Default for Pi {
 
 impl Peer for Pi {
     fn rx(&mut self, now: u64, b: u8, _baud: u32) {
+        self.apply_baud(now);
         if !self.answers {
             return;
         }
@@ -373,6 +396,8 @@ impl Peer for Pi {
             self.received.push(b);
             self.raw -= 1;
             if self.raw == 0 {
+                // stty $s: the line's speed again.
+                self.pending_baud = Some((now + 1_000, 115_200));
                 self.prompt(now);
             }
             return;
@@ -395,10 +420,11 @@ impl Peer for Pi {
         }
     }
     fn tx(&mut self, now: u64) -> Option<u8> {
+        self.apply_baud(now);
         self.out.pop(now)
     }
     fn baud(&self) -> u32 {
-        115_200
+        self.baud
     }
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self

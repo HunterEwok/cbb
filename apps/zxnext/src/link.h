@@ -29,6 +29,9 @@ void link_open(void);
 // Sets the ESP8266's UART to speed and leaves it selected.
 void link_open_esp(uint32_t speed);
 
+// Sets the selected UART's speed.
+void link_speed(uint32_t speed);
+
 // Selects the UART that the calls below use (LINK_ESP or LINK_PI); each
 // keeps its own speed and receive buffer.
 void link_use(uint8_t uart);

@@ -164,7 +164,11 @@ fn installs_then_finds_all_current() {
     let mut pi = Pi::new();
     pi.cbb_sha = Some(sha256::hex(&kit.pi_cbb));
     let mut o = run(&kit, &card, "install", Esp::new(kit.site.clone()), pi, 120.0, None);
-    assert!(o.has("CBB.DRV CURRENT") && o.has("SERVICE CURRENT") && o.has("TO PI   CURRENT") && o.has("DONE."), "{}", o.screen);
+    assert!(
+        o.has("CBB.DRV CURRENT") && o.has("SERVICE CURRENT") && o.has("TO PI   CURRENT") && o.has("DONE."),
+        "{}",
+        o.screen
+    );
     assert!(o.pi().received.is_empty());
     assert!(!o.esp().log.iter().any(|l| l.contains("HTTP: GET /zxnext/cbb ")));
     let _ = std::fs::remove_dir_all(&card);
@@ -203,7 +207,11 @@ fn installs_the_driver_without_the_pi() {
     let mut pi = Pi::new();
     pi.answers = false;
     let o = run(&kit, &card, "install", Esp::new(kit.site.clone()), pi, 300.0, None);
-    assert!(o.has("THE PI DOES NOT ANSWER") && o.has("TO PI   NO PI") && o.has("CBB.DRV IS INSTALLED."), "{}", o.screen);
+    assert!(
+        o.has("THE PI DOES NOT ANSWER") && o.has("TO PI   NO PI") && o.has("CBB.DRV IS INSTALLED."),
+        "{}",
+        o.screen
+    );
     assert_eq!(o.run.hw.drivers.len(), 1);
     let _ = std::fs::remove_dir_all(&card);
 }
@@ -218,6 +226,18 @@ fn opens_the_connection_again_when_the_site_closes_it() {
     assert!(o.has("SERVICE FETCHED") && o.has("TO PI   DONE") && o.has("DONE."), "{}", o.screen);
     assert!(o.pi_cbb_is(&kit.pi_cbb));
     assert!(o.esp().log.iter().filter(|l| l.contains("CIPSTART")).count() > 1);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn sends_to_the_pi_at_its_own_speed_when_the_tty_takes_no_other() {
+    let Some(kit) = kit("nofast") else { return };
+    let card = card("nofast");
+    let mut pi = Pi::new();
+    pi.fast = false;
+    let mut o = run(&kit, &card, "install", Esp::new(kit.site.clone()), pi, 600.0, None);
+    assert!(o.has("TO PI   DONE") && o.has("DONE."), "{}", o.screen);
+    assert!(o.pi_cbb_is(&kit.pi_cbb));
     let _ = std::fs::remove_dir_all(&card);
 }
 

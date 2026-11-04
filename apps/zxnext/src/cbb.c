@@ -54,8 +54,7 @@ static const char usage_text[] = "CBB " VERSION "\n\n"
            "                   the phone app (with\n"
            "                   net settings: via\n"
            "                   the ESP)\n"
-           ".cbb net on [-to \"HOST:PORT\"]\n"
-           " [-serve \"ESP:PORT\"] [-zone \"+HH:MM\"]\n"
+           ".cbb net on [HOST]\n"
            "                   the Pi's network\n"
            "                   through the ESP,\n"
            "                   in the background\n"
@@ -656,6 +655,11 @@ static uint8_t esp_speed(uint32_t speed)
 #pragma bssseg PAGE_17
 #pragma dataseg PAGE_17
 
+// The short form's defaults: the member's port, and where the phones reach
+// the Pi (the ESP's port, the lite member's own).
+static const char net_port[] = ":8764";
+static const char net_serve[] = " -serve 8764:8764";
+
 // net_pair starts the network under its QR code, without a word.
 static uint8_t quiet;
 
@@ -669,17 +673,31 @@ static int net_start(int argc, char **argv)
     }
     if (drv.de) return fail("the network runs already", 0);
     if (argc) {
-        for (i = 0; i < argc; i++) {
+        // The short form, .cbb net on HOST, is -to HOST:8764; a HOST:PORT
+        // keeps its port.
+        i = 0;
+        if (argv[0][0] != '-') {
+            if (!plain(argv[0])) return fail("a setting has a character the Pi's shell would take", argv[0]);
+            if (strlen(argv[0]) + 4 + sizeof net_port + sizeof net_serve > sizeof net_args) {
+                return fail("the settings are too long", 0);
+            }
+            n = sprintf(net_args, "-to %s%s", argv[0], strchr(argv[0], ':') ? "" : net_port);
+            i = 1;
+        }
+        for (; i < argc; i++) {
             if (!plain(argv[i])) return fail("a setting has a character the Pi's shell would take", argv[i]);
-            if (n + strlen(argv[i]) + 2 > sizeof net_args) return fail("the settings are too long", 0);
+            if (n + strlen(argv[i]) + 2 + sizeof net_serve > sizeof net_args) return fail("the settings are too long", 0);
             if (n) net_args[n++] = ' ';
             strcpy(net_args + n, argv[i]);
             n += strlen(argv[i]);
         }
-        if (!strstr(net_args, "-to ")) return fail("the computer to dial is missing: -to \"HOST:PORT\"", 0);
+        if (!strstr(net_args, "-to ")) return fail("the computer to dial is missing: .cbb net on HOST", 0);
+        // The phones reach the Pi at the ESP's 8764 unless -serve says
+        // otherwise.
+        if (!strstr(net_args, "-serve ")) strcpy(net_args + n, net_serve);
         if (net_save()) return 1;
     } else if (net_load()) {
-        return fail("no settings yet: .cbb net on -to \"HOST:PORT\"", NET_CFG);
+        return fail("no settings yet: .cbb net on HOST", NET_CFG);
     }
     if (!esp_speed(ESP_NET_SPEED)) {
         link_use(LINK_PI);
@@ -759,7 +777,7 @@ int net_pair(void)
     char ip[40], cmd[160], *serve, *colon = 0, *end;
     uint32_t len, crc;
     if (net_on()) return fail(net_runs, 0);
-    if (net_load()) return fail("no settings yet: .cbb net on -to \"HOST:PORT\" -serve \"8764:8764\"", NET_CFG);
+    if (net_load()) return fail("no settings yet: .cbb net on HOST", NET_CFG);
     serve = strstr(net_args, "-serve ");
     if (serve) colon = strchr(serve + 7, ':');
     if (!colon) return fail("the settings need -serve \"8764:8764\", where the phone reaches the Pi", net_args);
@@ -1342,25 +1360,66 @@ static uint8_t pi_sha(char *sha)
 // UART: the shell reads exactly its size, then checks its SHA-256 against
 // the one built with this CBB before it takes the place of the old one. The
 // wrapper that NextPi's shell runs is written unless there is one.
-static int to_pi(struct item *it, uint8_t row)
+// How long head may wait for the Pi's cbb: twice the time the copy takes
+// at speed (0: 115200), and a minute.
+static uint32_t pi_seconds(struct item *it, uint32_t speed)
+{
+    return it->size / ((speed ? speed : 115200UL) / 20) + 60;
+}
+
+// The speed the Pi's cbb goes at, which the Pi's tty takes for the copy
+// only: four times NextPi's usual 115200.
+#define PI_FAST_SPEED 460800UL
+
+// Waits a few frames, for the UART to send what it holds.
+static void wait_frames(uint8_t n)
+{
+    uint16_t frame;
+    while (n--) {
+        frame = FRAMES_LO;
+        while (FRAMES_LO == frame) {
+        }
+    }
+}
+
+// The row of the Pi's cbb on its way to the Pi, under the files.
+#define SEND_ROW ITEMS
+#define SEND_LABEL "TO PI"
+
+// Sends the Pi's cbb from the card to PI_DIR/cbb.new: at speed, which the
+// Pi's tty takes for the copy and leaves after, or with speed 0 at the
+// line's own. 0 when sent, 2 when the Pi did not say it was ready (its
+// tty may not take the speed), else 1 with the message shown.
+static int pi_send(struct item *it, uint8_t row, uint32_t speed)
 {
     uint8_t fh, err;
     uint16_t n, start = FRAMES_LO;
     uint32_t sent = 0;
-    if (link_shell()) return pi_silent();
     errno = 0;
     fh = esx_f_open(it->card, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
     if (errno) return fail("the Pi's cbb is not on the card", it->card);
-    // Raw: every byte as it is, none taken as a key or echoed.
+    // Raw: every byte as it is, none taken as a key or echoed; head gives
+    // up after twice the time the copy takes, and the tty gets its speed
+    // back after either. The second's sleep lets the Next, which takes
+    // the speed once the command has left, hear CBBGO at the new one; the
+    // CR first ends the line the rest of the echo left, which the Next
+    // hears garbled at that speed.
     sprintf(line,
-            "stty raw -echo -iexten; printf 'CBBGO\\r\\n'; timeout 1800 head -c %lu >" PI_DIR "/cbb.new; stty sane\n",
-            it->size);
+            "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu >" PI_DIR
+            "/cbb.new; stty $s\n",
+            speed ? speed : 115200UL, pi_seconds(it, speed), it->size);
     link_send_str(line);
+    if (speed) {
+        wait_frames(2);
+        link_speed(speed);
+    }
     for (;;) {
         err = link_line(line, sizeof line, 5);
         if (err) {
             esx_f_close(fh);
-            return fail("the Pi did not get ready", "no CBBGO");
+            link_open();
+            if (err == LINK_BREAK) return fail("stopped; .cbb install goes on from here", 0);
+            return 2;
         }
         if (strcmp(line, "CBBGO") == 0) break;
     }
@@ -1371,7 +1430,16 @@ static int to_pi(struct item *it, uint8_t row)
         progress(row, sent, it->size, start);
     }
     esx_f_close(fh);
+    wait_frames(2);
+    link_open();
     link_prompt();
+    return 0;
+}
+
+// Whether the Pi got the cbb built with this CBB: 0 yes, 3 another file,
+// else 1 with the message shown.
+static int pi_check(struct item *it)
+{
     // The digest is pins.h's, 64 hex digits, never the site's.
     link_send_str("cd " PI_DIR " && if ! command -v sha256sum >/dev/null; then rm -f cbb.new; echo CBBNOSHA; "
                   "elif [ \"$(sha256sum <cbb.new | cut -c1-64)\" = '");
@@ -1381,13 +1449,47 @@ static int to_pi(struct item *it, uint8_t row)
     for (;;) {
         if (link_line(line, sizeof line, 60)) return fail("the Pi did not answer", "no CBBOK");
         if (strcmp(line, "CBBNOSHA") == 0) return fail("the Pi has no sha256sum to check its cbb with", 0);
-        if (strcmp(line, "CBBERR") == 0) {
-            // The card's copy is not the one built with this CBB.
-            esx_f_unlink(it->card);
-            return fail("the Pi got another file than this CBB's; run .cbb install again", 0);
-        }
-        if (strcmp(line, "CBBOK") == 0) break;
+        if (strcmp(line, "CBBERR") == 0) return 3;
+        if (strcmp(line, "CBBOK") == 0) return 0;
     }
+}
+
+// The Pi's cbb to the Pi: fast, else at the line's speed, when the Pi's
+// tty does not take the speed or the copy came damaged.
+static int to_pi(struct item *it, uint8_t row)
+{
+    uint8_t err;
+    uint16_t start;
+    if (link_shell()) return pi_silent();
+    err = pi_send(it, row, PI_FAST_SPEED);
+    if (err == 2) {
+        // A tty that took the speed but lost CBBGO keeps head waiting,
+        // until its timeout at the most.
+        file_state(row, SEND_LABEL, "SLOWER");
+        start = FRAMES_LO;
+        while (link_shell()) {
+            if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > pi_seconds(it, PI_FAST_SPEED) + 10)
+                return fail("the Pi did not get ready", "no CBBGO");
+        }
+    } else if (!err) {
+        err = pi_check(it);
+        if (err == 3) {
+            link_prompt();
+            file_state(row, SEND_LABEL, "SLOWER");
+            err = 2;
+        }
+    }
+    if (err == 2) {
+        err = pi_send(it, row, 0);
+        if (err == 2) return fail("the Pi did not get ready", "no CBBGO");
+        if (!err) err = pi_check(it);
+    }
+    if (err == 3) {
+        // The card's copy is not the one built with this CBB.
+        esx_f_unlink(it->card);
+        return fail("the Pi got another file than this CBB's; run .cbb install again", 0);
+    }
+    if (err) return 1;
     link_prompt();
     // A service of the old cbb, which .cbb net on or a hand started, stops,
     // so that the next .cbb net on starts the new one.
@@ -1409,8 +1511,6 @@ static int to_pi(struct item *it, uint8_t row)
 // colour: fetching CBB.DRV and the Pi's cbb (ITEM_ROW; the user fetched
 // this CBB before), then sending the Pi's cbb to the Pi (SEND_ROW).
 #define ITEM_ROW(i) (i)
-#define SEND_ROW ITEMS
-#define SEND_LABEL "TO PI"
 
 static int install_files(uint8_t update)
 {

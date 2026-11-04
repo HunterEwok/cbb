@@ -16,7 +16,7 @@ fn main() {
     let secs: f64 = a[3].parse().unwrap();
     let args = a[4..].join(" ");
     // CARD keeps the card between runs; FAULTS plays failures:
-    // nowifi, status=N, close=N (requests), pisilent, space=SECONDS.
+    // nowifi, status=N, close=N (requests), pisilent, pinofast, space=SECONDS.
     let keep = std::env::var("CARD").ok();
     let card = keep
         .clone()
@@ -40,6 +40,7 @@ fn main() {
             "close" => esp.faults.close_after = Some(v.parse().unwrap()),
             "silent" => esp.faults.silent = true,
             "pisilent" => pi.answers = false,
+            "pinofast" => pi.fast = false,
             "pisha" => pi.cbb_sha = Some(v.to_string()),
             "space" => space = Some(v.parse::<f64>().unwrap()),
             _ => panic!("unknown fault {k}"),
