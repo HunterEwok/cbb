@@ -1126,11 +1126,10 @@ func TestStopHub(t *testing.T) {
 		a := mac.status(t).Away
 		return a != nil && !a.Hub && tunnelState(t, mac).Retired
 	})
-	if tunnelState(t, pi).Hub(macID) != nil {
-		t.Error("the pi keeps the Mac's offer")
-	}
-	waitUpTo(t, 30*time.Second, "the deck forgets the Mac's offer", func() bool {
-		return tunnelState(t, deck).Hub(macID) == nil
+	// Until it stopped, the Mac may share its offer again, so the others
+	// forget it for good once it says it stopped.
+	waitUpTo(t, 30*time.Second, "the pi and the deck forget the Mac's offer", func() bool {
+		return tunnelState(t, pi).Hub(macID) == nil && tunnelState(t, deck).Hub(macID) == nil
 	})
 	for _, d := range deck.devices(t) {
 		if want := d.Name == "pi"; d.Hub != want {
