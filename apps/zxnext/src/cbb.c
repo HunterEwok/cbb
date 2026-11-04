@@ -2118,7 +2118,8 @@ void usage_run(void)
 #pragma constseg PAGE_19
 static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm -rf cbb cbb.bin cbb.old cbb.new "
                                 "cbb-state /ram/link.log /ram/cbbjoin; cd; echo CBB$((1))GONE\n";
-static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; rm -rf " PI_DIR "/cbb-state /ram/cbbjoin; echo CBB$((1))GONE\n";
+// The service stops first, so that cbb leave changes the files itself.
+static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; " CBB_LITE " leave -yes; rm -rf /ram/cbbjoin; echo CBB$((1))GONE\n";
 static const char card_names[] = "CBB.DRV\0CBB.OVL\0OVL.PRT\0NET.CFG\0CBBPI.BIN\0DRV.PRT\0CBBPI.PRT\0PASTE.CFG\0CBB\0";
 static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? y/n\n";
 static const char un_none[] = "Nothing removed.\n";

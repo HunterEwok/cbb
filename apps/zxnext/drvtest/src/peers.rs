@@ -593,7 +593,7 @@ impl Pi {
             self.say(now + 20_000, s);
             return self.prompt(now + 20_000);
         }
-        if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; rm -rf /NextPi/nextpi/cbb-state ")
+        if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; cbb leave -yes; ")
             && cmd.ends_with("echo CBB$((1))GONE")
         {
             self.in_group = false;

@@ -156,7 +156,7 @@ All notable changes to cbb are documented in this file. The format follows
   phone reaches (a network started after the install had it there, and the phone got the
   service's certificate), and `cbb next link` starts the service again whenever it stopped.
   `.cbb pair` shows only the QR code and SCAN, THEN PRESS ANY KEY until a key, then clears
-  the screen for the rest. `.cbb leave` makes the Pi forget its group, so that `.cbb pair` joins again, the same group
+  the screen for the rest. `.cbb leave` runs `cbb leave -yes` on the Pi, which forgets its group, so that `.cbb pair` joins again, the same group
   or another one. `.cbb pair` says first when the Pi is in a group already, which `cbb next pair` refuses
   out of sight, and `.cbb uninstall` tells how to erase `/cbb/CBB`, which NextZXOS keeps
   while it runs.
