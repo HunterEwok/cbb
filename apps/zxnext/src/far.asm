@@ -36,6 +36,8 @@ PUBLIC _far_sha
 PUBLIC _far_uninstall
 PUBLIC _far_net_halt
 PUBLIC _far_read_list
+PUBLIC _far_cbb_swap
+PUBLIC _far_install_end
 PUBLIC _far_net_restart
 
 EXTERN __z_page_table
@@ -52,6 +54,8 @@ EXTERN _paste_receive
 EXTERN _pair_check
 EXTERN _net_halt
 EXTERN _read_list
+EXTERN _cbb_swap
+EXTERN _install_end
 EXTERN _net_restart
 EXTERN _ovl_load
 
@@ -121,6 +125,18 @@ _far_paste_receive:
 _far_read_list:
    ld a,FAR_DATA
    ld hl,_read_list
+   jr far_call
+
+; int far_cbb_swap(void), in the logo's page too.
+_far_cbb_swap:
+   ld a,FAR_DATA
+   ld hl,_cbb_swap
+   jr far_call
+
+; int far_install_end(void), in the logo's page too.
+_far_install_end:
+   ld a,FAR_DATA
+   ld hl,_install_end
    jr far_call
 
 ; void far_usage(void), in the logo's page.

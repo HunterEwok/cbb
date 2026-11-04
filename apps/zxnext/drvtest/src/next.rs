@@ -303,8 +303,9 @@ pub struct Next {
     /// The bytes .cbb sent through call 7.
     pub via_sent: Vec<u8>,
     /// The dot command's own file on the card, which NextZXOS keeps open
-    /// while it runs: it cannot be erased then. /cbb/CBB, as ../CBB runs
-    /// it, unless a test sets C:/DOT/CBB.
+    /// while it runs (handle 0, from M_GETHANDLE): it cannot be erased
+    /// until the command closes it. /cbb/CBB, as ../CBB runs it, or
+    /// C:/DOT/CBB when the card has one.
     pub running: String,
     /// The palette's 9-bit colours as written (NR 0x40/0x41/0x44), per index.
     pub palette: Vec<u16>,
@@ -931,8 +932,10 @@ impl Run {
                 if !path.is_file() {
                     return self.err(5);
                 }
+                // NextZXOS keeps a large dot command's file open (handle 0
+                // here, as M_GETHANDLE gives it) until it closes it.
                 let running = self.hw.running.clone();
-                if path == self.host(&running) {
+                if path == self.host(&running) && matches!(self.hw.files.first(), Some(Some(_))) {
                     return self.err(6); // in use
                 }
                 if let Ok(dir) = std::env::var("CBB_UNLINKED") {

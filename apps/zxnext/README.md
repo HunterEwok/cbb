@@ -72,7 +72,7 @@ download stopped or broke off. After the install's key, a Pi in no group goes on
 QR code shows at once, as `.cbb pair` shows it.
 
 A `CBB` fetched into `/cbb` by an earlier manual still works there as `../CBB`; `.cbb update`
-tells of a newer one in the folder the current one is in, `C:/DOT` first.
+replaces the one it runs as, `C:/DOT/CBB` first.
 
 **What is checked.** The files come over plain HTTP, since neither `.http` nor the ESP has
 TLS. So each `CBB` carries the size and SHA-256 of the `CBB.OVL`, `CBB.DRV` and the Pi's
@@ -84,9 +84,16 @@ network, take `CBB` from the release instead, whose files are signed
 ([installing](../../docs/guide/install.md#checking-a-download)): copy `zxnext/CBB` of
 `cbb-zxnext.tar.gz` to `C:/DOT` on the card, then `.cbb install`.
 
-`.cbb update` looks at the site's list for a newer `CBB`. When there is one, it says so, and
-you fetch it as at the start (or from the release) and run `.cbb install`; otherwise it
-installs this `CBB`'s files where they are missing or differ.
+`.cbb update` looks at the site's list for a newer `CBB`. Without one, it installs this
+`CBB`'s files where they are missing or differ, or says there are no updates. With one, it
+fetches it as `CBB.NEW` next to the running one (in `C:/DOT`, or in `/cbb` for an old
+install), then the files the list names for it, each checked against the list's size and
+SHA-256: the same trust as the `.http` that fetched `CBB` at the start. Last it closes its
+own file, which NextZXOS keeps open while a dot command over 8K runs (the API's "Large dot
+commands"), erases it and renames `CBB.NEW` in its place; the code in memory runs on. Should
+that fail, it says the `ERASE` and `RENAME` to type after it. The network, if it ran, it
+leaves off and asks for `.cbb net on`: starting it is the new `CBB`'s job, since the new
+driver and the Pi's new `cbb` may want what the old one does not know.
 
 Over an earlier installation: `.cbb install` asks for `.cbb net off` first while the network
 runs, and replaces only the files that differ. It installs `CBB.DRV` itself, and a driver

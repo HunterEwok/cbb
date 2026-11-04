@@ -161,6 +161,10 @@ fn run(
         std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
     }
     let mut run = Run::new(&kit.dot, card, args, Box::new(esp), Box::new(pi));
+    // .cbb runs the one in C:/DOT.
+    if card.join("dot/CBB").exists() {
+        run.hw.running = "c:/dot/CBB".into();
+    }
     let table = kit
         .map
         .lines()
@@ -981,22 +985,56 @@ fn installs_then_pairs() {
     let _ = std::fs::remove_dir_all(&card);
 }
 
-/// .cbb update tells of a newer CBB where this one is: C:/DOT, where .cbb
-/// runs it from anywhere.
+/// .cbb update with a newer CBB on the site fetches it next to this one
+/// in C:/DOT, where .cbb runs it from anywhere, then closes its own file,
+/// which NextZXOS keeps open, and puts the new one in its place; the
+/// network, if it ran, is left to the new CBB.
 #[test]
-fn update_tells_of_a_newer_cbb_in_dot() {
+fn updates_itself_in_dot() {
     let Some(kit) = kit("newerdot") else { return };
+    let (card, pi) = installed(&kit, "newerdot");
+    // The newer CBB: another one of the same size will do, as it does not
+    // run here.
+    let mut newer = std::fs::read(&kit.dot).unwrap();
+    let last = newer.len() - 1;
+    newer[last] ^= 0xFF;
+    std::fs::write(kit.site.join("CBB"), &newer).unwrap();
     let list = std::fs::read_to_string(kit.site.join("LIST")).unwrap();
     let list: String = list
         .lines()
         .map(|l| match l.strip_prefix("CBB ") {
-            Some(rest) => format!("CBB 1{rest}\n"),
+            Some(_) => format!(
+                "CBB {} {:08x} {}\n",
+                newer.len(),
+                crc32(&newer),
+                sha256::hex(&newer)
+            ),
             None => format!("{l}\n"),
         })
         .collect();
     std::fs::write(kit.site.join("LIST"), list).unwrap();
-    let (card, pi) = installed(&kit, "newerdot");
     std::fs::copy(&kit.dot, card.join("dot/CBB")).unwrap();
+    let o = run(
+        &kit,
+        &card,
+        "update",
+        Esp::new(kit.site.clone()),
+        pi,
+        120.0,
+        None,
+    );
+    assert!(o.has("CBB AND ITS FILES ARE NEW"), "{}", o.screen);
+    assert_eq!(std::fs::read(card.join("dot/CBB")).unwrap(), newer);
+    assert!(!card.join("dot/CBB.NEW").exists());
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+/// .cbb update with nothing new says so.
+#[test]
+fn says_when_there_are_no_updates() {
+    let Some(kit) = kit("noupdates") else { return };
+    let (card, pi) = installed(&kit, "noupdates");
+    std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
     let o = run(
         &kit,
         &card,
@@ -1006,10 +1044,6 @@ fn update_tells_of_a_newer_cbb_in_dot() {
         60.0,
         None,
     );
-    assert!(
-        o.has("A NEWER CBB IS OUT") && o.has("CD \"C:/DOT\""),
-        "{}",
-        o.screen
-    );
+    assert!(o.has("NO UPDATES"), "{}", o.screen);
     let _ = std::fs::remove_dir_all(&card);
 }

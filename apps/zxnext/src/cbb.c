@@ -413,8 +413,21 @@ static const char *sha_path;
 static uint8_t sha_digest;
 static char sha_out[65];
 extern uint32_t far_sha(void);
-// The newest CBB's size and CRC-32 in the site's list (far_read_list()).
+// The newest CBB's size and CRC-32 in the site's list (far_read_list()),
+// and each file's size and SHA-256 there, in the order of items[] and the
+// CBB last: a newer CBB comes with the files built with it.
 static uint32_t list_size, list_crc;
+#define LISTED 4
+static uint32_t list_isize[LISTED];
+static char list_isha[LISTED][65];
+// Whether the CBB that cbb_swap() replaces is C:/DOT's.
+static uint8_t swap_dot;
+extern int far_cbb_swap(void);
+// For install_end(): whether the Pi answered, and which end word: 0
+// done, 1 no updates, 2 a newer CBB too, whose network this one does not
+// start (the new one's may differ).
+static uint8_t end_pi, end_word;
+extern int far_install_end(void);
 extern int far_read_list(void);
 
 // pair_check() only finds whether the Pi is in a group, silently.
@@ -1371,6 +1384,13 @@ out:
     return err;
 }
 
+// The connection to the site, in MAIN, where the install's page has no
+// room left.
+#pragma codeseg code_compiler
+#pragma constseg rodata_compiler
+#pragma bssseg bss_compiler
+#pragma dataseg data_compiler
+
 // Opens a passthrough connection to the site through the ESP; 0 when open.
 static const char *const http_cmds[] = {"AT+CIPMODE=0", "AT+CIPCLOSE", "AT+CIPMUX=0", "AT+CIPMODE=1",
                                         "AT+CIPSTART=\"TCP\",\"" SITE "\",80", "AT+CIPSEND"};
@@ -1423,23 +1443,31 @@ static void http_close(void)
     esp_speed(ESP_SPEED);
 }
 
+#pragma codeseg PAGE_13
+#pragma constseg PAGE_13
+#pragma bssseg PAGE_13
+#pragma dataseg PAGE_13
+
 // The install screen, on black: the logo on the left (tools/icon), the
 // files and their bars on the right, the messages under them.
 //
 //   rows 0-17, columns 0-13   the logo
 //   rows 0-2, from column 15  the name and the version
-//   rows 4-11                 a file's name and state, then its bar, in
+//   row 3, from column 15     SPACE STOPS, at the end PRESS ANY KEY
+//   rows 4-13                 a file's name and state, then its bar, in
 //                             the stripes' colours: red, yellow, green,
-//                             and the Pi's cbb on its way in cyan
-//   rows 12-13                all of it, its bar empty in the four stripes,
+//                             the Pi's cbb on its way in cyan, and a
+//                             newer CBB in white
+//   rows 14-15                all of it, its bar empty in the four stripes,
 //                             filled in the colour of the quarter reached
-//   rows 14-15                the file under way: kilobytes, speed
-//   row 16, from column 15    SPACE STOPS, at the end PRESS ANY KEY
+//   rows 16-17                the file under way: kilobytes, speed
 //   rows 18-21                messages
 #define PANEL 15
 #define FILE_ROW 4
-#define TOTAL_ROW 12
-#define NOW_ROW 14
+#define TOTAL_ROW 14
+#define NOW_ROW 16
+// SPACE STOPS, at the end PRESS ANY KEY.
+#define KEY_ROW 3
 #define BAR_CELLS 12
 
 // The ROM's colour codes, for what .cbb prints meanwhile; in the divMMC
@@ -1704,6 +1732,8 @@ static int fetch(struct item *it, uint8_t row)
         esx_f_unlink(it->part);
         return fail("the file arrived damaged; run .cbb install again", it->name);
     }
+    // A newer CBB stays by the running one until the end (cbb_swap()).
+    if (!it->card) return 0;
     esx_f_unlink(it->card);
     if (esx_f_rename(it->part, it->card)) return fail("cannot put the file in place", it->card);
     file_state(row, it->label, "FETCHED");
@@ -1888,16 +1918,16 @@ static int to_pi(struct item *it, uint8_t row)
 // this CBB before), then sending the Pi's cbb to the Pi (SEND_ROW).
 #define ITEM_ROW(i) (i)
 
-static const char paste_default[] = "on-enter";
-// Two lines, so that the messages above stay on the screen.
-static const char paste_is_on[] = "Remote paste on. Off: the app or .cbb paste-receive off";
-static const char paste_is_off[] = "Remote paste off; on: .cbb paste-receive on";
+
+// A newer CBB, fetched next to the running one: dot or /cbb, CBB.NEW.
+static struct item cbb_new = {"CBB", "CBB", 0, 0, 0, 0, 0};
+#define CBB_ROW (SEND_ROW + 1)
 
 static int install_files(uint8_t update)
 {
     static char pisha[65];
     struct item *pi = &items[ITEMS - 1];
-    uint8_t i, pi_answers, dot, drv_new = 0, drv_on, old_bank = NO_BANK, need[ITEMS] = {0};
+    uint8_t i, pi_answers, dot = 0, newer = 0, nothing, drv_new = 0, drv_on, old_bank = NO_BANK, need[ITEMS] = {0};
     uint32_t size, crc;
     int err = 0;
     // The bank of a driver installed now, while the card has its file.
@@ -1921,26 +1951,31 @@ static int install_files(uint8_t update)
         if (link_stopped) return fail("stopped; .cbb install goes on from here", 0);
         return fail("cannot reach " SITE "; is the ESP on Wi-Fi?", line);
     }
-    // .cbb update first looks for a newer CBB, which its user fetches
-    // as at the start (README.md, "Install"): this one installs only its
-    // own files.
-    // It is the one in C:/DOT, where .cbb runs it from anywhere, else the
-    // one in /cbb that an earlier install had run as ../CBB.
+    // .cbb update first looks for a newer CBB in the list: then it
+    // installs the files the list names, as built with that one, and
+    // last puts it in place of this one (cbb_swap()). This one is the
+    // one in C:/DOT, where .cbb runs it from anywhere, else the one in
+    // /cbb that an earlier install had run as ../CBB.
     if (update) {
         err = far_read_list();
         crc = file_crc(DOT_CBB, &size);
         dot = size != 0;
         if (!dot) crc = file_crc(CBB_CARD, &size);
         if (!err && (size != list_size || crc != list_crc)) {
-            http_close();
-            link_use(LINK_PI);
-            say(dot ? "A newer CBB is out. Fetch it as at the start: CD \"C:/DOT\", .http -h " SITE
-                      " -u /zxnext -f CBB, then .cbb update."
-                    : "A newer CBB is out. Fetch it as at the start: CD \"/cbb\", .http -h " SITE
-                      " -u /zxnext -f CBB, then ../CBB update.");
-            return 1;
+            newer = 1;
+            for (i = 0; i < LISTED; i++)
+                if (!list_isize[i]) err = fail("the list lacks a file", "for the new CBB");
+            for (i = 0; i < ITEMS; i++) {
+                items[i].size = list_isize[i];
+                items[i].sha256 = list_isha[i];
+            }
+            cbb_new.part = dot ? DOT_CBB ".NEW" : CBB_CARD ".NEW";
+            cbb_new.size = list_isize[LISTED - 1];
+            cbb_new.sha256 = list_isha[LISTED - 1];
         }
     }
+    file_state(CBB_ROW, "CBB", newer ? "" : "CURRENT");
+    bar(FILE_ROW + 2 * CBB_ROW + 1, newer ? 0 : 100, INK_WHITE);
     // What is to do, first, for the total: the files to fetch, then the
     // Pi's cbb to send.
     total_size = total_done = 0;
@@ -1969,6 +2004,17 @@ static int install_files(uint8_t update)
             need[i] = 1;
             total_size += it->size;
         }
+    }
+    // Nothing to fetch, nothing to send: .cbb update says so.
+    nothing = !newer;
+    if (pi_answers && strcmp(pisha, pi->sha256)) nothing = 0;
+    for (i = 0; i < ITEMS; i++)
+        if (need[i]) nothing = 0;
+    if (newer && !err) {
+        total_size += cbb_new.size;
+        if (matches(&cbb_new, cbb_new.part)) file_state(CBB_ROW, "CBB", "FETCHED");
+        else err = fetch(&cbb_new, CBB_ROW);
+        total_done += cbb_new.size;
     }
     for (i = 0; i < ITEMS && !err; i++) {
         if (!need[i]) continue;
@@ -2009,22 +2055,21 @@ static int install_files(uint8_t update)
             say("CBB.DRV is installed.");
         }
     }
+    if (newer) {
+        swap_dot = dot;
+        if (!far_cbb_swap()) file_state(CBB_ROW, "CBB", "NEW");
+    }
     // Two different CBBs: .cbb runs the one in C:/DOT, ../CBB in /cbb the
     // other.
     crc = file_crc(CBB_CARD, &list_size);
     if ((file_crc(DOT_CBB, &size) != crc || size != list_size) && size && list_size) {
         say("C:/DOT/CBB and /cbb/CBB differ: .cbb runs the one in C:/DOT. Delete the other.");
     }
-    // Remote paste: on with Enter after the first install, as the user
-    // set it after that.
-    if (!paste_load()) {
-        strcpy(paste_set, paste_default);
-        if (paste_save()) return 1;
-    }
-    // Without the Pi, its message keeps the room.
-    if (pi_answers) say(paste_set[1] == 'n' ? paste_is_on : paste_is_off);
-    say("Done.");
-    return 0;
+    end_pi = pi_answers;
+    end_word = 0;
+    if (newer) end_word = 2;
+    if (update && nothing) end_word = 1;
+    return far_install_end();
 }
 
 // Not static: far_install() (far.asm) calls it, with install_update set.
@@ -2189,10 +2234,53 @@ int uninstall(void)
 #pragma codeseg PAGE_15
 #pragma constseg PAGE_15
 // Reads the site's list, a line NAME SIZE CRC32 SHA256 for each file, for
-// the size and CRC-32 of the newest CBB: .cbb update only tells of one,
-// since a CBB can check only the files built with it. Not static:
+// the size and CRC-32 of the newest CBB and the size and SHA-256 of each
+// file: a newer CBB's files are not those built with this one, so .cbb
+// update takes them as the list has them, as the user took this CBB from
+// the same site at the start. Not static:
 // far_read_list() (far.asm) calls it, from the install's page; it is in
 // the screen's, which has the room.
+// Puts the newer CBB, fetched as CBB.NEW, in place of the running one,
+// which NextZXOS keeps open (the API's "Large dot commands"): closed, it
+// can be erased, and the code in memory runs on. Else says how to, after
+// the command. Not static: far_cbb_swap() (far.asm) calls it, from the
+// install's page.
+int cbb_swap(void)
+{
+    const char *cur = swap_dot ? DOT_CBB : CBB_CARD;
+    sprintf(line, "%s.NEW", cur);
+    esx_f_close(esx_m_gethandle());
+    if (!esx_f_unlink(cur) && !esx_f_rename(line, cur)) return 0;
+    cur = swap_dot ? "C:/DOT/CBB" : "/cbb/CBB";
+    sprintf(line, "The new CBB is %s.NEW; after this, ERASE \"%s\": RENAME \"%s.NEW\" TO \"%s\"", cur, cur, cur, cur);
+    say(line);
+    return 1;
+}
+
+static const char paste_default[] = "on-enter";
+// Two lines, so that the messages above stay on the screen.
+static const char paste_is_on[] = "Remote paste on. Off: the app or .cbb paste-receive off";
+static const char paste_is_off[] = "Remote paste off; on: .cbb paste-receive on";
+static const char *const end_words[] = {"Done.", "No updates: everything is current.",
+                                        "Done: CBB and its files are new; start the network with .cbb net on"};
+
+// The install's end, after its files: remote paste on with Enter after
+// the first install, as the user set it after that; then what was done.
+// Not static: far_install_end() (far.asm) calls it, from the install's
+// page.
+int install_end(void)
+{
+    if (!paste_load()) {
+        strcpy(paste_set, paste_default);
+        if (paste_save()) return 1;
+    }
+    // Without the Pi, its message keeps the room.
+    if (end_pi) say(paste_set[1] == 'n' ? paste_is_on : paste_is_off);
+    say(end_words[end_word]);
+    return 0;
+}
+
+static const char *const listed[LISTED] = {"CBB.DRV", "CBB.OVL", "cbb", "CBB"};
 int read_list(void)
 {
     uint32_t *cbb_size = &list_size, *cbb_crc = &list_crc;
@@ -2235,6 +2323,12 @@ int read_list(void)
         if (strcmp(name, "CBB") == 0 && strlen(crc) == 8) {
             *cbb_size = size;
             *cbb_crc = strtoul(crc, 0, 16);
+        }
+        for (i = 0; i < LISTED; i++) {
+            if (strcmp(name, listed[i]) == 0 && strlen(sha) == 64) {
+                list_isize[i] = size;
+                strcpy(list_isha[i], sha);
+            }
         }
     }
     if (!*cbb_size) return fail("the list lacks a file", "CBB");
@@ -2337,7 +2431,7 @@ void screen_open(void)
     colour(INK_WHITE);
     at(2, PANEL);
     put_text(VERSION ", " SITE);
-    at(NOW_ROW + 2, PANEL);
+    at(KEY_ROW, PANEL);
     printf("SPACE STOPS");
 }
 
@@ -2348,7 +2442,7 @@ void screen_open(void)
 // show in the wrong ones.
 void screen_close(void)
 {
-    at(NOW_ROW + 2, PANEL);
+    at(KEY_ROW, PANEL);
     printf(qr_key + 11);
     key_clear();
     palette(1);
@@ -2404,7 +2498,7 @@ static int install(void)
         }
         pair_probe = 0;
     }
-    if (was || (!err && !install_update)) err |= net_do(net_on_word);
+    if ((was && end_word != 2) || (!err && !install_update)) err |= net_do(net_on_word);
     return err;
 }
 
