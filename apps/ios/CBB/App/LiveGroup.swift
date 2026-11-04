@@ -25,7 +25,7 @@ private let imageLog = Logger(subsystem: "tools.cbb", category: "images")
 /// keeps a connection to each, and syncs with them.
 @MainActor
 final class LiveGroup: GroupController {
-    enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer }
+    enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer, noGroup, rootLeaves([String]) }
 
     /// The clipboard holds something the app could not read as text: the
     /// paste was not allowed, or it is not text. The button leaves it as it
