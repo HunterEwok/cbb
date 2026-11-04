@@ -886,7 +886,7 @@ int net_cmd(void)
 // A range is asked for at a time, kept in text[], and written while the
 // server waits: the ESP has no flow control, and a card write runs with
 // interrupts off for longer than the UART's buffer lasts.
-#define CHUNK 4096
+#define CHUNK MAX_TEXT
 
 // The ROM's frame counter, 50 a second while interrupts run.
 #define FRAMES_LO (*(volatile uint16_t *)23672)
