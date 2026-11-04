@@ -841,17 +841,20 @@ static struct item items[] = {
 static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
 {
     uint32_t length = 0;
-    uint16_t i, status = 0;
+    uint16_t i, status = 0, got = 0;
     uint8_t c, err;
     sprintf(line, "GET " SITE_DIR "%s HTTP/1.1\r\nHost: " SITE "\r\nRange: bytes=%lu-%lu\r\n\r\n", name, from,
             from + size - 1);
     link_send_str(line);
-    // The status line and the headers, up to the empty line.
+    // The status line and the headers, up to the empty line; empty lines
+    // before the status line are the ESP's.
     for (i = 0;; i++) {
         err = link_line(line, sizeof line, 10);
-        if (err) return err;
-        if (i == 0) {
-            if (strncmp(line, "HTTP/1.", 7) != 0 || strlen(line) < 12) return 255;
+        if (err) goto out;
+        if (!status) {
+            if (!line[0]) continue;
+            err = 255;
+            if (strncmp(line, "HTTP/1.", 7) != 0 || strlen(line) < 12) goto out;
             status = (uint16_t)strtoul(line + 9, 0, 10);
         } else if (!line[0]) {
             break;
@@ -859,14 +862,21 @@ static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
             length = strtoul(line + 15, 0, 10);
         }
     }
-    if (status != 206 && !(status == 200 && from == 0)) return 254;
-    if (length != size) return 253;
-    for (i = 0; i < size; i++) {
+    err = 254;
+    if (status != 206 && !(status == 200 && from == 0)) goto out;
+    err = 253;
+    if (length != size) goto out;
+    for (; got < size; got++) {
         err = link_recv(&c, 10);
-        if (err) return err;
-        text[i] = c;
+        if (err) goto out;
+        text[got] = c;
     }
     return 0;
+out:
+    // What went wrong, for .cbb -d.
+    if (err != LINK_BREAK && err != 255)
+        sprintf(line, "error %u, status %u, length %lu, %u bytes", err, status, length, got);
+    return err;
 }
 
 // Opens a passthrough connection to the site through the ESP; 0 when open.
