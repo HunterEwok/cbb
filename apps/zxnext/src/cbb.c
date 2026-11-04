@@ -233,18 +233,19 @@ static uint8_t drv_bank(void)
 static uint8_t drv_install(void)
 {
     uint16_t size;
-    uint8_t bank, mmu3;
+    uint8_t bank, mmu7;
     if (drv_read(&size)) return 1;
     bank = esx_ide_bank_alloc(ESX_BANKTYPE_RAM);
     if (bank == NO_BANK) return 2;
-    // The bank in at $6000 for a moment: BASIC's memory, which this
-    // command does not use (its own is at $2000 and from $8000).
+    // The bank in at $E000 for a moment, the window of the command's own
+    // overlays (far.asm), never BASIC's at $6000; this code and text[]
+    // are in MAIN, below it, and MMU7 shows what it showed before after.
     intrinsic_di();
-    mmu3 = ZXN_READ_MMU3();
-    ZXN_WRITE_MMU3(bank);
-    memset((void *)0x6000, 0, 8192);
-    memcpy((void *)0x6000, text, size);
-    ZXN_WRITE_MMU3(mmu3);
+    mmu7 = ZXN_READ_MMU7();
+    ZXN_WRITE_MMU7(bank);
+    memset((void *)0xE000, 0, 8192);
+    memcpy((void *)0xE000, text, size);
+    ZXN_WRITE_MMU7(mmu7);
     intrinsic_ei();
     drv_code[drv_patch[0]] = bank;
     drv_code[drv_patch[1]] = bank;
@@ -1491,10 +1492,16 @@ static int run(int argc, char **argv)
     return 1;
 }
 
+// The stack's high-water mark (stack.asm).
+extern void stack_mark(void);
+extern uint16_t stack_unused(void);
+
 int main(int argc, char **argv)
 {
+    stack_mark();
     // Each command shows its own message; a nonzero result would make
     // NextZXOS add an unrelated error of its own.
     run(argc, argv);
+    if (debug) printf("stack: %u bytes never used\n", stack_unused());
     return 0;
 }

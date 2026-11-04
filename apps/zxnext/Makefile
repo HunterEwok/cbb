@@ -15,10 +15,15 @@ SRC := src/cbb.c src/link.c src/frame.c
 
 all: build/CBB build/PIBRIDGE build/CBB.DRV
 
-build/CBB: $(SRC) src/far.asm src/logo.h src/frame.h src/link.h
+# printf and scanf with only the conversions the code uses (formats.sh).
+build/formats: formats.sh $(SRC)
 	mkdir -p build
-	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src \
-		$(addprefix ../,$(SRC)) ../src/far.asm -o cbb -create-app
+	sh formats.sh $(SRC) >$@.new
+	mv $@.new $@
+
+build/CBB: $(SRC) src/far.asm src/stack.asm src/logo.h src/frame.h src/link.h build/formats
+	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src $$(cat formats) \
+		$(addprefix ../,$(SRC)) ../src/far.asm ../src/stack.asm -o cbb -create-app
 	@# MAIN ends below 0xE000, where the overlays show (src/far.asm).
 	@test $$(wc -c < build/cbb_MAIN.bin) -le 24576 || \
 		{ echo "CBB: MAIN reaches 0xE000, where the overlays show (src/far.asm)"; mv build/CBB build/CBB.bad; exit 1; }
