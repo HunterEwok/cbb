@@ -5,7 +5,7 @@
 # Installs cbb, the full member or the lite one, on OpenWrt
 # 25.12 or later, as root:
 #
-#   sh install.sh [--port N] [--auto-update on|off] path/to/cbb
+#   sh install.sh [--port N] [--auto-update on|off] [--no-pair] path/to/cbb
 #
 # It installs the binary to /usr/bin, the user and group cbb,
 # the procd init script, the settings in /etc/config/cbb (kept
@@ -17,7 +17,9 @@
 # come and go with the service (the init script); /etc/config/firewall is
 # not touched. --auto-update on|off (or CBB_AUTO_UPDATE) answers whether the
 # full member updates itself once a day to a signed release, from cron,
-# which it asks otherwise and keeps (packaging/update.sh). uninstall.sh
+# which it asks otherwise and keeps (packaging/update.sh). The lite member,
+# once running and in no group, starts pairing and shows its QR code at once
+# (packaging/pair.sh); --no-pair (CBB_PAIR=no) leaves that for later. uninstall.sh
 # removes it all again.
 set -eu
 
@@ -33,7 +35,7 @@ failed() {
 trap 'failed $?' EXIT
 
 usage() {
-	echo "usage: sh install.sh [--port N] [--auto-update on|off] path/to/cbb" >&2
+	echo "usage: sh install.sh [--port N] [--auto-update on|off] [--no-pair] path/to/cbb" >&2
 	exit 2
 }
 port=
@@ -53,6 +55,7 @@ while [ $# -gt 1 ]; do
 		;;
 	# get.sh passes the firewall choice; the rules here are the service's own.
 	--express | --no-firewall) ;;
+	--no-pair) CBB_PAIR=no ;;
 	*) usage ;;
 	esac
 	shift
@@ -161,7 +164,11 @@ answers /usr/bin/cbb || true
 echo "CBB is running on TCP port $port, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh"
 echo "Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one."
 if /usr/bin/cbb version 2>/dev/null | grep -q "lite member"; then
-	echo "Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
+	# shellcheck source=packaging/pair.sh
+	. "$here/../pair.sh"
+	if ! CBB_SOCKET=/var/run/cbb/control.sock pair_now /usr/bin/cbb cbb -name router; then
+		echo "Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
+	fi
 else
 	echo "Next: run cbb pair and scan its QR code with the CBB app on your phone."
 fi

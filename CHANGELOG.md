@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The lite member starts pairing as soon as it is installed: when it runs in no group and the
+  installer's output is a terminal, `get.sh --lite` and the Linux and OpenWrt `install.sh` run
+  `cbb pair` at the end and show the QR code, since small devices often have no keyboard.
+  An update or a reinstall that keeps the group skips it, `--no-pair` (or `CBB_PAIR=no`)
+  skips it for a scripted install, and Ctrl+C stops only the pairing. The Nano ESP32 starts
+  pairing by itself, once each boot, when its Wi-Fi is up and it is in no group.
 - Updates on networks that block GitHub and the mirror: a device that syncs away from home
   over VLESS reaches `dl.cbb.tools` inside VLESS, through its hub's forwarder, which lets
   registered groups reach only the mirror on its own server (`cbb forward -vless-mirror`);

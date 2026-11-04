@@ -21,6 +21,23 @@ use crate::{print, println};
 /// bytes, a text to type may be longer.
 const MAX_LINE: usize = 256;
 
+/// The name the board joins a group under when pair names none.
+const DEFAULT_NAME: &str = "Nano ESP32";
+
+/// Starts listening for the phone and shows the code to paste in the app.
+fn pair(board: &mut dyn Board, name: &str) {
+    match board.join(name) {
+        Ok(text) => {
+            println!("In the CBB app, tap \"Connect a new device\" and paste this:");
+            println!();
+            println!("{text}");
+            println!();
+            println!("The board waits up to 5 minutes; type status to see how it went.");
+        }
+        Err(e) => println!("{}", e.for_user()),
+    }
+}
+
 /// Whether the console has the type command: it types any text on the
 /// keyboard for whatever reaches the console, a program on the computer at
 /// the USB port among them, so only a build with the feature console-type
@@ -131,6 +148,31 @@ impl Console {
         }
     }
 
+    /// Starts pairing by itself once the board has an address and is in
+    /// no group, as if pair had been typed, so that a board without a
+    /// keyboard at hand shows its code as soon as its Wi-Fi is up. A board
+    /// in a group, or one whose settings cannot be read, stays quiet.
+    #[cfg_attr(feature = "qemu", allow(dead_code))]
+    pub fn offer_pair(&mut self, store: &Result<Store>, board: &mut dyn Board) {
+        match store {
+            Ok(s) if s.identity().is_none() => {}
+            _ => return,
+        }
+        println!();
+        println!("The board is in no group yet, so it starts pairing (type pair again later if it times out).");
+        pair(board, DEFAULT_NAME);
+        // What was being typed stays, so show it again after the prompt.
+        self.prompt();
+        match self.ask {
+            Ask::Password(_) => {
+                for _ in core::str::from_utf8(&self.line).unwrap_or("").chars() {
+                    print!("*");
+                }
+            }
+            _ => print!("{}", core::str::from_utf8(&self.line).unwrap_or("")),
+        }
+    }
+
     fn line_done(&mut self, line: &str, store: &mut Result<Store>, board: &mut dyn Board) {
         match core::mem::replace(&mut self.ask, Ask::Command) {
             Ask::Command => self.command(line, store, board),
@@ -172,7 +214,8 @@ impl Console {
                 println!("  status        what the board knows and how its network is doing");
                 println!("  wifi          set the Wi-Fi network to join (asks for its name and password)");
                 println!("  wifi forget   leave the Wi-Fi network and forget it");
-                println!("  pair [NAME]   join a group: shows a code to scan with the phone (name: Nano ESP32)");
+                println!("  pair [NAME]   join a group: shows a code to scan with the phone (name: Nano ESP32);");
+                println!("                the board starts it by itself once its Wi-Fi is up while it is in no group");
                 println!("  leave         forget the group (remove the board in the app too)");
                 println!("  debug on|off  show the details of errors, or not (debug build: on by default)");
                 println!("  selftest      run the TLS 1.3 self-test");
@@ -250,16 +293,7 @@ impl Console {
                     return;
                 }
                 let name = line["pair".len()..].trim();
-                match board.join(if name.is_empty() { "Nano ESP32" } else { name }) {
-                    Ok(text) => {
-                        println!("In the CBB app, tap \"Connect a new device\" and paste this:");
-                        println!();
-                        println!("{text}");
-                        println!();
-                        println!("The board waits up to 5 minutes; type status to see how it went.");
-                    }
-                    Err(e) => println!("{}", e.for_user()),
-                }
+                pair(board, if name.is_empty() { DEFAULT_NAME } else { name });
             }
             (Some("leave"), None, _) => match edit(store, |f| f.remove(tag::IDENTITY)) {
                 Ok(()) => println!("The board left its group. Remove it in the app too, so the group revokes it."),
