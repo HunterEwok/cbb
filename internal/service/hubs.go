@@ -314,7 +314,13 @@ func (s *Service) tryHub(ctx context.Context, run *tunRun, nd *node.Node, h tunn
 	hub := group.DeviceID(h.Device)
 	for i := 0; i < len(eps); i++ {
 		ep := eps[i]
-		raw, won, err := dialAny(ctx, cs, ep)
+		first := dialWindow
+		if vc != nil && ep == vc.Addr() {
+			// VLESS opens its connection to the forwarder with the
+			// first packet, and the handshakes sent meanwhile are lost.
+			first = vlessFirstWindow
+		}
+		raw, won, err := dialAny(ctx, cs, ep, first)
 		if err != nil {
 			if ctx.Err() != nil {
 				return false
@@ -387,6 +393,9 @@ type hubClient interface {
 var (
 	dialWindow  = handshakeTimeout
 	dialWindows = 6
+	// vlessFirstWindow is the first window over VLESS: its TLS and HTTP/2
+	// to the forwarder come first.
+	vlessFirstWindow = 3 * handshakeTimeout
 )
 
 // dialAny points each client at ep and dials the hub through all of them
@@ -396,8 +405,8 @@ var (
 // a busy machine, the handshake and the connection each can take most of a
 // window, and starting over would throw away what got through and meet the
 // same wait again, while a hub that does not answer still ends the try in
-// one window.
-func dialAny[C hubClient](ctx context.Context, cs []C, ep netip.AddrPort) (net.Conn, C, error) {
+// one window. The first window lasts first.
+func dialAny[C hubClient](ctx context.Context, cs []C, ep netip.AddrPort, first time.Duration) (net.Conn, C, error) {
 	dctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	type result struct {
@@ -418,7 +427,7 @@ func dialAny[C hubClient](ctx context.Context, cs []C, ep netip.AddrPort) (net.C
 			done := make(chan struct{})
 			defer close(done)
 			go func() {
-				t := time.NewTicker(window)
+				t := time.NewTimer(first)
 				defer t.Stop()
 				seen := c.Received()
 				for range windows {
@@ -427,6 +436,7 @@ func dialAny[C hubClient](ctx context.Context, cs []C, ep netip.AddrPort) (net.C
 						return
 					case <-t.C:
 					}
+					t.Reset(window)
 					n := c.Received()
 					if n == seen {
 						break
