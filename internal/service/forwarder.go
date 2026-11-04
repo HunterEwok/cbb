@@ -13,7 +13,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/release"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
@@ -110,14 +109,13 @@ func (s *Service) hubVLESS(fw *tunnel.ForwarderLink) []tunnel.VLESS {
 }
 
 // projectPins returns the pins this device accepts from the project's
-// forwarder: those of the keys.json of the newest release the group passed
-// around, when it names any, else the built-in ones.
+// forwarder: those of the newest keys.json the group passed around, with a
+// release or with the entry points, when it names any, else the built-in
+// ones.
 func (s *Service) projectPins() []string {
 	var listed [][]byte
-	if h := s.heldRelease(); h != nil {
-		if k, err := release.VerifyKeys(h.set.Keys, s.releaseRoots(), s.cfg.now(), release.Seen{}); err == nil {
-			listed = k.Forwarders(forward.ProjectHost)
-		}
+	if k, ok := s.newestKeys(); ok {
+		listed = k.Forwarders(forward.ProjectHost)
 	}
 	return forward.ProjectPins(listed)
 }

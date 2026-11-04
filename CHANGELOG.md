@@ -30,7 +30,13 @@ All notable changes to cbb are documented in this file. The format follows
   every group, free, as is without a promise of uptime, shared by the budget, and where to
   report abuse (abuse@cbb.tools).
 - `cbb global relay default` meets the group at the project's open relay on `cbb.tools:8765`,
-  whose address and key cbb knows.
+  whose address and key cbb knows. Its keys come from the signed `keys.json` (`use` `relay`,
+  `release-sign renew -relay`) and its address from `entries.json` (`relays`), the built-in
+  key only when they name none, so the relay changes its key, the old and new one listed
+  side by side, or moves, without a release. A device that fails to register there fetches
+  the newest lists from the mirror on the relay's server and tries again at once, without
+  asking; status shows the reason, the whole error as its detail. The project's forwarder's
+  keys are taken from the newest `keys.json` with the entry points as well.
 - The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
   their certificates, the forwarder's and the relay's ports, and the expiry of the signed files devices fetch
   (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").

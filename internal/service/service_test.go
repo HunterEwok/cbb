@@ -278,6 +278,9 @@ func startIn(t *testing.T, h *hub, s *testService) *testService {
 		joinListen: func() (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") },
 		joinAddrs:  func(port uint16) []string { return []string{fmt.Sprintf("127.0.0.1:%d", port)} },
 		newMode:    &sharedMode,
+		lookupIP: func(context.Context, string) ([]netip.Addr, error) {
+			return nil, errors.New("tests look up no names")
+		},
 	}
 	if s.cfg != nil {
 		s.cfg(&cfg)
