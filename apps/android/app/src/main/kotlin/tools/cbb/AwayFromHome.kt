@@ -279,7 +279,10 @@ class AwayFromHome(
         lock.notifyAll()
     }
 
+    // Off as soon as it is turned off or stopped, not only once the loop
+    // comes round from a hub it was still trying.
     @Volatile var status: Status = Status.OFF
+        get() = synchronized(lock) { if (stopped || state == null) Status.OFF else field }
         private set
 
     @Volatile var lastError: Throwable? = null
