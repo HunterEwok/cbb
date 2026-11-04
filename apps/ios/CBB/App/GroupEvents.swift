@@ -123,6 +123,15 @@ final class Notifier {
         if let old { GroupEvent.between(old, now).forEach(post) }
     }
 
+    /// Forgets the group's devices and events, once the phone left its
+    /// group: the next group's devices are not news of this one.
+    func forget() {
+        defaults.removeObject(forKey: Self.seenKey)
+        recent = []
+        failingSince = nil
+        hubNotified = false
+    }
+
     /// Notifies once when the hub has not answered through the tunnel for
     /// a while, and again only after it answered.
     func away(trying: Bool) {

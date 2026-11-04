@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 951f5919aba6 -->
+<!-- source: 0dae45ee8ba4 -->
 # Установка
 
 Copy Beyond Borders работает как небольшая фоновая служба на каждом компьютере. Его команда —
@@ -282,4 +282,5 @@ sudo sh /usr/local/share/cbb/uninstall.sh
 их, добавьте `--purge` (`-Purge` в Windows, с
 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`),
 затем удалите устройство из группы на другом устройстве (`sudo cbb remove NAME`, или на
-телефоне).
+телефоне). Чтобы выйти из группы и оставить CBB, выполните вместо этого `sudo cbb leave`: он
+удаляет ключи и файлы группы, и устройство может снова войти в группу.

@@ -35,6 +35,7 @@ struct MainView: View {
     @State private var selected: String?
     @State private var adding = false
     @State private var turningAwayOn = false
+    @State private var leaving = false
     @StateObject private var arrange = ArrangeState()
     @State private var query = ""
     @State private var filter: DeviceFilter?
@@ -51,8 +52,16 @@ struct MainView: View {
                 } else if model.status == nil {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if model.status?.removed == true {
-                    // The service keeps a removed Mac's group: joining again needs its keys gone first.
-                    Notice(symbol: "person.3", title: "This Mac was removed from the group", text: Text("Its members refuse it. To join a group again, remove CBB with its keys (sudo sh /usr/local/share/cbb/uninstall.sh --purge), install it again and join."))
+                    // The service keeps a removed Mac's group: joining again needs it to leave first.
+                    Notice(symbol: "person.3", title: "This Mac was removed from the group", text: Text("Its members refuse it. Leave the group here to join this group again or another one.")) {
+                        Button(role: .destructive) { leaving = true } label: { Text("Leave the group") }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.busy)
+                            .leaveDialog(isPresented: $leaving)
+                        if let message = model.message {
+                            Text(verbatim: message).foregroundStyle(palette.textDim).multilineTextAlignment(.center).textSelection(.enabled)
+                        }
+                    }
                 } else if !model.inGroup {
                     Notice(symbol: "person.3", title: "This Mac is in no group yet", text: Text("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new.")) {
                         Button { Task { await model.joinPhone() } } label: { Text("Join a phone's group") }
@@ -298,5 +307,25 @@ struct Notice<Actions: View>: View {
 extension Notice where Actions == EmptyView {
     init(symbol: String, title: LocalizedStringKey, text: Text) {
         self.init(symbol: symbol, title: title, text: text) { EmptyView() }
+    }
+}
+
+extension View {
+    /// Asks before this Mac leaves its group (D-83), then leaves.
+    func leaveDialog(isPresented: Binding<Bool>) -> some View {
+        modifier(LeaveDialog(isPresented: isPresented))
+    }
+}
+
+private struct LeaveDialog: ViewModifier {
+    @Binding var isPresented: Bool
+    @EnvironmentObject private var model: MacModel
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(Text("Leave the group?"), isPresented: $isPresented) {
+            Button(role: .destructive) { Task { await model.leave() } } label: { Text("Leave") }
+        } message: {
+            Text("This Mac's keys and the group's files here are deleted, and remote paste and the quick actions are turned off; the rest of the settings stay. It can then join this group or another one. The group lists it until an admin removes it.")
+        }
     }
 }

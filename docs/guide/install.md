@@ -271,4 +271,5 @@ the app the `.pkg` installed. The device's keys stay, so installing again brings
 add `--purge` (`-Purge` on Windows, with
 `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`),
 then remove the device from the group on another one (`sudo cbb remove NAME`, or on the
-phone).
+phone). To leave the group and keep CBB, run `sudo cbb leave` instead: it deletes the keys
+and the group's files, and the device can join a group again.

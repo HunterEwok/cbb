@@ -332,6 +332,14 @@ impl Node {
     }
 
     /// Closes every connection with a goodbye and refuses new ones.
+    /// Reports whether the group's records revoke this device: it was
+    /// removed, and joins again only after cbb leave.
+    pub fn removed(&self) -> bool {
+        let ident = self.identity();
+        let own: Vec<Cert> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
+        matches!(self.records.lock().unwrap().refused(&own), Some(Refusal::Refused(_)))
+    }
+
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
         for c in self.conns.lock().unwrap().values() {
@@ -648,7 +656,7 @@ impl Node {
             }
             let own: Vec<Cert> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
             if matches!(st.refused(&own), Some(Refusal::Refused(_))) {
-                self.logf("cbb: this device was removed from the group; join it again to sync");
+                self.logf("cbb: this device was removed from the group; to join again, run cbb leave, then cbb pair");
             }
             fresh
         };
