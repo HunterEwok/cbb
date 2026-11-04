@@ -177,7 +177,8 @@ function hubCard(d) {
   return `<div class="card"><div class="dim small">${esc(t("How the hub's tunnel hides"))}</div><div class="segmented">` +
     tunnels.map((m) => `<button type="button" data-tunnel="${m}" aria-checked="${m === cur}" ${state.busy ? "disabled" : ""}>${esc(tunnelName(m))}</button>`).join("") +
     `</div><div class="line"><span class="dim">${esc(t("Forwarder"))}</span><span class="value mono">${esc(fwd)}</span></div>` +
-    `<div class="actions"><button data-action="forwarder" ${state.busy ? "disabled" : ""}>${esc(t("Change the forwarder…"))}</button></div></div>`;
+    `<div class="actions"><button data-action="forwarder" ${state.busy ? "disabled" : ""}>${esc(t("Change the forwarder…"))}</button>` +
+    `<button data-action="terms">${esc(t("Terms of the project's servers"))}</button></div></div>`;
 }
 
 function modeButtons(current, id) {
@@ -690,6 +691,9 @@ async function deviceAction(action) {
         ? t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
         : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on."), t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id);
       break;
+    case "terms":
+      await call("OpenTerms").catch((e) => console.error("OpenTerms", e));
+      break;
     case "forwarder": {
       const text = await ask(t("Change the forwarder"), t("Your own forwarder's address and key, as cbb forward prints them, with a space between; leave it empty for the project's forwarder at cbb.tools."), t("Save"), "");
       if (text === null) break;
@@ -822,7 +826,7 @@ document.addEventListener("click", async (e) => {
   if (el.dataset.tunnel) {
     if (el.dataset.tunnel === hubTunnel(state.status?.away)) return;
     const text = el.dataset.tunnel === "vless"
-      ? t("Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
+      ? t("Your devices then try AmneziaWG first and, where UDP does not pass, reach this hub over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
       : t("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.");
     if (await ask(t("Change how the hub's tunnel hides?"), text, t("Change"))) await act("SetHub", el.dataset.tunnel, "", "");
     return;

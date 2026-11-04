@@ -58,7 +58,7 @@ class PhoneHub(val publicKey: ByteArray, clients: List<Client> = emptyList()) {
     @Volatile var obfuscation: String? = null
 
     /**
-     * Whether the clients may come only over VLESS: the offers then wait for
+     * Whether the clients may come over VLESS: the offers then wait for
      * vless, the way to the forwarder that its answer gives (cbbtun's
      * Status).
      */

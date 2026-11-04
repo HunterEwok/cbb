@@ -83,7 +83,7 @@ public final class PhoneHub: @unchecked Sendable {
         set { lock.withLock { link.obfuscation = newValue } }
     }
 
-    /// Whether the clients may come only over VLESS: the offers then wait
+    /// Whether the clients may come over VLESS: the offers then wait
     /// for vless, the way to the forwarder that its answer gives (cbbtun's
     /// Status).
     public var vlessOnly: Bool {

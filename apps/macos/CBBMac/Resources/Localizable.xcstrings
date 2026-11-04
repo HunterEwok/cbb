@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Terms of the project's servers": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Условия серверов проекта"
+          }
+        }
+      }
+    },
     "Void both histories": {
       "localizations": {
         "ru": {
@@ -321,12 +331,12 @@
         }
       }
     },
-    "Your devices then reach this hub only over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
+    "Your devices then try AmneziaWG first and, where UDP does not pass, reach this hub over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Тогда ваши устройства будут доходить до хаба только через VLESS к его форвардеру, а форвардер должен принимать VLESS. Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
+            "value": "Тогда ваши устройства сначала попробуют AmneziaWG, а там, где UDP не проходит, дойдут до хаба через VLESS к его форвардеру; форвардер должен принимать VLESS. Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
           }
         }
       }

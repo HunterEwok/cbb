@@ -468,7 +468,14 @@ class AwayFromHome(
         loopStatus = Status.CONNECTING
         val slot = hub + ":" + java.util.Base64.getEncoder().encodeToString(offer.hubKey)
         val n = synchronized(lock) { endpointOf[slot] ?: 0 }
-        val endpoint = offer.endpoints[n % offer.endpoints.size]
+        // With VLESS the hub's endpoints are tried over UDP only when it
+        // speaks AmneziaWG, never in plain WireGuard, and VLESS comes after
+        // them, in the same turn; the way that works is kept until it fails
+        // (docs/protocol.md, section 11, "VLESS").
+        val udp = if (offer.vless == null || offer.obfuscation != null) offer.endpoints.size else 0
+        val way = n % (udp + if (offer.vless != null) 1 else 0)
+        val overVLESS = way >= udp
+        val endpoint = offer.endpoints[if (overVLESS) 0 else way]
         val open = synchronized(lock) {
             if (tunnelTo == (hub to offer)) {
                 tunnel
@@ -481,7 +488,7 @@ class AwayFromHome(
             open
         } else {
             val started = try {
-                tunnels.start(s.key, offer.psk, offer.hubKey, device, hub, endpoint, offer.obfuscation ?: "", offer.vless ?: "")
+                tunnels.start(s.key, offer.psk, offer.hubKey, device, hub, endpoint, offer.obfuscation ?: "", if (overVLESS) offer.vless ?: "" else "")
             } catch (e: Exception) {
                 fail("the tunnel to the hub could not start", e)
                 return null

@@ -35,7 +35,7 @@ public struct HubState: Codable, Equatable, Sendable {
     /// for plain WireGuard; kept while it stays on, so the clients' offers
     /// stay good.
     public var obfuscation: Member.Obfuscation?
-    /// The group's VLESS user ID while its clients come only over VLESS to
+    /// The group's VLESS user ID while its clients may come over VLESS to
     /// the forwarder, nil otherwise.
     public var vlessID: String?
 
@@ -145,7 +145,7 @@ public final class HubOnPhone: @unchecked Sendable {
     public enum Status: Sendable, Equatable { case off, paused, homeOnly, registering, registered, failed }
 
     /// How the hub's tunnel hides (docs/design.md, "Blocked networks"):
-    /// plain WireGuard, AmneziaWG, or only over VLESS to the forwarder.
+    /// plain WireGuard, AmneziaWG, or AmneziaWG with VLESS to the forwarder.
     public enum Disguise: String, Sendable, CaseIterable { case plain, obfuscate, vless }
 
     /// The forwarder's address is no "ip:port", or its key no pin.
@@ -262,10 +262,12 @@ public final class HubOnPhone: @unchecked Sendable {
 
     /// Sets how the hub's tunnel hides. The AmneziaWG settings and the
     /// VLESS ID are made once and kept while that stays on; the clients get
-    /// the new offer the next time they meet the hub at home.
+    /// the new offer the next time they meet the hub at home. VLESS comes
+    /// with AmneziaWG: the clients try it over UDP first, and inside VLESS
+    /// it hides WireGuard's sizes (docs/protocol.md, section 11, "VLESS").
     public func setDisguise(_ d: Disguise) throws {
         let current = lock.withLock { state }
-        let obf = d == .obfuscate ? try current?.obfuscation ?? tunnels.newObfuscation() : nil
+        let obf = d != .plain ? try current?.obfuscation ?? tunnels.newObfuscation() : nil
         let id = d == .vless ? try current?.vlessID ?? tunnels.newVLESSID() : nil
         try change { s in
             (s.obfuscation, s.vlessID) = (obf, id)

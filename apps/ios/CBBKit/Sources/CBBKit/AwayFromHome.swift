@@ -313,6 +313,13 @@ public actor AwayFromHome {
         let offer = h.offer
         let slot = h.device + ":" + offer.hubKey.base64EncodedString()
         let n = endpointOf[slot] ?? 0
+        // With VLESS the hub's endpoints are tried over UDP only when it
+        // speaks AmneziaWG, never in plain WireGuard, and VLESS comes after
+        // them, in the same turn; the way that works is kept until it fails
+        // (docs/protocol.md, section 11, "VLESS").
+        let udp = offer.vless == nil || offer.obfuscation != nil ? offer.endpoints.count : 0
+        let way = n % (udp + (offer.vless != nil ? 1 : 0))
+        let overVLESS = way >= udp
         let t: OpenTunnel
         if let open = tunnel, tunnelTo == h {
             t = open
@@ -320,9 +327,9 @@ public actor AwayFromHome {
             closeTunnel()
             do {
                 t = try tunnels.start(privateKey: s.key, psk: offer.psk, hubKey: offer.hubKey, device: device, hub: h.device,
-                                      endpoint: offer.endpoints[n % offer.endpoints.count],
+                                      endpoint: offer.endpoints[overVLESS ? 0 : way],
                                       obfuscation: try offer.obfuscation?.jsonText() ?? "",
-                                      vless: try offer.vless?.jsonText() ?? "")
+                                      vless: overVLESS ? try offer.vless?.jsonText() ?? "" : "")
             } catch {
                 fail("the tunnel to the hub could not start", error)
                 return nil

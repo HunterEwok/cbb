@@ -140,15 +140,16 @@ they look, so both apps are built to the same plan.
    kit's `AwayFromHome` drives it in both the app and its tests. When the group's hub is
    obfuscated, its offer carries the AmneziaWG settings, and when it has its clients come
    over VLESS, the way there; both apps keep them with the offer and give them to the
-   tunnel, which then reaches the hub only over VLESS. Nothing changes on the screen.
+   tunnel, which then tries the hub's endpoints in AmneziaWG over UDP first and VLESS after
+   them, in turn, keeping to the way that works. Nothing changes on the screen.
    On a root or admin phone, "This phone as the hub" comes first (docs/design.md, "The
    phone as the hub"): a switch, on from the start in a group the phone made; where it
    stands (at home only without a forwarder, registering, registered, or why the forwarder
    refuses it, with the error underneath when details are on); whether the network the
    phone is on is one of the hub's home networks, with "This is my home network" when it
    is not; the forwarder's address and key, as `cbb forward` prints them; how the hub's
-   tunnel hides (WireGuard, AmneziaWG, or VLESS to a forwarder that takes it: the phone makes
-   the AmneziaWG settings or the VLESS user ID with cbbtun's `NewObfuscation` and
+   tunnel hides (WireGuard, AmneziaWG, or VLESS to a forwarder that takes it, which comes
+   with AmneziaWG: the phone makes the AmneziaWG settings and the VLESS user ID with cbbtun's `NewObfuscation` and
    `NewVLESSID` and keeps them while that choice stays, and the clients get them the next
    time they meet the hub at home); and on Android
    "Keep the hub running in the background", which lets the foreground service keep it.

@@ -243,16 +243,39 @@ func (s *Service) tryHub(ctx context.Context, run *tunRun, nd *node.Node, h tunn
 	}
 	key, psk := st.Key, h.PresharedKey
 	s.tunMu.Unlock()
+	// With VLESS the hub is tried over UDP first only when it speaks
+	// AmneziaWG, never in plain WireGuard, and then over VLESS to its
+	// forwarder; the way that worked last goes first the next time
+	// (docs/protocol.md, section 11, "VLESS").
 	eps := h.Endpoints
+	if udpBlocked != nil {
+		eps = udpBlocked(eps)
+	}
 	var vc *vless.Client
-	if h.VLESS != nil {
-		// The only way to the hub is VLESS to its forwarder.
-		if vc, err = vless.Dial(*h.VLESS); err != nil {
-			s.tunReport(run, "the way over VLESS to the hub's forwarder could not start", err)
-			return false
+	defer func() { closeVLESS(vc) }()
+	viaVLESS := func() bool {
+		if vc == nil {
+			if vc, err = vless.Dial(*h.VLESS); err != nil {
+				vc = nil
+				s.tunReport(run, "the way over VLESS to the hub's forwarder could not start", err)
+				return false
+			}
 		}
-		defer vc.Close()
-		eps = []netip.AddrPort{vc.Addr()}
+		return true
+	}
+	if h.VLESS != nil {
+		if h.Obfuscation == nil {
+			eps = nil
+		}
+		s.tunMu.Lock()
+		first := len(eps) == 0 || run.vlessFirst[h.Device]
+		s.tunMu.Unlock()
+		if first {
+			if !viaVLESS() {
+				return false
+			}
+			eps = append([]netip.AddrPort{vc.Addr()}, eps...)
+		}
 	}
 	hubKeys := []tunnel.Key{h.PublicKey}
 	if !h.Next.IsZero() {
@@ -289,15 +312,32 @@ func (s *Service) tryHub(ctx context.Context, run *tunRun, nd *node.Node, h tunn
 		s.tunMu.Unlock()
 	}()
 	hub := group.DeviceID(h.Device)
-	for _, ep := range eps {
-		raw, won, err := dialAny(ctx, cs, ep)
+	for i := 0; i < len(eps); i++ {
+		ep := eps[i]
+		first := dialWindow
+		if vc != nil && ep == vc.Addr() {
+			// VLESS opens its connection to the forwarder with the
+			// first packet, and the handshakes sent meanwhile are lost.
+			first = vlessFirstWindow
+		}
+		raw, won, err := dialAny(ctx, cs, ep, first)
 		if err != nil {
 			if ctx.Err() != nil {
 				return false
 			}
 			s.tunReport(run, fmt.Sprintf("no answer through the tunnel from %s at %v: the hub is off or cannot be reached, or the forwarder on the way is down", h.Device, ep), err)
+			if i == len(eps)-1 && h.VLESS != nil && vc == nil && viaVLESS() {
+				eps = append(eps, vc.Addr())
+			}
 			continue
 		}
+		overVLESS := vc != nil && ep == vc.Addr()
+		s.tunMu.Lock()
+		if run.vlessFirst == nil {
+			run.vlessFirst = map[string]bool{}
+		}
+		run.vlessFirst[h.Device] = overVLESS
+		s.tunMu.Unlock()
 		// The other keys get no answer: their tunnels stop, so they do
 		// not keep sending handshakes.
 		s.tunMu.Lock()
@@ -331,6 +371,16 @@ func (s *Service) tryHub(ctx context.Context, run *tunRun, nd *node.Node, h tunn
 	return false
 }
 
+// udpBlocked, in tests, stands for a network that lets no UDP through: it
+// replaces the hub's endpoints with ones that never answer.
+var udpBlocked func([]netip.AddrPort) []netip.AddrPort
+
+func closeVLESS(c *vless.Client) {
+	if c != nil {
+		c.Close()
+	}
+}
+
 // hubClient is what dialAny needs of a tunnel client.
 type hubClient interface {
 	SetEndpoint(ep netip.AddrPort) error
@@ -343,6 +393,9 @@ type hubClient interface {
 var (
 	dialWindow  = handshakeTimeout
 	dialWindows = 6
+	// vlessFirstWindow is the first window over VLESS: its TLS and HTTP/2
+	// to the forwarder come first.
+	vlessFirstWindow = 3 * handshakeTimeout
 )
 
 // dialAny points each client at ep and dials the hub through all of them
@@ -352,8 +405,8 @@ var (
 // a busy machine, the handshake and the connection each can take most of a
 // window, and starting over would throw away what got through and meet the
 // same wait again, while a hub that does not answer still ends the try in
-// one window.
-func dialAny[C hubClient](ctx context.Context, cs []C, ep netip.AddrPort) (net.Conn, C, error) {
+// one window. The first window lasts first.
+func dialAny[C hubClient](ctx context.Context, cs []C, ep netip.AddrPort, first time.Duration) (net.Conn, C, error) {
 	dctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	type result struct {
@@ -374,7 +427,7 @@ func dialAny[C hubClient](ctx context.Context, cs []C, ep netip.AddrPort) (net.C
 			done := make(chan struct{})
 			defer close(done)
 			go func() {
-				t := time.NewTicker(window)
+				t := time.NewTimer(first)
 				defer t.Stop()
 				seen := c.Received()
 				for range windows {
@@ -383,6 +436,7 @@ func dialAny[C hubClient](ctx context.Context, cs []C, ep netip.AddrPort) (net.C
 						return
 					case <-t.C:
 					}
+					t.Reset(window)
 					n := c.Received()
 					if n == seen {
 						break

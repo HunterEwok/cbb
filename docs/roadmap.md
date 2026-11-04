@@ -316,8 +316,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     in two kinds: with the site's real certificate, behind the server's own web server
     (XHTTP, which the site's nginx passes to the forwarder; the project's forwarder at
     cbb.tools runs it), or with REALITY, for forwarders without a web server. Every client
-    speaks each of them; on the lite member VLESS comes first, then AmneziaWG and the blind
-    relay ([below](#vless-behind-a-web-server)).
+    speaks each of them; on the lite member, in 0.7, AmneziaWG comes first (Linux, then the
+    ESP32), then VLESS over XHTTP on Linux only, then the blind relay
+    ([below](#vless-behind-a-web-server)).
 - **47.** **After TestFlight.** Back Tap on the iPhone in two taps: iOS lets no app make a
     shortcut or set Back Tap, so the app carries a signed shortcut file (`shortcuts sign
     --mode anyone` on a Mac) that runs its Sync clipboard action. A button "Add the
@@ -412,6 +413,55 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     after the launch: the GitHub Secure Open Source Fund, then FLOSS/fund once the project
     has users; NLnet's calls since 20 October 2026 do not fund code written with generative
     AI.
+- **55.** **Planned for 0.6 (the owner, 2026-11-03).** Updates through the group's ways
+    out, for devices on networks that block GitHub or the mirror. GitHub stays reached
+    directly, as now. Where the user switched AmneziaWG or VLESS on, the mirror on cbb.tools
+    is reached only through them: over VLESS the forwarder lets a group's registered VLESS
+    user ID reach the mirror on its own server as well as its UDP port, and nothing else, so
+    the server still gives no way to the internet; with AmneziaWG the devices get the
+    update from the group, inside its tunnel. The members already pass the signed release
+    to each other (the `release` message, docs/protocol.md section 16); the archives follow
+    over the member protocol ([design](design.md#where-updates-come-from)), so about one
+    device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
+    Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
+    with this item, on the same server.
+- **56.** **Planned for 0.6 (the owner, 2026-11-03).** A hub that reaches its forwarder
+    only over VLESS, for a phone hub on a trip in a network that lets nothing else through.
+    The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
+    into `cbb` and the kits beside its key, as they are no secret the design relies on; a
+    forwarder of one's own prints them with its key (`cbb forward`), and the user enters
+    them once. A hub keeps what the forwarder's answer says and uses that afterwards. It
+    tries TCP and UDP 8764 first and VLESS on 443 after them, as its clients do: over VLESS
+    go the registration (its TLS, with the forwarder's key pinned, inside VLESS) and the
+    hub's own tunnel packets, and the forwarder passes the clients' packets to such a hub
+    over that connection instead of UDP (docs/protocol.md, sections 11 and 13).
+    Nothing secret is compiled in: the builds stay reproducible (F-Droid) and the code
+    public. Instead the built-in path, and the `xhttp://host/path#key` string or QR code of
+    one's own forwarder, serve only a hub's first registration: the forwarder then gives each
+    group a data path of its own (random, kept with the group's registration), the hub hands
+    it to its clients in the offer, and the forwarder carries the group's packets only on
+    that path. The entry points (domains, ports, registration paths, the forwarders' keys)
+    are also published as a signed list in the release channel (`cbb.tools/channel/`, signed
+    with the channel key), so a blocked entry is replaced without a release; hubs and clients
+    pick the list up. Every device fetches the list with its update check, whether or not
+    VLESS is on, and takes it from any source, as the signature is what it trusts: cbb.tools,
+    the `channel` branch on GitHub, any member of its group (over the member protocol, as the
+    signed release), or a QR code or string another device shares; when none of them answers
+    and the list is stale, the app says so and where to get a new one. Later, once there is a spare domain or a CDN: several domains, or
+    Cloudflare in front of XHTTP, in the same signed list, as the name a network sees in TLS
+    is what it can block.
+- **57.** **Planned for 0.7 (the owner, 2026-11-03).** Push notifications on the iPhone, so
+    that a copy and the group's events reach it while its app is closed (Android needs
+    none: its foreground service keeps the connections). A member or the hub asks the
+    project's push service on cbb.tools to notify the phone; the service holds the APNs keys
+    and the phones' device tokens, never a group's keys. A Notification Service Extension
+    (about 30 seconds and 24 MiB) opens what is sealed to that phone: a short copy (a push
+    carries 4 KiB) shown with a "Copy" button, or a line that a larger copy or a file waits.
+    The service sees the tokens and the times, not the content: the privacy page says so,
+    and push can be switched off. Back Tap, the Action button and Share stay
+    as they are. To check on a device: whether the extension may put the text in the
+    clipboard without a tap, and whether Back Tap's 5 seconds are enough away from home
+    over VLESS (iOS allows about 30).
 
 ## Devices that are hard to type into
 
@@ -715,8 +765,11 @@ marks in `cbb status` are built:
 Item 46, decided by the owner on 2026-11-01. In 0.6 (moved there by the owner on 2026-11-03):
 the forwarder's XHTTP behind a web server (`cbb forward -vless-xhttp`), the transport in the
 hub's offer, and the clients in `cbb` and the phones' tunnel, the default on cbb.tools
-([design](design.md#blocked-networks)). Left for 0.7: the lite member's client, VLESS's own
-encryption, the interop vectors. Before it, VLESS ran only inside REALITY: the forwarder
+([design](design.md#blocked-networks)). Also in 0.6 (the owner, 2026-11-03): a hub that sets
+VLESS speaks AmneziaWG too, and its clients try AmneziaWG over UDP first and VLESS after it,
+never plain WireGuard; the client's XHTTP reuses its connections and spaces its uploads at
+random, with Xray's usual numbers. Left for 0.7: the lite member (AmneziaWG first, then its
+VLESS client on Linux), VLESS's own encryption, the interop vectors. Before it, VLESS ran only inside REALITY: the forwarder
 listens on TCP 443 itself and borrows another site's TLS. A server that already serves a site on 443, as cbb.tools does with
 nginx, cannot do that, and the lite member cannot speak REALITY at all: REALITY needs a
 browser's ClientHello and its own check inside the session ID, which rustls does not
@@ -751,8 +804,9 @@ a site.
 - **Clients.**
   - `cbb` and the phones' tunnel (`mobile/cbbtun`): Xray-core has VLESS over XHTTP; its TLS
     uses Xray's browser fingerprint (uTLS), so the ClientHello looks like a browser's.
-  - The lite member: a VLESS and XHTTP client of its own in `cbb_core` (sans-I/O, `no_std`
-    with alloc, so the ESP32 can have it later), on the TLS it has (rustls with the
+  - The lite member, on Linux only (the owner, 2026-11-03: not on the ESP32, whose memory
+    it would not fit, and after AmneziaWG): a VLESS and XHTTP client of its own in
+    `cbb_core` (sans-I/O, `no_std` with alloc), on the TLS it has (rustls with the
     RustCrypto provider), with VLESS's own encryption (ML-KEM-768 with X25519, as
     Xray-core's) when the forwarder asks for it. It checks the site's certificate against
     the public CAs (the Mozilla list built in, or the system's bundle on Linux and OpenWrt),
@@ -769,7 +823,7 @@ a site.
 - **cbb.tools.** `site/deploy/nginx.conf` gains the XHTTP location, which reads the path
   from a file made on the server (as `cbb-preview.conf`), so the path stays out of the
   repository; `site/README.md` gains the step, and the forwarder runs with XHTTP.
-- **Then, on the lite member:** AmneziaWG (its changes to WireGuard's packets: junk
+- **First, on the lite member (0.7):** AmneziaWG (its changes to WireGuard's packets: junk
   packets, shifted sizes and headers, padding) as a layer around GotaTun's UDP socket,
   ported from amneziawg-go (MIT, already in `internal/third_party/amneziawg-go`) to a
   sans-I/O layer in `cbb_core` under `src/third_party`, checked against it with interop
@@ -778,14 +832,14 @@ a site.
   refuses one). WireGuard's Noise and keys stay GotaTun's; the layer recomputes `mac1` for
   the changed message types. Padding inside the encrypted packets and random rekey times
   live inside GotaTun and need a small patch of it (`[patch]` in `lite/Cargo.toml`, as for
-  the ring stand-in). Then the blind relay (item 28), which the lite member does not reach
-  yet.
+  the ring stand-in). The same layer serves the ESP32 later. Then its VLESS client above,
+  and then the blind relay (item 28), which the lite member does not reach yet.
 
 Steps: the protocol and the Go forwarder and hub first, with Xray's XHTTP transport; then
 the phones' tunnel; then the lite member's client and its vectors; then cbb.tools' nginx
 and forwarder; then the guide for blocked networks (with its translations), the reference
 and the bench's cases for a network that blocks WireGuard (P20, S9, F7), run from a real
-network that blocks VPNs; then AmneziaWG and the relay on the lite member.
+network that blocks VPNs; in 0.7, AmneziaWG, then VLESS, then the relay on the lite member.
 
 ## The Next's network in the background
 
@@ -948,3 +1002,25 @@ the blind relay (item 28), and a second hub (D-65) covers the hours the first is
 Found on the way and worth fixing anyway: the phones' member key is kept with the keychain's
 "when unlocked" accessibility, so nothing in the background can use it while the phone is
 locked.
+
+**Looked at again on 2026-11-03, with Android and the user's own VPN.** The finding stands,
+and one point weighs more than the rest: today's tunnel (`mobile/cbbtun`) is an app's own
+traffic, so it runs beside any VPN the user has on, and CBB's packets simply go inside that
+VPN. A packet tunnel on the iPhone or a `VpnService` on Android would take the phone's one
+VPN slot: turning on one's own VPN would stop sync away from home, and the other way round.
+
+- **Android needs none of it.** The app's foreground service (`connectedDevice`) already
+  keeps its connections and the tunnel in the background, which an iPhone app cannot do.
+  `VpnService` would add the VPN key icon, the "allow a VPN connection" prompt and the slot
+  conflict, and gain nothing; `addAllowedApplication` narrows what it carries, not the slot.
+- **The iPhone without a VPN.** Background app refresh stays (a few seconds now and then,
+  docs/apps.md). Push notifications, now that the Apple developer account exists, are the
+  real way: a member or the hub asks the project's server to push (the APNs keys stay on
+  the server), and a Notification Service Extension, woken by a visible notification for up
+  to about 30 seconds with about 24 MiB, opens a small copy sealed to the phone (a push
+  carries 4 KiB) or shows that a copy waits. Silent pushes are throttled by iOS and only
+  help now and then. This belongs with the notifications work after TestFlight.
+- **An optional mode.** A packet tunnel offered only as an opt-in "keep the hub on in the
+  background" for people with no VPN of their own still meets guideline 5.4 (an
+  organization's account), TN3120 and the memory limit above; it is not planned. Should
+  the project register as an organization later, this is the one case to look at again.

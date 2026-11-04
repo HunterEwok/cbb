@@ -95,6 +95,9 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/** The terms of the project's forwarder and relay, in the reader's language. */
+private const val PROJECT_TERMS = "https://cbb.tools/?p=terms.html"
+
 /** Picks the screen, and asks once for the local network, which finding the computers needs on Android 17. */
 @Composable
 fun Root(model: AppModel) {
@@ -947,6 +950,17 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     style = MaterialTheme.typography.bodySmall,
                     color = palette.textDim,
                 )
+                if (hub.forwarder?.isProject == true) {
+                    val context = LocalContext.current
+                    Text(
+                        stringResource(R.string.project_terms),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.accent,
+                        modifier = Modifier.focusRing().clickable(role = Role.Button) {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_TERMS)))
+                        },
+                    )
+                }
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },

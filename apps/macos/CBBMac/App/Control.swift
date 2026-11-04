@@ -91,7 +91,7 @@ enum Control {
         var detail: String?
         /// On the hub: its tunnel speaks AmneziaWG.
         var obfuscated: Bool?
-        /// On the hub: its clients come only over VLESS to its forwarder.
+        /// On the hub: its clients may come over VLESS to its forwarder.
         var vless: Bool?
         /// On the hub: its forwarder; nil without one.
         var forwarder: Forwarder?

@@ -164,6 +164,7 @@
     <string name="hub_forwarder_address">Адрес, например 198.51.100.9:8764</string>
     <string name="hub_forwarder_key">Ключ, 44 символа</string>
     <string name="hub_forwarder_save">Сохранить форвардер</string>
+    <string name="project_terms">Условия серверов проекта</string>
     <string name="hub_forwarder_project">Издалека хаб доступен через форвардер проекта на cbb.tools. Чтобы использовать свой, введите его адрес и ключ.</string>
     <string name="hub_forwarder_back">Чтобы вернуться к форвардеру проекта, очистите оба поля и сохраните.</string>
     <string name="hub_bad_forwarder">Укажите адрес форвардера с портом и его ключ, как их выводит cbb forward, или оставьте оба поля пустыми.</string>
