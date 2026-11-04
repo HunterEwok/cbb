@@ -54,17 +54,15 @@ const (
 	RecordHandover   = authority.TypeHandover
 )
 
-// Device roles in device records: the member roles, shortcut for an
-// iPhone without the app that uses the shortcut and its token, and watch
+// Device roles in device records: the member roles, and watch
 // for a watch with an admin key of its own, which the root certified and
 // which signs only a few emergency actions (docs/protocol.md, section 10,
 // rule 8).
 const (
-	RoleFull     = "full"
-	RolePhone    = "phone"
-	RoleLite     = "lite"
-	RoleShortcut = "shortcut"
-	RoleWatch    = "watch"
+	RoleFull  = "full"
+	RolePhone = "phone"
+	RoleLite  = "lite"
+	RoleWatch = "watch"
 )
 
 // Where a device's keys live, as its device record says (docs/protocol.md,
@@ -142,14 +140,11 @@ func OSName(os string) string {
 }
 
 // A KeyHash names a key in records: SHA-256 over a SubjectPublicKeyInfo, or
-// over the 16 bytes of a phone ID for an iPhone's token; also a record ID.
+// also a record ID.
 type KeyHash = authority.Hash
 
 // KeyHashOf returns the key hash of a certificate's key.
 func KeyHashOf(cert *x509.Certificate) KeyHash { return sha256.Sum256(cert.RawSubjectPublicKeyInfo) }
-
-// PhoneKeyHash returns the key hash that names an iPhone's token.
-func PhoneKeyHash(phoneID []byte) KeyHash { return sha256.Sum256(phoneID) }
 
 // A RecordBody is what a record says (docs/protocol.md, section 10, "Records").
 type RecordBody = authority.Body
@@ -481,7 +476,7 @@ func (s *Records) Watch(k KeyHash) bool {
 type Device struct {
 	ID   DeviceID
 	Name string
-	Role string // RoleFull, RolePhone, RoleLite, RoleShortcut or RoleWatch
+	Role string // RoleFull, RolePhone, RoleLite or RoleWatch
 	OS   string // "" when its record does not tell
 	// Key is the member key of its newest counting record.
 	Key KeyHash

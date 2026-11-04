@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only. Drawn by tools/diagrams/diagrams.py; edit it there. -->
-<svg xmlns="http://www.w3.org/2000/svg" lang="es" width="720" height="300" viewBox="0 0 720 300" role="img" aria-label="Sin la app, un ordenador lleva el grupo">
+<svg xmlns="http://www.w3.org/2000/svg" lang="es" width="720" height="230" viewBox="0 0 720 230" role="img" aria-label="Sin la app, un ordenador lleva el grupo">
 <title>Sin la app, un ordenador lleva el grupo</title>
 <style>
   .bg { fill: none; }
@@ -41,21 +41,17 @@
     .lbl-bg { fill: #0d1117; stroke: #3d444d; }
   }
 </style>
-<g class="key"><rect class="card key" x="20.25" y="108.0" width="219.5" height="64" rx="10"/><g transform="translate(32.25,126)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="70.25" y="136">Ordenador con Linux</text><text class="s" x="70.25" y="154">guarda la clave del grupo</text><rect class="badge" x="198.15" y="99.0" width="33.6" height="18" rx="9"/><text class="badge-t" x="214.95" y="112.0" text-anchor="middle">RAÍZ</text></g>
+<g class="key"><rect class="card key" x="20.25" y="63.0" width="219.5" height="64" rx="10"/><g transform="translate(32.25,81)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="70.25" y="91">Ordenador con Linux</text><text class="s" x="70.25" y="109">guarda la clave del grupo</text><rect class="badge" x="198.15" y="54.0" width="33.6" height="18" rx="9"/><text class="badge-t" x="214.95" y="67.0" text-anchor="middle">RAÍZ</text></g>
 <g class=""><rect class="card " x="485.0" y="24.0" width="170" height="52" rx="10"/><g transform="translate(497.0,36)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="535.0" y="55">Mac</text></g>
 <g class=""><rect class="card " x="485.0" y="114.0" width="170" height="52" rx="10"/><g transform="translate(497.0,126)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="535.0" y="145">Windows</text></g>
-<g class=""><rect class="card " x="485.0" y="198.0" width="170" height="64" rx="10"/><g transform="translate(497.0,216)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="535.0" y="226">iPhone</text><text class="s" x="535.0" y="244">con el atajo</text></g>
-<path class="e-pair" d="M239.75,140.0 L485.0,140.0"/>
-<path class="a-pair" d="M485.0,140.0 L477.0,135.6 L477.0,144.4z"/>
-<path class="e-pair" d="M284.75,140 L284.75,50 L485.0,50.0"/>
+<path class="e-pair" d="M239.75,95.0 L284.75,95"/>
+<path class="e-pair" d="M284.75,95 L284.75,50 L485.0,50.0"/>
 <path class="a-pair" d="M485.0,50.0 L477.0,45.6 L477.0,54.4z"/>
-<path class="e-pair" d="M284.75,140 L284.75,230 L485.0,230.0"/>
-<path class="a-pair" d="M485.0,230.0 L477.0,225.6 L477.0,234.4z"/>
-<text class="note" x="360" y="290" text-anchor="middle">Después, cada dispositivo se sincroniza con todos los demás, como en un grupo creado en un teléfono.</text>
-<rect class="lbl-bg" x="307.6" y="129.0" width="154.6" height="22" rx="11.0"/>
-<text class="lbl pair" x="384.875" y="144.0" text-anchor="middle">código de seis dígitos</text>
+<path class="e-pair" d="M284.75,95 L284.75,140 L485.0,140.0"/>
+<path class="a-pair" d="M485.0,140.0 L477.0,135.6 L477.0,144.4z"/>
+<text class="note" x="360" y="215" text-anchor="middle">Después, cada dispositivo se sincroniza con todos los demás, como en un grupo creado en un teléfono.</text>
 <rect class="lbl-bg" x="307.6" y="39.0" width="154.6" height="22" rx="11.0"/>
 <text class="lbl pair" x="384.875" y="54.0" text-anchor="middle">código de seis dígitos</text>
-<rect class="lbl-bg" x="332.8" y="219.0" width="104.2" height="22" rx="11.0"/>
-<text class="lbl pair" x="384.875" y="234.0" text-anchor="middle">perfil y atajo</text>
+<rect class="lbl-bg" x="307.6" y="129.0" width="154.6" height="22" rx="11.0"/>
+<text class="lbl pair" x="384.875" y="144.0" text-anchor="middle">código de seis dígitos</text>
 </svg>

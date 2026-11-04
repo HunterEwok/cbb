@@ -140,7 +140,6 @@ private fun Summary(d: LiveGroup.Device) {
 private fun roleTitle(role: String, rootless: Boolean) = when (role) {
     "phone" -> R.string.role_phone
     "lite" -> if (rootless) R.string.role_lite_rootless else R.string.role_lite
-    "shortcut" -> R.string.role_shortcut
     "watch" -> R.string.kind_watch
     else -> if (rootless) R.string.role_full_rootless else R.string.role_full
 }

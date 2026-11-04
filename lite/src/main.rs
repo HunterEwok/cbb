@@ -119,7 +119,7 @@ port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the
 
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] = &["remove", "admin", "takeover", "new", "invite", "holder", "forward", "relay", "agent"];
+const FULL_ONLY: &[&str] = &["remove", "admin", "takeover", "new", "invite", "forward", "relay", "agent"];
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -334,8 +334,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                     out.flush().ok();
                     return;
                 }
-                println!("In the CBB app, tap \"Connect a new device\" (or run the shortcut");
-                println!("\"cbb: add a computer\") and scan this:\n");
+                println!("In the CBB app, tap \"Connect a new device\" and scan this:\n");
                 print!("{}", qr(text));
                 println!("\nOr paste this into the app: {text}");
                 println!("\nWaiting up to 5 minutes. Press Ctrl+C to cancel.");

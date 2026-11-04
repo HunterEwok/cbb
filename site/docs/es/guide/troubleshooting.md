@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 62cc1d41168b -->
+<!-- source: 671ad29a2563 -->
 # Cuando algo no funciona
 
 Empieza con `cbb status` en el dispositivo que falla: dice si el servicio está en marcha, en qué grupo está, qué miembros están conectados y el estado de la sincronización fuera de casa. Cada mensaje es corto; `CBB_DEBUG=1 cbb status` (en Windows, antes `$env:CBB_DEBUG = "1"`) muestra debajo el error subyacente. El registro del servicio siempre tiene los detalles: en Linux `journalctl -u cbb`, y el del conector de escritorio está en el diario de la sesión, `journalctl --user`; los demás sistemas están en [archivos y registros](../reference/devices.md#files-and-logs). El interruptor de detalles de cada parte, incluidas las apps y los instaladores, está en [mensajes de error y detalles](../reference/errors.md).
@@ -21,7 +21,6 @@ Empieza con `cbb status` en el dispositivo que falla: dice si el servicio está 
 
 - **"wrong code"**: cada ventana de emparejamiento admite tres intentos; ejecuta `cbb pair` de nuevo para obtener un código nuevo.
 - **El teléfono no llega al ordenador tras escanear su código QR**: el teléfono y el ordenador deben estar en la misma red, y el puerto del ordenador debe estar abierto (arriba). En iOS, permite la red local para la app (Ajustes, Privacidad y seguridad, Red local).
-- **El atajo no llega a `cbb.local`**: solo los ordenadores raíz y administradores del grupo lo sirven, y solo en el puerto 8764; al menos uno debe estar encendido (`cbb status` en cada ordenador dice si responde). Comprueba que el perfil está instalado y con confianza total ([Sin la app](without-app.md#3-add-an-iphone-with-the-shortcut)).
 
 ## Sincronización fuera de casa
 

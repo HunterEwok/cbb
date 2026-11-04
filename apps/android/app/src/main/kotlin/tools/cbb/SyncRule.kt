@@ -6,10 +6,9 @@ package tools.cbb
 import tools.cbb.kit.Member
 
 /**
- * The one button's rule, as for the iPhone's shortcut (internal/phone/sync.go):
- * a computer's copy of a moment ago comes to the phone; otherwise a new text
- * on the phone goes to the computers; otherwise the computers' latest text
- * comes.
+ * The one button's rule, as on the iPhone (LiveGroup.sync): a computer's
+ * copy of a moment ago comes to the phone; otherwise a new text on the phone
+ * goes to the computers; otherwise the computers' latest text comes.
  */
 object SyncRule {
     /** How recent a computer's copy must be for the button to fetch it first. */

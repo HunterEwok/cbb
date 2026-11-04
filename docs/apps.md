@@ -26,8 +26,7 @@ they look, so both apps are built to the same plan.
 ## Screens
 
 1. **Start** (no group yet): one sentence, the big button "Connect a new device" with a hint
-   below it (on a computer, run `cbb pair` and scan the code it shows; `cbb
-   pair -phone` in the mode without the app), and a second button, "I already use
+   below it (on a computer, run `cbb pair` and scan the code it shows), and a second button, "I already use
    Copy Beyond Borders on another phone", which joins that phone's group, and a third, "My group was
    made on a computer", where the user types the six-digit code that `cbb pair` shows on the
    group's root and the phone joins that group as an admin. The camera opens at once;
@@ -38,7 +37,7 @@ they look, so both apps are built to the same plan.
    before there is a group; when the system's language has no translation, a language menu
    sits next to it, with English chosen.
 2. **Home**: the one big button (send what this phone holds or fetch the computer's recent
-   copy, by the same rule as the shortcut; when the phone's clipboard holds something the
+   copy, by the rule of design.md, "The one button"; when the phone's clipboard holds something the
    app cannot read as text, it is left as it is and the line says so), the result in one
    line, and every device of the group under it, as tiles or as a list (the "…" menu
    switches them and opens Settings). A tile shows the device's icon (laptop, computer,
@@ -86,8 +85,8 @@ they look, so both apps are built to the same plan.
 4. **Devices** (the tiles of Home, and a device's page): on its page a summary (type,
    operating system, role, its place in the group, online or not) and the actions below
    it; Back returns to Home. The whole group, one tile per device: its name, an icon and the name of its
-   system (Linux, Windows, macOS, iOS, Android, or "device" for firmware; a lite member and an
-   iPhone with the shortcut are marked so), a "root", "admin" or "frozen" mark, a live dot when it is online and
+   system (Linux, Windows, macOS, iOS, Android, or "device" for firmware; a lite member is
+   marked so), a "root", "admin" or "frozen" mark, a live dot when it is online and
    "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
    device records (section 10 of [protocol.md](protocol.md)), so every app and
    `cbb status` show the same. On an admin phone, a row opens the device: rename,

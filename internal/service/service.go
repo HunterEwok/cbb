@@ -9,7 +9,6 @@ package service
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -17,7 +16,6 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,7 +31,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/netguard"
 	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/pair"
-	"github.com/HunterEwok/cbb/internal/phone"
 	"github.com/HunterEwok/cbb/internal/piv"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
 	"github.com/HunterEwok/cbb/internal/tunnel"
@@ -86,9 +83,6 @@ type Config struct {
 	// joinAddresses if nil.
 	joinListen func() (net.Listener, error)
 	joinAddrs  func(port uint16) []string
-	// battery reports whether the machine has a battery, for the holder
-	// priority; hasBattery if nil.
-	battery func() bool
 	// peerOf tells who is at the other end of a control connection, and
 	// atScreen whether that user may take a target's remote pastes; the
 	// system's if nil (peer.go).
@@ -166,7 +160,6 @@ type DiscoveryConfig struct {
 type Discovery interface {
 	Run(ctx context.Context) error
 	SetTXT(txt []string)
-	SetHolder(hold bool)
 }
 
 func mdnsDiscovery(c DiscoveryConfig) (Discovery, error) {
@@ -189,34 +182,22 @@ type Service struct {
 	// The TV pairing in progress (tvremote.go).
 	tv tvState
 
-	createMu      sync.Mutex // one group creation at a time
-	mu            sync.Mutex
-	id            *group.Identity // nil while the device is in no group
-	eng           *clip.Engine    // made with the identity
-	nd            *node.Node
-	responder     Discovery
-	nets          *networks // the known networks; set before the group starts
-	discoveryStop context.CancelFunc
-	discoveryDone chan struct{}
-	port          uint16
-	window        *pair.Window // announced; takes pairing connections
-	opening       bool         // a pairing window is being opened, maybe with a new group
-	phoneWindow   *phone.Window
-	phoneOpening  bool          // an iPhone pairing window is being opened
-	phoneConns    *connListener // the shortcut's HTTPS on the member port; nil if not served
-	phoneTLS      *tls.Config   // the shortcut's TLS, with phoneConns
-	profileConns  *connListener // the profile's plain HTTP while an iPhone pairing window is open
-	joining       bool          // a join is running
-	stopping      bool          // the service is stopping: no new group, no election
-	holder        bool
-	holdSetting   string // HolderAuto, HolderFirst, HolderFallback or HolderNever
-	battery       bool   // the machine has a battery, guessed at the start
-	// pendingPhoneCA is an iPhone CA another admin sent while this one held
-	// another that still stood, kept in case the records revoke that one.
-	pendingPhoneCA *group.CA
+	createMu       sync.Mutex // one group creation at a time
+	mu             sync.Mutex
+	id             *group.Identity // nil while the device is in no group
+	eng            *clip.Engine    // made with the identity
+	nd             *node.Node
+	responder      Discovery
+	nets           *networks // the known networks; set before the group starts
+	discoveryStop  context.CancelFunc
+	discoveryDone  chan struct{}
+	port           uint16
+	window         *pair.Window // announced; takes pairing connections
+	opening        bool         // a pairing window is being opened, maybe with a new group
+	joining        bool         // a join is running
+	stopping       bool         // the service is stopping: no new group
 	dialers        map[group.DeviceID]*dialer
 	nearby         map[group.DeviceID]time.Duration // the members of the group that discovery finds on this network, by the uptime they were first found
-	prio           map[group.DeviceID]int           // their holder priority (TXT h), for those that can hold the name
 	watchers       map[*watcher]bool
 	pastes         remotepaste.Limiter // remote pastes per sender
 	actionLimit    remotepaste.Limiter // quick actions per sender, as remote pastes
@@ -355,9 +336,6 @@ func Run(ctx context.Context, cfg Config) error {
 		only := onlyIn(cfg.Interfaces)
 		cfg.joinAddrs = func(port uint16) []string { return joinAddresses(port, only) }
 	}
-	if cfg.battery == nil {
-		cfg.battery = hasBattery
-	}
 	if cfg.peerOf == nil {
 		cfg.peerOf = connPeer
 	}
@@ -371,15 +349,12 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.runner = actions.System()
 	}
 	s := &Service{cfg: cfg, logf: cfg.Logf, dialers: map[group.DeviceID]*dialer{}, watchers: map[*watcher]bool{}, restart: make(chan struct{}, 1),
-		seen: map[group.DeviceID]time.Time{}, online: map[group.DeviceID]bool{}, unreached: map[group.DeviceID]bool{}, battery: cfg.battery(),
+		seen: map[group.DeviceID]time.Time{}, online: map[group.DeviceID]bool{}, unreached: map[group.DeviceID]bool{},
 		startedMS: cfg.now().UnixMilli()}
 	if s.cfg.runner == nil {
 		// A Mac and Windows run the presets in the signed-in user's
 		// session, through the agent.
 		s.cfg.runner = sessionRunner{s}
-	}
-	if s.holdSetting, err = loadHolder(cfg.StateDir); err != nil {
-		cfg.Logf("cbb: the holder setting: %v; using auto", err)
 	}
 
 	floor, err := loadMark(cfg.StateDir)
@@ -494,8 +469,7 @@ func loadMark(dir string) (hlc.Timestamp, error) {
 }
 
 // startGroup starts the network part with an identity: the member
-// connections, discovery and the member port; on Linux also
-// cbb.local. Its state is set only when all of it started.
+// connections, discovery and the member port. Its state is set only when all of it started.
 //
 // The group's context does not derive from Run's: only stopGroup ends it,
 // after the goodbyes, so a stopping service leaves in order.
@@ -530,7 +504,7 @@ func (s *Service) startGroup(id *group.Identity) error {
 	nd := node.New(node.Config{
 		Content: s.nodeContent(), Identity: id, Role: s.cfg.Role, Name: s.cfg.Name, OS: s.cfg.OS, Device: s.cfg.Device, Engine: eng, KeyStore: s.keyStore(id), Actions: s.actionsOn,
 		OnWrite: s.write, OnRelay: s.relayed, Serves: s.serves, OnPeers: s.peersChanged, OnCert: s.certRenewed, OnAdmin: s.becomeAdmin, OnCommand: s.command,
-		PhoneCAFor: s.phoneCAFor, OnPhoneCA: s.phoneCAReceived, Now: s.cfg.now, Logf: s.logf,
+		Now: s.cfg.now, Logf: s.logf,
 		Records: recordStore{s}, Credentials: credentialStore{s}, Releases: releaseStore{s}, Allow: s.allow, NoSecrets: s.noSecretsTo,
 		TunnelKey: tunKey, TunnelPSK: tunPSK, OnTunnelKey: s.tunnelKeyOffered, OnTunnel: s.tunnelOffered, SealKey: s.sealPublic,
 		HubShare: s.hubShare, OnHubs: s.hubsShared, OnEvidence: s.evidenceReceived, Evidence: s.ownEvidence(id),
@@ -542,7 +516,7 @@ func (s *Service) startGroup(id *group.Identity) error {
 		cancel()
 		return err
 	}
-	dc := DiscoveryConfig{ID: string(id.ID), TXT: txt(id, s.priorityLocked(id), false), OnPeers: s.found, Logf: s.logf,
+	dc := DiscoveryConfig{ID: string(id.ID), TXT: txt(id, false), OnPeers: s.found, Logf: s.logf,
 		Port: uint16(ln.Addr().(*net.TCPAddr).Port), Publish: s.nets.Publish, Only: s.only()}
 	r, err := s.cfg.Discover(dc)
 	if err != nil {
@@ -574,17 +548,13 @@ func (s *Service) startGroup(id *group.Identity) error {
 		defer s.wg.Done()
 		s.ensureListed()
 	}()
-	s.wg.Add(2)
+	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		s.accept(gctx, ln)
 	}()
-	go func() {
-		defer s.wg.Done()
-		s.servePhone(gctx, ln.Addr())
-	}()
-	// Discovery has its own context, so it can say goodbye for
-	// cbb.local before the member connections close.
+	// Discovery has its own context, so it can say goodbye before the
+	// member connections close.
 	dctx, dcancel := context.WithCancel(gctx)
 	s.responder, s.discoveryStop, s.discoveryDone = r, dcancel, make(chan struct{})
 	go func(done chan struct{}) {
@@ -598,7 +568,6 @@ func (s *Service) startGroup(id *group.Identity) error {
 			s.logf("cbb: this device's keys are in a file, not in hardware: %s", why)
 		}
 	}
-	s.electLocked() // alone, a member that can hold cbb.local holds it at once
 	s.tunMu.Lock()
 	s.runTunnelLocked()
 	s.tunMu.Unlock()
@@ -607,18 +576,15 @@ func (s *Service) startGroup(id *group.Identity) error {
 
 // stopGroup stops the network part: first discovery, which sends the
 // goodbyes for this member's names, then the member connections, which say
-// goodbye too, so the next holder takes cbb.local over at once.
+// goodbye too.
 func (s *Service) stopGroup() {
 	s.mu.Lock()
 	s.stopping = true
-	cancel, nd, w, pw := s.groupCancel, s.nd, s.window, s.phoneWindow
+	cancel, nd, w := s.groupCancel, s.nd, s.window
 	stopDiscovery, discoveryDone := s.discoveryStop, s.discoveryDone
 	s.mu.Unlock()
 	if w != nil {
 		w.Close()
-	}
-	if pw != nil {
-		pw.Close()
 	}
 	if stopDiscovery != nil {
 		stopDiscovery()
@@ -638,22 +604,12 @@ func (s *Service) stopGroup() {
 }
 
 // txtLocked returns the TXT record of this member.
-func (s *Service) txtLocked() []string { return txt(s.id, s.priorityLocked(s.id), s.window != nil) }
+func (s *Service) txtLocked() []string { return txt(s.id, s.window != nil) }
 
-// priorityLocked returns this member's priority for cbb.local,
-// 0 if it never holds the name (see priority).
-func (s *Service) priorityLocked(id *group.Identity) int {
-	return priority(s.holdSetting, id != nil && id.Phone != nil, s.battery)
-}
-
-// txt returns a TXT record: the protocol version, the group tag, the
-// holder priority if the member can hold cbb.local, and whether
-// a pairing window is open.
-func txt(id *group.Identity, prio int, window bool) []string {
+// txt returns a TXT record: the protocol version, the group tag and
+// whether a pairing window is open.
+func txt(id *group.Identity, window bool) []string {
 	t := []string{"v=1", "g=" + group.Tag(id.GroupCA.Cert)}
-	if prio > 0 {
-		t = append(t, "h="+strconv.Itoa(prio))
-	}
 	if window {
 		t = append(t, "p=1")
 	}

@@ -34,8 +34,7 @@ func envFile() string {
 // Port returns the member port, which a listening join uses too: a
 // device that joins is in no group yet, so nothing else holds it.
 // MemberPort, or N when CBB_PORT, from the environment or else from
-// EnvFile, names a port N. The iPhone shortcut names MemberPort, so it
-// works only with that one.
+// EnvFile, names a port N.
 func Port() (int, error) {
 	v, ok := os.LookupEnv("CBB_PORT")
 	if !ok {

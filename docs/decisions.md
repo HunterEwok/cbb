@@ -2,7 +2,7 @@
 # Architecture decisions
 
 For engineers. Every decision that shapes Copy Beyond Borders, numbered once and never
-renumbered: the code, the changelog and the other documents cite them as D-1 to D-79. The
+renumbered: the code, the changelog and the other documents cite them as D-1 to D-80. The
 reasons and the details of each are in the [design](design.md) and the
 [protocol](protocol.md); this page is the register.
 
@@ -14,8 +14,8 @@ it would cost a migration. The pull request that makes it:
 1. adds a row below with the next free number and the status `accepted`, in one or two
    sentences: what was decided, and the main reason or the option it rules out;
 2. explains it where the work is described: a section of the design or the protocol, which
-   names the decision (`(D-80)`), with the options considered and the consequences;
-3. when it replaces an earlier one, sets that row's status to `replaced by D-80` and keeps
+   names the decision (`(D-81)`), with the options considered and the consequences;
+3. when it replaces an earlier one, sets that row's status to `replaced by D-81` and keeps
    its text, so that old references still make sense.
 
 A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
@@ -34,7 +34,7 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | D-7 | accepted | Console without a desktop: tmux for copy and paste, a root helper for console paste outside tmux. |
 | D-8 | accepted | The repository is in English only, apart from the apps' translations (String Catalogs, Android `values-<language>`). |
 | D-9 | accepted | Pairing a computer: code entry with CPace inside TLS 1.3 instead of comparing digits, which a man in the middle can grind. |
-| D-10 | accepted | The iPhone trusts a separate CA restricted by name constraints; the token is shown only after that trust is in place. |
+| D-10 | replaced by D-80 | The iPhone trusts a separate CA restricted by name constraints; the token is shown only after that trust is in place. |
 | D-11 | accepted | One advertised port serves members, pairing and the iPhone, told apart by the first bytes. |
 | D-12 | accepted | Own mDNS responder on Linux: no Go library publishes a separate name with its own lifetime, answers per interface and sends goodbyes. |
 | D-13 | replaced by D-53 | Only Linux members hold `cbb.local`; Macs never hold it (since D-46 they listen too). |
@@ -55,7 +55,7 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | D-28 | accepted | Two ways in: watchers report changes (no event when nothing really changed), deliberate actions always send and also write the member's own clipboard. |
 | D-29 | accepted | Certificates are checked with the local clock, but never earlier than the group CA's start: a clock that is behind does not break the group, an expired certificate is still rejected. |
 | D-30 | accepted | Pairing runs inside TLS with self-signed certificates on the new device's side and channel binding (an exporter and both certificates) instead of a separate encryption layer: CPace authenticates the TLS session, and everything after it travels in that session. |
-| D-31 | accepted | The mDNS responder does not probe its names: device IDs are random, `cbb.local` is never renamed, and the group's election decides who holds it; two holders for a moment are harmless, since any Linux member can serve the iPhone. |
+| D-31 | partly replaced by D-80 | The mDNS responder does not probe its names: device IDs are random, `cbb.local` is never renamed, and the group's election decides who holds it; two holders for a moment are harmless, since any Linux member can serve the iPhone. |
 | D-32 | accepted | The Mac browses with CBB's own mDNS code instead of the Bonjour API: it shares port 5353 with mDNSResponder, and the service needs no cgo. The cost is a socket of its own on UDP 5353, which the macOS firewall may treat differently (see Open questions). D-12 still holds for Linux. |
 | D-33 | accepted | Several equal admin phones: a root CA with path length 1 certifies an admin CA per phone, each key in its own Secure Enclave or StrongBox, instead of one CA key copied between phones or backed up to a cloud. Only the root makes admins; a remaining admin becomes the root with a signed root record. |
 | D-34 | accepted | The devices list and revocations are signed records in a set that only grows and spreads through the member protocol; what it says depends on the set alone, so the group converges. Two admins that revoke each other both lose admin rights. |
@@ -77,7 +77,7 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | D-50 | accepted | A device's operating system (`os`) is stated apart from its role, so a Windows PC is shown as Windows; the roles are `full` (every computer with the service, the Mac included), `lite`, `phone` and `iphone`, and the `linux` and `mac` roles are dropped. |
 | D-51 | accepted | In a group a computer creates, only the creating computer (the root) and the members it makes admins hold CA keys, through the admin CAs of D-33 under a root with path length 1; any device but the root is removed by a record without a new group, and a lost root is taken over by an admin. |
 | D-52 | accepted | Groups made before D-51 are upgraded in place with a `root` record signed by the old group CA key and a revocation of that key; a leftover copy of the old key can break such a group but never take it over. |
-| D-53 | accepted | `cbb.local` is held only by a member with the iPhone CA key, machines that do not sleep first and laptops as a fallback, guessed from a battery and set by a setting. |
+| D-53 | replaced by D-80 | `cbb.local` is held only by a member with the iPhone CA key, machines that do not sleep first and laptops as a fallback, guessed from a battery and set by a setting. |
 | D-54 | accepted | Every admin may paste a text on any member that turned remote paste on (D-59), the target pressing nothing per paste, since a member already trusts its admins; the command is signed by the admin and checked by the target, and the iPhone is a sender only, because iOS allows no input into other apps. |
 | D-55 | accepted | Each device has a sync mode, own (the default), shared, receive only or send only, which decides only what moves between its clipboard and the group; it stays connected in every mode, changes its own mode, and any admin changes the mode of any member with a signed command. |
 | D-56 | accepted | Images, files and folders sync wherever the platform allows, with formatted text (HTML) last and optional; lite members, the iPhone shortcut, secrets and remote paste stay text only. |
@@ -104,3 +104,4 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | D-77 | accepted | The text of docs/protocol.md is under CC BY 4.0, so compatible implementations may use any license; the code stays under AGPL-3.0-only. |
 | D-78 | accepted | No additional permission for app stores for now: one can be added at any time but not taken back from released versions; whoever needs a store asks for a commercial license. |
 | D-79 | accepted | A full member or a lite member on Linux may be installed without root (`rootless`), as the user's own systemd service with its files in the user's home: it says so in its hello and its device record, and it is never the root, an admin or a hub, not even after a warning, since every program of the user can read its keys. The system install stays the default and the advice; on SteamOS it is kept across updates under `/opt` rather than made rootless. |
+| D-80 | accepted | Every phone joins through its app, with a key of its own: the way in for an iPhone without the app (the shortcut, its tokens, the name-constrained iPhone CA and the shared address `cbb.local` with its election) is removed now that the app has an Apple developer account, so the group has one kind of trust and every key in it can be revoked by a record. |

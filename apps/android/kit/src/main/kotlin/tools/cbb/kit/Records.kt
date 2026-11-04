@@ -232,7 +232,7 @@ class RecordSet {
     class Device(
         val id: String,
         val name: String,
-        /** "full", "phone", "lite", "shortcut" or "watch". */
+        /** "full", "phone", "lite" or "watch". */
         val role: String,
         /** The member key of its newest counting record. */
         val key: ByteArray,

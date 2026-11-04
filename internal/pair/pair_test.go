@@ -167,7 +167,7 @@ func TestPairMac(t *testing.T) {
 		t.Fatalf("join: %v; serve: %v", out.joinErr, out.serveErr)
 	}
 	id := out.id
-	if id.ID != j.ID || !group.SameKey(id.Key, j.Key.Public()) || id.ServesPhone() || id.PhoneCA != nil || id.GroupCA.Key != nil {
+	if id.ID != j.ID || !group.SameKey(id.Key, j.Key.Public()) || id.GroupCA.Key != nil {
 		t.Error("a Mac got the wrong identity, or CA keys")
 	}
 	if !id.GroupCA.Cert.Equal(f.admin.GroupCA.Cert) {
@@ -200,7 +200,7 @@ func TestPairLite(t *testing.T) {
 	if out.joinErr != nil || out.serveErr != nil {
 		t.Fatalf("join: %v; serve: %v", out.joinErr, out.serveErr)
 	}
-	if id := out.id; id.ServesPhone() || id.PhoneCA != nil || id.GroupCA.Key != nil {
+	if id := out.id; id.IsRoot() || id.GroupCA.Key != nil {
 		t.Error("a lite member got CA keys")
 	}
 	res, err := f.window.Result()
@@ -220,7 +220,7 @@ func TestPairLinux(t *testing.T) {
 		t.Fatalf("join: %v; serve: %v", out.joinErr, out.serveErr)
 	}
 	id := out.id
-	if id.ServesPhone() || id.GroupCA.Key != nil || id.PhoneCA != nil {
+	if id.GroupCA.Key != nil {
 		t.Fatal("a Linux member got CA keys")
 	}
 	assertMembers(t, id, f.admin)
@@ -236,7 +236,7 @@ func TestPairInARootGroup(t *testing.T) {
 		if out.joinErr != nil || out.serveErr != nil {
 			t.Fatalf("%s: join: %v; serve: %v", os, out.joinErr, out.serveErr)
 		}
-		if id := out.id; id.ServesPhone() || id.GroupCA.Key != nil || id.PhoneCA != nil || !id.NeedsAdminKey() {
+		if id := out.id; id.IsRoot() || id.GroupCA.Key != nil || !id.NeedsAdminKey() {
 			t.Errorf("%s: the member holds CA keys or needs no admin key", os)
 		}
 		assertMembers(t, out.id, f.admin)
@@ -887,7 +887,7 @@ func TestOpenNeedsCAKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	mac := *admin
-	mac.GroupCA.Key, mac.PhoneCA, mac.Phone = nil, nil, nil
+	mac.GroupCA.Key = nil
 	if _, err := Open(&mac, NewCode(), Options{}); err == nil {
 		t.Error("a Mac opened a pairing window")
 	}
@@ -929,8 +929,8 @@ func TestDialAListeningJoiner(t *testing.T) {
 			if out.joinErr != nil || out.serveErr != nil || out.savedCalls != 1 {
 				t.Fatalf("join %v, serve %v, saved %d", out.joinErr, out.serveErr, out.savedCalls)
 			}
-			if err := out.id.Check(); err != nil || out.id.ServesPhone() {
-				t.Errorf("the new identity: %v, admin %v", err, out.id.ServesPhone())
+			if err := out.id.Check(); err != nil {
+				t.Errorf("the new identity: %v, root %v", err, out.id.IsRoot())
 			}
 			if res, err := f.window.Result(); err != nil || res.Device != j.ID || !res.Confirmed {
 				t.Errorf("Result = %+v, %v", res, err)
@@ -997,8 +997,8 @@ func TestWelcomeWithoutCAKeys(t *testing.T) {
 	if out.joinErr != nil || out.serveErr != nil {
 		t.Fatalf("join %v, serve %v", out.joinErr, out.serveErr)
 	}
-	if err := out.id.Check(); err != nil || out.id.ServesPhone() || out.id.GroupCA.Key != nil || out.id.PhoneCA != nil || out.id.Phone != nil {
-		t.Errorf("the Linux device holds CA keys: %v, admin %v", err, out.id.ServesPhone())
+	if err := out.id.Check(); err != nil || out.id.GroupCA.Key != nil {
+		t.Errorf("the Linux device holds CA keys: %v, root %v", err, out.id.IsRoot())
 	}
 }
 
@@ -1206,7 +1206,7 @@ func TestComputerAdminAdmits(t *testing.T) {
 			if id.Issuer == nil || !id.Issuer.Equal(admin.AdminCA) || id.Cert.CheckSignatureFrom(admin.AdminCA) != nil {
 				t.Error("the certificate is not from the admin CA")
 			}
-			if id.ServesPhone() || id.GroupCA.Key != nil || id.PhoneCA != nil || !id.GroupCA.Cert.Equal(root.Cert) {
+			if id.GroupCA.Key != nil || !id.GroupCA.Cert.Equal(root.Cert) {
 				t.Error("the new device got CA keys or another group")
 			}
 			assertMembers(t, id, admin)
@@ -1332,7 +1332,7 @@ func TestJoinerRefusesKeysFromARoot(t *testing.T) {
 	}
 	member := memberAD{Device: f.admin.ID, Group: group.Tag(f.admin.GroupCA.Cert)}
 	id, err := j.identity(withOldCAKeys(t, w, &f.admin.GroupCA), f.admin.Cert, member)
-	if err != nil || id.GroupCA.Key != nil || id.PhoneCA != nil || id.ServesPhone() {
+	if err != nil || id.GroupCA.Key != nil {
 		t.Fatalf("a Linux joiner took CA keys: %v", err)
 	}
 }
@@ -1353,7 +1353,7 @@ func TestMacRefusesCAKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	id, err := j.identity(withOldCAKeys(t, wel, &admin.GroupCA), admin.Cert, memberAD{Device: admin.ID, Group: group.Tag(admin.GroupCA.Cert)})
-	if err != nil || id.GroupCA.Key != nil || id.PhoneCA != nil {
+	if err != nil || id.GroupCA.Key != nil {
 		t.Fatalf("a Mac took CA keys: %v", err)
 	}
 }

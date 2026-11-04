@@ -297,7 +297,7 @@ class PhoneGroup internal constructor(
      * Makes this phone the root once the records make its claim's new root
      * the current root, and signs what a new root starts with: its own device
      * that holds the root, the admins it keeps, and a removal of the lost
-     * root's device and the shortcuts. rootSigner is the new root's key. A
+     * root's device. rootSigner is the new root's key. A
      * phone that claimed with the recovery key has no device record yet: the
      * new root signs one, under name, with seal. This phone's member
      * certificate is reissued from the new root, as a root admits only with
@@ -331,7 +331,7 @@ class PhoneGroup internal constructor(
         for (d in list) {
             if (d.id == device) continue
             val admin = d.adminKey
-            if (d.id == lost || d.role == "shortcut") {
+            if (d.id == lost) {
                 revoke += d.keys
             } else if (admin != null && !d.frozen) {
                 out += record(d.id, d.name, d.role, d.key, rootSigner, now, admin, d.os, d.store, d.kind, d.proof, d.powers, d.commands, d.seal)

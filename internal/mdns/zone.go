@@ -16,12 +16,10 @@ import (
 // Names and lifetimes of the records, after RFC 6762 and RFC 6763.
 const (
 	ServiceName  = "_cbb._tcp.local."
-	PhoneName    = "cbb.local."
 	servicesName = "_services._dns-sd._udp.local."
 
 	hostTTL    = 120  // records that name a host: SRV, A, AAAA
 	otherTTL   = 4500 // PTR and TXT
-	phoneTTL   = 10   // cbb.local, so the iPhone follows a handover quickly
 	legacyTTL  = 10   // the most a legacy unicast answer may carry
 	cacheFlush = 0x8000
 	classIN    = dnsmessage.ClassINET
@@ -29,13 +27,12 @@ const (
 )
 
 // zone is what one member publishes: its service instance, its own host
-// name and, while it holds it, cbb.local.
+// name.
 type zone struct {
 	instance string // <device ID>._cbb._tcp.local.
 	host     string // cb-<device ID>.local.
 	port     uint16
 	txt      []string
-	holder   bool // answers for cbb.local
 }
 
 func newZone(id string, port uint16, txt []string) *zone {
@@ -169,9 +166,6 @@ func appendWireName(b []byte, s string) []byte {
 func (z *zone) all(ips []netip.Addr) []rr {
 	out := []rr{z.ptr(), z.srv(), z.txtRR()}
 	out = append(out, addrs(z.host, hostTTL, ips)...)
-	if z.holder {
-		out = append(out, addrs(PhoneName, phoneTTL, ips)...)
-	}
 	return out
 }
 
@@ -184,10 +178,6 @@ func (z *zone) answer(q *dnsmessage.Message, ips []netip.Addr) (answers, additio
 		return nil, nil
 	}
 	hostRRs := addrs(z.host, hostTTL, ips)
-	var phoneRRs []rr
-	if z.holder {
-		phoneRRs = addrs(PhoneName, phoneTTL, ips)
-	}
 	for _, question := range q.Questions {
 		t := question.Type
 		any := t == dnsmessage.TypeALL
@@ -208,8 +198,6 @@ func (z *zone) answer(q *dnsmessage.Message, ips []netip.Addr) (answers, additio
 			}
 		case sameName(question.Name, z.host):
 			answers = append(answers, hostAnswers(hostRRs, t)...)
-		case z.holder && sameName(question.Name, PhoneName):
-			answers = append(answers, hostAnswers(phoneRRs, t)...)
 		}
 	}
 	answers = suppress(dedup(answers), q.Answers)

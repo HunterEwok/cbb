@@ -11,7 +11,7 @@ until it is there.
 The functions these cases cover, one line per function of the product, are in
 [testbench-functions.md](testbench-functions.md). `testbench coverage` reads both files and
 prints how many functions have a case, how many of those cases run by themselves, and how
-many the harness runs today, by area, with the list of what is left (section 18).
+many the harness runs today, by area, with the list of what is left (section 17).
 
 The step-by-step form of the cases that have one, and the common procedures R1 to R7 (reset,
 form the group, end a run, copy and read, "arrives", errors in both modes, capture), are in
@@ -44,12 +44,11 @@ wrong". `tools/bench/errshow.go` does it for the command line.
 
 Where a case says **every pair** it runs from each kind of sender to each kind of receiver
 the bench has: Linux on Wayland, Linux on X11, Linux without a desktop, Windows, macOS, the
-lite member, a container, the router, FreeBSD, the Android app, the iPhone app, the iPhone
-shortcut, Android TV; and over each path: one LAN, across subnets (`-peer`), the hub's
+lite member, a container, the router, FreeBSD, the Android app, the iPhone app, Android TV; and over each path: one LAN, across subnets (`-peer`), the hub's
 tunnel directly, through the forwarder, with AmneziaWG, over VLESS, through the blind relay.
 
 Where it says **every role**: the root (a computer, a phone), an admin (a computer with a
-file key, a computer with a TPM key, a phone, a watch), a member, a lite member, a shortcut,
+file key, a computer with a TPM key, a phone, a watch), a member, a lite member,
 a frozen admin, a removed device.
 
 ### 0.4 The columns
@@ -119,10 +118,9 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | ID | Case | How | Needs |
 |---|---|---|---|
 | G20 | `cbb admin NAME` on the root: refused for a file key without `-allow-file-key`, allowed for a TPM key; the target must be connected; refused for a container and a lite member [L5] | real, fleet | |
-| G21 | An admin computer admits, renews, removes ordinary devices and serves the shortcut; it cannot make admins or remove the root or another admin [L5] | real, fleet | |
+| G21 | An admin computer admits, renews, removes ordinary devices; it cannot make admins or remove the root or another admin [L5] | real, fleet | |
 | G22 | `cbb freeze` from any admin; a frozen admin's records, commands, pastes and connections refused everywhere; `cbb unfreeze` on the root; a mutual freeze keeps both frozen; a frozen admin cannot take over; the root and admin phones cannot be frozen | fleet | |
 | G23 | Remove by name and by device ID: a member, an admin (the devices it admitted stay), a phone (both keys), a watch; the removed device's connections close at once and every member, the lite member and the hub refuse it [L3, L7] | real, fleet | |
-| G24 | Removing an admin of a computer's group replaces the iPhone CA; only shortcut iPhones pair again | fleet | |
 | G25 | A device that was off during a removal gets the record from the first member it meets; a removed device that was off reaches nobody | fleet | |
 | G26 | `cbb takeover` when the root computer is lost; the new root admits and makes admins; the old root comes back and is refused [L6] | real, fleet | |
 | G27 | A takeover undone: the old root is still there and removes the admin that took over, before or after it hears of the takeover (its status names that admin); the takeover stops counting | fleet | |
@@ -158,7 +156,6 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | ID | Case | How | Needs |
 |---|---|---|---|
 | K1 | A member certificate is renewed when less than 240 days remain, by the root, an admin computer and an admin phone (with `issuer`); new connections present it at once [L4] | time | |
-| K2 | The `cbb.local` certificate is renewed at 60 days left, and at once when its start is in the future | time | |
 | K3 | A member takes a renewal only from a valid admin: a `cert` message for another device or key, ending earlier, not for client and server, or signed by a removed admin is ignored and logged; a frozen admin still renews a listed device (docs/protocol.md, section 10); a device whose certificate a removed admin renewed stays in the group | fleet | |
 | K4 | No admin on through the whole renewal window: the certificate expires, connections fail with a clear message, the device pairs again | time | |
 | K5 | A certificate already ending with its CA is not renewed; a CA at the end of its 20 years is replaced as after a removal | time | |
@@ -168,7 +165,6 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | K9 | Key levels 1, 2 and 3: who may be root, admin and hub at each; `cbb status` and the devices lists show `file`, `hardware` or `proven (kind)` | fleet, real | |
 | K10 | Evidence: a phone's attestation (Android TEE and StrongBox, App Attest), TPM EK chains checked offline, the Intel and AMD fetch only at level 1; a bad chain refused; the revocation list marks a revoked chain `hardware` with the reason | fleet, ui | |
 | K11 | Old groups whose root or admins hold file keys are warned and offered a move to a proven root | fleet | |
-| K12 | The shortcut's token: kept hashed, passed to the admins; `-new-token` revokes every token | fleet | |
 | K13 | The TPM evidence flow: AK made under the EK, credential activation, the result shown by `cbb status`; Windows through the platform crypto provider | real, helper | |
 | K14 | Chains through an admin CA: a device certified by an admin presents the admin CA in TLS; every member, the lite member and both kits accept it, and still accept it once that admin is removed, since the removal keeps the devices it admitted | fleet | |
 
@@ -179,8 +175,6 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | D1 | mDNS: every full member and the lite member publish and browse; avahi, systemd-resolved, mDNSResponder and the Windows DNS client keep working beside it; another group's records are ignored | real, fleet | |
 | D2 | Who dials: of two full members the lower ID dials; the other dials after 30 s when that is blocked; one connection per pair stays [P4] | fleet, real | |
 | D3 | Full members dial lite members; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
-| D4 | `cbb.local`: a machine without a battery holds it first, a laptop only as a fallback; `cbb holder auto/first/fallback/never`; only devices with the iPhone CA key take part [L8, P25] | real, fleet | |
-| D5 | Handover: the holder stops (goodbye) and another takes the name at once; the holder loses power and another takes it within 20 s | real, fleet | |
 | D6 | Known networks: a member is quiet on a network it does not know; it learns one by making or joining a group, a pairing window or a member connection; `cbb status` names quiet networks; `sudo cbb network` after a new router | fleet | |
 | D7 | Only private, unique-local and link-local addresses are published and accepted; a public source address on the member port is refused by the program and by the unit's limits | fleet | |
 | D8 | Only IPv6 between two members; link-local addresses tried last [P19] | fleet, real | |
@@ -241,7 +235,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | Y32 | A received secret carries the marks on each system, stays out of histories and cloud clipboards, and is given up at its expiry | helper, real | |
 | Y33 | A secret in a hello is a mark only: a member that knows only the mark has no text | fleet | |
 | Y34 | The memory of skipped secrets: a manager offering one again makes no event for 12 h; it holds 4096 entries | fleet, helper | |
-| Y35 | Secrets from the phones and the shortcut; `cbb paste -terminal` refuses a secret without `-secret` | ui, real | |
+| Y35 | Secrets from the phones; `cbb paste -terminal` refuses a secret without `-secret` | ui, real | |
 
 ## 6. Sync modes (M)
 
@@ -264,7 +258,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | O3 | `cbb copy FILE...`, `-text`, `-type png/jpeg/html`; `cbb paste -o DIR`: never replaces a file, waits for a copy still arriving, in `own` saves the group's copy | real | |
 | O4 | Formatted text: HTML from a browser and an office program arrives as HTML where a desktop takes it, as text on phones, the lite member and older connectors; HTML over 8 MiB or text over 256 KiB goes as text alone; never with a secret | real, helper | |
 | O5 | Limits: `max-copy` from 1 MiB to 1 GiB, `max-copy-away` up to `max-copy`, others refused; a copy over a receiver's limit is not fetched and is said once in `cbb status` and the log; the sender's own limit [P2] | real | |
-| O6 | Text-only devices (lite, shortcut, Nano, ZX Next) take the text that goes with a copy and never fetch | real, fleet | |
+| O6 | Text-only devices (lite, Nano, ZX Next) take the text that goes with a copy and never fetch | real, fleet | |
 | O7 | Transfer faults: a fetch cut in the middle resumes from its offset; the sender restarts mid-transfer; a newer copy stops the fetch; a corrupted chunk (hash mismatch) is refused and fetched again; a peer that stops answering is cancelled after 15 s | fleet | |
 | O8 | Priority: texts keep flowing during a 500 MB transfer | fleet, real | |
 | O9 | The cache: older copies deleted 10 min after they are replaced, all at a restart, within twice the limit; the agent's received folder emptied at start; the files readable only by the user | time, real | |
@@ -360,20 +354,11 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W41 | The push sender: an encrypted push reaches the iPhone and wakes it; cbb.tools stores nothing | ui, real | Apple account |
 | W42 | Phones away: the tunnel in the app's process (`cbbtun`), the loopback port, the kits' member TLS to the hub; the Android foreground service away; the iPhone while the app runs | ui | |
 
-## 11. The iPhone shortcut (X)
+## 11. The command line, the control socket and errors (U)
 
 | ID | Case | How | Needs |
 |---|---|---|---|
-| X1 | `cbb pair -phone`: the profile over plain HTTP only while the window is open; the fingerprint; the code and token only over the trusted CA | helper, person | |
-| X2 | `POST /sync`: a computer's copy under 45 s old goes to the phone; a new phone text becomes an event; the member's own clipboard text comes back; nothing to transfer; the phone's own text does not count as a computer's copy | fleet, real | |
-| X3 | Errors as `direction: error` with a message: an unknown token, a revoked token; never a secret in the message | fleet | |
-| X4 | The iPhone CA's name constraints: a certificate for another name or an IP address is refused by a client that trusts the CA | fleet | |
-
-## 12. The command line, the control socket and errors (U)
-
-| ID | Case | How | Needs |
-|---|---|---|---|
-| U1 | `cbb status` matches the real state on every system: devices, systems, roles, root, admin and frozen marks, key store, last seen, clock skew, mode, holder, quiet networks, dial-back warning, away state, transfers [P13] | real, fleet | |
+| U1 | `cbb status` matches the real state on every system: devices, systems, roles, root, admin and frozen marks, key store, last seen, clock skew, mode, quiet networks, dial-back warning, away state, transfers [P13] | real, fleet | |
 | U2 | `cbb version`, `help`, each command's `-h`; unknown flags and commands print the usage; the lite member's help says it is the lite member and a full member's command there says so | real | |
 | U3 | Local access: a user outside the `cbb` group is refused with the group named; a member of it cannot use the admin socket; the Windows socket's access list [S11] | real | |
 | U4 | Errors as 0.2 says for every refusal of this catalogue, in both modes; a development build shows details by default | real, fleet | |
@@ -387,7 +372,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | U12 | Error details in the apps: off in release builds, on in debug builds; seven taps on the version, the launch argument `ShowErrorDetails` and the tray and Mac apps' switch show the cause under each message | ui | |
 | U13 | The lite member's `-state`, `-socket`, `-debug`, `CBB_STATE`, `CBB_SOCKET`; `CBB_SOCKET` for a second instance of a full member | real, fleet | |
 
-## 13. Platforms and their desktops (H)
+## 12. Platforms and their desktops (H)
 
 | ID | Case | How | Needs |
 |---|---|---|---|
@@ -407,7 +392,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | H14 | The Steam Deck's Game Mode and gamescope [P17] | person | |
 | H15 | The iPad build and big screens: the layout of each screen in both orientations and split view | ui | iPad |
 
-## 14. The apps (A)
+## 13. The apps (A)
 
 | ID | Case | How | Needs |
 |---|---|---|---|
@@ -428,7 +413,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | A15 | Themes: ten colours in System, Dark and Light; tiles and list; every device icon | ui | |
 | A16 | Plain-language paths: a lost phone ("remove it on your other phone"), a group with one admin advised to add a second, errors in one line with the next step | ui | |
 
-## 15. Security (S)
+## 14. Security (S)
 
 | ID | Case | How | Needs |
 |---|---|---|---|
@@ -456,7 +441,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | S23 | Commands passed on by a member cannot be changed or forged by it | fleet | |
 | S24 | A stolen admin computer (its state copied to a fresh container): it acts until frozen; after the freeze nothing it signs counts | fleet | |
 
-## 16. Load, concurrency and faults (E)
+## 15. Load, concurrency and faults (E)
 
 | ID | Case | How | Needs |
 |---|---|---|---|
@@ -472,7 +457,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | E10 | Soak for 24 h: a copy every 30 s from a random member, a fault every hour, memory and descriptors sampled every 5 minutes; flat, no restarts [Soak] | real, fleet | |
 | E11 | The service hung [F13]: SIGSTOP; commands answer within seconds; after SIGCONT it catches up | real | |
 
-## 17. What the bench needs for this
+## 16. What the bench needs for this
 
 - The controller runs the fleet: Docker with bridge and macvlan networks, QEMU for OpenWrt and
   FreeBSD, a JVM for the Kotlin phone. If the controller is too small for 40 containers and
@@ -486,7 +471,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
   WatchConnectivity, the Data Layer, wrist detection).
 - A TV for T17, T19 and H13 (Android TV starts in the emulator for the rest).
 
-## 18. How it is run
+## 17. How it is run
 
 `testbench all BUILD` runs everything the harness has, one suite after another, each after a
 reset, and writes one report with the coverage table and the list of what is skipped and

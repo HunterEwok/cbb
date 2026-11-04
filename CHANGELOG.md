@@ -335,7 +335,7 @@ All notable changes to cbb are documented in this file. The format follows
 - `release-sign verify` checks SHA256SUMS against the files and the signed manifest and
   prints the manifest's Docker image; the published workflow checks every published release
   with it, each file's build attestation, and the image's digest on ghcr.io (I22).
-- The bench's fleet runs the holder's election and handover (D4, D5), dial-back (D11), what a
+- The bench's fleet runs dial-back (D11), what a
   stranger learns (S21), the forwarder's hub rule (W30) and fuzzing for `-fuzz-for` (S20).
 - The bench's fleet runs the key-file warnings (K11), the join matrix (G41, Y6) and, in a
   systemd container, `cbb update` from a test feed signed by `tools/release-sign`: the install,
@@ -922,7 +922,7 @@ All notable changes to cbb are documented in this file. The format follows
   (`tools.cbb` on macOS), the user `cbb` (`_cbb` on macOS and FreeBSD), the directories
   (`/etc/cbb`, `/var/lib/cbb`, `/opt/cbb` and the others), the release archives
   (`cbb-linux-amd64.tar.gz` and the others), the Homebrew formula and the OpenWrt package
-  `cbb`, the protocol's names (`_cbb._tcp`, `cbb.local`, the ALPN protocols, the `cbb://` links
+  `cbb`, the protocol's names (`_cbb._tcp`, the ALPN protocols, the `cbb://` links
   and QR codes, the signature labels), the Swift package `CBBKit` and the Kotlin package
   `tools.cbb`. An install of 0.5 is not moved: remove it with its own uninstaller.
 - What earlier versions left behind is gone, as nothing before 0.6 is read: the installers no
@@ -1130,8 +1130,8 @@ All notable changes to cbb are documented in this file. The format follows
   record's `kind` and `proof`, the attestation challenge's group tag, AmneziaWG's sizes and
   where its header protection is defined, the registration ID's 64 bits, the missing message
   and control header fields, and the hub exception for phones. docs/cryptography.md says
-  which keys do leave a device, the member certificates' real lifetime on phones (2 years;
-  397 days is the `cbb.local` certificate's, in limits.md too) and the
+  which keys do leave a device, the member certificates' real lifetime on phones (2 years,
+  in limits.md too) and the
   invitation secret; the threat model says which WireGuard keys a hub admits.
 - docs/design.md follows arc42: goals and constraints, context, solution strategy, building
   blocks, runtime, deployment, crosscutting concepts, decisions, quality requirements, risks
@@ -1184,6 +1184,13 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Removed
 
+- The way in for an iPhone without the app (D-80): every phone now joins through its app,
+  with a key of its own. Gone with it are the iPhone shortcut and its token, `cbb pair
+  -phone` and `-new-token`, the configuration profile and its pages, the iPhone CA and the
+  `cbb.local` certificate, the shared address `cbb.local` with `cbb holder` and the TXT key
+  `h`, the `phone_ca` message and hello field, and the record role `shortcut`. The member
+  port now takes TLS alone. A group a computer created keeps working; an iPhone that used
+  the shortcut joins it with the app ("My group was made on a computer").
 - The Rust core's reader of group records of version 1 (`records`): commands now live in
   `command`, and the interop vectors of version 1 (`go-*.json` for records, commands, hubs
   and credentials) give way to the `v2-*.json` vectors of the same cases.
@@ -1654,7 +1661,7 @@ All notable changes to cbb are documented in this file. The format follows
   sending, so only a peer that sends nothing for 15 seconds ends a fetch.
 - The Android app's dependencies take Guava 33.7.2, which fixes GHSA-xxph-c9ww-hj94 in the
   33.3.1 that CameraX and Media3 bring in.
-- `cbb revoke`, `takeover`, `freeze`, `unfreeze` and `holder` with `-h` print their usage
+- `cbb revoke`, `takeover`, `freeze` and `unfreeze` with `-h` print their usage
   instead of asking the service about a device named `-h`.
 - The TV remote's errors name `cbb remote add`, the command that adds a TV, instead of
   `cbb tv add`, which does not exist.
@@ -1670,7 +1677,7 @@ All notable changes to cbb are documented in this file. The format follows
   the takeover, as docs/design.md says it does: the others refused its connections, so its
   removal of that admin reached no one, and it gave up its root key when it heard of the
   takeover. Full members now exchange records, and nothing else, with such an old root; it
-  keeps its root key and iPhone CA, `cbb status` there names the admin that took over, and
+  keeps its root key, `cbb status` there names the admin that took over, and
   `cbb revoke` of that admin, before or after it heard, undoes the takeover
   (docs/protocol.md, section 10). Going back to the group's first root no longer crashes
   the service.

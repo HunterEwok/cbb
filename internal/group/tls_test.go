@@ -93,8 +93,6 @@ func TestMemberHandshakeRejects(t *testing.T) {
 	noALPN.NextProtos, noALPN.VerifyConnection = nil, nil // so only the server can object
 	noCert := mac.ClientTLS(admin.ID, now)
 	noCert.Certificates = nil
-	phoneCert := admin.ClientTLS(admin.ID, now)
-	phoneCert.Certificates = []tls.Certificate{admin.tlsCert(admin.Phone)}
 	// A stranger that trusts this group's CA, so only the server can object
 	// to its certificate.
 	strangerClient := stranger.ClientTLS(admin.ID, now)
@@ -119,7 +117,6 @@ func TestMemberHandshakeRejects(t *testing.T) {
 		{"another protocol", otherALPN, admin.ServerTLS(now), "server"},
 		{"no protocol", noALPN, admin.ServerTLS(now), "server"},
 		{"no client certificate", noCert, admin.ServerTLS(now), "server"},
-		{"the cbb.local certificate as a client", phoneCert, admin.ServerTLS(now), "server"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -174,29 +171,5 @@ func TestMemberHandshakeWithClockBehind(t *testing.T) {
 	behind := TLSOptions{Now: func() time.Time { return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC) }}
 	if _, _, cerr, serr := handshake(t, mac.ClientTLS(admin.ID, behind), admin.ServerTLS(behind)); cerr != nil || serr != nil {
 		t.Errorf("handshake with the clock in 1970: client %v, server %v", cerr, serr)
-	}
-}
-
-func TestPhoneTLS(t *testing.T) {
-	admin := newGroup(t)
-	roots := x509.NewCertPool()
-	roots.AddCert(admin.PhoneCA.Cert)
-	phone := &tls.Config{RootCAs: roots, ServerName: PhoneName, Time: func() time.Time { return t0 }}
-	ccs, _, cerr, serr := handshake(t, phone, admin.PhoneTLS())
-	if cerr != nil || serr != nil {
-		t.Fatalf("handshake: client %v, server %v", cerr, serr)
-	}
-	if len(ccs.PeerCertificates) != 2 || !ccs.PeerCertificates[1].Equal(admin.PhoneCA.Cert) {
-		t.Error("the server does not send the iPhone CA after its certificate")
-	}
-	// The iPhone does not accept the member certificate, and a member does
-	// not accept the cbb.local certificate.
-	member := &tls.Config{RootCAs: roots, ServerName: PhoneName, Time: phone.Time}
-	if _, _, cerr, _ := handshake(t, member, admin.ServerTLS(TLSOptions{})); cerr == nil {
-		t.Error("an iPhone client accepted the member certificate")
-	}
-	mac := join(t, admin, t0)
-	if _, _, cerr, _ := handshake(t, mac.ClientTLS(admin.ID, TLSOptions{}), admin.PhoneTLS()); cerr == nil {
-		t.Error("a member accepted the cbb.local certificate")
 	}
 }

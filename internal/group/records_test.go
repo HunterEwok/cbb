@@ -402,7 +402,7 @@ func TestRecordRoles(t *testing.T) {
 		{RoleFull, ""},
 		{RoleFull, OSWindows},
 		{RoleFull, OSMacOS},
-		{RoleShortcut, OSiOS},
+		{RolePhone, OSiOS},
 		{RoleLite, OSNone},
 		{RolePhone, OSAndroid},
 	} {

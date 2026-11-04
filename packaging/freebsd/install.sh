@@ -184,8 +184,7 @@ if [ -z "$appliance" ]; then
 fi
 sh /usr/local/share/cbb/firewall.sh setup "$firewall" "$port"
 if [ "$port" != 8764 ]; then
-	echo "CBB uses TCP port $port instead of 8764. The iPhone shortcut works only"
-	echo "with 8764; the CBB app takes any port."
+	echo "CBB uses TCP port $port instead of 8764."
 fi
 
 sysrc -q cbb_enable=YES >/dev/null

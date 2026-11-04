@@ -37,7 +37,7 @@ func renewalChecks(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 	}) != nil {
 		return
 	}
-	before, _, err := identityCerts(ctx, t)
+	before, err := memberCert(ctx, t)
 	if err != nil {
 		r.Do(p+"certificate", func() error { return err })
 		return
@@ -54,7 +54,7 @@ func renewalChecks(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 			if _, err := runForge(ctx, h, m, root, t, "-target-state", "/tmp/"+t.Name, c.arg); err != nil {
 				return err
 			}
-			now, _, err := identityCerts(ctx, t)
+			now, err := memberCert(ctx, t)
 			if err != nil {
 				return err
 			}
@@ -79,7 +79,7 @@ func renewalChecks(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 			return err
 		}
 		return eventually(ctx, 10*time.Second, func() error {
-			now, _, err := identityCerts(ctx, t)
+			now, err := memberCert(ctx, t)
 			if err == nil && !now.NotAfter.After(before.NotAfter) {
 				err = fmt.Errorf("%s did not take a valid renewal from %s", t.Name, signer.Name)
 			}
@@ -120,7 +120,7 @@ func renewalChecks(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 		if _, err := runForge(ctx, h, m, root, t, "-target-state", "/tmp/"+t.Name, "cert:valid:/tmp/"+admin.Name); err != nil {
 			return err
 		}
-		now, _, err := identityCerts(ctx, t)
+		now, err := memberCert(ctx, t)
 		if err == nil && !now.Equal(before) {
 			err = fmt.Errorf("%s took a certificate from a removed admin", t.Name)
 		}

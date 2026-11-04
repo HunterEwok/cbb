@@ -27,9 +27,7 @@ import (
 // certificate is due for renewal. The group's signed records travel in
 // records messages to a peer whose hello names other records. The group's
 // root sends an admin message with an admin CA to a member whose hello
-// offers an admin key. In a group a computer created, an admin sends a
-// phone_ca message with the iPhone CA and its key to an admin whose hello
-// names another one. The group's hub sends a tunnel message to a member
+// offers an admin key. The group's hub sends a tunnel message to a member
 // whose hello offers a tunnel key. An admin sends a command message with a
 // signed command for the receiver, such as a sync mode, which answers with
 // a result message. A hub sends a hubs message to another device that may
@@ -47,7 +45,6 @@ const (
 	typeCert    = "cert"
 	typeRecs    = "records"
 	typeAdmin   = "admin"
-	typePhoneCA = "phone_ca"
 	typeTun     = "tunnel"
 	typeCommand = "command"
 	typeResult  = "result"
@@ -119,10 +116,6 @@ type message struct {
 	// AdminCA, in an admin message from the group's root, is the
 	// receiver's admin CA for the admin key its hello offered, DER.
 	AdminCA []byte `json:"admin_ca,omitempty"`
-	// PhoneCA and PhoneCAKey, in a phone_ca message from an admin, are
-	// the group's iPhone CA, DER, and its key, PKCS #8.
-	PhoneCA    []byte `json:"phone_ca,omitempty"`
-	PhoneCAKey []byte `json:"phone_ca_key,omitempty"`
 	// Tunnel, in a tunnel message from the group's hub, is its offer for
 	// the tunnel key the receiver's hello carried.
 	Tunnel *TunnelOffer `json:"tunnel,omitempty"`
@@ -275,9 +268,6 @@ type helloBody struct {
 	Mode string `json:"mode,omitempty"`
 	// AdminKey is the admin key the sender offers, for the root.
 	AdminKey []byte `json:"admin_key,omitempty"`
-	// PhoneCA is the SHA-256 of the SubjectPublicKeyInfo of the iPhone CA
-	// whose key the sender holds.
-	PhoneCA []byte `json:"phone_ca,omitempty"`
 	// KeyStore is where the sender says its keys live (group.StoreFile or
 	// group.StoreHardware or group.StoreRootless).
 	KeyStore string `json:"key_store,omitempty"`
@@ -311,10 +301,6 @@ type helloOut struct {
 	// that is no admin yet, DER, for the group's root to certify when it
 	// makes the member an admin.
 	AdminKey []byte `json:"admin_key,omitempty"`
-	// PhoneCA is the SHA-256 of the SubjectPublicKeyInfo of the iPhone CA
-	// whose key this member holds, so another admin knows whether to send
-	// it a newer one.
-	PhoneCA []byte `json:"phone_ca,omitempty"`
 	// TunnelKey is this member's WireGuard public key, for the group's hub.
 	TunnelKey []byte `json:"tunnel_key,omitempty"`
 	// TunnelPSK is this member's own preshared key, for every hub.

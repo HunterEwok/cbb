@@ -203,11 +203,5 @@ func (s *Service) setIdentityLocked(next *group.Identity) error {
 	}
 	s.id = next
 	s.nd.SetIdentity(next)
-	// Taking or losing the iPhone CA changes whether this member may hold
-	// cbb.local.
-	if s.responder != nil && !s.stopping {
-		s.responder.SetTXT(s.txtLocked())
-		s.electLocked()
-	}
 	return nil
 }

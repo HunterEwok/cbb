@@ -86,30 +86,17 @@ func exec1(ctx context.Context, name string, args ...string) (string, error) {
 
 // memberCert reads a fleet member's member certificate from its state.
 func memberCert(ctx context.Context, d *Device) (*x509.Certificate, error) {
-	c, _, err := identityCerts(ctx, d)
-	return c, err
-}
-
-// identityCerts reads a fleet member's member certificate and its
-// cbb.local certificate, nil if it serves no phone, from its
-// state.
-func identityCerts(ctx context.Context, d *Device) (member, phone *x509.Certificate, err error) {
 	out, err := Run(ctx, d, "cat /var/lib/cbb/identity.json", "")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	var f struct {
-		Cert  []byte `json:"cert"`
-		Phone []byte `json:"phone"`
+		Cert []byte `json:"cert"`
 	}
 	if err := json.Unmarshal([]byte(out), &f); err != nil {
-		return nil, nil, fmt.Errorf("%s: identity.json: %w", d.Name, err)
+		return nil, fmt.Errorf("%s: identity.json: %w", d.Name, err)
 	}
-	if member, err = x509.ParseCertificate(f.Cert); err != nil || f.Phone == nil {
-		return member, nil, err
-	}
-	phone, err = x509.ParseCertificate(f.Phone)
-	return member, phone, err
+	return x509.ParseCertificate(f.Cert)
 }
 
 // renewal (K1, K7): the root renews the members' certificates in their
@@ -147,24 +134,6 @@ func renewal(ctx context.Context, r *Report, g *benchGroup, timeout time.Duratio
 			})
 		})
 	}
-	// K2: the root's cbb.local certificate lasts 397 scaled
-	// days and is renewed when less than 60 remain.
-	r.Do("time/K2-local-cert", func() error {
-		_, c, err := identityCerts(ctx, g.hub)
-		if err != nil {
-			return err
-		}
-		if c == nil {
-			return fmt.Errorf("%s, the root, serves no phone", g.hub.Name)
-		}
-		return eventually(ctx, scaled(400*24*time.Hour), func() error {
-			_, n, err := identityCerts(ctx, g.hub)
-			if err == nil && !n.NotAfter.After(c.NotAfter) {
-				err = fmt.Errorf("%s still has its cbb.local certificate until %s", g.hub.Name, n.NotAfter.Format(time.TimeOnly))
-			}
-			return err
-		})
-	})
 	r.Do(p+"K7-still-syncing", func() error {
 		text := "cbb-bench " + g.run + " after the renewal"
 		if err := Copy(ctx, g.members[1], text); err != nil {

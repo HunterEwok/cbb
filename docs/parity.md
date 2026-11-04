@@ -21,7 +21,7 @@ on every platform of the class, on the roadmap).
 | Capability | Linux | macOS | Windows | Notes |
 |---|---|---|---|---|
 | Service, agent, autostart | yes | yes | yes | systemd and desktop autostart; LaunchDaemon and LaunchAgent; Windows service and the sign-in entry |
-| Every `cbb` command (pair, revoke, admin, freeze, takeover, invite, global, holder, copy, paste) | yes | yes | yes | one program; the service is the same code |
+| Every `cbb` command (pair, revoke, admin, freeze, takeover, invite, global, copy, paste) | yes | yes | yes | one program; the service is the same code |
 | Secrets from password managers | yes | yes | yes | X11/Wayland hint, `ConcealedType`, the Windows clipboard formats |
 | Battery detection | yes | yes | yes | |
 | Installer and uninstaller, `--purge` | yes | yes | yes | |

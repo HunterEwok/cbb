@@ -81,7 +81,6 @@ type noDiscovery struct{}
 
 func (noDiscovery) Run(ctx context.Context) error { <-ctx.Done(); return nil }
 func (noDiscovery) SetTXT([]string)               {}
-func (noDiscovery) SetHolder(bool)                {}
 
 func startService(t *testing.T) string {
 	t.Helper()

@@ -133,3 +133,56 @@ func TestTestsKeptRunning(t *testing.T) {
 		t.Fatalf("%q", problems)
 	}
 }
+
+// A test removed with what it tests is excused only by a line the change
+// adds to the list, naming a decision that docs/decisions.md records.
+func TestRemovedTests(t *testing.T) {
+	decisions := []byte("| ID | Status | Decision |\n|---|---|---|\n| D-7 | accepted | x |\n")
+	list := []byte("# comment\n\np/a_test.go TestGone D-7: what it tested is gone\n" +
+		"p/a_test.go TestOld D-7: listed before\n" +
+		"p/a_test.go TestUnknown D-9: no such decision\n" +
+		"p/a_test.go TestNoReason D-7\n")
+	base := []byte("p/a_test.go TestOld D-7: listed before\n")
+	got, problems := removedTests(list, base, decisions)
+	if len(got) != 1 || !got["p/a_test.go TestGone"] {
+		t.Errorf("excused %v", got)
+	}
+	if len(problems) != 2 || !strings.Contains(problems[0], "D-9 is no decision") || !strings.Contains(problems[1], "want \"FILE TEST D-N: why\"") {
+		t.Errorf("%q", problems)
+	}
+}
+
+// checkTestsKept takes the list's excuses, and reports a listed test that
+// is still there.
+func TestTestsKeptWithTheList(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	repo := t.TempDir()
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init", "-q")
+	os.MkdirAll(filepath.Join(repo, "p"), 0o755)
+	os.WriteFile(filepath.Join(repo, "p/a_test.go"), []byte("func TestKept(t *testing.T) {}\nfunc TestGone(t *testing.T) {}\nfunc TestLost(t *testing.T) {}\n"), 0o644)
+	runGit("add", "-A")
+	runGit("-c", "user.name=test", "-c", "user.email=test@example.org", "commit", "-q", "-m", "initial")
+	t.Chdir(repo)
+	now := map[string][]byte{
+		"p/a_test.go":       []byte("func TestKept(t *testing.T) {}\n"),
+		"docs/decisions.md": []byte("| D-7 | accepted | x |\n"),
+		removedTestsFile:    []byte("p/a_test.go TestGone D-7: gone with its feature\np/a_test.go TestKept D-7: still here\n"),
+	}
+	problems, err := checkTestsKept("HEAD", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(problems) != 2 || !strings.Contains(problems[0], "TestKept is listed") || !strings.Contains(problems[1], "TestLost is gone") {
+		t.Fatalf("%q", problems)
+	}
+}

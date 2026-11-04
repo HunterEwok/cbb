@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f031187fad1e -->
+<!-- source: 4c42c72db35b -->
 # 快速入门
 
 Copy Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设备上复制，在另一台上粘贴。这些设备在你的家庭网络中组成一个**群组**。手机保管群组的密钥，并由它放行每台新设备，所以没有你的许可，谁也无法加入。
@@ -13,7 +13,7 @@ Copy Beyond Borders 让你的手机和电脑共用一个剪贴板：在一台设
 ## 1. 在手机上安装应用
 
 - **Android** 10 或更高版本：在手机上从[最新版本](https://github.com/HunterEwok/cbb/releases/latest)页面下载 `cbb-X.Y.Z.apk` 并打开；当 Android 询问时，允许浏览器安装应用。
-- **iPhone**：应用将通过 TestFlight 发布，目前尚未开放。在此之前，iPhone 使用快捷指令，群组由一台电脑保管：参见[不使用应用](without-app.md)。
+- **iPhone**：应用将通过 TestFlight 发布，目前尚未开放。在此之前，群组可以从 Android 或电脑上开始：参见[不使用应用](without-app.md)。
 
 打开应用。你将在第 3 步添加第一台电脑。
 
@@ -79,5 +79,5 @@ sudo cbb mode shared
 
 - [工作原理](how-it-works.md)：群组、各种角色，以及设备在家里和离家后各种连接方式的图示。
 - [离家使用](away-from-home.md)：通过中枢从任何地方同步。
-- [不使用应用](without-app.md)：由电脑保管的群组，以及 iPhone 快捷指令。
+- [不使用应用](without-app.md)：由电脑保管的群组。
 - [故障排除](troubleshooting.md)：出问题时看这里。

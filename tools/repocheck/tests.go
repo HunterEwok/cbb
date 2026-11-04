@@ -152,10 +152,20 @@ func checkTestsKept(base string, files map[string][]byte) ([]string, error) {
 	}
 	had, have := testNames(old), testNames(files)
 	skipped, skips := testSkips(old), testSkips(files)
-	var problems []string
+	baseList, _ := git("show", base+":"+removedTestsFile)
+	removed, problems := removedTests(files[removedTestsFile], []byte(baseList), files["docs/decisions.md"])
+	for key, file := range have {
+		f := strings.Fields(key)
+		if removed[file+" "+f[len(f)-1]] {
+			problems = append(problems, fmt.Sprintf("%s: the %s test %s is listed in %s but still there", file, f[0], f[len(f)-1], removedTestsFile))
+		}
+	}
 	for key, file := range had {
 		f := strings.Fields(key)
 		if _, ok := have[key]; !ok {
+			if removed[file+" "+f[len(f)-1]] {
+				continue
+			}
 			problems = append(problems, fmt.Sprintf("%s: the %s test %s is gone; keep it, or keep its name for the test that replaces it", file, f[0], f[len(f)-1]))
 		} else if skips[key] > skipped[key] {
 			problems = append(problems, fmt.Sprintf("%s: the %s test %s skips where it did not; a change keeps every test running", have[key], f[0], f[len(f)-1]))
@@ -163,4 +173,43 @@ func checkTestsKept(base string, files map[string][]byte) ([]string, error) {
 	}
 	sort.Strings(problems)
 	return problems, nil
+}
+
+// removedTestsFile lists the tests a change removes together with what
+// they test, by a decision of docs/decisions.md: one line each, "FILE TEST
+// D-N: why", and # for a comment.
+const removedTestsFile = "tools/repocheck/removed-tests.txt"
+
+// removedTestLine is one line of removedTestsFile.
+var removedTestLine = regexp.MustCompile(`^(\S+) (\S+) (D-[0-9]+): \S.*$`)
+
+// removedTests returns the tests that list excuses, as "FILE TEST" keys,
+// and what is wrong with it. A line excuses a test only when the change
+// adds it (base, the list at the base commit, lacks it) and names a
+// decision that docs/decisions.md (decisions) records, so an old line
+// never lets a later change drop a test with the same name.
+func removedTests(list, base, decisions []byte) (map[string]bool, []string) {
+	old := map[string]bool{}
+	for _, l := range strings.Split(string(base), "\n") {
+		old[strings.TrimSpace(l)] = true
+	}
+	out := map[string]bool{}
+	var problems []string
+	for i, l := range strings.Split(string(list), "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.HasPrefix(l, "#") || old[l] {
+			continue
+		}
+		m := removedTestLine.FindStringSubmatch(l)
+		if m == nil {
+			problems = append(problems, fmt.Sprintf("%s:%d: want \"FILE TEST D-N: why\"", removedTestsFile, i+1))
+			continue
+		}
+		if !regexp.MustCompile(`(?m)^\| ` + m[3] + ` \|`).Match(decisions) {
+			problems = append(problems, fmt.Sprintf("%s:%d: %s is no decision of docs/decisions.md", removedTestsFile, i+1, m[3]))
+			continue
+		}
+		out[m[1]+" "+m[2]] = true
+	}
+	return out, problems
 }
