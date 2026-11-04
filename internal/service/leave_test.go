@@ -118,7 +118,7 @@ func TestLeaveDamaged(t *testing.T) {
 	}
 	leaveOn(t, pi)
 	pi = restartService(t, &h, pi)
-	if _, err := pi.do(t, control.Header{Op: control.OpLeave}, ""); err == nil || !strings.Contains(err.Error(), "in no group") {
+	if _, err := pi.do(t, control.Header{Op: control.OpLeave}, ""); err == nil || !strings.Contains(err.Error(), "nothing to leave") {
 		t.Errorf("leave in no group: %v", err)
 	}
 }
@@ -165,7 +165,7 @@ func TestLiteLeave(t *testing.T) {
 			t.Errorf("%s is left", name)
 		}
 	}
-	if out, err := exec.Command(bin, "-state", dir, "-socket", lite.socket, "leave", "-yes").CombinedOutput(); err == nil || !strings.Contains(string(out), "in no group") {
+	if out, err := exec.Command(bin, "-state", dir, "-socket", lite.socket, "leave", "-yes").CombinedOutput(); err == nil || !strings.Contains(string(out), "nothing to leave") {
 		t.Errorf("leave in no group: %v; %s", err, out)
 	}
 }

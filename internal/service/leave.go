@@ -37,6 +37,9 @@ var groupFiles = []string{
 	remotepaste.LogFile, actions.LogFile, oldGroupDir, group.RecordsFileName,
 }
 
+// errNothingToLeave is the answer to a leave in no group.
+var errNothingToLeave = errors.New("this device is in no group, so there is nothing to leave; cbb pair joins one")
+
 // errRootLeaves is why the group's root does not leave while the group
 // has other devices: nobody could then add or remove one.
 func errRootLeaves(others []string) error {
@@ -58,7 +61,7 @@ func (s *Service) leave() error {
 	case busy:
 		return errors.New("a pairing is running here; let it end, then leave")
 	case id == nil && s.broken == nil:
-		return errors.New("this device is in no group")
+		return errNothingToLeave
 	}
 	if id != nil {
 		var others []string

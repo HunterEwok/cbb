@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -28,6 +29,16 @@ func cmdLeave(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		default:
 			fmt.Fprintln(stderr, "cbb: usage: cbb leave [-yes]; it deletes this device's keys and the group's files, keeps the settings, and lets it join a group again")
 			return 2
+		}
+	}
+	// In no group there is nothing to ask about. A service that does not
+	// answer the status, or whose group file is damaged, gets the question
+	// and says what it can do.
+	if c, err := control.DialFor(control.OpStatus); err == nil {
+		m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpStatus}})
+		c.Close()
+		if err == nil && m.Status != nil && m.Status.Group == "" {
+			return fail(stderr, errors.New("this device is in no group, so there is nothing to leave; cbb pair joins one"))
 		}
 	}
 	if !yes {

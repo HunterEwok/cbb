@@ -9,6 +9,9 @@ use std::path::Path;
 use crate::error::{Error, Result};
 use crate::{actions, identity, records, remotepaste, sealkey};
 
+/// The answer to a leave in no group.
+pub const NOTHING_TO_LEAVE: &str = "this device is in no group, so there is nothing to leave; cbb pair joins one";
+
 /// What a device keeps of its group in the state directory: its keys, the
 /// tunnel's (only in builds with it), the logs that name the group's
 /// devices, a group left before 0.6, and the records last, so that a leave

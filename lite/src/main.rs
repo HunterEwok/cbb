@@ -660,6 +660,11 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         [a] if flag(a) == Some("yes") => true,
         _ => return Err(Error::msg("usage: cbb leave [-yes]")),
     };
+    // In no group there is nothing to ask about; a state this user cannot
+    // read gets the question, and the service says what it can do.
+    if matches!(identity::Identity::load(&g.state), Ok(None)) && !g.state.join(records::FILE_NAME).exists() {
+        return Err(Error::msg(leave::NOTHING_TO_LEAVE));
+    }
     if !yes {
         print!("{LEAVE_QUESTION}");
         std::io::stdout().flush().ok();
@@ -682,7 +687,7 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         println!("Left the group. The service restarts in no group: cbb pair joins one.");
     } else {
         if identity::Identity::load(&g.state).ok().flatten().is_none() && !g.state.join(records::FILE_NAME).exists() {
-            return Err(Error::msg("this device is in no group"));
+            return Err(Error::msg(leave::NOTHING_TO_LEAVE));
         }
         leave::leave_group(&g.state)?;
         println!("Left the group: cbb pair joins one.");

@@ -1142,7 +1142,7 @@ impl Service {
             "leave" => {
                 // The node stops first, so nothing writes the group's files
                 // again; the service then restarts in no group.
-                self.node()?.close();
+                self.node.read().unwrap().clone().ok_or_else(|| Error::msg(crate::leave::NOTHING_TO_LEAVE))?.close();
                 let res = crate::leave::leave_group(&self.state_dir);
                 match &res {
                     Ok(()) => (self.log)(
