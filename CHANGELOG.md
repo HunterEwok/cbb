@@ -87,7 +87,7 @@ All notable changes to cbb are documented in this file. The format follows
   and progress bar on the right, the messages under them; and installs `CBB.DRV` itself through the driver API, as `.install` does;
   `.cbb net on` does the same after a reset, so `.install` is no longer needed. Not yet run
   on a real Next. The logo and the usage text with the install screen and SHA-256, the
-  install, `.cbb net`, and `.cbb paste`, `copy`, `text` and `pair` sit in four pages of the
+  install, `.cbb net`, and `.cbb paste`, `copy`, `text` and `pair` sit in three pages of the
   dot command's own, which NextZXOS allocates for it while it runs; `make` fails when any
   part keeps less than 1K free, or MAIN less than 3K for the stack and growth
   (`apps/zxnext/budget.sh`, README.md, "Memory"), or when a function shares its address
@@ -101,7 +101,10 @@ All notable changes to cbb are documented in this file. The format follows
   rows 18 to 21 and scroll only there, and it reads a file from the first byte of its body
   (a stray line end made every download one byte off). A site without the files is told at
   once (`cbb.tools has no such file`) instead of after five tries, and SPACE while it
-  connects stops it instead of blaming the Wi-Fi. `make test` runs the real `CBB` on a
+  connects stops it instead of blaming the Wi-Fi. It runs at 28 MHz and puts BASIC's speed
+  back after: at 3.5 MHz the site's answers overflowed the UART and no download got
+  through. It stays under 64K (a CBB of exactly 64K reset a real Next), so paste, copy,
+  text and pair share the page of `.cbb net`. `make test` runs the real `CBB` on a
   played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
   cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
   silent Pi, a closed connection, SPACE, the usage and a paste, each failed on what would
