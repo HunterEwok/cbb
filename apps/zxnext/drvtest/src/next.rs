@@ -1157,7 +1157,11 @@ impl Run {
         if iy != ERR_NR {
             self.hw.breach(format!("an interrupt with IY at {iy:#06x}: the ROM writes there"));
         }
-        if sp < 0x4000 {
+        // z88dk's exit moves the stack to the top of the dot command's
+        // divMMC memory (DOTN_REGISTER_SP, 0x4000) while it puts the pages
+        // back, interrupts on: the handler's few bytes land in the space
+        // CODE leaves free (budget.sh keeps 1K).
+        if sp < 0x3F00 {
             self.hw.breach(format!("an interrupt with the stack at {sp:#06x}, in the divMMC"));
         }
         // The handler pushes AF and HL, and the ROM's KEYBOARD a few more.

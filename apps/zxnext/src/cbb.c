@@ -827,9 +827,10 @@ again:
             got = !i;
         }
     }
-    // NextZXOS's own tools read +IPD without the sender.
-    for (i = 0; i < 2; i++) {
-        link_send_str(i ? "AT+CIPDINFO=0\r\n" : "AT+CIPCLOSE=4\r\n");
+    // NextZXOS's own tools read +IPD without the sender, in CIPMUX=0
+    // (refused while the network's server runs, which the link wants).
+    for (i = 0; i < 3; i++) {
+        link_send_str(i == 2 ? "AT+CIPMUX=0\r\n" : i ? "AT+CIPDINFO=0\r\n" : "AT+CIPCLOSE=4\r\n");
         while (link_line(line, sizeof line, 1) == LINK_OK && strcmp(line, "OK") && strcmp(line, "ERROR")) {
         }
     }
@@ -1028,15 +1029,12 @@ static int net_stop(void)
     if (!net_on()) return fail("the network does not run", 0);
     driver(DRV_SWITCH, 0);
     link_quit();
-    // Back to the stock speed, for NextZXOS's own tools and .pibridge,
-    // without the connections the network left (a computer's to the
-    // server stays open otherwise, and the ESP has only five).
+    // The ESP as NextZXOS's own tools (.http) and .pibridge expect it:
+    // the network's server and its connections (a computer's stays open,
+    // and the ESP has only five) keep CIPMUX=1 until a restart, which
+    // also puts back the stock speed.
     if (!esp_speed(ESP_SPEED)) printf("The ESP did not answer AT.\n");
-    else {
-        link_send_str("AT+CIPCLOSE=5\r\n");
-        while (link_line(line, sizeof line, 2) == LINK_OK && strcmp(line, "OK") && strcmp(line, "ERROR")) {
-        }
-    }
+    else esp_restart();
     link_use(LINK_PI);
     if (link_shell()) return fail("the network stopped, but the Pi does not answer", no_prompt);
     printf("The network stopped.\n");
