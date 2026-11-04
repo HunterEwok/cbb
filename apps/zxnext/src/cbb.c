@@ -29,6 +29,8 @@
 #define VERSION "0.5.0"
 // The lite member on the Pi; the NextPi set-up puts it on the shell's PATH.
 #define CBB_LITE "cbb"
+// Stops the lite member's service that cbb next link started.
+#define PKILL_SERVICE "pkill -f ' service -peer 127\\.0\\.0\\.1:'"
 // The longest text pasted or copied.
 #define MAX_TEXT 8192
 // How long the lite member may take to answer, in seconds.
@@ -731,7 +733,6 @@ static uint8_t holds(const uint8_t *p, uint16_t n, const char *s)
     return 0;
 }
 
-#pragma codeseg PAGE_17
 // The end of the name at i in the answer of n bytes.
 static uint16_t skip_name(uint16_t i, uint16_t n)
 {
@@ -744,6 +745,7 @@ static uint16_t skip_name(uint16_t i, uint16_t n)
     return n;
 }
 
+#pragma codeseg PAGE_17
 // The port of the answer's SRV record, else 8764.
 static uint16_t srv_port(uint16_t n)
 {
@@ -984,12 +986,14 @@ static uint8_t esp_address(char *ip, uint8_t max)
 // network's settings): cbb next pair waits on the Pi for the
 // phone, at the ESP's address and the port -serve leads to, while the
 // network runs under the QR code the phone scans.
-// Not static: far_net_pair() (far.asm) calls it.
 static int net_stop(void);
+static const char pair_cmd[] = "(%s; " CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null; %s) &\n";
+static const char pair_pkill[] = PKILL_SERVICE;
 
+// Not static: far_net_pair() (far.asm) calls it.
 int net_pair(void)
 {
-    char ip[40], cmd[160], *serve, *colon = 0, *end;
+    char ip[40], cmd[224], *serve, *colon = 0, *end;
     uint32_t len, crc;
     // The network holds the Pi's line: it stops for the pairing, and
     // starts again after it.
@@ -1009,15 +1013,17 @@ int net_pair(void)
     }
     serve = strstr(net_args, "-serve ");
     if (serve) colon = strchr(serve + 7, ':');
-    if (!colon) return fail("the settings need -serve \"8764:8764\", where the phone reaches the Pi", net_args);
+    if (!colon) return fail("the settings need -serve", net_args);
     if (!esp_address(ip, sizeof ip)) return fail("the ESP gave no address; is it on the Wi-Fi network?", line);
     // -addr the ESP's address and port, -port where -serve leads.
     *colon = 0;
     end = strchr(colon + 1, ' ');
     if (end) *end = 0;
     // Settings too long for the command are refused, never cut.
-    if (snprintf(cmd, sizeof cmd, CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null &\n", ip,
-                 serve + 7, colon + 1) >= (int)sizeof cmd)
+    // The service, which a network started, listens on the member port
+    // that the phone reaches: it stops while cbb next pair waits there, and
+    // once more after it, so that the link starts it again in the group.
+    if (snprintf(cmd, sizeof cmd, pair_cmd, pair_pkill, ip, serve + 7, colon + 1, pair_pkill) >= (int)sizeof cmd)
         return fail("the -serve setting is too long", net_args);
     if (link_shell()) return pi_silent();
     link_send_str(cmd);
@@ -1734,7 +1740,7 @@ static int to_pi(struct item *it, uint8_t row)
     link_prompt();
     // A service of the old cbb, which .cbb net on or a hand started, stops,
     // so that the next .cbb net on starts the new one.
-    link_send_str("pkill -f ' service -peer 127\\.0\\.0\\.1:'\n");
+    link_send_str(PKILL_SERVICE "\n");
     link_prompt();
     // The wrapper keeps the state in the user partition, since NextPi's
     // root is read-only; an older cbb that is the program itself is kept

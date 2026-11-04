@@ -52,6 +52,8 @@ const AWAY_ANSWER: Duration = Duration::from_secs(120);
 /// How long the link waits for the Next's clock before it starts the
 /// service without it.
 const SERVICE_WAIT: Duration = Duration::from_secs(10);
+/// How often the link checks that the service runs, after it started it.
+const SERVICE_CHECK: Duration = Duration::from_secs(20);
 /// How far the Pi's clock may be off before the Next's sets it.
 const CLOCK_SLACK: i64 = 2;
 /// The ESP's connection that carries the datagrams of `-udp`: the last, as
@@ -747,7 +749,9 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
             });
         }
         if service_at.is_some_and(|at| clock.is_some() || now >= at) {
-            service_at = None;
+            // And again a while later: a service that stopped (.cbb pair
+            // stops it while cbb next pair waits on its port) starts again.
+            service_at = Some(now + SERVICE_CHECK);
             match start_service(g, port, udp_port, log_path.as_deref()) {
                 Ok(true) => (link.log)("started the service"),
                 Ok(false) => {}
