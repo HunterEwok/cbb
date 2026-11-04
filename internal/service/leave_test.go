@@ -6,6 +6,7 @@ package service
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -119,5 +120,52 @@ func TestLeaveDamaged(t *testing.T) {
 	pi = restartService(t, &h, pi)
 	if _, err := pi.do(t, control.Header{Op: control.OpLeave}, ""); err == nil || !strings.Contains(err.Error(), "in no group") {
 		t.Errorf("leave in no group: %v", err)
+	}
+}
+
+// TestLiteLeave: a lite member the group removed leaves through its
+// service, which then stops to be started again; with the service stopped,
+// cbb leave looks at the files itself and finds no group. CBB_LITE names
+// the lite member's binary (cargo build in lite/).
+func TestLiteLeave(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	dir := joinLite(t, bin, pi)
+	lite := startLite(t, bin, dir, "-no-mdns", "-peer", pi.addr())
+	waitFor(t, "the lite member connects", func() bool { return len(pi.status(t).Peers) == 1 })
+	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "lite"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the lite member sees it was removed", func() bool {
+		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && m.Status != nil && m.Status.Removed
+	})
+	leave := func() string {
+		out, err := exec.Command(bin, "-state", dir, "-socket", lite.socket, "leave", "-yes").CombinedOutput()
+		if err != nil {
+			t.Fatalf("cbb leave: %v; %s", err, out)
+		}
+		return string(out)
+	}
+	if out := leave(); !strings.Contains(out, "restarts in no group") {
+		t.Errorf("cbb leave through the service: %s", out)
+	}
+	select {
+	case <-lite.done:
+		lite.cancel = nil
+	case <-time.After(10 * time.Second):
+		t.Fatal("the lite member did not restart after leave")
+	}
+	for _, name := range []string{"identity.json", "records.json", "seal.json"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			t.Errorf("%s is left", name)
+		}
+	}
+	if out, err := exec.Command(bin, "-state", dir, "-socket", lite.socket, "leave", "-yes").CombinedOutput(); err == nil || !strings.Contains(string(out), "in no group") {
+		t.Errorf("leave in no group: %v; %s", err, out)
 	}
 }
