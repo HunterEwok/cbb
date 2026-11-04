@@ -460,6 +460,13 @@ impl Pi {
             self.received.clear();
             return;
         }
+        if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; cd /NextPi/nextpi && rm -rf ")
+            && cmd.ends_with("echo CBB$((1))GONE")
+        {
+            self.cbb_sha = None;
+            self.say(now + 100_000, "CBB1GONE\r\n");
+            return self.prompt(now + 100_000);
+        }
         if cmd.starts_with("cd /NextPi/nextpi && if ! command -v sha256sum") {
             let want = cmd.split('\'').nth(1).unwrap_or("");
             let got = crate::sha256::hex(&self.received);

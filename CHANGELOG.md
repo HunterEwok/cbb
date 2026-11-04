@@ -113,10 +113,12 @@ All notable changes to cbb are documented in this file. The format follows
   460800 baud (`stty` on the Pi for the copy, then back), at 115200 when the Pi's tty does not take
   that speed or the copy comes damaged. `.cbb net on` finds a computer of the group by itself
   (an mDNS question through the ESP, which the members answer to it alone), and `.cbb net on
-  HOST` names one: the port 8764 and `-serve 8764:8764` are the defaults. `make test` runs the real `CBB` on a
+  HOST` names one: the port 8764 and `-serve 8764:8764` are the defaults. `.cbb uninstall`
+  removes, after a Y, what `.cbb install` and `.cbb net` put anywhere: the network and
+  `CBB.DRV`, the Pi's cbb and its group, and the files in `/cbb`. `make test` runs the real `CBB` on a
   played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
   cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
-  silent Pi, a Pi without the fast speed, finding a computer, a closed connection, SPACE, the usage and a paste, each failed on what would
+  silent Pi, a Pi without the fast speed, finding a computer, uninstalling, a closed connection, SPACE, the usage and a paste, each failed on what would
   go wrong on a real Next (README.md, "Testing on a played Next").
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there

@@ -270,7 +270,15 @@ fn run_with(kit: &Kit, args: &str, esp: Esp, pi: Pi) -> Run {
     let card = card(&format!("plain-{}", args.replace(' ', "-")));
     std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
     std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
-    let mut run = Run::new(&kit.dot, &card, args, Box::new(esp), Box::new(pi));
+    let run = run_on(kit, &card, args, esp, pi, Vec::new());
+    let _ = std::fs::remove_dir_all(&card);
+    run
+}
+
+/// Runs .cbb ARGS on this card, with these keys, until it ends.
+fn run_on(kit: &Kit, card: &Path, args: &str, esp: Esp, pi: Pi, keys: Vec<Key>) -> Run {
+    let mut run = Run::new(&kit.dot, card, args, Box::new(esp), Box::new(pi));
+    run.hw.keys = keys;
     let table = kit.map.lines().find(|l| l.starts_with("__z_page_table ")).expect("__z_page_table");
     run.page_table = u16::from_str_radix(table.split('$').nth(1).unwrap().get(..4).unwrap(), 16).unwrap();
     run.overlay_logical = kit.pages.clone();
@@ -291,7 +299,6 @@ fn run_with(kit: &Kit, args: &str, esp: Esp, pi: Pi) -> Run {
     assert!(breaches.is_empty(), "breaches:\n{}", breaches.join("\n"));
     // Only an installed driver keeps its bank.
     assert_eq!(run.hw.ours.iter().filter(|&&p| p).count(), run.hw.drivers.len(), "pages still taken");
-    let _ = std::fs::remove_dir_all(&card);
     run
 }
 
@@ -339,4 +346,44 @@ fn says_when_no_computer_answers() {
     let run = run_with(&kit, "net on", esp, Pi::new());
     let s = run.hw.screen_text().to_uppercase();
     assert!(s.contains("FOUND NO COMPUTER"), "{s}");
+}
+
+/// A card as .cbb install and .cbb net on leave it, and a Pi with its cbb.
+fn installed(kit: &Kit, name: &str) -> (PathBuf, Pi) {
+    let card = card(name);
+    std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
+    std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
+    std::fs::write(card.join("cbb/NET.CFG"), "-serve 8764:8764").unwrap();
+    let mut pi = Pi::new();
+    pi.cbb_sha = Some(sha256::hex(&kit.pi_cbb));
+    (card, pi)
+}
+
+#[test]
+fn uninstalls_everything_after_y() {
+    let Some(kit) = kit("uninstall") else { return };
+    let (card, pi) = installed(&kit, "uninstall");
+    // Y: the half-row 0xDF, bit 4.
+    let y = vec![Key { from: 500_000, until: 800_000, row: 0xDF, bit: 4 }];
+    let mut run = run_on(&kit, &card, "uninstall", Esp::new(kit.site.clone()), pi, y);
+    let s = run.hw.screen_text().to_uppercase();
+    assert!(s.contains("THE PI'S CBB IS REMOVED") && s.contains("FILES IN /CBB ARE REMOVED"), "{s}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(pi.cbb_sha.is_none(), "{:?}", pi.log);
+    assert!(!card.join("cbb").exists(), "{:?}", std::fs::read_dir(card.join("cbb")).map(|d| d.count()));
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn keeps_everything_without_y() {
+    let Some(kit) = kit("keep") else { return };
+    let (card, pi) = installed(&kit, "keep");
+    let n = vec![Key { from: 500_000, until: 800_000, row: 0x7F, bit: 3 }];
+    let mut run = run_on(&kit, &card, "uninstall", Esp::new(kit.site.clone()), pi, n);
+    let s = run.hw.screen_text().to_uppercase();
+    assert!(s.contains("NOTHING REMOVED"), "{s}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(pi.cbb_sha.is_some());
+    assert!(card.join("cbb/CBB.DRV").exists() && card.join("cbb/NET.CFG").exists());
+    let _ = std::fs::remove_dir_all(&card);
 }

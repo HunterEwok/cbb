@@ -27,6 +27,8 @@ tools. Test them on the machine before relying on them.
 .cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below)
 .cbb update           the same, for the files the site has newer
+.cbb uninstall        after a Y: stop the network, uninstall CBB.DRV, remove the Pi's cbb
+                      and its group, and the files in /cbb (the folder too, when empty)
 .cbb -d paste         the same, with the cause under each error and, at the end, the
                       bytes of the stack never used (debug mode)
 ```
@@ -227,7 +229,7 @@ for the rest. z88dk's `dotn` loader puts `.cbb` in these parts:
 | CODE | divMMC, 0x2000-0x3FFF | the library, `far.asm`, `colour()`, the palette | 1K |
 | MAIN | 0x8000 up to 0xE000 | `run()`, the link, the frames, the driver's calls, the install screen's bars, the strings | 3K: 2K for the stack, which starts at 0xE000 and goes down (about 200 bytes used), 1K to grow |
 | PAGE_13 | 0xE000-0xFFFF | the install: fetching over the ESP, checking, sending to the Pi | 1K |
-| PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256 | 1K |
+| PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256, `.cbb uninstall` | 1K |
 | PAGE_17 | 0xE000-0xFFFF | `.cbb net`, `paste`, `copy`, `text` and `pair` | 1K |
 
 The pages share 0xE000, the window of MMU7, so only one is there at a time. MAIN calls

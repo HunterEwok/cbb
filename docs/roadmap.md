@@ -932,6 +932,12 @@ signature (apps/zxnext/README.md, "Install"):
   `CBB` and its files against the release's signed `release.json` through the `cbb` already
   on the Pi, which checks releases for its own `cbb update`, so that an update needs no
   trust in the network either.
+- The Pi's `cbb` is sent at 460800 baud, at 115200 when the Pi's tty does not take it or
+  the copy comes damaged; a real Next measured 31 to 32 KB/s, against 9 at 115200. Next
+  (0.7): a faster step first, 921600 (the line's limit is about 92 KB/s, but the card's reads
+  and the Pi's writes take part of it, so about 50 to 60 KB/s), then 460800 and 115200.
+  The Pi Zero's UART has a 16-byte buffer and no flow control here, so a speed it loses
+  bytes at fails the SHA-256 check and the next step down sends again.
 
 **Open questions, for the bench.**
 

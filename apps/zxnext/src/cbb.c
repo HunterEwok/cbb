@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <z80.h>
 
 #include "frame.h"
 // The logo lives in the far data page (far.asm): far_byte() reads it.
@@ -64,7 +65,7 @@ static const char usage_text[] = "CBB " VERSION "\n\n"
            "                   from cbb.tools,\n"
            "                   the Pi's cbb too\n"
            ".cbb update        tell of a newer\n"
-           "                   CBB, or install\n"
+           "                   CBB, or install\n"           ".cbb uninstall     remove it all\n"
            ".cbb -d ...        show error details\n";
 #pragma constseg rodata_compiler
 
@@ -178,6 +179,9 @@ static int link_fail(uint8_t err)
 // CBB.DRV (drv/): its id, and where .cbb net keeps the link's settings.
 #define DRIVER_ID 124
 #define NET_CFG "/cbb/NET.CFG"
+// The Pi's cbb: on the card, and where NextPi's shell finds it.
+#define PI_CARD "/cbb/CBBPI.BIN"
+#define PI_DIR "/NextPi/nextpi"
 #define DRV_COUNTERS 1
 #define DRV_SWITCH 2
 #define DRV_STATE 3
@@ -1033,9 +1037,6 @@ int net_cmd(void)
 #define SITE "cbb.tools"
 #define SITE_DIR "/zxnext/"
 #define SITE_LIST "LIST"
-// The Pi's cbb: on the card, and where NextPi's shell finds it.
-#define PI_CARD "/cbb/CBBPI.BIN"
-#define PI_DIR "/NextPi/nextpi"
 // Where NextZXOS looks for dot commands first.
 #define DOT_CBB "c:/dot/CBB"
 // A range is asked for at a time, kept in text[], and written while the
@@ -1778,6 +1779,71 @@ int install_run(void)
 // is in the logo's page (far.asm, far_screen_open(), far_screen_close()).
 #pragma codeseg PAGE_15
 #pragma constseg PAGE_15
+
+// .cbb uninstall: everything .cbb install and .cbb net put anywhere, after
+// a Y: the network and the driver, the Pi's cbb and its state, the files
+// in /cbb and the folder when nothing else is left in it. The phone app
+// still lists the Next until it is removed there.
+// Its words are arrays of this page: zcc keeps string literals with the
+// main program's.
+static const char card_files[][16] = {"/cbb/CBB.DRV", "/cbb/NET.CFG", "/cbb/CBBPI.BIN", "/cbb/DRV.PRT",
+                                      "/cbb/CBBPI.PRT", "/cbb/CBB"};
+static const char un_ask[] = "Remove CBB: the network, CBB.DRV,\nthe Pi's cbb and its group, and\nthe files in /cbb? Y or N\n";
+static const char un_none[] = "Nothing removed.\n";
+static const char un_drv_stays[] = "CBB.DRV stays: .uninstall it.\n";
+static const char un_drv_gone[] = "CBB.DRV is uninstalled.\n";
+static const char un_pi_silent[] = "The Pi did not answer: its cbb\nstays in " PI_DIR ".\n";
+static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm -rf cbb cbb.bin cbb.old cbb.new "
+                                "cbb-state /ram/link.log /ram/cbbjoin; cd; echo CBB$((1))GONE\n";
+static const char un_pi_gone[] = "CBB1GONE";
+static const char un_pi_quiet[] = "The Pi did not say it is done.\n";
+static const char un_pi_done[] = "The Pi's cbb is removed.\n";
+static const char un_dir[] = "/cbb";
+static const char un_done[] = "The files in /cbb are removed.\nRemove the Next in the phone app\ntoo.\n";
+
+// Not static: far_uninstall() (far.asm) calls it.
+int uninstall(void)
+{
+    uint8_t i;
+    printf(un_ask);
+    // Y is in the half-row of P to Y, port 0xDFFE, bit 4.
+    in_wait_nokey();
+    in_wait_key();
+    i = z80_inp(0xDFFE) & 0x10;
+    in_wait_nokey();
+    if (i) {
+        printf(un_none);
+        return 0;
+    }
+    if (net_on()) {
+        driver(DRV_SWITCH, 0);
+        link_quit();
+        esp_speed(ESP_SPEED);
+        link_use(LINK_PI);
+    }
+    if (driver(DRV_STATE, 0) == 0) printf(drv_uninstall(drv_bank()) ? un_drv_stays : un_drv_gone);
+    if (link_shell()) {
+        printf(un_pi_silent);
+    } else {
+        link_send_str(un_pi_cmd);
+        for (;;) {
+            if (link_line(line, sizeof line, 30)) {
+                printf(un_pi_quiet);
+                break;
+            }
+            if (strcmp(line, un_pi_gone) == 0) {
+                printf(un_pi_done);
+                break;
+            }
+        }
+        link_prompt();
+    }
+    for (i = 0; i < sizeof card_files / sizeof card_files[0]; i++) esx_f_unlink(card_files[i]);
+    esx_f_rmdir(un_dir);
+    printf(un_done);
+    return 0;
+}
+
 #pragma bssseg PAGE_15
 #pragma dataseg PAGE_15
 
@@ -1911,6 +1977,7 @@ extern int far_net_pair(void);
 extern int far_cmd(void);
 extern void far_screen_open(void);
 extern void far_screen_close(void);
+extern int far_uninstall(void);
 
 // .cbb install and .cbb update: the screen in its page, the install in its.
 static int install(void)
@@ -1954,6 +2021,7 @@ static int run(int argc, char **argv)
         far_argv = argv + i + 1;
         return far_net();
     }
+    if (strcmp(argv[i], "uninstall") == 0 && argc - i == 1) return far_uninstall();
     if ((strcmp(argv[i], "install") == 0 || strcmp(argv[i], "update") == 0) && argc - i == 1) {
         install_update = argv[i][0] == 'u';
         return install();

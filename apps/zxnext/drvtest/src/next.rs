@@ -832,6 +832,17 @@ impl Run {
                 std::fs::create_dir(&path).unwrap();
                 self.ok();
             }
+            0xAB => {
+                // F_RMDIR: an empty folder only.
+                let name = self.string(hl);
+                let path = self.host(&name);
+                if !path.is_dir() || std::fs::read_dir(&path).map(|mut d| d.next().is_some()).unwrap_or(true) {
+                    return self.err(5);
+                }
+                std::fs::remove_dir(&path).unwrap();
+                self.hw.log.push(format!("rmdir {name}"));
+                self.ok();
+            }
             0xAD => {
                 let name = self.string(hl);
                 let path = self.host(&name);
