@@ -938,6 +938,10 @@ signature (apps/zxnext/README.md, "Install"):
   and the Pi's writes take part of it, so about 50 to 60 KB/s), then 460800 and 115200.
   The Pi Zero's UART has a 16-byte buffer and no flow control here, so a speed it loses
   bytes at fails the SHA-256 check and the next step down sends again.
+- `.cbb paste`, `copy` and `text` need the Pi's shell, so while the network runs they stop
+  it and start it again after, some 10 to 15 seconds. Next (0.7): the driver carries them
+  to `cbb next link` in frames of their own over the running network, as it carries the
+  ESP's bytes, and the link hands them to the service, with no stop.
 
 **Open questions, for the bench.**
 

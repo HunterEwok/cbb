@@ -300,12 +300,10 @@ static uint8_t drv_uninstall(uint8_t bank)
     return 0;
 }
 
-// Types a command for the lite member at NextPi's shell.
+// Types a command for the lite member at NextPi's shell (the network
+// stopped: cmd_run() and net_pair() see to it).
 static int command(const char *args)
 {
-    if (net_on()) {
-        return fail("the network uses the Pi's line; stop it first with .cbb net off", "CBB.DRV is on");
-    }
     if (link_shell()) {
         return pi_silent();
     }
@@ -493,12 +491,22 @@ static int qr(uint8_t size)
 
 // Not static: far_cmd() (far.asm) calls it, with far_argc and far_argv
 // set; run() has checked the number of words.
+static int net_stop(void);
+static int net_start(int argc, char **argv);
+
+// The network holds the Pi's line, which these need for its shell: it
+// stops for them and starts again after, so a copy goes out at once.
 int cmd_run(void)
 {
     char **argv = far_argv;
-    if (strcmp(argv[0], "paste") == 0) return paste(far_argc == 2 ? argv[1] : 0);
-    if (strcmp(argv[0], "copy") == 0) return copy_file(argv[1]);
-    return copy_words(far_argc - 1, argv + 1);
+    uint8_t was = net_on();
+    int err;
+    if (was && net_stop()) return 1;
+    if (strcmp(argv[0], "paste") == 0) err = paste(far_argc == 2 ? argv[1] : 0);
+    else if (strcmp(argv[0], "copy") == 0) err = copy_file(argv[1]);
+    else err = copy_words(far_argc - 1, argv + 1);
+    if (was) err |= net_start(0, 0);
+    return err;
 }
 
 #pragma codeseg code_compiler
@@ -713,6 +721,7 @@ static const char *const mdns_cmds[] = {"AT+CIPMODE=0", "AT+CIPMUX=1", "AT+CIPCL
 static const char ipd[] = "+IPD,";
 static char net_to[32];
 
+#pragma codeseg code_compiler
 // Whether the n bytes at p hold s.
 static uint8_t holds(const uint8_t *p, uint16_t n, const char *s)
 {
@@ -723,6 +732,7 @@ static uint8_t holds(const uint8_t *p, uint16_t n, const char *s)
     return 0;
 }
 
+#pragma codeseg PAGE_17
 // The end of the name at i in the answer of n bytes.
 static uint16_t skip_name(uint16_t i, uint16_t n)
 {

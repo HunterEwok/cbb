@@ -502,3 +502,23 @@ fn turns_remote_paste_off_for_the_link() {
     assert_eq!(std::fs::read_to_string(card.join("cbb/PASTE.CFG")).unwrap(), "off");
     let _ = std::fs::remove_dir_all(&card);
 }
+
+#[test]
+fn sends_text_while_the_network_runs() {
+    let Some(kit) = kit("textnet") else { return };
+    let (card, pi) = installed(&kit, "textnet");
+    let mut esp = Esp::new(kit.site.clone());
+    esp.members = vec![("192.168.0.175".into(), 8764, String::new())];
+    let mut run = run_after(&kit, &card, "text Hello from Next", esp, pi, Vec::new(), |run| {
+        run.hw.drivers.push((124, vec![0; 512]));
+        run.hw.net = true;
+    });
+    // The network stops for the Pi's shell, and starts again after.
+    let s = run.hw.screen_text();
+    assert!(s.contains("The network stopped.") && s.contains("Found 192.168.0.175:8764"), "{s}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    let copy = pi.log.iter().position(|l| l.contains("next copy")).unwrap_or_else(|| panic!("{:?}", pi.log));
+    let link = pi.log.iter().position(|l| l.contains("next link")).unwrap_or_else(|| panic!("{:?}", pi.log));
+    assert!(copy < link, "{:?}", pi.log);
+    let _ = std::fs::remove_dir_all(&card);
+}

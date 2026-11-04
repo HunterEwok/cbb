@@ -123,8 +123,9 @@ All notable changes to cbb are documented in this file. The format follows
   of the group, without the phone app: the link joins through the ESP (`cbb next link
   -join`) to the computer whose pairing window is open. Finding a computer restarts the ESP
   once when it refuses the question (a computer can keep a connection to its server after
-  `.cbb net off`), and `.cbb pair` stops a running network itself and starts it again after
-  the code. Remote paste on the Next is on after `.cbb install`, Enter too (D-81), and the
+  `.cbb net off`), and `.cbb pair`, `paste`, `copy` and `text` stop a running network
+  themselves and start it again after. `.cbb net off` restarts the ESP, so that NextZXOS's
+  `.http` finds it as it expects. Remote paste on the Next is on after `.cbb install`, Enter too (D-81), and the
   install says so; `.cbb paste-receive on [-enter] | off` changes it, and `.cbb net on`
   hands it to the service on the Pi (`cbb next link -paste`). `make test` runs the real `CBB` on a
   played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
