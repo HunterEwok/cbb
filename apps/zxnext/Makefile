@@ -15,10 +15,13 @@ SRC := src/cbb.c src/link.c src/frame.c
 
 all: build/CBB build/PIBRIDGE build/CBB.DRV
 
-build/CBB: $(SRC) src/frame.h src/link.h
+build/CBB: $(SRC) src/far.asm src/logo.h src/frame.h src/link.h
 	mkdir -p build
 	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src \
-		$(addprefix ../,$(SRC)) -o cbb -create-app
+		$(addprefix ../,$(SRC)) ../src/far.asm -o cbb -create-app
+	@# MAIN ends below 0xE000, where the overlays show (src/far.asm).
+	@test $$(wc -c < build/cbb_MAIN.bin) -le 24576 || \
+		{ echo "CBB: MAIN reaches 0xE000, where the overlays show (src/far.asm)"; mv build/CBB build/CBB.bad; exit 1; }
 
 build/PIBRIDGE: src/pibridge.c src/link.c src/link.h src/frame.c src/frame.h
 	mkdir -p build
