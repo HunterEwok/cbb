@@ -400,10 +400,10 @@ type Away struct {
 type Forwarder struct {
 	Endpoint   string `json:"endpoint"`
 	Registered bool   `json:"registered,omitempty"`
-	Seen       string `json:"seen,omitempty"`   // where the forwarder reaches the hub's port
+	Seen       string `json:"seen,omitempty"`       // where the forwarder reaches the hub's port
 	OverVLESS  bool   `json:"over_vless,omitempty"` // the hub reaches the forwarder only over VLESS
-	Error      string `json:"error,omitempty"`  // why the hub is not registered
-	Detail     string `json:"detail,omitempty"` // the underlying error, for debugging
+	Error      string `json:"error,omitempty"`      // why the hub is not registered
+	Detail     string `json:"detail,omitempty"`     // the underlying error, for debugging
 }
 
 // Relay describes a device's link to its blind relay.
