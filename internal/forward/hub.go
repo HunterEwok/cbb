@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"syscall"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/frame"
@@ -93,6 +94,29 @@ type HubConfig struct {
 
 	// Report, if set, hears how the registration stands.
 	Report func(Report)
+
+	// Allowed, if set, says which addresses the hub may dial to reach the
+	// forwarder; the service passes netguard.Allowed. Without it, only
+	// Link.Endpoint's, as for a phone, whose app keeps no list of the
+	// group's servers.
+	Allowed func(netip.Addr) bool
+}
+
+// control is the Control of the dialer that reaches the forwarder: it
+// refuses, before any packet leaves, an address that cfg.Allowed refuses.
+func (cfg HubConfig) control() func(network, address string, _ syscall.RawConn) error {
+	allowed := cfg.Allowed
+	if allowed == nil {
+		to := cfg.Link.Endpoint.Addr().Unmap()
+		allowed = func(a netip.Addr) bool { return a.Unmap() == to }
+	}
+	return func(network, address string, _ syscall.RawConn) error {
+		ap, err := netip.ParseAddrPort(address)
+		if err != nil || !allowed(ap.Addr()) {
+			return fmt.Errorf("%s: %w", address, netguard.ErrOutside)
+		}
+		return nil
+	}
 }
 
 // Report is how a hub's registration stands.
@@ -198,7 +222,7 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 		}
 		return tc, nil
 	}
-	d := net.Dialer{Timeout: setupTimeout, KeepAlive: 30 * time.Second, Control: netguard.Control}
+	d := net.Dialer{Timeout: setupTimeout, KeepAlive: 30 * time.Second, Control: cfg.control()}
 	raw, err := d.DialContext(ctx, "tcp", cfg.Link.Endpoint.String())
 	var tc *tls.Conn
 	var over *tunnel.VLESS // the way in over VLESS the registration took
