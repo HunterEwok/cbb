@@ -1712,10 +1712,16 @@ extern uint16_t stack_unused(void);
 
 int main(int argc, char **argv)
 {
+    // BASIC may run at 3.5 MHz: there a byte at 115200 baud leaves too few
+    // cycles to read it, the UART's 512 bytes overflow, and link.c's
+    // timeouts, counted at 28 MHz, last eight times as long.
+    uint8_t speed = ZXN_READ_REG(0x07) & 3;
+    ZXN_WRITE_REG(0x07, 3);
     stack_mark();
     // Each command shows its own message; a nonzero result would make
     // NextZXOS add an unrelated error of its own.
     run(argc, argv);
+    ZXN_WRITE_REG(0x07, speed);
     if (debug) printf("stack: %u bytes never used\n", stack_unused());
     return 0;
 }

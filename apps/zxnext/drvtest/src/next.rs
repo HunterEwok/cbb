@@ -586,7 +586,7 @@ impl Run {
         };
         hw.nr[0x00] = 10; // the Next
         hw.nr[0x01] = 0x32; // core 3.02
-        hw.nr[0x07] = 3; // 28 MHz
+        hw.nr[0x07] = 0; // 3.5 MHz, as BASIC starts
         hw.nr[0x7F] = 8;
         hw.nr[0xA0] = 0;
         // The screen: BASIC's, white paper, black ink, cleared.
@@ -1148,6 +1148,8 @@ impl Run {
             let (page, _) = self.hw.slot_addr(a);
             match page {
                 Some(p) if self.hw.ours[p as usize] || p == 10 || p == 11 => {}
+                // BASIC's own stack, as the startup and the exit run on it.
+                Some(1) if a < self.hw.basic_sp && a >= self.hw.basic_sp.wrapping_sub(512) => {}
                 Some(p) => {
                     self.hw.breach(format!("an interrupt's pushes at {a:#06x} land in page {p}, not the command's"))
                 }

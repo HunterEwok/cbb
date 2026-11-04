@@ -141,6 +141,8 @@ fn run(kit: &Kit, card: &Path, args: &str, esp: Esp, pi: Pi, secs: f64, space: O
     assert_eq!(run.result.map(|r| r.0), Some(false), "an error to BASIC");
     let breaches: Vec<String> = run.hw.breaches.iter().map(|b| format!("{:#06x}: {}", b.pc, b.what)).collect();
     assert!(breaches.is_empty(), "breaches:\n{}", breaches.join("\n"));
+    // BASIC's 3.5 MHz back, after 28 MHz while it ran.
+    assert_eq!(run.hw.nr[0x07] & 3, 0, "the CPU's speed");
     Outcome { screen, run }
 }
 
