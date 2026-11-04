@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+#
+# A published release reaches the mirror within the hour; a run with
+# nothing new downloads only keys.json and stable.json.
+
+[Unit]
+Description=Mirror the cbb releases every hour
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target
