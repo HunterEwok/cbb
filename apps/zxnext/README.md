@@ -56,18 +56,28 @@ changes; the Pi's copy is removed from the card once the Pi has it.
 
 A line shows each download: the percentage, the kilobytes, the speed and the time left, and
 the border blinks while it runs. SPACE stops it, and `.cbb install` goes on from where a
-download stopped or broke off. Every file is checked against the site's list (its size and
-CRC-32 on the Next, its MD5 on the Pi) before it replaces the old one. `.cbb update` does
-the same and fetches only the files that changed. The files come over plain HTTP, since
-neither `.http` nor the ESP has TLS: the checks find a damaged download, not a changed one,
-until the list is signed (docs/roadmap.md, "Installing").
+download stopped or broke off.
+
+**What is checked.** The files come over plain HTTP, since neither `.http` nor the ESP has
+TLS. So each `CBB` carries the size and SHA-256 of the `CBB.DRV` and the Pi's `cbb` it was
+built with, and installs only those, whatever the site or the network serves: the Next
+checks the driver, and the Pi checks its `cbb` with `sha256sum` before it replaces the old
+one. What `CBB` itself is, nothing on the Next can check: the one `.http` fetches is as
+trustworthy as the network it came over. For an installation that does not trust the
+network, take `CBB` from the release instead, whose files are signed
+([installing](../../docs/guide/install.md#checking-a-download)): copy `zxnext/CBB` of
+`cbb-zxnext.tar.gz` to `/cbb` on the card, then `../CBB install`.
+
+`.cbb update` looks at the site's list for a newer `CBB`. When there is one, it says so, and
+you fetch it as at the start (or from the release) and run `../CBB install`; otherwise it
+installs this `CBB`'s files where they are missing or differ.
 
 Over an earlier installation: `.cbb install` asks for `.cbb net off` first while the network
 runs, and replaces only the files that differ. It installs `CBB.DRV` itself, and a driver
 already installed, which runs from memory, it uninstalls and installs again when the file is
 new. On the Pi it stops the old `cbb service`, so the next `.cbb net on` starts the new
 one, and an old `cbb` that is the program itself, not the start script, is kept as
-`cbb.old`. A `CBB` in `C:/DOT` that differs from the new one is reported, not touched:
+`cbb.old`. A `CBB` in `C:/DOT` that differs from the one in `/cbb` is reported, not touched:
 `.cbb` runs that one, `../CBB` in `/cbb` the new one.
 
 Not yet run on a real Next.
@@ -187,8 +197,9 @@ With [z88dk](https://github.com/z88dk/z88dk) 2.3 (`zcc` on the `PATH`, `ZCCCFG` 
 at its `lib/config`):
 
 ```sh
-make          # build/CBB, build/PIBRIDGE (copy them to C:/DOT) and build/CBB.DRV
-make test     # the frame parser's tests with the host's C compiler, and the driver's
+make PI_CBB=cbb   # build/CBB, build/PIBRIDGE (copy them to C:/DOT) and build/CBB.DRV;
+                  # cbb is the Pi's lite member, which CBB installs (pins.sh)
+make test         # the frame parser's and SHA-256's tests with the host's C compiler, and the driver's
               # bank in a Z80 emulator against two played UARTs (drvtest, with cargo)
 ```
 

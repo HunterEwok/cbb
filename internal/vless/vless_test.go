@@ -4,12 +4,16 @@
 package vless
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"fmt"
 	"net"
+	"net/http"
 	"net/netip"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -253,5 +257,57 @@ func TestThroughXHTTP(t *testing.T) {
 	wrongName.ServerName = "www.example.org"
 	if roundTrip(t, wrongName) {
 		t.Fatal("a site whose certificate does not carry the name got through")
+	}
+}
+
+// A stranger with no VLESS user makes the server hold little: one upload
+// carries at most MaxPostBytes, and a session keeps at most
+// MaxBufferedPosts of them until its client shows up.
+func TestXHTTPHoldsLittleForStrangers(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Listen(ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.Ready(ctx); err != nil {
+		t.Fatal(err)
+	}
+	padding := "?x_padding=" + strings.Repeat("X", 500)
+	// An upload that the server neither takes nor refuses waits for a
+	// place in the queue: 0 here.
+	client := &http.Client{Timeout: 2 * time.Second}
+	post := func(session string, seq, size int) int {
+		u := fmt.Sprintf("http://127.0.0.1:%d%s/%s/%d%s", s.Port(), path, session, seq, padding)
+		resp, err := client.Post(u, "application/octet-stream", bytes.NewReader(make([]byte, size)))
+		if err != nil {
+			return 0
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := post("a", 0, MaxPostBytes); code != http.StatusOK {
+		t.Fatalf("an upload of the largest size: %d", code)
+	}
+	if code := post("b", 0, MaxPostBytes+1); code != http.StatusRequestEntityTooLarge {
+		t.Errorf("an upload over the limit: %d", code)
+	}
+	// No client reads the session, so its uploads stay queued until the
+	// queue is full; the next one waits (behind nginx, which bounds the
+	// requests waiting) or is refused.
+	refused := false
+	for seq := 1; seq <= MaxBufferedPosts+1; seq++ {
+		if post("a", seq, 1) != http.StatusOK {
+			refused = true
+			break
+		}
+	}
+	if !refused {
+		t.Errorf("a session with no client took more than %d uploads", MaxBufferedPosts)
 	}
 }

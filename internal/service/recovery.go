@@ -166,9 +166,11 @@ func (s *Service) claimWithRecovery(key crypto.Signer, admin group.KeyHash, cert
 	s.recMu.Lock()
 	var named *authority.Hash
 	var kept []byte
+	var roots []*x509.Certificate
 	if s.records != nil {
 		named = s.records.State().Recovery
-		kept = recoveryCert(s.records.All(), admin)
+		roots = s.records.Roots()
+		kept = recoveryCert(s.records.All(), roots, admin)
 	}
 	s.recMu.Unlock()
 	switch {
@@ -177,7 +179,9 @@ func (s *Service) claimWithRecovery(key crypto.Signer, admin group.KeyHash, cert
 	case *named != admin:
 		return errors.New("this is not the group's recovery key: the root phone made a new one since, which replaced it")
 	}
-	if kept != nil {
+	// The sheet's or the card's admin CA when a root of the group issued
+	// it, else the one a recovery record carries under such a root.
+	if !underARoot(cert, roots, admin) && kept != nil {
 		cert = kept
 	}
 	adminCA, err := x509.ParseCertificate(cert)
@@ -218,8 +222,10 @@ func (s *Service) claimWithRecovery(key crypto.Signer, admin group.KeyHash, cert
 }
 
 // recoveryCert is the admin CA a recovery record in rs gives for the key
-// hash admin, the newest; nil if none does.
-func recoveryCert(rs []group.Record, admin group.KeyHash) []byte {
+// hash admin, the newest that one of roots, the group's roots, issued; nil
+// if none does. Another admin may sign a recovery record too, which counts
+// for nothing, so a CA no root issued is never taken from one.
+func recoveryCert(rs []group.Record, roots []*x509.Certificate, admin group.KeyHash) []byte {
 	var cert []byte
 	var at int64
 	for _, r := range rs {
@@ -227,11 +233,26 @@ func recoveryCert(rs []group.Record, admin group.KeyHash) []byte {
 		if err != nil || b.Type != group.RecordRecovery || b.Admin == nil || *b.Admin != admin || b.TimeMS < at {
 			continue
 		}
-		if c, err := x509.ParseCertificate(b.Cert); err == nil && group.KeyHashOf(c) == admin {
+		if underARoot(b.Cert, roots, admin) {
 			cert, at = b.Cert, b.TimeMS
 		}
 	}
 	return bytes.Clone(cert)
+}
+
+// underARoot reports whether der is an admin CA for the key hash admin
+// that one of roots issued.
+func underARoot(der []byte, roots []*x509.Certificate, admin group.KeyHash) bool {
+	c, err := x509.ParseCertificate(der)
+	if err != nil || group.KeyHashOf(c) != admin {
+		return false
+	}
+	for _, root := range roots {
+		if c.CheckSignatureFrom(root) == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // handOver hands the group to the admin target names, on the root

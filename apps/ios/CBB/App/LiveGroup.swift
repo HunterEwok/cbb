@@ -585,7 +585,10 @@ final class LiveGroup: GroupController {
                     try await t.start()
                     defer { t.close() }
                     guard let leaf = t.peerCertificate, let sid = t.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else { continue }
-                    return try await PairingJoiner.accept(over: t, code: code.code, info: info, memberCert: leaf, joinerCert: cert,
+                    // The admin key proves itself for this connection
+                    // (Face ID, as for every use of the key).
+                    let proved = try info.proving(sessionID: sid, with: admin)
+                    return try await PairingJoiner.accept(over: t, code: code.code, info: proved, memberCert: leaf, joinerCert: cert,
                                                           sessionID: sid, now: Date()) { try PhoneGroup.joined($0).save(to: file) }
                 } catch PairingJoiner.Failure.refused(.wrongCode) {
                     wrong += 1
@@ -639,7 +642,8 @@ final class LiveGroup: GroupController {
                 guard let leaf = t.peerCertificate, let sid = t.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else {
                     throw Failure.unreachable
                 }
-                return try await PairingJoiner.join(over: t, code: code, info: info, memberCert: leaf, joinerCert: cert,
+                let proved = try info.proving(sessionID: sid, with: admin)
+                return try await PairingJoiner.join(over: t, code: code, info: proved, memberCert: leaf, joinerCert: cert,
                                                     sessionID: sid, now: Date()) { try PhoneGroup.joined($0).save(to: file) }
             } onCancel: {
                 t.close()

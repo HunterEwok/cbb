@@ -53,7 +53,7 @@ svg.board { display: block; width: 100%; height: auto; }
 <svg width="0" height="0" style="position:absolute">${filters}</svg>
 <div class="text">
   <div class="brand"><img src="${fileURL("static/icon-dark.png")}" alt="">Copy Beyond Borders</div>
-  <h1>${t("One clipboard")} <span>${t("to rule them all.")}</span></h1>
+  <h1>${t("Copy on one device,")} <span>${t("paste on another.")}</span></h1>
   <p>ANDROID · IPHONE · WINDOWS · MAC · LINUX</p>
 </div>
 <div class="frame"><div class="surface"><svg class="board" viewBox="0 0 640 330"><g class="chalk">${hero}</g><g class="words">${word(95, 228, "Computer")}${word(455, 292, "TLS 1.3", true)}${word(576, 228, "Phone")}</g></svg></div></div>

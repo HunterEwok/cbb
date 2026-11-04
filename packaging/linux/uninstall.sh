@@ -14,10 +14,11 @@
 # It stops the service and the desktop agents and removes the binary, the
 # unit, the agent's user unit and autostart entry, the tmux and console
 # configuration, the update timer and cbb update's folder, the settings in
-# /etc/cbb and the firewall rules
+# /etc/cbb, the quick actions' polkit rule and the firewall rules
 # that install.sh added, and only those. The device's keys and
 # group, in /var/lib/cbb, stay for a reinstall unless --purge; the
-# cbb user and group stay too, since files may still belong to them.
+# cbb user and group stay too, since files may still belong to them,
+# unless --purge.
 set -eu
 
 # A failure says so with its exit status; CBB_ERROR_DETAILS=1 shows every
@@ -111,7 +112,8 @@ rm -f /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service \
 	/usr/local/share/applications/cbb.desktop /usr/local/bin/cbb-desktop \
 	/etc/systemd/user/cbb-agent.service \
 	/etc/profile.d/cbb-console.sh /usr/lib/sysusers.d/cbb.conf /usr/local/bin/cbb \
-	/etc/profile.d/cbb-path.sh /etc/sysusers.d/cbb.conf /etc/atomic-update.conf.d/cbb.conf
+	/etc/profile.d/cbb-path.sh /etc/sysusers.d/cbb.conf /etc/atomic-update.conf.d/cbb.conf \
+	/etc/polkit-1/rules.d/60-cbb.rules /etc/polkit-1/localauthority/50-local.d/cbb.pkla
 if command -v systemctl >/dev/null 2>&1; then
 	systemctl daemon-reload || true
 fi
@@ -136,6 +138,14 @@ fi
 rm -rf "$share" /etc/cbb /var/lib/cbb-update /opt/cbb /opt/cbb-update
 if [ "$purge" = yes ]; then
 	rm -rf /var/lib/cbb
+	# Its files are gone, so the account goes too: a later one of the same
+	# name gets nothing of this one's.
+	if getent passwd cbb >/dev/null 2>&1 && command -v userdel >/dev/null 2>&1; then
+		userdel cbb 2>/dev/null || true
+	fi
+	if getent group cbb >/dev/null 2>&1 && command -v groupdel >/dev/null 2>&1; then
+		groupdel cbb 2>/dev/null || true
+	fi
 	echo "CBB is removed, with this device's keys; it left its group."
 else
 	echo "CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them."

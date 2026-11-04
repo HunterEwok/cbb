@@ -81,9 +81,10 @@ func (k *Keyboard) saveHosts(hosts []dbus.ObjectPath) {
 }
 
 // watchDisconnects forgets the bond of a host whose connection failed
-// authentication, until the keyboard closes.
+// authentication, until the keyboard closes. Only BlueZ says so: any
+// program on the system bus may send a signal of that name.
 func (k *Keyboard) watchDisconnects() {
-	match := []dbus.MatchOption{dbus.WithMatchInterface(deviceIface), dbus.WithMatchMember("Disconnected")}
+	match := []dbus.MatchOption{dbus.WithMatchSender(bluezBus), dbus.WithMatchInterface(deviceIface), dbus.WithMatchMember("Disconnected")}
 	if err := k.conn.AddMatchSignal(match...); err != nil {
 		k.logf("cbb: keyboard: watching for hosts that forgot it: %v", err)
 		return
@@ -100,11 +101,20 @@ func (k *Keyboard) watchDisconnects() {
 			if sig.Name != deviceIface+".Disconnected" || len(sig.Body) == 0 {
 				continue
 			}
-			if reason, _ := sig.Body[0].(string); reason == reasonAuth {
+			if reason, _ := sig.Body[0].(string); reason == reasonAuth && k.fromBlueZ(sig.Sender) {
 				k.forgetHost(sig.Path)
 			}
 		}
 	}()
+}
+
+// fromBlueZ tells whether sender, a unique bus name, is the one that owns
+// BlueZ's name now. The match above filters by the sender too, but the
+// library hands every signal of the connection to every channel.
+func (k *Keyboard) fromBlueZ(sender string) bool {
+	var owner string
+	err := k.conn.BusObject().Call("org.freedesktop.DBus.GetNameOwner", 0, bluezBus).Store(&owner)
+	return err == nil && owner != "" && owner == sender
 }
 
 // forgetHost removes the bond with the device at p, when it is one of the

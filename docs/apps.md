@@ -28,8 +28,8 @@ they look, so both apps are built to the same plan.
 1. **Start** (no group yet): one sentence, the big button "Connect a new device" with a hint
    below it (on a computer, run `cbb pair` and scan the code it shows), and a second button, "I already use
    Copy Beyond Borders on another phone", which joins that phone's group, and a third, "My group was
-   made on a computer", where the user types the six-digit code that `cbb pair` shows on the
-   group's root and the phone joins that group as an admin. The camera opens at once;
+   made on a computer", where the user types the six-digit code that `cbb pair -admin` shows on
+   the group's root and the phone joins that group as an admin. The camera opens at once;
    after the scan the app creates the group key in the Secure Enclave or StrongBox, admits
    the device and goes to Home. At the first launch the app makes this phone's own key and
    says so once, in a card: "This phone is ready", what the key is for in plain words, and
@@ -409,7 +409,10 @@ page of Settings:
    system's clipboard overlay that appears after each copy.
 2. It then shows a 1-pixel accessibility overlay window that takes the focus for a moment,
    reads the clipboard, sends the text to the group and goes away. The service reads no
-   screen content beyond what tells it that a copy happened, and the app says so.
+   screen content beyond what tells it that a copy happened, and the app says so. A copy
+   marked sensitive (`android.content.extra.IS_SENSITIVE`, as password managers and this
+   app's received secrets mark it) stays on the phone, as the computers leave the password
+   managers' marks; the button still sends it when the user taps it.
 3. Android 12 and later show "CBB pasted from your clipboard" each time; that
    is the system's notice and cannot be turned off.
 
@@ -857,8 +860,9 @@ the app on real devices.
   a computer announcing a pairing window (`p=1`), then 2 s more, and refuses when two
   announce one; it dials that window with its own self-signed certificate, confirms the code
   first (`PairingJoiner.join`) and checks the Welcome, whose admin CA the root issued for the
-  admin key it offered. An admin computer that is not the root refuses a phone, and the app
-  says to run `cbb pair` on the computer that created the group.
+  admin key it offered. A window of a plain `cbb pair`, or of an admin computer that is not the
+  root, refuses a phone that offers an admin key, and the app says to run `cbb pair -admin` on
+  the computer that created the group.
 - When the root hands the group to this phone (`cbb handover` on the root computer, a
   `handover` record naming this phone's admin key, which `group_view` reports as `handed_to`),
   Home shows "The group is yours to take". Its button makes a new root key (the Secure Enclave

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: d10744fc3cc7 -->
+<!-- source: e3cc41b050a0 -->
 # Programu
 
 Copy Beyond Borders ina programu za simu, saa na kompyuta za mezani. Programu za simu hushikilia kikundi; programu za kompyuta ni dirisha la kuangalia huduma ambayo tayari inaendeshwa kwenye kompyuta.
@@ -35,7 +35,7 @@ Kamera isipoweza kutumika: kwenye iPhone, andika tarakimu sita ambazo kompyuta i
 
 Gusa kifaa kuona aina yake, mfumo, toleo na jukumu. Kwenye simu ya msimamizi unaweza pia:
 
-- **Kukipa jina jipya** au **Kukiondoa**; kuondoa huuliza mara moja, kisha uso wako, alama ya kidole au nambari ya siri.
+- **Kukipa jina jipya** au **Kukiondoa**; kuondoa huuliza mara moja, kisha uso wako, alama ya kidole au nambari ya siri. Kwenye Android kila sahihi huuliza: kuongeza kompyuta ya kwanza huuliza mara tano (vyeti vya kikundi chenyewe, kisha vya kompyuta), kila inayofuata mara mbili, na kila kitendo kingine mara moja; kila ombi husema ni la ngapi ("Signature 2 of 5"). Cheti cha kompyuta kinapohitaji kufanywa upya, au funguo za kikundi za kusawazisha ukiwa mbali na nyumbani, programu huuliza unapoifungua.
 - **Make it an admin**, kwa kompyuta: kisha inaweza kuongeza na kuondoa vifaa kwa `sudo cbb pair` na `sudo cbb remove`. Ufunguo wake ni faili kwenye kompyuta, isipokuwa ni kompyuta ya Linux yenye TPM, na programu inakuonya kuhusu hilo kwanza; kwa hiyo chagua kompyuta unayoiamini, ikiwezekana inayowaka kila wakati na ambayo pia ni [kitovu](away-from-home.md).
 
 ### Simu ya pili, na simu iliyopotea

@@ -7,6 +7,10 @@ gets with the device. This page says where each kind of device keeps them, how t
 can check it, and which level of strictness to choose. The exact rules are in the
 [protocol](../protocol.md), section 17.
 
+> Built and tested in CI against a software TPM; on real devices so far only the iPhone's
+> Secure Enclave and Windows in a virtual machine. What has been tried where is in the
+> README's [status table](../../README.md#status).
+
 ## Where keys live
 
 | Where | Devices | What a thief gets |
@@ -41,6 +45,10 @@ hardware can prove it:
   records the computer as **proven**; nothing is asked of the maker. Intel's and AMD's
   firmware TPMs often keep their certificate on the maker's server instead, so they stay
   hardware. **Apple devices** (App Attest) do not prove their keys yet.
+- **A computer that made the group**, its root, counts as keys in a file all the same: the
+  group's root key, which signs everything the group decides, is a file on a computer for
+  now. Such a group starts at the level "files allowed" (below); a group made on a phone
+  keeps its root key in the phone's hardware.
 
 ## The three levels
 

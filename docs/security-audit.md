@@ -5,6 +5,9 @@ release. It is a defensive exercise: we confirm that clipboard data cannot be re
 network and that an outsider with no access cannot join a group or get a useful answer from
 the servers.
 
+It is a plan, the scope and the method, not a report: the audits that follow it keep their
+findings private until they are fixed, and the fixes reach CHANGELOG.md like any change.
+
 Read it together with [the hardware test bench](testbench.md), whose section 9 lists the
 security tests this audit carries out, and with [the protocol](protocol.md) and
 [the design](design.md), which this audit measures against.

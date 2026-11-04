@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: c2d39475bc20 -->
+<!-- source: 9b05c71a6bfc -->
 # Kibodi na televisheni
 
 Kwa yeyote anayetaka kuandika nenosiri refu, kiungo au utafutaji kwenye televisheni, kompyuta kibao, kiweko cha michezo au kompyuta ambayo haina chochote cha Copy Beyond Borders. Kifaa kimoja cha kikundi chako huandika maandishi hayo pale kama kibodi au kama rimoti ya televisheni, unapogusa wewe au msimamizi anapotuma ubandikaji wa mbali.
@@ -96,8 +96,8 @@ sudo cbb remote pastes living-room-tv on   # an admin's remote pastes go to that
 
 ## Mipaka
 
-- Bado haijajaribiwa kwenye televisheni, kompyuta kibao au adapta halisi za Bluetooth: majaribio hufanyika dhidi ya BlueZ bandia, Android TV bandia na Roku bandia.
-- Programu za simu bado haziwezi kuwa rimoti ya televisheni; televisheni za Samsung na LG na Apple TV zitafuata ([ramani ya njia](../roadmap.md), kipengele cha 25).
+- Kwenye televisheni halisi imejaribiwa tu na Apple TV 4K, kuandika kupitia `cbb remote`; mengine hujaribiwa dhidi ya BlueZ, Android TV, Apple TV na Roku bandia.
+- Programu za simu bado haziwezi kuwa rimoti ya televisheni; televisheni za Samsung na LG zitafuata ([ramani ya njia](../roadmap.md), kipengele cha 25).
 - Kibodi huandika herufi 4,096 kwa kila mara kwa upeo.
 
 Kila chaguo liko katika [amri](../reference/cli.md); milango ya televisheni iko katika [vifaa, milango na faili](../reference/devices.md#ports); jinsi inavyofanya kazi ndani iko katika [maelezo ya programu](../apps.md#android-the-bluetooth-keyboard).

@@ -411,9 +411,12 @@ func (b *Board) WriteImage(typ string, data []byte, text string) (int64, error) 
 	dib := imageDIBV5(img)
 	if typ != clip.TypePNG {
 		// The PNG is made from the DIB, so the decoded pixels can go first
-		// (imageBytes).
+		// (imageBytes). They do only once the collector has run: left to
+		// its own pace, it lets the heap grow to about twice the count
+		// before it frees them.
 		r := img.Bounds()
 		img = nil
+		runtime.GC()
 		if data, err = dibPNG(dib, r.Dx(), r.Dy()); err != nil {
 			return 0, err
 		}

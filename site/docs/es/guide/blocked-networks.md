@@ -10,7 +10,7 @@ Fuera de casa, tus dispositivos llegan al hub por el túnel WireGuard del propio
 | **AmneziaWG** (`-obfuscate`) | paquetes UDP que no se parecen a nada en particular | el hub o un reenviador | ordenadores, teléfonos |
 | **VLESS** (`-vless`) | una conexión HTTPS a un sitio web | un reenviador con VLESS activado (el del proyecto lo tiene) | ordenadores, teléfonos |
 
-Elijas lo que elijas, el portapapeles permanece dentro del túnel del grupo y del TLS propio de los dispositivos, cifrado de extremo a extremo. El disfraz solo cambia el aspecto de los paquetes en la red.
+Elijas lo que elijas, el portapapeles permanece dentro del túnel del grupo y del TLS propio de los dispositivos, así que nada entre tus dispositivos puede leerlo. El disfraz solo cambia el aspecto de los paquetes en la red.
 
 ## Cuál usar
 

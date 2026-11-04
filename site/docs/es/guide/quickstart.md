@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 4c42c72db35b -->
+<!-- source: 1a79497966a1 -->
 # Inicio rápido
 
 Copy Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
@@ -33,7 +33,7 @@ En **Windows** 10 u 11, en un PowerShell abierto con «Ejecutar como administrad
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-El instalador comprueba la descarga, inicia Copy Beyond Borders y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, winget, Docker y los detalles están en [Instalación](install.md).
+El instalador comprueba la descarga, inicia Copy Beyond Borders y hace dos preguntas: si abrir el cortafuegos para él (responde `y`) y si debe actualizarse automáticamente (`y` también es una buena respuesta). Después, cierra sesión y vuelve a entrar una vez, o abre una terminal nueva en Windows. Homebrew, Docker y los detalles están en [Instalación](install.md).
 
 ## 3. Añade el ordenador
 

@@ -4,6 +4,7 @@
 package service
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HunterEwok/cbb/internal/authority"
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/piv"
@@ -240,4 +242,51 @@ func TestRecoveryWithCard(t *testing.T) {
 		id, err := group.Load(b.dir)
 		return err == nil && id.IsRoot() && len(id.Roots) == 1 && id.Claim == nil
 	})
+}
+
+// TestRecoveryCertUnderARoot checks that cbb recovery takes the recovery
+// key's admin CA only from a recovery record whose CA a root of the group
+// issued: a newer record that another admin signs with a CA of its own for
+// the same key counts for nothing, and must not replace the right one.
+func TestRecoveryCertUnderARoot(t *testing.T) {
+	id, err := group.Create(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stranger, err := group.Create(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	good, err := id.RootCA().IssueAdmin(group.NewDeviceID(), &key.PublicKey, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad, err := stranger.RootCA().IssueAdmin(group.NewDeviceID(), &key.PublicKey, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := group.KeyHashOf(good)
+	if group.KeyHashOf(bad) != k {
+		t.Fatal("the two admin CAs differ in key")
+	}
+	at := time.Now().UnixMilli()
+	sign := func(cert *x509.Certificate, signer *ecdsa.PrivateKey, ms int64) group.Record {
+		r, err := authority.Sign(group.RecordBody{Type: group.RecordRecovery, Group: group.Tag(id.GroupCA.Cert), Seq: 1, TimeMS: ms, Admin: &k, Cert: cert.Raw}, signer, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	rs := []group.Record{sign(good, id.RootCA().Key.(*ecdsa.PrivateKey), at), sign(bad, stranger.RootCA().Key.(*ecdsa.PrivateKey), at+1000)}
+	roots := []*x509.Certificate{id.Root()}
+	if got := recoveryCert(rs, roots, k); !bytes.Equal(got, good.Raw) {
+		t.Error("the admin CA came from a record whose CA no root of the group issued")
+	}
+	if underARoot(bad.Raw, roots, k) || !underARoot(good.Raw, roots, k) {
+		t.Error("underARoot does not tell the root's admin CA from another")
+	}
 }

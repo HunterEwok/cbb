@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 4c42c72db35b -->
+<!-- source: 1a79497966a1 -->
 # بداية سريعة
 
 يمنح Copy Beyond Borders هاتفك وحواسيبك حافظة واحدة: تنسخ على جهاز وتلصق على آخر. تشكّل الأجهزة **مجموعة** على شبكتك المنزلية. يحتفظ الهاتف بمفتاح المجموعة ويسمح بدخول كل جهاز جديد، فلا يستطيع أحد الانضمام من دونك.
@@ -33,7 +33,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
 ```
 
-يتحقق المثبّت من التنزيل، ويشغّل Copy Beyond Borders، ويطرح سؤالين: هل يفتح جدار الحماية له (أجب بـ `y`)، وهل يحدّث نفسه تلقائيًا (و`y` إجابة جيدة أيضًا). بعد ذلك سجّل الخروج ثم الدخول مرة واحدة، أو افتح طرفية جديدة على Windows. يوجد Homebrew وwinget وDocker والتفاصيل في [التثبيت](install.md).
+يتحقق المثبّت من التنزيل، ويشغّل Copy Beyond Borders، ويطرح سؤالين: هل يفتح جدار الحماية له (أجب بـ `y`)، وهل يحدّث نفسه تلقائيًا (و`y` إجابة جيدة أيضًا). بعد ذلك سجّل الخروج ثم الدخول مرة واحدة، أو افتح طرفية جديدة على Windows. يوجد Homebrew وDocker والتفاصيل في [التثبيت](install.md).
 
 ## 3. أضف الحاسوب
 

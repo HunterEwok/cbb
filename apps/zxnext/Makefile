@@ -2,18 +2,27 @@
 # Copyright (C) 2026 HunterEwok
 
 # .cbb, the dot command for the ZX Spectrum Next (README.md).
-#   make        build/CBB, build/PIBRIDGE and build/CBB.DRV with z88dk (zcc and
-#               z88dk-z80asm on the PATH, ZCCCFG set)
-#   make test   the host tests of the frame parser with cc, and the driver's in
-#               an emulator (drvtest, with cargo)
+#   make PI_CBB=FILE
+#               build/CBB, build/PIBRIDGE and build/CBB.DRV with z88dk (zcc and
+#               z88dk-z80asm on the PATH, ZCCCFG set); FILE is the Pi's cbb, the
+#               lite member for ARMv6, whose size and SHA-256 CBB carries with
+#               the driver's (pins.sh), as it installs only those
+#   make test   the host tests of the frame parser and SHA-256 with cc, and the
+#               driver's in an emulator (drvtest, with cargo)
 
 ZCC ?= zcc
 ASM ?= z88dk-z80asm
 CC ?= cc
 CARGO ?= cargo
-SRC := src/cbb.c src/link.c src/frame.c
+PI_CBB ?=
+SRC := src/cbb.c src/link.c src/frame.c src/sha256.c
 
 all: build/CBB build/PIBRIDGE build/CBB.DRV
+
+build/pins.h: pins.sh build/CBB.DRV $(PI_CBB)
+	@test -n "$(PI_CBB)" || { echo "make: PI_CBB names the Pi's cbb, which CBB installs" >&2; exit 1; }
+	sh pins.sh build/CBB.DRV $(PI_CBB) >$@.new
+	mv $@.new $@
 
 # printf and scanf with only the conversions the code uses (formats.sh).
 build/formats: formats.sh $(SRC)
@@ -21,8 +30,8 @@ build/formats: formats.sh $(SRC)
 	sh formats.sh $(SRC) >$@.new
 	mv $@.new $@
 
-build/CBB: $(SRC) src/far.asm src/stack.asm src/logo.h src/frame.h src/link.h build/formats
-	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src $$(cat formats) \
+build/CBB: $(SRC) src/far.asm src/stack.asm src/logo.h src/frame.h src/link.h src/sha256.h build/pins.h build/formats
+	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src -I. $$(cat formats) \
 		$(addprefix ../,$(SRC)) ../src/far.asm ../src/stack.asm -o cbb -create-app
 	@# MAIN ends below 0xE000, where the overlays show (src/far.asm).
 	@test $$(wc -c < build/cbb_MAIN.bin) -le 24576 || \
@@ -54,13 +63,18 @@ build/CBB.DRV: drv/drv.asm build/drv/stub.bin build/drv/bank.bin
 		-odrv.bin drv.asm
 	cp build/drv/drv.bin $@
 
-test: build/frame_test build/drv/bank.bin build/drv/stub.bin
+test: build/frame_test build/sha256_test build/drv/bank.bin build/drv/stub.bin
 	./build/frame_test
+	./build/sha256_test
 	cd drvtest && $(CARGO) test -q
 
 build/frame_test: src/frame.c src/frame.h test/frame_test.c
 	mkdir -p build
 	$(CC) -std=c99 -Wall -Wextra -Werror -Isrc src/frame.c test/frame_test.c -o $@
+
+build/sha256_test: src/sha256.c src/sha256.h test/sha256_test.c
+	mkdir -p build
+	$(CC) -std=c99 -Wall -Wextra -Werror -Isrc src/sha256.c test/sha256_test.c -o $@
 
 clean:
 	rm -rf build

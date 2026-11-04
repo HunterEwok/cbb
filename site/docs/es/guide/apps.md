@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: d10744fc3cc7 -->
+<!-- source: e3cc41b050a0 -->
 # Las apps
 
 Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps de teléfono llevan el grupo; las de escritorio son una ventana al servicio que ya se ejecuta en el ordenador.
@@ -35,7 +35,7 @@ Cuando no se puede usar la cámara: en un iPhone, escribe los seis dígitos que 
 
 Pulsa un dispositivo para ver su tipo, sistema, versión y rol. En un teléfono administrador también puedes:
 
-- **Renombrarlo** o **eliminarlo**; eliminar pide confirmación una vez y después tu cara, tu huella o tu código.
+- **Renombrarlo** o **eliminarlo**; eliminar pide confirmación una vez y después tu cara, tu huella o tu código. En Android cada firma lo pide: añadir el primer ordenador lo pide cinco veces (los certificados propios del grupo y luego los del ordenador), cada uno más dos veces y cualquier otra acción una vez; cada solicitud dice cuál es («Signature 2 of 5»). Cuando hay que renovar el certificado de un ordenador, o las claves del grupo para sincronizar fuera de casa, la app lo pide al abrirla.
 - **Make it an admin**, en el caso de un ordenador: entonces puede añadir y quitar dispositivos con `sudo cbb pair` y `sudo cbb remove`. Su clave es un archivo del ordenador, salvo que sea un ordenador Linux con TPM, y la app te avisa primero; así que elige un ordenador de confianza, a ser posible uno que esté siempre encendido y que además sea el [hub](away-from-home.md).
 
 ### Un segundo teléfono y un teléfono perdido

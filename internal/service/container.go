@@ -53,10 +53,15 @@ func (s *Service) keysAllowed() error {
 }
 
 // keyStore is where this device says its keys live: group.StoreRootless
-// for a rootless install, else where id's member key is.
+// for a rootless install, else where id's member key is; on the group's
+// root, group.StoreFile when its CA key, which signs the records and the
+// certificates, is a file, whatever its member key.
 func (s *Service) keyStore(id *group.Identity) string {
 	if s.cfg.Rootless {
 		return group.StoreRootless
+	}
+	if ca := id.RootCA(); ca != nil && group.KeyStoreOf(ca.Key) == group.StoreFile {
+		return group.StoreFile
 	}
 	return group.KeyStoreOf(id.Key)
 }

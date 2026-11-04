@@ -21,6 +21,8 @@
 #include "logo.h"
 #pragma constseg rodata_compiler
 #include "link.h"
+#include "pins.h"
+#include "sha256.h"
 
 #define VERSION "0.5.0"
 // The lite member on the Pi; the NextPi set-up puts it on the shell's PATH.
@@ -61,8 +63,8 @@ static const char usage_text[] = "CBB " VERSION "\n\n"
            ".cbb install       fetch the rest\n"
            "                   from cbb.tools,\n"
            "                   the Pi's cbb too\n"
-           ".cbb update        the same: newer\n"
-           "                   files only\n"
+           ".cbb update        tell of a newer\n"
+           "                   CBB, or install\n"
            ".cbb -d ...        show error details\n";
 #pragma constseg rodata_compiler
 
@@ -569,6 +571,8 @@ static uint8_t esp_speed(uint32_t speed)
 // The net command's words, which run() leaves in MAIN for net_cmd().
 static int net_argc;
 static char **net_argv;
+// Whether install() runs as .cbb update, which run() leaves in MAIN too.
+static uint8_t install_update;
 
 // .cbb net and .cbb pair through the ESP, from here to net_cmd(), are an
 // overlay of their own, as .cbb install is (far.asm, far_net()).
@@ -688,8 +692,10 @@ int net_pair(void)
     *colon = 0;
     end = strchr(colon + 1, ' ');
     if (end) *end = 0;
-    sprintf(cmd, CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null &\n", ip, serve + 7,
-            colon + 1);
+    // Settings too long for the command are refused, never cut.
+    if (snprintf(cmd, sizeof cmd, CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null &\n", ip,
+                 serve + 7, colon + 1) >= (int)sizeof cmd)
+        return fail("the -serve setting is too long", net_args);
     if (link_shell()) return pi_silent();
     link_send_str(cmd);
     link_prompt();
@@ -811,19 +817,24 @@ int net_cmd(void)
 // The ROM's scroll count: kept high, the screen scrolls without "scroll?".
 #define SCR_CT (*(volatile uint8_t *)23692)
 
-// name: on the server; label: on the screen.
+// name: on the server; label: on the screen. size and sha256 are those of
+// the files built with this CBB (pins.h, from the Makefile): whatever the
+// site serves, only they are installed. The Next checks the driver's
+// SHA-256 itself; the Pi's cbb, megabytes, the Pi checks.
 struct item {
     const char *name, *label, *card, *part;
-    uint32_t size, crc;
-    char md5[33];
+    uint32_t size;
+    const char *sha256;
+    uint8_t pi;
 };
 
 static struct item items[] = {
-    {"CBB", "CBB", "/cbb/CBB", "/cbb/CBB.PRT", 0, 0, ""},
-    {"CBB.DRV", "CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", 0, 0, ""},
-    {"cbb", "SERVICE", PI_CARD, "/cbb/CBBPI.PRT", 0, 0, ""},
+    {"CBB.DRV", "CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", PIN_DRV_SIZE, PIN_DRV_SHA256, 0},
+    {"cbb", "SERVICE", PI_CARD, "/cbb/CBBPI.PRT", PIN_PI_SIZE, PIN_PI_SHA256, 1},
 };
 #define ITEMS (sizeof items / sizeof items[0])
+// This CBB, as the install's own steps put it in /cbb.
+#define CBB_CARD "/cbb/CBB"
 
 // Asks for size bytes of name from offset on the open connection; 0 with
 // the bytes in text[] when they all came.
@@ -1146,18 +1157,59 @@ static uint32_t file_crc(const char *path, uint32_t *size)
     return crc;
 }
 
+// The SHA-256 of a file on the card goes into s, read in chunks; its size
+// is the result (0 without the file).
+static uint32_t file_sha(const char *path, struct sha256 *s)
+{
+    uint8_t fh;
+    uint16_t n;
+    uint32_t size = 0;
+    errno = 0;
+    fh = esx_f_open(path, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) return 0;
+    while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
+        if (s) sha256_add(s, text, n);
+        size += n;
+    }
+    esx_f_close(fh);
+    return size;
+}
+
+// The digest in s, in lowercase hex as sha256sum prints it.
+static void sha_hex(struct sha256 *s, char out[65])
+{
+    static uint8_t d[32];
+    uint8_t i;
+    sha256_end(s, d);
+    for (i = 0; i < 32; i++) sprintf(out + 2 * i, "%02x", d[i]);
+}
+
+// Whether the file at path is the item's: its size, and on the Next its
+// SHA-256 too.
+static uint8_t matches(struct item *it, const char *path)
+{
+    static struct sha256 s;
+    static char hex[65];
+    sha256_init(&s);
+    if (file_sha(path, it->pi ? 0 : &s) != it->size) return 0;
+    if (it->pi) return 1;
+    sha_hex(&s, hex);
+    return strcmp(hex, it->sha256) == 0;
+}
+
 // Fetches one item to its .PRT file, going on from what an earlier try
-// left there, and puts it in place once it matches the list; 0 when done.
+// left there, and puts it in place once it is the one built with this CBB;
+// 0 when done.
 static int fetch(struct item *it, uint8_t row)
 {
     uint8_t fh, err, tries = 0;
     uint16_t n, start = FRAMES_LO;
-    uint32_t got, crc;
-    // What an earlier try left, with its CRC so far.
-    crc = file_crc(it->part, &got);
+    uint32_t got;
+    // What an earlier try left.
+    got = file_sha(it->part, 0);
     if (got > it->size) {
         esx_f_unlink(it->part);
-        crc = got = 0;
+        got = 0;
     }
     errno = 0;
     fh = esx_f_open(it->part, ESX_MODE_W | ESX_MODE_OPEN_CREAT);
@@ -1188,12 +1240,11 @@ static int fetch(struct item *it, uint8_t row)
             esx_f_close(fh);
             return fail("cannot write to the card", it->part);
         }
-        crc = crc_add(crc, text, n);
         got += n;
         progress(row, got, it->size, start);
     }
     esx_f_close(fh);
-    if (crc != it->crc) {
+    if (!matches(it, it->part)) {
         file_state(row, it->label, "DAMAGED");
         esx_f_unlink(it->part);
         return fail("the file arrived damaged; run .cbb install again", it->name);
@@ -1204,15 +1255,16 @@ static int fetch(struct item *it, uint8_t row)
     return 0;
 }
 
-// Whether the file on the card is the list's.
+// Whether the file on the card is the one built with this CBB.
 static uint8_t up_to_date(struct item *it)
 {
-    uint32_t size, crc = file_crc(it->card, &size);
-    return size == it->size && crc == it->crc;
+    return matches(it, it->card);
 }
 
-// Reads the list: a line NAME SIZE CRC32 MD5 for each file.
-static int read_list(void)
+// Reads the site's list, a line NAME SIZE CRC32 SHA256 for each file, for
+// the size and CRC-32 of the newest CBB: .cbb update only tells of one,
+// since a CBB can check only the files built with it.
+static int read_list(uint32_t *cbb_size, uint32_t *cbb_crc)
 {
     char *p, *q;
     uint8_t i, err;
@@ -1237,38 +1289,34 @@ static int read_list(void)
         }
         text[len] = 0;
     }
+    *cbb_size = 0;
     for (p = (char *)text; *p; p = q) {
-        char name[16], md5[40];
+        char name[16], sha[72];
         uint32_t size;
         char crc[12];
         q = strchr(p, '\n');
         if (q) *q++ = 0;
         else q = p + strlen(p);
-        if (sscanf(p, "%15s %lu %11s %39s", name, &size, crc, md5) != 4) continue;
-        for (i = 0; i < ITEMS; i++) {
-            if (strcmp(items[i].name, name) == 0 && strlen(crc) == 8 && strlen(md5) == 32) {
-                items[i].size = size;
-                items[i].crc = strtoul(crc, 0, 16);
-                strcpy(items[i].md5, md5);
-            }
+        if (sscanf(p, "%15s %lu %11s %71s", name, &size, crc, sha) != 4) continue;
+        if (strcmp(name, "CBB") == 0 && strlen(crc) == 8) {
+            *cbb_size = size;
+            *cbb_crc = strtoul(crc, 0, 16);
         }
     }
-    for (i = 0; i < ITEMS; i++) {
-        if (!items[i].size) return fail("the list lacks a file", items[i].name);
-    }
+    if (!*cbb_size) return fail("the list lacks a file", "CBB");
     return 0;
 }
 
-// Asks NextPi's shell for the MD5 of the Pi's cbb, into md5 ("none"
+// Asks NextPi's shell for the SHA-256 of the Pi's cbb, into sha ("none"
 // without one); 0 when the Pi answered.
-static uint8_t pi_md5(char *md5)
+static uint8_t pi_sha(char *sha)
 {
     if (link_shell()) return 1;
-    link_send_str("{ md5sum " PI_DIR "/cbb.bin 2>/dev/null || echo none; } | cut -c1-32 | sed 's/^/CBBM /'\n");
+    link_send_str("{ sha256sum " PI_DIR "/cbb.bin 2>/dev/null || echo none; } | cut -c1-64 | sed 's/^/CBBS /'\n");
     for (;;) {
         if (link_line(line, sizeof line, 10)) return 1;
-        if (strncmp(line, "CBBM ", 5) == 0 && strlen(line) <= 37) {
-            strcpy(md5, line + 5);
+        if (strncmp(line, "CBBS ", 5) == 0 && strlen(line) <= 69) {
+            strcpy(sha, line + 5);
             link_prompt();
             return 0;
         }
@@ -1276,11 +1324,12 @@ static uint8_t pi_md5(char *md5)
 }
 
 // Copies the Pi's cbb from the card to NextPi's user partition over the
-// UART: the shell reads exactly its size, then checks its MD5 before it
-// takes the place of the old one. The wrapper that NextPi's shell runs is
-// written unless there is one.
+// UART: the shell reads exactly its size, then checks its SHA-256 against
+// the one built with this CBB before it takes the place of the old one. The
+// wrapper that NextPi's shell runs is written unless there is one.
 static int to_pi(struct item *it, uint8_t row)
 {
+    static char check[300];
     uint8_t fh, err;
     uint16_t n, start = FRAMES_LO;
     uint32_t sent = 0;
@@ -1309,14 +1358,21 @@ static int to_pi(struct item *it, uint8_t row)
     }
     esx_f_close(fh);
     link_prompt();
-    sprintf(line,
-            "cd " PI_DIR " && [ \"$(md5sum <cbb.new | cut -c1-32)\" = %s ] && chmod 755 cbb.new && "
-            "mv -f cbb.new cbb.bin && echo CBBOK || { rm -f cbb.new; echo CBBERR; }\n",
-            it->md5);
-    link_send_str(line);
+    // The digest is pins.h's, 64 hex digits, never the site's.
+    snprintf(check, sizeof check,
+             "cd " PI_DIR " && if ! command -v sha256sum >/dev/null; then rm -f cbb.new; echo CBBNOSHA; "
+             "elif [ \"$(sha256sum <cbb.new | cut -c1-64)\" = '%s' ]; then chmod 755 cbb.new && "
+             "mv -f cbb.new cbb.bin && echo CBBOK; else rm -f cbb.new; echo CBBERR; fi\n",
+             it->sha256);
+    link_send_str(check);
     for (;;) {
         if (link_line(line, sizeof line, 60)) return fail("the Pi did not answer", "no CBBOK");
-        if (strcmp(line, "CBBERR") == 0) return fail("the Pi got a damaged copy; run .cbb install again", 0);
+        if (strcmp(line, "CBBNOSHA") == 0) return fail("the Pi has no sha256sum to check its cbb with", 0);
+        if (strcmp(line, "CBBERR") == 0) {
+            // The card's copy is not the one built with this CBB.
+            esx_f_unlink(it->card);
+            return fail("the Pi got another file than this CBB's; run .cbb install again", 0);
+        }
         if (strcmp(line, "CBBOK") == 0) break;
     }
     link_prompt();
@@ -1335,17 +1391,17 @@ static int to_pi(struct item *it, uint8_t row)
 }
 
 // .cbb install and .cbb update: the Next's files to /cbb, the Pi's cbb
-// through the card to the Pi; each only when the list has another. The
-// rows of the screen: CBB, CBB.DRV, the Pi's cbb fetched, then sent.
-// The Pi's cbb goes on in its row: fetched, then sent.
+// through the card to the Pi; each only when the one in place is not the
+// one built with this CBB. The rows of the screen: CBB.DRV, the Pi's cbb
+// fetched, then sent. The Pi's cbb goes on in its row: fetched, then sent.
 #define PI_ROW (ITEMS - 1)
 
-static int install_files(void)
+static int install_files(uint8_t update)
 {
-    static char pimd5[33];
+    static char pisha[65];
     struct item *pi = &items[ITEMS - 1];
     uint8_t i, pi_answers, drv_new = 0, drv_on, old_bank = NO_BANK, need[ITEMS] = {0};
-    uint32_t size;
+    uint32_t size, crc, list_size, list_crc;
     int err = 0;
     // The bank of a driver installed now, while the card has its file.
     drv_on = driver(DRV_STATE, 0) == 0;
@@ -1358,13 +1414,26 @@ static int install_files(void)
     }
     file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "TOTAL", "");
     bar(TOTAL_ROW + 1, 0, 0xFF);
-    pi_answers = !pi_md5(pimd5);
+    pi_answers = !pi_sha(pisha);
     if (http_open()) {
         http_close();
         link_use(LINK_PI);
         return fail("cannot reach " SITE "; is the ESP on Wi-Fi?", line);
     }
-    err = read_list();
+    // .cbb update first looks for a newer CBB, which its user fetches
+    // as at the start (README.md, "Install"): this one installs only its
+    // own files.
+    if (update) {
+        err = read_list(&list_size, &list_crc);
+        crc = file_crc(CBB_CARD, &size);
+        if (!err && (size != list_size || crc != list_crc)) {
+            http_close();
+            link_use(LINK_PI);
+            say("A newer CBB is out. Fetch it as at the start: .http -h " SITE " -u /zxnext -f CBB in /cbb, "
+                "then ../CBB install.");
+            return 1;
+        }
+    }
     // What is to do, first, for the total: the files to fetch, then the
     // Pi's cbb to send.
     total_size = total_done = 0;
@@ -1373,11 +1442,11 @@ static int install_files(void)
         const char *state = "CURRENT";
         if (it == pi) {
             if (!pi_answers) state = "NO PI";
-            else if (strcmp(pimd5, it->md5) == 0) state = "CURRENT";
+            else if (strcmp(pisha, it->sha256) == 0) state = "CURRENT";
             // On the card from a try that stopped later.
             else if (up_to_date(it)) state = "FETCHED";
             else state = 0;
-            if (pi_answers && strcmp(pimd5, it->md5)) total_size += it->size;
+            if (pi_answers && strcmp(pisha, it->sha256)) total_size += it->size;
         } else if (!up_to_date(it)) {
             state = 0;
         }
@@ -1393,14 +1462,14 @@ static int install_files(void)
         if (!need[i]) continue;
         err = fetch(&items[i], i);
         total_done += items[i].size;
-        if (i == 1) drv_new = 1;
+        if (!items[i].pi) drv_new = 1;
     }
     http_close();
     link_use(LINK_PI);
     if (err) return 1;
     if (!pi_answers) {
         say("The Pi does not answer: its cbb comes with .cbb update later.");
-    } else if (strcmp(pimd5, pi->md5) == 0) {
+    } else if (strcmp(pisha, pi->sha256) == 0) {
         file_state(PI_ROW, pi->label, "CURRENT");
     } else {
         file_state(PI_ROW, pi->label, "TO PI");
@@ -1431,20 +1500,21 @@ static int install_files(void)
         }
     }
     // An older .cbb in C:/DOT runs as .cbb before this one.
-    if (file_crc(DOT_CBB, &size) != items[0].crc && size) {
+    crc = file_crc(CBB_CARD, &list_size);
+    if ((file_crc(DOT_CBB, &size) != crc || size != list_size) && size && list_size) {
         say("C:/DOT/CBB is another .cbb: .cbb runs it, ../CBB the new one. Replace or delete it.");
     }
     say("Done.");
     return 0;
 }
 
-// Not static: far_install() (far.asm) calls it.
+// Not static: far_install() (far.asm) calls it, with install_update set.
 int install(void)
 {
     int err;
     if (net_on()) return fail(net_runs, 0);
     screen_open();
-    err = install_files();
+    err = install_files(install_update);
     screen_close();
     return err;
 }
@@ -1487,7 +1557,10 @@ static int run(int argc, char **argv)
         net_argv = argv + i + 1;
         return far_net();
     }
-    if ((strcmp(argv[i], "install") == 0 || strcmp(argv[i], "update") == 0) && argc - i == 1) return far_install();
+    if ((strcmp(argv[i], "install") == 0 || strcmp(argv[i], "update") == 0) && argc - i == 1) {
+        install_update = argv[i][0] == 'u';
+        return far_install();
+    }
     usage();
     return 1;
 }

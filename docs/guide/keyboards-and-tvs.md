@@ -133,9 +133,9 @@ that forgot this computer, must pair again.
 
 ## Limits
 
-- Not yet tried on real TVs, tablets or Bluetooth adapters: the tests run against a fake
-  BlueZ, a fake Android TV and a fake Roku.
-- The phones' apps cannot be a TV's remote yet; Samsung and LG TVs and the Apple TV follow
+- Tried on a real TV only with an Apple TV 4K, typing through `cbb remote`; the rest runs in
+  tests against a fake BlueZ, a fake Android TV, a fake Apple TV and a fake Roku.
+- The phones' apps cannot be a TV's remote yet; Samsung and LG TVs follow
   ([roadmap](../roadmap.md), item 25).
 - A keyboard types at most 4,096 characters at a time.
 
