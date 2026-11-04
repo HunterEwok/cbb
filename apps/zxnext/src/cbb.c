@@ -1453,21 +1453,19 @@ static void http_close(void)
 //
 //   rows 0-17, columns 0-13   the logo
 //   rows 0-2, from column 15  the name and the version
-//   row 3, from column 15     SPACE STOPS, at the end PRESS ANY KEY
-//   rows 4-13                 a file's name and state, then its bar, in
-//                             the stripes' colours: red, yellow, green,
-//                             the Pi's cbb on its way in cyan, and a
-//                             newer CBB in white
-//   rows 14-15                all of it, its bar empty in the four stripes,
-//                             filled in the colour of the quarter reached
-//   rows 16-17                the file under way: kilobytes, speed
+//   rows 4-13                 a file's name and state, then its bar, each
+//                             in one colour, in the order they are done:
+//                             the stripes' red, yellow and green, the
+//                             Pi's cbb on its way in cyan, a newer CBB
+//                             (.cbb update) in white
+//   rows 14-15                the file under way: kilobytes, speed
+//   row 16, from column 15    SPACE STOPS, at the end PRESS ANY KEY
 //   rows 18-21                messages
 #define PANEL 15
 #define FILE_ROW 4
-#define TOTAL_ROW 14
-#define NOW_ROW 16
+#define NOW_ROW 14
 // SPACE STOPS, at the end PRESS ANY KEY.
-#define KEY_ROW 3
+#define KEY_ROW 16
 #define BAR_CELLS 12
 
 // The ROM's colour codes, for what .cbb prints meanwhile; in the divMMC
@@ -1537,24 +1535,18 @@ static void file_state(uint8_t row, const char *name, const char *state)
     printf("%-8s%-9s", name, state);
 }
 
-// The bytes of the whole install, and those of the files done.
-static uint32_t total_size, total_done;
-
-// The bars' colours, the Next's stripes, a row each. The total's bar
-// (ink 0xFF): its empty part in all four, a quarter each, its filled part
-// all in the colour of the quarter it reached.
-// The fifth: the total's at 100%.
-static const uint8_t bar_ink[5] = {INK_RED, INK_YELLOW, INK_GREEN, INK_CYAN, INK_CYAN};
+// The bars' colours, a row each, from the first fetched to the last: the
+// Next's stripes, the Pi's cbb on its way in cyan, a newer CBB in white.
+static const uint8_t bar_ink[5] = {INK_RED, INK_YELLOW, INK_GREEN, INK_CYAN, INK_WHITE};
 // Draws a bar in half cells at a screen row, with the percentage.
 static void bar(uint8_t screen_row, uint8_t pct, uint8_t ink)
 {
     uint8_t halves = (uint8_t)((uint16_t)pct * (BAR_CELLS * 2) / 100), i, c;
-    uint8_t fill = ink < 8 ? ink : bar_ink[pct / 25];
     at(screen_row, PANEL);
     for (i = 0; i < BAR_CELLS; i++) {
         // The ROM's block graphics: 143 full, 138 the left half.
         c = halves >= 2 * i + 2 ? 143 : halves == 2 * i + 1 ? 138 : '-';
-        colour(c == '-' && ink > 7 ? bar_ink[i / (BAR_CELLS / 4)] : fill);
+        colour(ink);
         putchar(c);
     }
     colour(INK_WHITE);
@@ -1567,15 +1559,14 @@ static uint8_t percent(uint32_t got, uint32_t size)
     return size && got < size ? (uint8_t)(got * 100 / size) : 100;
 }
 
-// Draws a file's bar and the total's, and the numbers of the one under way.
+// Draws a file's bar, and the numbers of the one under way.
 static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 {
     uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50;
     uint32_t rate = secs ? got / secs : 0;
     uint16_t left = rate ? (uint16_t)((size - got) / rate) : 0;
     char speed[8];
-    bar(FILE_ROW + 2 * row + 1, percent(got, size), bar_ink[row & 3]);
-    bar(TOTAL_ROW + 1, percent(total_done + got, total_size), 0xFF);
+    bar(FILE_ROW + 2 * row + 1, percent(got, size), bar_ink[row]);
     at(NOW_ROW, PANEL);
     printf("%5luK OF %5luK", got >> 10, size >> 10);
     if (rate < 10240) sprintf(speed, "%u.%uK/S", (uint16_t)(rate >> 10), (uint16_t)((rate & 1023) * 10 >> 10));
@@ -1941,8 +1932,6 @@ static int install_files(uint8_t update)
     }
     file_state(SEND_ROW, SEND_LABEL, "");
     bar(FILE_ROW + 2 * SEND_ROW + 1, 0, bar_ink[SEND_ROW]);
-    file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "TOTAL", "");
-    bar(TOTAL_ROW + 1, 0, 0xFF);
     pi_answers = !pi_sha(pisha);
     link_stopped = 0;
     if (http_open()) {
@@ -1974,11 +1963,11 @@ static int install_files(uint8_t update)
             cbb_new.sha256 = list_isha[LISTED - 1];
         }
     }
-    file_state(CBB_ROW, "CBB", newer ? "" : "CURRENT");
-    bar(FILE_ROW + 2 * CBB_ROW + 1, newer ? 0 : 100, INK_WHITE);
-    // What is to do, first, for the total: the files to fetch, then the
-    // Pi's cbb to send.
-    total_size = total_done = 0;
+    if (newer) {
+        file_state(CBB_ROW, "CBB", "");
+        bar(FILE_ROW + 2 * CBB_ROW + 1, 0, bar_ink[CBB_ROW]);
+    }
+    // What is to do: the files to fetch, then the Pi's cbb to send.
     for (i = 0; i < ITEMS && !err; i++) {
         struct item *it = &items[i];
         const char *state = "CURRENT";
@@ -1988,7 +1977,6 @@ static int install_files(uint8_t update)
             // On the card from a try that stopped later.
             else if (up_to_date(it)) state = "FETCHED";
             else state = 0;
-            if (pi_answers && strcmp(pisha, it->sha256)) total_size += it->size;
         } else if (!up_to_date(it)) {
             state = 0;
         }
@@ -2002,7 +1990,6 @@ static int install_files(uint8_t update)
             }
         } else {
             need[i] = 1;
-            total_size += it->size;
         }
     }
     // Nothing to fetch, nothing to send: .cbb update says so.
@@ -2010,17 +1997,19 @@ static int install_files(uint8_t update)
     if (pi_answers && strcmp(pisha, pi->sha256)) nothing = 0;
     for (i = 0; i < ITEMS; i++)
         if (need[i]) nothing = 0;
-    if (newer && !err) {
-        total_size += cbb_new.size;
-        if (matches(&cbb_new, cbb_new.part)) file_state(CBB_ROW, "CBB", "FETCHED");
-        else err = fetch(&cbb_new, CBB_ROW);
-        total_done += cbb_new.size;
-    }
     for (i = 0; i < ITEMS && !err; i++) {
         if (!need[i]) continue;
         err = fetch(&items[i], ITEM_ROW(i));
-        total_done += items[i].size;
-        if (!items[i].pi) drv_new = 1;
+        // CBB.DRV, which runs from memory once installed.
+        if (i == 0) drv_new = 1;
+    }
+    if (newer && !err) {
+        if (matches(&cbb_new, cbb_new.part)) {
+            file_state(CBB_ROW, "CBB", "FETCHED");
+            bar(FILE_ROW + 2 * CBB_ROW + 1, 100, bar_ink[CBB_ROW]);
+        } else {
+            err = fetch(&cbb_new, CBB_ROW);
+        }
     }
     http_close();
     link_use(LINK_PI);
@@ -2030,8 +2019,6 @@ static int install_files(uint8_t update)
     } else if (strcmp(pisha, pi->sha256) != 0) {
         file_state(SEND_ROW, SEND_LABEL, "SENDING");
         if (to_pi(pi, SEND_ROW)) return 1;
-        total_done += pi->size;
-        bar(TOTAL_ROW + 1, 100, 0xFF);
         // The card keeps no copy of the Pi's program.
         esx_f_unlink(pi->card);
         file_state(SEND_ROW, SEND_LABEL, "DONE");
