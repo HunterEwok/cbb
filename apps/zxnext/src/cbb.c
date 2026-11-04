@@ -64,7 +64,9 @@ static const char usage_text[] = "CBB " VERSION "\n\n"
            "                   from cbb.tools,\n"
            "                   the Pi's cbb too\n"
            ".cbb update        tell of a newer\n"
-           "                   CBB, or install\n"           ".cbb uninstall     remove it all\n"
+           "                   CBB, or install\n"
+           ".cbb paste-receive on|off\n"
+           ".cbb uninstall     remove it all\n"
            ".cbb -d ...        show error details\n";
 #pragma constseg rodata_compiler
 
@@ -178,6 +180,8 @@ static int link_fail(uint8_t err)
 // CBB.DRV (drv/): its id, and where .cbb net keeps the link's settings.
 #define DRIVER_ID 124
 #define NET_CFG "/cbb/NET.CFG"
+// .cbb paste-receive's switch, which .cbb net on hands the link (-paste).
+#define PASTE_CFG "/cbb/PASTE.CFG"
 // The Pi's cbb: on the card, and where NextPi's shell finds it.
 #define PI_CARD "/cbb/CBBPI.BIN"
 #define PI_DIR "/NextPi/nextpi"
@@ -504,6 +508,34 @@ int cmd_run(void)
 
 // The link's settings: the -to, -serve and -zone of `cbb next link`.
 static char net_args[120];
+
+// PASTE_CFG's setting; 1 when there is one.
+static char paste_set[10];
+static uint8_t plain(const char *s);
+
+static uint8_t paste_load(void)
+{
+    uint8_t fh;
+    uint16_t n;
+    errno = 0;
+    fh = esx_f_open(PASTE_CFG, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) return 0;
+    n = esx_f_read(fh, paste_set, sizeof paste_set - 1);
+    esx_f_close(fh);
+    paste_set[n] = 0;
+    return n && plain(paste_set);
+}
+
+static int paste_save(void)
+{
+    uint8_t fh;
+    errno = 0;
+    fh = esx_f_open(PASTE_CFG, ESX_MODE_W | ESX_MODE_OPEN_CREAT_TRUNC);
+    if (errno) return fail("cannot save the setting; is there a folder /cbb?", PASTE_CFG);
+    esx_f_write(fh, paste_set, strlen(paste_set));
+    esx_f_close(fh);
+    return 0;
+}
 
 static uint8_t net_load(void)
 {
@@ -866,6 +898,10 @@ static int net_start(int argc, char **argv)
     if (pair_code) {
         link_send_str(" -join ");
         link_send_str(pair_code);
+    }
+    if (paste_load()) {
+        link_send_str(" -paste ");
+        link_send_str(paste_set);
     }
     link_send_str(" -log /ram/link.log\n");
     // The driver may only start once the link has made the UART raw: the
@@ -1694,6 +1730,11 @@ static int to_pi(struct item *it, uint8_t row)
 // this CBB before), then sending the Pi's cbb to the Pi (SEND_ROW).
 #define ITEM_ROW(i) (i)
 
+static const char paste_default[] = "on-enter";
+// Two lines, so that the messages above stay on the screen.
+static const char paste_is_on[] = "Remote paste on. Off: the app or ../CBB paste-receive off";
+static const char paste_is_off[] = "Remote paste off; on: ../CBB paste-receive on";
+
 static int install_files(uint8_t update)
 {
     static char pisha[65];
@@ -1809,6 +1850,14 @@ static int install_files(uint8_t update)
     if ((file_crc(DOT_CBB, &size) != crc || size != list_size) && size && list_size) {
         say("C:/DOT/CBB is another .cbb: .cbb runs it, ../CBB the new one. Replace or delete it.");
     }
+    // Remote paste: on with Enter after the first install, as the user
+    // set it after that.
+    if (!paste_load()) {
+        strcpy(paste_set, paste_default);
+        if (paste_save()) return 1;
+    }
+    // Without the Pi, its message keeps the room.
+    if (pi_answers) say(paste_set[1] == 'n' ? paste_is_on : paste_is_off);
     say("Done.");
     return 0;
 }
@@ -1831,7 +1880,7 @@ int install_run(void)
 // Its words are arrays of this page: zcc keeps string literals with the
 // main program's.
 static const char card_files[][16] = {"/cbb/CBB.DRV", "/cbb/NET.CFG", "/cbb/CBBPI.BIN", "/cbb/DRV.PRT",
-                                      "/cbb/CBBPI.PRT", "/cbb/CBB"};
+                                      "/cbb/CBBPI.PRT", "/cbb/PASTE.CFG", "/cbb/CBB"};
 static const char un_ask[] = "Remove CBB: the network, CBB.DRV,\nthe Pi's cbb and its group, and\nthe files in /cbb? Y or N\n";
 static const char un_none[] = "Nothing removed.\n";
 static const char un_drv_stays[] = "CBB.DRV stays: .uninstall it.\n";
@@ -1846,6 +1895,30 @@ static const char un_dir[] = "/cbb";
 static const char un_done[] = "The files in /cbb are removed.\nRemove the Next in the phone app\ntoo.\n";
 
 // Not static: far_uninstall() (far.asm) calls it.
+// .cbb paste-receive on [-enter] | off: whether the group's admins may
+// type on the Next. .cbb install turns it on, with Enter, for BASIC's
+// lines; the Next's own user turns it off here, or an admin in the app.
+static const char pr_off[] = "off", pr_on[] = "on", pr_enter[] = "-enter", pr_on_enter[] = "on-enter";
+static const char pr_said[] = "Remote paste %s from the next\n.cbb net on%s\n";
+static const char pr_runs[] = " (net off first)";
+
+// Not static: far_paste_receive() (far.asm) calls it.
+int paste_receive(void)
+{
+    int argc = far_argc;
+    char **argv = far_argv;
+    if (argc == 1 && strcmp(argv[0], pr_off) == 0) strcpy(paste_set, pr_off);
+    else if (argc == 1 && strcmp(argv[0], pr_on) == 0) strcpy(paste_set, pr_on);
+    else if (argc == 2 && strcmp(argv[0], pr_on) == 0 && strcmp(argv[1], pr_enter) == 0) strcpy(paste_set, pr_on_enter);
+    else {
+        usage();
+        return 1;
+    }
+    if (paste_save()) return 1;
+    printf(pr_said, paste_set[1] == 'n' ? pr_on : pr_off, net_on() ? pr_runs : pr_off + 3);
+    return 0;
+}
+
 int uninstall(void)
 {
     uint8_t i;
@@ -2022,6 +2095,7 @@ extern int far_cmd(void);
 extern void far_screen_open(void);
 extern void far_screen_close(void);
 extern int far_uninstall(void);
+extern int far_paste_receive(void);
 
 // .cbb install and .cbb update: the screen in its page, the install in its.
 static int install(void)
@@ -2067,6 +2141,11 @@ static int run(int argc, char **argv)
         far_argc = argc - i - 1;
         far_argv = argv + i + 1;
         return far_net();
+    }
+    if (strcmp(argv[i], "paste-receive") == 0) {
+        far_argc = argc - i - 1;
+        far_argv = argv + i + 1;
+        return far_paste_receive();
     }
     if (strcmp(argv[i], "uninstall") == 0 && argc - i == 1) return far_uninstall();
     if ((strcmp(argv[i], "install") == 0 || strcmp(argv[i], "update") == 0) && argc - i == 1) {

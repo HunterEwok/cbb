@@ -28,6 +28,9 @@ tools. Test them on the machine before relying on them.
 .cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below)
 .cbb update           the same, for the files the site has newer
+.cbb paste-receive on [-enter] | off
+                      whether the group's admins may type on the Next from the phone app;
+                      .cbb install turns it on with Enter, .cbb net on hands it to the Pi
 .cbb uninstall        after a Y: stop the network, uninstall CBB.DRV, remove the Pi's cbb
                       and its group, and the files in /cbb (the folder too, when empty)
 .cbb -d paste         the same, with the cause under each error and, at the end, the

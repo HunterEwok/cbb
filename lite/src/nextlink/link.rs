@@ -25,7 +25,7 @@ use super::esp::{self, Esp, Event};
 use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
-pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
+pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-join code] [-paste on|on-enter|off] [-log file] [-trace]";
 
 /// The line the link writes once the UART is raw, which `.cbb net on`
 /// waits for before it turns the driver on.
@@ -579,6 +579,7 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
     let mut trace = false;
     let mut udp = None;
     let mut join = None;
+    let mut paste = None;
     let mut i = 0;
     while i < args.len() {
         if crate::flag(&args[i]) == Some("trace") {
@@ -601,6 +602,14 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
                 ));
             }
             Some("join") => join = Some(value()?),
+            Some("paste") => {
+                paste = Some(match value()?.as_str() {
+                    "on" => (true, false),
+                    "on-enter" => (true, true),
+                    "off" => (false, false),
+                    _ => return Err(Error::msg(USAGE)),
+                })
+            }
             Some("udp") => {
                 let v = value()?;
                 let (a, rest) = v.split_once(':').ok_or_else(|| Error::msg(USAGE))?;
@@ -744,6 +753,10 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
                 Ok(false) => {}
                 Err(e) => (link.log)(&format!("cannot start the service: {}", e.for_user())),
             }
+            if let Some((on, enter)) = paste.take() {
+                let (g, log) = (g.clone(), tx.clone());
+                std::thread::spawn(move || set_paste(&g, on, enter, &log));
+            }
         }
         for (id, use_, mut s) in std::mem::take(&mut link.readers) {
             let tx = tx.clone();
@@ -766,6 +779,31 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Tells the service whether the group's admins may paste on the Next, as
+/// .cbb paste-receive set it (-paste): the Next's user is the Pi's, so
+/// the switch is theirs. The service may still be starting: it is asked
+/// again for a minute.
+fn set_paste(g: &crate::Global, on: bool, enter: bool, log: &mpsc::Sender<Msg>) {
+    let h = crate::control::Header {
+        op: "paste-receive".into(),
+        name: if on { "on" } else { "off" }.into(),
+        enter,
+        ..Default::default()
+    };
+    let mut last = String::new();
+    for _ in 0..30 {
+        std::thread::sleep(Duration::from_secs(2));
+        match crate::request(g, &crate::control::Message::new(h.clone(), Vec::new())) {
+            Ok(_) => {
+                log.send(Msg::Log(format!("remote paste is {} here (enter {enter})", h.name))).ok();
+                return;
+            }
+            Err(e) => last = e.for_user(),
+        }
+    }
+    log.send(Msg::Log(format!("cannot set remote paste: {last}"))).ok();
 }
 
 /// The wait after a failed dial of -to that follows wait; away is whether

@@ -24,6 +24,7 @@ PUBLIC _rom_char
 PUBLIC _far_install
 PUBLIC _far_net
 PUBLIC _far_net_pair
+PUBLIC _far_paste_receive
 PUBLIC _far_cmd
 PUBLIC _far_screen_open
 PUBLIC _far_screen_close
@@ -39,6 +40,7 @@ EXTERN _screen_open
 EXTERN _screen_close
 EXTERN _sha_run
 EXTERN _uninstall
+EXTERN _paste_receive
 
 FAR_DATA    equ 15
 FAR_INSTALL equ 13
@@ -115,6 +117,12 @@ _far_sha:
 _far_uninstall:
    ld a,FAR_DATA
    ld hl,_uninstall
+   jr far_call
+
+; int far_paste_receive(void), in the logo's page too.
+_far_paste_receive:
+   ld a,FAR_DATA
+   ld hl,_paste_receive
    jr far_call
 
 _far_net:

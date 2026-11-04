@@ -490,7 +490,7 @@ fn hint(systemd: bool, systemctl: &str) -> String {
 }
 
 /// Sends one request to the service and returns its answer.
-fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
+pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
     let conn = if control::is_admin(&m.header.op) {
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {

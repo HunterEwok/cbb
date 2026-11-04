@@ -159,6 +159,9 @@ fn installs_then_finds_all_current() {
     assert_eq!(o.run.hw.drivers.len(), 1);
     assert_eq!(o.taken(), 1);
     assert_eq!(std::fs::read(card.join("cbb/CBB.DRV")).unwrap(), std::fs::read(kit.site.join("CBB.DRV")).unwrap());
+    // Remote paste is on after the first install, Enter too, and it says so.
+    assert!(o.has("REMOTE PASTE ON"), "{}", o.screen);
+    assert_eq!(std::fs::read_to_string(card.join("cbb/PASTE.CFG")).unwrap(), "on-enter");
 
     // Again, with the Pi's cbb in place: nothing to fetch or send.
     let mut pi = Pi::new();
@@ -372,6 +375,7 @@ fn installed(kit: &Kit, name: &str) -> (PathBuf, Pi) {
     std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
     std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
     std::fs::write(card.join("cbb/NET.CFG"), "-serve 8764:8764").unwrap();
+    std::fs::write(card.join("cbb/PASTE.CFG"), "on-enter").unwrap();
     let mut pi = Pi::new();
     pi.cbb_sha = Some(sha256::hex(&kit.pi_cbb));
     (card, pi)
@@ -478,5 +482,23 @@ fn pairs_while_the_network_runs() {
     assert!(s.contains("The network stopped.") && s.contains("Found 192.168.0.175:8764"), "{s}");
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(pi.log.iter().any(|l| l.contains("-join 123-456 ")), "{:?}", pi.log);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn turns_remote_paste_off_for_the_link() {
+    let Some(kit) = kit("pasteoff") else { return };
+    let (card, _) = installed(&kit, "pasteoff");
+    let run = run_on(&kit, &card, "paste-receive off", Esp::new(kit.site.clone()), Pi::new(), Vec::new());
+    assert!(run.hw.screen_text().contains("Remote paste off"), "{}", run.hw.screen_text());
+    assert_eq!(std::fs::read_to_string(card.join("cbb/PASTE.CFG")).unwrap(), "off");
+    let mut esp = Esp::new(kit.site.clone());
+    esp.members = vec![("192.168.0.175".into(), 8764, String::new())];
+    let mut run = run_on(&kit, &card, "net on", esp, Pi::new(), Vec::new());
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(pi.log.iter().any(|l| l.contains("-serve 8764:8764 -paste off -log")), "{:?}", pi.log);
+    let run = run_on(&kit, &card, "paste-receive on -x", Esp::new(kit.site.clone()), Pi::new(), Vec::new());
+    assert!(run.hw.screen_text().contains("paste-receive"), "{}", run.hw.screen_text());
+    assert_eq!(std::fs::read_to_string(card.join("cbb/PASTE.CFG")).unwrap(), "off");
     let _ = std::fs::remove_dir_all(&card);
 }
