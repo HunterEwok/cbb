@@ -619,6 +619,19 @@ static uint8_t esp_at(uint32_t speed)
     return 0;
 }
 
+// Restarts the ESP, for a mode it keeps until then (CIPMUX=1 with a
+// server). It comes back at its stock speed and joins the Wi-Fi network
+// again a few seconds after "ready": until "WIFI GOT IP" it connects
+// nowhere.
+static void esp_restart(void)
+{
+    uint8_t n = 0;
+    link_send_str("AT+RST\r\n");
+    link_open_esp(ESP_SPEED);
+    while (n++ < 20 && link_line(line, sizeof line, 10) == LINK_OK && strcmp(line, "WIFI GOT IP")) {
+    }
+}
+
 // Takes the ESP out of a transparent connection, as a .pibridge whose
 // connection ended under it leaves it: a second of quiet, +++, a second,
 // then back to normal sends.
@@ -829,9 +842,7 @@ failed:
     // it restarts: once, a restart at its stock speed, then again.
     if (!reset) {
         reset = 1;
-        link_send_str("AT+RST\r\n");
-        while (link_line(line, sizeof line, 5) == LINK_OK && strcmp(line, "ready")) {
-        }
+        esp_restart();
         if (esp_speed(ESP_SPEED)) goto again;
     }
     link_use(LINK_PI);
@@ -1017,8 +1028,15 @@ static int net_stop(void)
     if (!net_on()) return fail("the network does not run", 0);
     driver(DRV_SWITCH, 0);
     link_quit();
-    // Back to the stock speed, for NextZXOS's own tools and .pibridge.
+    // Back to the stock speed, for NextZXOS's own tools and .pibridge,
+    // without the connections the network left (a computer's to the
+    // server stays open otherwise, and the ESP has only five).
     if (!esp_speed(ESP_SPEED)) printf("The ESP did not answer AT.\n");
+    else {
+        link_send_str("AT+CIPCLOSE=5\r\n");
+        while (link_line(line, sizeof line, 2) == LINK_OK && strcmp(line, "OK") && strcmp(line, "ERROR")) {
+        }
+    }
     link_use(LINK_PI);
     if (link_shell()) return fail("the network stopped, but the Pi does not answer", no_prompt);
     printf("The network stopped.\n");
@@ -1223,9 +1241,7 @@ again:
                 // The network's server keeps CIPMUX=1 until the ESP
                 // restarts, at its stock speed.
                 reset = 1;
-                link_send_str("AT+RST\r\n");
-                while (link_line(line, sizeof line, 5) == LINK_OK && strcmp(line, "ready")) {
-                }
+                esp_restart();
                 if (!esp_speed(ESP_FETCH_SPEED)) return 1;
                 goto again;
             }

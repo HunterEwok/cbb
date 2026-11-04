@@ -60,6 +60,8 @@ pub struct Esp {
     pub site: PathBuf,
     pub faults: Faults,
     pub wifi: bool,
+    /// After AT+RST, the time it joins the Wi-Fi network again.
+    wifi_at: u64,
     pub log: Vec<String>,
     /// A baud change after the OK goes out.
     pending_baud: Option<(u64, u32)>,
@@ -126,6 +128,7 @@ impl Esp {
             site,
             faults: Faults::default(),
             wifi: true,
+            wifi_at: 0,
             log: Vec::new(),
             pending_baud: None,
             members: Vec::new(),
@@ -188,6 +191,8 @@ impl Esp {
             self.cipmode = 0;
             self.reply(now, "\r\nOK\r\n");
             self.out.push(now + 100_000, b"\x8a\xf3 ets Jan  8 2013\r\n\r\nready\r\n");
+            self.wifi_at = now + 3_000_000;
+            self.out.push(self.wifi_at, b"WIFI CONNECTED\r\nWIFI GOT IP\r\n");
             self.pending_baud = Some((now + 5_000, 115_200));
             return;
         }
@@ -213,6 +218,9 @@ impl Esp {
         if let Some(v) = c.strip_prefix("AT+CIPDINFO=") {
             self.cipdinfo = v == "1";
             return self.reply(now, "\r\nOK\r\n");
+        }
+        if c.starts_with("AT+CIPSTART") && now < self.wifi_at {
+            return self.reply(now, "\r\nERROR\r\n");
         }
         if c.starts_with("AT+CIPSTART=4,\"UDP\"") {
             if !self.mux {
