@@ -17,8 +17,12 @@ use serde_json::{Map, Value};
 use super::{Code, Refusal, b64_value, bad_args, json, refuse};
 use crate::authority::{Hash, Record, Seen, TYPE_CLAIM, TYPE_FREEZE, TYPE_RESOLVE, TYPE_REVOKE};
 use crate::certs::{Cert, KeyHash, b64};
+use crate::clip::{Kind, Via};
+use crate::copy::{self, Blob, Content, Sealed};
 use crate::error::Error;
 use crate::group::{ClaimTime, Device, Records, Refusal as Verdict};
+use crate::hlc::Timestamp;
+use crate::media::Manifest;
 
 /// What every call over the set takes: the group CA, the member's clock
 /// and the records file, none for an empty set. `group` names the group
@@ -105,6 +109,9 @@ fn device_value(d: &Device, s: &Records) -> Value {
     if !d.seal.is_empty() {
         m.insert("seal".into(), b64_value(&d.seal));
     }
+    if d.forward_only {
+        m.insert("forward_only".into(), Value::from(true));
+    }
     if d.admin {
         m.insert("admin".into(), Value::from(true));
     }
@@ -168,6 +175,9 @@ pub(super) fn dispatch(op: &str, args: &Value) -> Option<Result<Vec<u8>, Refusal
         "group_refused_admin_ca" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(refused_admin_ca),
         "group_taken_over" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(taken_over),
         "group_admin_peer" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(admin_peer),
+        "group_hub_peer" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(hub_peer),
+        "group_seal_copy" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_copy),
+        "group_check_copy" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(check_copy),
         "group_command" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(command),
         "group_claim_times" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(claim_times),
         "group_body" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(body),
@@ -302,6 +312,89 @@ fn admin_peer(a: ChainArgs) -> Result<Vec<u8>, Refusal> {
     let mut m = Map::new();
     m.insert("admin".into(), Value::from(s.admin_peer(&a.device, &certs_of(&a.chain)?)));
     Ok(json(Value::Object(m)))
+}
+
+/// `group_hub_peer`: whether the device with the chain may be a hub of
+/// the group, whose offers a member keeps: the root, an admin, or a device
+/// that only passes copies on (docs/protocol.md, section 11).
+fn hub_peer(a: ChainArgs) -> Result<Vec<u8>, Refusal> {
+    let s = a.set.open()?;
+    let mut m = Map::new();
+    m.insert("hub".into(), Value::from(s.hub_peer(&a.device, &certs_of(&a.chain)?)));
+    Ok(json(Value::Object(m)))
+}
+
+#[derive(Deserialize)]
+struct SealCopyArgs {
+    #[serde(flatten)]
+    set: SetArgs,
+    id: String,
+    origin: String,
+    time: Timestamp,
+    #[serde(with = "b64")]
+    cert: Vec<u8>,
+    #[serde(with = "b64", default)]
+    issuer: Vec<u8>,
+    kind: Kind,
+    #[serde(default)]
+    via: Via,
+    text: String,
+    #[serde(default)]
+    media: Option<Manifest>,
+    #[serde(default)]
+    blob: Option<Blob>,
+    /// The copy's key, which sealed its blob; the core makes one when
+    /// there is no blob and it is left out.
+    #[serde(with = "b64::opt", default)]
+    key: Option<Vec<u8>>,
+}
+
+/// `group_seal_copy`: seals a copy to the readers the set names
+/// (docs/protocol.md, section 4, "Sealing"). The answer holds the event
+/// without its signature, `to_sign`, which the origin signs with its member
+/// key and puts in the event's `sig`, the readers, and the key when the
+/// core made it.
+fn seal_copy(a: SealCopyArgs) -> Result<Vec<u8>, Refusal> {
+    let s = a.set.open()?;
+    let bad = |e: Error| refuse(Code::Copy, e.context("The copy cannot be sealed."));
+    let made = a.key.is_none();
+    let key: [u8; copy::KEY_SIZE] = match &a.key {
+        Some(k) => k.as_slice().try_into().map_err(|_| bad(Error::msg("the copy's key is not 32 bytes")))?,
+        None if a.blob.is_none() => copy::new_key(),
+        None => return Err(bad(Error::msg("a copy with a blob needs the key that sealed it"))),
+    };
+    let readers = copy::readers(&s, a.kind == Kind::Secret);
+    let content = Content { kind: a.kind, via: a.via, text: a.text, media: a.media };
+    let d = copy::seal(&a.id, &a.origin, a.time, &a.cert, &a.issuer, &readers, &content, a.blob, &key).map_err(bad)?;
+    let mut m = Map::new();
+    m.insert(
+        "event".into(),
+        serde_json::to_value(&d.sealed)
+            .map_err(|e| refuse(Code::Request, Error::with("The copy does not encode.", e)))?,
+    );
+    m.insert("to_sign".into(), b64_value(&d.to_sign));
+    m.insert("readers".into(), Value::from(readers.into_iter().map(|(id, _)| id).collect::<Vec<_>>()));
+    if made {
+        m.insert("key".into(), b64_value(&key));
+    }
+    Ok(json(Value::Object(m)))
+}
+
+#[derive(Deserialize)]
+struct CheckCopyArgs {
+    #[serde(flatten)]
+    set: SetArgs,
+    event: Sealed,
+}
+
+/// `group_check_copy`: checks a copy's origin and signature against the
+/// set, as a member does before it passes the copy on.
+fn check_copy(a: CheckCopyArgs) -> Result<Vec<u8>, Refusal> {
+    let s = a.set.open()?;
+    a.event
+        .check(&s, a.set.now_ms.div_euclid(1000))
+        .map_err(|e| refuse(Code::Copy, e.context("The copy is refused.")))?;
+    Ok(json(Value::Object(Map::new())))
 }
 
 #[derive(Deserialize)]

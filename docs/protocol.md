@@ -592,7 +592,7 @@ The Content is what only the readers see, in binary: a version byte (`1`); the k
 below) as its length in 4 bytes and its JSON, length 0 unless the kind is `media`; then zero bytes up to the next step: 1 KiB, 4 KiB,
 16 KiB, 64 KiB, 256 KiB, 1 MiB, 2 MiB, 3 MiB or 4 MiB, so that the members in between learn the
 size only within a step. `payload` is that and its 16-byte tag. A reader MUST refuse a
-Content that does not fill its step with zeros, has a version, kind or `via` it does not
+Content that is not padded with zeros to the smallest step that holds it, has a version, kind or `via` it does not
 know, or breaks the rules of a copy that held before sealing: unless the copy is a mark of a
 secret (no payload), the text is non-empty, at most 1 MiB (1 048 576 bytes) and valid UTF-8,
 except that a `media` copy may have an empty text of at most 256 KiB (262 144 bytes); a

@@ -66,6 +66,8 @@ pub struct Device {
     /// Its public key for sealed messages, which commands for it are
     /// sealed to; empty when its record has none.
     pub seal: Vec<u8>,
+    /// It passes the group's copies on as a hub but reads none.
+    pub forward_only: bool,
     /// An admin now: it has an admin key and is not frozen.
     pub admin: bool,
     /// Its admin key, whether or not it is frozen.
@@ -440,6 +442,7 @@ impl Records {
                     kind: d.hardware.clone(),
                     proof: d.proof.clone(),
                     seal: d.seal.clone(),
+                    forward_only: d.forward_only,
                     // A frozen admin is no admin until the freeze ends.
                     admin: d.admin.is_some() && !d.frozen,
                     admin_key: d.admin.map(|a| a.0),
@@ -612,12 +615,25 @@ impl Records {
 
     /// Whether the device `dev` may be the group's hub by the records
     /// alone, as Go's MayHost: the root's own device, whose key is not
-    /// revoked, or an admin with the power hub.
+    /// revoked, an admin with the power hub, or a device that only passes
+    /// copies on (docs/protocol.md, section 11, "Two kinds of hub").
     pub fn may_host(&self, dev: &str) -> bool {
         if self.root_member().is_some_and(|(id, k)| id == dev && !self.revoked(&k)) {
             return true;
         }
-        self.devices().iter().any(|d| d.id == dev && d.may(authority::POWER_HUB))
+        self.devices().iter().any(|d| d.id == dev && (d.may(authority::POWER_HUB) || d.forward_only))
+    }
+
+    /// Whether a peer with this chain, verified to a root on the path, may
+    /// be a hub of the group, whose offers a member keeps: admin_peer, or a
+    /// device that only passes copies on, by the key of its leaf.
+    pub fn hub_peer(&self, dev: &str, chain: &[Cert]) -> bool {
+        if self.admin_peer(dev, chain) {
+            return true;
+        }
+        let Some(leaf) = chain.first() else { return false };
+        let key = leaf.key_hash();
+        !self.revoked(&key) && self.devices().iter().any(|d| d.id == dev && d.forward_only && d.keys.contains(&key))
     }
 
     /// The devices that may be the group's hubs, in the order in which they
@@ -627,11 +643,23 @@ impl Records {
     /// own device first, then by device ID.
     pub fn hub_order(&self) -> Vec<String> {
         let root = self.root_member().filter(|(_, k)| !self.revoked(k)).map(|(id, _)| id);
-        let mut hubs: Vec<(bool, bool, String)> = self
+        // Phones, then the computers that are the root or admins, then the
+        // devices that only pass copies on.
+        let mut hubs: Vec<(u8, bool, String)> = self
             .devices()
             .into_iter()
-            .filter(|d| root.as_deref() == Some(d.id.as_str()) || d.may(authority::POWER_HUB))
-            .map(|d| (d.role != "phone", root.as_deref() != Some(d.id.as_str()), d.id))
+            .filter(|d| root.as_deref() == Some(d.id.as_str()) || d.may(authority::POWER_HUB) || d.forward_only)
+            .map(|d| {
+                let is_root = root.as_deref() == Some(d.id.as_str());
+                let part = if d.role == "phone" {
+                    0
+                } else if is_root || d.may(authority::POWER_HUB) {
+                    1
+                } else {
+                    2
+                };
+                (part, !is_root, d.id)
+            })
             .collect();
         hubs.sort();
         let order: Vec<String> = hubs.into_iter().map(|(_, _, id)| id).collect();
