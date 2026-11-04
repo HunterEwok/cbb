@@ -6,7 +6,12 @@ package service
 import (
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
+	"net"
 	"net/netip"
+	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -100,5 +105,52 @@ func TestProjectVLESS(t *testing.T) {
 	ways := s.projectVLESS(addr)
 	if len(ways) != 1 || ways[0].Path != "/the-new-path-1" || ways[0].Endpoint != netip.AddrPortFrom(addr, 8443) || ways[0].ServerName != "cbb.tools" {
 		t.Fatalf("with entry points: %+v", ways)
+	}
+}
+
+// TestLiteEntries: a lite member takes the signed entry points a computer
+// passes it, keeps them and says in its hello that it holds them, so the
+// computer does not send them again.
+func TestLiteEntries(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	signer := newReleaseSigner(t)
+	var h hub
+	pi := startWith(t, &h, "pi", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	dir := joinLite(t, bin, pi)
+	pemFile := filepath.Join(t.TempDir(), "roots.pem")
+	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := free.Addr().(*net.TCPAddr).Port
+	free.Close()
+	lite := startLiteEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile}, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pi.addr())
+	waitFor(t, "the lite member answers", func() bool {
+		_, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil
+	})
+	waitFor(t, "the lite member connected", func() bool { return len(lite.status(t).Peers) == 1 })
+	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signEntries(t, 2, "/second-path-1")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the lite member keeps the entry points", func() bool {
+		data, err := os.ReadFile(filepath.Join(dir, "entries.json"))
+		var set node.EntriesSet
+		var e release.Entries
+		return err == nil && json.Unmarshal(data, &set) == nil && json.Unmarshal(set.Entries.Body, &e) == nil && e.Seq == 2
+	})
+	if !lite.logged("took newer entry points") {
+		t.Error("the lite member did not log the entry points it took")
+	}
+	// Forged ones it drops.
+	other := newReleaseSigner(t)
+	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, other.signEntries(t, 3, "/forged-path-1")); err == nil {
+		t.Error("pi took entry points signed under other roots")
 	}
 }

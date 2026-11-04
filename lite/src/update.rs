@@ -556,6 +556,17 @@ pub fn wait_healthy(status: &dyn Fn() -> Result<String>, version: &str, within: 
     }
 }
 
+/// The release roots: those of the PEM file CBB_RELEASE_ROOTS names, for
+/// tests, else the pinned ones.
+pub fn release_roots() -> Vec<Vec<u8>> {
+    if let Some(f) = std::env::var_os("CBB_RELEASE_ROOTS")
+        && let Ok(r) = read_roots(Path::new(&f))
+    {
+        return r;
+    }
+    ROOTS.iter().map(|r| r.to_vec()).collect()
+}
+
 /// Reads the public keys of a PEM file, for tests (CBB_RELEASE_ROOTS).
 pub fn read_roots(path: &Path) -> Result<Vec<Vec<u8>>> {
     #[derive(Deserialize)]

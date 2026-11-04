@@ -15,6 +15,7 @@ mod away;
 mod control;
 mod device;
 mod discovery;
+mod entries;
 mod error;
 mod files;
 mod identity;
