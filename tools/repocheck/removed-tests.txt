@@ -1,0 +1,31 @@
+# Tests removed together with what they test, by a decision of docs/decisions.md:
+# one line each, "FILE TEST D-N: why" (CONTRIBUTING.md, "Tests"). A line excuses
+# a test only in the change that adds it.
+
+cmd/cbb/admin_commands_test.go TestModeAndHolder D-80: `cbb holder` went with the shared address cbb.local; mode and network stay in TestModeAndNetwork
+cmd/cbb/holder_test.go TestHolderLine D-80: the status line of the cbb.local holder went with the address
+internal/group/group_test.go TestCheckRejectsPartialAdmins D-80: it checked an admin's iPhone CA and cbb.local certificate, which no identity holds now
+internal/group/group_test.go TestPhoneCACannotCertifyOtherSites D-80: the iPhone CA is gone
+internal/group/group_test.go TestPhoneCANameConstraints D-80: the iPhone CA is gone
+internal/group/group_test.go TestPhoneCertificate D-80: the cbb.local certificate is gone
+internal/group/group_test.go TestRenewAfterTheClockWasAhead D-80: it renewed the cbb.local certificate, which is gone
+internal/group/tls_test.go TestPhoneTLS D-80: the member's TLS for the shortcut is gone
+internal/mdns/mdns_test.go TestHolder D-80: mDNS no longer answers for cbb.local
+internal/mdns/mdns_test.go TestHolderGoodbyeOnStop D-80: mDNS no longer answers for cbb.local, so it says no goodbye for it
+internal/phone/pair_test.go TestPagesAreSafe D-80: the shortcut's pairing pages are gone
+internal/phone/pair_test.go TestPairJSON D-80: the shortcut's pairing endpoint is gone
+internal/phone/pair_test.go TestPairPage D-80: the shortcut's pairing page is gone
+internal/phone/pair_test.go TestPairWindowLimits D-80: the shortcut's pairing window is gone; the computers' window keeps its limits in internal/pair
+internal/phone/pair_test.go TestProfile D-80: the configuration profile is gone
+internal/phone/pair_test.go TestShortcutFile D-80: the shortcut file is gone
+internal/phone/phone_test.go TestSyncByHand D-80: the shortcut's /sync is gone
+internal/phone/phone_test.go TestSyncDirections D-80: the shortcut's /sync is gone; the apps' rule is tested in both kits
+internal/phone/phone_test.go TestSyncErrors D-80: the shortcut's /sync is gone
+internal/phone/phone_test.go TestSyncSecret D-80: the shortcut's /sync is gone
+internal/phone/phone_test.go TestToken D-80: the shortcut's tokens are gone
+internal/service/demux_test.go TestPassedBounded D-80: the member port no longer passes plain HTTP on to the shortcut's server: it takes TLS alone
+internal/service/service_test.go TestAdminsShareTheIPhoneCA D-80: no iPhone CA is shared now; TestOnlyTheRootRemovesAnAdmin keeps its check on removing admins
+internal/service/service_test.go TestAloneHoldsTheName D-80: the election for cbb.local is gone
+internal/service/service_test.go TestHolderPriority D-80: the election for cbb.local is gone
+internal/service/service_test.go TestIPhone D-80: the shortcut's endpoints on the member port are gone
+internal/service/service_test.go TestShortcutTokenOnlySyncs D-80: the shortcut's tokens are gone
