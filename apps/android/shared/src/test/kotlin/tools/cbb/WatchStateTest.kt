@@ -17,6 +17,7 @@ class WatchStateTest {
             events = listOf("deck joined the group.", "pi was removed from the group."),
             color = "ocean",
             details = true,
+            group = "tag",
         )
         assertEquals(s, WatchState.decode(s.encode()))
         assertEquals(WatchState(), WatchState.decode(WatchState().encode()))

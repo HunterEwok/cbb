@@ -15,6 +15,7 @@ struct DeviceDetail: View {
     @State private var freezing = false
     @State private var thawing = false
     @State private var hubbing = false
+    @State private var leaving = false
     @State private var renaming = false
     @State private var newName = ""
     @State private var tunnelTo: MacModel.HubTunnel?
@@ -212,6 +213,9 @@ struct DeviceDetail: View {
         if !model.isAdmin {
             Text("This Mac is no admin of the group: the phone or an admin computer adds and removes devices.")
                 .font(.footnote).foregroundStyle(palette.textDim)
+            if d.isSelf {
+                leaveAction.glassTile(cornerRadius: Tokens.radiusCard).disabled(model.busy)
+            }
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 action("pencil", "Rename") {
@@ -254,6 +258,9 @@ struct DeviceDetail: View {
                 if !d.isSelf {
                     line
                     action("xmark.circle", "Remove", danger: true) { removing = true }
+                } else {
+                    line
+                    leaveAction
                 }
             }
             .glassTile(cornerRadius: Tokens.radiusCard)
@@ -262,6 +269,13 @@ struct DeviceDetail: View {
                 Text(verbatim: message).font(.callout).foregroundStyle(palette.textDim).textSelection(.enabled)
             }
         }
+    }
+
+    /// This Mac leaves its group; the root only when it is alone, which
+    /// the service checks.
+    private var leaveAction: some View {
+        action("rectangle.portrait.and.arrow.right", "Leave the group", danger: true) { leaving = true }
+            .leaveDialog(isPresented: $leaving)
     }
 
     private func action(_ symbol: String, _ title: LocalizedStringKey, danger: Bool = false, perform: @escaping () -> Void) -> some View {

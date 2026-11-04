@@ -117,7 +117,10 @@ final class WatchModel: NSObject, ObservableObject {
         session.sendMessage([WatchState.awayKey: on], replyHandler: { reply in
             let s = WatchState(reply)
             Task { @MainActor in
-                if let s { self.state = s }
+                if let s {
+                    self.state = s
+                    self.forgetIfLeft(s)
+                }
                 self.switching = false
             }
         }, errorHandler: { error in
@@ -159,7 +162,20 @@ final class WatchModel: NSObject, ObservableObject {
     }
 
     private func take(_ context: [String: Any]) {
-        if let s = WatchState(context) { state = s }
+        if let s = WatchState(context) {
+            state = s
+            forgetIfLeft(s)
+        }
+    }
+
+    /// Forgets the admin key once the phone is in no group or in another
+    /// one than the root certified the key in: the phone left its group
+    /// (D-83), and the key signs for nothing any more.
+    private func forgetIfLeft(_ s: WatchState) {
+        guard let a = admission, !s.hasGroup || (s.group != nil && s.group != a.group) else { return }
+        WatchKey.forget()
+        admission = nil
+        log.notice("the phone left the group: the watch's admin key is deleted")
     }
 }
 

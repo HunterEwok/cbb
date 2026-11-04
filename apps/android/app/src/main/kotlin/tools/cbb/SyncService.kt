@@ -45,6 +45,11 @@ class SyncService : Service() {
             runCatching { context.startForegroundService(Intent(context, SyncService::class.java)) }
         }
 
+        /** Stops the service, once the phone left its group. */
+        fun stop(context: Context) {
+            context.stopService(Intent(context, SyncService::class.java))
+        }
+
         private fun notification(context: Context): Notification {
             val nm = context.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(

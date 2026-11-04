@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 951f5919aba6 -->
+<!-- source: 0dae45ee8ba4 -->
 # Kusakinisha
 
 Copy Beyond Borders huendeshwa kama huduma ndogo ya chinichini kwenye kila kompyuta. Amri yake ni `cbb`. Kila njia iliyo hapa chini husakinisha programu ile ile; chagua unayopenda.
@@ -171,4 +171,4 @@ Kwenye SteamOS ni `sudo sh /opt/cbb/share/uninstall.sh`. Kwa Homebrew, endesha `
 
 Kwenye Windows: Mipangilio, Programu, "CBB", Ondoa.
 
-Hii huondoa programu, huduma, kanuni za ngome ya moto zilizoongezwa na kisakinishi na, kwenye Mac, programu iliyosakinishwa na `.pkg`. Funguo za kifaa hubaki, kwa hiyo kusakinisha tena hukirudisha kwenye kikundi chake. Ili kuzifuta pia, ongeza `--purge` (`-Purge` kwenye Windows, kwa `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), kisha ondoa kifaa kutoka kwenye kikundi kupitia kifaa kingine (`sudo cbb remove NAME`, au kwenye simu).
+Hii huondoa programu, huduma, kanuni za ngome ya moto zilizoongezwa na kisakinishi na, kwenye Mac, programu iliyosakinishwa na `.pkg`. Funguo za kifaa hubaki, kwa hiyo kusakinisha tena hukirudisha kwenye kikundi chake. Ili kuzifuta pia, ongeza `--purge` (`-Purge` kwenye Windows, kwa `powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\cbb\uninstall.ps1" -Purge`), kisha ondoa kifaa kutoka kwenye kikundi kupitia kifaa kingine (`sudo cbb remove NAME`, au kwenye simu). Ili kuondoka kwenye kikundi na kubaki na CBB, endesha badala yake `sudo cbb leave`: hufuta funguo na faili za kikundi, na kifaa kinaweza kujiunga na kikundi tena.

@@ -54,7 +54,6 @@
   "It is a hub now.": "Теперь это хаб.",
   "It is an admin now.": "Теперь это админ.",
   "It will no longer sync with your devices. To add it again, pair it again.": "Оно перестанет синхронизироваться с вашими устройствами. Чтобы вернуть его, добавьте его заново.",
-  "Its members refuse it. To join a group again, remove CBB with its keys (uninstall --purge), install it again and join.": "Участники группы его не принимают. Чтобы снова войти в группу, удалите CBB вместе с ключами (uninstall --purge), установите заново и войдите.",
   "Join a phone's group": "Войти в группу телефона",
   "Joined the group.": "Компьютер вошёл в группу.",
   "Laptop": "Ноутбук",
@@ -197,5 +196,11 @@
   "Change how the hub's tunnel hides?": "Изменить маскировку туннеля хаба?",
   "Change": "Изменить",
   "The hub's settings are saved.": "Настройки хаба сохранены.",
-  "Terms of the project's servers": "Условия серверов проекта"
+  "Terms of the project's servers": "Условия серверов проекта",
+  "Its members refuse it. Leave the group here to join this group again or another one.": "Участники группы его не принимают. Выйдите здесь из группы, чтобы снова войти в эту группу или в другую.",
+  "Leave the group": "Выйти из группы",
+  "Leave the group?": "Выйти из группы?",
+  "Leave": "Выйти",
+  "This computer's keys and the group's files here are deleted, and remote paste and the quick actions are turned off; the rest of the settings stay. It can then join this group or another one. The group lists it until an admin removes it.": "Ключи этого компьютера и файлы группы на нём удаляются, удалённая вставка и быстрые действия выключаются, остальные настройки остаются. Потом он может войти в эту группу или в другую. В списке группы он остаётся, пока его не удалит админ.",
+  "Left the group. This computer can join a group again.": "Вы вышли из группы. Этот компьютер может снова войти в группу."
 }

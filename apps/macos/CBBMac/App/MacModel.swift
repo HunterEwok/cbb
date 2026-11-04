@@ -220,6 +220,9 @@ final class MacModel: ObservableObject {
     /// The dialog that asks first warns that the computer's key is a file,
     /// which -allow-file-key consents to.
     func makeAdmin(_ id: String) async { await admin(["admin", "-allow-file-key", id], done: String(localized: "It is an admin now.")) }
+    /// Takes this Mac out of its group (cbb leave, D-83): its keys and the
+    /// group's files go, its settings stay, and it may join again.
+    func leave() async { await admin(["leave", "-yes"], done: String(localized: "Left the group. This Mac can join a group again.")) }
     func freeze(_ id: String) async { await admin(["freeze", id], done: String(localized: "Frozen.")) }
     /// Makes a device a hub of the group for sync away from home, reached
     /// through the project's forwarder: this Mac as cbb global hub does, or

@@ -74,6 +74,8 @@ Commands:
   forward                 Run a forwarder for hubs that clients cannot reach directly.
   relay -group TAG        Run a blind relay for groups without a hub.
   new                     Create a group with this computer as its root.
+  leave [-yes]            Leave the group: delete this device's keys and the group's files,
+                          keep the settings; then it can join this group or another one.
   mode [own|shared|receive|send]
                           Show or set what moves between this clipboard and the group;
                           a new device keeps its own.
@@ -170,6 +172,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdAdmin(rest, stdout, stderr)
 	case "new":
 		return cmdNew(rest, stdout, stderr)
+	case "leave":
+		return cmdLeave(rest, stdin, stdout, stderr)
 	case "pair":
 		return cmdPair(rest, stdin, stdout, stderr)
 	case "invite":
