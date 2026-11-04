@@ -1269,6 +1269,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Android app could still show sync away from home as connected for a moment after it was
+  turned off; it now shows it off at once.
 - On an X11 desktop cbb could crash now and then while it opened another connection to the X
   server or first used XTEST or the screen saver extension: xgb's extensions write tables that
   every connection reads. Each extension now starts once, before any connection takes events.
