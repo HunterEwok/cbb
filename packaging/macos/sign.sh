@@ -17,6 +17,10 @@
 # release is the same program to macOS. An app, built by xcodebuild without
 # signing, is signed from the inside out: its nested code first, then the
 # bundle, which keeps the identifier of its Info.plist.
+#
+# cbb is signed with cbb.entitlements beside this script: the Rust core,
+# which wazero compiles at run time, needs executable memory that no
+# signature covers. CBB.app runs no such code and asks for nothing.
 set -eu
 
 if [ $# -ne 2 ]; then
@@ -25,6 +29,7 @@ if [ $# -ne 2 ]; then
 fi
 identity=$1
 bin=$2
+entitlements=$(cd "$(dirname "$0")" && pwd)/cbb.entitlements
 
 # sign PATH [codesign flags] signs one piece of code.
 sign() {
@@ -50,10 +55,14 @@ case $bin in
 	;;
 esac
 
-sign "$bin" --identifier tools.cbb.cli
+sign "$bin" --identifier tools.cbb.cli --entitlements "$entitlements"
 codesign --verify --strict --verbose=2 "$bin"
 # The runtime flag is what notarization and the checks below rely on.
 codesign --display --verbose=2 "$bin" 2>&1 | grep -q 'flags=.*runtime'
+# Without the entitlement a Mac that enforces it kills cbb as it loads the
+# core, though a runner that does not would still pass the run below.
+codesign --display --entitlements - --xml "$bin" 2>/dev/null |
+	grep -q 'com.apple.security.cs.allow-unsigned-executable-memory'
 # The group's rules come from the Rust core, which wazero compiles to
 # machine code at run time; it must still load under the hardened runtime.
 # An Intel build runs on an Apple silicon runner only through Rosetta.

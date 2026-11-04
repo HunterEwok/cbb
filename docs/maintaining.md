@@ -495,7 +495,11 @@ Connect API key), so that Gatekeeper opens it without a warning. Without the sec
 program is signed ad hoc, as before. The certificates live in a keychain of the run's own
 (`packaging/macos/keychain.sh`), removed when the step ends. CI's build job signs every pull
 request's build ad hoc with the same flags and runs `cbb version`, which loads the Rust core
-under the hardened runtime.
+under the hardened runtime. `cbb` carries one entitlement,
+`com.apple.security.cs.allow-unsigned-executable-memory` (`packaging/macos/cbb.entitlements`):
+wazero compiles the core to machine code at run time, and a Mac that enforces the hardened
+runtime's memory rules (macOS 27) kills a `cbb` without it as it loads the core. sign.sh
+refuses a signature without it, since a runner that does not enforce them passes the run.
 
 The same secrets make the Mac's installer package, `cbb-X.Y.Z.pkg` (the job "the Mac app
 and the .pkg"): `cbb` for Apple silicon and Intel in one program (`lipo` of the two signed

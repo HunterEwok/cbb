@@ -1298,6 +1298,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- cbb for macOS, signed with the hardened runtime (the release's Developer ID build, and
+  `packaging/macos/sign.sh`), was killed by macOS 27 as soon as it loaded the Rust core,
+  so `cbb version` and the installer failed: wazero's compiled code needs executable memory
+  that no signature covers. cbb is now signed with the one entitlement that allows it.
 - The Android app could still show sync away from home as connected for a moment after it was
   turned off; it now shows it off at once.
 - On an X11 desktop cbb could crash now and then while it opened another connection to the X
