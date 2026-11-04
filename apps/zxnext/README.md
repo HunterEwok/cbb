@@ -19,8 +19,8 @@ tools. Test them on the machine before relying on them.
 .cbb copy notes.txt   send a file (up to 8 KB)
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
-.cbb pair             join the group: scan the code on the screen with the phone app
-                      (through the ESP once .cbb net has its settings)
+.cbb pair             join the group through the ESP: scan the code on the screen with
+                      the phone app
 .cbb net on           the Pi's network through the ESP, in the background, to a
                       computer of the group it finds (.cbb net on 192.168.0.10 names one)
 .cbb net off          stop it
@@ -194,7 +194,7 @@ back at 115200. The lite member (`cbb service -peer 127.0.0.1:8769`) has to run 
 While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
 `pair` ask for `.cbb net off` first.
 
-On a Pi without a radio, once `.cbb net` has its settings, `.cbb pair` joins the group through the ESP. It asks the ESP
+NextPi has no network of its own, so `.cbb pair` joins the group through the ESP, with the network's settings or their defaults. It asks the ESP
 for its address (`AT+CIFSR`), starts `cbb next pair` on the Pi in the background with that
 address and the ports of `-serve` (so the settings need `-serve`), draws the QR code, and
 starts the network under it, so the phone that scans the code reaches the Pi through the

@@ -31,9 +31,8 @@
 #define CBB_LITE "cbb"
 // The longest text pasted or copied.
 #define MAX_TEXT 8192
-// How long the lite member may take to answer, in seconds; pair waits for the phone.
+// How long the lite member may take to answer, in seconds.
 #define ANSWER_SECONDS 20
-#define JOIN_SECONDS 330
 
 static uint8_t text[MAX_TEXT];
 static char line[200];
@@ -52,9 +51,8 @@ static const char usage_text[] = "CBB " VERSION "\n\n"
            ".cbb text -s WORDS such as a password\n"
            ".cbb pair          join the group:\n"
            "                   scan the code with\n"
-           "                   the phone app (with\n"
-           "                   net settings: via\n"
-           "                   the ESP)\n"
+           "                   the phone app,\n"
+           "                   through the ESP\n"
            ".cbb net on [HOST]\n"
            "                   the Pi's network\n"
            "                   through the ESP,\n"
@@ -486,21 +484,6 @@ static int qr(uint8_t size)
     return 0;
 }
 
-static int pair(void)
-{
-    uint32_t len, crc;
-    if (command("pair")) return 1;
-    if (expect(LINE_QR, &len, &crc, ANSWER_SECONDS) != LINE_QR) return 1;
-    if (qr((uint8_t)len)) return 1;
-    // The phone scans; the pairing ends with CBBOK. SPACE cancels.
-    if (expect(LINE_OK, &len, &crc, JOIN_SECONDS) != LINE_OK) return 1;
-    link_prompt();
-    zx_border(INK_BLACK);
-    zx_cls(PAPER_WHITE | INK_BLACK);
-    printf("Joined the group.\n");
-    return 0;
-}
-
 // Not static: far_cmd() (far.asm) calls it, with far_argc and far_argv
 // set; run() has checked the number of words.
 int cmd_run(void)
@@ -508,8 +491,7 @@ int cmd_run(void)
     char **argv = far_argv;
     if (strcmp(argv[0], "paste") == 0) return paste(far_argc == 2 ? argv[1] : 0);
     if (strcmp(argv[0], "copy") == 0) return copy_file(argv[1]);
-    if (strcmp(argv[0], "text") == 0) return copy_words(far_argc - 1, argv + 1);
-    return pair();
+    return copy_words(far_argc - 1, argv + 1);
 }
 
 #pragma codeseg code_compiler
@@ -918,7 +900,11 @@ int net_pair(void)
     char ip[40], cmd[160], *serve, *colon = 0, *end;
     uint32_t len, crc;
     if (net_on()) return fail(net_runs, 0);
-    if (net_load()) return fail("no settings yet: .cbb net on", NET_CFG);
+    // Without settings, the defaults, as .cbb net on saves them.
+    if (net_load()) {
+        strcpy(net_args, net_serve + 1);
+        if (net_save()) return 1;
+    }
     serve = strstr(net_args, "-serve ");
     if (serve) colon = strchr(serve + 7, ':');
     if (!colon) return fail("the settings need -serve \"8764:8764\", where the phone reaches the Pi", net_args);
@@ -2014,8 +2000,8 @@ static int run(int argc, char **argv)
         (strcmp(argv[i], "text") == 0 && argc - i >= 2)) {
         return far_cmd();
     }
-    // With the network's settings, the Pi has no network but the ESP's.
-    if (strcmp(argv[i], "pair") == 0 && argc - i == 1) return net_load() ? far_cmd() : far_net_pair();
+    // NextPi has no network but the ESP's.
+    if (strcmp(argv[i], "pair") == 0 && argc - i == 1) return far_net_pair();
     if (strcmp(argv[i], "net") == 0) {
         far_argc = argc - i - 1;
         far_argv = argv + i + 1;
