@@ -163,12 +163,12 @@ func startHubWith(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer,
 				hs.vless = r.VLESS
 			}
 			if r.Seen.IsValid() {
-				if r.OverVLESS != (hc.VLESS != nil) {
+				if r.OverVLESS != (hc.VLESS != nil && hc.Link.Endpoint.IsValid()) {
 					t.Fatalf("over VLESS: %v", r.OverVLESS)
 				}
 				// Over VLESS the forwarder sees the hub at the port its
 				// side of VLESS sends the hub's packets from.
-				if hc.VLESS == nil && r.Seen.Port() != uint16(h.UDPPort()) {
+				if !r.OverVLESS && r.Seen.Port() != uint16(h.UDPPort()) {
 					t.Fatalf("the forwarder sees the hub at %v, not on its port %d", r.Seen, h.UDPPort())
 				}
 				return hs
@@ -900,7 +900,11 @@ func TestHubOverXHTTP(t *testing.T) {
 	id, _ := tunnel.NewVLESSID()
 	given := &tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: vless.RegistrationID}
 	key, peer := newClient(t)
-	hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{VLESSID: id, VLESS: given, Link: Link{Endpoint: dead}})
+	// A way in that leads nowhere first: the hub tries the next.
+	nowhere := *given
+	nowhere.Path = "/nowhere-at-all"
+	ways := func() []tunnel.VLESS { return []tunnel.VLESS{nowhere, *given} }
+	hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{VLESSID: id, VLESS: ways, Link: Link{Endpoint: dead}})
 	// The group's packets come under a path of its own below the path.
 	group, ok := strings.CutPrefix(hs.vless.Path, path+"/")
 	if !ok || tunnel.CheckGroupPath(group) != nil {

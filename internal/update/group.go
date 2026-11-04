@@ -78,3 +78,21 @@ func MirrorThrough(dial func(ctx context.Context) (net.Conn, error)) Source {
 type through struct{ *httpSource }
 
 func (t *through) String() string { return t.base + " over VLESS" }
+
+// EntriesName is the signed list of the project's entry points, beside
+// keys.json in the channel (docs/protocol.md, section 16, "Entry points").
+const EntriesName = "entries.json"
+
+// FetchEntries fetches the signed entry points from src; the service
+// checks them.
+func FetchEntries(ctx context.Context, src Source) (release.File, error) {
+	var f release.File
+	data, err := src.Fetch(ctx, EntriesName, "", maxManifest)
+	if err != nil {
+		return f, err
+	}
+	if err := json.Unmarshal(data, &f); err != nil {
+		return f, fmt.Errorf("%s: %w", EntriesName, err)
+	}
+	return f, nil
+}

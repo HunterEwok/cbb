@@ -52,6 +52,7 @@ const (
 	typeEvid    = "evidence"
 	typeCreds   = "credentials"
 	typeRelease = "release"
+	typeEntries = "entries"
 	typeGet     = "get"
 	typeMissing = "missing"
 	typeChunk   = "chunk" // a binary frame, never JSON
@@ -113,6 +114,10 @@ type message struct {
 	// Release, in a release message, is the newest signed release the
 	// sender holds (docs/protocol.md, section 16, "In the group").
 	Release *ReleaseSet `json:"release,omitempty"`
+	// Entries, in an entries message, is the newest signed list of the
+	// project's entry points the sender holds (docs/protocol.md, section
+	// 16, "Entry points").
+	Entries *EntriesSet `json:"entries,omitempty"`
 	// AdminCA, in an admin message from the group's root, is the
 	// receiver's admin CA for the admin key its hello offered, DER.
 	AdminCA []byte `json:"admin_ca,omitempty"`
@@ -285,6 +290,9 @@ type helloBody struct {
 	ReleaseSeq uint64 `json:"release_seq,omitempty"`
 	// ReleaseKeys is the seq of that release's keys.json; 0 for none.
 	ReleaseKeys uint64 `json:"release_keys_seq,omitempty"`
+	// EntriesSeq and EntriesKeys are the same for the entry points.
+	EntriesSeq  uint64 `json:"entries_seq,omitempty"`
+	EntriesKeys uint64 `json:"entries_keys_seq,omitempty"`
 }
 
 // helloOut is the hello this member sends: the engine's hello, the digest
@@ -330,6 +338,10 @@ type helloOut struct {
 	// peer sends only a newer one.
 	ReleaseSeq  uint64 `json:"release_seq,omitempty"`
 	ReleaseKeys uint64 `json:"release_keys_seq,omitempty"`
+	// EntriesSeq and EntriesKeys are the same for the signed entry points
+	// this member holds.
+	EntriesSeq  uint64 `json:"entries_seq,omitempty"`
+	EntriesKeys uint64 `json:"entries_keys_seq,omitempty"`
 }
 
 // ReleaseOrder is where a signed release stands among others: the seq of
@@ -348,6 +360,14 @@ type ReleaseSet struct {
 	Keys    signed.File `json:"keys"`
 	Channel signed.File `json:"channel"`
 	Release signed.File `json:"release"`
+}
+
+// EntriesSet is the signed list of the project's entry points as members
+// pass it to each other: entries.json and the keys.json whose key signed
+// it (docs/protocol.md, section 16, "Entry points").
+type EntriesSet struct {
+	Keys    signed.File `json:"keys"`
+	Entries signed.File `json:"entries"`
 }
 
 // recordsChunk bounds the records of one message, well below maxFrame.

@@ -1113,7 +1113,13 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   networks"); the forwarder then tries them only on handshakes of the size that group's
   have, and on the packets of addresses that already have a session with it. In VLESS mode
   the forwarder lets in only the VLESS user IDs of registered groups and routes what comes
-  inside the same way.
+  inside the same way. Each group's packets come on an XHTTP path of its own, which the
+  forwarder derives from its key and the group and gives the hub when it registers; the
+  path built into the programs serves only a hub's registration, which a hub on a network
+  that lets only HTTPS through makes inside VLESS too. Those built-in ways in are backed by
+  a signed list, `entries.json`, that the project renews beside `keys.json` and every member
+  passes on, so a blocked way in is replaced without a release ([protocol.md](protocol.md),
+  section 16, "Entry points").
 - **Fallback: a port computed by the group.** If `mac1` routing does not hold up, the hub and
   its clients compute the group's port themselves, from a secret of the group and the current
   hour, as an authenticator app computes its codes; there is no request that names the group.

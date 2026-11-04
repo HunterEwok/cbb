@@ -40,7 +40,7 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 		Key:         st.ServingKey(),
 		Obfuscation: st.Obfuscation,
 		VLESSID:     fw.VLESSID,
-		VLESS:       hubVLESS(fw),
+		VLESS:       func() []tunnel.VLESS { return s.hubVLESS(fw) },
 		Cert: func() tls.Certificate {
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -88,20 +88,25 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 	}()
 }
 
-// hubVLESS returns how the hub reaches its forwarder over VLESS when the
-// forwarder's TCP port does not answer: what an earlier registration told
-// it, else the project's forwarder's built-in settings; nil for a hub
-// without VLESS, or with a forwarder of its own it has not yet reached.
-func hubVLESS(fw *tunnel.ForwarderLink) *tunnel.VLESS {
-	switch {
-	case fw.VLESSID == "":
+// hubVLESS returns the ways the hub reaches its forwarder over VLESS when
+// the forwarder's TCP port does not answer: what an earlier registration
+// told it, then for the project's forwarder those of the signed entry
+// points or the built-in one; none for a hub without VLESS, or with a
+// forwarder of its own it has not reached yet.
+func (s *Service) hubVLESS(fw *tunnel.ForwarderLink) []tunnel.VLESS {
+	if fw.VLESSID == "" {
 		return nil
-	case fw.VLESS != nil:
-		return fw.VLESS
-	case fw.Project:
-		return forward.ProjectVLESS(fw.Endpoint.Addr())
 	}
-	return nil
+	var out []tunnel.VLESS
+	s.tunMu.Lock()
+	if st := s.tunnel; st != nil && st.Forwarder != nil && st.Forwarder.VLESS != nil {
+		out = append(out, *st.Forwarder.VLESS)
+	}
+	s.tunMu.Unlock()
+	if fw.Project {
+		out = append(out, s.projectVLESS(fw.Endpoint.Addr())...)
+	}
+	return out
 }
 
 // projectPins returns the pins this device accepts from the project's

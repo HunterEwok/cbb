@@ -79,6 +79,8 @@ const (
 	OpReleaseFile = "release-file"   // client → service: an archive of the held release that cbb update installed, Value its SHA-256 and Part its size, its bytes in data messages
 	OpReleaseGet  = "release-get"    // client → service: the archive of the held release whose SHA-256 is Value, from this device or its peers; a reply with Part, its bytes, then Done
 	OpReleaseHeld = "release-held"   // client → service: the signed release this device holds, a Release in JSON, for cbb update when no update server answers
+	OpEntries     = "entries"        // client → service: the signed entry points, keys.json and entries.json in JSON ({keys, entries}), from cbb update or a string, for the group
+	OpEntriesGet  = "entries-get"    // client → service: the signed entry points this device holds, in the same JSON
 	OpUpdateWay   = "update-way"     // client → service: the VLESS settings, a tunnel.VLESS in JSON, by which cbb update reaches the mirror on the hub's forwarder; empty without VLESS
 	OpReleaseWant = "release-want"   // client → service: on a hub, the names of the held release's archives the group's members update from and it does not hold, in JSON, for cbb update to download
 	OpKeyboard    = "keyboard"       // client → service: Name "on" (Keyboard the settings), "off", "pair", "type" (the payload) or "" (status): this computer as a Bluetooth keyboard

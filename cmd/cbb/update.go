@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/release"
 	"github.com/HunterEwok/cbb/internal/rootless"
 	"github.com/HunterEwok/cbb/internal/update"
@@ -235,6 +236,7 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 	}
 	r := found.Release
 	shareRelease(found)
+	shareEntries(ctx, found)
 	if elevated {
 		st.Seen, st.CheckedMS, st.Available = found.Seen, time.Now().UnixMilli(), ""
 		if found.Newer && !found.Failed {
@@ -281,6 +283,34 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	return 0
+}
+
+// shareEntries fetches the signed entry points from the server the release
+// came from and hands them to the service, which checks them, keeps them
+// and passes them to the group (docs/protocol.md, section 16, "Entry
+// points"). A server without them, or a service that does not run, misses
+// them; the group passes them on.
+func shareEntries(ctx context.Context, found update.Found) {
+	if _, ok := found.Source.(update.Group); ok || len(found.Keys.Body) == 0 {
+		return
+	}
+	fctx, cancel := context.WithTimeout(ctx, time.Minute)
+	f, err := update.FetchEntries(fctx, found.Source)
+	cancel()
+	if err != nil {
+		return
+	}
+	data, err := json.Marshal(node.EntriesSet{Keys: found.Keys, Entries: f})
+	if err != nil {
+		return
+	}
+	c, err := control.DialFor(control.OpEntries)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+	c.Do(&control.Message{Header: control.Header{Op: control.OpEntries}, Payload: data})
 }
 
 // archivesForGroup downloads, on a hub, the archives the group's members

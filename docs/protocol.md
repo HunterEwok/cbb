@@ -487,6 +487,8 @@ depends on a version number.
 | `actions` | array or absent | the names of the sender's quick actions that are on (section 15), at most 64, for the admins' buttons; a receiver drops a name that is not valid; absent from one with none on. A change shows at the next connection |
 | `release_seq` | integer or absent | the `seq` of the channel file of the newest signed release the sender holds (section 16, "In the group"); absent when it holds none |
 | `release_keys_seq` | integer or absent | with `release_seq`: the `seq` of that release's `keys.json`; absent when it holds none |
+| `entries_seq` | integer or absent | the `seq` of the newest signed `entries.json` the sender holds (section 16, "Entry points"); absent when it holds none |
+| `entries_keys_seq` | integer or absent | with `entries_seq`: the `seq` of the `keys.json` it came with; absent when it holds none |
 | `features` | array of strings or absent | what the sender supports beyond the protocol of its ALPN version, each name once: `media` from a member that serves the content of media events ("Content", below), so others may send it `get` (the lite member serves none). A receiver reads the first 32 names and ignores those it does not know, so a later release adds a feature without a new ALPN version |
 | `group_ca` | string or absent | from a full member on a connection that carries records only with a device no `device` record names ("Records only" in the exchange): the group's first root, DER in base64, so that a new phone restoring the group with the recovery key builds the group's path from the records (section 10, "The recovery key"). Every other hello leaves it out |
 | `seal` | string or absent | the sender's public key for sealed messages, 1216 bytes in base64 (an X-Wing key, `internal/seal`), which the group's root puts in the sender's device record (`seal`, section 10) so that commands for it can be sealed (section 15); a key of another size is ignored; absent from the phones for now |
@@ -976,12 +978,12 @@ socket's and makes again at each start unless the system, the administrators or 
 it), with mode 0600: only root and the
 service's user (on Windows the system, administrators and the service's account) can
 connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket takes only
-`copy`, `paste`, `copy-media`, `copied-media`, `paste-media`, `config`, `status`, `devices`, `release`, `release-get`, `release-held`, `keys` (from root only) and `watch` (with
+`copy`, `paste`, `copy-media`, `copied-media`, `paste-media`, `config`, `status`, `devices`, `release`, `release-get`, `release-held`, `entries`, `entries-get`, `keys` (from root only) and `watch` (with
 the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
 all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
 rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
 with its own two sockets, but its control socket takes fewer: no `copy-media`, `copied-media`,
-`paste-media`, `config`, `release`, `release-get` or `keys`, and of the watcher's reports no
+`paste-media`, `config`, `release`, `release-get`, `entries`, `entries-get` or `keys`, and of the watcher's reports no
 `acted`.
 
 ### Framing
@@ -1078,6 +1080,8 @@ A connection carries one request: the service reads the first message and dispat
 | `release-file` | `{value, part}`: the archive's SHA-256 and its `size`, then its bytes in `data` messages | `{done}`: `cbb update` hands the service an archive of the release it holds (section 16), which keeps it only whole and matching its hash, to pass on to its peers. Only on the admin socket |
 | `keys` | `{name, value, keys}`: `paste` or `enter`, a user ID, and the grant of an `inject` | `{done}` when the service handed that inject to a `desktop` watcher of that user and it is not answered yet, and `name` is its paste keys the first time or, after them, its Enter the first time when the command set `enter`; otherwise an error. Only from root (the uinput helper), on the control socket |
 | `release-held` | none | payload = the release this device holds in JSON, `{keys, channel, release}`, or an error when it holds none: `cbb update` takes it when no update server answers, and checks it as it checks what it downloads (section 16) |
+| `entries` | payload = the signed entry points in JSON, `{keys, entries}` (section 16, "Entry points"), from `cbb update` or `cbb global entries import` | `{done}`: the service checks them, keeps them when they are newer than those it holds, and passes them on to its peers; an error when they do not check out |
+| `entries-get` | none | payload = the signed entry points this device holds, in the same JSON, or an error when it holds none or they have expired: `cbb global entries` shows them and `export` gives them as a string |
 | `release-want` | none | payload = the names of the held release's archives that the members' hellos name and this device does not hold whole, a JSON array, at most 16; `null` on a device that is no hub: its `cbb update` downloads them for the group (section 16). Only on the admin socket |
 | `update-way` | none | payload = the VLESS settings (section 11) of the hub this device reaches away from home, with the group's VLESS user ID, or none without VLESS: `cbb update` reaches the mirror through them (section 16). Only on the admin socket |
 | `release-get` | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{done}`: the archive of the held release, from this device or fetched from its peers |
@@ -2358,6 +2362,13 @@ accepts, and a hub that knows it as the project's follows its key from then on, 
 state's `project` says. The clients get the forwarder from the hub's offer, as for any
 other.
 
+A hub of the project's forwarder registers over VLESS when direct TCP to it does not answer
+("Registration", below): through the ways in that the newest signed entry points it holds
+name for `cbb.tools:8764` (section 16, "Entry points"), each `server_name` looked up when it
+is not the forwarder's host, else through the one built in (`forward.ProjectVLESS`: XHTTP
+on `cbb.tools:443`). A hub of another forwarder uses the VLESS settings it learned from that
+forwarder's registration answer.
+
 ### Registration
 
 Framing: inside TLS, each message of this section is one frame (Conventions, "Frames").
@@ -2547,7 +2558,8 @@ Either way:
   forwarder learns from the hellos that the hub is reached at the port its side of VLESS
   sends them from, and passes the clients' packets to the hub through it. The settings
   for the first time are those an earlier registration gave the hub, or, for the project's
-  forwarder, the built-in ones: XHTTP on port 443 of `cbb.tools`, the path `/banMEJvnYJJap8S`.
+  forwarder, those the signed entry points name (section 16, "Entry points"), else the
+  built-in ones: XHTTP on port 443 of `cbb.tools`, the path `/banMEJvnYJJap8S`.
   The registrations over VLESS, held or being set up, all come from the forwarder's own
   address, so they are bounded together, at 1024, instead of by address.
   The forwarder knows which group's ID each of those ports serves, and the per-source
@@ -2989,6 +3001,7 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
 | `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 8 of `{key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status`, `channel` or `forwarder`)`}` |
 | `release` (`release.json`) | a release key | `version`, `channel`, `time_ms`, `min_from` (a version, optional), `files`: 1 to 256 of `{name, size, sha256, binaries?}`, `docker` (optional `{image, digest}`) |
 | `channel` (`stable.json`, ...) | a release key or a channel key | `channel`, `seq` (from 1), `time_ms`, `expires_ms`, `release` (the version), `release_sha256` (SHA-256 of that `release.json`'s body, hex) |
+| `entries` (`entries.json`) | a release key or a channel key | `seq` (from 1), `time_ms`, `expires_ms`, `forwarders`: at most 16 of `{name` (the forwarder, `host:port`, each once), `vless`: at most 8 of `{transport` (`xhttp`), `server_name` (a site's name), `port` (1 to 65535), `path` (`/` and 8 to 64 of `A-Z a-z 0-9 - _`)`}}` |
 | `attest-status` (`attest-status.json`) | a status key | `seq` (from 1), `time_ms`, `expires_ms`, `source_ms` (when Google last changed its list, optional), `android_revoked`: the serial numbers |
 
 - A key of a `use` the reader does not know is in `keys.json` for newer programs and signs
@@ -3004,7 +3017,7 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
   most 64, are the programs inside an archive: `name`, the path inside it (`/` allowed, no
   `..`), and `sha256`.
 - `docker.digest` is `sha256:` and 64 hex digits.
-- A `keys` or `channel` file lives at most 100 days (`expires_ms` after `time_ms`, by at
+- A `keys`, `channel` or `entries` file lives at most 100 days (`expires_ms` after `time_ms`, by at
   most 8 640 000 000 ms), and its `time_ms` is not negative. `keys.json` is signed again every 90 days, and a channel file
   before it expires. `attest-status.json` lives at most 8 days (691 200 000 ms) and is
   signed again at least a day before it expires.
@@ -3104,6 +3117,36 @@ it checks what it downloads.
   16, downloads each from the server it checked the release from, checks it against
   `release.json` and hands it over as with `release-file`.
 - A member that does not know `release` ignores it, as it ignores every message of a type it does not know.
+
+### Entry points
+
+The project's servers can be reached in more ways than the addresses built into the
+programs, and those ways change when a network starts to block one. So the project signs
+their list, `entries.json`, with a release key or the channel key, beside `keys.json` in the
+branch `channel` and at the top of every mirror (`https://cbb.tools/channel/entries.json`,
+renewed with the channel file); a device trusts the signature, wherever the list came from.
+For now it lists, for each forwarder of the project, its ways in over VLESS (section 13,
+"VLESS"); a hub registers through them (section 13, "The project's forwarder").
+
+- A device MUST take a list only when its `keys.json` passes step 1 of the check above, and
+  `entries.json` verifies under a release or channel key of that `keys.json`, decodes as an
+  `entries` body, has not expired, is not signed more than a day ahead of the device's clock,
+  and its `seq` is not below the highest it took under the same or an older `keys.json`, nor
+  more than 65 536 above it; the floors are kept apart from the release's. It keeps the
+  newest that checks out (`entries.json` in the service's state directory, `{keys,
+  entries}`), and stops using it once it expires.
+- `cbb update` fetches `entries.json` from the server whose release it checked and hands it,
+  with that `keys.json`, to its service (control operation `entries`).
+- Members pass it on as they pass the release ("In the group"): a hello carries
+  `entries_seq` and `entries_keys_seq`, and after a peer's hello a member that holds a newer
+  list (a `keys.json` with a higher `seq`, or the same one and a higher `entries` `seq`)
+  sends it to a `full` or `lite` member in an `entries` message:
+  `{"t":"entries","entries":{"keys":...,"entries":...}}`. A member takes it with the check
+  above, keeps it and sends it on to its other peers; it drops one that fails, and logs why.
+  A member that does not know `entries` ignores it; the lite member does not read it yet.
+- Between devices that share no group, the list goes as a string: `cbb-entries:` and the
+  JSON `{keys, entries}` in base64url without padding, which `cbb global entries export`
+  gives (`-qr` as a QR code) and `cbb global entries import` takes.
 
 ## 17. Key stores
 
@@ -3473,7 +3516,7 @@ within version 1, and a new ALPN version would rename them.
 
 `hello`, `event`, `ping`, `bye`, `cert` (section 4); `get`, `missing` and binary `chunk`
 frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
-(section 11); `command`, `result` (section 15); `release` (section 16); `evidence` (section
+(section 11); `command`, `result` (section 15); `release`, `entries` (section 16); `evidence` (section
 17); `credentials` (section 18).
 
 ### Values
