@@ -108,6 +108,8 @@ void link_send_str(const char *s)
     while (*s) link_send(*s++);
 }
 
+uint8_t link_stopped;
+
 uint8_t link_recv(uint8_t *c, uint16_t seconds)
 {
     uint32_t rounds = seconds * ROUNDS_PER_SECOND;
@@ -116,7 +118,10 @@ uint8_t link_recv(uint8_t *c, uint16_t seconds)
             *c = z80_inp(PORT_RX_BAUD);
             return LINK_OK;
         }
-        if (in_key_pressed(IN_KEY_SCANCODE_SPACE)) return LINK_BREAK;
+        if (in_key_pressed(IN_KEY_SCANCODE_SPACE)) {
+            link_stopped = 1;
+            return LINK_BREAK;
+        }
         if (rounds-- == 0) return LINK_TIMEOUT;
     }
 }

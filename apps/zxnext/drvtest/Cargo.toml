@@ -14,3 +14,7 @@ publish = false
 iz80 = "=0.5.1"
 
 [workspace]
+
+# The played Next runs millions of instructions a second only optimised.
+[profile.test]
+opt-level = 3

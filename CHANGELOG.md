@@ -86,17 +86,26 @@ All notable changes to cbb are documented in this file. The format follows
   as a screen loads from tape), each file's state
   and progress bar on the right, the messages under them; and installs `CBB.DRV` itself through the driver API, as `.install` does;
   `.cbb net on` does the same after a reset, so `.install` is no longer needed. Not yet run
-  on a real Next. The logo and the usage text, `.cbb install` and `.cbb net` sit in pages of
-  the dot command's own, which NextZXOS allocates for it while it runs, each shown only
-  while it is needed, so its main 32K keeps about 12K free (`apps/zxnext/src/far.asm`).
-  Its printf and scanf carry only the conversions the code uses (`apps/zxnext/formats.sh`),
-  which leaves about 1.4K of its divMMC page free instead of 240 bytes. Its stack is just
-  below 0xE000 and no longer at the top of memory, in the window the pages show in, which
-  crashed `.cbb install` as it started; `.cbb -d` ends with how much of the stack was never
-  used. It copies `CBB.DRV`'s bank through its own window at 0xE000 and no
-  longer through BASIC's at 0x6000, and it sets only its own bits of NextReg 0xA0.
-  `.cbb install`'s messages stay in rows 18 to 21 and scroll only there: a message on
-  row 22, out of BASIC's screen, reset the Next after a failed download.
+  on a real Next. The logo and the usage text with the install screen and SHA-256, the
+  install, `.cbb net`, and `.cbb paste`, `copy`, `text` and `pair` sit in four pages of the
+  dot command's own, which NextZXOS allocates for it while it runs; `make` fails when any
+  part keeps less than 1K free, or MAIN less than 3K for the stack and growth
+  (`apps/zxnext/budget.sh`, README.md, "Memory"), or when a function shares its address
+  with its own static data, which z88dk does in a page that holds code and data, and which
+  reset the Next as `.cbb install` started its download (`apps/zxnext/mapcheck.sh`).
+  Its printf and scanf carry only the conversions the code uses (`apps/zxnext/formats.sh`).
+  Its stack is just below 0xE000 and no longer at the top of memory, in the window the
+  pages show in; `.cbb -d` ends with how much of the stack was never used. It copies
+  `CBB.DRV`'s bank through its own window at 0xE000 and no longer through BASIC's at
+  0x6000, and it sets only its own bits of NextReg 0xA0. `.cbb install`'s messages stay in
+  rows 18 to 21 and scroll only there, and it reads a file from the first byte of its body
+  (a stray line end made every download one byte off). A site without the files is told at
+  once (`cbb.tools has no such file`) instead of after five tries, and SPACE while it
+  connects stops it instead of blaming the Wi-Fi. `make test` runs the real `CBB` on a
+  played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
+  cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
+  silent Pi, a closed connection, SPACE, the usage and a paste, each failed on what would
+  go wrong on a real Next (README.md, "Testing on a played Next").
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own

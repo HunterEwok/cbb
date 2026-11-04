@@ -337,6 +337,11 @@ static uint8_t expect(uint8_t want, uint32_t *len, uint32_t *crc, uint16_t secon
 static int far_argc;
 static char **far_argv;
 static uint8_t install_update;
+// sha_run()'s file, whether it takes the digest, and the digest in hex.
+static const char *sha_path;
+static uint8_t sha_digest;
+static char sha_out[65];
+extern uint32_t far_sha(void);
 
 // Whether copy and text send a secret: the group's devices keep it out of
 // their histories and clear it from their clipboards after a while.
@@ -893,6 +898,11 @@ static struct item items[] = {
 // This CBB, as the install's own steps put it in /cbb.
 #define CBB_CARD "/cbb/CBB"
 
+// The status of the last answer http_range() read, and what fetch() says
+// when the site has no such file: trying again does not help then.
+static uint16_t http_status;
+static const char no_file[] = SITE " has no such file; are its files in place?";
+
 // Asks for size bytes of name from offset on the open connection; 0 with
 // the bytes in text[] when they all came.
 static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
@@ -900,6 +910,7 @@ static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
     uint32_t length = 0;
     uint16_t i, status = 0, got = 0;
     uint8_t c, err;
+    http_status = 0;
     sprintf(line, "GET " SITE_DIR "%s HTTP/1.1\r\nHost: " SITE "\r\nRange: bytes=%lu-%lu\r\n\r\n", name, from,
             from + size - 1);
     link_send_str(line);
@@ -925,6 +936,7 @@ static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
         }
     }
     err = 254;
+    http_status = status;
     if (status != 206 && !(status == 200 && from == 0)) goto out;
     err = 253;
     if (length != size) goto out;
@@ -1055,7 +1067,11 @@ static void palette(uint8_t restore)
     ZXN_WRITE_REG(0x43, control);
 }
 
-#pragma codeseg PAGE_13
+// The bars and the states on the install screen are in MAIN: the install
+// draws them, and so does the screen's own page (README.md, "Memory").
+#pragma codeseg code_compiler
+#pragma constseg rodata_compiler
+#pragma bssseg bss_compiler
 
 // Shows a file's state on its row: "current", "fetching" and so on.
 static void file_state(uint8_t row, const char *name, const char *state)
@@ -1112,6 +1128,10 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
     printf("%-7s%2u:%02u LEFT", speed, left / 60, left % 60);
 }
 
+#pragma codeseg PAGE_13
+#pragma constseg PAGE_13
+#pragma bssseg PAGE_13
+
 // CRC-32 by a table of 16, half a byte at a time: the Pi's cbb is
 // megabytes, and frame.c's bit by bit takes minutes for it, while a table
 // of 256 would take a kilobyte that .cbb does not have.
@@ -1149,44 +1169,22 @@ static uint32_t file_crc(const char *path, uint32_t *size)
     return crc;
 }
 
-// The SHA-256 of a file on the card goes into s, read in chunks; its size
-// is the result (0 without the file).
-static uint32_t file_sha(const char *path, struct sha256 *s)
+// The size of a file on the card (0 without it), and with digest 1 its
+// SHA-256 in sha_out. SHA-256 is in the screen's page with sha_run(),
+// whose arguments these are (far.asm, far_sha()).
+static uint32_t file_sha(const char *path, uint8_t digest)
 {
-    uint8_t fh;
-    uint16_t n;
-    uint32_t size = 0;
-    errno = 0;
-    fh = esx_f_open(path, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
-    if (errno) return 0;
-    while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
-        if (s) sha256_add(s, text, n);
-        size += n;
-    }
-    esx_f_close(fh);
-    return size;
-}
-
-// The digest in s, in lowercase hex as sha256sum prints it.
-static void sha_hex(struct sha256 *s, char out[65])
-{
-    static uint8_t d[32];
-    uint8_t i;
-    sha256_end(s, d);
-    for (i = 0; i < 32; i++) sprintf(out + 2 * i, "%02x", d[i]);
+    sha_path = path;
+    sha_digest = digest;
+    return far_sha();
 }
 
 // Whether the file at path is the item's: its size, and on the Next its
 // SHA-256 too.
 static uint8_t matches(struct item *it, const char *path)
 {
-    static struct sha256 s;
-    static char hex[65];
-    sha256_init(&s);
-    if (file_sha(path, it->pi ? 0 : &s) != it->size) return 0;
-    if (it->pi) return 1;
-    sha_hex(&s, hex);
-    return strcmp(hex, it->sha256) == 0;
+    if (file_sha(path, !it->pi) != it->size) return 0;
+    return it->pi || strcmp(sha_out, it->sha256) == 0;
 }
 
 // Fetches one item to its .PRT file, going on from what an earlier try
@@ -1215,6 +1213,11 @@ static int fetch(struct item *it, uint8_t row)
             esx_f_close(fh);
             file_state(row, it->label, "STOPPED");
             return fail("stopped; .cbb install goes on from here", 0);
+        }
+        if (err == 254 && http_status >= 400 && http_status < 500) {
+            esx_f_close(fh);
+            file_state(row, it->label, "NOT THERE");
+            return fail(no_file, line);
         }
         if (err) {
             // The server may have closed the connection: open it again.
@@ -1414,9 +1417,11 @@ static int install_files(uint8_t update)
     file_state(TOTAL_ROW / 2 - FILE_ROW / 2, "TOTAL", "");
     bar(TOTAL_ROW + 1, 0, 0xFF);
     pi_answers = !pi_sha(pisha);
+    link_stopped = 0;
     if (http_open()) {
         http_close();
         link_use(LINK_PI);
+        if (link_stopped) return fail("stopped; .cbb install goes on from here", 0);
         return fail("cannot reach " SITE "; is the ESP on Wi-Fi?", line);
     }
     // .cbb update first looks for a newer CBB, which its user fetches
@@ -1519,6 +1524,31 @@ int install_run(void)
 #pragma constseg PAGE_15
 #pragma bssseg PAGE_15
 #pragma dataseg PAGE_15
+
+// The SHA-256 of a file, for file_sha() in the install's page: not
+// static, as far_sha() (far.asm) calls it.
+static struct sha256 sha_state;
+static uint8_t sha_bytes[32];
+
+uint32_t sha_run(void)
+{
+    uint8_t fh, i;
+    uint16_t n;
+    uint32_t size = 0;
+    sha256_init(&sha_state);
+    errno = 0;
+    fh = esx_f_open(sha_path, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) return 0;
+    while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
+        if (sha_digest) sha256_add(&sha_state, text, n);
+        size += n;
+    }
+    esx_f_close(fh);
+    // In lowercase hex, as sha256sum prints it.
+    sha256_end(&sha_state, sha_bytes);
+    for (i = 0; i < 32; i++) sprintf(sha_out + 2 * i, "%02x", sha_bytes[i]);
+    return size;
+}
 
 // Unpacks the logo (PackBits, tools/icon) into text[].
 static void logo_unpack(void)

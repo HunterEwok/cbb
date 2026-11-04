@@ -62,6 +62,8 @@ pub trait Peer {
     fn tx(&mut self, now: u64) -> Option<u8>;
     /// The speed the device sends and listens at.
     fn baud(&self) -> u32;
+    /// The device itself, for a test to look at afterwards.
+    fn as_any(&mut self) -> &mut dyn std::any::Any;
 }
 
 pub struct Uart {
@@ -171,24 +173,15 @@ pub struct Screen {
 
 impl Screen {
     fn new() -> Screen {
-        Screen {
-            chars: [[b' '; 32]; 24],
-            attrs: [[0x38; 32]; 24],
-            row: 0,
-            col: 0,
-            pending: Vec::new(),
-            scrolls: 0,
-        }
+        Screen { chars: [[b' '; 32]; 24], attrs: [[0x38; 32]; 24], row: 0, col: 0, pending: Vec::new(), scrolls: 0 }
     }
 
     /// The rows as text.
     pub fn text(&self) -> String {
         let mut s = String::new();
         for r in 0..24 {
-            let line: String = self.chars[r]
-                .iter()
-                .map(|&c| if (32..127).contains(&c) { c as char } else { '?' })
-                .collect();
+            let line: String =
+                self.chars[r].iter().map(|&c| if (32..127).contains(&c) { c as char } else { '?' }).collect();
             s.push_str(&format!("{r:2} |{line}|\n"));
         }
         s
@@ -294,11 +287,7 @@ impl Next {
     fn slot_addr(&self, a: u16) -> (Option<u8>, usize) {
         let slot = (a >> 13) as usize;
         let off = (a as usize) & (PAGE - 1);
-        if slot < 2 {
-            (None, off)
-        } else {
-            (Some(self.mmu[slot]), off)
-        }
+        if slot < 2 { (None, off) } else { (Some(self.mmu[slot]), off) }
     }
 
     pub fn read(&self, a: u16) -> u8 {
@@ -314,7 +303,8 @@ impl Next {
     /// A write as the command's code makes it, checked.
     fn write(&mut self, a: u16, v: u8) {
         if Some(a) == self.watch {
-            let line = format!("{:.3}s watch {a:#06x} = {v} from {:#06x} (mmu7 {})", self.now / 1e6, self.pc, self.mmu[7]);
+            let line =
+                format!("{:.3}s watch {a:#06x} = {v} from {:#06x} (mmu7 {})", self.now / 1e6, self.pc, self.mmu[7]);
             self.log.push(line);
         }
         let slot = (a >> 13) as usize;
@@ -331,9 +321,7 @@ impl Next {
                 } else if a < self.basic_sp && a >= self.basic_sp.wrapping_sub(512) && slot == 7 && page == 1 {
                     // BASIC's machine stack, which the command runs on at first
                 } else if !self.ours.get(page as usize).copied().unwrap_or(false) {
-                    self.breach(format!(
-                        "wrote {v:#04x} to page {page} at {a:#06x}, not the command's"
-                    ));
+                    self.breach(format!("wrote {v:#04x} to page {page} at {a:#06x}, not the command's"));
                 }
                 self.ram[page as usize * PAGE + off] = v;
             }
@@ -777,7 +765,9 @@ impl Run {
                 self.ok();
             }
             0x9D | 0x9E => {
-                let Some(Some(f)) = self.hw.files.get(a as usize) else { return self.err(7) };
+                let Some(Some(f)) = self.hw.files.get(a as usize) else {
+                    return self.err(7);
+                };
                 let (path, pos, write) = (f.path.clone(), f.pos, f.write);
                 if hl < 0x4000 && hl >= 0x2000 {
                     // allowed: the command's own 8K
@@ -819,7 +809,9 @@ impl Run {
                 self.ok();
             }
             0x9F => {
-                let Some(Some(f)) = self.hw.files.get_mut(a as usize) else { return self.err(7) };
+                let Some(Some(f)) = self.hw.files.get_mut(a as usize) else {
+                    return self.err(7);
+                };
                 let off = (bc as u64) << 16 | de as u64;
                 match hl & 0xFF {
                     0 => f.pos = off,
@@ -897,8 +889,7 @@ impl Run {
                 }
                 4 => {
                     let drv = de as u8 & 0x7F;
-                    let Some(code) = self.hw.drivers.iter().find(|d| d.0 == drv).map(|d| d.1.clone())
-                    else {
+                    let Some(code) = self.hw.drivers.iter().find(|d| d.0 == drv).map(|d| d.1.clone()) else {
                         return self.err(5);
                     };
                     for (i, b) in code.iter().enumerate() {
@@ -1157,9 +1148,9 @@ impl Run {
             let (page, _) = self.hw.slot_addr(a);
             match page {
                 Some(p) if self.hw.ours[p as usize] || p == 10 || p == 11 => {}
-                Some(p) => self.hw.breach(format!(
-                    "an interrupt's pushes at {a:#06x} land in page {p}, not the command's"
-                )),
+                Some(p) => {
+                    self.hw.breach(format!("an interrupt's pushes at {a:#06x} land in page {p}, not the command's"))
+                }
                 None => {}
             }
             self.hw.os_write(a, 0xEE);
@@ -1364,8 +1355,20 @@ impl Run {
                 let v = match op {
                     0x28 => de << (b & 31).min(16) as u32 & 0xFFFF,
                     0x29 => ((de as i16) >> (b & 31).min(15)) as u16,
-                    0x2A => if b & 31 >= 16 { 0 } else { de >> (b & 31) },
-                    0x2B => if b & 31 >= 16 { 0xFFFF } else { !((!de) >> (b & 31)) },
+                    0x2A => {
+                        if b & 31 >= 16 {
+                            0
+                        } else {
+                            de >> (b & 31)
+                        }
+                    }
+                    0x2B => {
+                        if b & 31 >= 16 {
+                            0xFFFF
+                        } else {
+                            !((!de) >> (b & 31))
+                        }
+                    }
                     _ => de.rotate_left((b & 15) as u32),
                 };
                 let v = if op == 0x28 && b & 31 >= 16 { 0 } else { v };

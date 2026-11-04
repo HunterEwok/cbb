@@ -2,15 +2,16 @@
 ; Copyright (C) 2026 HunterEwok
 
 ; The dot command's far pages, kept out of MAIN's 32K (README.md,
-; "Memory"): PAGE_15 holds the install screen with its logo and the usage
-; text; PAGE_13 the install itself, PAGE_17 .cbb net and pair through the
+; "Memory"): PAGE_15 holds the install screen with its logo, the usage
+; text and SHA-256; PAGE_13 the install itself, PAGE_17 .cbb net and pair through the
 ; ESP, PAGE_19 .cbb paste, copy, text and pair through the Pi's own
 ; network, each an overlay. z88dk's dotn loader puts each in a page that
 ; NextZXOS allocates for the command and frees when it ends, as z88dk's
 ; own dot commands (ls) do with theirs. All have the addresses
 ; 0xE000-0xFFFF, the window of MMU7, which MAIN leaves empty (it ends below
-; 0xE000; budget.sh checks). An overlay calls MAIN and this page, never
-; another overlay.
+; 0xE000; budget.sh checks). An overlay calls MAIN and this page directly,
+; and another overlay only through its entry here, which puts the caller's
+; page back after (far_sha()).
 ;
 ; This code runs from the divMMC page (code_dot), and the stack is below
 ; 0xE000 too (REGISTER_SP in the Makefile; z88dk's own default, the top of
@@ -27,6 +28,7 @@ PUBLIC _far_net_pair
 PUBLIC _far_cmd
 PUBLIC _far_screen_open
 PUBLIC _far_screen_close
+PUBLIC _far_sha
 
 EXTERN __z_page_table
 EXTERN _install_run
@@ -35,6 +37,7 @@ EXTERN _net_pair
 EXTERN _cmd_run
 EXTERN _screen_open
 EXTERN _screen_close
+EXTERN _sha_run
 
 FAR_DATA    equ 15
 FAR_INSTALL equ 13
@@ -98,6 +101,13 @@ _far_screen_open:
 _far_screen_close:
    ld a,FAR_DATA
    ld hl,_screen_close
+   jr far_call
+
+; uint32_t far_sha(void), from the install's page: far_call puts that page
+; back after, and keeps the result in dehl.
+_far_sha:
+   ld a,FAR_DATA
+   ld hl,_sha_run
    jr far_call
 
 _far_net:

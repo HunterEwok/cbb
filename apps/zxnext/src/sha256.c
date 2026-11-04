@@ -7,6 +7,15 @@
 
 #include <string.h>
 
+#ifdef __Z88DK
+// On the Next, in .cbb's screen page with sha_run() (cbb.c), as only the
+// install uses it (README.md, "Memory").
+#pragma codeseg PAGE_15
+#pragma constseg PAGE_15
+#pragma bssseg PAGE_15
+#pragma dataseg PAGE_15
+#endif
+
 static const uint32_t k[64] = {
     0x428a2f98UL, 0x71374491UL, 0xb5c0fbcfUL, 0xe9b5dba5UL, 0x3956c25bUL, 0x59f111f1UL, 0x923f82a4UL, 0xab1c5ed5UL,
     0xd807aa98UL, 0x12835b01UL, 0x243185beUL, 0x550c7dc3UL, 0x72be5d74UL, 0x80deb1feUL, 0x9bdc06a7UL, 0xc19bf174UL,
@@ -60,10 +69,13 @@ static void compress(struct sha256 *s)
     for (i = 0; i < 8; i++) s->h[i] += v[i];
 }
 
+// At file scope: in a page that holds code and data alike, z88dk would put
+// a function's own static data at the function's address (mapcheck.sh).
+static const uint32_t h0[8] = {0x6a09e667UL, 0xbb67ae85UL, 0x3c6ef372UL, 0xa54ff53aUL,
+                               0x510e527fUL, 0x9b05688cUL, 0x1f83d9abUL, 0x5be0cd19UL};
+
 void sha256_init(struct sha256 *s)
 {
-    static const uint32_t h0[8] = {0x6a09e667UL, 0xbb67ae85UL, 0x3c6ef372UL, 0xa54ff53aUL,
-                                   0x510e527fUL, 0x9b05688cUL, 0x1f83d9abUL, 0x5be0cd19UL};
     memcpy(s->h, h0, sizeof h0);
     s->used = 0;
     s->bytes_lo = s->bytes_hi = 0;

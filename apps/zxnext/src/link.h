@@ -15,6 +15,9 @@ enum {
     LINK_BREAK    // the user pressed SPACE
 };
 
+// Whether a link call has seen SPACE, for a caller that only knows it failed.
+extern uint8_t link_stopped;
+
 // The two UARTs, as the select port's bit 6 names them.
 #define LINK_ESP 0x00
 #define LINK_PI 0x40

@@ -7,8 +7,10 @@
 #               z88dk-z80asm on the PATH, ZCCCFG set); FILE is the Pi's cbb, the
 #               lite member for ARMv6, whose size and SHA-256 CBB carries with
 #               the driver's (pins.sh), as it installs only those
-#   make test   the host tests of the frame parser and SHA-256 with cc, and the
-#               driver's in an emulator (drvtest, with cargo)
+#   make test   the host tests of the frame parser and SHA-256 with cc, the
+#               driver's in an emulator, and with build/CBB (make
+#               PI_CBB=build/PIBRIDGE first) .cbb itself on a played Next
+#               (drvtest, with cargo; README.md, "Testing on a played Next")
 
 ZCC ?= zcc
 ASM ?= z88dk-z80asm
@@ -19,10 +21,15 @@ SRC := src/cbb.c src/link.c src/frame.c src/sha256.c
 
 all: build/CBB build/PIBRIDGE build/CBB.DRV
 
-build/pins.h: pins.sh build/CBB.DRV $(PI_CBB)
+build/pins.h: pins.sh build/CBB.DRV $(PI_CBB) build/pi_cbb
 	@test -n "$(PI_CBB)" || { echo "make: PI_CBB names the Pi's cbb, which CBB installs" >&2; exit 1; }
 	sh pins.sh build/CBB.DRV $(PI_CBB) >$@.new
 	mv $@.new $@
+
+# Which file PI_CBB names, so that another one makes pins.h again.
+build/pi_cbb: FORCE
+	@mkdir -p build
+	@echo '$(PI_CBB)' | cmp -s - $@ || echo '$(PI_CBB)' >$@
 
 # printf and scanf with only the conversions the code uses (formats.sh).
 build/formats: formats.sh $(SRC)
@@ -85,4 +92,4 @@ build/sha256_test: src/sha256.c src/sha256.h test/sha256_test.c
 clean:
 	rm -rf build
 
-.PHONY: all test clean
+.PHONY: all test clean FORCE

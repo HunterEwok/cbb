@@ -55,7 +55,8 @@ pub struct Esp {
     burst: Vec<u8>,
     last_rx: u64,
     request: Vec<u8>,
-    requests: u32,
+    /// The HTTP requests on this connection.
+    pub requests: u32,
     pub site: PathBuf,
     pub faults: Faults,
     pub wifi: bool,
@@ -134,7 +135,8 @@ impl Esp {
             return;
         }
         if c == "AT+CIFSR" {
-            return self.reply(now, "+CIFSR:STAIP,\"192.168.0.166\"\r\n+CIFSR:STAMAC,\"08:3a:f2:00:00:01\"\r\n\r\nOK\r\n");
+            return self
+                .reply(now, "+CIFSR:STAIP,\"192.168.0.166\"\r\n+CIFSR:STAMAC,\"08:3a:f2:00:00:01\"\r\n\r\nOK\r\n");
         }
         if c.is_empty() {
             return;
@@ -275,6 +277,9 @@ impl Peer for Esp {
     fn baud(&self) -> u32 {
         self.baud
     }
+    fn as_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// NextPi's supervisor shell: SUP> and the commands .cbb types.
@@ -292,7 +297,15 @@ pub struct Pi {
 
 impl Pi {
     pub fn new() -> Pi {
-        Pi { out: Out::default(), line: Vec::new(), raw: 0, received: Vec::new(), cbb_sha: None, log: Vec::new(), answers: true }
+        Pi {
+            out: Out::default(),
+            line: Vec::new(),
+            raw: 0,
+            received: Vec::new(),
+            cbb_sha: None,
+            log: Vec::new(),
+            answers: true,
+        }
     }
 
     fn say(&mut self, now: u64, s: &str) {
@@ -376,5 +389,8 @@ impl Peer for Pi {
     }
     fn baud(&self) -> u32 {
         115_200
+    }
+    fn as_any(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
