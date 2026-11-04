@@ -129,6 +129,9 @@ All notable changes to cbb are documented in this file. The format follows
   before. `.cbb pair` stops the Pi's service while `cbb next pair` waits on the member port the
   phone reaches (a network started after the install had it there, and the phone got the
   service's certificate), and `cbb next link` starts the service again whenever it stopped.
+  `.cbb pair` says first when the Pi is in a group already, which `cbb next pair` refuses
+  out of sight, and `.cbb uninstall` tells how to erase `/cbb/CBB`, which NextZXOS keeps
+  while it runs.
   `.cbb net off` restarts the ESP, so that NextZXOS's
   `.http` finds it as it expects. Remote paste on the Next is on after `.cbb install`, Enter too (D-81), and the
   install says so; `.cbb paste-receive on [-enter] | off` changes it, and `.cbb net on`

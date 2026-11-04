@@ -440,6 +440,8 @@ pub struct Pi {
     pub answers: bool,
     /// Whether the tty takes a speed above 115200 for the copy.
     pub fast: bool,
+    /// Whether the Pi's cbb-state holds an identity: it is in a group.
+    pub in_group: bool,
     baud: u32,
     /// A speed stty sets, and when.
     pending_baud: Option<(u64, u32)>,
@@ -456,6 +458,7 @@ impl Pi {
             log: Vec::new(),
             answers: true,
             fast: true,
+            in_group: false,
             baud: 115_200,
             pending_baud: None,
         }
@@ -509,6 +512,11 @@ impl Pi {
             self.raw = n;
             self.received.clear();
             return;
+        }
+        if cmd.starts_with("test -e /NextPi/nextpi/cbb-state/identity.json && echo CBB$((1))IN") {
+            let s = if self.in_group { "CBB1IN\r\nCBB1END\r\n" } else { "CBB1END\r\n" };
+            self.say(now + 20_000, s);
+            return self.prompt(now + 20_000);
         }
         if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; cd /NextPi/nextpi && rm -rf ")
             && cmd.ends_with("echo CBB$((1))GONE")

@@ -987,6 +987,7 @@ static uint8_t esp_address(char *ip, uint8_t max)
 // phone, at the ESP's address and the port -serve leads to, while the
 // network runs under the QR code the phone scans.
 static int net_stop(void);
+extern int far_pair_check(void);
 static const char pair_cmd[] = "(%s; " CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null; %s) &\n";
 static const char pair_pkill[] = PKILL_SERVICE;
 
@@ -998,6 +999,7 @@ int net_pair(void)
     // The network holds the Pi's line: it stops for the pairing, and
     // starts again after it.
     if (net_on() && net_stop()) return 1;
+    if (far_pair_check()) return 1;
     // Without settings, the defaults, as .cbb net on saves them.
     if (net_load()) {
         strcpy(net_args, net_serve + 1);
@@ -1412,6 +1414,26 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 #pragma codeseg PAGE_13
 #pragma constseg PAGE_13
 #pragma bssseg PAGE_13
+
+// Whether the Pi is in a group: cbb next pair and -join refuse then, the
+// one in the Pi's background and the other in the link's log, which the
+// Next would never show.
+static const char in_group_cmd[] = "test -e " PI_DIR "/cbb-state/identity.json && echo CBB$((1))IN; echo CBB$((1))END\n";
+static const char in_group_yes[] = "CBB1IN", in_group_end[] = "CBB1END";
+static const char in_group[] = "the Pi is in a group\nalready: remove it in the\napp, then ../CBB uninstall\nand install";
+
+// Not static: far_pair_check() (far.asm) calls it, with the network off.
+int pair_check(void)
+{
+    uint8_t in = 0;
+    if (link_shell()) return pi_silent();
+    link_send_str(in_group_cmd);
+    while (!link_line(line, sizeof line, 5) && strcmp(line, in_group_end)) {
+        if (strcmp(line, in_group_yes) == 0) in = 1;
+    }
+    link_prompt();
+    return in ? fail(in_group, 0) : 0;
+}
 
 // CRC-32 by a table of 16, half a byte at a time: the Pi's cbb is
 // megabytes, and frame.c's bit by bit takes minutes for it, while a table
@@ -1910,7 +1932,7 @@ int install_run(void)
 // main program's.
 static const char card_files[][16] = {"/cbb/CBB.DRV", "/cbb/NET.CFG", "/cbb/CBBPI.BIN", "/cbb/DRV.PRT",
                                       "/cbb/CBBPI.PRT", "/cbb/PASTE.CFG", "/cbb/CBB"};
-static const char un_ask[] = "Remove CBB: the network, CBB.DRV,\nthe Pi's cbb and its group, and\nthe files in /cbb? Y or N\n";
+static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? Y/N\n";
 static const char un_none[] = "Nothing removed.\n";
 static const char un_drv_stays[] = "CBB.DRV stays: .uninstall it.\n";
 static const char un_drv_gone[] = "CBB.DRV is uninstalled.\n";
@@ -1921,7 +1943,8 @@ static const char un_pi_gone[] = "CBB1GONE";
 static const char un_pi_quiet[] = "The Pi did not say it is done.\n";
 static const char un_pi_done[] = "The Pi's cbb is removed.\n";
 static const char un_dir[] = "/cbb";
-static const char un_done[] = "The files in /cbb are removed.\nRemove the Next in the phone app\ntoo.\n";
+// /cbb/CBB runs now, and NextZXOS keeps it: it stays, with the folder.
+static const char un_done[] = "Removed but CBB, which runs:\nCD \"/\": ERASE \"/cbb/CBB\"\nRemove the Next in the app too.\n";
 
 // Not static: far_uninstall() (far.asm) calls it.
 // .cbb paste-receive on [-enter] | off: whether the group's admins may

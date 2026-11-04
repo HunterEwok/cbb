@@ -391,7 +391,7 @@ fn uninstalls_everything_after_y() {
     let y = vec![Key { from: 500_000, until: 800_000, row: 0xDF, bit: 4 }];
     let mut run = run_on(&kit, &card, "uninstall", Esp::new(kit.site.clone()), pi, y);
     let s = run.hw.screen_text().to_uppercase();
-    assert!(s.contains("THE PI'S CBB IS REMOVED") && s.contains("FILES IN /CBB ARE REMOVED"), "{s}");
+    assert!(s.contains("THE PI'S CBB IS REMOVED") && s.contains("ERASE \"/CBB/CBB\""), "{s}");
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(pi.cbb_sha.is_none(), "{:?}", pi.log);
     assert!(!card.join("cbb").exists(), "{:?}", std::fs::read_dir(card.join("cbb")).map(|d| d.count()));
@@ -485,6 +485,18 @@ fn pairs_while_the_network_runs() {
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(pi.log.iter().any(|l| l.contains("-join 123-456 ")), "{:?}", pi.log);
     let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn says_when_the_pi_is_in_a_group_already() {
+    let Some(kit) = kit("pairin") else { return };
+    let mut pi = Pi::new();
+    pi.in_group = true;
+    let mut run = run_with(&kit, "pair 123-456", Esp::new(kit.site.clone()), pi);
+    let s = run.hw.screen_text();
+    assert!(s.contains("already: remove it"), "{s}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(!pi.log.iter().any(|l| l.contains("next pair")), "{:?}", pi.log);
 }
 
 #[test]

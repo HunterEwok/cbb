@@ -33,7 +33,8 @@ tools. Test them on the machine before relying on them.
                       whether the group's admins may type on the Next from the phone app;
                       .cbb install turns it on with Enter, .cbb net on hands it to the Pi
 .cbb uninstall        after a Y: stop the network, uninstall CBB.DRV, remove the Pi's cbb
-                      and its group, and the files in /cbb (the folder too, when empty)
+                      and its group, and the files in /cbb; /cbb/CBB itself runs then and
+                      stays, with the folder: ERASE it after
 .cbb -d paste         the same, with the cause under each error and, at the end, the
                       bytes of the stack never used (debug mode)
 ```
@@ -211,7 +212,9 @@ through the ESP as well (lite/README.md).
 Without the phone app, `sudo cbb pair` on a computer of the group shows a code, and
 `.cbb pair 123-456` on the Next joins with it: it finds the computer whose pairing window is
 open (TXT `p=1`), starts the network to it with `cbb next link -join 123-456`, and the
-computer's `cbb pair` says when the Pi has joined.
+computer's `cbb pair` says when the Pi has joined. Both ways, `.cbb pair` first asks the
+Pi whether its state holds an identity: a Pi in a group already does not join another, so
+the Next says so instead of waiting.
 
 ## Build
 

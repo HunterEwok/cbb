@@ -25,6 +25,7 @@ PUBLIC _far_install
 PUBLIC _far_net
 PUBLIC _far_net_pair
 PUBLIC _far_paste_receive
+PUBLIC _far_pair_check
 PUBLIC _far_cmd
 PUBLIC _far_screen_open
 PUBLIC _far_screen_close
@@ -41,6 +42,7 @@ EXTERN _screen_close
 EXTERN _sha_run
 EXTERN _uninstall
 EXTERN _paste_receive
+EXTERN _pair_check
 
 FAR_DATA    equ 15
 FAR_INSTALL equ 13
@@ -123,6 +125,12 @@ _far_uninstall:
 _far_paste_receive:
    ld a,FAR_DATA
    ld hl,_paste_receive
+   jr far_call
+
+; int far_pair_check(void), in the installer's page.
+_far_pair_check:
+   ld a,FAR_INSTALL
+   ld hl,_pair_check
    jr far_call
 
 _far_net:
