@@ -901,6 +901,7 @@ final class LiveGroup: GroupController {
         try? HubKeychain.save(nil)
         try? RelayKeychain.save(nil)
         let dir = file.deletingLastPathComponent()
+        entries.remove()
         for url in [file, credentialsURL, dir.appendingPathComponent("attest-status")] {
             try? FileManager.default.removeItem(at: url)
         }
@@ -1212,6 +1213,11 @@ final class LiveGroup: GroupController {
     /// credentials.json beside the group's file.
     private var credentialsURL: URL { file.deletingLastPathComponent().appendingPathComponent("credentials.json") }
 
+    /// The newest signed entry points the computers sent (docs/protocol.md,
+    /// section 16, "Entry points"), entries.json beside the group's file.
+    private lazy var entries = EntriesFile(url: file.deletingLastPathComponent().appendingPathComponent("entries.json"),
+                                           log: { hubLog.error("\($0, privacy: .public)") })
+
     /// Drops the credentials and the keys for the servers of an earlier
     /// group, when the phone makes or joins one.
     private func forgetCredentials() {
@@ -1368,7 +1374,7 @@ final class LiveGroup: GroupController {
                               onEvidence: { [weak self] peer, chain, e in
                                   Task { @MainActor in await self?.evidenceReceived(from: peer, chain: chain, e) }
                               },
-                              content: content, credentials: credentials)
+                              content: content, credentials: credentials, entries: entries)
         nodeRef.value = node
         let relay = Relay(group: g.tag)
         relay.allowed = Self.allowed(g)
@@ -1667,7 +1673,8 @@ final class LiveGroup: GroupController {
         guard let port = tunnelListener?.port, self.hub === hub else { return }
         let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
-        hub.start(.init(memberPort: port, chain: g.memberChain + roots, sign: sign, records: g.records.authorityRecords))
+        hub.start(.init(memberPort: port, chain: g.memberChain + roots, sign: sign, records: g.records.authorityRecords,
+                        ways: entries.ways(for: HubState.Forwarder.projectHost)))
         guard hub.isHome(network) else {
             homeListener?.stop()
             homeListener = nil

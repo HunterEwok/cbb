@@ -227,14 +227,19 @@ public enum Member {
         /// new phone restoring the group with the recovery key (section 10,
         /// "The recovery key").
         public var groupCA: Data?
+        /// The seq of the newest entries.json the sender holds and of the
+        /// keys.json it came with (section 16, "Entry points"); nil for none.
+        public var entriesSeq: UInt64?
+        public var entriesKeysSeq: UInt64?
 
         public init(wallMS: Int64, current: Event? = nil, records: String? = nil, name: String? = nil, os: String? = nil,
                     adminKey: Data? = nil, tunnelKey: Data? = nil, tunnelPSK: Data? = nil, device: DeviceInfo? = nil, mode: String? = nil,
-                    keyStore: String? = nil, actions: [String] = [], media: Bool = false, groupCA: Data? = nil) {
+                    keyStore: String? = nil, actions: [String] = [], media: Bool = false, groupCA: Data? = nil,
+                    entriesSeq: UInt64? = nil, entriesKeysSeq: UInt64? = nil) {
             (self.wallMS, self.current, self.records, self.name, self.os, self.adminKey, self.tunnelKey) =
                 (wallMS, current, records, name, os, adminKey, tunnelKey)
             (self.tunnelPSK, self.device, self.mode, self.keyStore, self.actions, self.media) = (tunnelPSK, device, mode, keyStore, actions, media)
-            self.groupCA = groupCA
+            (self.groupCA, self.entriesSeq, self.entriesKeysSeq) = (groupCA, entriesSeq, entriesKeysSeq)
         }
     }
 
@@ -629,6 +634,9 @@ public enum Member {
         /// The group's server credentials the sender keeps, or new ones it
         /// passes on (section 18).
         case credentials([ServerCredentials.Credential])
+        /// The newest signed entry points the sender holds (section 16,
+        /// "Entry points").
+        case entries(Releases.EntriesSet)
         /// From the root: the receiver's admin CA, DER, for the admin key
         /// its hello offered.
         case admin(Data)
@@ -737,13 +745,14 @@ public enum Member {
                                       keyStore: h.key_store.flatMap { $0 == Records.file || $0 == Records.hardware || $0 == Records.rootless ? $0 : nil },
                                       actions: Array((h.actions?.value ?? []).filter(Commands.validActionName).prefix(Commands.maxHelloActions)),
                                       media: (h.features?.value ?? []).prefix(Member.maxFeatures).contains(Member.featureMedia),
-                                      groupCA: h.group_ca))
+                                      groupCA: h.group_ca, entriesSeq: h.entries_seq, entriesKeysSeq: h.entries_keys_seq))
         case "event": return .event(w.event?.value)
         case "ping": return .ping
         case "bye": return .bye
         case "cert": return .cert(w.cert ?? Data(), issuer: w.issuer)
         case "records": return .records(w.records ?? [])
         case "credentials": return .credentials(w.credentials ?? [])
+        case "entries": return w.entries?.value.map { .entries($0) } ?? .unknown(w.t)
         case "admin": return .admin(w.admin_ca ?? Data())
         case "tunnel": return .tunnel(w.tunnel?.value)
         case "hubs": return w.hubs?.value.map { .hubs($0) } ?? .unknown(w.t)
@@ -778,6 +787,8 @@ public enum Member {
         var actions: Lenient<[String]>?
         var features: Lenient<[String]>?
         var group_ca: Data?
+        var entries_seq: UInt64?
+        var entries_keys_seq: UInt64?
     }
 
     struct WireIn: Decodable {
@@ -796,14 +807,15 @@ public enum Member {
         var result: Lenient<CommandResult>?
         var evidence: Lenient<Evidence>?
         var get: Lenient<Get>?
+        var entries: Lenient<Releases.EntriesSet>?
     }
 
     struct WireOut: Encodable {
         let m: Message
         init(_ m: Message) { self.m = m }
 
-        enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get }
-        enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features, group_ca }
+        enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get, entries }
+        enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features, group_ca, entries_seq, entries_keys_seq }
 
         func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -826,6 +838,8 @@ public enum Member {
                 if !h.actions.isEmpty { try hc.encode(h.actions, forKey: .actions) }
                 if h.media { try hc.encode([Member.featureMedia], forKey: .features) }
                 try hc.encodeIfPresent(h.groupCA, forKey: .group_ca)
+                try hc.encodeIfPresent(h.entriesSeq, forKey: .entries_seq)
+                try hc.encodeIfPresent(h.entriesKeysSeq, forKey: .entries_keys_seq)
             case let .event(e):
                 try c.encode("event", forKey: .t)
                 try c.encodeIfPresent(e, forKey: .event)
@@ -841,6 +855,9 @@ public enum Member {
             case let .credentials(cs):
                 try c.encode("credentials", forKey: .t)
                 try c.encode(cs, forKey: .credentials)
+            case let .entries(e):
+                try c.encode("entries", forKey: .t)
+                try c.encode(e, forKey: .entries)
             case let .admin(ca):
                 try c.encode("admin", forKey: .t)
                 try c.encode(ca, forKey: .admin_ca)

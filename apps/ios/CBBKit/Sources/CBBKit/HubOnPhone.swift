@@ -98,6 +98,10 @@ public protocol HubTunnel: AnyObject, Sendable {
     /// "" without VLESS.
     func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String, vlessID: String) throws
     func setRecords(_ records: String) throws
+    /// Tells the hub that its forwarder is the project's, with the ways in
+    /// over VLESS of the signed entry points as JSON, "" for none (cbbtun's
+    /// Hub.SetProjectWays).
+    func setProjectWays(_ ways: String) throws
     /// cbbtun's Status JSON.
     func status() -> String
     /// Opens a remote invitation's guest tunnel (cbbtun's Hub.Invite).
@@ -161,8 +165,12 @@ public final class HubOnPhone: @unchecked Sendable {
         public var chain: [Data]
         public var sign: @Sendable (Data) throws -> Data
         public var records: [Member.Record]
-        public init(memberPort: UInt16, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: [Member.Record]) {
-            (self.memberPort, self.chain, self.sign, self.records) = (memberPort, chain, sign, records)
+        /// The ways in over VLESS to the project's forwarder that the
+        /// signed entry points name (EntriesFile.ways).
+        public var ways: [Releases.EntryVLESS]
+        public init(memberPort: UInt16, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: [Member.Record],
+                    ways: [Releases.EntryVLESS] = []) {
+            (self.memberPort, self.chain, self.sign, self.records, self.ways) = (memberPort, chain, sign, records, ways)
         }
     }
 
@@ -385,6 +393,8 @@ public final class HubOnPhone: @unchecked Sendable {
         do {
             t = try tunnels.start(privateKey: s.key, device: device, memberPort: g.memberPort,
                                   obfuscation: try s.obfuscation?.jsonText() ?? "", clients: try h.clientsJSON())
+            // Away from home the hub may reach the project's forwarder only over VLESS (section 13).
+            if fw.isProject { try t.setProjectWays(g.ways.isEmpty ? "" : try Self.json(g.ways)) }
             try t.register(endpoint: fw.endpoint, pin: fw.pin, chain: g.chain, sign: g.sign, records: try Self.json(g.records), vlessID: s.vlessID ?? "")
         } catch {
             log("the hub could not start", error)
@@ -447,7 +457,7 @@ public final class HubOnPhone: @unchecked Sendable {
         return (.registering, nil)
     }
 
-    private static func json(_ rs: [Member.Record]) throws -> String {
-        String(decoding: try JSONEncoder().encode(rs), as: UTF8.self)
+    private static func json<T: Encodable>(_ v: T) throws -> String {
+        String(decoding: try JSONEncoder().encode(v), as: UTF8.self)
     }
 }

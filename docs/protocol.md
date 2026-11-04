@@ -3141,10 +3141,13 @@ For now it lists, for each forwarder of the project, its ways in over VLESS (sec
 - Members pass it on as they pass the release ("In the group"): a hello carries
   `entries_seq` and `entries_keys_seq`, and after a peer's hello a member that holds a newer
   list (a `keys.json` with a higher `seq`, or the same one and a higher `entries` `seq`)
-  sends it to a `full` or `lite` member in an `entries` message:
+  sends it to the peer in an `entries` message:
   `{"t":"entries","entries":{"keys":...,"entries":...}}`. A member takes it with the check
   above, keeps it and sends it on to its other peers; it drops one that fails, and logs why.
-  A member that does not know `entries` ignores it; the lite member does not read it yet.
+  A phone takes it the same way and keeps it in its own files, but passes none on: its hello
+  carries the seqs it holds, so that a computer does not send the same list again, and its
+  hub registers through the ways it names (section 13). A member that does not know
+  `entries` ignores it; the lite member does not read it yet.
 - Between devices that share no group, the list goes as a string: `cbb-entries:` and the
   JSON `{keys, entries}` in base64url without padding, which `cbb global entries export`
   gives (`-qr` as a QR code) and `cbb global entries import` takes.

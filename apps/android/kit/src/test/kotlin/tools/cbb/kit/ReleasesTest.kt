@@ -62,6 +62,34 @@ class ReleasesTest {
         }
     }
 
+    /** testdata/interop/go-entries.json, from Go's TestEntriesVectors: which entries.json a phone takes. */
+    @Test
+    fun goEntries() {
+        val v = Interop.read("go-entries.json").jsonObject
+        val roots = v.getValue("roots").jsonArray.map { b64(it.jsonPrimitive.content) }
+        val now = v.getValue("now_ms").jsonPrimitive.long
+        val cases = v.getValue("vectors").jsonArray.map { it.jsonObject }
+        assertEquals(14, cases.size)
+        for (c in cases) {
+            val name = c.str("name")
+            val s = c.getValue("seen").jsonObject
+            val seen = Releases.Seen(
+                s.optLong("keys_seq") ?: 0,
+                entriesSeq = s.optLong("entries_seq") ?: 0,
+                entriesKeysSeq = s.optLong("entries_keys_seq") ?: 0,
+            )
+            val set = Releases.EntriesSet.fromJson(c)!!
+            val got = runCatching { Releases.checkEntries(set, roots, now, seen) }
+            assertEquals(c.getValue("ok").jsonPrimitive.boolean, got.isSuccess, "$name: ${got.exceptionOrNull()?.message}")
+            got.getOrNull()?.let { (e, next) ->
+                assertEquals(c.optLong("seq"), e.seq, name)
+                assertEquals(e.seq, next.entriesSeq, name)
+                assertEquals(3L, next.entriesKeysSeq, name)
+                assertEquals(3L, next.keysSeq, name)
+            }
+        }
+    }
+
     @Test
     fun compare() {
         assertEquals(1, Releases.compare("0.10.0", "0.9.0"))

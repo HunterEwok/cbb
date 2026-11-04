@@ -50,6 +50,9 @@ object Releases {
             if (!verifySignature(spki, body, sig)) throw Refused("the signature is not valid")
         }
 
+        /** The envelope as JSON, as members pass it. */
+        fun toJson(): JsonObject = JsonObject(mapOf("body" to Wire.bytes(body)!!, "sig" to Wire.bytes(sig)!!, "key" to Wire.bytes(key)!!))
+
         companion object {
             fun fromJson(o: JsonObject): File =
                 File(o.optBytes("body") ?: ByteArray(0), o.optBytes("sig") ?: ByteArray(0), o.optBytes("key") ?: ByteArray(0))
@@ -85,6 +88,9 @@ object Releases {
         val statusSeq: Long = 0,
         val channelKeysSeq: Long = 0,
         val statusKeysSeq: Long = 0,
+        /** The highest entries.json seq taken and the keys.json seq it was taken under, kept apart from the release's. */
+        val entriesSeq: Long = 0,
+        val entriesKeysSeq: Long = 0,
     )
 
     /** The most a channel or status seq may rise past the one held under the same keys.json, as Go's MaxSeqStep. */
@@ -338,5 +344,70 @@ object Releases {
             statusKeysSeq = k.seq,
             channelKeysSeq = if (seen.channelKeysSeq == 0L) seen.keysSeq else seen.channelKeysSeq,
         )
+    }
+
+    /** A way in over VLESS to a forwarder that entries.json lists. */
+    data class EntryVLESS(val transport: String, val serverName: String, val port: Int, val path: String) {
+        fun toJson(): JsonObject = JsonObject(
+            mapOf("transport" to JsonPrimitive(transport), "server_name" to JsonPrimitive(serverName), "port" to JsonPrimitive(port), "path" to JsonPrimitive(path)),
+        )
+    }
+
+    /** A forwarder of the project in entries.json: host:port and its ways in. */
+    data class EntryForwarder(val name: String, val vless: List<EntryVLESS>)
+
+    /** The body of entries.json, the signed list of the project's entry points (docs/protocol.md, section 16, "Entry points"). */
+    class Entries(val seq: Long, val timeMS: Long, val expiresMS: Long, val forwarders: List<EntryForwarder>) {
+        /** The entry of the forwarder named [name]. */
+        fun forwarder(name: String): EntryForwarder? = forwarders.firstOrNull { it.name == name }
+    }
+
+    /** The signed entry points as members pass them: entries.json and the keys.json whose key signed it. */
+    class EntriesSet(val keys: File, val entries: File) {
+        fun toJson(): JsonObject = JsonObject(mapOf("keys" to keys.toJson(), "entries" to entries.toJson()))
+
+        companion object {
+            fun fromJson(o: JsonObject): EntriesSet? {
+                val k = o.optObject("keys") ?: return null
+                val e = o.optObject("entries") ?: return null
+                return EntriesSet(File.fromJson(k), File.fromJson(e))
+            }
+        }
+    }
+
+    internal fun decodeEntries(body: ByteArray): Entries = reading {
+        val o = decode(body, "entries", "seq", "time_ms", "expires_ms", "forwarders")
+        val seq = o.optLong("seq") ?: 0
+        if (seq <= 0) throw Refused("entries.json has no sequence number")
+        val expires = lifetime(o)
+        val fws = o.optArray("forwarders")?.map { f ->
+            val fo = f.jsonObject
+            val ways = fo.optArray("vless")?.map { v ->
+                val w = v.jsonObject
+                EntryVLESS(w.optString("transport") ?: "", w.optString("server_name") ?: "", (w.optLong("port") ?: 0).toInt(), w.optString("path") ?: "")
+            } ?: emptyList()
+            EntryForwarder(fo.optString("name") ?: "", ways)
+        } ?: emptyList()
+        return Entries(seq, o.optLong("time_ms") ?: 0, expires, fws)
+    }
+
+    /**
+     * Checks entries.json: keys.json under the pinned roots, the list under
+     * a release or channel key of it, its expiry, and that neither is older
+     * than seen. Returns the list and the Seen to keep.
+     */
+    fun checkEntries(set: EntriesSet, roots: List<ByteArray>, nowMS: Long, seen: Seen): Pair<Entries, Seen> {
+        val k = verifyKeys(set.keys, roots, nowMS, seen)
+        val e = try {
+            set.entries.verify(k.spkis(USE_RELEASE) + k.spkis(USE_CHANNEL))
+            decodeEntries(set.entries.body).also {
+                if (nowMS >= it.expiresMS) throw Refused("the file has expired")
+                if (signedAhead(it.timeMS, nowMS)) throw Refused("the file was signed ahead of this device's clock")
+                checkSeq(it.seq, floor(seen.entriesSeq, seen.entriesKeysSeq, seen.keysSeq, k.seq))
+            }
+        } catch (e: Refused) {
+            fail("entries.json", e)
+        }
+        return e to seen.copy(keysSeq = k.seq, entriesSeq = e.seq, entriesKeysSeq = k.seq)
     }
 }

@@ -425,7 +425,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
     Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
     with this item, on the same server.
-- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phone kits and the lite member do not read the list yet, a phone hub does not register over VLESS yet, and no app says yet that the list is stale.** A hub that reaches its forwarder
+- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones take and keep the list and a phone hub registers over VLESS through its ways (2026-11-04); the lite member does not read the list yet, and no app says yet that the list is stale.** A hub that reaches its forwarder
     only over VLESS, for a phone hub on a trip in a network that lets nothing else through.
     The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
     into `cbb` and the kits beside its key, as they are no secret the design relies on; a

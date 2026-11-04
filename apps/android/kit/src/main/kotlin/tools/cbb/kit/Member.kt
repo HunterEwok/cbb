@@ -266,6 +266,9 @@ object Member {
          * "The recovery key").
          */
         val groupCA: ByteArray? = null,
+        /** The seq of the newest entries.json the sender holds and of the keys.json it came with (section 16, "Entry points"); 0 for none. */
+        val entriesSeq: Long = 0,
+        val entriesKeysSeq: Long = 0,
     ) {
         override fun equals(other: Any?): Boolean =
             other is Hello && wallMS == other.wallMS && current == other.current && records == other.records && keyStore == other.keyStore &&
@@ -273,7 +276,7 @@ object Member {
                 name == other.name && os == other.os && adminKey.contentEqualsOrNull(other.adminKey) &&
                 tunnelKey.contentEqualsOrNull(other.tunnelKey) &&
                 tunnelPSK.contentEqualsOrNull(other.tunnelPSK) && device == other.device && mode == other.mode &&
-                groupCA.contentEqualsOrNull(other.groupCA)
+                groupCA.contentEqualsOrNull(other.groupCA) && entriesSeq == other.entriesSeq && entriesKeysSeq == other.entriesKeysSeq
 
         override fun hashCode(): Int = wallMS.hashCode()
     }
@@ -591,6 +594,9 @@ object Member {
         /** The group's server credentials the sender keeps, or new ones it passes on (section 18). */
         data class Credentials(val credentials: List<ServerCredentials.Credential>) : Message()
 
+        /** The newest signed entry points the sender holds (section 16, "Entry points"). */
+        class Entries(val set: Releases.EntriesSet) : Message()
+
         /** From the root: the receiver's admin CA, DER, for the admin key its hello offered. */
         class Admin(val adminCA: ByteArray) : Message() {
             override fun equals(other: Any?): Boolean = other is Admin && adminCA.contentEquals(other.adminCA)
@@ -656,6 +662,8 @@ object Member {
                 "key_store" to Wire.str(m.hello.keyStore),
                 "features" to if (m.hello.media) JsonArray(listOf(JsonPrimitive(FEATURE_MEDIA))) else null,
                 "group_ca" to Wire.bytes(m.hello.groupCA),
+                "entries_seq" to if (m.hello.entriesSeq > 0) Wire.num(m.hello.entriesSeq) else null,
+                "entries_keys_seq" to if (m.hello.entriesSeq > 0) Wire.num(m.hello.entriesKeysSeq) else null,
             ),
         )
         is Message.Event -> Wire.obj("t" to Wire.str("event"), "event" to m.event?.toJson())
@@ -664,6 +672,7 @@ object Member {
         is Message.Cert -> Wire.obj("t" to Wire.str("cert"), "cert" to Wire.bytes(m.cert), "issuer" to Wire.bytes(m.issuer))
         is Message.Records -> Wire.obj("t" to Wire.str("records"), "records" to JsonArray(m.records.map { it.toJson() }))
         is Message.Credentials -> Wire.obj("t" to Wire.str("credentials"), "credentials" to JsonArray(m.credentials.map { it.toJson() }))
+        is Message.Entries -> Wire.obj("t" to Wire.str("entries"), "entries" to m.set.toJson())
         is Message.Admin -> Wire.obj("t" to Wire.str("admin"), "admin_ca" to Wire.bytes(m.adminCA))
         is Message.Tunnel -> Wire.obj("t" to Wire.str("tunnel"), "tunnel" to m.offer?.toJson())
         is Message.Hubs -> Wire.obj("t" to Wire.str("hubs"), "hubs" to m.share.toJson())
@@ -775,6 +784,8 @@ object Member {
                             media = (h.opt("features") as? JsonArray).orEmpty().take(MAX_FEATURES)
                                 .any { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content == FEATURE_MEDIA },
                             groupCA = h.optBytes("group_ca"),
+                            entriesSeq = h.optLong("entries_seq") ?: 0,
+                            entriesKeysSeq = h.optLong("entries_keys_seq") ?: 0,
                         ),
                     )
                 }
@@ -790,6 +801,7 @@ object Member {
                         ServerCredentials.Credential.fromJson(it as? JsonObject ?: throw WireTypeException("credentials"))
                     } ?: emptyList(),
                 )
+                "entries" -> o.optObject("entries")?.let(Releases.EntriesSet::fromJson)?.let { Message.Entries(it) } ?: Message.Unknown(t)
                 "admin" -> Message.Admin(o.optBytes("admin_ca") ?: ByteArray(0))
                 "tunnel" -> Message.Tunnel(o.optObject("tunnel")?.let { TunnelOffer.fromJson(it) })
                 "hubs" -> o.optObject("hubs")?.let { Message.Hubs(HubShare.fromJson(it)) } ?: Message.Unknown(t)

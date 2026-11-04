@@ -26,6 +26,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/invite"
 	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/release"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
@@ -68,6 +69,9 @@ type Hub struct {
 	registered bool // Register was called
 	records    []group.Record
 	report     forward.Report
+	project    bool                 // SetProjectWays was called: the forwarder is the project's
+	ways       []release.EntryVLESS // the project's forwarder's ways in from its signed entry points
+	learned    *tunnel.VLESS        // the VLESS settings the forwarder's last answer gave
 }
 
 // Client is one of a hub's clients as SetClients takes it, in JSON: the
@@ -344,6 +348,7 @@ func (h *Hub) Register(endpoint, pin, chain string, signer Signer, records, vles
 		Key:         h.key,
 		Obfuscation: h.obf,
 		VLESSID:     vlessID,
+		VLESS:       func() []tunnel.VLESS { return h.vless(ep.Addr()) },
 		Cert:        func() tls.Certificate { return cert },
 		Authority: func() (crypto.Signer, *x509.Certificate, []group.Record) {
 			h.mu.Lock()
@@ -357,6 +362,10 @@ func (h *Hub) Register(endpoint, pin, chain string, signer Signer, records, vles
 			if r.Err != nil {
 				r.Seen = h.report.Seen
 			}
+			if r.VLESS != nil {
+				v := *r.VLESS
+				h.learned = &v
+			}
 			h.report = r
 			h.mu.Unlock()
 		},
@@ -367,6 +376,45 @@ func (h *Hub) Register(endpoint, pin, chain string, signer Signer, records, vles
 		forward.Register(h.ctx, cfg)
 	}()
 	return nil
+}
+
+// SetProjectWays tells the hub that its forwarder is the project's, and
+// gives the ways in over VLESS that the newest signed entry points the kit
+// holds name for it (docs/protocol.md, section 16, "Entry points"), a JSON
+// array of {transport, server_name, port, path}, or "" for none: when the
+// forwarder's TCP port does not answer, the hub registers inside VLESS
+// through the settings the forwarder's last answer gave, then through
+// these, else through the way built in (section 13, "The project's
+// forwarder"). It takes effect at the next registration.
+func (h *Hub) SetProjectWays(ways string) error {
+	var ws []release.EntryVLESS
+	if ways != "" {
+		if err := json.Unmarshal([]byte(ways), &ws); err != nil {
+			return fmt.Errorf("cbbtun: the ways in: %w", err)
+		}
+		if len(ws) > 8 {
+			return errors.New("cbbtun: too many ways in")
+		}
+	}
+	h.mu.Lock()
+	h.project, h.ways = true, ws
+	h.mu.Unlock()
+	return nil
+}
+
+// vless returns the ways the hub tries over VLESS to its forwarder at addr.
+func (h *Hub) vless(addr netip.Addr) []tunnel.VLESS {
+	h.mu.Lock()
+	var out []tunnel.VLESS
+	if h.learned != nil {
+		out = append(out, *h.learned)
+	}
+	project, ways := h.project, h.ways
+	h.mu.Unlock()
+	if project {
+		out = append(out, forward.ProjectWays(addr, ways)...)
+	}
+	return out
 }
 
 // SetRecords replaces the authority records that the next registration
@@ -436,7 +484,8 @@ func (d digestSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (
 // Status tells how the registration stands, as JSON: registered (bool),
 // seen (where the forwarder reaches the hub's WireGuard port, "ip:port"),
 // vless (the way to the forwarder over VLESS that the hub's offer gives
-// its clients) and error (why it is not registered); {} before Register.
+// its clients), over_vless (the hub itself reaches the forwarder over
+// VLESS) and error (why it is not registered); {} before Register.
 func (h *Hub) Status() string {
 	h.mu.Lock()
 	r := h.report
@@ -445,9 +494,10 @@ func (h *Hub) Status() string {
 		Registered bool          `json:"registered,omitempty"`
 		Seen       string        `json:"seen,omitempty"`
 		VLESS      *tunnel.VLESS `json:"vless,omitempty"`
+		OverVLESS  bool          `json:"over_vless,omitempty"`
 		Error      string        `json:"error,omitempty"`
 	}
-	s.Registered, s.VLESS = r.Registered, r.VLESS
+	s.Registered, s.VLESS, s.OverVLESS = r.Registered, r.VLESS, r.OverVLESS
 	if r.Seen.IsValid() {
 		s.Seen = r.Seen.String()
 	}

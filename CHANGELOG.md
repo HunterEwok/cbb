@@ -32,7 +32,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb update` fetches it, the members pass it to each other, and `cbb global entries export`
   and `import` carry it as a string or QR code; every device checks the signature, wherever
   it came from. `release-sign entries` signs it, and `extend`, `take`, `due` and `mirror`
-  keep it (docs/maintaining.md, "Signed releases").
+  keep it (docs/maintaining.md, "Signed releases"). The iPhone and Android take the list
+  from the computers of their group and keep it, and a phone that is the hub registers with
+  the project's forwarder over VLESS through the ways it names, then through the built-in
+  ones.
 - The website has the terms of the project's forwarder and relay at `cbb.tools` (Terms of the
   public servers, in every language of the site, linked from every page's footer): open to
   every group, free, as is without a promise of uptime, shared by the budget, and where to

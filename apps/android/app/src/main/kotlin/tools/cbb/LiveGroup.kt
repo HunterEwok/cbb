@@ -17,6 +17,7 @@ import tools.cbb.kit.AndroidAttestation
 import tools.cbb.kit.CertificateInfo
 import tools.cbb.kit.CertificateSigner
 import tools.cbb.kit.CredentialKeeper
+import tools.cbb.kit.EntriesFile
 import tools.cbb.kit.Core
 import tools.cbb.kit.CredentialRefresh
 import tools.cbb.kit.CredentialStore
@@ -188,6 +189,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** The group's server credentials (docs/protocol.md, section 18), beside the group; read when first needed, under the lock. */
     private val credentialsFile = File(file.parentFile, "credentials.json")
     private var credentialStore: CredentialStore? = null
+
+    /** The newest signed entry points the computers sent (docs/protocol.md, section 16, "Entry points"), beside the group. */
+    private val entries = EntriesFile(File(file.parentFile, "entries.json"), log = { Log.w(TAG, it) })
 
     /** Brings the credentials up to date, one refresh at a time, off the node's threads. */
     private val credentialWork = Executors.newSingleThreadExecutor { r -> Thread(r, "credentials").apply { isDaemon = true } }
@@ -485,7 +489,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Log.i(TAG, "the hub's member listener takes connections through the tunnel on port ${l.port}")
         } ?: return
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
-        h.start(HubOnPhone.Group(loop.port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords))
+        h.start(
+            HubOnPhone.Group(loop.port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords, entries.ways(HubState.Forwarder.PROJECT_HOST)),
+        )
         if (!h.isHome(currentNetwork())) {
             stopHome()
             return
@@ -1059,6 +1065,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         file.delete()
         credentialsFile.delete()
+        entries.remove()
         awayFile.delete()
         hubFile.delete()
         relayFile.delete()
@@ -1845,6 +1852,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             onEvidence = ::evidenceReceived,
             content = content,
             credentials = Credentials(),
+            entries = entries,
             adminCA = { key -> synchronized(lock) { state?.computerAdminCA(key) } },
             // A copy of a moment ago from another device; an older one, as a
             // hello brings it on connecting, would overwrite what the phone
