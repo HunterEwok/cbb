@@ -1283,7 +1283,7 @@ static void http_close(void)
 //   rows 10-11                all of it, its bar empty in the four stripes,
 //                             filled in the colour of the quarter reached
 //   rows 13-14                the file under way: kilobytes, speed
-//   row 15, from column 15    SPACE STOPS, at the end PRESS A KEY
+//   row 15, from column 15    SPACE STOPS, at the end PRESS ANY KEY
 //   rows 18-21                messages
 #define PANEL 15
 #define FILE_ROW 4
@@ -2156,7 +2156,7 @@ void screen_open(void)
 void screen_close(void)
 {
     at(NOW_ROW + 2, PANEL);
-    printf("PRESS A KEY");
+    printf("PRESS ANY KEY");
     in_wait_nokey();
     in_wait_key();
     in_wait_nokey();

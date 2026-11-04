@@ -70,7 +70,7 @@ fn main() {
     }
     let mut shown = 0;
     let mut t = 0.0;
-    while !run.done && t < secs && !run.hw.screen_text().contains("PRESS A KEY") {
+    while !run.done && t < secs && !run.hw.screen_text().contains("PRESS ANY KEY") {
         run.run(1.0);
         t += 1.0;
         let b = &run.hw.breaches;
@@ -85,7 +85,7 @@ fn main() {
         shown = b.len();
     }
     // A key for "press a key", as the user would.
-    if !run.done && run.hw.screen_text().contains("PRESS A KEY") {
+    if !run.done && run.hw.screen_text().contains("PRESS ANY KEY") {
         for x in &run.hw.breaches[shown..] {
             println!(
                 "{:7.2}s BREACH at {:#06x}: {}",

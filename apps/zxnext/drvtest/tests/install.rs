@@ -170,14 +170,14 @@ fn run(
         });
     }
     let mut t = 0.0;
-    while !run.done && t < secs && !run.hw.screen_text().contains("PRESS A KEY") {
+    while !run.done && t < secs && !run.hw.screen_text().contains("PRESS ANY KEY") {
         run.run(1.0);
         t += 1.0;
     }
     let screen = run.hw.screen_text();
     assert!(
-        screen.contains("PRESS A KEY"),
-        "no PRESS A KEY after {t}s:\n{screen}"
+        screen.contains("PRESS ANY KEY"),
+        "no PRESS ANY KEY after {t}s:\n{screen}"
     );
     let now = run.hw.now as u64;
     run.hw.keys.push(Key {
