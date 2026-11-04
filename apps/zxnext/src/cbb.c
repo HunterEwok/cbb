@@ -93,9 +93,9 @@ static void at(uint8_t row, uint8_t col)
     rom_char(col);
 }
 
-// The QR code's line, as wide as its wait; the install screen's from
-// PRESS.
-static const char qr_key[] = " SCAN, THEN PRESS ANY KEY ";
+// The QR code's line, as wide as its wait; the install screen's
+// from PRESS.
+static const char qr_key[] = "SCAN, THEN PRESS ANY KEY";
 
 // After a key, a clear screen in BASIC's colours and border (BORDCR,
 // ATTR_P), for what the QR code or the install screen showed.
@@ -485,8 +485,9 @@ static int qr(uint8_t size)
     // cbb next pair's codes are far under 168 modules.
     uint8_t scale = 168 / size, x, row, col, d, px, py, err;
     if (scale > 4) scale = 4;
+    // White on white until the network runs (net_pair).
     zx_border(INK_WHITE);
-    zx_cls(PAPER_WHITE | INK_BLACK);
+    zx_cls(PAPER_WHITE | INK_WHITE);
     for (row = 0; row < size; row++) {
         err = link_line(line, sizeof line, ANSWER_SECONDS);
         if (err) return link_fail(err);
@@ -1002,8 +1003,8 @@ static int net_stop(void);
 extern int far_pair_check(void);
 static const char pair_cmd[] = "(%s; " CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null; %s) &\n";
 static const char pair_pkill[] = PKILL_SERVICE;
-static const char qr_wait[] = "WAIT: STARTING THE NETWORK";
-static const char qr_after[] = "The app shows the Next once\nit has joined.\n";
+static const char qr_wait[] = "WAIT: THE NETWORK STARTS";
+static const char qr_after[] = "The app shows the Next\nonce it joins.\n";
 
 // Not static: far_net_pair() (far.asm) calls it.
 int net_pair(void)
@@ -1051,14 +1052,18 @@ int net_pair(void)
     link_prompt();
     quiet = 1;
     // The phone reaches the Pi through the network, which takes some
-    // seconds to start: a scan before that is refused.
-    at(21, 3);
+    // seconds to start: a scan before that would be refused, so the code
+    // stays white on white until it runs, under the line that says so
+    // (in ATTR_T, BASIC's colours).
+    at(21, 4);
     printf(qr_wait);
-    // An error stays as it is, over the code.
-    if ((err = net_start(0, 0))) return err;
+    // An error shows in black.
+    err = net_start(0, 0);
+    memset((uint8_t *)0x5800, PAPER_WHITE | INK_BLACK, 768);
+    if (err) return err;
     // Nothing else on the screen while the phone scans: the rest after a
     // key, on a clear screen in BASIC's colours.
-    at(21, 3);
+    at(21, 4);
     printf(qr_key);
     key_clear();
     printf(qr_after);
@@ -2199,7 +2204,7 @@ void screen_open(void)
 void screen_close(void)
 {
     at(NOW_ROW + 2, PANEL);
-    printf(qr_key + 12);
+    printf(qr_key + 11);
     key_clear();
     palette(1);
     screen_row = 0;
