@@ -423,13 +423,9 @@ func (s *Service) publish(nd *node.Node, rs ...group.Record) {
 	s.settleRecords(rs)
 }
 
-// recordDevice records a device this member admitted, if it is an admin.
-func (s *Service) recordDevice(dev group.DeviceID, name, role, os string, key group.KeyHash, sealKey []byte) {
-	s.recordDeviceAdmin(dev, name, role, os, key, sealKey, nil)
-}
-
-// recordDeviceAdmin is recordDevice for a device that is an admin with the
-// admin CA adminCA too, as a phone the root admitted; nil for none.
+// recordDeviceAdmin records a device this member admitted, if it is an
+// admin; adminCA is the device's admin CA when it is an admin too, as a
+// phone the root admitted, and nil for none.
 func (s *Service) recordDeviceAdmin(dev group.DeviceID, name, role, os string, key group.KeyHash, sealKey []byte, adminCA *x509.Certificate) {
 	s.mu.Lock()
 	id, nd := s.id, s.nd
