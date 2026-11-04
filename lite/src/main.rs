@@ -127,6 +127,7 @@ pub(crate) fn openwrt() -> bool {
     std::path::Path::new("/etc/openwrt_release").exists()
 }
 
+#[derive(Clone)]
 struct Global {
     state: PathBuf,
     socket: PathBuf,
@@ -268,36 +269,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         }
         i += 2;
     }
-    if identity::Identity::load(&g.state)?.is_some() {
-        return Err(Error::msg(format!(
-            "this device is already in a group, and a lite member admits no devices (use the phone app or \
-             a full member); to join another group, stop the service and remove {}",
-            g.state.join(identity::FILE_NAME).display()
-        )));
-    }
-    std::fs::create_dir_all(&g.state).context(format!(
-        "cannot create {0}; make it for the service's user first: \
-         sudo install -d -o cbb -g cbb -m 0700 {0}",
-        g.state.display()
-    ))?;
-    let mut joiner = pair::Joiner::new(&name)?;
-    // The key for sealed messages the service will offer in its hello goes
-    // with the info, so that a phone records it as it admits this member.
-    match sealkey::load(&g.state)
-        .and_then(|s| cbb_core::seal::public_key(&s).map_err(|e| e.context("the key for sealed messages")))
-    {
-        Ok(public) => joiner.seal = public,
-        Err(e) => eprintln!("cbb: the key for sealed commands: {e}; commands will come unsealed"),
-    }
-    let state = g.state.clone();
-    let save = move |id: &identity::Identity, rs: &[records::Record], ts: &[records::ClaimTime]| {
-        let mut set = records::new(&id.group_ca);
-        let _ = set.add_all(rs);
-        set.take_claim_times(ts);
-        records::Stored::save(&set, &state)?;
-        id.save(&state)?;
-        service::new_device_mode(&state)
-    };
+    let (joiner, save) = joiner(g, &name)?;
+    let save = &*save;
     let id = match code_addr {
         Some(a) => {
             print!("Pairing code: ");
@@ -307,7 +280,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             let code = pair::normalize_code(line.trim())?;
             let sock = TcpStream::connect_timeout(&resolve(&a)?, Duration::from_secs(10))
                 .context(format!("cannot connect to {a}"))?;
-            pair::join(&joiner, sock, &code, &save)?
+            pair::join(&joiner, sock, &code, save)?
         }
         None => {
             let ln = TcpListener::bind(("::", port))
@@ -349,7 +322,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                     eprintln!("{s}");
                 }
             };
-            pair::listen(&joiner, ln, (!addrs.is_empty()).then_some(addrs), &code, pair::LIFETIME, &shown, &save, &log)?
+            pair::listen(&joiner, ln, (!addrs.is_empty()).then_some(addrs), &code, pair::LIFETIME, &shown, save, &log)?
         }
     };
     wait_for_group(g);
@@ -364,6 +337,50 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// The joiner of a device in no group yet, and how it saves the group it
+/// joins.
+fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
+    if identity::Identity::load(&g.state)?.is_some() {
+        return Err(Error::msg(format!(
+            "this device is already in a group, and a lite member admits no devices (use the phone app or \
+             a full member); to join another group, stop the service and remove {}",
+            g.state.join(identity::FILE_NAME).display()
+        )));
+    }
+    std::fs::create_dir_all(&g.state).context(format!(
+        "cannot create {0}; make it for the service's user first: \
+         sudo install -d -o cbb -g cbb -m 0700 {0}",
+        g.state.display()
+    ))?;
+    let mut joiner = pair::Joiner::new(name)?;
+    // The key for sealed messages the service will offer in its hello goes
+    // with the info, so that a phone records it as it admits this member.
+    match sealkey::load(&g.state)
+        .and_then(|s| cbb_core::seal::public_key(&s).map_err(|e| e.context("the key for sealed messages")))
+    {
+        Ok(public) => joiner.seal = public,
+        Err(e) => eprintln!("cbb: the key for sealed commands: {e}; commands will come unsealed"),
+    }
+    let state = g.state.clone();
+    let save = move |id: &identity::Identity, rs: &[records::Record], ts: &[records::ClaimTime]| {
+        let mut set = records::new(&id.group_ca);
+        let _ = set.add_all(rs);
+        set.take_claim_times(ts);
+        records::Stored::save(&set, &state)?;
+        id.save(&state)?;
+        service::new_device_mode(&state)
+    };
+    Ok((joiner, Box::new(save)))
+}
+
+/// Joins with the code from cbb pair on a full member, through a
+/// connection to it: the Next's link joins this way through the ESP.
+pub(crate) fn join_with_code(g: &Global, sock: TcpStream, code: &str) -> Result<identity::Identity> {
+    let (joiner, save) = joiner(g, &host_name())?;
+    let code = pair::normalize_code(code)?;
+    pair::join(&joiner, sock, &code, &*save)
 }
 
 /// Waits until a running service has taken the group that join saved: it
@@ -473,7 +490,7 @@ fn hint(systemd: bool, systemctl: &str) -> String {
 }
 
 /// Sends one request to the service and returns its answer.
-fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
+pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
     let conn = if control::is_admin(&m.header.op) {
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {

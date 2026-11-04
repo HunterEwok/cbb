@@ -104,13 +104,62 @@ All notable changes to cbb are documented in this file. The format follows
   as a screen loads from tape), each file's state
   and progress bar on the right, the messages under them; and installs `CBB.DRV` itself through the driver API, as `.install` does;
   `.cbb net on` does the same after a reset, so `.install` is no longer needed. Not yet run
-  on a real Next. The logo and the usage text, `.cbb install` and `.cbb net` sit in pages of
-  the dot command's own, which NextZXOS allocates for it while it runs, each shown only
-  while it is needed, so its main 32K keeps about 12K free (`apps/zxnext/src/far.asm`).
-  Its printf and scanf carry only the conversions the code uses (`apps/zxnext/formats.sh`),
-  which leaves the stack about 1.7K instead of 0.5K, and `.cbb -d` ends with how much of the
-  stack was never used. It copies `CBB.DRV`'s bank through its own window at 0xE000 and no
-  longer through BASIC's at 0x6000, and it sets only its own bits of NextReg 0xA0.
+  on a real Next. The logo and the usage text with the install screen and SHA-256, the
+  install, `.cbb net`, and `.cbb paste`, `copy`, `text` and `pair` sit in three pages of the
+  dot command's own, which NextZXOS allocates for it while it runs; `make` fails when any
+  part keeps less than 1K free, or MAIN less than 3K for the stack and growth
+  (`apps/zxnext/budget.sh`, README.md, "Memory"), or when a function shares its address
+  with its own static data, which z88dk does in a page that holds code and data, and which
+  reset the Next as `.cbb install` started its download (`apps/zxnext/mapcheck.sh`).
+  Its printf and scanf carry only the conversions the code uses (`apps/zxnext/formats.sh`).
+  Its stack is just below 0xE000 and no longer at the top of memory, in the window the
+  pages show in; `.cbb -d` ends with how much of the stack was never used. It copies
+  `CBB.DRV`'s bank through its own window at 0xE000 and no longer through BASIC's at
+  0x6000, and it sets only its own bits of NextReg 0xA0. `.cbb install`'s messages stay in
+  rows 18 to 21 and scroll only there, and it reads a file from the first byte of its body
+  (a stray line end made every download one byte off). A site without the files is told at
+  once (`cbb.tools has no such file`) instead of after five tries, and SPACE while it
+  connects stops it instead of blaming the Wi-Fi. It runs at 28 MHz and puts BASIC's speed
+  back after: at 3.5 MHz the site's answers overflowed the UART and no download got
+  through. It stays under 64K (a CBB of exactly 64K reset a real Next), so paste, copy,
+  text and pair share the page of `.cbb net`. The Pi says it is ready for its cbb with
+  `printf 'CBBGO\r\n'`: after `stty raw` its `echo` ends the line without the CR that
+  `.cbb` waits for. The install screen's rows are CBB.DRV, SERVICE (fetching the Pi's cbb)
+  and TO PI (sending it), then the total. It fetches at 230400 baud instead of 115200
+  in ranges of 8K (about twice as fast; 460800 overflowed the UART on the played Next) and puts the ESP
+  back at 115200 after, and finds the ESP at any of its three speeds. It sends the Pi its cbb at
+  460800 baud (`stty` on the Pi for the copy, then back), at 115200 when the Pi's tty does not take
+  that speed or the copy comes damaged. `.cbb net on` finds a computer of the group by itself
+  (an mDNS question through the ESP, which the members answer to it alone), and `.cbb net on
+  HOST` names one: the port 8764 and `-serve 8764:8764` are the defaults. `.cbb uninstall`
+  removes, after a Y, what `.cbb install` and `.cbb net` put anywhere: the network and
+  `CBB.DRV`, the Pi's cbb and its group, and the files in `/cbb`. `.cbb pair` always goes
+  through the ESP, with the default settings when there are none. The ESP stays in CIPMUX=1 with a
+  server after the network, which its firmware keeps until it restarts: finding a computer
+  asks on connection 4 in that mode, and `.cbb install` restarts the ESP (`AT+RST`) when it
+  refuses CIPMUX=0. `.cbb pair CODE` joins with the code of `cbb pair` on a computer
+  of the group, without the phone app: the link joins through the ESP (`cbb next link
+  -join`) to the computer whose pairing window is open. Finding a computer restarts the ESP
+  once when it refuses the question (a computer can keep a connection to its server after
+  `.cbb net off`), and `.cbb pair`, `paste`, `copy` and `text` stop a running network
+  themselves and start it again after. `.cbb install` stops a running network
+  itself and starts the network when it is done, and `.cbb update` starts it again when it ran
+  before. `.cbb pair` stops the Pi's service while `cbb next pair` waits on the member port the
+  phone reaches (a network started after the install had it there, and the phone got the
+  service's certificate), and `cbb next link` starts the service again whenever it stopped.
+  `.cbb pair` shows only the QR code and SCAN, THEN PRESS ANY KEY until a key, then clears
+  the screen for the rest. `.cbb leave` makes the Pi forget its group, so that `.cbb pair` joins again, the same group
+  or another one. `.cbb pair` says first when the Pi is in a group already, which `cbb next pair` refuses
+  out of sight, and `.cbb uninstall` tells how to erase `/cbb/CBB`, which NextZXOS keeps
+  while it runs.
+  `.cbb net off` restarts the ESP, so that NextZXOS's
+  `.http` finds it as it expects. Remote paste on the Next is on after `.cbb install`, Enter too (D-81), and the
+  install says so; `.cbb paste-receive on [-enter] | off` changes it, and `.cbb net on`
+  hands it to the service on the Pi (`cbb next link -paste`). `make test` runs the real `CBB` on a
+  played Next (`apps/zxnext/drvtest`: the Z80N, NextZXOS's calls, the ROM, the ESP with
+  cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
+  silent Pi, a Pi without the fast speed, finding a computer, uninstalling, a closed connection, SPACE, the usage and a paste, each failed on what would
+  go wrong on a real Next (README.md, "Testing on a played Next").
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own

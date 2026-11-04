@@ -55,6 +55,11 @@ void link_open(void)
     set_speed(speed);
 }
 
+void link_speed(uint32_t speed)
+{
+    set_speed(speed);
+}
+
 void link_open_esp(uint32_t speed)
 {
     z80_outp(PORT_SELECT, LINK_ESP);
@@ -108,15 +113,28 @@ void link_send_str(const char *s)
     while (*s) link_send(*s++);
 }
 
+uint8_t link_stopped;
+
 uint8_t link_recv(uint8_t *c, uint16_t seconds)
 {
-    uint32_t rounds = seconds * ROUNDS_PER_SECOND;
+    uint32_t rounds;
+    // A byte that is there goes at once, through the ports themselves:
+    // .cbb install reads 23K a second (230400 baud), and the UART keeps
+    // only 512 bytes.
+    if (IO_UART_STATUS & STATUS_RX_AVAIL) {
+        *c = IO_UART_RX;
+        return LINK_OK;
+    }
+    rounds = seconds * ROUNDS_PER_SECOND;
     for (;;) {
         if (z80_inp(PORT_TX_STATUS) & STATUS_RX_AVAIL) {
             *c = z80_inp(PORT_RX_BAUD);
             return LINK_OK;
         }
-        if (in_key_pressed(IN_KEY_SCANCODE_SPACE)) return LINK_BREAK;
+        if (in_key_pressed(IN_KEY_SCANCODE_SPACE)) {
+            link_stopped = 1;
+            return LINK_BREAK;
+        }
         if (rounds-- == 0) return LINK_TIMEOUT;
     }
 }
@@ -144,15 +162,16 @@ static void drain(void)
 }
 
 // Waits for "SUP>" within seconds.
+static const char prompt[] = "SUP>";
+
 static uint8_t wait_prompt(uint16_t seconds)
 {
-    static const char want[] = "SUP>";
     uint8_t got = 0, c;
     while (link_recv(&c, seconds) == LINK_OK) {
-        if (c == want[got]) {
+        if (c == prompt[got]) {
             if (++got == 4) return 1;
         } else {
-            got = c == want[0];
+            got = c == prompt[0];
         }
     }
     return 0;
