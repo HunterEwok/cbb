@@ -16,7 +16,10 @@
 #include <string.h>
 
 #include "frame.h"
+// The logo lives in the far data page (far.asm): far_byte() reads it.
+#pragma constseg PAGE_15
 #include "logo.h"
+#pragma constseg rodata_compiler
 #include "link.h"
 
 #define VERSION "0.5.0"
@@ -32,9 +35,11 @@ static uint8_t text[MAX_TEXT];
 static char line[200];
 static uint8_t debug;
 
-static void usage(void)
-{
-    printf("CBB " VERSION "\n\n"
+extern uint8_t far_byte(const uint8_t *p) __z88dk_fastcall;
+
+// The usage, in the far data page.
+#pragma constseg PAGE_15
+static const char usage_text[] = "CBB " VERSION "\n\n"
            ".cbb paste [FILE]  show the group's\n"
            "                   text, or save it\n"
            ".cbb copy FILE     send a file\n"
@@ -58,7 +63,14 @@ static void usage(void)
            "                   the Pi's cbb too\n"
            ".cbb update        the same: newer\n"
            "                   files only\n"
-           ".cbb -d ...        show error details\n");
+           ".cbb -d ...        show error details\n";
+#pragma constseg rodata_compiler
+
+static void usage(void)
+{
+    const char *p = usage_text;
+    char c;
+    while ((c = far_byte((const uint8_t *)p++))) putchar(c);
 }
 
 // While .cbb install's screen shows, messages go to its lower rows
@@ -553,6 +565,17 @@ static uint8_t esp_speed(uint32_t speed)
     return esp_answers(speed);
 }
 
+// The net command's words, which run() leaves in MAIN for net_cmd().
+static int net_argc;
+static char **net_argv;
+
+// .cbb net and .cbb pair through the ESP, from here to net_cmd(), are an
+// overlay of their own, as .cbb install is (far.asm, far_net()).
+#pragma codeseg PAGE_17
+#pragma constseg PAGE_17
+#pragma bssseg PAGE_17
+#pragma dataseg PAGE_17
+
 // net_pair starts the network under its QR code, without a word.
 static uint8_t quiet;
 
@@ -649,7 +672,8 @@ static uint8_t esp_address(char *ip, uint8_t max)
 // network's settings): cbb next pair waits on the Pi for the
 // phone, at the ESP's address and the port -serve leads to, while the
 // network runs under the QR code the phone scans.
-static int net_pair(void)
+// Not static: far_net_pair() (far.asm) calls it.
+int net_pair(void)
 {
     char ip[40], cmd[160], *serve, *colon = 0, *end;
     uint32_t len, crc;
@@ -743,11 +767,31 @@ static int net(int argc, char **argv)
     usage();
     return 1;
 }
+#pragma bssseg bss_compiler
+
+// Not static: far_net() (far.asm) calls it.
+int net_cmd(void)
+{
+    return net(net_argc, net_argv);
+}
+
+#pragma codeseg code_compiler
+#pragma constseg rodata_compiler
+#pragma dataseg data_compiler
 
 // .cbb install: the files from cbb.tools, through the ESP (docs/roadmap.md,
 // "Installing"). NextZXOS's .http has no TLS and neither has the ESP, so
 // they come over plain HTTP; each is checked against the list before it
 // replaces the old one, which guards against a damaged download.
+// All of .cbb install, from here to install(), is an overlay: its code,
+// constants and variables are in a page of its own (far.asm), which shows
+// at 0xE000 only while far_install() runs it. It uses MAIN freely, which
+// therefore has to end below 0xE000 (the Makefile checks).
+#pragma codeseg PAGE_13
+#pragma constseg PAGE_13
+#pragma bssseg PAGE_13
+#pragma dataseg PAGE_13
+
 #define SITE "cbb.tools"
 #define SITE_DIR "/zxnext/"
 #define SITE_LIST "LIST"
@@ -886,15 +930,13 @@ static void colour(uint8_t ink)
 static void logo_unpack(void)
 {
     const uint8_t *p = logo_packed;
-    uint8_t *out = text, n;
+    uint8_t *out = text, n, k;
     while (out < text + LOGO_BYTES) {
-        n = *p++;
+        n = far_byte(p++);
         if (n < 128) {
-            memcpy(out, p, n + 1);
-            p += n + 1;
-            out += n + 1;
+            for (k = 0; k <= n; k++) *out++ = far_byte(p++);
         } else {
-            memset(out, *p++, 257 - n);
+            memset(out, far_byte(p++), 257 - n);
             out += 257 - n;
         }
     }
@@ -949,8 +991,8 @@ static const uint8_t palette_new[PALETTE_COLOURS][3] = {
     {9, 0x73, 0},  // bright blue ink: the title, steel blue 3,4,6
 };
 static uint8_t palette_old[PALETTE_COLOURS][2];
-#pragma constseg rodata_compiler
-#pragma bssseg bss_compiler
+#pragma constseg PAGE_13
+#pragma bssseg PAGE_13
 
 // Puts the logo's colours in the ULA palette that shows (restore 0), or
 // the old ones back (restore 1).
@@ -972,7 +1014,7 @@ static void palette(uint8_t restore)
     ZXN_WRITE_REG(0x43, control);
 }
 
-#pragma codeseg code_compiler
+#pragma codeseg PAGE_13
 
 // The border's colour before the screen, which the ROM keeps in BORDCR.
 static uint8_t border_old;
@@ -1395,7 +1437,8 @@ static int install_files(void)
     return 0;
 }
 
-static int install(void)
+// Not static: far_install() (far.asm) calls it.
+int install(void)
 {
     int err;
     if (net_on()) return fail(net_runs, 0);
@@ -1404,6 +1447,16 @@ static int install(void)
     screen_close();
     return err;
 }
+
+#pragma codeseg code_compiler
+#pragma constseg rodata_compiler
+#pragma bssseg bss_compiler
+#pragma dataseg data_compiler
+
+// The overlays' entry points, each run in its page (far.asm).
+extern int far_install(void);
+extern int far_net(void);
+extern int far_net_pair(void);
 
 static int run(int argc, char **argv)
 {
@@ -1427,9 +1480,13 @@ static int run(int argc, char **argv)
     if (strcmp(argv[i], "copy") == 0 && argc - i == 2) return copy_file(argv[i + 1]);
     if (strcmp(argv[i], "text") == 0 && argc - i >= 2) return copy_words(argc - i - 1, argv + i + 1);
     // With the network's settings, the Pi has no network but the ESP's.
-    if (strcmp(argv[i], "pair") == 0 && argc - i == 1) return net_load() ? pair() : net_pair();
-    if (strcmp(argv[i], "net") == 0) return net(argc - i - 1, argv + i + 1);
-    if ((strcmp(argv[i], "install") == 0 || strcmp(argv[i], "update") == 0) && argc - i == 1) return install();
+    if (strcmp(argv[i], "pair") == 0 && argc - i == 1) return net_load() ? pair() : far_net_pair();
+    if (strcmp(argv[i], "net") == 0) {
+        net_argc = argc - i - 1;
+        net_argv = argv + i + 1;
+        return far_net();
+    }
+    if ((strcmp(argv[i], "install") == 0 || strcmp(argv[i], "update") == 0) && argc - i == 1) return far_install();
     usage();
     return 1;
 }
