@@ -1,6 +1,66 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Its members refuse it. Leave the group here to join this group again or another one.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Участники группы его не принимают. Выйдите здесь из группы, чтобы снова войти в эту группу или в другую."
+          }
+        }
+      }
+    },
+    "Leave the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выйти из группы"
+          }
+        }
+      }
+    },
+    "Leave the group?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выйти из группы?"
+          }
+        }
+      }
+    },
+    "Leave": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выйти"
+          }
+        }
+      }
+    },
+    "This Mac's keys and the group's files here are deleted, and remote paste and the quick actions are turned off; the rest of the settings stay. It can then join this group or another one. The group lists it until an admin removes it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи этого Mac и файлы группы на нём удаляются, удалённая вставка и быстрые действия выключаются, остальные настройки остаются. Потом он может войти в эту группу или в другую. В списке группы он остаётся, пока его не удалит админ."
+          }
+        }
+      }
+    },
+    "Left the group. This Mac can join a group again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы вышли из группы. Этот Mac может снова войти в группу."
+          }
+        }
+      }
+    },
     "Terms of the project's servers": {
       "localizations": {
         "ru": {
@@ -2007,16 +2067,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Этот Mac удалён из группы"
-          }
-        }
-      }
-    },
-    "Its members refuse it. To join a group again, remove CBB with its keys (sudo sh /usr/local/share/cbb/uninstall.sh --purge), install it again and join.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Участники группы его не принимают. Чтобы снова войти в группу, удалите CBB вместе с ключами (sudo sh /usr/local/share/cbb/uninstall.sh --purge), установите заново и войдите."
           }
         }
       }

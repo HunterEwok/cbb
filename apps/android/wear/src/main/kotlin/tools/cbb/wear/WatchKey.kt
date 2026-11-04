@@ -84,6 +84,16 @@ object WatchKey {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(ADMISSION, null)
             ?.let { WatchState.Admission.decode(Base64.getDecoder().decode(it)) }
 
+    /** Forgets the admin key, the pending one and the admission, as when the phone left the group the root certified the key in. */
+    fun forget(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val ks = keyStore()
+        for (d in listOfNotNull(prefs.getString(ADMIN, null), prefs.getString(PENDING, null))) {
+            if (ks.containsAlias(alias(d))) ks.deleteEntry(alias(d))
+        }
+        prefs.edit().remove(ADMIN).remove(PENDING).remove(ADMISSION).apply()
+    }
+
     /** The certified key, for signing; null without one. */
     fun adminKey(context: Context): PrivateKey? {
         val device = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(ADMIN, null) ?: return null

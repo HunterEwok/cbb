@@ -377,6 +377,7 @@ private fun Summary(model: AppModel) {
  */
 @Composable
 private fun Alerts(model: AppModel) {
+    RemovedCard(model)
     Handed(model)
     if (model.alerts.isEmpty()) return
     val palette = LocalPalette.current
