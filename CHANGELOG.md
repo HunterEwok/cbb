@@ -95,6 +95,8 @@ All notable changes to cbb are documented in this file. The format follows
   crashed `.cbb install` as it started; `.cbb -d` ends with how much of the stack was never
   used. It copies `CBB.DRV`'s bank through its own window at 0xE000 and no
   longer through BASIC's at 0x6000, and it sets only its own bits of NextReg 0xA0.
+  `.cbb install`'s messages stay in rows 18 to 21 and scroll only there: a message on
+  row 22, out of BASIC's screen, reset the Next after a failed download.
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own

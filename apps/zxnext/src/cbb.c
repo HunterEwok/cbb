@@ -77,7 +77,10 @@ static void usage(void)
 }
 
 // While .cbb install's screen shows, messages go to its lower rows
-// (screen_row), one under the other, never scrolling the logo away.
+// (screen_row), one under the other, never scrolling the logo away: rows
+// MESSAGE_ROW to 21, the ROM's upper screen ending at 21 (AT 22 stops
+// the program with "Out of screen"), the oldest scrolled off when full.
+#define MESSAGE_ROW 18
 static uint8_t screen_row;
 
 static void at(uint8_t row, uint8_t col)
@@ -91,10 +94,29 @@ static void at(uint8_t row, uint8_t col)
 // characters.
 static void message_at(uint16_t len)
 {
+    uint8_t lines = (uint8_t)(len / 32 + 1), k;
+    // The rows' pixels, in the screen's bottom third (rows 16-23): each
+    // of their 8 lines 256 bytes on; one row up, the last cleared. The
+    // rows' attributes are all the same.
+    uint8_t *p;
     if (!screen_row) return;
-    if (screen_row > 22) screen_row = 22;
+    while (screen_row + lines > 22 && screen_row > MESSAGE_ROW) {
+        p = (uint8_t *)0x5000 + (MESSAGE_ROW - 16) * 32;
+        for (k = 0; k < 8; k++, p += 256) {
+            memmove(p, p + 32, (21 - MESSAGE_ROW) * 32);
+            memset(p + (21 - MESSAGE_ROW) * 32, 0, 32);
+        }
+        screen_row--;
+    }
     at(screen_row, 0);
-    screen_row += (uint8_t)(len / 32 + 1);
+    screen_row += lines;
+}
+
+// Ends a message's line; on the screen the next one is placed with AT, as
+// a newline on row 21 would scroll the whole screen.
+static void end_line(void)
+{
+    if (!screen_row) putchar('\n');
 }
 
 // Prints a text, in capitals while .cbb install's screen shows.
@@ -109,12 +131,13 @@ static int fail(const char *msg, const char *detail)
     message_at(strlen(msg) + 5);
     put_text("cbb: ");
     put_text(msg);
-    putchar('\n');
+    end_line();
     if (debug && detail && *detail) {
         message_at(strlen(detail) + 4);
         put_text("  (");
         put_text(detail);
-        put_text(")\n");
+        putchar(')');
+        end_line();
     }
     return 1;
 }
@@ -137,7 +160,7 @@ static void say(const char *msg)
 {
     message_at(strlen(msg));
     put_text(msg);
-    putchar('\n');
+    end_line();
 }
 
 static int link_fail(uint8_t err)
@@ -930,12 +953,12 @@ static void http_close(void)
 //   rows 10-11                all of it, its bar empty in the four stripes,
 //                             filled in the colour of the quarter reached
 //   rows 13-14                the file under way: kilobytes, speed
-//   rows 19-23                messages
+//   row 15, from column 15    SPACE STOPS, at the end PRESS A KEY
+//   rows 18-21                messages
 #define PANEL 15
 #define FILE_ROW 4
 #define TOTAL_ROW 10
 #define NOW_ROW 13
-#define MESSAGE_ROW 19
 #define BAR_CELLS 12
 
 // The ROM's colour codes, for what .cbb prints meanwhile.
@@ -1050,6 +1073,8 @@ static void screen_open(void)
     logo_unpack();
     logo_draw();
     screen_row = MESSAGE_ROW;
+    // No "scroll?", should anything scroll still.
+    SCR_CT = 255;
     // The name centred over the bars, 17 columns.
     colour(INK_BLUE);
     at(0, PANEL + 3);
@@ -1069,7 +1094,8 @@ static void screen_open(void)
 // show in the wrong ones.
 static void screen_close(void)
 {
-    say("Press a key.");
+    at(NOW_ROW + 2, PANEL);
+    printf("PRESS A KEY");
     in_wait_nokey();
     in_wait_key();
     in_wait_nokey();
@@ -1125,7 +1151,6 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
     uint32_t rate = secs ? got / secs : 0;
     uint16_t left = rate ? (uint16_t)((size - got) / rate) : 0;
     char speed[8];
-    SCR_CT = 255;
     bar(FILE_ROW + 2 * row + 1, percent(got, size), bar_ink[row & 3]);
     bar(TOTAL_ROW + 1, percent(total_done + got, total_size), 0xFF);
     at(NOW_ROW, PANEL);
