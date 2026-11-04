@@ -26,7 +26,8 @@ tools. Test them on the machine before relying on them.
                       computer of the group it finds (.cbb net on 192.168.0.10 names one)
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
-.cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below)
+.cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below),
+                      then start the network (a running one stops for it)
 .cbb update           the same, for the files the site has newer
 .cbb paste-receive on [-enter] | off
                       whether the group's admins may type on the Next from the phone app;

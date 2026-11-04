@@ -162,6 +162,8 @@ fn installs_then_finds_all_current() {
     // Remote paste is on after the first install, Enter too, and it says so.
     assert!(o.has("REMOTE PASTE ON"), "{}", o.screen);
     assert_eq!(std::fs::read_to_string(card.join("cbb/PASTE.CFG")).unwrap(), "on-enter");
+    // The network starts after the install: it looks for a computer.
+    assert!(o.esp().log.iter().any(|l| l.contains("AT+CIPSTART=4")), "{:?}", o.esp().log);
 
     // Again, with the Pi's cbb in place: nothing to fetch or send.
     let mut pi = Pi::new();

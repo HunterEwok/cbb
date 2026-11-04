@@ -152,7 +152,6 @@ static int fail(const char *msg, const char *detail)
 static const char no_prompt[] = "no SUP> prompt";
 static const char not_start[] = "cbb next link did not start on the Pi";
 static const char too_long[] = "the text is too long";
-static const char net_runs[] = "the network runs; stop it first with .cbb net off";
 
 // The Pi's shell did not answer.
 static int pi_silent(void)
@@ -2122,13 +2121,30 @@ extern int far_uninstall(void);
 extern int far_paste_receive(void);
 
 // .cbb install and .cbb update: the screen in its page, the install in its.
+// .cbb net on or off, from here: the network's code is in its page.
+static char net_on_word[] = "on", net_off_word[] = "off";
+static char *net_word[1];
+
+static int net_do(char *word)
+{
+    net_word[0] = word;
+    far_argc = 1;
+    far_argv = net_word;
+    return far_net();
+}
+
+// The network stops for the install, which needs the ESP and the Pi's
+// shell, and runs after it: after an install always, after an update when
+// it ran before.
 static int install(void)
 {
     int err;
-    if (net_on()) return fail(net_runs, 0);
+    uint8_t was = net_on();
+    if (was && net_do(net_off_word)) return 1;
     far_screen_open();
     err = far_install();
     far_screen_close();
+    if (was || (!err && !install_update)) err |= net_do(net_on_word);
     return err;
 }
 
