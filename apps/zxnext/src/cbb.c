@@ -93,8 +93,9 @@ static void at(uint8_t row, uint8_t col)
     rom_char(col);
 }
 
-// The QR code's line; the install screen's from PRESS.
-static const char qr_key[] = "SCAN, THEN PRESS ANY KEY";
+// The QR code's line, as wide as its wait; the install screen's from
+// PRESS.
+static const char qr_key[] = " SCAN, THEN PRESS ANY KEY ";
 
 // After a key, a clear screen in BASIC's colours and border (BORDCR,
 // ATTR_P), for what the QR code or the install screen showed.
@@ -481,9 +482,9 @@ static void plot(uint8_t x, uint8_t y)
 static int qr(uint8_t size)
 {
     // From the top, row 21 left for the key under it.
+    // cbb next pair's codes are far under 168 modules.
     uint8_t scale = 168 / size, x, row, col, d, px, py, err;
     if (scale > 4) scale = 4;
-    if (scale == 0) return fail("the QR code is too large for the screen", 0);
     zx_border(INK_WHITE);
     zx_cls(PAPER_WHITE | INK_BLACK);
     for (row = 0; row < size; row++) {
@@ -1001,6 +1002,7 @@ static int net_stop(void);
 extern int far_pair_check(void);
 static const char pair_cmd[] = "(%s; " CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null; %s) &\n";
 static const char pair_pkill[] = PKILL_SERVICE;
+static const char qr_wait[] = "WAIT: STARTING THE NETWORK";
 static const char qr_after[] = "The app shows the Next once\nit has joined.\n";
 
 // Not static: far_net_pair() (far.asm) calls it.
@@ -1048,11 +1050,15 @@ int net_pair(void)
     if (qr((uint8_t)len)) return 1;
     link_prompt();
     quiet = 1;
+    // The phone reaches the Pi through the network, which takes some
+    // seconds to start: a scan before that is refused.
+    at(21, 3);
+    printf(qr_wait);
     // An error stays as it is, over the code.
     if ((err = net_start(0, 0))) return err;
     // Nothing else on the screen while the phone scans: the rest after a
     // key, on a clear screen in BASIC's colours.
-    at(21, 4);
+    at(21, 3);
     printf(qr_key);
     key_clear();
     printf(qr_after);
@@ -2193,7 +2199,7 @@ void screen_open(void)
 void screen_close(void)
 {
     at(NOW_ROW + 2, PANEL);
-    printf(qr_key + 11);
+    printf(qr_key + 12);
     key_clear();
     palette(1);
     screen_row = 0;
