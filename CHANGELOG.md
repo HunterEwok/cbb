@@ -60,8 +60,9 @@ All notable changes to cbb are documented in this file. The format follows
   as a screen loads from tape), each file's state
   and progress bar on the right, the messages under them; and installs `CBB.DRV` itself through the driver API, as `.install` does;
   `.cbb net on` does the same after a reset, so `.install` is no longer needed. Not yet run
-  on a real Next. The logo and the usage text sit in a page of the dot command's own,
-  which NextZXOS allocates for it while it runs, so its main 32K keeps about 2.4K free.
+  on a real Next. The logo and the usage text, `.cbb install` and `.cbb net` sit in pages of
+  the dot command's own, which NextZXOS allocates for it while it runs, each shown only
+  while it is needed, so its main 32K keeps about 12K free (`apps/zxnext/src/far.asm`).
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own
