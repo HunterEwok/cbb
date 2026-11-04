@@ -47,7 +47,8 @@ static void set_speed(uint32_t speed)
 void link_open(void)
 {
     uint32_t speed = 115200UL;
-    ZXN_NEXTREG(NR_PI_PERIPHERALS, 0x30); // the UART on the Pi's GPIO 14 and 15
+    // The UART on the Pi's GPIO 14 and 15; the register's other bits stay.
+    ZXN_WRITE_REG(NR_PI_PERIPHERALS, nextreg(NR_PI_PERIPHERALS) | 0x30);
     z80_outp(PORT_SELECT, LINK_PI);
     // .pisend -q stores 2 for 2 Mbit/s and 8 for 115200 [check on the Next].
     if (nextreg(NR_USER) == 2) speed = 2000000UL;

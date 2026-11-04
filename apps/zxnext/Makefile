@@ -24,10 +24,15 @@ build/pins.h: pins.sh build/CBB.DRV $(PI_CBB)
 	sh pins.sh build/CBB.DRV $(PI_CBB) >$@.new
 	mv $@.new $@
 
-build/CBB: $(SRC) src/far.asm src/logo.h src/frame.h src/link.h src/sha256.h build/pins.h
+# printf and scanf with only the conversions the code uses (formats.sh).
+build/formats: formats.sh $(SRC)
 	mkdir -p build
-	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src -I. \
-		$(addprefix ../,$(SRC)) ../src/far.asm -o cbb -create-app
+	sh formats.sh $(SRC) >$@.new
+	mv $@.new $@
+
+build/CBB: $(SRC) src/far.asm src/stack.asm src/logo.h src/frame.h src/link.h src/sha256.h build/pins.h build/formats
+	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src -I. $$(cat formats) \
+		$(addprefix ../,$(SRC)) ../src/far.asm ../src/stack.asm -o cbb -create-app
 	@# MAIN ends below 0xE000, where the overlays show (src/far.asm).
 	@test $$(wc -c < build/cbb_MAIN.bin) -le 24576 || \
 		{ echo "CBB: MAIN reaches 0xE000, where the overlays show (src/far.asm)"; mv build/CBB build/CBB.bad; exit 1; }

@@ -78,6 +78,10 @@ All notable changes to cbb are documented in this file. The format follows
   on a real Next. The logo and the usage text, `.cbb install` and `.cbb net` sit in pages of
   the dot command's own, which NextZXOS allocates for it while it runs, each shown only
   while it is needed, so its main 32K keeps about 12K free (`apps/zxnext/src/far.asm`).
+  Its printf and scanf carry only the conversions the code uses (`apps/zxnext/formats.sh`),
+  which leaves the stack about 1.7K instead of 0.5K, and `.cbb -d` ends with how much of the
+  stack was never used. It copies `CBB.DRV`'s bank through its own window at 0xE000 and no
+  longer through BASIC's at 0x6000, and it sets only its own bits of NextReg 0xA0.
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own
