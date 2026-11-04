@@ -176,6 +176,22 @@ mod tests {
         assert_eq!(seal(body, &[1, 2, 3])["error"]["name"], "signed");
     }
 
+    /// A hub command's order to stop being a hub carries nothing else.
+    #[test]
+    fn hub_stop_order() {
+        let body = |hub: &str| {
+            format!(
+                r#"{{"by":"00000000000000000000000000000001","expires_ms":31000,"group":"g","hub":{hub},"id":"0123456789abcdef0123456789abcdef","time_ms":1000,"to":"00000000000000000000000000000002","type":"hub","v":1}}"#
+            )
+        };
+        assert!(crate::command::Command::parse(body(r#"{"stop":true}"#).as_bytes()).is_ok());
+        assert!(
+            crate::command::Command::parse(body(r#"{"endpoints":["203.0.113.7:8764"],"stop":true}"#).as_bytes())
+                .is_err()
+        );
+        assert!(crate::command::Command::parse(body(r#"{"stop":false}"#).as_bytes()).is_err());
+    }
+
     /// `seal_public` gives the public key of a secret, the one the Go
     /// vectors carry, and refuses a secret of the wrong size.
     #[test]

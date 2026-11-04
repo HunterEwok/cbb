@@ -190,8 +190,10 @@ const (
 // without a preshared key, whether it serves its clients now, and the
 // clients it keeps, itself among them, with their keys, so that each hub
 // of the group can take every client (docs/protocol.md, section 11,
-// "Several hubs").
+// "Several hubs"). Stopped, alone, tells that the sender is no hub any
+// more, so that the receiver forgets its offer ("Stopping a hub").
 type HubShare struct {
+	Stopped bool              `json:"stopped,omitempty"`
 	Serving bool              `json:"serving,omitempty"`
 	Offer   *TunnelOffer      `json:"offer,omitempty"`
 	Clients []group.HubClient `json:"clients,omitempty"`
