@@ -1935,9 +1935,9 @@ static int install_files(uint8_t update)
             http_close();
             link_use(LINK_PI);
             say(dot ? "A newer CBB is out. Fetch it as at the start: CD \"C:/DOT\", .http -h " SITE
-                      " -u /zxnext -f CBB, then .cbb install."
+                      " -u /zxnext -f CBB, then .cbb update."
                     : "A newer CBB is out. Fetch it as at the start: CD \"/cbb\", .http -h " SITE
-                      " -u /zxnext -f CBB, then ../CBB install.");
+                      " -u /zxnext -f CBB, then ../CBB update.");
             return 1;
         }
     }
