@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Updates on networks that block GitHub and the mirror: a device that syncs away from home
+  over VLESS reaches `dl.cbb.tools` inside VLESS, through its hub's forwarder, which lets
+  registered groups reach only the mirror on its own server (`cbb forward -vless-mirror`);
+  when no update server answers, `cbb update` takes the signed release its group passed to
+  the service, and the archive from the members, checking both as it checks a download.
 - The website has the terms of the project's forwarder and relay at `cbb.tools` (Terms of the
   public servers, in every language of the site, linked from every page's footer): open to
   every group, free, as is without a promise of uptime, shared by the budget, and where to

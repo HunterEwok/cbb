@@ -413,7 +413,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     after the launch: the GitHub Secure Open Source Fund, then FLOSS/fund once the project
     has users; NLnet's calls since 20 October 2026 do not fund code written with generative
     AI.
-- **55.** **Planned for 0.6 (the owner, 2026-11-03).** Updates through the group's ways
+- **55.** **In 0.6 (the owner, 2026-11-03); the mirror over VLESS and the release from the group are built; the hub fetching the archives of its group's other systems is still to do.** Updates through the group's ways
     out, for devices on networks that block GitHub or the mirror. GitHub stays reached
     directly, as now. Where the user switched AmneziaWG or VLESS on, the mirror on cbb.tools
     is reached only through them: over VLESS the forwarder lets a group's registered VLESS

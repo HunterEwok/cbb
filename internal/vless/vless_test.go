@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -213,7 +214,13 @@ func TestUserOfEachClient(t *testing.T) {
 // the group id.
 func behindWebServer(t *testing.T, path, id string) (*Server, tunnel.VLESS) {
 	t.Helper()
-	s, err := Listen(ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t)})
+	return behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t)}, id)
+}
+
+func behindWebServerWith(t *testing.T, cfg ServerConfig, id string) (*Server, tunnel.VLESS) {
+	t.Helper()
+	path := cfg.Path
+	s, err := Listen(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,5 +342,93 @@ func TestXHTTPHoldsLittleForStrangers(t *testing.T) {
 	}
 	if !refused {
 		t.Errorf("a session with no client took more than %d uploads", MaxBufferedPosts)
+	}
+}
+
+// tcpEcho answers every TCP connection with what it sends, in the
+// mirror's place.
+func tcpEcho(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				io.Copy(c, c)
+			}()
+		}
+	}()
+	return ln.Addr().String()
+}
+
+// throughMirror sends a line through the way to the mirror and tells
+// whether it came back.
+func throughMirror(t *testing.T, l tunnel.VLESS) bool {
+	t.Helper()
+	m, err := DialMirror(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	for range 10 {
+		c, err := net.DialTimeout("tcp", m.Addr().String(), time.Second)
+		if err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		c.SetDeadline(time.Now().Add(3 * time.Second))
+		c.Write([]byte("a line\n"))
+		b := make([]byte, 7)
+		_, err = io.ReadFull(c, b)
+		c.Close()
+		if err == nil {
+			return string(b) == "a line\n"
+		}
+	}
+	return false
+}
+
+// A registered group's client reaches the mirror over VLESS, and only
+// the mirror; without one a TCP stream goes nowhere.
+func TestMirrorThroughXHTTP(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := tunnel.NewVLESSID()
+	s, l := behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t), Mirror: tcpEcho(t)}, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.Ready(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if throughMirror(t, l) {
+		t.Fatal("a group that was not let in reached the mirror")
+	}
+	if err := s.AddUser(id); err != nil {
+		t.Fatal(err)
+	}
+	if !throughMirror(t, l) {
+		t.Fatal("nothing came back from the mirror")
+	}
+	if !roundTrip(t, l) {
+		t.Fatal("the packets stopped with a mirror")
+	}
+
+	path2, _ := tunnel.NewVLESSPath()
+	none, l2 := behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path2, To: echo(t)}, id)
+	if err := none.AddUser(id); err != nil {
+		t.Fatal(err)
+	}
+	if throughMirror(t, l2) {
+		t.Fatal("a TCP stream went somewhere without a mirror")
 	}
 }

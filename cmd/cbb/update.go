@@ -9,7 +9,10 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -200,6 +203,14 @@ func cmdUpdate(args []string, stdout, stderr io.Writer) int {
 		if sources, err = update.Sources(st.Mirror); err != nil {
 			return fail(stderr, err)
 		}
+		if st.Mirror == "" {
+			var closeWay func()
+			sources, closeWay = mirrorOverVLESS(sources, out)
+			defer closeWay()
+		}
+		// The group's members passed the service the newest signed
+		// release: the last source, for a device that reaches no server.
+		sources = append(sources, update.Group{Held: heldRelease})
 	}
 	progs, err := update.Programs(exe)
 	if err != nil {
@@ -287,6 +298,68 @@ func shareRelease(found update.Found) {
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(10 * time.Second))
 	c.Do(&control.Message{Header: control.Header{Op: control.OpRelease}, Payload: data})
+}
+
+// mirrorOverVLESS replaces the mirror on dl.cbb.tools with the way to it
+// over VLESS when sync away from home goes over VLESS: the forwarder on
+// the mirror's server lets the group's clients reach it, and the mirror is
+// then never asked directly (docs/protocol.md, section 16, "Where the
+// files are"). GitHub stays asked directly. It returns what stops the way.
+func mirrorOverVLESS(sources []update.Source, log io.Writer) ([]update.Source, func()) {
+	none := func() {}
+	c, err := control.DialFor(control.OpUpdateWay)
+	if err != nil {
+		return sources, none
+	}
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpUpdateWay}})
+	c.Close()
+	if err != nil || len(m.Payload) == 0 {
+		return sources, none
+	}
+	var v tunnel.VLESS
+	if err := json.Unmarshal(m.Payload, &v); err != nil {
+		return sources, none
+	}
+	way, err := vless.DialMirror(v)
+	if err != nil {
+		fmt.Fprintf(log, "The way to the mirror over VLESS could not start: %v\n", err)
+		return sources, none
+	}
+	addr := way.Addr().String()
+	through := update.MirrorThrough(func(ctx context.Context) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "tcp", addr)
+	})
+	out := make([]update.Source, 0, len(sources))
+	for _, src := range sources {
+		if src.String() == update.Mirror {
+			src = through
+		}
+		out = append(out, src)
+	}
+	return out, func() { way.Close() }
+}
+
+// heldRelease asks the service for the signed release it holds.
+func heldRelease(ctx context.Context) (keys, channel, rel release.File, err error) {
+	c, err := control.DialFor(control.OpReleaseHeld)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	stop := context.AfterFunc(ctx, func() { c.SetDeadline(time.Now()) })
+	defer stop()
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpReleaseHeld}})
+	if err != nil {
+		return
+	}
+	var r control.Release
+	if err = json.Unmarshal(m.Payload, &r); err != nil {
+		return
+	}
+	return r.Keys, r.Channel, r.Release, nil
 }
 
 // groupArchive asks the service for the archive a, which it holds or

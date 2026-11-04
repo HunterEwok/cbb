@@ -199,6 +199,11 @@ type VLESSConfig struct {
 	Site string
 	Dest string
 	Key  [32]byte // the REALITY key, X25519
+	// Mirror, if set, is the TCP address, host:port, of the mirror of the
+	// releases on this server, which the clients of registered groups
+	// reach over VLESS for their updates, and nothing else (docs/protocol.md,
+	// section 13, "VLESS").
+	Mirror string
 }
 
 // XHTTPConfig is the web server in front of the forwarder's XHTTP: it ends
@@ -363,7 +368,7 @@ func Listen(cfg Config) (*Forwarder, error) {
 		if to.Addr().IsUnspecified() {
 			to = netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), to.Port())
 		}
-		sc.To = to
+		sc.To, sc.Mirror = to, v.Mirror
 		if f.vless, err = vless.Listen(sc); err != nil {
 			udp.Close()
 			tcp.Close()

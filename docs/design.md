@@ -1978,6 +1978,12 @@ docs/protocol.md, section 16.
   trusted.
 - Members pass the signed manifest and the archives to each other inside the group, so about
   one device per group asks the internet; each still checks the signatures itself.
+- A device that syncs away from home over VLESS reaches the mirror only inside VLESS, through
+  its hub's forwarder, which lets a registered group's VLESS user ID reach the mirror on its
+  own server and nothing else, so the server gives no way to the internet. When neither
+  GitHub nor the mirror answers, `cbb update` takes the signed release the group passed to
+  its service, and the archive from the members, as with AmneziaWG, whose devices reach the
+  internet through no server of the project.
 - An update check tells the server the device's address, its system and its version. It is
   at most once a day, sends no group data and works with sync away from home off. The
   documentation says so, and the check can be turned off.

@@ -202,6 +202,28 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			return
 		}
 		reply(c, control.Header{Done: true}, nil)
+	case control.OpReleaseHeld:
+		h := s.heldRelease()
+		if h == nil {
+			fail(c, errors.New("this device holds no signed release"))
+			return
+		}
+		data, err := json.Marshal(h.set)
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Done: true}, data)
+	case control.OpUpdateWay:
+		var data []byte
+		if v := s.updateVLESS(); v != nil {
+			var err error
+			if data, err = json.Marshal(v); err != nil {
+				fail(c, err)
+				return
+			}
+		}
+		reply(c, control.Header{Done: true}, data)
 	case control.OpReleaseFile:
 		if err := s.receiveReleaseFile(r, m); err != nil {
 			fail(c, err)

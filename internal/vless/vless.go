@@ -75,6 +75,11 @@ type ServerConfig struct {
 	Key        [32]byte // the REALITY private key, X25519
 	// To is the forwarder's own UDP port, where every packet goes.
 	To netip.AddrPort
+	// Mirror, if set, is the TCP address, host:port, of the mirror of the
+	// releases on the forwarder's own server: a client's TCP streams go
+	// there and nowhere else (docs/protocol.md, section 13, "VLESS").
+	// Without it a TCP stream goes nowhere.
+	Mirror string
 }
 
 // ShortID returns the REALITY short ID of the private key: it needs no
@@ -159,9 +164,9 @@ func Listen(cfg ServerConfig) (*Server, error) {
 		})
 	}
 	// Whatever a client asks for, its packets go to the forwarder's UDP
-	// port and nowhere else, and no TCP stream, which would reach the
-	// forwarder's registrations (toForwarder).
-	out := &toForwarder{to: cfg.To}
+	// port and nowhere else, and a TCP stream only to the mirror, never to
+	// the forwarder's registrations (toForwarder).
+	out := &toForwarder{to: cfg.To, mirror: cfg.Mirror}
 	inst, err := start(inboundHandler(inboundTag, listen, stream, &vlessin.Config{Decryption: "none"}), nil)
 	if err != nil {
 		return nil, err
@@ -276,6 +281,63 @@ func Dial(l tunnel.VLESS) (*Client, error) {
 	}
 	addr := pc.LocalAddr().(*net.UDPAddr).AddrPort()
 	pc.Close()
+	// The address means nothing: the forwarder sends every packet to its
+	// own port.
+	in := &dokodemo.Config{
+		RewriteAddress:  xnet.NewIPOrDomain(xnet.LocalHostIP),
+		RewritePort:     9,
+		AllowedNetworks: []xnet.Network{xnet.Network_UDP},
+	}
+	inst, err := startClient(l, addr, in)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{inst: inst, addr: addr}, nil
+}
+
+// Mirror is a client's way to the mirror of the releases on its
+// forwarder's server, over VLESS: a local TCP port whose connections the
+// forwarder passes to the mirror. TLS with the mirror's own name goes
+// inside, so the mirror's certificate is checked as on any other way.
+type Mirror struct {
+	inst *core.Instance
+	addr netip.AddrPort
+}
+
+// DialMirror starts the client's way to the mirror for the link.
+func DialMirror(l tunnel.VLESS) (*Mirror, error) {
+	if err := l.Check(); err != nil {
+		return nil, err
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("vless: %w", err)
+	}
+	addr := ln.Addr().(*net.TCPAddr).AddrPort()
+	ln.Close()
+	// The address means nothing: the forwarder sends every stream to its
+	// mirror.
+	in := &dokodemo.Config{
+		RewriteAddress:  xnet.NewIPOrDomain(xnet.LocalHostIP),
+		RewritePort:     443,
+		AllowedNetworks: []xnet.Network{xnet.Network_TCP},
+	}
+	inst, err := startClient(l, addr, in)
+	if err != nil {
+		return nil, err
+	}
+	return &Mirror{inst: inst, addr: addr}, nil
+}
+
+// Addr returns the local TCP address that leads to the mirror.
+func (m *Mirror) Addr() netip.AddrPort { return m.addr }
+
+// Close stops the way to the mirror.
+func (m *Mirror) Close() error { return m.inst.Close() }
+
+// startClient runs a client's side for the link with the local inbound in
+// on addr.
+func startClient(l tunnel.VLESS, addr netip.AddrPort, in *dokodemo.Config) (*core.Instance, error) {
 	var stream *internet.StreamConfig
 	if l.Transport == tunnel.TransportXHTTP {
 		// HTTPS to the site, its certificate checked against the public
@@ -301,20 +363,9 @@ func Dial(l tunnel.VLESS) (*Client, error) {
 			SpiderY:     make([]int64, 10),
 		})
 	}
-	// The address means nothing: the forwarder sends every packet to its
-	// own port.
-	in := &dokodemo.Config{
-		RewriteAddress:  xnet.NewIPOrDomain(xnet.LocalHostIP),
-		RewritePort:     9,
-		AllowedNetworks: []xnet.Network{xnet.Network_UDP},
-	}
 	server := endpoint(l.Endpoint)
 	server.User = &protocol.User{Account: serial.ToTypedMessage(&xvless.Account{Id: l.ID, Encryption: "none"})}
-	inst, err := start(inboundHandler("", addr, nil, in), &vlessout.Config{Vnext: server}, stream)
-	if err != nil {
-		return nil, err
-	}
-	return &Client{inst: inst, addr: addr}, nil
+	return start(inboundHandler("", addr, nil, in), &vlessout.Config{Vnext: server}, stream)
 }
 
 // Addr returns the local UDP address WireGuard sends to.

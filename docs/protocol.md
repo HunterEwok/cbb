@@ -975,7 +975,7 @@ socket's and makes again at each start unless the system, the administrators or 
 it), with mode 0600: only root and the
 service's user (on Windows the system, administrators and the service's account) can
 connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket takes only
-`copy`, `paste`, `copy-media`, `copied-media`, `paste-media`, `config`, `status`, `devices`, `release`, `release-get`, `keys` (from root only) and `watch` (with
+`copy`, `paste`, `copy-media`, `copied-media`, `paste-media`, `config`, `status`, `devices`, `release`, `release-get`, `release-held`, `keys` (from root only) and `watch` (with
 the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
 all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
 rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
@@ -1076,6 +1076,8 @@ A connection carries one request: the service reads the first message and dispat
 | `release` | payload = the release in JSON, `{keys, channel, release}`, the three files of section 16 that `cbb update` fetched | `{done}`: the service checks the release as a `release` message (section 16, "In the group"), keeps it when it is newer than the one it holds, and passes it on to its peers |
 | `release-file` | `{value, part}`: the archive's SHA-256 and its `size`, then its bytes in `data` messages | `{done}`: `cbb update` hands the service an archive of the release it holds (section 16), which keeps it only whole and matching its hash, to pass on to its peers. Only on the admin socket |
 | `keys` | `{name, value, keys}`: `paste` or `enter`, a user ID, and the grant of an `inject` | `{done}` when the service handed that inject to a `desktop` watcher of that user and it is not answered yet, and `name` is its paste keys the first time or, after them, its Enter the first time when the command set `enter`; otherwise an error. Only from root (the uinput helper), on the control socket |
+| `release-held` | none | payload = the release this device holds in JSON, `{keys, channel, release}`, or an error when it holds none: `cbb update` takes it when no update server answers, and checks it as it checks what it downloads (section 16) |
+| `update-way` | none | payload = the VLESS settings (section 11) of the hub this device reaches away from home, with the group's VLESS user ID, or none without VLESS: `cbb update` reaches the mirror through them (section 16). Only on the admin socket |
 | `release-get` | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{done}`: the archive of the held release, from this device or fetched from its peers |
 | `watch` | `{kind, via, inject?, paste_only?, act?, images?, files?}` + payload = what the clipboard holds now (may be empty) | `{"op":"reply"}` without `done`; then the watcher protocol below |
 
@@ -2516,7 +2518,14 @@ Either way:
 - Only the VLESS user IDs of registered hubs that asked for VLESS are let in. A client's
   UDP packets, whatever address the client names, go to the forwarder's own UDP port, from
   a port of the forwarder's own address for each of the client's flows, and are routed
-  there as any client's; the answers go back the same way, and a TCP stream goes nowhere.
+  there as any client's; the answers go back the same way. A TCP stream goes nowhere, but
+  to the forwarder's mirror of the releases when it runs with one (`cbb forward
+  -vless-mirror 127.0.0.1:443`, the web server that serves `dl.cbb.tools` on the same
+  server): whatever address the client names, the stream goes to that one address, so a
+  device on a network that blocks the mirror still updates (section 16), and the forwarder
+  gives no way to anywhere else. Its TLS runs inside, between the device and the mirror,
+  with the mirror's certificate. One VLESS user ID has at most 4 such streams at a time,
+  and one is closed after 2 minutes with nothing sent either way.
   The forwarder knows which group's ID each of those ports serves, and the per-source
   handshake limit and the per-network budget of "Limits" count what comes over VLESS by
   that ID, as one source and one network for each group; a client's own group's limits
@@ -2990,6 +2999,14 @@ keeps all three at its top and each release's files under `vX.Y.Z/`. A device fe
 `keys.json` and the channel file, then the `release.json` of the version the channel file
 names, and that version's files; `get.sh` and `get.ps1` install the release `stable.json`
 names, not GitHub's latest, which differ for a few minutes after a release.
+
+`cbb update` tries GitHub, then the mirror. When this device syncs away from home through a
+hub that uses VLESS (section 11), it reaches the default mirror only inside VLESS, through
+the hub's forwarder (section 13), since a network that blocks WireGuard blocks the mirror
+as well; a mirror set by hand (`cbb update -mirror`) is reached directly. When neither
+answers, it asks its service for the release the group passed to it (control operation
+`release-held`, below), and the archive comes from the members as below; the files are
+checked the same way, wherever they came from.
 
 ### The check
 
