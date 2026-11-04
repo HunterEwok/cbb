@@ -35,6 +35,8 @@
 #define MAX_TEXT 8192
 // How long the lite member may take to answer, in seconds.
 #define ANSWER_SECONDS 20
+// The ROM's frame counter, 50 a second while interrupts run.
+#define FRAMES_LO (*(volatile uint16_t *)23672)
 
 static uint8_t text[MAX_TEXT];
 static char line[200];
@@ -44,7 +46,7 @@ static uint8_t debug;
 #pragma constseg PAGE_15
 // 32 columns, the commands' words from column 14 (a tab), and few
 // enough lines that nothing asks "scroll?".
-static const char usage_text[] = "CBB " VERSION "  ../CBB COMMAND\n\n"
+static const char usage_text[] = "CBB " VERSION "  .cbb COMMAND\n\n"
            "paste [FILE]\tshow the group's\n"
            "\ttext, or save it\n"
            "copy FILE\tsend a file\n"
@@ -211,6 +213,17 @@ static uint8_t driver(uint8_t function, uint16_t de)
     return esx_m_drvapi(&drv) != 0;
 }
 
+// Whether the card has the file.
+static uint8_t card_has(const char *path)
+{
+    uint8_t fh;
+    errno = 0;
+    fh = esx_f_open(path, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) return 0;
+    esx_f_close(fh);
+    return 1;
+}
+
 // Whether the driver holds the Pi's UART for the network.
 static uint8_t net_on(void)
 {
@@ -306,6 +319,52 @@ static uint8_t drv_uninstall(uint8_t bank)
     return 0;
 }
 
+// CBB.OVL: the pages from OVL_FIRST on, which ovl.sh cut out of CBB, so
+// that CBB stays under 64K. NextZXOS allocates them empty, and far.asm's
+// far_call() has ovl_load() read one before its first call there; the
+// last four bytes of each are the stamp of the build, which CBB carries.
+#define OVL_FILE "/cbb/CBB.OVL"
+#define OVL_FIRST 19
+#define OVL_CHUNK 512
+extern uint8_t _z_page_table[];
+#pragma codeseg code_dot
+#pragma constseg code_dot
+#pragma bssseg code_dot
+static const char ovl_stamp[] = OVL_STAMP;
+static const char ovl_missing[] = "CBB.OVL is missing: .cbb install";
+static const char ovl_other[] = "CBB.OVL is not this CBB's: .cbb install";
+static uint8_t ovl_loaded;
+
+// Not static: far_call() (far.asm) calls it; 0 when the page is there.
+uint8_t ovl_load(uint8_t page) __z88dk_fastcall
+{
+    uint8_t buf[OVL_CHUNK], fh, mmu7, bit = 1 << ((page - OVL_FIRST) >> 1), bad = 0;
+    uint16_t at;
+    if (ovl_loaded & bit) return 0;
+    errno = 0;
+    fh = esx_f_open(OVL_FILE, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) return fail(ovl_missing, 0);
+    esx_f_seek(fh, (uint32_t)((page - OVL_FIRST) >> 1) << 13, ESX_SEEK_SET);
+    mmu7 = ZXN_READ_MMU7();
+    // Through the stack, under 0xE000, the page in for each copy only.
+    for (at = 0; at < 8192 && !bad; at += OVL_CHUNK) {
+        bad = esx_f_read(fh, buf, OVL_CHUNK) != OVL_CHUNK;
+        intrinsic_di();
+        ZXN_WRITE_MMU7(_z_page_table[page]);
+        memcpy((void *)(0xE000 + at), buf, OVL_CHUNK);
+        ZXN_WRITE_MMU7(mmu7);
+        intrinsic_ei();
+    }
+    esx_f_close(fh);
+    // The stamp came with the last chunk.
+    if (bad || memcmp(buf + OVL_CHUNK - 4, ovl_stamp, 4)) return fail(ovl_other, 0);
+    ovl_loaded |= bit;
+    return 0;
+}
+#pragma codeseg code_compiler
+#pragma constseg rodata_compiler
+#pragma bssseg bss_compiler
+
 // Types a command for the lite member at NextPi's shell (the network
 // stopped: cmd_run() and net_pair() see to it).
 static int command(const char *args)
@@ -354,17 +413,23 @@ static const char *sha_path;
 static uint8_t sha_digest;
 static char sha_out[65];
 extern uint32_t far_sha(void);
+// The newest CBB's size and CRC-32 in the site's list (far_read_list()).
+static uint32_t list_size, list_crc;
+extern int far_read_list(void);
+
+// pair_check() only finds whether the Pi is in a group, silently.
+static uint8_t pair_probe;
 
 // Whether copy and text send a secret: the group's devices keep it out of
 // their histories and clear it from their clipboards after a while.
 static uint8_t secret;
 
-// .cbb paste, copy, text and pair (through the Pi's own network), from
-// here to cmd_run(), share the net command's page (far.asm, far_cmd()).
-#pragma codeseg PAGE_17
-#pragma constseg PAGE_17
-#pragma bssseg PAGE_17
-#pragma dataseg PAGE_17
+// .cbb paste, copy and text, from here to cmd_run(), are in CBB.OVL's page
+// (far.asm, far_cmd()).
+#pragma codeseg PAGE_19
+#pragma constseg PAGE_19
+#pragma bssseg PAGE_19
+#pragma dataseg PAGE_19
 
 // Eight lowercase hex digits, as the lite member writes a CRC-32.
 static void hex8(char *out, uint32_t v)
@@ -464,55 +529,72 @@ static int copy_words(int argc, char **argv)
     return copy(len);
 }
 
-// Sets one pixel of the ULA screen.
-static void plot(uint8_t x, uint8_t y)
+// While the network runs, the commands go through the driver (calls 7
+// and 8): it sends the Pi frames of what link_send() gets and keeps the
+// Pi's frames for link_recv(), and the link on the Pi runs the command as
+// NextPi's shell would (lite/src/nextlink/link.rs). A driver without the
+// calls has the network stop for them and start again after.
+#define DRV_CBB_OUT 7
+#define DRV_CBB_IN 8
+#define VIA_OPEN 0
+#define VIA_BYTE 1
+#define VIA_STOP 3
+#define VIA_CLOSE 4
+
+static void via_send(uint8_t c)
 {
-    *zx_pxy2saddr(x, y) |= zx_px2bitmask(x);
+    // 3, which stops a command at the shell, stops it at the link.
+    driver(DRV_CBB_OUT, c == 3 ? VIA_STOP << 8 : VIA_BYTE << 8 | c);
 }
 
-// Draws a QR code row by row as it arrives, dark modules in black on white,
-// centred, as large as the screen allows.
-static int qr(uint8_t size)
+static uint8_t via_recv(uint8_t *c, uint16_t seconds)
 {
-    // From the top, row 21 left for the key under it.
-    // cbb next pair's codes are far under 168 modules.
-    uint8_t scale = 168 / size, x, row, col, d, px, py, err;
-    if (scale > 4) scale = 4;
-    // White on white until the network runs (net_pair).
-    zx_border(INK_WHITE);
-    zx_cls(PAPER_WHITE | INK_WHITE);
-    for (row = 0; row < size; row++) {
-        err = link_line(line, sizeof line, ANSWER_SECONDS);
-        if (err) return link_fail(err);
-        x = 128 - size * scale / 2;
-        for (col = 0; col < size; col++, x += scale) {
-            d = hex_digit(line[col >> 2]);
-            if (d == 255) return fail("the Pi sent a damaged QR code", line);
-            if (!(d & (8 >> (col & 3)))) continue;
-            for (py = 0; py < scale; py++)
-                for (px = 0; px < scale; px++) plot(x + px, row * scale + py);
+    uint16_t start = FRAMES_LO;
+    for (;;) {
+        driver(DRV_CBB_IN, 0);
+        if (drv.de & 0x100) {
+            *c = (uint8_t)drv.de;
+            return LINK_OK;
         }
+        if (in_key_pressed(IN_KEY_SCANCODE_SPACE)) {
+            link_stopped = 1;
+            return LINK_BREAK;
+        }
+        if ((uint16_t)(FRAMES_LO - start) / 50 >= seconds) return LINK_TIMEOUT;
     }
-    return 0;
 }
+
+extern int far_net_halt(void);
+extern int far_net_restart(void);
 
 // Not static: far_cmd() (far.asm) calls it, with far_argc and far_argv
 // set; run() has checked the number of words.
-static int net_stop(void);
-static int net_start(int argc, char **argv);
-
-// The network holds the Pi's line, which these need for its shell: it
-// stops for them and starts again after, so a copy goes out at once.
 int cmd_run(void)
 {
     char **argv = far_argv;
-    uint8_t was = net_on();
+    uint8_t was = net_on(), via = 0;
     int err;
-    if (was && net_stop()) return 1;
+    if (was) {
+        // A command the link still runs from before stops first.
+        via = !driver(DRV_CBB_OUT, VIA_OPEN << 8);
+        if (via) {
+            driver(DRV_CBB_OUT, VIA_STOP << 8);
+            link_via_send = via_send;
+            link_via_recv = via_recv;
+        } else if (far_net_halt()) {
+            return 1;
+        }
+    }
     if (strcmp(argv[0], "paste") == 0) err = paste(far_argc == 2 ? argv[1] : 0);
     else if (strcmp(argv[0], "copy") == 0) err = copy_file(argv[1]);
     else err = copy_words(far_argc - 1, argv + 1);
-    if (was) err |= net_start(0, 0);
+    if (via) {
+        link_via_send = 0;
+        link_via_recv = 0;
+        driver(DRV_CBB_OUT, VIA_CLOSE << 8);
+    } else if (was) {
+        err |= far_net_restart();
+    }
     return err;
 }
 
@@ -728,7 +810,6 @@ static const char *const mdns_cmds[] = {"AT+CIPMODE=0", "AT+CIPMUX=1", "AT+CIPCL
 static const char ipd[] = "+IPD,";
 static char net_to[32];
 
-#pragma codeseg code_compiler
 // Whether the n bytes at p hold s.
 static uint8_t holds(const uint8_t *p, uint16_t n, const char *s)
 {
@@ -751,7 +832,6 @@ static uint16_t skip_name(uint16_t i, uint16_t n)
     return n;
 }
 
-#pragma codeseg PAGE_17
 // The port of the answer's SRV record, else 8764.
 static uint16_t srv_port(uint16_t n)
 {
@@ -988,6 +1068,38 @@ static uint8_t esp_address(char *ip, uint8_t max)
     return found && plain(ip);
 }
 
+// Sets one pixel of the ULA screen.
+static void plot(uint8_t x, uint8_t y)
+{
+    *zx_pxy2saddr(x, y) |= zx_px2bitmask(x);
+}
+
+// Draws a QR code row by row as it arrives, dark modules in black on white,
+// centred, as large as the screen allows.
+static int qr(uint8_t size)
+{
+    // From the top, row 21 left for the key under it.
+    // cbb next pair's codes are far under 168 modules.
+    uint8_t scale = 168 / size, x, row, col, d, px, py, err;
+    if (scale > 4) scale = 4;
+    // White on white until the network runs (net_pair).
+    zx_border(INK_WHITE);
+    zx_cls(PAPER_WHITE | INK_WHITE);
+    for (row = 0; row < size; row++) {
+        err = link_line(line, sizeof line, ANSWER_SECONDS);
+        if (err) return link_fail(err);
+        x = 128 - size * scale / 2;
+        for (col = 0; col < size; col++, x += scale) {
+            d = hex_digit(line[col >> 2]);
+            if (d == 255) return fail("the Pi sent a damaged QR code", line);
+            if (!(d & (8 >> (col & 3)))) continue;
+            for (py = 0; py < scale; py++)
+                for (px = 0; px < scale; px++) plot(x + px, row * scale + py);
+        }
+    }
+    return 0;
+}
+
 // Joins the group through the ESP (.cbb pair when /cbb/NET.CFG holds the
 // network's settings): cbb next pair waits on the Pi for the
 // phone, at the ESP's address and the port -serve leads to, while the
@@ -1104,6 +1216,18 @@ static void net_debug(void)
     for (i = 0; i < 64; i++) printf(i % 8 == 7 ? "%02x\n" : "%02x ", cap[(start + i) & 63]);
 }
 
+// Not static: far_net_halt() and far_net_restart() (far.asm) call them,
+// for the commands of CBB.OVL's page with a driver that cannot carry them.
+int net_halt(void)
+{
+    return net_stop();
+}
+
+int net_restart(void)
+{
+    return net_start(0, 0);
+}
+
 static int net_show(void)
 {
     if (driver(DRV_STATE, 0)) {
@@ -1169,7 +1293,6 @@ int net_cmd(void)
 #define CHUNK MAX_TEXT
 
 // The ROM's frame counter, 50 a second while interrupts run.
-#define FRAMES_LO (*(volatile uint16_t *)23672)
 // The ROM's scroll count: kept high, the screen scrolls without "scroll?".
 #define SCR_CT (*(volatile uint8_t *)23692)
 
@@ -1186,6 +1309,7 @@ struct item {
 
 static struct item items[] = {
     {"CBB.DRV", "CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", PIN_DRV_SIZE, PIN_DRV_SHA256, 0},
+    {"CBB.OVL", "CBB.OVL", OVL_FILE, "/cbb/OVL.PRT", PIN_OVL_SIZE, PIN_OVL_SHA256, 0},
     {"cbb", "SERVICE", PI_CARD, "/cbb/CBBPI.PRT", PIN_PI_SIZE, PIN_PI_SHA256, 1},
 };
 #define ITEMS (sizeof items / sizeof items[0])
@@ -1304,17 +1428,18 @@ static void http_close(void)
 //
 //   rows 0-17, columns 0-13   the logo
 //   rows 0-2, from column 15  the name and the version
-//   rows 4-9                  a file's name and state, then its bar, in
-//                             the stripes' colours: red, yellow, green
-//   rows 10-11                all of it, its bar empty in the four stripes,
+//   rows 4-11                 a file's name and state, then its bar, in
+//                             the stripes' colours: red, yellow, green,
+//                             and the Pi's cbb on its way in cyan
+//   rows 12-13                all of it, its bar empty in the four stripes,
 //                             filled in the colour of the quarter reached
-//   rows 13-14                the file under way: kilobytes, speed
-//   row 15, from column 15    SPACE STOPS, at the end PRESS ANY KEY
+//   rows 14-15                the file under way: kilobytes, speed
+//   row 16, from column 15    SPACE STOPS, at the end PRESS ANY KEY
 //   rows 18-21                messages
 #define PANEL 15
 #define FILE_ROW 4
-#define TOTAL_ROW 10
-#define NOW_ROW 13
+#define TOTAL_ROW 12
+#define NOW_ROW 14
 #define BAR_CELLS 12
 
 // The ROM's colour codes, for what .cbb prints meanwhile; in the divMMC
@@ -1372,11 +1497,10 @@ static void palette(uint8_t restore)
     ZXN_WRITE_REG(0x43, control);
 }
 
-// The bars and the states on the install screen are in MAIN: the install
-// draws them, and so does the screen's own page (README.md, "Memory").
-#pragma codeseg code_compiler
-#pragma constseg rodata_compiler
-#pragma bssseg bss_compiler
+// The bars and the states on the install screen, in the install's page.
+#pragma codeseg PAGE_13
+#pragma constseg PAGE_13
+#pragma bssseg PAGE_13
 
 // Shows a file's state on its row: "current", "fetching" and so on.
 static void file_state(uint8_t row, const char *name, const char *state)
@@ -1433,32 +1557,40 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
     printf("%-7s%2u:%02u LEFT", speed, left / 60, left % 60);
 }
 
-#pragma codeseg PAGE_13
-#pragma constseg PAGE_13
-#pragma bssseg PAGE_13
+// In CBB.OVL's page, as .cbb leave and .cbb pair use it.
+#pragma codeseg PAGE_19
+#pragma constseg PAGE_19
+#pragma bssseg PAGE_19
 
 // Whether the Pi is in a group: cbb next pair and -join refuse then, the
 // one in the Pi's background and the other in the link's log, which the
 // Next would never show.
 static const char in_group_cmd[] = "test -e " PI_DIR "/cbb-state/identity.json && echo CBB$((1))IN; echo CBB$((1))END\n";
 static const char in_group_yes[] = "CBB1IN", in_group_end[] = "CBB1END";
-static const char in_group[] = "the Pi is in a group\nalready: ../CBB leave first";
+static const char in_group[] = "the Pi is in a group\nalready: .cbb leave first";
 static const char in_none[] = "the Pi is in no group:\nnothing to leave";
 
 // Not static: far_pair_check() (far.asm) calls it, with the network off:
 // for .cbb leave, the Pi must be in a group, for .cbb pair in none.
+// With pair_probe, after .cbb install, it says nothing, and gives 0 only
+// when the Pi answers and is in no group.
 int pair_check(void)
 {
     uint8_t in = 0;
-    if (link_shell()) return pi_silent();
+    if (link_shell()) return pair_probe ? 1 : pi_silent();
     link_send_str(in_group_cmd);
     while (!link_line(line, sizeof line, 5) && strcmp(line, in_group_end)) {
         if (strcmp(line, in_group_yes) == 0) in = 1;
     }
     link_prompt();
+    if (pair_probe) return in;
     if (far_argv[0][0] == 'l') return in ? 0 : fail(in_none, 0);
     return in ? fail(in_group, 0) : 0;
 }
+
+#pragma codeseg PAGE_13
+#pragma constseg PAGE_13
+#pragma bssseg PAGE_13
 
 // CRC-32 by a table of 16, half a byte at a time: the Pi's cbb is
 // megabytes, and frame.c's bit by bit takes minutes for it, while a table
@@ -1582,56 +1714,6 @@ static int fetch(struct item *it, uint8_t row)
 static uint8_t up_to_date(struct item *it)
 {
     return matches(it, it->card);
-}
-
-// Reads the site's list, a line NAME SIZE CRC32 SHA256 for each file, for
-// the size and CRC-32 of the newest CBB: .cbb update only tells of one,
-// since a CBB can check only the files built with it.
-static int read_list(uint32_t *cbb_size, uint32_t *cbb_crc)
-{
-    char *p, *q;
-    uint8_t i, err;
-    uint16_t len;
-    // The list is short: one range of up to CHUNK bytes, then cut to size.
-    link_send_str("GET " SITE_DIR SITE_LIST " HTTP/1.1\r\nHost: " SITE "\r\n\r\n");
-    len = 0;
-    for (i = 0;; i++) {
-        err = link_line(line, sizeof line, 10);
-        if (err) return fail("the site did not answer", "no list");
-        if (i == 0 && strncmp(line, "HTTP/1.1 200", 12) != 0) return fail("the site has no files for the Next yet", line);
-        if (!line[0]) {
-            // The empty line's LF, before the body.
-            if (link_recv((uint8_t *)line, 10) || line[0] != '\n') return fail("the list is damaged", "no LF");
-            break;
-        }
-        if (strncasecmp(line, "Content-Length:", 15) == 0) len = (uint16_t)strtoul(line + 15, 0, 10);
-    }
-    if (len == 0 || len >= CHUNK) return fail("the list is damaged", 0);
-    {
-        uint16_t k;
-        uint8_t c;
-        for (k = 0; k < len; k++) {
-            if (link_recv(&c, 10)) return fail("the list broke off", 0);
-            text[k] = c;
-        }
-        text[len] = 0;
-    }
-    *cbb_size = 0;
-    for (p = (char *)text; *p; p = q) {
-        char name[16], sha[72];
-        uint32_t size;
-        char crc[12];
-        q = strchr(p, '\n');
-        if (q) *q++ = 0;
-        else q = p + strlen(p);
-        if (sscanf(p, "%15s %lu %11s %71s", name, &size, crc, sha) != 4) continue;
-        if (strcmp(name, "CBB") == 0 && strlen(crc) == 8) {
-            *cbb_size = size;
-            *cbb_crc = strtoul(crc, 0, 16);
-        }
-    }
-    if (!*cbb_size) return fail("the list lacks a file", "CBB");
-    return 0;
 }
 
 // Asks NextPi's shell for the SHA-256 of the Pi's cbb, into sha ("none"
@@ -1808,15 +1890,15 @@ static int to_pi(struct item *it, uint8_t row)
 
 static const char paste_default[] = "on-enter";
 // Two lines, so that the messages above stay on the screen.
-static const char paste_is_on[] = "Remote paste on. Off: the app or ../CBB paste-receive off";
-static const char paste_is_off[] = "Remote paste off; on: ../CBB paste-receive on";
+static const char paste_is_on[] = "Remote paste on. Off: the app or .cbb paste-receive off";
+static const char paste_is_off[] = "Remote paste off; on: .cbb paste-receive on";
 
 static int install_files(uint8_t update)
 {
     static char pisha[65];
     struct item *pi = &items[ITEMS - 1];
-    uint8_t i, pi_answers, drv_new = 0, drv_on, old_bank = NO_BANK, need[ITEMS] = {0};
-    uint32_t size, crc, list_size, list_crc;
+    uint8_t i, pi_answers, dot, drv_new = 0, drv_on, old_bank = NO_BANK, need[ITEMS] = {0};
+    uint32_t size, crc;
     int err = 0;
     // The bank of a driver installed now, while the card has its file.
     drv_on = driver(DRV_STATE, 0) == 0;
@@ -1842,14 +1924,20 @@ static int install_files(uint8_t update)
     // .cbb update first looks for a newer CBB, which its user fetches
     // as at the start (README.md, "Install"): this one installs only its
     // own files.
+    // It is the one in C:/DOT, where .cbb runs it from anywhere, else the
+    // one in /cbb that an earlier install had run as ../CBB.
     if (update) {
-        err = read_list(&list_size, &list_crc);
-        crc = file_crc(CBB_CARD, &size);
+        err = far_read_list();
+        crc = file_crc(DOT_CBB, &size);
+        dot = size != 0;
+        if (!dot) crc = file_crc(CBB_CARD, &size);
         if (!err && (size != list_size || crc != list_crc)) {
             http_close();
             link_use(LINK_PI);
-            say("A newer CBB is out. Fetch it as at the start: .http -h " SITE " -u /zxnext -f CBB in /cbb, "
-                "then ../CBB install.");
+            say(dot ? "A newer CBB is out. Fetch it as at the start: CD \"C:/DOT\", .http -h " SITE
+                      " -u /zxnext -f CBB, then .cbb install."
+                    : "A newer CBB is out. Fetch it as at the start: CD \"/cbb\", .http -h " SITE
+                      " -u /zxnext -f CBB, then ../CBB install.");
             return 1;
         }
     }
@@ -1921,10 +2009,11 @@ static int install_files(uint8_t update)
             say("CBB.DRV is installed.");
         }
     }
-    // An older .cbb in C:/DOT runs as .cbb before this one.
+    // Two different CBBs: .cbb runs the one in C:/DOT, ../CBB in /cbb the
+    // other.
     crc = file_crc(CBB_CARD, &list_size);
     if ((file_crc(DOT_CBB, &size) != crc || size != list_size) && size && list_size) {
-        say("C:/DOT/CBB is another .cbb: .cbb runs it, ../CBB the new one. Replace or delete it.");
+        say("C:/DOT/CBB and /cbb/CBB differ: .cbb runs the one in C:/DOT. Delete the other.");
     }
     // Remote paste: on with Enter after the first install, as the user
     // set it after that.
@@ -1969,19 +2058,20 @@ void usage_run(void)
     }
 }
 
+// .cbb uninstall, leave and paste-receive are in CBB.OVL's page.
+#pragma codeseg PAGE_19
+#pragma bssseg PAGE_19
 // .cbb uninstall: everything .cbb install and .cbb net put anywhere, after
 // a Y: the network and the driver, the Pi's cbb and its state, the files
 // in /cbb and the folder when nothing else is left in it. The phone app
 // still lists the Next until it is removed there.
 // Its words are arrays of this page: zcc keeps string literals with the
 // main program's.
-// The Pi's commands in the divMMC page, which has the room.
-#pragma constseg code_dot
+#pragma constseg PAGE_19
 static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm -rf cbb cbb.bin cbb.old cbb.new "
                                 "cbb-state /ram/link.log /ram/cbbjoin; cd; echo CBB$((1))GONE\n";
 static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; rm -rf " PI_DIR "/cbb-state /ram/cbbjoin; echo CBB$((1))GONE\n";
-#pragma constseg PAGE_15
-static const char card_names[] = "CBB.DRV\0NET.CFG\0CBBPI.BIN\0DRV.PRT\0CBBPI.PRT\0PASTE.CFG\0CBB\0";
+static const char card_names[] = "CBB.DRV\0CBB.OVL\0OVL.PRT\0NET.CFG\0CBBPI.BIN\0DRV.PRT\0CBBPI.PRT\0PASTE.CFG\0CBB\0";
 static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? y/n\n";
 static const char un_none[] = "Nothing removed.\n";
 static const char un_drv_stays[] = "CBB.DRV stays: .uninstall it.\n";
@@ -1990,13 +2080,16 @@ static const char un_pi_silent[] = "The Pi did not answer: its cbb\nstays in " P
 // .cbb leave: only the Pi's group, after a Y; its cbb stays, and
 // .cbb pair joins this group or another one again.
 static const char lv_ask[] = "Leave the group: the Pi forgets\nits keys? y/n\n";
-static const char lv_done[] = "Left. Remove the Next in the app\ntoo; ../CBB pair joins again.\n";
+static const char lv_done[] = "Left. Remove the Next in the app\ntoo; .cbb pair joins again.\n";
 static const char un_pi_gone[] = "CBB1GONE";
 static const char un_pi_quiet[] = "The Pi did not say it is done.\n";
 static const char un_pi_done[] = "The Pi's cbb is removed.\n";
 static const char un_dir[] = "/cbb/";
-// /cbb/CBB runs now, and NextZXOS keeps it: it stays, with the folder.
-static const char un_done[] = "Removed but CBB, which runs:\nCD \"/\": ERASE \"/cbb/CBB\"\nRemove the Next in the app too.\n";
+// /cbb/CBB, when it runs now, stays, as NextZXOS keeps it, with the
+// folder; C:/DOT/CBB is the user's, who fetched it there.
+static const char un_card[] = "Removed but CBB, which runs:\nCD \"/\": ERASE \"/cbb/CBB\"\n";
+static const char un_dot[] = "Removed. C:/DOT/CBB stays: you\nfetched it, so erase it yourself:\nERASE \"C:/DOT/CBB\"\n";
+static const char un_done[] = "Remove the Next in the app too.\n";
 
 // Not static: far_uninstall() (far.asm) calls it.
 // .cbb paste-receive on [-enter] | off: whether the group's admins may
@@ -2087,7 +2180,64 @@ int uninstall(void)
     }
     line[4] = 0;
     esx_f_rmdir(line);
+    if (card_has(CBB_CARD)) printf(un_card);
+    else if (card_has(DOT_CBB)) printf(un_dot);
     printf(un_done);
+    return 0;
+}
+
+#pragma codeseg PAGE_15
+#pragma constseg PAGE_15
+// Reads the site's list, a line NAME SIZE CRC32 SHA256 for each file, for
+// the size and CRC-32 of the newest CBB: .cbb update only tells of one,
+// since a CBB can check only the files built with it. Not static:
+// far_read_list() (far.asm) calls it, from the install's page; it is in
+// the screen's, which has the room.
+int read_list(void)
+{
+    uint32_t *cbb_size = &list_size, *cbb_crc = &list_crc;
+    char *p, *q;
+    uint8_t i, err;
+    uint16_t len;
+    // The list is short: one range of up to CHUNK bytes, then cut to size.
+    link_send_str("GET " SITE_DIR SITE_LIST " HTTP/1.1\r\nHost: " SITE "\r\n\r\n");
+    len = 0;
+    for (i = 0;; i++) {
+        err = link_line(line, sizeof line, 10);
+        if (err) return fail("the site did not answer", "no list");
+        if (i == 0 && strncmp(line, "HTTP/1.1 200", 12) != 0) return fail("the site has no files for the Next yet", line);
+        if (!line[0]) {
+            // The empty line's LF, before the body.
+            if (link_recv((uint8_t *)line, 10) || line[0] != '\n') return fail("the list is damaged", "no LF");
+            break;
+        }
+        if (strncasecmp(line, "Content-Length:", 15) == 0) len = (uint16_t)strtoul(line + 15, 0, 10);
+    }
+    if (len == 0 || len >= CHUNK) return fail("the list is damaged", 0);
+    {
+        uint16_t k;
+        uint8_t c;
+        for (k = 0; k < len; k++) {
+            if (link_recv(&c, 10)) return fail("the list broke off", 0);
+            text[k] = c;
+        }
+        text[len] = 0;
+    }
+    *cbb_size = 0;
+    for (p = (char *)text; *p; p = q) {
+        char name[16], sha[72];
+        uint32_t size;
+        char crc[12];
+        q = strchr(p, '\n');
+        if (q) *q++ = 0;
+        else q = p + strlen(p);
+        if (sscanf(p, "%15s %lu %11s %71s", name, &size, crc, sha) != 4) continue;
+        if (strcmp(name, "CBB") == 0 && strlen(crc) == 8) {
+            *cbb_size = size;
+            *cbb_crc = strtoul(crc, 0, 16);
+        }
+    }
+    if (!*cbb_size) return fail("the list lacks a file", "CBB");
     return 0;
 }
 
@@ -2244,6 +2394,16 @@ static int install(void)
     far_screen_open();
     err = far_install();
     far_screen_close();
+    // After the first install, a Pi in no group joins one at once: the
+    // pairing's QR code, under which the network starts.
+    if (!err && !install_update) {
+        pair_probe = 1;
+        if (!far_pair_check()) {
+            pair_probe = 0;
+            return far_net_pair();
+        }
+        pair_probe = 0;
+    }
     if (was || (!err && !install_update)) err |= net_do(net_on_word);
     return err;
 }

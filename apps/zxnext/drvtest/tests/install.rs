@@ -87,6 +87,7 @@ fn kit(name: &str) -> Option<Kit> {
     for (f, data) in [
         ("CBB", std::fs::read(&dot).unwrap()),
         ("CBB.DRV", std::fs::read(build.join("CBB.DRV")).unwrap()),
+        ("CBB.OVL", std::fs::read(build.join("CBB.OVL")).unwrap()),
         ("cbb", pi_cbb.clone()),
     ] {
         std::fs::write(site.join(f), &data).unwrap();
@@ -151,6 +152,14 @@ fn run(
     space: Option<f64>,
 ) -> Outcome {
     std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
+    // A Pi in a group already: the install ends with its screen, where a
+    // Pi in none would go on to pair (installs_then_pairs).
+    let mut pi = pi;
+    pi.in_group = true;
+    // CBB.OVL as the install left it, for the commands after it.
+    if !args.starts_with("install") && !args.starts_with("update") {
+        std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
+    }
     let mut run = Run::new(&kit.dot, card, args, Box::new(esp), Box::new(pi));
     let table = kit
         .map
@@ -186,7 +195,13 @@ fn run(
         row: 0xBF,
         bit: 0,
     });
-    run.run(5.0);
+    // The Pi's shell tells whether it is in a group, then the network starts.
+    for _ in 0..30 {
+        if run.done {
+            break;
+        }
+        run.run(1.0);
+    }
     assert!(
         run.done,
         ".cbb did not end after the key:\n{}",
@@ -451,6 +466,12 @@ fn run_after(
     keys: Vec<Key>,
     before: impl FnOnce(&mut Run),
 ) -> Run {
+    if !args.starts_with("install")
+        && !args.starts_with("update")
+        && !card.join("cbb/CBB.OVL").exists()
+    {
+        std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
+    }
     let mut run = Run::new(&kit.dot, card, args, Box::new(esp), Box::new(pi));
     run.hw.keys = keys;
     before(&mut run);
@@ -578,11 +599,48 @@ fn uninstalls_everything_after_y() {
     );
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(pi.cbb_sha.is_none(), "{:?}", pi.log);
-    assert!(
-        !card.join("cbb").exists(),
-        "{:?}",
-        std::fs::read_dir(card.join("cbb")).map(|d| d.count())
+    // Only the CBB that runs, which NextZXOS keeps.
+    let left: Vec<_> = std::fs::read_dir(card.join("cbb"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    assert_eq!(left, ["CBB"]);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+/// CBB in C:/DOT, as .cbb from anywhere: /cbb goes, and C:/DOT/CBB is the
+/// user's to erase.
+#[test]
+fn uninstalls_from_dot() {
+    let Some(kit) = kit("uninstalldot") else {
+        return;
+    };
+    let (card, pi) = installed(&kit, "uninstalldot");
+    std::fs::rename(card.join("cbb/CBB"), card.join("dot/CBB")).unwrap();
+    let y = vec![Key {
+        from: 500_000,
+        until: 800_000,
+        row: 0xDF,
+        bit: 4,
+    }];
+    let run = run_after(
+        &kit,
+        &card,
+        "uninstall",
+        Esp::new(kit.site.clone()),
+        pi,
+        y,
+        |run| {
+            run.hw.running = "c:/dot/CBB".into();
+        },
     );
+    let s = run.hw.screen_text();
+    assert!(
+        s.contains("C:/DOT/CBB stays") && s.contains("ERASE \"C:/DOT/CBB\""),
+        "{s}"
+    );
+    assert!(!card.join("cbb").exists());
+    assert!(card.join("dot/CBB").exists());
     let _ = std::fs::remove_dir_all(&card);
 }
 
@@ -697,7 +755,7 @@ fn says_when_the_pi_is_in_a_group_already() {
     pi.in_group = true;
     let mut run = run_with(&kit, "pair 123-456", Esp::new(kit.site.clone()), pi);
     let s = run.hw.screen_text();
-    assert!(s.contains("already: ../CBB leave first"), "{s}");
+    assert!(s.contains("already: .cbb leave first"), "{s}");
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(
         !pi.log.iter().any(|l| l.contains("next pair")),
@@ -843,5 +901,115 @@ fn sends_text_while_the_network_runs() {
         .position(|l| l.contains("next link"))
         .unwrap_or_else(|| panic!("{:?}", pi.log));
     assert!(copy < link, "{:?}", pi.log);
+    assert_eq!(pi.copied, b"Hello from Next");
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+/// .cbb ARGS with the network running and a driver that carries the
+/// commands (cbb.drv 0.2): the network goes on.
+fn through_the_driver(name: &str, args: &str) -> Option<Run> {
+    let kit = kit(name)?;
+    let (card, pi) = installed(&kit, name);
+    let run = run_after(
+        &kit,
+        &card,
+        args,
+        Esp::new(kit.site.clone()),
+        pi,
+        Vec::new(),
+        |run| {
+            run.hw.drivers.push((124, vec![0; 512]));
+            run.hw.net = true;
+            run.hw.via = true;
+        },
+    );
+    let _ = std::fs::remove_dir_all(&card);
+    assert!(run.hw.net, "the network stopped:\n{}", run.hw.screen_text());
+    assert!(
+        !run.hw.screen_text().contains("The network stopped."),
+        "{}",
+        run.hw.screen_text()
+    );
+    Some(run)
+}
+
+#[test]
+fn sends_text_through_the_driver() {
+    let Some(mut run) = through_the_driver("textvia", "text Hello from Next") else {
+        return;
+    };
+    let s = run.hw.screen_text();
+    assert!(s.contains("15 bytes sent to the group"), "{s}");
+    let sent = String::from_utf8_lossy(&run.hw.via_sent).to_string();
+    assert!(sent.contains("cbb next copy 15 "), "{sent:?}");
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert_eq!(pi.copied, b"Hello from Next");
+}
+
+#[test]
+fn pastes_through_the_driver() {
+    let Some(run) = through_the_driver("pastevia", "paste") else {
+        return;
+    };
+    let s = run.hw.screen_text();
+    assert!(s.contains("Hello from the group"), "{s}");
+}
+
+/// After the first install, a Pi in no group goes on to pair at once: the
+/// QR code's command runs on the Pi once the install's screen has its key.
+#[test]
+fn installs_then_pairs() {
+    let Some(kit) = kit("thenpair") else { return };
+    let (card, pi) = installed(&kit, "thenpair");
+    std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
+    let keys = (0..6)
+        .map(|i| Key {
+            from: 8_000_000 + i * 5_000_000,
+            until: 8_300_000 + i * 5_000_000,
+            row: 0xBF,
+            bit: 0,
+        })
+        .collect();
+    let mut run = run_on(&kit, &card, "install", Esp::new(kit.site.clone()), pi, keys);
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    let probe = pi
+        .log
+        .iter()
+        .position(|l| l.contains("cbb-state/identity.json"));
+    let pair = pi.log.iter().position(|l| l.contains("next pair -addr"));
+    assert!(probe.is_some() && pair > probe, "{:?}", pi.log);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+/// .cbb update tells of a newer CBB where this one is: C:/DOT, where .cbb
+/// runs it from anywhere.
+#[test]
+fn update_tells_of_a_newer_cbb_in_dot() {
+    let Some(kit) = kit("newerdot") else { return };
+    let list = std::fs::read_to_string(kit.site.join("LIST")).unwrap();
+    let list: String = list
+        .lines()
+        .map(|l| match l.strip_prefix("CBB ") {
+            Some(rest) => format!("CBB 1{rest}\n"),
+            None => format!("{l}\n"),
+        })
+        .collect();
+    std::fs::write(kit.site.join("LIST"), list).unwrap();
+    let (card, pi) = installed(&kit, "newerdot");
+    std::fs::copy(&kit.dot, card.join("dot/CBB")).unwrap();
+    let o = run(
+        &kit,
+        &card,
+        "update",
+        Esp::new(kit.site.clone()),
+        pi,
+        60.0,
+        None,
+    );
+    assert!(
+        o.has("A NEWER CBB IS OUT") && o.has("CD \"C:/DOT\""),
+        "{}",
+        o.screen
+    );
     let _ = std::fs::remove_dir_all(&card);
 }

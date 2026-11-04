@@ -448,7 +448,13 @@ pub struct Pi {
     line: Vec<u8>,
     /// Raw input: bytes still to take, and where they go.
     raw: usize,
+    /// Whether the raw bytes are cbb next copy's text, not a file's.
+    raw_copy: bool,
     pub received: Vec<u8>,
+    /// The group's latest text, which cbb next paste gives.
+    pub clip: Vec<u8>,
+    /// What cbb next copy took.
+    pub copied: Vec<u8>,
     /// The cbb on the Pi: its SHA-256 in hex, or none.
     pub cbb_sha: Option<String>,
     pub log: Vec<String>,
@@ -468,7 +474,10 @@ impl Pi {
             out: Out::default(),
             line: Vec::new(),
             raw: 0,
+            raw_copy: false,
             received: Vec::new(),
+            clip: b"Hello from the group".to_vec(),
+            copied: Vec::new(),
             cbb_sha: None,
             log: Vec::new(),
             answers: true,
@@ -546,6 +555,35 @@ impl Pi {
             self.received.clear();
             return;
         }
+        // The lite member's frames (lite/README.md): a text, and a copy
+        // that answers CBBGO, takes its bytes raw, then says CBBOK.
+        let words: Vec<&str> = cmd.split_whitespace().filter(|w| *w != "-debug").collect();
+        if words.len() >= 3 && words[0] == "cbb" && words[1] == "next" {
+            match &words[2..] {
+                ["paste", "-max", _] => {
+                    let crc = crate::crc32(&self.clip);
+                    let mut f = format!("CBB1 {} {crc:08x}\r", self.clip.len()).into_bytes();
+                    f.extend_from_slice(&self.clip);
+                    f.extend_from_slice(b"\rCBBOK\r");
+                    self.out.push(now + 50_000, &f);
+                    return self.prompt(now + 50_000);
+                }
+                ["copy", rest @ ..] => {
+                    let n = rest
+                        .iter()
+                        .rev()
+                        .nth(1)
+                        .and_then(|n| n.parse().ok())
+                        .unwrap_or(0);
+                    self.say(now + 50_000, "CBBGO\r");
+                    self.raw = n;
+                    self.raw_copy = true;
+                    self.copied.clear();
+                    return;
+                }
+                _ => {}
+            }
+        }
         if cmd.starts_with("test -e /NextPi/nextpi/cbb-state/identity.json && echo CBB$((1))IN") {
             let s = if self.in_group {
                 "CBB1IN\r\nCBB1END\r\n"
@@ -594,6 +632,16 @@ impl Peer for Pi {
     fn rx(&mut self, now: u64, b: u8, _baud: u32) {
         self.apply_baud(now);
         if !self.answers {
+            return;
+        }
+        if self.raw > 0 && self.raw_copy {
+            self.copied.push(b);
+            self.raw -= 1;
+            if self.raw == 0 {
+                self.raw_copy = false;
+                self.say(now + 50_000, "CBBOK\r");
+                self.prompt(now + 50_000);
+            }
             return;
         }
         if self.raw > 0 {

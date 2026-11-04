@@ -919,7 +919,7 @@ signature (apps/zxnext/README.md, "Install"):
   with each file's size, CRC-32 and SHA-256 (`packaging/zxnext/site.sh`, the release's
   `cbb-zxnext.tar.gz`). Each `CBB` carries the size and SHA-256 of the driver and the Pi's
   `cbb` built with it (`apps/zxnext/pins.sh`) and installs only those (0.6).
-- One line fetches `.cbb`: `.http -h cbb.tools -u /zxnext -f CBB`, then `../CBB install` fetches
+- One line fetches `.cbb` into `C:/DOT`: `.http -h cbb.tools -u /zxnext -f CBB`, then `.cbb install` fetches
   the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
   list before it replaces the old one, a download that broke goes on from where it
   stopped, and a line shows the percentage, the kilobytes, the speed and the time left;
@@ -938,10 +938,13 @@ signature (apps/zxnext/README.md, "Install"):
   and the Pi's writes take part of it, so about 50 to 60 KB/s), then 460800 and 115200.
   The Pi Zero's UART has a 16-byte buffer and no flow control here, so a speed it loses
   bytes at fails the SHA-256 check and the next step down sends again.
-- `.cbb paste`, `copy` and `text` need the Pi's shell, so while the network runs they stop
-  it and start it again after, some 10 to 15 seconds. Next (0.7): the driver carries them
-  to `cbb next link` in frames of their own over the running network, as it carries the
-  ESP's bytes, and the link hands them to the service, with no stop.
+- `.cbb paste`, `copy` and `text` go over the running network: the driver (0.2) carries
+  them to `cbb next link` in frames of their own, as it carries the ESP's bytes, and the
+  link runs their `cbb next` as NextPi's shell would. Only `.cbb pair` still stops the
+  network for the shell.
+- `CBB` lives in `C:/DOT`, so `.cbb` runs from any folder, and its rarer commands are in
+  `/cbb/CBB.OVL`, read into a page of their own when they run, so `CBB` stays under the 64K
+  a real Next reset at.
 
 **Open questions, for the bench.**
 
