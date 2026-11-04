@@ -1976,14 +1976,14 @@ static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm 
 static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; rm -rf " PI_DIR "/cbb-state /ram/cbbjoin; echo CBB$((1))GONE\n";
 #pragma constseg PAGE_15
 static const char card_names[] = "CBB.DRV\0NET.CFG\0CBBPI.BIN\0DRV.PRT\0CBBPI.PRT\0PASTE.CFG\0CBB\0";
-static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? Y/N\n";
+static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? y/n\n";
 static const char un_none[] = "Nothing removed.\n";
 static const char un_drv_stays[] = "CBB.DRV stays: .uninstall it.\n";
 static const char un_drv_gone[] = "CBB.DRV is uninstalled.\n";
 static const char un_pi_silent[] = "The Pi did not answer: its cbb\nstays in " PI_DIR ".\n";
 // .cbb leave: only the Pi's group, after a Y; its cbb stays, and
 // .cbb pair joins this group or another one again.
-static const char lv_ask[] = "Leave the group: the Pi forgets\nits keys? Y/N\n";
+static const char lv_ask[] = "Leave the group: the Pi forgets\nits keys? y/n\n";
 static const char lv_done[] = "Left. Remove the Next in the app\ntoo; ../CBB pair joins again.\n";
 static const char un_pi_gone[] = "CBB1GONE";
 static const char un_pi_quiet[] = "The Pi did not say it is done.\n";
@@ -2043,6 +2043,9 @@ int uninstall(void)
     in_wait_nokey();
     in_wait_key();
     i = z80_inp(0xDFFE) & 0x10;
+    // A shift first (CAPS SHIFT 0xFEFE bit 0, SYMBOL SHIFT 0x7FFE bit 1)
+    // waits for the Y with it: y and Y both answer yes.
+    while (i && (!(z80_inp(0xFEFE) & 1) || !(z80_inp(0x7FFE) & 2))) i = z80_inp(0xDFFE) & 0x10;
     in_wait_nokey();
     if (i) {
         printf(un_none);

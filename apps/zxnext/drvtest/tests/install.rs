@@ -710,12 +710,21 @@ fn leaves_the_group_after_y() {
     let Some(kit) = kit("leave") else { return };
     let (card, mut pi) = installed(&kit, "leave");
     pi.in_group = true;
-    let y = vec![Key {
-        from: 3_000_000,
-        until: 3_300_000,
-        row: 0xDF,
-        bit: 4,
-    }];
+    // CAPS SHIFT first, then the Y with it: still yes.
+    let y = vec![
+        Key {
+            from: 3_000_000,
+            until: 3_600_000,
+            row: 0xFE,
+            bit: 0,
+        },
+        Key {
+            from: 3_200_000,
+            until: 3_500_000,
+            row: 0xDF,
+            bit: 4,
+        },
+    ];
     let mut run = run_on(&kit, &card, "leave", Esp::new(kit.site.clone()), pi, y);
     let s = run.hw.screen_text();
     assert!(s.contains("Left. Remove the Next"), "{s}");
@@ -739,7 +748,7 @@ fn says_when_there_is_no_group_to_leave() {
         Vec::new(),
     );
     let s = run.hw.screen_text();
-    assert!(s.contains("nothing to leave") && !s.contains("Y/N"), "{s}");
+    assert!(s.contains("nothing to leave") && !s.contains("y/n"), "{s}");
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(!pi.log.iter().any(|l| l.contains("rm -rf")), "{:?}", pi.log);
     let _ = std::fs::remove_dir_all(&card);
