@@ -116,7 +116,7 @@ func parseEntries(s string) (node.EntriesSet, error) {
 	var set node.EntriesSet
 	b64, ok := strings.CutPrefix(strings.TrimSpace(s), entriesPrefix)
 	if !ok {
-		return set, errors.New("that is not a string of signed entry points; it starts with " + entriesPrefix)
+		return set, fmt.Errorf("that is not a string of signed entry points, which starts with %q", entriesPrefix)
 	}
 	data, err := base64.RawURLEncoding.DecodeString(b64)
 	if err != nil || len(data) > 2*release.MaxBody {
