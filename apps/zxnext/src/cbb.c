@@ -93,6 +93,21 @@ static void at(uint8_t row, uint8_t col)
     rom_char(col);
 }
 
+// The QR code's line; the install screen's from PRESS.
+static const char qr_key[] = "SCAN, THEN PRESS ANY KEY";
+
+// After a key, a clear screen in BASIC's colours and border (BORDCR,
+// ATTR_P), for what the QR code or the install screen showed.
+static void key_clear(void)
+{
+    in_wait_nokey();
+    in_wait_key();
+    in_wait_nokey();
+    zx_border(*(uint8_t *)23624 >> 3 & 7);
+    zx_cls(*(uint8_t *)23693);
+    at(0, 0);
+}
+
 // Puts the print position on the next message row for a text of len
 // characters.
 static void message_at(uint16_t len)
@@ -465,22 +480,22 @@ static void plot(uint8_t x, uint8_t y)
 // centred, as large as the screen allows.
 static int qr(uint8_t size)
 {
-    uint8_t scale = 184 / size, x0, y0, row, col, d, px, py, err;
+    // From the top, row 21 left for the key under it.
+    uint8_t scale = 168 / size, x, row, col, d, px, py, err;
     if (scale > 4) scale = 4;
     if (scale == 0) return fail("the QR code is too large for the screen", 0);
-    x0 = (256 - size * scale) / 2;
-    y0 = (192 - size * scale) / 2;
     zx_border(INK_WHITE);
     zx_cls(PAPER_WHITE | INK_BLACK);
     for (row = 0; row < size; row++) {
         err = link_line(line, sizeof line, ANSWER_SECONDS);
         if (err) return link_fail(err);
-        for (col = 0; col < size; col++) {
+        x = 128 - size * scale / 2;
+        for (col = 0; col < size; col++, x += scale) {
             d = hex_digit(line[col >> 2]);
             if (d == 255) return fail("the Pi sent a damaged QR code", line);
             if (!(d & (8 >> (col & 3)))) continue;
             for (py = 0; py < scale; py++)
-                for (px = 0; px < scale; px++) plot(x0 + col * scale + px, y0 + row * scale + py);
+                for (px = 0; px < scale; px++) plot(x + px, row * scale + py);
         }
     }
     return 0;
@@ -986,12 +1001,14 @@ static int net_stop(void);
 extern int far_pair_check(void);
 static const char pair_cmd[] = "(%s; " CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null; %s) &\n";
 static const char pair_pkill[] = PKILL_SERVICE;
+static const char qr_after[] = "The app shows the Next once\nit has joined.\n";
 
 // Not static: far_net_pair() (far.asm) calls it.
 int net_pair(void)
 {
     char ip[40], cmd[224], *serve, *colon = 0, *end;
     uint32_t len, crc;
+    int err;
     // The network holds the Pi's line: it stops for the pairing, and
     // starts again after it.
     if (net_on() && net_stop()) return 1;
@@ -1031,9 +1048,14 @@ int net_pair(void)
     if (qr((uint8_t)len)) return 1;
     link_prompt();
     quiet = 1;
-    if (net_start(0, 0)) return 1;
-    // The code stays for the phone after .cbb ends, under what comes next.
-    printf("Scan it in the phone app;\nCLS clears it then.\n");
+    // An error stays as it is, over the code.
+    if ((err = net_start(0, 0))) return err;
+    // Nothing else on the screen while the phone scans: the rest after a
+    // key, on a clear screen in BASIC's colours.
+    at(21, 4);
+    printf(qr_key);
+    key_clear();
+    printf(qr_after);
     return 0;
 }
 
@@ -2121,12 +2143,10 @@ static void logo_draw(void)
 }
 
 // The border's colour before the screen, which the ROM keeps in BORDCR.
-static uint8_t border_old;
 
 // Not static: far_screen_open() (far.asm) calls it.
 void screen_open(void)
 {
-    border_old = (*(uint8_t *)23624 >> 3) & 7;
     zx_border(INK_BLACK);
     palette(0);
     zx_cls(PAPER_BLACK | INK_WHITE | BRIGHT);
@@ -2156,14 +2176,9 @@ void screen_open(void)
 void screen_close(void)
 {
     at(NOW_ROW + 2, PANEL);
-    printf("PRESS ANY KEY");
-    in_wait_nokey();
-    in_wait_key();
-    in_wait_nokey();
-    zx_border(border_old);
+    printf(qr_key + 11);
+    key_clear();
     palette(1);
-    zx_cls(*(uint8_t *)23693);
-    at(0, 0);
     screen_row = 0;
 }
 
