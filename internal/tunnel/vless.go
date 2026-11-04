@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/netip"
 	"regexp"
+	"strings"
 )
 
 // VLESS is what a client needs to reach the hub's forwarder inside VLESS,
@@ -74,12 +75,32 @@ func (v *VLESS) Check() error {
 }
 
 // CheckVLESSPath refuses what is not a path for XHTTP: a
-// slash and 8 to 64 letters, digits, '-' or '_'.
+// slash and 8 to 64 letters, digits, '-' or '_', then for a group's path a
+// slash and its own part (CheckGroupPath).
 func CheckVLESSPath(p string) error {
 	if !vlessPathPattern.MatchString(p) {
 		return fmt.Errorf("tunnel: vless: %q is not a path such as /AbC-12_xyz0123456", p)
 	}
 	return nil
+}
+
+// CheckGroupPath refuses what is not a group's own part of an XHTTP path,
+// which the forwarder gives each group: 16 to 64 letters, digits, '-' or
+// '_'.
+func CheckGroupPath(p string) error {
+	if !groupPathPattern.MatchString(p) {
+		return fmt.Errorf("tunnel: vless: %q is not a group's path", p)
+	}
+	return nil
+}
+
+// RegistrationPath returns the XHTTP path a hub registers on: p without the
+// group's own part.
+func RegistrationPath(p string) string {
+	if i := strings.LastIndexByte(p, '/'); i > 0 {
+		return p[:i]
+	}
+	return p
 }
 
 // NewVLESSPath returns a new random path for XHTTP, which keeps scanners
@@ -104,7 +125,8 @@ func (v *VLESS) Equal(w *VLESS) bool {
 var (
 	shortIDPattern    = regexp.MustCompile(`^([0-9a-f]{2}){1,8}$`)
 	serverNamePattern = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
-	vlessPathPattern  = regexp.MustCompile(`^/[A-Za-z0-9_-]{8,64}$`)
+	vlessPathPattern  = regexp.MustCompile(`^/[A-Za-z0-9_-]{8,64}(/[A-Za-z0-9_-]{16,64})?$`)
+	groupPathPattern  = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
 	vlessIDPattern    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 

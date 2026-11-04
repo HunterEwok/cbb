@@ -856,7 +856,12 @@ func TestThroughXHTTP(t *testing.T) {
 	id, _ := tunnel.NewVLESSID()
 	key, peer := newClient(t)
 	hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{VLESSID: id})
-	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id}
+	// The group's packets come under a path of its own below the path.
+	group, ok := strings.CutPrefix(hs.vless.Path, path+"/")
+	if !ok || tunnel.CheckGroupPath(group) != nil {
+		t.Fatalf("the hub learned the path %q", hs.vless.Path)
+	}
+	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: hs.vless.Path, ID: id}
 	if !hs.vless.Equal(&want) {
 		t.Fatalf("the hub learned %+v, want %+v", hs.vless, want)
 	}
@@ -896,7 +901,12 @@ func TestHubOverXHTTP(t *testing.T) {
 	given := &tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: vless.RegistrationID}
 	key, peer := newClient(t)
 	hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{VLESSID: id, VLESS: given, Link: Link{Endpoint: dead}})
-	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id}
+	// The group's packets come under a path of its own below the path.
+	group, ok := strings.CutPrefix(hs.vless.Path, path+"/")
+	if !ok || tunnel.CheckGroupPath(group) != nil {
+		t.Fatalf("the hub learned the path %q", hs.vless.Path)
+	}
+	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: hs.vless.Path, ID: id}
 	if !hs.vless.Equal(&want) {
 		t.Fatalf("the hub learned %+v, want %+v", hs.vless, want)
 	}
@@ -1287,5 +1297,24 @@ func TestVLESSScansApart(t *testing.T) {
 	}
 	if _, ok := f.route(netip.MustParseAddrPort("203.0.113.10:4000"), initiation(pub, 2), now); !ok {
 		t.Fatal("a client's handshake was dropped after a flood over VLESS")
+	}
+}
+
+// A group's XHTTP path is the same after a restart, with the same key, and
+// another forwarder's key gives it another one.
+func TestGroupPathKept(t *testing.T) {
+	cert, _ := NewCert()
+	other, _ := NewCert()
+	path := func(c tls.Certificate) string {
+		f, err := Listen(Config{Listen: "127.0.0.1:0", Cert: c})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		return f.groupPath("a group")
+	}
+	a, b, c := path(cert), path(cert), path(other)
+	if a != b || a == c || tunnel.CheckGroupPath(a) != nil {
+		t.Fatalf("paths %q, %q, %q", a, b, c)
 	}
 }

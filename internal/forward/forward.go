@@ -26,7 +26,9 @@ import (
 	"container/list"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -123,6 +125,7 @@ type Forwarder struct {
 	netScans  *lru[scanKey, *bucket]          // NetworkScanRate
 	from      *budget.Count                   // registrations held or being set up, by source
 	setting   int                             // registrations being set up
+	pathKey   [32]byte                        // keys the groups' XHTTP paths, from the forwarder's key
 	overVLESS int                             // registrations over VLESS, held or being set up
 	mask      [32]byte                        // the key of the hellos' mask, given to every hub
 	vless     *vless.Server
@@ -137,23 +140,24 @@ type Forwarder struct {
 
 // reg is a hub's registration.
 type reg struct {
-	tag      string
-	key      [32]byte            // the hub's WireGuard public key
-	mac1     [32]byte            // mac1Key(key)
-	obf      *tunnel.Obfuscation // the group's AmneziaWG settings; nil for plain WireGuard
-	vlessID  string              // the group's VLESS user ID; empty without VLESS
-	id       uint64
-	helloKey [32]byte
-	counter  uint64         // the last hello's
-	hubEP    netip.AddrPort // where the hub's WireGuard port is reached; zero before its first hello
-	seen     chan netip.AddrPort
-	clients  map[netip.AddrPort]int // client addresses and their handshakes and sessions
-	waiting  int                    // handshakes that wait for the hub's answer
-	packets  bucket
-	bytes    bucket
-	closed   bool
-	conn     net.Conn // the registration's TLS
-	raw      net.Conn // its TCP connection, which closes without waiting, unlike TLS
+	tag       string
+	key       [32]byte            // the hub's WireGuard public key
+	mac1      [32]byte            // mac1Key(key)
+	obf       *tunnel.Obfuscation // the group's AmneziaWG settings; nil for plain WireGuard
+	vlessID   string              // the group's VLESS user ID; empty without VLESS
+	vlessPath string              // the group's own part of the XHTTP path; empty without XHTTP
+	id        uint64
+	helloKey  [32]byte
+	counter   uint64         // the last hello's
+	hubEP     netip.AddrPort // where the hub's WireGuard port is reached; zero before its first hello
+	seen      chan netip.AddrPort
+	clients   map[netip.AddrPort]int // client addresses and their handshakes and sessions
+	waiting   int                    // handshakes that wait for the hub's answer
+	packets   bucket
+	bytes     bucket
+	closed    bool
+	conn      net.Conn // the registration's TLS
+	raw       net.Conn // its TCP connection, which closes without waiting, unlike TLS
 }
 
 // clientKey names a client's session by the index it chose; indices are
@@ -383,6 +387,12 @@ func Listen(cfg Config) (*Forwarder, error) {
 		f.vlessCfg, f.byVLESS, f.vlessUser = v, map[string]*reg{}, f.vless.User
 	}
 	f.tlsCfg = f.serverTLS(cfg.Cert)
+	if der, err := x509.MarshalPKCS8PrivateKey(cfg.Cert.PrivateKey); err == nil {
+		f.pathKey = sha256.Sum256(append([]byte("cbb forwarder group paths\x00"), der...))
+	} else if _, err := rand.Read(f.pathKey[:]); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("forward: %w", err)
+	}
 	return f, nil
 }
 
@@ -819,6 +829,9 @@ func (f *Forwarder) dropRegLocked(r *reg) {
 	if r.vlessID != "" && f.byVLESS[r.vlessID] == r {
 		delete(f.byVLESS, r.vlessID)
 		_ = f.vless.RemoveUser(r.vlessID)
+	}
+	if r.vlessPath != "" {
+		f.vless.RemovePath(r.vlessPath)
 	}
 	if r.obf != nil {
 		f.byInit[initSize(r.obf)] = slices.DeleteFunc(f.byInit[initSize(r.obf)], func(o *reg) bool { return o == r })

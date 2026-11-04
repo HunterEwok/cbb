@@ -2503,6 +2503,15 @@ the path to it:
 - The path is `-vless-path`, or one made at random the first time and kept in its key file
   as a PEM block `CBB XHTTP PATH` (the path's bytes). It keeps scanners off the listener;
   nothing relies on it being secret.
+- Under the path itself the forwarder takes only registrations (the registrations' user ID,
+  below). Each group's packets come under a path of its own below it, `<path>/<group>`:
+  `<group>` is the first 16 bytes of HMAC-SHA256 keyed with SHA-256 of `cbb forwarder group
+  paths`, a zero byte and the forwarder's key (PKCS #8), over `cbb group path`, a zero byte
+  and the group's tag, in unpadded base64url, so it is the same at each registration and
+  after a restart, and unknown to anyone without the forwarder's key. The registration's
+  answer gives it in `path`, and the hub hands it to its clients in the offer. A group's
+  user ID is let in only under the path of a registered group; the path every build may
+  carry thus reaches nothing but the registrations.
 - Every other request gets the site. The web server sees the VLESS user ID and the
   encrypted WireGuard packets and SHOULD keep no log of that path.
 

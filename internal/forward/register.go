@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -214,6 +215,15 @@ func (f *Forwarder) acceptRegistrations() {
 	}
 }
 
+// groupPath returns the group's own part of the XHTTP path: the same for
+// the group at each registration and after a restart, so that its clients'
+// offers stay good, and known to nobody without the forwarder's key.
+func (f *Forwarder) groupPath(tag string) string {
+	m := hmac.New(sha256.New, f.pathKey[:])
+	m.Write([]byte("cbb group path\x00" + tag))
+	return base64.RawURLEncoding.EncodeToString(m.Sum(nil)[:16])
+}
+
 // registrationOverVLESS takes a hub's registration that came over VLESS,
 // from a hub that reaches the forwarder in no other way. All of them come
 // from the forwarder's own address, so they are bounded together
@@ -408,7 +418,11 @@ func (f *Forwarder) register(raw net.Conn) (*reg, error) {
 	}
 	var vlessAns *vlessAnswer
 	if v := f.vlessCfg; r.vlessID != "" && v.XHTTP != nil {
-		vlessAns = &vlessAnswer{Transport: tunnel.TransportXHTTP, Port: v.XHTTP.Port, ServerName: v.XHTTP.Host, Path: v.XHTTP.Path}
+		// The group's packets come under a path of its own, the same at
+		// each registration: v.XHTTP.Path, which every build may carry,
+		// takes only registrations.
+		r.vlessPath = f.groupPath(tag)
+		vlessAns = &vlessAnswer{Transport: tunnel.TransportXHTTP, Port: v.XHTTP.Port, ServerName: v.XHTTP.Host, Path: v.XHTTP.Path + "/" + r.vlessPath}
 	} else if r.vlessID != "" {
 		pub, err := vless.PublicKey(v.Key)
 		if err != nil {
@@ -452,6 +466,11 @@ func (f *Forwarder) register(raw net.Conn) (*reg, error) {
 			old.vlessID = ""
 		}
 		f.dropRegLocked(old)
+	}
+	if r.vlessPath != "" {
+		if err := f.vless.AddPath(r.vlessPath); err != nil {
+			r.vlessPath = ""
+		}
 	}
 	a := answer{ID: r.id, Mask: f.mask[:]}
 	if r.vlessID != "" {

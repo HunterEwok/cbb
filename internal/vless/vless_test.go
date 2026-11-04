@@ -228,7 +228,12 @@ func behindWebServerWith(t *testing.T, cfg ServerConfig, id string) (*Server, tu
 	back := net.JoinHostPort("127.0.0.1", strconv.Itoa(int(s.Port())))
 	web, cert := vlesstest.WebServer(t, path, func() string { return back })
 	TrustForTests(cert)
-	return s, tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: id}
+	// A group's packets come under its own path.
+	const group = "a-group-of-its-own"
+	if err := s.AddPath(group); err != nil {
+		t.Fatal(err)
+	}
+	return s, tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path + "/" + group, ID: id}
 }
 
 func TestThroughXHTTP(t *testing.T) {
@@ -481,5 +486,35 @@ func TestRegistrationStream(t *testing.T) {
 	}
 	if roundTrip(t, l) {
 		t.Error("the registrations' user ID reached the forwarder's UDP port")
+	}
+}
+
+// Over XHTTP a group's packets pass only under a group's path: not under
+// the path every build carries, nor under a path that is not let in.
+func TestGroupPaths(t *testing.T) {
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := tunnel.NewVLESSID()
+	s, l := behindWebServer(t, path, id)
+	if err := s.AddUser(id); err != nil {
+		t.Fatal(err)
+	}
+	base, other := l, l
+	base.Path = path
+	other.Path = path + "/not-a-group-path-at-all"
+	if roundTrip(t, base) {
+		t.Error("a group's packets passed under the registrations' path")
+	}
+	if roundTrip(t, other) {
+		t.Error("a group's packets passed under a path that is not let in")
+	}
+	s.RemovePath("a-group-of-its-own")
+	if roundTrip(t, l) {
+		t.Error("a group's packets passed under its path once it was taken back")
+	}
+	if err := s.AddPath("short"); err == nil {
+		t.Error("a short group path was taken")
 	}
 }
