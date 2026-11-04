@@ -1359,6 +1359,11 @@ All notable changes to cbb are documented in this file. The format follows
   pastes and other commands reached them through it. A computer now tells the phones
   connected to it which members it reaches (`reach`, docs/protocol.md section 4), and the
   apps show those as online through the hub.
+- A phone as the hub could not register with its forwarder: the registration dialed through
+  the service's list of allowed addresses, which only the service on a computer fills, so the
+  phone refused the forwarder's public address as "outside the home network". The hub's
+  registration now takes the addresses it may dial from its settings: the service's list on
+  a computer, and only the forwarder's own address on a phone.
 - cbb for macOS, signed with the hardened runtime (the release's Developer ID build, and
   `packaging/macos/sign.sh`), was killed by macOS 27 as soon as it loaded the Rust core,
   so `cbb version` and the installer failed: wazero's compiled code needs executable memory
