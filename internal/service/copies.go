@@ -36,10 +36,15 @@ func (s *Service) sealCopy(ev clip.Event) (*clip.Sealed, error) {
 	}
 	s.recMu.Lock()
 	var readers []clip.Reader
+	forwardOnly := false
 	if s.records != nil {
 		readers = s.records.Readers(ev.Kind == clip.Secret)
+		forwardOnly = slices.ContainsFunc(s.records.Devices(), func(d group.Device) bool { return d.ID == k.id.ID && d.ForwardOnly })
 	}
 	s.recMu.Unlock()
+	if forwardOnly {
+		return nil, errForwardOnly
+	}
 	// This member reads its own copies, which a copy it gets back after
 	// a restart needs, even while its record does not name its key yet.
 	if k.public != nil && !slices.ContainsFunc(readers, func(r clip.Reader) bool { return r.ID == ev.Origin }) && len(readers) < clip.MaxReaders {

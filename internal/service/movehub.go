@@ -107,8 +107,8 @@ func (s *Service) takeHub(body group.CommandBody) node.Result {
 	s.mu.Lock()
 	id := s.id
 	s.mu.Unlock()
-	if !id.IsAdmin() {
-		return refuse(node.ResultRefused, "this computer is no admin, and only the group's root or an admin can be its hub; make it an admin first")
+	if !id.IsAdmin() && !s.awaitForwardOnly(id.ID) {
+		return refuse(node.ResultRefused, "this computer is no admin, and its record does not make it a hub that only passes copies on; only the group's root, an admin, or such a computer can be a hub")
 	}
 	o := body.Hub
 	var fwd, fwdKey string
@@ -333,8 +333,11 @@ func (s *Service) waitClientsLeft(ctx context.Context, nd *node.Node, self group
 // through the forwarder and at the addresses given. A hub hands it its
 // clients, and a device with sync away from home on hands itself, so that
 // the new hub serves them before they meet it at home; this device keeps
-// the new hub's offer.
-func (s *Service) makeHub(ctx context.Context, target, fwd, fwdKey string, addrs []string) error {
+// the new hub's offer. With forwardOnly the target may be any computer
+// that is no admin: this device first signs it a device record with
+// forward_only, so that it passes the copies on and reads none
+// (docs/protocol.md, section 11, "Two kinds of hub").
+func (s *Service) makeHub(ctx context.Context, target, fwd, fwdKey string, addrs []string, forwardOnly bool) error {
 	s.mu.Lock()
 	id, nd := s.id, s.nd
 	s.mu.Unlock()
@@ -350,7 +353,9 @@ func (s *Service) makeHub(ctx context.Context, target, fwd, fwdKey string, addrs
 		return errors.New("-on names this device; cbb global hub makes it a hub here")
 	case d.Role != group.RoleFull:
 		return fmt.Errorf("%s is no computer: a phone is the hub while its app is open (This phone as the hub there), and a lite member or a watch is never one", d.Name)
-	case !s.mayHost(group.DeviceID(d.ID)):
+	case forwardOnly && d.Admin:
+		return fmt.Errorf("%s is an admin, a hub that reads the copies; only a computer that is no admin is made one that only passes them on", d.Name)
+	case !forwardOnly && !s.mayHost(group.DeviceID(d.ID)):
 		return fmt.Errorf("%s may not be a hub: only the group's root or an admin with the hub power is one; make it an admin first", d.Name)
 	case d.Frozen:
 		return fmt.Errorf("%s is frozen; an admin thaws it first", d.Name)
@@ -361,6 +366,11 @@ func (s *Service) makeHub(ctx context.Context, target, fwd, fwdKey string, addrs
 	}
 	if s.frozen(id) {
 		return errFrozen
+	}
+	if forwardOnly {
+		if err := s.markForwardOnly(id, nd, group.DeviceID(d.ID)); err != nil {
+			return err
+		}
 	}
 	order := group.HubOrder{Endpoints: addrs}
 	switch {
@@ -438,4 +448,75 @@ func (s *Service) makeHub(ctx context.Context, target, fwd, fwdKey string, addrs
 		return fmt.Errorf("saving the tunnel state: %w", err)
 	}
 	return nil
+}
+
+// markForwardOnly signs the device dev a record with forward_only, unless
+// its newest record has it, and passes it to the group: dev then passes
+// the copies on as a hub and reads none (docs/protocol.md, section 11,
+// "Two kinds of hub").
+func (s *Service) markForwardOnly(id *group.Identity, nd *node.Node, dev group.DeviceID) error {
+	rec := s.deviceRecord(dev)
+	switch {
+	case rec == nil:
+		return fmt.Errorf("%s is not in the devices list yet", dev)
+	case rec.ForwardOnly:
+		return nil
+	case rec.AdminKey != nil:
+		return fmt.Errorf("%s is an admin; only a computer that is no admin only passes copies on", rec.Name)
+	case rec.Role != group.RoleFull:
+		return fmt.Errorf("%s is no computer; only a computer only passes copies on", rec.Name)
+	}
+	s.recMu.Lock()
+	rootDevice := s.records.RootDevice()
+	s.recMu.Unlock()
+	if rec.ID == rootDevice {
+		return fmt.Errorf("%s is the root's own computer, a hub that reads the copies", rec.Name)
+	}
+	s.awaitRecords(id)
+	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(rec.ID), Name: rec.Name, Role: rec.Role,
+		OS: rec.OS, Key: &rec.Key, Store: rec.Store, Kind: rec.Kind, Proof: rec.Proof, Seal: rec.Seal, ForwardOnly: true})
+	if err != nil {
+		return err
+	}
+	s.publish(nd, r)
+	if !s.mayHost(dev) {
+		return errors.New("the group's records did not take the record that makes it a hub: only the root or an admin with the powers admit and hub signs it")
+	}
+	s.logf("cbb: %s (%s) only passes the copies on now, and reads none; the next copies are no longer sealed to it", rec.Name, rec.ID)
+	return nil
+}
+
+// errForwardOnly refuses what a hub that only passes copies on does not do.
+var errForwardOnly = errors.New("this computer is a hub of the group that only passes the copies on: it makes, reads and pastes none")
+
+// forwardOnlyWait is how long a computer that is no admin waits for the
+// record that makes it a hub that only passes copies on, which the admin
+// sends just before its hub command.
+const forwardOnlyWait = 10 * time.Second
+
+// awaitForwardOnly reports whether the records make this device, dev, a hub
+// that only passes copies on, waiting a little for the record.
+func (s *Service) awaitForwardOnly(dev group.DeviceID) bool {
+	for end := time.Now().Add(forwardOnlyWait); ; time.Sleep(100 * time.Millisecond) {
+		if d := s.deviceRecord(dev); d != nil && d.ForwardOnly && s.mayHost(dev) {
+			return true
+		}
+		if time.Now().After(end) {
+			return false
+		}
+	}
+}
+
+// forwardOnly reports whether this device's newest record makes it a hub
+// that only passes copies on: it makes no copies, writes none to its
+// clipboard, and takes no paste or action command.
+func (s *Service) forwardOnly() bool {
+	s.mu.Lock()
+	id := s.id
+	s.mu.Unlock()
+	if id == nil {
+		return false
+	}
+	d := s.deviceRecord(id.ID)
+	return d != nil && d.ForwardOnly
 }
