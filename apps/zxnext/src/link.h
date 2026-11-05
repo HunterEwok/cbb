@@ -47,6 +47,12 @@ void link_put(uint8_t c);
 // How many times link_ready found a receive buffer full.
 uint16_t link_overflows(void);
 
+// When set, link_send() and link_recv() go through these instead of the
+// UART, and link_shell() has nothing to do: .cbb's commands through the
+// driver while the network runs.
+extern void (*link_via_send)(uint8_t c);
+extern uint8_t (*link_via_recv)(uint8_t *c, uint16_t seconds);
+
 // Makes NextPi's shell (SUP>) ready for a command; 0 if the Pi answers.
 uint8_t link_shell(void);
 

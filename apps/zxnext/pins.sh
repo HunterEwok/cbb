@@ -20,3 +20,8 @@ pin() {
 echo "// Made by pins.sh: the files built with this CBB."
 pin DRV "$1"
 pin PI "$2"
+# CBB.OVL is linked with CBB, so ovl.sh writes its size, its SHA-256 and
+# the stamp of its pages over these, after the link.
+echo '#define PIN_OVL_SIZE 0x7A73564FUL // "OVsz"'
+echo '#define PIN_OVL_SHA256 "OVL-SHA256-PLACEHOLDER@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"'
+echo '#define OVL_STAMP "OVst"'

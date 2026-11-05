@@ -5,7 +5,10 @@
 ; each call (stub.asm). On every frame's interrupt it passes the ESP's bytes
 ; to the Pi in frames and the Pi's frames for the ESP to the ESP, sends the
 ; Pi how many of its bytes it took, its hello and the clock, and types the
-; characters of the Pi's key frames one a frame. The frames are those of
+; characters of the Pi's key frames one a frame. It also carries .cbb's
+; commands to the Pi while the network runs (calls 7 and 8): their bytes
+; in frames to the Pi, the Pi's answers in a ring of their own, which .cbb
+; reads. The frames are those of
 ; the lite member's `cbb next link` (lite/README.md, "The network through
 ; the Next's ESP8266"). It restores the UART selection it found, so the
 ; program in front is not disturbed.
@@ -37,6 +40,8 @@ F_TIME          equ     'T'
 F_ACK           equ     'A'
 F_KEYS          equ     'K'
 F_QUIT          equ     'Q'
+F_CBB_OUT       equ     'C'     ; .cbb's bytes for the Pi's shell
+F_CBB_IN        equ     'c'     ; the answers for .cbb
 
 ESP_CHUNK       equ     48      ; the ESP's bytes in one frame to the Pi
 HELLO_TICKS     equ     50      ; a hello every second
@@ -47,6 +52,9 @@ ESP_RING        equ     $F000   ; 1 KB: bytes for the ESP
 KEY_RING        equ     $F400   ; 256 bytes: characters to type
 ESP_BUF         equ     $F500   ; the ESP's bytes on their way to the Pi
 CAP             equ     $F600   ; the last 64 bytes from the Pi, for .cbb net -d
+CBB_RING        equ     $F800   ; 1 KB: the Pi's answers for .cbb
+CBB_OUT         equ     $FC00   ; .cbb's bytes on their way to the Pi
+CBB_CHUNK       equ     64      ; .cbb's bytes in one frame to the Pi
 
         jp      api             ; $E000
         jp      im              ; $E003
@@ -59,7 +67,13 @@ CAP             equ     $F600   ; the last 64 bytes from the Pi, for .cbb net -d
 ; read from it (DE); B = 5 the last dropped frame (C its type, B its
 ; length, E the sum so far, D the byte that ended it; HL the bytes taken);
 ; B = 6 six of the last 64 bytes from the Pi (from E, in C, B, E, D, L, H;
-; byte n of the Pi is at n mod 64). Carry set for an unknown call.
+; byte n of the Pi is at n mod 64); B = 7 .cbb's bytes for the Pi: D = 0
+; opens (the answers' ring empty, and kept from now), D = 1 the byte E
+; (a frame goes once CBB_CHUNK wait, the rest at the next interrupt),
+; D = 2 sends what waits, D = 3 that and an empty frame, which stops the
+; command on the Pi, D = 4 closes; B = 8 the next byte of the Pi's
+; answers in E, with D = 1, or D = 0 for none yet. Carry set for an
+; unknown call.
 api:
         ld      a,b
         cp      1
@@ -92,6 +106,7 @@ api2:
         ld      (hello_left),a
         ld      hl,1
         ld      (time_left),hl
+        call    cbb_reset
 api_ok:
         and     a
         ret
@@ -120,7 +135,7 @@ api5:
         ret
 api6:
         cp      6
-        jr      nz,api_bad
+        jr      nz,api7
         ld      a,e             ; six bytes of CAP from E (0..58)
         and     63
         ld      l,a
@@ -139,8 +154,112 @@ api6:
         ld      l,a
         and     a
         ret
+api7:
+        cp      7
+        jr      nz,api8
+        ld      a,d
+        and     a
+        jr      nz,a7_byte
+        call    cbb_reset       ; D = 0: open
+        inc     a
+        ld      (cbb_open),a
+        ret
+a7_byte:
+        cp      1
+        jr      nz,a7_send
+        ld      a,(cbb_n)
+        ld      l,a
+        ld      h,CBB_OUT >> 8
+        ld      (hl),e
+        inc     a
+        ld      (cbb_n),a
+        cp      CBB_CHUNK
+        ld      hl,cbb_flush
+        jr      z,api_pi
+        and     a
+        ret
+a7_send:
+        ld      hl,cbb_flush
+        cp      2
+        jr      z,api_pi
+        ld      hl,cbb_stop
+        cp      3
+        jr      z,api_pi
+        cp      4
+        jr      nz,api_bad
+        jp      cbb_reset       ; D = 4: close
+api8:
+        cp      8
+        jr      nz,api_bad
+        ld      hl,(cbb_head)
+        ld      de,(cbb_tail)
+        and     a
+        sbc     hl,de
+        ld      de,0
+        ret     z               ; none yet, carry clear
+        ld      hl,(cbb_head)
+        push    hl
+        ld      a,h
+        and     3
+        or      CBB_RING >> 8
+        ld      h,a
+        ld      e,(hl)
+        pop     hl
+        inc     hl
+        ld      a,h
+        and     3
+        ld      h,a
+        ld      (cbb_head),hl
+        inc     d
+        and     a
+        ret
 api_bad:
         scf
+        ret
+
+; Runs HL, which sends frames to the Pi, from a call: the UART selected
+; before is selected again after.
+api_pi:
+        ld      bc,PORT_SELECT
+        in      a,(c)
+        push    af
+        call    jp_hl
+        pop     af
+        ld      bc,PORT_SELECT
+        out     (c),a
+        and     a
+        ret
+jp_hl:
+        jp      (hl)
+
+; .cbb's waiting bytes to the Pi in a frame.
+cbb_flush:
+        ld      a,(cbb_n)
+        and     a
+        ret     z
+        ld      b,a
+        xor     a
+        ld      (cbb_n),a
+        ld      a,F_CBB_OUT
+        ld      hl,CBB_OUT
+        jp      frame
+
+; Those, then an empty frame: the command on the Pi stops.
+cbb_stop:
+        call    cbb_flush
+        ld      a,F_CBB_OUT
+        ld      b,0
+        jp      frame
+
+; Empties the answers' ring and the bytes waiting, and closes; A = 0,
+; carry clear.
+cbb_reset:
+        ld      hl,0
+        ld      (cbb_head),hl
+        ld      (cbb_tail),hl
+        xor     a
+        ld      (cbb_n),a
+        ld      (cbb_open),a
         ret
 
 ; ---------------------------------------------------------------------------
@@ -156,6 +275,7 @@ im:
         call    from_pi
         call    to_esp
         call    from_esp
+        call    cbb_flush
         call    ack
         call    hello
         call    keys
@@ -164,8 +284,8 @@ im:
         out     (c),a
         ret
 
-; Reads the Pi's bytes while the ring for the ESP has room for a whole
-; frame's data, and decodes them.
+; Reads the Pi's bytes while the ring for the ESP, and the one for .cbb
+; while it is open, have room for a whole frame's data, and decodes them.
 from_pi:
         ld      bc,PORT_SELECT
         ld      a,SEL_PI
@@ -175,11 +295,13 @@ fp_loop:
         and     a
         jr      nz,fp_read      ; inside a frame: its room was checked
         call    esp_free        ; HL = free bytes in the ring
-        ld      a,h
+        call    fp_room
+        ret     c
+        ld      a,(cbb_open)
         and     a
-        jr      nz,fp_read      ; 256 or more
-        ld      a,l
-        cp      255
+        jr      z,fp_read
+        call    cbb_free
+        call    fp_room
         ret     c
 fp_read:
         ld      bc,PORT_STATUS
@@ -202,10 +324,26 @@ fp_read:
         call    decode
         jr      fp_loop
 
+; Carry when HL, a ring's free bytes, is under a frame's data.
+fp_room:
+        ld      a,h
+        and     a
+        ret     nz              ; 256 or more
+        ld      a,l
+        cp      255
+        ret
+
+; HL = the free bytes in .cbb's ring, as esp_free.
+cbb_free:
+        ld      hl,(cbb_head)
+        ld      de,(cbb_tail)
+        jr      ring_free
+
 ; HL = the free bytes in the ESP's ring: (head - tail - 1) mod 1024.
 esp_free:
         ld      hl,(esp_head)
         ld      de,(esp_tail)
+ring_free:
         and     a
         sbc     hl,de
         dec     hl
@@ -289,6 +427,8 @@ dt_len:
         ld      (hl),a
         ld      hl,(esp_tail)   ; the data goes after the committed bytes
         ld      (esp_tent),hl
+        ld      hl,(cbb_tail)
+        ld      (cbb_tent),hl
         ld      a,(key_tail)
         ld      (key_tent),a
         ld      a,(dlen)
@@ -323,7 +463,7 @@ dt_data:
         jr      dt_count
 dt_key:
         cp      F_KEYS
-        jr      nz,dt_count
+        jr      nz,dt_cbb
         ld      a,(key_head)
         ld      d,a
         ld      a,(key_tent)
@@ -340,6 +480,22 @@ dt_key:
 dt_full:
         ld      a,1
         ld      (kfull),a
+        jr      dt_count
+dt_cbb:
+        ; CBB_RING + (cbb_tent & 1023) = E; kept only while .cbb's ring
+        ; is open (dt_sum), whose room from_pi checked then.
+        cp      F_CBB_IN
+        jr      nz,dt_count
+        ld      hl,(cbb_tent)
+        push    hl
+        ld      a,h
+        and     3
+        or      CBB_RING >> 8
+        ld      h,a
+        ld      (hl),e
+        pop     hl
+        inc     hl
+        ld      (cbb_tent),hl
 dt_count:
         ld      hl,dcnt
         dec     (hl)
@@ -367,9 +523,21 @@ dt_sum:
         ret
 dt_k:
         cp      F_KEYS
-        jr      nz,dt_q
+        jr      nz,dt_c
         ld      a,(key_tent)
         ld      (key_tail),a
+        ret
+dt_c:
+        cp      F_CBB_IN
+        jr      nz,dt_q
+        ld      a,(cbb_open)
+        and     a
+        ret     z               ; nobody reads it: dropped
+        ld      hl,(cbb_tent)
+        ld      a,h
+        and     3
+        ld      h,a
+        ld      (cbb_tail),hl
         ret
 dt_q:
         cp      F_QUIT
@@ -579,7 +747,7 @@ keys:
         ret
 
 hello_text:
-        defm    "cbb.drv 0.1"
+        defm    "cbb.drv 0.2"
 hello_end:
 
 ; The state.
@@ -605,6 +773,11 @@ dropped:        defw    0
 esp_sent:       defw    0       ; bytes sent to the ESP
 esp_got:        defw    0       ; bytes read from the ESP
 drop_info:      defs    4, 0    ; the last dropped frame, for call 5
+cbb_open:       defb    0       ; .cbb reads the Pi's answers (call 7)
+cbb_n:          defb    0       ; .cbb's bytes waiting in CBB_OUT
+cbb_head:       defw    0       ; .cbb's ring, indices 0..1023
+cbb_tail:       defw    0
+cbb_tent:       defw    0
 hello_left:     defb    1
 time_left:      defw    1
 code_end:

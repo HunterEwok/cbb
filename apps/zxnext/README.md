@@ -27,7 +27,8 @@ tools. Test them on the machine before relying on them.
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below),
-                      then start the network (a running one stops for it)
+                      then pair the Pi (its QR code) when it is in no group, else start
+                      the network (a running one stops for it)
 .cbb update           the same, for the files the site has newer
 .cbb paste-receive on [-enter] | off
                       whether the group's admins may type on the Next from the phone app;
@@ -35,8 +36,8 @@ tools. Test them on the machine before relying on them.
 .cbb leave            after a Y: the Pi forgets its keys and its group; its cbb stays, and
                       .cbb pair joins the same group or another one
 .cbb uninstall        after a Y: stop the network, uninstall CBB.DRV, remove the Pi's cbb
-                      and its group, and the files in /cbb; /cbb/CBB itself runs then and
-                      stays, with the folder: ERASE it after
+                      and its group, and the files in /cbb; C:/DOT/CBB is yours to ERASE
+                      (a /cbb/CBB that runs as ../CBB stays too, with the folder)
 .cbb -d paste         the same, with the cause under each error and, at the end, the
                       bytes of the stack never used (debug mode)
 ```
@@ -53,42 +54,61 @@ Through the ESP8266, once it is on the Wi-Fi network (NextZXOS's own tools join 
 NextBASIC:
 
 ```
-MKDIR "/cbb": CD "/cbb"
+CD "C:/DOT"
 .http -h cbb.tools -u /zxnext -f CBB
-../CBB install
+.cbb install
 ```
 
-`.http` fetches `.cbb` itself; `install` fetches the rest from cbb.tools into `/cbb`
-(`CBB.DRV` and the lite member for the Pi), then copies the Pi's `cbb` over the
+`.http` fetches `.cbb` itself into `C:/DOT`, where NextZXOS finds dot commands, so `.cbb`
+runs from any folder. `install` writes everything else in `/cbb`: it fetches the rest from
+cbb.tools (`CBB.OVL`, `CBB.DRV` and the lite member for the Pi), then copies the Pi's `cbb` over the
 UART to `/NextPi/nextpi`, where it writes a start script `cbb` that keeps the member's state
 in `/NextPi/nextpi/cbb-state` (NextPi's root is read-only). Nothing else on the card or the Pi
 changes; the Pi's copy is removed from the card once the Pi has it.
 
 A line shows each download: the percentage, the kilobytes, the speed and the time left, and
 the border blinks while it runs. SPACE stops it, and `.cbb install` goes on from where a
-download stopped or broke off.
+download stopped or broke off. After the install's key, a Pi in no group goes on to pair: the
+QR code shows at once, as `.cbb pair` shows it.
+
+**At power-on.** NextZXOS runs `C:/NEXTZXOS/AUTOEXEC.BAS` when it starts: `.cbb install`
+adds `.cbb net on` to it as its last line, after the user's own lines (or writes one with
+only that line), and `.cbb uninstall` takes the line out again and leaves the rest as it
+was. A program that never ends, or ends in `.core`, never reaches it; then start the network
+by hand. In the first two minutes after power-on `.cbb net on` waits up to a minute and a
+half for NextPi, which takes about half a minute to start.
+
+A `CBB` fetched into `/cbb` by an earlier manual still works there as `../CBB`; `.cbb update`
+replaces the one it runs as, `C:/DOT/CBB` first.
 
 **What is checked.** The files come over plain HTTP, since neither `.http` nor the ESP has
-TLS. So each `CBB` carries the size and SHA-256 of the `CBB.DRV` and the Pi's `cbb` it was
-built with, and installs only those, whatever the site or the network serves: the Next
-checks the driver, and the Pi checks its `cbb` with `sha256sum` before it replaces the old
+TLS. So each `CBB` carries the size and SHA-256 of the `CBB.OVL`, `CBB.DRV` and the Pi's
+`cbb` it was built with, and installs only those, whatever the site or the network serves: the Next
+checks the overlay and the driver, and the Pi checks its `cbb` with `sha256sum` before it replaces the old
 one. What `CBB` itself is, nothing on the Next can check: the one `.http` fetches is as
 trustworthy as the network it came over. For an installation that does not trust the
 network, take `CBB` from the release instead, whose files are signed
 ([installing](../../docs/guide/install.md#checking-a-download)): copy `zxnext/CBB` of
-`cbb-zxnext.tar.gz` to `/cbb` on the card, then `../CBB install`.
+`cbb-zxnext.tar.gz` to `C:/DOT` on the card, then `.cbb install`.
 
-`.cbb update` looks at the site's list for a newer `CBB`. When there is one, it says so, and
-you fetch it as at the start (or from the release) and run `../CBB install`; otherwise it
-installs this `CBB`'s files where they are missing or differ.
+`.cbb update` looks at the site's list for a newer `CBB`. Without one, it installs this
+`CBB`'s files where they are missing or differ, or says there are no updates. With one, it
+fetches it as `CBB.NEW` next to the running one (in `C:/DOT`, or in `/cbb` for an old
+install), then the files the list names for it, each checked against the list's size and
+SHA-256: the same trust as the `.http` that fetched `CBB` at the start. Last it closes its
+own file, which NextZXOS keeps open while a dot command over 8K runs (the API's "Large dot
+commands"), erases it and renames `CBB.NEW` in its place; the code in memory runs on. Should
+that fail, it says the `ERASE` and `RENAME` to type after it. The network, if it ran, it
+leaves off and asks for `.cbb net on` or a restart: starting it is the new `CBB`'s job, since the new
+driver and the Pi's new `cbb` may want what the old one does not know.
 
 Over an earlier installation: `.cbb install` asks for `.cbb net off` first while the network
 runs, and replaces only the files that differ. It installs `CBB.DRV` itself, and a driver
 already installed, which runs from memory, it uninstalls and installs again when the file is
 new. On the Pi it stops the old `cbb service`, so the next `.cbb net on` starts the new
 one, and an old `cbb` that is the program itself, not the start script, is kept as
-`cbb.old`. A `CBB` in `C:/DOT` that differs from the one in `/cbb` is reported, not touched:
-`.cbb` runs that one, `../CBB` in `/cbb` the new one.
+`cbb.old`. A `CBB` in `C:/DOT` that differs from one in `/cbb` is reported, not touched:
+`.cbb` runs the one in `C:/DOT`.
 
 Not yet run on a real Next.
 
@@ -162,13 +182,20 @@ the work:
   (NextZXOS's `drv_drvrtc`);
 - it types the characters of the Pi's key frames, one a frame once the program took the
   last (`LAST_K` and bit 5 of `FLAGS`, as the ROM does for a key);
+- it carries `.cbb`'s commands while the network runs: their bytes in frames to the Pi, the
+  Pi's answers in a 1 KB ring of their own, which `.cbb` reads; while it reads, the Pi's
+  frames wait in the Pi's UART when that ring is full too, and answers nobody reads are
+  dropped;
 - it restores the UART selection it found, and stops on the Pi's quit frame.
 
 The frames are those of `cbb next link` (lite/README.md, "The network through the Next's
 ESP8266"). The driver starts off, so that nothing reaches NextPi's shell before the link
 runs; its API turns it on: `DRIVER 124,2,1` (1 the counters: the ESP's overflows, dropped
 frames, bytes taken; 2 on or off, and turning it on starts the counts again, as the link counts its bytes from 0; 3 whether it is on, in A and DE; 4 the bytes sent to and read from the ESP; 5 the last
-dropped frame; 6 the last 64 bytes from the Pi, which `.cbb -d net` shows). Its id, 124, is not
+dropped frame; 6 the last 64 bytes from the Pi, which `.cbb -d net` shows; 7 `.cbb`'s
+bytes for the Pi, D = 0 opens, 1 a byte in E, 2 sends what waits, 3 that and the frame that
+stops the command, 4 closes; 8 the next byte of the Pi's answers, in E with D = 1, or D = 0
+for none yet; driver 0.2). Its id, 124, is not
 assigned by NextZXOS's maintainers yet.
 
 To use it, put `CBB` and `CBB.DRV` in `/cbb` (`.cbb install` does), join the ESP to the Wi-Fi network as NextZXOS's own
@@ -199,9 +226,11 @@ ESP8266"). While the network runs, the ESP's UART is at 19200 (`AT+UART_CUR`, no
 flash): the driver hands the Pi 2400 of its bytes a second, and the ESP has no flow control, so
 at its stock 115200 a burst would overflow the Next's 512-byte buffer; `.cbb net off` puts it
 back at 115200. The lite member (`cbb service -peer 127.0.0.1:8769`) has to run on the Pi as well.
-While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy`, `text` and
-`pair` stop the network for the Pi's shell and start it again after (some 10 to 15 seconds),
-so a copy goes to the group at once.
+While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy` and `text` go
+through the driver (calls 7 and 8), and the link on the Pi runs their `cbb next paste` or
+`copy` as NextPi's shell would, so the network goes on. With an older driver, which has no
+such calls, they stop the network for the Pi's shell and start it again after (some 10 to
+15 seconds). `.cbb pair` stops it in any case.
 
 NextPi has no network of its own, so `.cbb pair` joins the group through the ESP, with the network's settings or their defaults. It asks the ESP
 for its address (`AT+CIFSR`), starts `cbb next pair` on the Pi in the background with that
@@ -224,7 +253,8 @@ With [z88dk](https://github.com/z88dk/z88dk) 2.3 (`zcc` on the `PATH`, `ZCCCFG` 
 at its `lib/config`):
 
 ```sh
-make PI_CBB=cbb   # build/CBB, build/PIBRIDGE (copy them to C:/DOT) and build/CBB.DRV;
+make PI_CBB=cbb   # build/CBB (to C:/DOT), build/CBB.OVL (to /cbb), build/PIBRIDGE and
+                  # build/CBB.DRV;
                   # cbb is the Pi's lite member, which CBB installs (pins.sh)
 make test         # the frame parser's and SHA-256's tests with the host's C compiler, the driver's
                   # bank in a Z80 emulator against two played UARTs, and .cbb itself on a played
@@ -232,7 +262,7 @@ make test         # the frame parser's and SHA-256's tests with the host's C com
 ```
 
 CI's `ZX Spectrum Next` job builds z88dk from its release source, checked against a
-SHA-256, and runs both; the run keeps `CBB`, `PIBRIDGE` and `CBB.DRV` as its artifact
+SHA-256, and runs both; the run keeps `CBB`, `CBB.OVL`, `PIBRIDGE` and `CBB.DRV` as its artifact
 `cbb-zxnext-dot`.
 
 ## Memory
@@ -242,11 +272,19 @@ for the rest. z88dk's `dotn` loader puts `.cbb` in these parts:
 
 | Part | Where | What | Must leave free |
 |---|---|---|---|
-| CODE | divMMC, 0x2000-0x3FFF | the library, `far.asm`, `colour()`, the palette | 1K |
-| MAIN | 0x8000 up to 0xE000 | `run()`, the link, the frames, the driver's calls, the install screen's bars, the strings | 3K: 2K for the stack, which starts at 0xE000 and goes down (about 200 bytes used), 1K to grow |
-| PAGE_13 | 0xE000-0xFFFF | the install: fetching over the ESP, checking, sending to the Pi | 1K |
-| PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256, `.cbb uninstall` and `leave` | 1K |
-| PAGE_17 | 0xE000-0xFFFF | `.cbb net`, `paste`, `copy`, `text` and `pair` | 1K |
+| CODE | divMMC, 0x2000-0x3FFF | the library, `far.asm`, `colour()`, the palette, `ovl_load()` | 1K |
+| MAIN | 0x8000 up to 0xE000 | `run()`, the link, the frames, the driver's calls, the strings | 3K: 2K for the stack, which starts at 0xE000 and goes down (about 600 bytes used), 1K to grow |
+| PAGE_13 | 0xE000-0xFFFF | the install: fetching over the ESP, checking, sending to the Pi, the install screen's bars | 1K |
+| PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256, the site's list | 1K |
+| PAGE_17 | 0xE000-0xFFFF | `.cbb net` and `pair` | 1K |
+| PAGE_19 | 0xE000-0xFFFF, in `CBB.OVL` | `.cbb paste`, `copy`, `text`, `leave`, `uninstall`, `paste-receive` | 1K |
+
+`CBB` stays under 64K: a `CBB` of 64K reset a real Next. So the pages from 19 on are not in
+it but in `/cbb/CBB.OVL`, which `.cbb install` fetches: `ovl.sh` cuts them out of the file
+z88dk wrote, marks them in its page table to be allocated but not loaded, and writes the
+stamp of the build into each and `CBB.OVL`'s size, SHA-256 and stamp into `CBB`. The first
+far call into such a page reads it from `CBB.OVL` and checks its stamp (`ovl_load()`), so
+there may be as many as the program needs, and the user still types the one command.
 
 The pages share 0xE000, the window of MMU7, so only one is there at a time. MAIN calls
 a page through its entry in `far.asm` (`far_install()`, `far_cmd()` and so on), which

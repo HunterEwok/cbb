@@ -324,14 +324,20 @@ to 255), that many bytes and the sum of the type, the length and the bytes modul
 before), `E` bytes from the ESP, `e` bytes for the ESP, `T` the clock (the date and the time in
 MS-DOS's form, as NextZXOS's `M_DATE` gives them, each 16 bits little-endian),
 `A` how many bytes on the wire the driver has taken (16 bits, little-endian; the link
-sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters to type and
-`Q` to stop. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
+sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters to type,
+`Q` to stop, `C` what `.cbb` types for the Pi's shell and `c` the answers for it. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
 frames, with up to five connections (`AT+CIPMUX=1`) and the data in `+IPD` blocks.
 
 The link is also a remote paste target, `next`: once `cbb paste-receive on` is set, an
 admin's paste goes to the driver in `K` frames, 50 characters a second, and the driver types
 them into whatever program runs on the Next. As with the text console, the link has to run
 as root and a line break needs `-enter`.
+
+While the network runs, `.cbb paste`, `copy` and `text` reach the Pi in `C` frames (driver
+0.2): the link takes the line `cbb [-debug] next paste|copy ...`, and nothing else, runs it
+as NextPi's shell would, with the link's state, hands it what follows as its input, and
+sends what it writes back in `c` frames, then `CR LF SUP>`, the shell's prompt. An empty `C`
+frame stops the command; any other line gets `CBBERR` and the prompt.
 
 ## Errors
 
