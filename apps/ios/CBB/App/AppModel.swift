@@ -1330,6 +1330,12 @@ final class AppModel: ObservableObject {
         if let f = error as? Content.Failure, case .tooLarge = f {
             return String(localized: "This image is larger than 100 MB, so it stays on the computer.", bundle: .app)
         }
+        if let f = error as? Content.Failure, f == .unread {
+            return String(localized: "This copy was not sealed to this phone, so it cannot be read here. Copy it again on that device.", bundle: .app)
+        }
+        if error is CopyKeys.Failure {
+            return String(localized: "This phone does not have the group's device list yet, so it cannot seal or read copies. Try again once a computer is connected.", bundle: .app)
+        }
         if error is Content.Failure || (error as? MemberNode.Failure) == .missing {
             return String(localized: "Could not get the image from the computers. Copy it there again, then try again.", bundle: .app)
         }

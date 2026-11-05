@@ -1291,6 +1291,26 @@
         }
       }
     },
+    "This copy was not sealed to this phone, so it cannot be read here. Copy it again on that device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Эта копия запечатана не для этого телефона, поэтому здесь её не прочитать. Скопируйте её ещё раз на том устройстве."
+          }
+        }
+      }
+    },
+    "This phone does not have the group's device list yet, so it cannot seal or read copies. Try again once a computer is connected.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У телефона ещё нет списка устройств группы, поэтому он не может запечатывать и читать копии. Повторите, когда подключится компьютер."
+          }
+        }
+      }
+    },
     "Could not get the image from the computers. Copy it there again, then try again.": {
       "localizations": {
         "ru": {

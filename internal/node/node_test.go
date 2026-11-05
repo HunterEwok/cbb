@@ -47,6 +47,10 @@ type member struct {
 	engine *clip.Engine
 	writes chan Write
 	peers  chan int // len(Peers()) at each OnPeers call
+	// blobs, when set, holds the parts of this member's copies of images
+	// and files, and gets the blob each is sealed into, for a peer that
+	// opens it; otherwise a copy names a blob nobody holds.
+	blobs *memContent
 }
 
 var (
@@ -96,13 +100,20 @@ func newMember(t *testing.T, role Role, opts ...option) *member {
 	m := &member{t: t, id: id, writes: make(chan Write, 1024), peers: make(chan int, 1024)}
 	secret := testReaders.add(t, devID)
 	ec := clip.Config{Self: string(devID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil), Seal: func(ev clip.Event) (*clip.Sealed, error) {
-		// The node passes a copy's blob on by its name alone; these tests
-		// fetch parts by their own hashes.
+		// The node passes a copy's blob on by its name alone; most of these
+		// tests fetch parts by their own hashes.
 		var blob *clip.Blob
+		k := clip.NewKey()
 		if ev.Media != nil && ev.Media.Size > 0 {
 			blob = &clip.Blob{Size: clip.BlobSize(ev.Media.Size), SHA256: make([]byte, sha256.Size)}
+			if m.blobs != nil {
+				var err error
+				if blob, err = m.blobs.sealBlob(k, ev.Media); err != nil {
+					return nil, err
+				}
+			}
 		}
-		return clip.SealCopy(ev.ID, ev.Origin, ev.Time, cert.Raw, nil, testReaders.of(t), clip.Content{Kind: ev.Kind, Via: ev.Via, Text: ev.Text, Media: ev.Media}, blob, clip.NewKey(), key)
+		return clip.SealCopy(ev.ID, ev.Origin, ev.Time, cert.Raw, nil, testReaders.of(t), clip.Content{Kind: ev.Kind, Via: ev.Via, Text: ev.Text, Media: ev.Media}, blob, k, key)
 	}}
 	nc := Config{
 		Identity: id, Role: role,
@@ -147,6 +158,14 @@ func (r *readerSet) add(t *testing.T, dev group.DeviceID) []byte {
 	defer r.mu.Unlock()
 	r.readers[t.Name()] = append(r.readers[t.Name()], clip.Reader{ID: string(dev), Seal: pub})
 	return secret
+}
+
+// addKey adds dev, with its public key for sealed messages, to the readers
+// of the test t.
+func (r *readerSet) addKey(t *testing.T, dev group.DeviceID, pub []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.readers[t.Name()] = append(r.readers[t.Name()], clip.Reader{ID: string(dev), Seal: pub})
 }
 
 func (r *readerSet) of(t *testing.T) []clip.Reader {

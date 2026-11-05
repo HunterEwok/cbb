@@ -229,11 +229,12 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// record of its own device says that it holds the root.
     mutating func record(device: String, name: String, role: String, os: String? = nil, key: Data, admin: Data? = nil,
                          powers: [String]? = nil, commands: [String]? = nil, store: String? = nil, kind: String? = nil,
-                         proof: String? = nil, seal: Data? = nil, caSigner: CertificateSigner, now: Date) throws -> Member.Record {
+                         proof: String? = nil, seal: Data? = nil, forwardOnly: Bool = false, caSigner: CertificateSigner, now: Date) throws -> Member.Record {
         guard isAdmin else { throw Failure.notAdmin }
         var b = Records.Body(type: "device", signer: Self.signer(caSigner), timeMS: Records.ms(now))
         (b.device, b.name, b.role, b.os, b.key, b.admin) = (device, name, role, os, key, admin)
         (b.store, b.kind, b.proof, b.seal) = (store, kind, proof, seal)
+        if forwardOnly { b.forward_only = true }
         if admin != nil {
             let g = Self.grants(role: role)
             (b.powers, b.commands) = (powers ?? g.powers, commands ?? g.commands)
@@ -355,7 +356,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
                 revoke += d.keys
             } else if let admin = d.adminKey, !d.frozen {
                 out.append(try record(device: d.id, name: d.name, role: d.role, os: d.os, key: d.key, admin: admin, powers: d.powers,
-                                      commands: d.commands, store: d.store, kind: d.kind, proof: d.proof, seal: d.seal, caSigner: rootSigner, now: now))
+                                      commands: d.commands, store: d.store, kind: d.kind, proof: d.proof, seal: d.seal, forwardOnly: d.forwardOnly, caSigner: rootSigner, now: now))
             }
         }
         if !revoke.isEmpty {
@@ -549,7 +550,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         guard !name.isEmpty, Self.validName(name) == name else { throw Failure.invalidName }
         return try record(device: device, name: name, role: d.role, os: d.os, key: d.key, admin: d.adminKey,
                           powers: d.adminKey == nil ? nil : d.powers, commands: d.adminKey == nil ? nil : d.commands,
-                          store: d.store, kind: d.kind, proof: d.proof, seal: d.seal, caSigner: caSigner, now: now)
+                          store: d.store, kind: d.kind, proof: d.proof, seal: d.seal, forwardOnly: d.forwardOnly, caSigner: caSigner, now: now)
     }
 
     /// Unfreezes an admin computer that another admin froze (section 10,
@@ -753,14 +754,14 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
             guard d.store == Records.proven else { return nil }
             return try record(device: device, name: d.name, role: d.role, os: d.os, key: d.key, admin: d.adminKey,
                               powers: d.adminKey == nil ? nil : d.powers, commands: d.adminKey == nil ? nil : d.commands,
-                              store: Records.hardware, kind: d.kind, proof: nil, seal: d.seal, caSigner: rootSigner, now: now)
+                              store: Records.hardware, kind: d.kind, proof: nil, seal: d.seal, forwardOnly: d.forwardOnly, caSigner: rootSigner, now: now)
         }
         if d.store == r.store, (d.kind ?? "") == r.kind { return nil }
         guard let first = e.chain.first else { return nil }
         let proof = r.store == Records.proven ? SHA256.hash(data: first).map { String(format: "%02x", $0) }.joined() : nil
         return try record(device: device, name: d.name, role: d.role, os: d.os, key: d.key, admin: d.adminKey,
                           powers: d.adminKey == nil ? nil : d.powers, commands: d.adminKey == nil ? nil : d.commands, store: r.store,
-                          kind: r.kind.isEmpty ? nil : r.kind, proof: proof, seal: d.seal, caSigner: rootSigner, now: now)
+                          kind: r.kind.isEmpty ? nil : r.kind, proof: proof, seal: d.seal, forwardOnly: d.forwardOnly, caSigner: rootSigner, now: now)
     }
 
     /// The admin CA this phone issued for an admin key a computer offers,
