@@ -57,14 +57,18 @@ fn member_frames() {
                 if let Some(d) = want.get("device") {
                     assert_eq!(serde_json::to_value(&device).unwrap(), *d);
                 }
+                // The current copy is sealed: its header, unread here.
                 if let Some(c) = h.current {
-                    assert_eq!(serde_json::to_value(&c).unwrap(), want["current"]);
+                    assert!(c.unread);
+                    let s = c.sealed.unwrap();
+                    s.validate().unwrap();
+                    assert_eq!(serde_json::to_value(&s).unwrap(), want["current"]);
                 }
             }
             "event" => {
-                let ev: Event = serde_json::from_value(m.event.clone().unwrap()).unwrap();
-                ev.validate().unwrap();
-                assert_eq!(serde_json::to_value(&ev).unwrap(), f["event"]);
+                let s: crate::copy::Sealed = serde_json::from_value(m.event.clone().unwrap()).unwrap();
+                s.validate().unwrap();
+                assert_eq!(serde_json::to_value(&s).unwrap(), f["event"]);
             }
             "records" => assert!(!m.records.is_empty()),
             _ => {}
