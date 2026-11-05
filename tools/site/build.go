@@ -42,7 +42,7 @@ const siteURL = "https://cbb.tools"
 // engines as a FAQPage. An answer is plain text: no links.
 var faq = []struct{ Q, A string }{
 	{"Is it free?", "Yes. Copy Beyond Borders is free software: no price, no subscription, no ads."},
-	{"Can anyone else read what I copy?", "No. Your devices talk only to each other, and always encrypted. Away from home a server may pass the traffic on, but it cannot read it."},
+	{"Can anyone else read what I copy?", "No. Every copy is encrypted end to end on the device that makes it, for your own devices alone. Whatever passes it on, a hub, a forwarder or a relay, cannot read it."},
 	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on keeps sync away from home going at any time."},
 	{"Does it work away from home?", "Yes. Your devices reach the group through its hub, a computer of yours or a phone while its app is open, over an encrypted tunnel. For now this takes a port forward on your router or a small server of your own."},
 	{"Why does the iPhone need a gesture?", "iOS does not let apps read the clipboard in the background. You send a copy with the Action button or a double tap on the back of the phone."},

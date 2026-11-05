@@ -1,17 +1,30 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0eb5464abc4a -->
+<!-- source: 8cc314e35203 -->
 # Faragha: nani anaona nini
 
-Kwa yeyote anayetaka kujua nini kinatoka kwenye vifaa vyake. Copy Beyond Borders haina akaunti, wingu wala telemetria: unachonakili huenda kwenye vifaa vya kikundi chako tu, na kila kifaa cha kikundi kinaweza kukisoma. Njiani kimesimbwa kati ya kila vifaa viwili, kwa hiyo hakuna seva wala mtandao katikati unaoweza kukisoma. Ukurasa huu unaorodhesha kila kitu kingine ambacho mtu aliye nje ya kikundi anaweza kuona, na jinsi ya kukizima.
+Kwa yeyote anayetaka kujua kinachotoka kwenye vifaa vyake. Copy Beyond Borders haina akaunti, wingu wala telemetri: unachonakili kimesimbwa mwisho hadi mwisho, kimefungwa kwenye kifaa kinachokinakili kwa ajili ya vifaa vya kikundi chako vinavyosoma nakala, na hakuna kingine kinachoweza kukifungua: wala seva, wala mtandao, wala kifaa kilicho katikati. Ukurasa huu unaeleza kile ambacho vifaa vinavyopitisha nakala bado vinaweza kuona, na kila kitu ambacho mtu nje ya kikundi anaweza kuona, na jinsi ya kukizima.
 
 ## Unachonakili
 
-Maandishi, picha na faili hupita tu kati ya vifaa vya kikundi chako, ndani ya TLS 1.3 yenye vyeti vya kikundi chenyewe. Ukiwa mbali na nyumbani pia hupita ndani ya WireGuard, kupitia kitovu chako, na labda kupitia kisambazaji au relei. Hakuna seva, mtandao wala mtoa huduma anayeweza kuvisoma, zikiwemo seva za mradi. Kifaa kilichoondolewa kwenye kikundi hakipati kitu zaidi.
+Maandishi, picha na faili husimbwa mwisho hadi mwisho. Kifaa kinachonakili husimba kila nakala kwa ufunguo uliotengenezwa kwa ajili ya nakala hiyo tu, hufunga ufunguo huo kwa kila kifaa cha kikundi kinachosoma nakala (X-Wing, unaounganisha X25519 na ML-KEM-768 sugu kwa kompyuta za kwantamu) na kutia nakala sahihi kwa ufunguo wake wa mwanachama. Ni vifaa hivyo tu vinavyoweza kuifungua; kila kifaa hukagua sahihi, kwa hiyo hakuna kinachoweza kubadilisha nakala au kutengeneza moja kwa jina la kingine. Kisha nakala iliyofungwa husafiri ndani ya TLS 1.3 kwa vyeti vya kikundi chenyewe, na ukiwa mbali na nyumbani pia ndani ya WireGuard, kupitia kitovu chako na labda kisambazaji au relei. Hakuna seva, mtandao wala mtoa huduma anayeweza kuisoma, hata seva za mradi. Kifaa kinachoondolewa kwenye kikundi hakipati kitu tena, na kifaa kinachojiunga husoma nakala kuanzia inayofuata, si zile zilizotengenezwa kabla yake.
 
-Mambo mawili ni vighairi, na yote mawili ni chaguo lako:
+## Vifaa vilivyo katikati vinaona nini
+
+Mara nyingi nakala hufika kwenye kifaa kupitia kingine: kupitia kitovu ukiwa mbali na nyumbani, au kupitia kompyuta inayoipitisha nyumbani. Vifaa hivyo havisomi chochote cha nakala ambayo haikufungwa kwa ajili yao, lakini kuipitisha kunahitaji kidogo, ambacho hubaki nje ya ufungaji:
+
+- **Kifaa kipi kiliituma, na lini.** Muda huamua nakala ipi ni mpya zaidi, jambo ambalo kila kifaa kinahitaji, ikiwemo kitovu kinachopitisha nakala tu.
+- **Imefungwa kwa ajili ya vifaa vipi.** Hiyo ni orodha ya vifaa vya kikundi, ambayo tayari wanaijua.
+- **Ukubwa wake kwa ngazi** (1, 4, 16, 64 na 256 KB, 1 MB, kisha kila megabaiti inayofuata), na kama ina picha au faili, pamoja na jumla yake hadi 64 KB. Faili zote za nakala moja ni kipande kimoja kilichofungwa, kwa hiyo idadi yake haionekani.
+
+Kisichoonekana kamwe: kama ni maandishi, siri, picha au faili; maandishi yenyewe; majina ya faili; ukubwa kamili.
+
+## Vighairi
+
+Vyote viwili ni chaguo lako:
 
 - **Roku** iliyoongezwa kwa `cbb remote add -roku -consent` hupata maandishi yake kama HTTP wazi kwenye mtandao wako wa nyumbani ([kibodi na televisheni](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
-- **Kitovu** ni kimoja cha vifaa vyako mwenyewe, kwa hiyo husoma nakala kama mwanachama mwingine yeyote na kuzipitisha. Ubao wa kunakili haujasimbwa mwisho hadi mwisho, kutoka kifaa kinachonakili hadi kile kinachobandika: kila kifaa cha kikundi huusoma. Amri tu, kama ubandikaji wa mbali au kitendo cha haraka, ndizo hufungwa kwa kifaa kimoja zinachokusudiwa, kwa hiyo kitovu kinachozipitisha hakiwezi kuzisoma ([ubandikaji wa mbali](remote-paste.md)).
+- **Kitovu kinachosoma nakala** ni msimamizi uliyemchagua, kwa hiyo nakala hufungwa kwa ajili yake kama kwa vifaa vyako vingine. Kompyuta inayowaka kila wakati ambayo funguo zake ziko kwenye faili tu, kama Raspberry Pi, ifanye badala yake **kitovu kinachopitisha nakala tu**: hakuna nakala inayofungwa kwa ajili yake, kwa hiyo haisomi yoyote ([ukiwa mbali na nyumbani](away-from-home.md)). Amri, kama kubandika kwa mbali au kitendo cha haraka, hufungwa kwa ajili ya kifaa kimoja zinachokiendea katika hali zote mbili ([kubandika kwa mbali](remote-paste.md)).
+- **Apple Watch** au saa ya **Wear OS** hupata nakala kutoka kwa simu yake kupitia njia ambayo mfumo wenyewe husimba kati ya hivyo viwili, si zilizofungwa na Copy Beyond Borders.
 
 ## Kila mtu mwingine
 

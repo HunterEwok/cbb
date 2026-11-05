@@ -10,6 +10,7 @@
   <h2>{{t "Your clipboard"}}</h2>
   <ul>
     <li>{{t "There are no accounts, no cloud and no telemetry. Copy Beyond Borders does not report to anyone."}}</li>
+    <li>{{t "Every copy, its text, images and files, is encrypted end to end: the device that copies seals it for the devices of your group that read copies (X-Wing, post-quantum) and signs it. Nothing that passes it on can read it, change it or forge one."}}</li>
     <li>{{t "Only devices you let in belong to your group, and they talk only to each other. Every connection is encrypted with TLS, and each device proves it is in the group."}}</li>
     <li>{{t "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps them in its TPM or Secure Enclave when it has one, otherwise in files that only Copy Beyond Borders can read."}}</li>
     <li>{{t "What password managers mark as secret is not synced automatically."}}</li>
@@ -21,7 +22,8 @@
   <table class="chalk-table servers centred">
     <thead><tr><td></td><th scope="col">{{t "Reads the clipboard"}}</th><th scope="col">{{t "Knows which of your devices talk, and when"}}</th><th scope="col">{{t "Whose it is"}}</th></tr></thead>
     <tbody>
-    <tr><th scope="row">{{t "Hub"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "yes, it is one of your devices"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours: a computer, or a phone while its app is open"}}</td></tr>
+    <tr><th scope="row">{{t "Hub that reads the copies"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "yes: it is an admin of your group"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours: a computer, or a phone while its app is open"}}</td></tr>
+    <tr><th scope="row">{{t "Hub that only passes copies on"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no: the copies are sealed past it"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours: any computer of the group, a Raspberry Pi say"}}</td></tr>
     <tr><th scope="row">{{t "Forwarder"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "no: it sees only the addresses, timing and sizes of the encrypted packets it passes to your hub"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours; the project's at cbb.tools is not open yet"}}</td></tr>
     <tr><th scope="row">{{t "Blind relay"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours; the project's at cbb.tools is not open yet"}}</td></tr>
     </tbody>
