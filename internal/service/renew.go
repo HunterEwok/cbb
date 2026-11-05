@@ -202,6 +202,7 @@ func (s *Service) setIdentityLocked(next *group.Identity) error {
 		return err
 	}
 	s.id = next
+	s.setSealer(next, s.sealSecret, s.sealPublic)
 	s.nd.SetIdentity(next)
 	return nil
 }
