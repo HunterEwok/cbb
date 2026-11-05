@@ -172,6 +172,7 @@ class PhoneGroup internal constructor(
         powers: List<String>? = null,
         commands: List<String>? = null,
         seal: ByteArray? = null,
+        forwardOnly: Boolean = false,
     ): Member.Record {
         if (!isAdmin) throw Failure("this phone is no admin")
         val b = Records.Body.of("device", caSigner, now)
@@ -185,6 +186,7 @@ class PhoneGroup internal constructor(
         b.kind = kind
         b.proof = proof
         b.seal = seal
+        b.forwardOnly = forwardOnly
         if (admin != null) {
             val (p, c) = Records.grants(role)
             b.powers = powers ?: p
@@ -201,6 +203,7 @@ class PhoneGroup internal constructor(
             d.powers.takeIf { admin != null && admin.contentEqualsOrNull(d.adminKey) && it.isNotEmpty() },
             d.commands.takeIf { admin != null && admin.contentEqualsOrNull(d.adminKey) && it.isNotEmpty() },
             d.seal,
+            d.forwardOnly,
         )
 
     /**
@@ -334,7 +337,7 @@ class PhoneGroup internal constructor(
             if (d.id == lost) {
                 revoke += d.keys
             } else if (admin != null && !d.frozen) {
-                out += record(d.id, d.name, d.role, d.key, rootSigner, now, admin, d.os, d.store, d.kind, d.proof, d.powers, d.commands, d.seal)
+                out += record(d.id, d.name, d.role, d.key, rootSigner, now, admin, d.os, d.store, d.kind, d.proof, d.powers, d.commands, d.seal, d.forwardOnly)
             }
         }
         if (revoke.isNotEmpty()) {

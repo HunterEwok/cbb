@@ -4,16 +4,26 @@
 package tools.cbb.kit
 
 import java.io.Closeable
-import java.io.OutputStream
 import java.security.MessageDigest
 
 /**
  * The images and files a member holds whole, which it serves to its peers
- * (docs/protocol.md, section 4, "Content"), as Go's node.Content.
+ * (docs/protocol.md, section 4, "Content"), as Go's node.Content: only the
+ * sealed blobs of copies, never the parts in the open.
  */
 interface ContentStore {
-    /** The part whose SHA-256 is sum, or null when this phone does not hold all of it. The node closes it. */
+    /** The blob whose SHA-256 is sum, or null when this phone does not hold all of it. The node closes it. */
     fun open(sum: ByteArray): ContentSource?
+
+    /**
+     * Seals the parts of m, which the store holds, into the blob of a new
+     * copy under a new key, and keeps the blob to serve it; null when m holds
+     * no bytes (docs/protocol.md, section 4, "The blob").
+     */
+    fun sealBlob(m: Media.Manifest): Pair<ByteArray, Blob>? {
+        if (m.size != 0L) throw Content.NoParts()
+        return null
+    }
 }
 
 /** One part a ContentStore opened. */
@@ -28,30 +38,50 @@ interface ContentSource : Closeable {
 
 /**
  * A ContentStore in memory, for the phone's own copies: it keeps the parts
- * of the last few manifests it was given, at most maxBytes together.
+ * and the blobs it was given last, at most twice maxBytes together, for the
+ * blob of each copy, and serves only the blobs.
  */
 class MemoryContent(private val maxBytes: Long = Media.MAX_MEDIA) : ContentStore {
     private val parts = LinkedHashMap<String, ByteArray>()
+    private val blobs = HashSet<String>()
 
-    /** Keeps the bytes of a part, dropping the oldest beyond maxBytes; it returns its SHA-256. */
-    fun put(bytes: ByteArray): ByteArray = synchronized(this) {
+    /** Keeps the bytes of a part, or of a sealed blob, dropping the oldest beyond twice maxBytes; it returns its SHA-256. */
+    fun put(bytes: ByteArray, blob: Boolean = false): ByteArray = synchronized(this) {
         val sum = sha256(bytes)
         val key = sum.toHex()
         parts.remove(key)
         parts[key] = bytes
+        if (blob) blobs.add(key) else blobs.remove(key)
         var total = parts.values.sumOf { it.size.toLong() }
         val it = parts.entries.iterator()
-        while (total > maxBytes && parts.size > 1 && it.hasNext()) {
+        while (total > 2 * maxBytes && parts.size > 1 && it.hasNext()) {
             val e = it.next()
             if (e.key == key) continue
             total -= e.value.size
+            blobs.remove(e.key)
             it.remove()
         }
         sum
     }
 
+    /** The bytes of a part or a blob it keeps. */
+    fun bytes(sum: ByteArray): ByteArray? = synchronized(this) { parts[sum.toHex()] }
+
+    override fun sealBlob(m: Media.Manifest): Pair<ByteArray, Blob>? {
+        if (m.size == 0L) return null
+        val data = m.parts.filter { !it.dir && it.size > 0 }.map { p ->
+            val b = p.sha256?.let { bytes(it) }
+            if (b == null || b.size.toLong() != p.size) throw Content.NoParts()
+            b
+        }
+        val key = Blob.newKey()
+        val (blob, sealed) = Blob.seal(key, data)
+        put(sealed, blob = true)
+        return key to blob
+    }
+
     override fun open(sum: ByteArray): ContentSource? = synchronized(this) {
-        parts[sum.toHex()]?.let { b ->
+        parts[sum.toHex()]?.takeIf { sum.toHex() in blobs }?.let { b ->
             object : ContentSource {
                 override val size = b.size.toLong()
                 override fun read(offset: Long, length: Int) = b.copyOfRange(offset.toInt(), offset.toInt() + length)
@@ -99,28 +129,42 @@ object Content {
 
     class TooLarge(val size: Long, val limit: Long) : Exception("the copy is $size bytes, more than the limit of $limit")
 
+    /** The copy is not sealed to this phone, or names no blob. */
+    class Unread : Exception("the copy is not sealed to this phone")
+
+    /** The store does not hold the parts of a copy to seal. */
+    class NoParts : Exception("the parts of the copy are no longer on this phone")
+
+    /** The blob or a part does not match its hash, or does not open. */
+    class Mismatch : Exception("the copy's content does not match")
+
     /**
-     * Fetches part of event from the connected members that serve content,
-     * its origin first, into out, and checks its hash. It throws when no
-     * member has it whole, the part is over limit or does not match.
+     * Fetches the sealed blob of event from the connected members that
+     * serve content, its origin first, checks it against its hash, opens it
+     * with the copy's key, and returns the bytes of the manifest's parts that
+     * are no folders, in order, each checked against its own hash
+     * (docs/protocol.md, section 4, "The blob" and "Content"). It throws when
+     * no member has it whole, it is over limit or does not match.
      */
-    fun fetch(node: MemberNode, event: Member.Event, part: Media.Part, out: () -> OutputStream, limit: Long = Media.MAX_MEDIA) {
-        val sum = part.sha256 ?: throw IllegalArgumentException("a folder has no content")
-        if (part.size > limit) throw TooLarge(part.size, limit)
+    fun parts(node: MemberNode, event: Member.Event, limit: Long = Media.MAX_MEDIA): List<ByteArray> {
+        val m = event.media ?: throw IllegalArgumentException("the copy holds no images or files")
+        if (m.size == 0L) return m.parts.filter { !it.dir }.map { ByteArray(0) }
+        val blob = event.sealed?.blob ?: throw Unread()
+        val key = event.key ?: throw Unread()
+        if (m.size > limit || blob.size > Blob.sizeOf(limit)) throw TooLarge(m.size, limit)
         val peers = node.mediaPeers.sortedBy { if (it == event.origin) 0 else 1 }
         if (peers.isEmpty()) throw MemberNode.ProtocolException("no member that serves images and files is connected")
         var last: Exception? = null
         for (p in peers) {
-            val h = MessageDigest.getInstance("SHA-256")
+            val out = java.io.ByteArrayOutputStream()
             try {
-                out().use { o ->
-                    node.fetch(p, sum, part.size) { _, data ->
-                        h.update(data)
-                        o.write(data)
-                    }
+                node.fetch(p, blob.sha256, blob.size) { _, data -> out.write(data) }
+                val d = out.toByteArray()
+                if (!MemoryContent.sha256(d).contentEquals(blob.sha256)) {
+                    last = Mismatch()
+                    continue
                 }
-                if (h.digest().contentEquals(sum)) return
-                last = MemberNode.ProtocolException("the part does not match its hash")
+                return Blob.open(key, blob, d, m)
             } catch (e: InterruptedException) {
                 throw e
             } catch (e: Exception) {
@@ -130,10 +174,10 @@ object Content {
         throw last!!
     }
 
-    /** The bytes of part of event, as fetch gets them. */
+    /** The bytes of part of event, as parts gets them. */
     fun bytes(node: MemberNode, event: Member.Event, part: Media.Part, limit: Long = Media.MAX_MEDIA): ByteArray {
-        var b = java.io.ByteArrayOutputStream()
-        fetch(node, event, part, { java.io.ByteArrayOutputStream().also { b = it } }, limit)
-        return b.toByteArray()
+        val i = event.media?.parts?.filter { !it.dir }?.indexOf(part) ?: -1
+        if (part.dir || i < 0) throw IllegalArgumentException("not a part of the copy that holds bytes")
+        return parts(node, event, limit)[i]
     }
 }

@@ -76,13 +76,17 @@ class ContentTest {
     fun nodesFetch() {
         val store = MemoryContent()
         val changes = Collections.synchronizedList(mutableListOf<Member.Event>())
-        val a = MemberNode(SyncEngine("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", HybridClock()), "Pixel", content = store)
-        val b = MemberNode(SyncEngine("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", HybridClock()), "pi", Member.Role.FULL, onChange = { changes.add(it) })
+        // The copies are sealed: b fetches a's blob and opens it.
+        val keys = TestCopies()
+        val idA = keys.idA
+        val idB = keys.idB
+        val a = MemberNode(SyncEngine(idA, HybridClock()), "Pixel", content = store, copies = keys.a)
+        val b = MemberNode(SyncEngine(idB, HybridClock()), "pi", Member.Role.FULL, onChange = { changes.add(it) }, copies = keys.b)
         val (pa, pb) = Pipe.pair()
-        val ta = Background { a.serve(pa, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") }
-        val tb = Background { b.serve(pb, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") }
+        val ta = Background { a.serve(pa, idB) }
+        val tb = Background { b.serve(pb, idA) }
         waitUntil { a.peers == 1 && b.peers == 1 }
-        assertEquals(listOf("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), b.mediaPeers)
+        assertEquals(listOf(idA), b.mediaPeers)
         assertEquals(emptyList(), a.mediaPeers) // b serves nothing
 
         // A picture of 5 MiB and a bit, more than the fetch asks for ahead.
@@ -92,21 +96,25 @@ class ContentTest {
         waitUntil { changes.any { it.id == e.id } }
         val got = changes.first { it.id == e.id }
         val part = got.media!!.parts.single()
+        val blob = got.sealed!!.blob!!
+        assertEquals(Blob.sizeOf(part.size), blob.size)
         // Events keep flowing while the content does.
         val fetch = Background { Content.bytes(b, got, part) }
         b.send("meanwhile", Member.Kind.TEXT)
         waitUntil { a.usable?.first == "meanwhile" }
         assertContentEquals(png, fetch.join())
 
+        // The phone serves the sealed blob only, never the part in the open.
+        assertFailsWith<MemberNode.MissingException> { b.fetch(idA, part.sha256!!, part.size) { _, _ -> } }
         // A part the phone does not hold is missing; one over the limit is not fetched.
-        assertFailsWith<MemberNode.MissingException> { b.fetch("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ByteArray(32) { 1 }, 10) { _, _ -> } }
+        assertFailsWith<MemberNode.MissingException> { b.fetch(idA, ByteArray(32) { 1 }, 10) { _, _ -> } }
         assertFailsWith<Content.TooLarge> { Content.bytes(b, got, part, limit = 1 shl 20) }
         // b serves nothing.
-        assertFailsWith<MemberNode.ProtocolException> { a.fetch("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", part.sha256!!, part.size) { _, _ -> } }
+        assertFailsWith<MemberNode.ProtocolException> { a.fetch(idB, blob.sha256, blob.size) { _, _ -> } }
 
         // An interrupted fetch cancels, and the next one gets it all.
         val slow = Thread {
-            runCatching { b.fetch("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", part.sha256!!, part.size) { _, _ -> Thread.sleep(50) } }
+            runCatching { b.fetch(idA, blob.sha256, blob.size) { _, _ -> Thread.sleep(50) } }
         }.apply { start() }
         Thread.sleep(100)
         slow.interrupt()
@@ -115,7 +123,7 @@ class ContentTest {
 
         // A sink that fails ends the fetch with its error.
         assertFailsWith<IllegalStateException> {
-            b.fetch("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", part.sha256!!, part.size) { _, _ -> error("disk full") }
+            b.fetch(idA, blob.sha256, blob.size) { _, _ -> error("disk full") }
         }
         assertContentEquals(png, Content.bytes(b, got, part))
 
@@ -191,15 +199,20 @@ class ContentTest {
 
     @Test
     fun memoryContentKeepsTheNewest() {
+        // Twice maxBytes, for a copy's parts and its sealed blob.
         val store = MemoryContent(maxBytes = 10)
         val one = store.put(ByteArray(6) { 1 })
-        val two = store.put(ByteArray(6) { 2 })
-        assertEquals(null, store.open(one))
+        val two = store.put(ByteArray(6) { 2 }, blob = true)
+        val three = store.put(ByteArray(10) { 3 })
+        assertEquals(null, store.bytes(one))
+        assertEquals(10, store.bytes(three)!!.size)
+        // Only blobs are served, never the parts in the open.
+        assertEquals(null, store.open(three))
         assertEquals(6, store.open(two)!!.size.toInt())
         // One part over the limit is still kept, alone.
-        val big = store.put(ByteArray(20))
+        val big = store.put(ByteArray(40), blob = true)
         assertEquals(null, store.open(two))
-        assertEquals(20L, store.open(big)!!.size)
+        assertEquals(40L, store.open(big)!!.size)
     }
 
     /** While a part is served, a cancel of a part that is neither queued nor served is not kept, as in Go, so the peer's cancels hold at most one count for each part it asked for. */

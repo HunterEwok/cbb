@@ -117,7 +117,9 @@ private fun joinTLS(host: String, port: Int, code: String) {
 
 private fun memberTLS(host: String, port: Int, peer: String) {
     val key = SoftwareSigner()
+    val secret = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
     println("key ${Base64.getEncoder().encodeToString(key.publicKeyDER)}")
+    println("seal ${Base64.getEncoder().encodeToString(Core.sealPublic(secret))}")
     System.out.flush()
     fun field(name: String): ByteArray {
         val line = readlnOrNull() ?: fail("no $name on standard input")
@@ -126,13 +128,18 @@ private fun memberTLS(host: String, port: Int, peer: String) {
     }
     val cert = field("cert")
     val ca = field("ca")
+    // The group's records, which name the readers of the copies.
+    val records = RecordSet()
+    val list = kotlinx.serialization.json.Json.parseToJsonElement(field("records").decodeToString()) as kotlinx.serialization.json.JsonArray
+    records.addAll(list.map { Member.Record.fromJson(it as kotlinx.serialization.json.JsonObject) }, ca)
     val me = CertificateInfo(cert).commonName ?: fail("no device ID")
     val tls = TLSTransport.dial(host, port, Member.ALPN, key.keyPair.private, listOf(cert)) {
         runCatching { GroupCertificates.verifyMember(it[0], ca, Instant.now()) }.getOrNull() == peer
     }
     val changes = LinkedBlockingQueue<Member.Event>()
     val store = MemoryContent()
-    val node = MemberNode(SyncEngine(me, HybridClock()), "Android", onChange = { changes.add(it) }, content = store)
+    val copies = CopyKeys(me, cert, null, key, secret) { records }
+    val node = MemberNode(SyncEngine(me, HybridClock()), "Android", onChange = { changes.add(it) }, content = store, copies = copies)
     val serving = Thread { node.serve(tls, peer) }.apply { start() }
     val deadline = System.nanoTime() + 15_000_000_000L
     while (node.peers == 0) {

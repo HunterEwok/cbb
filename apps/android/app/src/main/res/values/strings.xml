@@ -88,6 +88,8 @@
     <string name="error_too_many_codes">Too many wrong codes. Try again with a new code.</string>
     <string name="error_clipboard_unreadable">Could not read the clipboard, so it was left as it is. Copy the text again, then try again.</string>
     <string name="error_image_too_large">This image is larger than 100 MB, so it stays on the computer.</string>
+    <string name="error_copy_unread">This copy was not sealed to this phone, so it cannot be read here. Copy it again on that device.</string>
+    <string name="error_copy_no_records">This phone does not have the group\'s device list yet, so it cannot seal or read copies. Try again once a computer is connected.</string>
     <string name="error_image_unavailable">Could not get the image from the computers. Copy it there again, then try again.</string>
     <string name="error_not_admin">Only an admin phone can do this.</string>
     <string name="error_file_key">This computer keeps its keys in a file. Make it an admin first on its page, which warns what that means.</string>
