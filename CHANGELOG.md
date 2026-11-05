@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The lite member starts pairing as soon as it is installed: when it runs in no group and the
+  installer's output is a terminal, `get.sh --lite` and the Linux and OpenWrt `install.sh` run
+  `cbb pair` at the end and show the QR code, since small devices often have no keyboard.
+  An update or a reinstall that keeps the group skips it, `--no-pair` (or `CBB_PAIR=no`)
+  skips it for a scripted install, and Ctrl+C stops only the pairing. The Nano ESP32 starts
+  pairing by itself, once each boot, when its Wi-Fi is up and it is in no group.
 - Leaving the group (D-83): `sudo cbb leave` on a computer or a lite member deletes the
   device's keys and the group's files, keeps CBB and its settings, turns remote paste and the
   quick actions off, and lets it join this group or another one with `cbb pair`; before, the

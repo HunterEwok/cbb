@@ -6,7 +6,7 @@
 # runs it, without root (a rootless install, D-79; docs/design.md,
 # "Rootless installs"):
 #
-#   sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] path/to/cbb
+#   sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-pair] path/to/cbb
 #
 # install.sh runs this script for --rootless. It puts the binary in
 # ~/.local/bin, the service (and the full member's desktop agent) in the
@@ -33,7 +33,7 @@ trap 'failed $?' EXIT
 export LC_ALL=C
 
 usage() {
-	echo "usage: sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] path/to/cbb" >&2
+	echo "usage: sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-pair] path/to/cbb" >&2
 	exit 2
 }
 port=
@@ -42,6 +42,7 @@ auto=
 while [ $# -gt 1 ]; do
 	case $1 in
 	--rootless) ;;
+	--no-pair) CBB_PAIR=no ;;
 	--port)
 		port=$2
 		shift
@@ -222,7 +223,11 @@ case ":$PATH:" in
 esac
 echo "For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q $share/tmux.conf"
 if [ "$kind" = lite ]; then
-	echo "Next: see lite/README.md; in short, $run pair here, and scan its QR code with the phone app."
+	# shellcheck source=packaging/pair.sh
+	. "$here/../pair.sh"
+	if ! pair_now "$cbb" ""; then
+		echo "Next: see lite/README.md; in short, $run pair here, and scan its QR code with the phone app."
+	fi
 else
 	echo "Next: run $run pair and scan its QR code with the CBB app on your phone."
 fi
