@@ -682,10 +682,15 @@ func TestQueuedEventsGoOutBeforeTheGoodbye(t *testing.T) {
 	for i := range 20 {
 		pi.Copied(fmt.Sprintf("last copy %d", i), clip.Text, clip.Copy)
 	}
+	// The peer reads while the node closes: twenty sealed copies can be
+	// more than a small socket buffer (FreeBSD's) holds, and the writes
+	// before the goodbye have only a second.
+	got := make(chan []*message, 1)
+	go func() { got <- r.frames(3 * time.Second) }()
 	pi.Close()
 	var events int
 	var bye bool
-	for _, m := range r.frames(time.Second) {
+	for _, m := range <-got {
 		switch m.Type {
 		case typeEvent:
 			events++
