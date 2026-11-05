@@ -96,3 +96,16 @@ func FetchEntries(ctx context.Context, src Source) (release.File, error) {
 	}
 	return f, nil
 }
+
+// FetchKeys fetches the current keys.json from src; the service checks it.
+func FetchKeys(ctx context.Context, src Source) (release.File, error) {
+	var f release.File
+	data, err := src.Fetch(ctx, "keys.json", "", maxManifest)
+	if err != nil {
+		return f, err
+	}
+	if err := json.Unmarshal(data, &f); err != nil {
+		return f, fmt.Errorf("keys.json: %w", err)
+	}
+	return f, nil
+}

@@ -520,6 +520,36 @@ func TestForwarderKeys(t *testing.T) {
 	}
 }
 
+// A relay's key in keys.json names the project's relay for its members,
+// and entries.json may say where it is reached now.
+func TestRelayEntries(t *testing.T) {
+	root, rel, relayKey := newSigner(t), newSigner(t), newSigner(t)
+	kb := keysBody(1, nowMS-1000, 90*24*time.Hour, rel)
+	kb.Keys = append(kb.Keys, Key{Key: relayKey.spki, Name: "cbb.tools:8765", Use: UseRelay},
+		Key{Key: root.spki, Name: "cbb.tools:8765", Use: UseForwarder})
+	keys := sign(t, kb, root)
+	now := time.UnixMilli(nowMS)
+	k, err := VerifyKeys(keys, [][]byte{root.spki}, now, Seen{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := k.Relays("cbb.tools:8765"); len(got) != 1 || !bytes.Equal(got[0], relayKey.spki) {
+		t.Errorf("Relays = %x", got)
+	}
+	b := entriesBody(1, nowMS-1000, 30*24*time.Hour)
+	b.Relays = []EntryRelay{{Name: "cbb.tools:8765", Endpoints: []string{"relay.cbb.tools:8765", "cbb.tools:8765"}}}
+	e, _, err := CheckEntries(keys, sign(t, b, rel), [][]byte{root.spki}, now, Seen{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := e.Relay("cbb.tools:8765"); !ok || len(r.Endpoints) != 2 {
+		t.Errorf("Relay = %+v, %v", r, ok)
+	}
+	if _, ok := e.Relay("example.org:8765"); ok {
+		t.Error("another relay's entry")
+	}
+}
+
 func entriesBody(seq uint64, at int64, life time.Duration) Entries {
 	return Entries{V: 1, Type: TypeEntries, Seq: seq, TimeMS: at, ExpiresMS: at + life.Milliseconds(),
 		Forwarders: []EntryForwarder{{Name: "cbb.tools:8764",
@@ -561,6 +591,11 @@ func TestCheckEntries(t *testing.T) {
 		func(e *Entries) { e.Forwarders[0].VLESS[0].Port = 0 },
 		func(e *Entries) { e.Forwarders = append(e.Forwarders, e.Forwarders[0]) },
 		func(e *Entries) { e.Forwarders = nil },
+		func(e *Entries) { e.Relays = []EntryRelay{{Name: "cbb.tools"}} },
+		func(e *Entries) {
+			e.Relays = []EntryRelay{{Name: "cbb.tools:8765", Endpoints: []string{"203.0.113.9:8765"}}}
+		},
+		func(e *Entries) { e.Relays = []EntryRelay{{Name: "cbb.tools:8765"}, {Name: "cbb.tools:8765"}} },
 	} {
 		b := entriesBody(7, nowMS-1000, 30*24*time.Hour)
 		bad(&b)
