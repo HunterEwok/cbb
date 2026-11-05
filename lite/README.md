@@ -119,8 +119,13 @@ built, unpack the archive (or make one with `sh packaging/archive.sh`) and run
 group and keep the lite member, for example after the group removed it: `sudo cbb leave`,
 then join again.
 
-The service waits until the device joins a group. Join as the service's user, so that it
-can read its keys:
+The service waits until the device joins a group. Since a small device often has no keyboard
+and you install it to pair it, the installer starts pairing by itself when the device is in no
+group and its output is a terminal (over SSH too): it shows the QR code at once. An update, or
+a reinstall that keeps the group, skips it; `--no-pair` (or `CBB_PAIR=no`) skips it for a
+scripted install, which a script needs whenever it runs the installer with a terminal (`ssh -t`
+too), or it waits up to 5 minutes for a phone; Ctrl+C stops the pairing but not the installer. Joining still takes the code
+shown on the device. To pair later, join as the service's user, so that it can read its keys:
 
 ```sh
 sudo -u cbb cbb pair -name pi
@@ -162,7 +167,7 @@ On a Linux computer where you have no `sudo`, install it for your own user inste
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --lite --rootless
-cbb pair -name pi              # as yourself, without sudo -u
+cbb pair -name pi              # later, as yourself, without sudo -u (the installer pairs once)
 ```
 
 It runs as your own systemd user service (`systemctl --user status cbb`), with the
@@ -184,7 +189,7 @@ member syncs only at home for now, without sync away from home), as root:
 
 ```sh
 uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --lite
-su -s /bin/sh cbb -c 'cbb pair -name router'
+su -s /bin/sh cbb -c 'cbb pair -name router'   # later; the installer pairs once
 ```
 
 It installs OpenWrt's procd service, the same as a full member's

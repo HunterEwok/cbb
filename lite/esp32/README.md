@@ -70,7 +70,7 @@ cbb> status
 | `status` | what the board knows and how its network is doing |
 | `wifi` | sets the Wi-Fi network to join: asks for its name and password, saves them and joins it |
 | `wifi forget` | leaves the Wi-Fi network and forgets it |
-| `pair [NAME]` | joins a group by the phone, under NAME (default: Nano ESP32): see below |
+| `pair [NAME]` | joins a group by the phone, under NAME (default: Nano ESP32); a board in no group starts this by itself once its Wi-Fi is up: see below |
 | `leave` | forgets the group; remove the board in the app too, so the group revokes it |
 | `debug on`, `debug off` | shows the details of errors under their message, or not; saved in flash. Without it a debug build shows them and a release build does not |
 | `selftest` | runs the TLS 1.3 self-test |
@@ -88,7 +88,9 @@ again after the connection drops.
 
 ## Joining a group
 
-Once the board has an address, type `pair`. It prints a `cbb://join?...` link
+Once the board has an address while it is in no group, it starts pairing by itself, once
+each boot, as if `pair` had been typed: a board set up for the first time shows its link as
+soon as its Wi-Fi is up. Otherwise, or after five minutes, type `pair`. It prints a `cbb://join?...` link
 with a new pairing code, its address and port 8764 and the fingerprint of its pairing
 certificate; in the app, tap "Connect a new device" and paste it. The phone dials the
 board, and the two run the pairing of docs/protocol.md over TLS 1.3 (`lite/embassy`, the

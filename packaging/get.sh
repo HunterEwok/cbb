@@ -14,7 +14,9 @@
 # network too (a home network on the carrier-grade NAT range); on Linux, --lite installs the lite member for small devices instead of the full
 # member, --console also starts tmux after a login on the text console, and
 # --uinput adds the full member's uinput helper for remote paste on desktops
-# without another way to press keys.
+# without another way to press keys. The lite member starts pairing as
+# soon as it runs in no group and shows its QR code; --no-pair, for a
+# scripted install, leaves that for later.
 # --rootless, run without sudo (curl ... | sh -s -- --rootless), installs the
 # full member, or with --lite the lite member, for the user who runs it, on
 # Linux only (D-79).
@@ -52,6 +54,7 @@ cgnat=
 auto=
 firewall=${CBB_FIREWALL:-ask}
 lite=no
+nopair=
 rootless=
 while [ $# -gt 0 ]; do
 	case $1 in
@@ -86,9 +89,10 @@ while [ $# -gt 0 ]; do
 	--express) firewall=express ;;
 	--no-firewall) firewall=no ;;
 	--lite) lite=yes ;;
+	--no-pair) nopair=--no-pair ;;
 	--rootless) rootless=--rootless ;;
 	*)
-		echo "get.sh: unknown option $1 (known: --lite, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)" >&2
+		echo "get.sh: unknown option $1 (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)" >&2
 		exit 2
 		;;
 	esac
@@ -387,10 +391,10 @@ elif [ "$os" = freebsd ]; then
 	# shellcheck disable=SC2086 # $port, $cgnat and $auto are words or none
 	CBB_FIREWALL=$firewall sh "$tmp/$dir/packaging/freebsd/install.sh" $port $cgnat $auto "$tmp/$dir/cbb"
 elif [ "$os" = openwrt ]; then
-	# shellcheck disable=SC2086 # $port and $auto are words or none
-	sh "$tmp/$dir/packaging/openwrt/install.sh" $port $auto "$tmp/$dir/cbb"
+	# shellcheck disable=SC2086 # $port, $auto and $nopair are words or none
+	sh "$tmp/$dir/packaging/openwrt/install.sh" $port $auto $nopair "$tmp/$dir/cbb"
 else
-	# shellcheck disable=SC2086 # $rootless, $console, $uinput, $port, $cgnat and $auto are words or none
-	CBB_FIREWALL=$firewall sh "$tmp/$dir/packaging/linux/install.sh" $rootless $console $uinput $port $cgnat $auto "$tmp/$dir/cbb"
+	# shellcheck disable=SC2086 # $rootless, $console, $uinput, $port, $cgnat, $auto and $nopair are words or none
+	CBB_FIREWALL=$firewall sh "$tmp/$dir/packaging/linux/install.sh" $rootless $console $uinput $port $cgnat $auto $nopair "$tmp/$dir/cbb"
 fi
 
