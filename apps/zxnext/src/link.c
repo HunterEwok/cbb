@@ -101,8 +101,15 @@ uint16_t link_overflows(void)
     return overflows;
 }
 
+void (*link_via_send)(uint8_t c);
+uint8_t (*link_via_recv)(uint8_t *c, uint16_t seconds);
+
 void link_send(uint8_t c)
 {
+    if (link_via_send) {
+        link_via_send(c);
+        return;
+    }
     while (z80_inp(PORT_TX_STATUS) & STATUS_TX_BUSY) {
     }
     z80_outp(PORT_TX_STATUS, c);
@@ -118,6 +125,7 @@ uint8_t link_stopped;
 uint8_t link_recv(uint8_t *c, uint16_t seconds)
 {
     uint32_t rounds;
+    if (link_via_recv) return link_via_recv(c, seconds);
     // A byte that is there goes at once, through the ports themselves:
     // .cbb install reads 23K a second (230400 baud), and the UART keeps
     // only 512 bytes.
@@ -180,6 +188,7 @@ static uint8_t wait_prompt(uint16_t seconds)
 uint8_t link_shell(void)
 {
     uint8_t tries;
+    if (link_via_send) return 0;
     for (tries = 0; tries < 3; tries++) {
         drain();
         if (tries) {

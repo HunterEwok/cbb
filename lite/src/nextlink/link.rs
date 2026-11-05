@@ -12,7 +12,10 @@
 //! service's paste target `next` too: a remote paste goes to the driver in
 //! key frames, which it types into the program in front. NextPi starts
 //! nothing of ours at boot, so the link starts the service when none runs,
-//! pointed at its own ports.
+//! pointed at its own ports. While it runs, `.cbb paste`, `copy` and
+//! `text` come through the driver's frames too (frame::CBB_OUT): the link
+//! runs their `cbb next` as NextPi's shell would, and sends back what it
+//! writes (frame::CBB_IN).
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
@@ -63,6 +66,11 @@ const UDP_ID: u8 = esp::LINKS - 1;
 /// The datagrams kept while the ESP's UDP connection opens; older ones are
 /// dropped, as UDP may.
 const UDP_QUEUE: usize = 8;
+
+/// The prompt that ends each command for `.cbb`, as NextPi's shell writes it.
+const PROMPT: &[u8] = b"\r\nSUP>";
+/// The longest command line `.cbb` types.
+const LINE_MAX: usize = 256;
 
 /// The characters sent to type each second: the driver types one a frame,
 /// 50 a second, and its ring holds 255, so it never fills.
@@ -120,6 +128,9 @@ pub enum Msg {
     /// Characters to type, in the Spectrum character set.
     Keys(Vec<u8>),
     Log(String),
+    /// What the command `.cbb` runs wrote, and its end.
+    CommandOut(Vec<u8>),
+    CommandEnded,
 }
 
 /// The link without its threads: bytes and connections in, frames out.
@@ -154,6 +165,17 @@ pub struct Link<W: Write> {
     /// The time the Next's clock gave, in seconds since 1970, to set.
     pub clock: Option<i64>,
     pub quit: bool,
+    /// The command line `.cbb` types, until its end.
+    line: Vec<u8>,
+    /// A command of `.cbb`'s runs, and whether it was stopped, so that
+    /// nothing more of it goes to the Next.
+    command: bool,
+    stopped: bool,
+    /// For run(): the arguments of a command to start, its input, and
+    /// whether to stop it.
+    pub start: Option<Vec<String>>,
+    pub input: Vec<u8>,
+    pub stop: bool,
     /// Logs the bytes to and from the ESP (`-trace`).
     pub trace: bool,
     log: Box<dyn FnMut(&str) + Send>,
@@ -185,6 +207,12 @@ impl<W: Write> Link<W> {
             clock: None,
             trace: false,
             quit: false,
+            line: Vec::new(),
+            command: false,
+            stopped: false,
+            start: None,
+            input: Vec::new(),
+            stop: false,
             log,
         }
     }
@@ -226,6 +254,18 @@ impl<W: Write> Link<W> {
             }
             Msg::Keys(k) => self.keys.extend(k),
             Msg::Log(s) => (self.log)(&s),
+            Msg::CommandOut(b) => {
+                if !self.stopped {
+                    self.answer_cbb(&b);
+                }
+            }
+            Msg::CommandEnded => {
+                self.command = false;
+                self.input.clear();
+                if !std::mem::take(&mut self.stopped) {
+                    self.answer_cbb(PROMPT);
+                }
+            }
         }
         self.after(now);
     }
@@ -260,9 +300,54 @@ impl<W: Write> Link<W> {
                     None => (self.log)("the Next's clock gave no valid time"),
                 },
                 frame::QUIT => self.quit = true,
+                frame::CBB_OUT => self.cbb_bytes(&f.data),
                 _ => {}
             }
         }
+    }
+
+    /// `.cbb`'s bytes: a command line while none runs, else its input; an
+    /// empty frame stops it.
+    fn cbb_bytes(&mut self, data: &[u8]) {
+        if data.is_empty() {
+            self.line.clear();
+            if self.command {
+                self.stop = true;
+                self.stopped = true;
+            }
+            return;
+        }
+        for (i, &b) in data.iter().enumerate() {
+            if self.command {
+                self.input.extend_from_slice(&data[i..]);
+                return;
+            }
+            if b != b'\n' && b != b'\r' {
+                if self.line.len() < LINE_MAX {
+                    self.line.push(b);
+                }
+                continue;
+            }
+            let line = String::from_utf8_lossy(&std::mem::take(&mut self.line)).into_owned();
+            if line.trim().is_empty() {
+                continue;
+            }
+            match command_args(&line) {
+                Some(args) => {
+                    (self.log)(&format!("runs cbb {}", args.join(" ")));
+                    self.start = Some(args);
+                    self.command = true;
+                }
+                None => {
+                    self.answer_cbb(b"CBBERR the network runs only cbb next paste and copy\r");
+                    self.answer_cbb(PROMPT);
+                }
+            }
+        }
+    }
+
+    fn answer_cbb(&mut self, b: &[u8]) {
+        self.wire.extend(frame::encode(frame::CBB_IN, b));
     }
 
     /// The member dialled the local port. Dialled connections take the
@@ -475,10 +560,71 @@ impl<W: Write> Link<W> {
         self.sent = self.sent.wrapping_add(room as u16);
     }
 
+    /// Whether a command of `.cbb`'s runs.
+    pub fn running(&self) -> bool {
+        self.command
+    }
+
     #[cfg(test)]
     pub fn output(&self) -> &W {
         &self.out
     }
+}
+
+/// The arguments for this program of a command line `.cbb` types: `cbb
+/// [-debug] next paste|copy ...`, and nothing else.
+fn command_args(line: &str) -> Option<Vec<String>> {
+    let words: Vec<&str> = line.split_whitespace().collect();
+    let (&first, mut rest) = words.split_first()?;
+    if first != "cbb" {
+        return None;
+    }
+    let mut args = Vec::new();
+    if rest.first() == Some(&"-debug") {
+        args.push("-debug".to_string());
+        rest = &rest[1..];
+    }
+    match rest {
+        ["next", "paste" | "copy", ..] => {
+            args.extend(rest.iter().map(|w| w.to_string()));
+            Some(args)
+        }
+        _ => None,
+    }
+}
+
+/// Starts a command of `.cbb`'s: this program with the link's state, its
+/// output to the link as it comes, its end after.
+fn start_command(
+    g: &crate::Global,
+    args: &[String],
+    tx: &mpsc::Sender<Msg>,
+) -> Result<(std::process::ChildStdin, u32)> {
+    let mut cmd = std::process::Command::new(std::env::current_exe().context("cannot find this program")?);
+    cmd.arg("-state").arg(&g.state).arg("-socket").arg(&g.socket).args(args);
+    cmd.stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
+    let mut child = cmd.spawn().context("cannot run cbb next")?;
+    let (Some(stdin), Some(mut stdout)) = (child.stdin.take(), child.stdout.take()) else {
+        return Err(Error::msg("cannot reach cbb next"));
+    };
+    let pid = child.id();
+    let tx = tx.clone();
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 512];
+        loop {
+            match stdout.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if tx.send(Msg::CommandOut(buf[..n].to_vec())).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+        child.wait().ok();
+        tx.send(Msg::CommandEnded).ok();
+    });
+    Ok((stdin, pid))
 }
 
 /// The Next's clock as NextZXOS gives it to a driver (drv_drvrtc, as
@@ -717,6 +863,7 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
     let mut service_at = join.is_none().then(|| Instant::now() + SERVICE_WAIT);
     let mut join_at = join.as_ref().map(|_| Instant::now() + SERVICE_WAIT);
     let (joined_tx, joined) = mpsc::channel::<bool>();
+    let mut command: Option<(std::process::ChildStdin, u32)> = None;
     while !link.quit {
         let now = Instant::now();
         if joined.try_recv() == Ok(true) {
@@ -726,6 +873,31 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
             Ok(m) => link.handle(m, now),
             Err(mpsc::RecvTimeoutError::Timeout) => link.tick(now),
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+        if let Some(args) = link.start.take() {
+            match start_command(g, &args, &tx) {
+                Ok(c) => command = Some(c),
+                Err(e) => {
+                    let line = format!("CBBERR {}\r", e.for_user());
+                    link.handle(Msg::CommandOut(line.into_bytes()), now);
+                    link.handle(Msg::CommandEnded, now);
+                }
+            }
+        }
+        if !link.input.is_empty() {
+            let input = std::mem::take(&mut link.input);
+            if let Some((stdin, _)) = command.as_mut() {
+                stdin.write_all(&input).ok();
+            }
+        }
+        if std::mem::take(&mut link.stop)
+            && let Some((_, pid)) = command.take()
+        {
+            // SAFETY: kill only sends a signal to the command's process.
+            unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+        }
+        if !link.running() {
+            command = None;
         }
         let clock = link.clock.take();
         if let Some(secs) = clock {
@@ -915,6 +1087,65 @@ mod tests {
 
     fn from_esp(b: &[u8]) -> Msg {
         Msg::Uart(encode(frame::FROM_ESP, b))
+    }
+
+    /// The frames for `.cbb` the link wrote since `at`.
+    fn to_cbb(link: &Link<Vec<u8>>, at: &mut usize) -> Vec<u8> {
+        let wire = link.output()[*at..].to_vec();
+        *at = link.output().len();
+        Decoder::new().push(&wire).into_iter().filter(|f| f.kind == frame::CBB_IN).flat_map(|f| f.data).collect()
+    }
+
+    /// `.cbb paste` while the network runs: the link starts `cbb next
+    /// paste` as the shell would, and its output and the prompt go back.
+    #[test]
+    fn runs_cbbs_commands() {
+        let (mut link, _, now) = new_link();
+        let mut at = 0;
+        link.handle(Msg::Uart(encode(frame::HELLO, b"cbb.drv 0.2")), now);
+        to_cbb(&link, &mut at);
+        link.handle(Msg::Uart(encode(frame::CBB_OUT, b"cbb -debug next paste -max 8192\n")), now);
+        assert_eq!(
+            link.start.take(),
+            Some(vec!["-debug".into(), "next".into(), "paste".into(), "-max".into(), "8192".into()])
+        );
+        assert!(link.running());
+        link.handle(Msg::CommandOut(b"CBB1 2 0\rhi\rCBBOK\r".to_vec()), now);
+        link.handle(Msg::CommandEnded, now);
+        assert_eq!(to_cbb(&link, &mut at), b"CBB1 2 0\rhi\rCBBOK\r\r\nSUP>");
+        assert!(!link.running());
+        // A copy: the line, then its text, which is the command's input.
+        link.handle(Msg::Uart(encode(frame::CBB_OUT, b"cbb next copy 5 0000abcd\n")), now);
+        assert!(link.start.take().is_some());
+        link.handle(Msg::Uart(encode(frame::CBB_OUT, b"hel")), now);
+        link.handle(Msg::Uart(encode(frame::CBB_OUT, b"lo")), now);
+        assert_eq!(std::mem::take(&mut link.input), b"hello");
+        // .cbb stops it: nothing more of it, not even the prompt.
+        link.handle(Msg::Uart(encode(frame::CBB_OUT, b"")), now);
+        assert!(std::mem::take(&mut link.stop));
+        link.handle(Msg::CommandOut(b"CBBERR stopped\r".to_vec()), now);
+        link.handle(Msg::CommandEnded, now);
+        assert!(to_cbb(&link, &mut at).is_empty());
+    }
+
+    /// Only `cbb next paste` and `copy`: the rest of the shell stays shut.
+    #[test]
+    fn refuses_other_commands() {
+        let (mut link, _, now) = new_link();
+        let mut at = 0;
+        link.handle(Msg::Uart(encode(frame::HELLO, b"cbb.drv 0.2")), now);
+        to_cbb(&link, &mut at);
+        for line in ["rm -rf /\n", "cbb next link -to x:1\n", "cbb service\n"] {
+            link.handle(Msg::Uart(encode(frame::CBB_OUT, line.as_bytes())), now);
+            assert!(link.start.is_none(), "{line}");
+            let out = to_cbb(&link, &mut at);
+            assert!(out.starts_with(b"CBBERR ") && out.ends_with(b"\r\nSUP>"), "{}", out.escape_ascii());
+        }
+        assert_eq!(
+            command_args("cbb next copy -secret 3 00000000"),
+            Some(vec!["next".into(), "copy".into(), "-secret".into(), "3".into(), "00000000".into()])
+        );
+        assert_eq!(command_args("sudo cbb next paste"), None);
     }
 
     #[test]
