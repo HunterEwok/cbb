@@ -392,12 +392,13 @@ secret the release still succeeds and warns that there is no feed.
 ## The ZX Spectrum Next's files
 
 The release workflow's `zxnext` job takes the lite member for the Pi Zero from the `lite`
-job, builds `.cbb` and `CBB.DRV` with the SHA-256 of that member and of the driver inside
-`.cbb` (`make PI_CBB=...`, `apps/zxnext/pins.sh`), and lays them out for cbb.tools
-(`packaging/zxnext/site.sh`) as `cbb-zxnext.tar.gz`: `zxnext/` with the three files and
-`LIST`, a line of name, size, CRC-32 and SHA-256 for each. `.cbb install` installs only the
-driver and the member its own `.cbb` carries; `.cbb update` reads `LIST` to tell of a newer
-`.cbb`. The three files must come from one build: a `.cbb` refuses another build's.
+job, builds `.cbb`, its overlay `CBB.OVL` and `CBB.DRV` with the SHA-256 of that member, of
+the overlay and of the driver inside `.cbb` (`make PI_CBB=...`, `apps/zxnext/pins.sh` and
+`ovl.sh`), and lays them out for cbb.tools (`packaging/zxnext/site.sh`) as
+`cbb-zxnext.tar.gz`: `zxnext/` with the four files and `LIST`, a line of name, size, CRC-32
+and SHA-256 for each. `.cbb install` installs only the overlay, the driver and the member its
+own `.cbb` carries; `.cbb update` reads `LIST` to tell of a newer `.cbb`. The four files must
+come from one build: a `.cbb` refuses another build's.
 
 NextZXOS's `.http` and the ESP8266 have no TLS, so these two paths are served over plain HTTP
 on port 80, where the rest of the site redirects to HTTPS (`site/deploy/nginx.conf`, the

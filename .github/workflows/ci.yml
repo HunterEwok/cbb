@@ -671,7 +671,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
@@ -2242,6 +2242,9 @@ jobs:
           test -s build/CBB
           test -s build/PIBRIDGE
           test -s build/CBB.DRV
+          test -s build/CBB.OVL
+          # The overlay's SHA-256 inside CBB, written there by ovl.sh.
+          grep -q "$(sha256sum <build/CBB.OVL | cut -c1-64)" build/CBB
           grep -q "PIN_PI_SHA256 \"$(sha256sum <build/PIBRIDGE | cut -c1-64)\"" build/pins.h
           grep -q "PIN_DRV_SHA256 \"$(sha256sum <build/CBB.DRV | cut -c1-64)\"" build/pins.h
       - name: the frame parser's tests on the host, and the driver's in an emulator
@@ -2253,7 +2256,7 @@ jobs:
       - name: the files for cbb.tools (packaging/zxnext/site.sh; PIBRIDGE stands in for the Pi's cbb)
         run: |
           sh packaging/zxnext/site.sh apps/zxnext/build apps/zxnext/build/PIBRIDGE "$RUNNER_TEMP/site"
-          test "$(wc -l <"$RUNNER_TEMP/site/zxnext/LIST")" -eq 3
+          test "$(wc -l <"$RUNNER_TEMP/site/zxnext/LIST")" -eq 4
           grep -q "^cbb [0-9]* [0-9a-f]\{8\} $(sha256sum <apps/zxnext/build/PIBRIDGE | cut -c1-64)$" "$RUNNER_TEMP/site/zxnext/LIST"
           cmp "$RUNNER_TEMP/site/zxnext/CBB" apps/zxnext/build/CBB
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -2261,6 +2264,7 @@ jobs:
           name: cbb-zxnext-dot
           path: |
             apps/zxnext/build/CBB
+            apps/zxnext/build/CBB.OVL
             apps/zxnext/build/PIBRIDGE
             apps/zxnext/build/CBB.DRV
           retention-days: 14

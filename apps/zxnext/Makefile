@@ -3,7 +3,7 @@
 
 # .cbb, the dot command for the ZX Spectrum Next (README.md).
 #   make PI_CBB=FILE
-#               build/CBB, build/PIBRIDGE and build/CBB.DRV with z88dk (zcc and
+#               build/CBB, build/CBB.OVL, build/PIBRIDGE and build/CBB.DRV with z88dk (zcc and
 #               z88dk-z80asm on the PATH, ZCCCFG set); FILE is the Pi's cbb, the
 #               lite member for ARMv6, whose size and SHA-256 CBB carries with
 #               the driver's (pins.sh), as it installs only those
@@ -37,12 +37,18 @@ build/formats: formats.sh $(SRC)
 	sh formats.sh $(SRC) >$@.new
 	mv $@.new $@
 
-build/CBB: mapcheck.sh budget.sh $(SRC) src/far.asm src/stack.asm src/logo.h src/frame.h src/link.h src/sha256.h build/pins.h build/formats
+build/CBB.OVL: build/CBB
+
+build/CBB: mapcheck.sh budget.sh ovl.sh $(SRC) src/far.asm src/stack.asm src/logo.h src/frame.h src/link.h src/sha256.h build/pins.h build/formats
 	@# The stack starts at 0xE000, under the overlays' window (src/far.asm):
-	@# z88dk's default, the top of memory, is in it.
+	@# z88dk's default, the top of memory, is in it. The page tables go
+	@# up to the last page used, not z88dk's 223.
+	rm -f build/cbb_PAGE_*.bin
 	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src -I. $$(cat formats) \
-		-pragma-define:REGISTER_SP=0xE000 \
+		-pragma-define:REGISTER_SP=0xE000 -pragma-define:DOTN_LAST_PAGE=19 \
 		$(addprefix ../,$(SRC)) ../src/far.asm ../src/stack.asm -o cbb -create-app -m
+	@# The pages from 19 on go to CBB.OVL, which CBB loads (ovl.sh).
+	@sh ovl.sh build || { mv build/CBB build/CBB.bad; exit 1; }
 	@# The memory budget, with room to grow everywhere (README.md, "Memory"):
 	@# zcc does not check that an overlay fits its 8K page, nor MAIN the
 	@# stack's room under 0xE000 (src/stack.asm).

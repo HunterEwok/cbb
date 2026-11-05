@@ -231,7 +231,7 @@ fn hello_clock_and_the_esp_both_ways() {
         (5 + 8u16).to_le_bytes(),
         "the bytes taken from the Pi"
     );
-    assert_eq!(f[2].1, b"cbb.drv 0.1");
+    assert_eq!(f[2].1, b"cbb.drv 0.2");
     assert_eq!(
         f[3].1,
         [0x62, 0x5D, 0xC7, 0x0B],
@@ -404,4 +404,97 @@ fn turned_on_again_counts_from_zero() {
         1u16.to_le_bytes(),
         "the first ack counts this run only"
     );
+}
+
+impl Driver {
+    /// Call 7 with D and E.
+    fn cbb_out(&mut self, d: u8, e: u8) {
+        self.call(0xE000, 0x0700, (d as u16) << 8 | e as u16);
+        assert!(
+            !self.cpu.registers().get_flag(iz80::Flag::C),
+            "call 7 failed"
+        );
+    }
+    /// Call 8 until it has nothing: what .cbb reads.
+    fn cbb_in(&mut self) -> Vec<u8> {
+        let mut got = Vec::new();
+        loop {
+            self.call(0xE000, 0x0800, 0);
+            let de = self.cpu.registers().get16(Reg16::DE);
+            if de >> 8 == 0 {
+                return got;
+            }
+            got.push(de as u8);
+        }
+    }
+}
+
+/// .cbb's command goes to the Pi in frames while the network runs, and the
+/// Pi's answers come back through their own ring.
+#[test]
+fn carries_cbbs_commands() {
+    let mut d = Driver::new();
+    d.on();
+    d.interrupt();
+    d.pi_frames();
+    d.next.select = 0x00; // .cbb may have the ESP's selected
+    d.cbb_out(0, 0);
+    for &b in b"cbb next paste -max 8192\n" {
+        d.cbb_out(1, b);
+    }
+    assert_eq!(d.next.select, 0x00, "the UART it found is selected again");
+    // The bytes wait for the interrupt, which sends them in one frame.
+    assert!(d.pi_frames().is_empty());
+    d.interrupt();
+    let f = d.pi_frames();
+    assert_eq!(
+        f.iter().find(|f| f.0 == b'C').map(|f| f.1.clone()),
+        Some(b"cbb next paste -max 8192\n".to_vec()),
+        "{f:?}"
+    );
+    d.next.pi.rx.extend(frame(b'c', b"CBB1 2 0\rhi\r"));
+    d.next.pi.rx.extend(frame(b'e', b"AT\r\n"));
+    d.next.pi.rx.extend(frame(b'c', b"CBBOK\r\r\nSUP>"));
+    d.interrupt();
+    assert_eq!(d.cbb_in(), b"CBB1 2 0\rhi\rCBBOK\r\r\nSUP>");
+    assert_eq!(d.next.esp.tx, b"AT\r\n", "the network goes on meanwhile");
+    // 64 bytes go at once; a stop sends what waits, then an empty frame.
+    for i in 0..70u8 {
+        d.cbb_out(1, i);
+    }
+    d.cbb_out(3, 0);
+    let f: Vec<_> = d.pi_frames().into_iter().filter(|f| f.0 == b'C').collect();
+    assert_eq!(f.iter().map(|f| f.1.len()).collect::<Vec<_>>(), [64, 6, 0]);
+    d.cbb_out(4, 0);
+}
+
+/// Answers nobody reads are dropped, and never hold the network up; an
+/// open ring holds the Pi in its UART when it is full.
+#[test]
+fn answers_wait_only_while_open() {
+    let mut d = Driver::new();
+    d.on();
+    for _ in 0..8 {
+        d.next.pi.rx.extend(frame(b'c', &[b'x'; 200]));
+    }
+    d.next.pi.rx.extend(frame(b'e', b"AT\r\n"));
+    d.interrupt();
+    assert_eq!(d.next.esp.tx, b"AT\r\n");
+    assert!(d.cbb_in().is_empty(), "closed: nothing kept");
+    d.cbb_out(0, 0);
+    for _ in 0..8 {
+        d.next.pi.rx.extend(frame(b'c', &[b'y'; 200]));
+    }
+    d.next.pi.rx.extend(frame(b'e', b"AT\r\n"));
+    d.interrupt();
+    assert!(!d.next.pi.rx.is_empty(), "the rest waits in the Pi's UART");
+    let mut got = d.cbb_in();
+    for _ in 0..10 {
+        d.interrupt();
+        got.extend(d.cbb_in());
+    }
+    assert_eq!(got, vec![b'y'; 1600]);
+    assert_eq!(d.next.esp.tx, b"AT\r\nAT\r\n");
+    d.call(0xE000, 0x0100, 0);
+    assert_eq!(d.cpu.registers().get16(Reg16::DE), 0, "no frame dropped");
 }

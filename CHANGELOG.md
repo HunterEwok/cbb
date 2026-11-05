@@ -156,7 +156,7 @@ All notable changes to cbb are documented in this file. The format follows
   phone reaches (a network started after the install had it there, and the phone got the
   service's certificate), and `cbb next link` starts the service again whenever it stopped.
   `.cbb pair` shows only the QR code and SCAN, THEN PRESS ANY KEY until a key, then clears
-  the screen for the rest. `.cbb leave` makes the Pi forget its group, so that `.cbb pair` joins again, the same group
+  the screen for the rest. `.cbb leave` runs `cbb leave -yes` on the Pi, which forgets its group, so that `.cbb pair` joins again, the same group
   or another one. `.cbb pair` says first when the Pi is in a group already, which `cbb next pair` refuses
   out of sight, and `.cbb uninstall` tells how to erase `/cbb/CBB`, which NextZXOS keeps
   while it runs.
@@ -168,6 +168,22 @@ All notable changes to cbb are documented in this file. The format follows
   cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
   silent Pi, a Pi without the fast speed, finding a computer, uninstalling, a closed connection, SPACE, the usage and a paste, each failed on what would
   go wrong on a real Next (README.md, "Testing on a played Next").
+  `.cbb paste`, `copy` and `text` no longer stop a running network: `CBB.DRV` 0.2 carries
+  them to the Pi in frames of their own (calls 7 and 8, a 1 KB ring for the answers), and
+  `cbb next link` runs their `cbb next paste` or `copy`, and nothing else, as NextPi's shell
+  would; with an older driver they stop it as before. `CBB` lives in `C:/DOT`, so `.cbb`
+  runs from any folder (`CD "C:/DOT"`, `.http -h cbb.tools -u /zxnext -f CBB`,
+  `.cbb install`); everything else stays in `/cbb`. `.cbb update` says when there are no
+  updates, and with a newer `CBB` on the site installs it and its files (checked against the
+  site's list) and puts it in place of itself, closing the file NextZXOS keeps open for it;
+  `.cbb net on` then starts the network with the new one. `.cbb install` adds `.cbb net on`
+  to `C:/NEXTZXOS/AUTOEXEC.BAS` as its last line, so the network starts at power-on, where
+  `.cbb net on` waits for NextPi to start; `.cbb uninstall` takes the line out. `.cbb uninstall` leaves `C:/DOT/CBB` for the user to
+  erase. The rarer commands (`paste`, `copy`, `text`, `leave`, `uninstall`,
+  `paste-receive`) are in `/cbb/CBB.OVL`, read into a page NextZXOS allocates on their
+  first call and checked against the stamp `CBB` carries (`apps/zxnext/ovl.sh`), so `CBB`
+  stays under 64K with room to grow; `.cbb install` fetches it with the other files.
+  After the first install, a Pi in no group goes on to pair at once with its QR code.
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own
