@@ -28,6 +28,11 @@ fn main() {
     std::fs::create_dir_all(card.join("cbb")).unwrap();
     std::fs::create_dir_all(card.join("dot")).unwrap();
     std::fs::copy(&dot, card.join("cbb/CBB")).unwrap();
+    // CBB.OVL as an install leaves it, unless the run is the install.
+    let ovl = dot.with_file_name("CBB.OVL");
+    if ovl.exists() && !args.starts_with("install") && !card.join("cbb/CBB.OVL").exists() {
+        std::fs::copy(&ovl, card.join("cbb/CBB.OVL")).unwrap();
+    }
     let faults = std::env::var("FAULTS").unwrap_or_default();
     let mut esp = Esp::new(site);
     let mut pi = Pi::new();
