@@ -126,6 +126,13 @@ type Config struct {
 	// (docs/protocol.md, section 10, "Stopping the exchange").
 	NoSecrets func(group.DeviceID) bool
 
+	// TakeCopy checks a sealed copy a peer sent against the group's
+	// records and returns the engine's event of it: opened when it is
+	// sealed to this member, Unread otherwise (docs/protocol.md, section 4,
+	// "Opening"). A copy it refuses is dropped and logged; without it every
+	// copy is.
+	TakeCopy func(from group.DeviceID, s *clip.Sealed) (clip.Event, error)
+
 	// Records, if set, keeps the group's signed records.
 	Records RecordStore
 	// Credentials, if set, keeps the group's server credentials, which go
@@ -1271,6 +1278,10 @@ func (n *Node) apply(res clip.Result, from *conn) {
 
 // forward sends an event to every connection except the one it came from.
 func (n *Node) forward(ev clip.Event, from *conn) {
+	if ev.Sealed == nil {
+		n.cfg.Logf("node: a copy that is not sealed is not sent")
+		return
+	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	for _, c := range n.conns {
@@ -1459,12 +1470,14 @@ func (c *conn) message(o outgoing) (*message, error) {
 	switch {
 	case o.hello != nil:
 		h := *o.hello
-		if h.Current != nil {
-			ev := *h.Current
-			ev.Age = addAge(ev.Age, c.n.cfg.Uptime()-o.queued)
-			h.Current = &ev
+		var current *clip.Sealed
+		if h.Current != nil && h.Current.Sealed != nil {
+			s := *h.Current.Sealed
+			s.Age = addAge(h.Current.Age, c.n.cfg.Uptime()-o.queued)
+			current = &s
 		}
-		out := helloOut{Hello: h, Name: c.n.cfg.Name, OS: c.n.cfg.OS, Mode: c.n.cfg.Engine.Mode().String(), KeyStore: c.n.cfg.KeyStore}
+		h.Current = nil
+		out := helloOut{Hello: h, Current: current, Name: c.n.cfg.Name, OS: c.n.cfg.OS, Mode: c.n.cfg.Engine.Mode().String(), KeyStore: c.n.cfg.KeyStore}
 		if out.KeyStore == "" {
 			out.KeyStore = group.StoreFile
 		}
@@ -1537,11 +1550,15 @@ func (c *conn) message(o outgoing) (*message, error) {
 		return &message{Type: typeMissing, Get: o.missing}, nil
 	default:
 		ev := *o.event
-		ev.Age = addAge(ev.Age, c.n.cfg.Uptime()-o.queued)
-		if ev.Kind == clip.Secret && c.n.cfg.NoSecrets != nil && c.n.cfg.NoSecrets(c.id) {
-			ev.Text = "" // the mark of the secret
+		if ev.Sealed == nil {
+			return nil, errors.New("a copy that is not sealed")
 		}
-		data, err := encode(ev)
+		if ev.Kind == clip.Secret && !ev.Unread && c.n.cfg.NoSecrets != nil && c.n.cfg.NoSecrets(c.id) {
+			ev = ev.Mark()
+		}
+		s := *ev.Sealed
+		s.Age = addAge(ev.Age, c.n.cfg.Uptime()-o.queued)
+		data, err := encode(s)
 		if err != nil {
 			return nil, err
 		}
@@ -1661,6 +1678,11 @@ func (c *conn) reader() error {
 			if err != nil {
 				return fmt.Errorf("node: bad hello from %s: %w", c.id, err)
 			}
+			if extra.current != nil {
+				if ev, ok := c.take(extra.current); ok {
+					h.Current = &ev
+				}
+			}
 			c.mu.Lock()
 			c.peerRole = m.Role
 			if group.ValidName(extra.Name) {
@@ -1725,9 +1747,13 @@ func (c *conn) reader() error {
 		}
 		switch m.Type {
 		case typeEvent:
-			var ev clip.Event
-			if err := json.Unmarshal(m.Event, &ev); err != nil {
+			var s clip.Sealed
+			if err := json.Unmarshal(m.Event, &s); err != nil {
 				c.n.cfg.Logf("node: dropped an event from %s that does not decode", c.id)
+				continue
+			}
+			ev, ok := c.take(&s)
+			if !ok {
 				continue
 			}
 			res, err := e.Received(ev)
@@ -1819,8 +1845,9 @@ func (c *conn) reader() error {
 }
 
 // decodeHello decodes a hello, and returns the rest of it, the peer's
-// records digest and name, as it came. A current event that does not
-// decode, for example from a newer version, counts as none.
+// records digest and name, as it came, with its current copy as it came
+// in current. A current copy that does not decode, for example from a
+// newer version, counts as none.
 func decodeHello(raw json.RawMessage) (clip.Hello, helloBody, error) {
 	var b helloBody
 	if err := json.Unmarshal(raw, &b); err != nil || len(raw) == 0 {
@@ -1828,12 +1855,27 @@ func decodeHello(raw json.RawMessage) (clip.Hello, helloBody, error) {
 	}
 	h := clip.Hello{Wall: b.Wall}
 	if len(b.Current) > 0 && string(b.Current) != "null" {
-		var ev clip.Event
-		if json.Unmarshal(b.Current, &ev) == nil {
-			h.Current = &ev
+		var s clip.Sealed
+		if json.Unmarshal(b.Current, &s) == nil {
+			b.current = &s
 		}
 	}
 	return h, b, nil
+}
+
+// take checks a sealed copy from the peer with TakeCopy and returns the
+// engine's event of it; false, logged, when it is refused.
+func (c *conn) take(s *clip.Sealed) (clip.Event, bool) {
+	if c.n.cfg.TakeCopy == nil {
+		c.n.cfg.Logf("node: dropped a copy from %s: this member checks no copies", c.id)
+		return clip.Event{}, false
+	}
+	ev, err := c.n.cfg.TakeCopy(c.id, s)
+	if err != nil {
+		c.n.cfg.Logf("node: dropped a copy from %s: %v", c.id, err)
+		return clip.Event{}, false
+	}
+	return ev, true
 }
 
 // maxPeerActions bounds the quick actions a peer's hello may list: the
