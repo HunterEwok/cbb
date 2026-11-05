@@ -295,6 +295,18 @@ pub struct Next {
     pub drivers: Vec<(u8, Vec<u8>)>,
     /// Whether cbb.drv runs the network (its call 2 switches it).
     pub net: bool,
+    /// Whether cbb.drv carries .cbb's commands to the Pi while the network
+    /// runs (its calls 7 and 8, cbb.drv 0.2): they go to the Pi played
+    /// here as if typed at its shell, and its answers come back; without
+    /// them the calls set carry, as an older driver's do.
+    pub via: bool,
+    /// The bytes .cbb sent through call 7.
+    pub via_sent: Vec<u8>,
+    /// The dot command's own file on the card, which NextZXOS keeps open
+    /// while it runs (handle 0, from M_GETHANDLE): it cannot be erased
+    /// until the command closes it. /cbb/CBB, as ../CBB runs it, or
+    /// C:/DOT/CBB when the card has one.
+    pub running: String,
     /// The palette's 9-bit colours as written (NR 0x40/0x41/0x44), per index.
     pub palette: Vec<u16>,
     pal_index: u8,
@@ -624,6 +636,9 @@ impl Run {
             errh: 0,
             drivers: Vec::new(),
             net: false,
+            via: false,
+            via_sent: Vec::new(),
+            running: "/cbb/CBB".into(),
             palette: (0..256).map(|i| i as u16 * 2).collect(),
             pal_index: 0,
             pal_second: false,
@@ -665,7 +680,9 @@ impl Run {
         for (a, v) in sysvars {
             hw.os_write(a, v);
         }
-        hw.os_write16(FRAMES, 0);
+        // Ten minutes after power-on: .cbb net on waits for NextPi to
+        // start only in the first two (a test sets FRAMES lower for that).
+        hw.os_write16(FRAMES, 30_000);
         hw.os_write(FRAMES + 2, 0);
         // The command line, in BASIC's line, ended by ENTER.
         let line = format!("../CBB {args}\r");
@@ -917,6 +934,12 @@ impl Run {
                 if !path.is_file() {
                     return self.err(5);
                 }
+                // NextZXOS keeps a large dot command's file open (handle 0
+                // here, as M_GETHANDLE gives it) until it closes it.
+                let running = self.hw.running.clone();
+                if path == self.host(&running) && matches!(self.hw.files.first(), Some(Some(_))) {
+                    return self.err(6); // in use
+                }
                 if let Ok(dir) = std::env::var("CBB_UNLINKED") {
                     let _ = std::fs::copy(&path, Path::new(&dir).join(path.file_name().unwrap()));
                 }
@@ -1004,6 +1027,28 @@ impl Run {
             }
             3 => {
                 self.set(Reg16::DE, self.hw.net as u16);
+                self.ok();
+            }
+            7 | 8 if !self.hw.via => self.carry(true),
+            7 => {
+                let now = self.hw.now as u64;
+                match de >> 8 {
+                    1 => {
+                        self.hw.via_sent.push(de as u8);
+                        self.hw.pi.peer.rx(now, de as u8, 115_200);
+                    }
+                    3 => {
+                        self.hw.via_sent.push(3);
+                        self.hw.pi.peer.rx(now, 3, 115_200);
+                    }
+                    _ => {}
+                }
+                self.ok();
+            }
+            8 => {
+                let now = self.hw.now as u64;
+                let b = self.hw.pi.peer.tx(now);
+                self.set(Reg16::DE, b.map_or(0, |b| 0x100 | b as u16));
                 self.ok();
             }
             _ => {
