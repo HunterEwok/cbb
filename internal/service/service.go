@@ -66,6 +66,9 @@ type Config struct {
 	listen func() (net.Listener, error)
 	// now is the clock for certificates; time.Now if nil.
 	now func() time.Time
+	// lookupIP looks up a server's name, as the project's relay's; the
+	// system's resolver if nil. Tests replace it.
+	lookupIP func(ctx context.Context, host string) ([]netip.Addr, error)
 	// readSheet reads what the user typed or scanned from a recovery
 	// sheet; the Rust core's read_recovery_sheet if nil. Tests replace it.
 	readSheet func(string) (*recoverySheet, error)
@@ -308,6 +311,11 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.now == nil {
 		cfg.now = benchtime.Now
+	}
+	if cfg.lookupIP == nil {
+		cfg.lookupIP = func(ctx context.Context, host string) ([]netip.Addr, error) {
+			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+		}
 	}
 	if cfg.browseFor == 0 {
 		cfg.browseFor = 10 * time.Second

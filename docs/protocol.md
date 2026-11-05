@@ -1915,7 +1915,7 @@ beyond) and check the same bytes.
 | `op` | Request | Answers |
 |------|---------|---------|
 | `devices` | none | `{devices: [{id, name, role, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only |
-| `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"), reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins, in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none. Members connect again afterwards, so their hellos carry the change (section 11) |
+| `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"), reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, section 14), in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none. Members connect again afterwards, so their hellos carry the change (section 11) |
 | `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`) |
 | `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected full member an admin ("Admins") |
 | `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
@@ -2355,8 +2355,8 @@ without addresses, or with `-forwarder default`, and a phone that is the hub wit
 forwarder of the user's own take its address, looked up when the hub is set, and its pin,
 so that nobody types either. The control request carries the address the command line
 looked up and `forwarder_key` `default`; the service fills in the pin. The pins a hub
-accepts from it are those of the `keys.json` of the newest release the group passed around
-when that lists any for `cbb.tools:8764` (section 16, "Keys"), else those built in
+accepts from it are those of the newest `keys.json` the group passed around, with a release
+or with the entry points, when that lists any for `cbb.tools:8764` (section 16, "Keys"), else those built in
 (`internal/forward/project.go`, `HubState.Forwarder.projectPin` in the kits); while its key
 changes both pins are listed and either is taken. A hub command carries the pin the old hub
 accepts, and a hub that knows it as the project's follows its key from then on, as the hub
@@ -2632,8 +2632,34 @@ runs end to end between the two devices.
 - A device's service takes a relay only with the user's consent (`consent` on the control
   socket's `away` request, section 8), after `cbb global relay` showed what the relay learns;
   where sync away from home is off, the same request turns it on with new keys.
-- A device keeps `relay: {endpoint, key}` in its `tunnel.json` (section 11), and then is
-  neither a hub nor a hub's client: it ignores a hub's offer.
+- A device keeps `relay: {endpoint, key, project}` in its `tunnel.json` (section 11), and
+  then is neither a hub nor a hub's client: it ignores a hub's offer.
+
+### The project's relay
+
+The project runs an open relay at `cbb.tools:8765`. `cbb global relay default` sends the
+address it looked up and `relay_key` `default`; the service keeps the relay with `project`
+`true` and follows its key and address from the signed lists (section 16), so that the relay
+can change its key or move without a release and without the user:
+
+- At each start of the link, the device accepts the pins of the keys that the newest
+  `keys.json` it holds (with a release or with the entry points) lists with `use` `relay` and
+  `name` `cbb.tools:8765`, else the pins built in (`internal/relay/project.go`). While the
+  key changes both are listed, and either is taken.
+- When a registration fails, the device fetches `keys.json` and `entries.json` from the
+  mirror `dl.cbb.tools` (HTTPS, its certificate checked by name) at the relay's address on
+  TCP 443, the one server its network limit lets it reach, at most every 10 minutes, and
+  takes them with the checks of section 16; the group and `cbb update` bring them as well.
+  It then tries again at once with the pins of the newest lists, without asking the user.
+- When the relay did not answer, the device looks up where it is reached now: the
+  `endpoints` that the newest `entries.json` gives the relay named `cbb.tools:8765`, else that
+  name, and tries the next address, which it keeps in `tunnel.json` as the relay's
+  `endpoint`. Where the system limits the service's network (the systemd unit, the Windows
+  Firewall rule), `cbb global allow` lets it reach the new address.
+- Status shows a short reason while it fails, the whole error as its detail.
+
+A relay of the user's own is kept as it was given: a new key means `cbb global relay` with the
+new key on every device.
 
 ### Registration
 
@@ -2977,9 +3003,12 @@ them alike, against `testdata/interop/go-release.json`.
   and the forwarder's address as `name` (`cbb.tools:8764`). They sign nothing: a hub takes
   their pins (SHA-256 of each SubjectPublicKeyInfo, as `cbb forward` prints its key) as the
   ones it accepts from that forwarder, in place of the pins built into the program, when the
-  `keys.json` of the newest release it holds lists any (section 13, "The project's
-  forwarder"). A new key is listed beside the old one before the forwarder changes to it, and
-  the old one is dropped after.
+  newest `keys.json` it holds, with a release or with the entry points, lists any (section
+  13, "The project's forwarder"). A new key is listed beside the old one before the
+  forwarder changes to it, and the old one is dropped after.
+- **The project's relay's keys**, P-256, the same with `use` `relay` and the relay's address
+  as `name` (`cbb.tools:8765`); a device on the project's relay takes their pins (section 14,
+  "The project's relay").
 
 ### The envelope
 
@@ -2999,15 +3028,16 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
 
 | `type` | Signed by | Fields |
 |--------|-----------|--------|
-| `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 8 of `{key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status`, `channel` or `forwarder`)`}` |
+| `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 8 of `{key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status`, `channel`, `forwarder` or `relay`)`}` |
 | `release` (`release.json`) | a release key | `version`, `channel`, `time_ms`, `min_from` (a version, optional), `files`: 1 to 256 of `{name, size, sha256, binaries?}`, `docker` (optional `{image, digest}`) |
 | `channel` (`stable.json`, ...) | a release key or a channel key | `channel`, `seq` (from 1), `time_ms`, `expires_ms`, `release` (the version), `release_sha256` (SHA-256 of that `release.json`'s body, hex) |
-| `entries` (`entries.json`) | a release key or a channel key | `seq` (from 1), `time_ms`, `expires_ms`, `forwarders`: at most 16 of `{name` (the forwarder, `host:port`, each once), `vless`: at most 8 of `{transport` (`xhttp`), `server_name` (a site's name), `port` (1 to 65535), `path` (`/` and 8 to 64 of `A-Z a-z 0-9 - _`)`}}` |
+| `entries` (`entries.json`) | a release key or a channel key | `seq` (from 1), `time_ms`, `expires_ms`, `forwarders`: at most 16 of `{name` (the forwarder, `host:port`, each once), `vless`: at most 8 of `{transport` (`xhttp`), `server_name` (a site's name), `port` (1 to 65535), `path` (`/` and 8 to 64 of `A-Z a-z 0-9 - _`)`}}`, `relays` (optional): at most 16 of `{name` (the relay, `host:port`, each once), `endpoints` (optional): at most 8 `host:port` where it is reached now`}` |
 | `attest-status` (`attest-status.json`) | a status key | `seq` (from 1), `time_ms`, `expires_ms`, `source_ms` (when Google last changed its list, optional), `android_revoked`: the serial numbers |
 
 - A key of a `use` the reader does not know is in `keys.json` for newer programs and signs
   nothing for it; a release key signs no `attest-status.json`, a status key no release
-  or channel file, a channel key nothing but channel files, and a forwarder key nothing.
+  or channel file, a channel key nothing but channel files, and a forwarder or relay key
+  nothing.
 
 - A version is `X.Y.Z` or, for a release candidate, `X.Y.Z-rc.N`: decimal numbers of at
   most 6 digits without leading zeros (`N` from 1), compared number by number, a release
@@ -3126,8 +3156,9 @@ programs, and those ways change when a network starts to block one. So the proje
 their list, `entries.json`, with a release key or the channel key, beside `keys.json` in the
 branch `channel` and at the top of every mirror (`https://cbb.tools/channel/entries.json`,
 renewed with the channel file); a device trusts the signature, wherever the list came from.
-For now it lists, for each forwarder of the project, its ways in over VLESS (section 13,
-"VLESS"); a hub registers through them (section 13, "The project's forwarder").
+It lists, for each forwarder of the project, its ways in over VLESS (section 13, "VLESS"),
+through which a hub registers (section 13, "The project's forwarder"); and for each relay of
+the project, where it is reached now (section 14, "The project's relay").
 
 - A device MUST take a list only when its `keys.json` passes step 1 of the check above, and
   `entries.json` verifies under a release or channel key of that `keys.json`, decodes as an

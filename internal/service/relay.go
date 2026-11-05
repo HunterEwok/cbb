@@ -28,7 +28,7 @@ func (s *Service) joinRelayLocked(ctx context.Context, run *tunRun, link tunnel.
 	s.tunRelay = &control.Relay{Endpoint: link.Endpoint.String()}
 	s.tunRelayed = 0
 	cfg := relay.MemberConfig{
-		Link: relay.Link{Endpoint: link.Endpoint, Pin: link.Pin},
+		Link: s.relayLink(link),
 		Self: s.tunSelf,
 		Key:  key,
 		Cert: func() tls.Certificate {
@@ -101,19 +101,27 @@ func (s *Service) joinRelayLocked(ctx context.Context, run *tunRun, link tunnel.
 			if s.tunRun != run {
 				return
 			}
-			st := &control.Relay{Endpoint: link.Endpoint.String(), Connected: r.Connected, Online: r.Online}
+			// The project's relay may have moved since the link started.
+			ep := link.Endpoint
+			if st := s.tunnel; st != nil && st.Relay != nil {
+				ep = st.Relay.Endpoint
+			}
+			st := &control.Relay{Endpoint: ep.String(), Connected: r.Connected, Online: r.Online}
 			if r.Err != nil {
-				st.Error, st.Detail = relayProblem(r.Err), r.Err.Error()
+				st.Error, st.Detail = relayProblem(r.Err, link.Project), r.Err.Error()
 				if s.tunRelay == nil || s.tunRelay.Detail != st.Detail {
-					s.logf("cbb: sync away from home: the relay at %v: %v", link.Endpoint, r.Err)
+					s.logf("cbb: sync away from home: the relay at %v: %v", ep, r.Err)
 				}
 			} else if r.Connected && (s.tunRelay == nil || !s.tunRelay.Connected) {
-				s.logf("cbb: sync away from home: connected to the relay at %v", link.Endpoint)
+				s.logf("cbb: sync away from home: connected to the relay at %v", ep)
 			}
 			s.tunRelay, s.tunRelayed = st, r.Through
 		},
 		Logf:    s.logf,
 		Verbose: tunnelVerbose(),
+	}
+	if link.Project {
+		cfg.Retry = s.projectRelayRetry(run)
 	}
 	s.wg.Add(1)
 	go func() {
@@ -134,11 +142,13 @@ func (s *Service) node() *node.Node {
 // relayProblem is a short message for status of why the device is not
 // connected to its relay; the whole error goes to the log and to the
 // detail.
-func relayProblem(err error) string {
+func relayProblem(err error, project bool) string {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "refused the registration"):
 		return msg
+	case project && relayKeyRefused(err):
+		return "the project's relay has a key this device does not know yet; it fetches the newest signed list and tries again"
 	case strings.Contains(msg, "not the one given"):
 		return "the relay's key is not the one given with -key"
 	case strings.HasPrefix(msg, "reaching the relay"):
