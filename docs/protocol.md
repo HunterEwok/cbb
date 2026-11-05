@@ -589,11 +589,11 @@ behind may still seal to a device that has been removed, which no member lets co
 The Content is what only the readers see, in binary: a version byte (`1`); the kind (`1`
 `text`, `2` `secret`, `3` `media`); `via` (`0` `copy`, `1` `phone`, `2`
 `universal-clipboard`); the text as its length in 4 bytes and its bytes; the manifest ("Media",
-below) as its length in 4 bytes and its JSON, length 0 unless the kind is `media`; then zero bytes up to the next step: 1 KiB, 4 KiB,
+below) as its length in 4 bytes and its JSON in the canonical form of signed bodies (section 10), length 0 unless the kind is `media`; then zero bytes up to the next step: 1 KiB, 4 KiB,
 16 KiB, 64 KiB, 256 KiB, 1 MiB, 2 MiB, 3 MiB or 4 MiB, so that the members in between learn the
 size only within a step. `payload` is that and its 16-byte tag. A reader MUST refuse a
-Content that is not padded with zeros to the smallest step that holds it, has a version, kind or `via` it does not
-know, or breaks the rules of a copy that held before sealing: unless the copy is a mark of a
+Content that is not padded with zeros to the smallest step that holds it, has a version, kind or `via` it does not know or a manifest not in that form,
+or breaks the rules of a copy that held before sealing: unless the copy is a mark of a
 secret (no payload), the text is non-empty, at most 1 MiB (1 048 576 bytes) and valid UTF-8,
 except that a `media` copy may have an empty text of at most 256 KiB (262 144 bytes); a
 `media` copy has a valid manifest and `blob` whenever its manifest's `size` is not 0, and
@@ -609,6 +609,9 @@ fails, and logs it. A member that reads copies then finds the wrap whose `to` is
 device ID, opens `K` with its `seal` secret and `h`, and opens `payload`. A copy that has
 no wrap for it, or that does not open, it still keeps and passes on by the rules of section
 5, since the others may read theirs, but never writes to its clipboard.
+
+Go (`internal/clip`, `internal/group/copy.go`) and the Rust core (`cbb_core::copy`) are
+checked against each other on `copies-go.json`, `copies-rust.json` and `go-copy-checks.json`.
 
 #### What the members in between see
 

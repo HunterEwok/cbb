@@ -182,6 +182,10 @@ type Body struct {
 	HoldsRoot bool `json:"holds_root,omitempty"`
 	// Seal is the device's public key for sealed messages (internal/seal).
 	Seal []byte `json:"seal,omitempty"`
+	// ForwardOnly marks a device that passes the group's copies on as a
+	// hub but reads none, so no copy is sealed to it (docs/protocol.md,
+	// section 11, "Two kinds of hub").
+	ForwardOnly bool `json:"forward_only,omitempty"`
 
 	Keys    []Hash `json:"keys,omitempty"`
 	Seen    []Seen `json:"seen,omitempty"`
@@ -206,7 +210,7 @@ type Body struct {
 // that it may carry; needed lists those it must.
 var (
 	fields = map[string]map[string]bool{
-		TypeDevice:     set("device", "name", "role", "os", "key", "admin", "powers", "commands", "store", "kind", "proof", "holds_root", "seal"),
+		TypeDevice:     set("device", "name", "role", "os", "key", "admin", "powers", "commands", "store", "kind", "proof", "holds_root", "seal", "forward_only"),
 		TypeRevoke:     set("keys", "seen"),
 		TypeFreeze:     set("keys", "seen"),
 		TypeThaw:       set("records"),
@@ -250,6 +254,7 @@ func (b *Body) present() []string {
 	add(b.Proof != "", "proof")
 	add(b.HoldsRoot, "holds_root")
 	add(len(b.Seal) > 0, "seal")
+	add(b.ForwardOnly, "forward_only")
 	add(len(b.Keys) > 0, "keys")
 	add(len(b.Seen) > 0, "seen")
 	add(len(b.Records) > 0, "records")
@@ -438,6 +443,9 @@ func (b *Body) checkDevice() error {
 	}
 	if b.Admin == nil && (len(b.Powers) > 0 || len(b.Commands) > 0) {
 		return errors.New("authority: powers and commands come only with admin")
+	}
+	if b.ForwardOnly && (b.Role != "full" || b.Admin != nil || b.HoldsRoot) {
+		return errors.New("authority: only a computer that is no admin passes copies on without reading them")
 	}
 	if len(b.Seal) > 0 && len(b.Seal) != SealKeySize {
 		return fmt.Errorf("authority: a device record's seal is %d bytes, not %d", len(b.Seal), SealKeySize)

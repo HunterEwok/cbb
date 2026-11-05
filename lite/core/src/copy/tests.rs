@@ -11,6 +11,9 @@ use p256::ecdsa::{Signature, SigningKey};
 use super::*;
 use crate::certs::DeviceId;
 use crate::media::Part;
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
+use serde_json::{Value, json};
 
 struct Device {
     id: DeviceId,
@@ -281,4 +284,191 @@ fn readers_are_checked_and_counted() {
         )
         .is_err()
     );
+}
+
+fn dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/interop")
+}
+
+fn content_json(c: &Content) -> Value {
+    let mut v = json!({"kind": c.kind, "via": c.via, "text": c.text});
+    if let Some(m) = &c.media {
+        v["media"] = serde_json::to_value(m).unwrap();
+    }
+    v
+}
+
+/// Seals parts as a blob under key: the blob and its name.
+fn seal_blob(key: &[u8; 32], parts: &[u8]) -> (Vec<u8>, Blob) {
+    let n = parts.len().div_ceil(SEGMENT);
+    let mut blob = Vec::new();
+    for (i, chunk) in parts.chunks(SEGMENT).enumerate() {
+        blob.extend(seal_segment(key, i as u64, i == n - 1, chunk).unwrap());
+    }
+    let meta = Blob { size: blob.len() as i64, sha256: certs::sha256(&blob).to_vec() };
+    (blob, meta)
+}
+
+/// The copies the Rust core seals for testdata/interop/copies-rust.json,
+/// in the form of Go's copies-go.json (internal/clip's TestCopyVectors).
+fn rust_vectors() -> Value {
+    let (a, b, c, x) = (device(1), device(2), device(3), device(4));
+    let reader = |d: &Device| json!({"id": d.id.as_str(), "secret": STANDARD.encode(d.secret)});
+    let mut cases = Vec::new();
+    let mut add = |name: &str, ct: Content, parts: Option<Vec<u8>>, to: &[&Device]| -> Sealed {
+        let key = new_key();
+        let (blob, meta) = match &parts {
+            Some(p) => {
+                let (b, m) = seal_blob(&key, p);
+                (Some(b), Some(m))
+            }
+            None => (None, None),
+        };
+        let s = sealed(&a, to, &ct, meta, &key);
+        let mut case = json!({"name": name, "event": s, "readers": to.iter().map(|d| reader(d)).collect::<Vec<_>>(),
+            "outsider": reader(&x), "content": content_json(&ct)});
+        if let (Some(b), Some(p)) = (blob, parts) {
+            case["blob"] = Value::from(STANDARD.encode(b));
+            case["parts"] = Value::from(STANDARD.encode(p));
+        }
+        cases.push(case);
+        s
+    };
+    let text = add("a text to three", text("Hello from Rust"), None, &[&a, &b, &c]);
+    add(
+        "a secret from a phone",
+        Content { kind: Kind::Secret, via: Via::Phone, ..text_of("hunter2") },
+        None,
+        &[&a, &b],
+    );
+    add("a long text", Content { via: Via::Universal, ..text_of(&"\u{fc}".repeat(3000)) }, None, &[&a, &c]);
+    let parts: Vec<u8> = (0..(SEGMENT + 1234)).map(|i| (i * 7) as u8).collect();
+    let mut img = image(parts.len() as i64);
+    img.text = "an image".into();
+    img.media.as_mut().unwrap().parts[0].sha256 = Some(certs::sha256(&parts).to_vec());
+    add("an image of two segments", img, Some(parts), &[&a, &b]);
+
+    let mut refused = Vec::new();
+    let mut refuse = |name: &str, stage: &str, s: Value| {
+        refused.push(json!({"name": name, "stage": stage, "event": s, "reader": reader(&b)}));
+    };
+    let mut open = serde_json::to_value(&text).unwrap();
+    open["text"] = Value::from("Hello from Rust");
+    refuse("a copy in the open", "validate", open);
+    let mut unsorted = text.clone();
+    unsorted.wraps.reverse();
+    refuse("wraps not sorted", "validate", serde_json::to_value(&unsorted).unwrap());
+    let mut changed = text.clone();
+    changed.payload[7] ^= 1;
+    refuse("a changed payload", "verify", serde_json::to_value(&changed).unwrap());
+    let mut moved = text.clone();
+    moved.time = Timestamp::parse("1761024000000.4").unwrap();
+    refuse("moved to another time", "verify", serde_json::to_value(&moved).unwrap());
+    let mut off = text.clone();
+    off.wraps.retain(|w| w.to != c.id.as_str());
+    refuse("a reader taken off", "verify", serde_json::to_value(&off).unwrap());
+    let mut resigned = moved.clone();
+    let sig: Signature = a.key.sign(&resigned.to_sign());
+    resigned.sig = sig.to_der().as_bytes().to_vec();
+    refuse("moved and signed again", "open", serde_json::to_value(&resigned).unwrap());
+    json!({"comment": "Written by the Rust core's copy tests with CBB_UPDATE_VECTORS=1. Each reader opens each case's event to its content, and the outsider does not; each refused event fails at its stage (docs/protocol.md, section 4, \"Event\").", "cases": cases, "refused": refused})
+}
+
+fn text_of(t: &str) -> Content {
+    text(t)
+}
+
+fn b64(v: &Value) -> Vec<u8> {
+    STANDARD.decode(v.as_str().unwrap()).unwrap()
+}
+
+/// Where a refused copy fails: validate, verify (the origin's signature)
+/// or open, by the reader.
+fn refused_at(r: &Value) -> &'static str {
+    let Ok(s) = serde_json::from_value::<Sealed>(r["event"].clone()) else { return "validate" };
+    if s.validate().is_err() {
+        return "validate";
+    }
+    if !Cert::parse(&s.cert).unwrap().verifies(&s.to_sign(), &s.sig) {
+        return "verify";
+    }
+    if s.open(r["reader"]["id"].as_str().unwrap(), &b64(&r["reader"]["secret"])).is_err() {
+        return "open";
+    }
+    ""
+}
+
+/// testdata/interop/copies-go.json, which Go's TestCopyVectors writes, and
+/// copies-rust.json, which this writes with CBB_UPDATE_VECTORS=1: every
+/// reader opens each copy to its content and blob, the outsider does not,
+/// and each refused copy fails at its stage.
+#[test]
+fn vectors() {
+    if std::env::var("CBB_UPDATE_VECTORS").as_deref() == Ok("1") {
+        let mut s = serde_json::to_string_pretty(&rust_vectors()).unwrap();
+        s.push('\n');
+        std::fs::write(dir().join("copies-rust.json"), s).unwrap();
+    }
+    for file in ["copies-go.json", "copies-rust.json"] {
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(dir().join(file)).unwrap()).unwrap();
+        let cases = v["cases"].as_array().unwrap();
+        let refused = v["refused"].as_array().unwrap();
+        assert!(cases.len() >= 4 && refused.len() >= 4, "{file}");
+        for c in cases {
+            let name = format!("{file} {}", c["name"]);
+            let s: Sealed = serde_json::from_value(c["event"].clone()).unwrap();
+            s.validate().unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(Cert::parse(&s.cert).unwrap().verifies(&s.to_sign(), &s.sig), "{name}");
+            for r in c["readers"].as_array().unwrap() {
+                let (got, key) =
+                    s.open(r["id"].as_str().unwrap(), &b64(&r["secret"])).unwrap_or_else(|e| panic!("{name}: {e}"));
+                assert_eq!(content_json(&got), c["content"], "{name}");
+                if let Some(blob) = c.get("blob") {
+                    let blob = b64(blob);
+                    let parts = b64(&c["parts"]);
+                    assert_eq!(s.blob.as_ref().unwrap().sha256, certs::sha256(&blob).to_vec(), "{name}");
+                    let n = blob.len() / SEALED_SEGMENT;
+                    let mut got = Vec::new();
+                    for (i, seg) in blob.chunks(SEALED_SEGMENT).enumerate() {
+                        got.extend(open_segment(&key, i as u64, i == n - 1, seg).unwrap());
+                    }
+                    assert_eq!(&got[..parts.len()], &parts[..], "{name}");
+                    assert!(got[parts.len()..].iter().all(|&b| b == 0), "{name}");
+                }
+            }
+            let o = &c["outsider"];
+            assert!(s.open(o["id"].as_str().unwrap(), &b64(&o["secret"])).is_err(), "{name}: the outsider opens it");
+        }
+        for r in refused {
+            assert_eq!(refused_at(r), r["stage"].as_str().unwrap(), "{file} {}", r["name"]);
+        }
+    }
+}
+
+/// testdata/interop/go-copy-checks.json, which Go's TestCopyCheckVectors
+/// writes: the copies a member takes by the group's records, the readers
+/// the records give, and the order of the hubs, a hub that only passes
+/// copies on last.
+#[test]
+fn go_copy_checks() {
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(dir().join("go-copy-checks.json")).unwrap()).unwrap();
+    let ca = Cert::parse(&b64(&v["group_ca"])).unwrap();
+    let now = v["now_ms"].as_i64().unwrap();
+    let mut s = Records::new(&ca);
+    s.set_clock(move || now);
+    let rs: Vec<crate::authority::Record> = serde_json::from_value(v["records"].clone()).unwrap();
+    s.add_all(&rs);
+    let copies = v["copies"].as_array().unwrap();
+    assert!(copies.len() >= 8);
+    for c in copies {
+        let e: Sealed = serde_json::from_value(c["event"].clone()).unwrap();
+        let got = e.check(&s, now / 1000);
+        assert_eq!(got.is_ok(), c["ok"].as_bool().unwrap(), "{}: {got:?}", c["name"]);
+    }
+    let ids = |secret: bool| -> Vec<Value> {
+        crate::copy::readers(&s, secret).into_iter().map(|(id, _)| Value::from(id)).collect()
+    };
+    assert_eq!(Value::from(ids(false)), v["readers"]);
+    assert_eq!(Value::from(ids(true)), v["secret_readers"]);
+    assert_eq!(serde_json::to_value(s.hub_order()).unwrap(), v["hub_order"]);
 }

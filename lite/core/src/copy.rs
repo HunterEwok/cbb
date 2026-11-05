@@ -242,7 +242,9 @@ impl Content {
     pub fn encode(&self) -> Result<Vec<u8>> {
         self.validate()?;
         let manifest = match &self.media {
-            Some(m) => serde_json::to_vec(m).map_err(|e| Error::with("the manifest does not encode", e))?,
+            Some(m) => crate::strict::canonicalize(
+                &serde_json::to_vec(m).map_err(|e| Error::with("the manifest does not encode", e))?,
+            )?,
             None => Vec::new(),
         };
         let mut out = Vec::new();
@@ -306,6 +308,9 @@ impl Content {
         let manifest = take(&mut at, n)?;
         let media = if kind == Kind::Media {
             crate::strict::integers_only(manifest)?;
+            if crate::strict::canonicalize(manifest).ok().as_deref() != Some(manifest) {
+                return Err(Error::msg("the copy's manifest is not in the strict form"));
+            }
             Some(Manifest::parse(manifest)?)
         } else if n != 0 {
             return Err(Error::msg("a copy that is not media has a manifest"));

@@ -766,7 +766,8 @@ func (ep *epoch) permitted(r *rec) bool {
 	b := &r.Body
 	switch b.Type {
 	case TypeDevice:
-		return ep.has(a, PowerAdmit) && b.Admin == nil && !b.HoldsRoot && b.Role != "phone" && b.Role != "watch"
+		return ep.has(a, PowerAdmit) && b.Admin == nil && !b.HoldsRoot && b.Role != "phone" && b.Role != "watch" &&
+			(!b.ForwardOnly || ep.has(a, PowerHub))
 	case TypeRevoke:
 		for _, k := range b.Keys {
 			switch {
@@ -1293,19 +1294,21 @@ const (
 
 // Device is one device of the state.
 type Device struct {
-	Device   string   `json:"device"`
-	Name     string   `json:"name"`
-	Role     string   `json:"role"`
-	OS       string   `json:"os,omitempty"`
-	Keys     []Hash   `json:"keys"`
-	Store    string   `json:"store,omitempty"`
-	Kind     string   `json:"kind,omitempty"`
-	Proof    string   `json:"proof,omitempty"`
-	Seal     []byte   `json:"seal,omitempty"`
-	Admin    *Hash    `json:"admin,omitempty"`
-	Powers   []string `json:"powers,omitempty"`
-	Commands []string `json:"commands,omitempty"`
-	Frozen   bool     `json:"frozen,omitempty"`
+	Device string `json:"device"`
+	Name   string `json:"name"`
+	Role   string `json:"role"`
+	OS     string `json:"os,omitempty"`
+	Keys   []Hash `json:"keys"`
+	Store  string `json:"store,omitempty"`
+	Kind   string `json:"kind,omitempty"`
+	Proof  string `json:"proof,omitempty"`
+	Seal   []byte `json:"seal,omitempty"`
+	// ForwardOnly: the device passes copies on as a hub and reads none.
+	ForwardOnly bool     `json:"forward_only,omitempty"`
+	Admin       *Hash    `json:"admin,omitempty"`
+	Powers      []string `json:"powers,omitempty"`
+	Commands    []string `json:"commands,omitempty"`
+	Frozen      bool     `json:"frozen,omitempty"`
 }
 
 // Claim is a claim of the state.
@@ -1570,7 +1573,7 @@ func (ep *epoch) device(id string, rs []*rec) (Device, bool) {
 		return a.Body.Seq > b.Body.Seq
 	})
 	n := counting[0].Body
-	d := Device{Device: id, Name: n.Name, Role: n.Role, OS: n.OS, Store: n.Store, Kind: n.Kind, Proof: n.Proof, Seal: n.Seal}
+	d := Device{Device: id, Name: n.Name, Role: n.Role, OS: n.OS, Store: n.Store, Kind: n.Kind, Proof: n.Proof, Seal: n.Seal, ForwardOnly: n.ForwardOnly}
 	for k := range keys {
 		d.Keys = append(d.Keys, k)
 	}

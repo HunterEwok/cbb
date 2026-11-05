@@ -484,8 +484,11 @@ type Device struct {
 	// attestation the root checked, if any.
 	Store, Kind, Proof string
 	// Seal is its public key for sealed messages, if its record has one.
-	Seal  []byte
-	Admin bool
+	Seal []byte
+	// ForwardOnly says that it passes the group's copies on as a hub but
+	// reads none, so no copy is sealed to it.
+	ForwardOnly bool
+	Admin       bool
 	// AdminKey is its admin key, nil when it is no admin; Powers and
 	// Commands what its newest root record gives it.
 	AdminKey         *KeyHash
@@ -517,7 +520,7 @@ func (s *Records) Devices() []Device {
 	var out []Device
 	for _, d := range st.Devices {
 		dev := Device{ID: DeviceID(d.Device), Name: d.Name, Role: d.Role, OS: d.OS, Store: StoreOf(d.Store, d.Role), Kind: d.Kind, Proof: d.Proof,
-			Seal: d.Seal, Keys: d.Keys, Powers: d.Powers, Commands: d.Commands, Frozen: d.Frozen}
+			Seal: d.Seal, ForwardOnly: d.ForwardOnly, Keys: d.Keys, Powers: d.Powers, Commands: d.Commands, Frozen: d.Frozen}
 		if d.Admin != nil {
 			// A frozen admin is no admin until the freeze ends.
 			a := *d.Admin
@@ -783,14 +786,14 @@ func (s *Records) AdminUnder(root, admin KeyHash) bool {
 
 // MayHost reports whether the device dev may be the group's hub for sync
 // away from home by the records alone: the root's own device, whose key is
-// not revoked, or an admin with the power hub (docs/protocol.md, section
-// 11).
+// not revoked, an admin with the power hub, or a device that only passes
+// copies on (docs/protocol.md, section 11, "Two kinds of hub").
 func (s *Records) MayHost(dev DeviceID) bool {
 	if root, key := s.RootMember(); root == dev && !s.Revoked(key) {
 		return true
 	}
 	for _, d := range s.Devices() {
-		if d.ID == dev && d.May(authority.PowerHub) {
+		if d.ID == dev && (d.May(authority.PowerHub) || d.ForwardOnly) {
 			return true
 		}
 	}
@@ -800,28 +803,35 @@ func (s *Records) MayHost(dev DeviceID) bool {
 // HubOrder returns the devices that may be the group's hubs, in the order
 // in which they serve (docs/protocol.md, section 11, "Several hubs"):
 // first the main hubs of the hubs table, in its order, then the others:
-// the phones, whose keys are in hardware, then the rest, and in each part
-// the root's own device first, then by device ID.
+// the phones, whose keys are in hardware, then the computers that are the
+// root or admins, then the devices that only pass copies on, and in each
+// part the root's own device first, then by device ID.
 func (s *Records) HubOrder() []DeviceID {
 	root, key := s.RootMember()
 	if root != "" && s.Revoked(key) {
 		root = ""
 	}
 	type hub struct {
-		id    DeviceID
-		phone bool
+		id   DeviceID
+		part int // 0 a phone, 1 a trusted computer, 2 one that only passes copies on
 	}
 	var hubs []hub
 	for _, d := range s.Devices() {
-		if d.ID == root || d.May(authority.PowerHub) {
-			hubs = append(hubs, hub{d.ID, d.Role == RolePhone})
+		trusted := d.ID == root || d.May(authority.PowerHub)
+		switch {
+		case (trusted || d.ForwardOnly) && d.Role == RolePhone:
+			hubs = append(hubs, hub{d.ID, 0})
+		case trusted:
+			hubs = append(hubs, hub{d.ID, 1})
+		case d.ForwardOnly:
+			hubs = append(hubs, hub{d.ID, 2})
 		}
 	}
 	sort.Slice(hubs, func(i, j int) bool {
 		a, b := hubs[i], hubs[j]
 		switch {
-		case a.phone != b.phone:
-			return a.phone
+		case a.part != b.part:
+			return a.part < b.part
 		case (a.id == root) != (b.id == root):
 			return a.id == root
 		}
