@@ -235,8 +235,14 @@ group there.
 The devices then meet at the relay whenever they are not on one network. Both must be
 online at once, since the relay stores nothing. It speaks plain WireGuard only.
 
+Your relay's key stays the one the devices were given: if you make a new key file, run
+`sudo cbb global relay ADDRESS:PORT -key <new key>` on each computer and give the new key
+on the phones.
+
 Groups that do not want to run their own can use the project's open relay at `cbb.tools:8765`:
-`sudo cbb global relay default` knows its address and key. Planned ([roadmap](../roadmap.md),
+`sudo cbb global relay default` knows its address and key, and follows a new key or address
+of it from the project's signed lists by itself ([protocol](../protocol.md), section 14,
+"The project's relay"). Planned ([roadmap](../roadmap.md),
 item 28): AmneziaWG and VLESS on the relay, as on the forwarder.
 
 ## What the server keeps

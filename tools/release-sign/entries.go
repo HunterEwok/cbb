@@ -26,13 +26,14 @@ const entriesName = "entries.json"
 const renewedEntries = "https://cbb.tools/channel/" + entriesName
 
 // entries signs a new list of entry points into a checkout of the branch
-// channel: the forwarders of -in, a plain JSON {"forwarders": [...]}, one
+// channel: the forwarders and relays of -in, a plain JSON
+// {"forwarders": [...], "relays": [...]}, one
 // more than the branch's seq, valid for -days. The key is the release key
 // or a channel key that keys.json certifies.
 func entries(args []string) error {
 	fs := flag.NewFlagSet("entries", flag.ExitOnError)
 	key := fs.String("key", "", "the signer: the release key or a channel key (file:, piv: or se:)")
-	in := fs.String("in", "", "the entry points to sign, a JSON object with forwarders")
+	in := fs.String("in", "", "the entry points to sign, a JSON object with forwarders and relays")
 	days := fs.Int("days", int(channelLife.Hours()/24), "how many days the list is valid, at most 100")
 	fs.Parse(args)
 	if *key == "" || *in == "" || fs.NArg() != 1 {
@@ -49,6 +50,7 @@ func entries(args []string) error {
 	}
 	var body struct {
 		Forwarders []release.EntryForwarder `json:"forwarders"`
+		Relays     []release.EntryRelay     `json:"relays"`
 	}
 	if err := json.Unmarshal(data, &body); err != nil {
 		return fmt.Errorf("%s: %w", *in, err)
@@ -69,7 +71,7 @@ func entries(args []string) error {
 	}
 	at := now().UnixMilli()
 	e := release.Entries{V: 1, Type: release.TypeEntries, Seq: seq, TimeMS: at,
-		ExpiresMS: at + (time.Duration(*days) * 24 * time.Hour).Milliseconds(), Forwarders: body.Forwarders}
+		ExpiresMS: at + (time.Duration(*days) * 24 * time.Hour).Milliseconds(), Forwarders: body.Forwarders, Relays: body.Relays}
 	f, err := signWith(k, e)
 	if err != nil {
 		return err
@@ -98,7 +100,8 @@ func checkEntriesFile(keys, f release.File, lapsed bool) (release.Entries, error
 }
 
 // renewEntries signs the list of entry points at from again with the
-// channel key k, one more seq, a new expiry and the same forwarders, into
+// channel key k, one more seq, a new expiry and the same forwarders and
+// relays, into
 // out: with extend, on cbb.tools. A channel without one has nothing to
 // renew.
 func renewEntries(from, out string, keys release.File, k crypto.Signer) error {
@@ -130,7 +133,7 @@ func renewEntries(from, out string, keys release.File, k crypto.Signer) error {
 
 // takeEntries replaces the list in a checkout of the branch channel with
 // the one cbb.tools renewed, when that one checks out, is newer and names
-// the same forwarders: only the maintainer changes them.
+// the same forwarders and relays: only the maintainer changes them.
 func takeEntries(dir, src string) error {
 	keys, err := readFile(filepath.Join(dir, "keys.json"))
 	if err != nil {
@@ -160,8 +163,8 @@ func takeEntries(dir, src string) error {
 		return nil
 	case n.Seq > c.Seq+maxTakeStep:
 		return fmt.Errorf("the renewed %s %d is more than %d past the branch's %d", entriesName, n.Seq, maxTakeStep, c.Seq)
-	case !sameForwarders(n.Forwarders, c.Forwarders):
-		return fmt.Errorf("the renewed %s names other forwarders: only release-sign entries changes them", entriesName)
+	case !sameForwarders(n.Forwarders, c.Forwarders) || !sameRelays(n.Relays, c.Relays):
+		return fmt.Errorf("the renewed %s names other forwarders or relays: only release-sign entries changes them", entriesName)
 	}
 	if err := writeFile(filepath.Join(dir, entriesName), f); err != nil {
 		return err
@@ -173,6 +176,12 @@ func takeEntries(dir, src string) error {
 func sameForwarders(a, b []release.EntryForwarder) bool {
 	return slices.EqualFunc(a, b, func(x, y release.EntryForwarder) bool {
 		return x.Name == y.Name && slices.Equal(x.VLESS, y.VLESS)
+	})
+}
+
+func sameRelays(a, b []release.EntryRelay) bool {
+	return slices.EqualFunc(a, b, func(x, y release.EntryRelay) bool {
+		return x.Name == y.Name && slices.Equal(x.Endpoints, y.Endpoints)
 	})
 }
 

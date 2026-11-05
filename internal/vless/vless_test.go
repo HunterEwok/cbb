@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -516,5 +517,22 @@ func TestGroupPaths(t *testing.T) {
 	}
 	if err := s.AddPath("short"); err == nil {
 		t.Error("a short group path was taken")
+	}
+}
+
+// A port another socket holds is told apart, so that Listen picks other
+// free ports then.
+func TestAddrInUse(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	_, err = net.Listen("tcp", l.Addr().String())
+	if err == nil || !addrInUse(err) {
+		t.Errorf("addrInUse(%v) = false", err)
+	}
+	if addrInUse(errors.New("vless: something else")) {
+		t.Error("another error counted as a port in use")
 	}
 }

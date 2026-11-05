@@ -132,7 +132,7 @@ clipboard but sees which devices talk, when and how much. See
 [running your own servers](../admin/self-hosting.md#a-blind-relay).
 
 The project runs a blind relay at `cbb.tools` that any group can use: `sudo cbb global relay default`
-knows its address and key.
+knows its address and key, and keeps up by itself when the project changes them.
 
 ## Turning it off
 
