@@ -156,6 +156,14 @@ func (r *readerSet) add(t *testing.T, dev group.DeviceID) []byte {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if _, ok := r.readers[t.Name()]; !ok {
+		// A test run again (-count) starts with no readers.
+		t.Cleanup(func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			delete(r.readers, t.Name())
+		})
+	}
 	r.readers[t.Name()] = append(r.readers[t.Name()], clip.Reader{ID: string(dev), Seal: pub})
 	return secret
 }
@@ -546,19 +554,30 @@ func TestSilentPeerIsDropped(t *testing.T) {
 
 func TestStalledPeerIsDropped(t *testing.T) {
 	// A peer that stops reading fills the socket and then the queue; the
-	// node drops it instead of waiting.
-	pi, mac := newMember(t, Full, withTimers(time.Second, 3*time.Second)), newMember(t, Full)
+	// node drops it instead of waiting for its Timeout. Each copy is
+	// sealed, which takes a while on a slow machine, so the Timeout is
+	// long and the copies stop once the peer is gone.
+	const timeout = 20 * time.Second
+	pi, mac := newMember(t, Full, withTimers(time.Second, timeout)), newMember(t, Full)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	waitPeers(t, pi, 1)
 	start := time.Now()
 	text := strings.Repeat("x", 4096)
-	for i := range 2000 {
+	dropped := false
+	for i := 0; i < 2000 && !dropped; i++ {
 		pi.Copied(fmt.Sprintf("%d %s", i, text), clip.Text, clip.Copy)
+		select {
+		case <-r.done:
+			dropped = true
+		default:
+		}
 	}
-	wait(t, r.done, "a stalled peer to be dropped")
-	if d := time.Since(start); d > 2*time.Second {
-		t.Errorf("dropping a stalled peer took %v", d)
+	if !dropped {
+		wait(t, r.done, "a stalled peer to be dropped")
+	}
+	if d := time.Since(start); d > timeout/2 {
+		t.Errorf("dropping a stalled peer took %v, as if it waited for the Timeout", d)
 	}
 }
 
