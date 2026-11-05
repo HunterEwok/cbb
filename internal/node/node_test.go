@@ -6,6 +6,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -95,7 +96,13 @@ func newMember(t *testing.T, role Role, opts ...option) *member {
 	m := &member{t: t, id: id, writes: make(chan Write, 1024), peers: make(chan int, 1024)}
 	secret := testReaders.add(t, devID)
 	ec := clip.Config{Self: string(devID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil), Seal: func(ev clip.Event) (*clip.Sealed, error) {
-		return clip.SealCopy(ev.ID, ev.Origin, ev.Time, cert.Raw, nil, testReaders.of(t), clip.Content{Kind: ev.Kind, Via: ev.Via, Text: ev.Text, Media: ev.Media}, nil, clip.NewKey(), key)
+		// The node passes a copy's blob on by its name alone; these tests
+		// fetch parts by their own hashes.
+		var blob *clip.Blob
+		if ev.Media != nil && ev.Media.Size > 0 {
+			blob = &clip.Blob{Size: clip.BlobSize(ev.Media.Size), SHA256: make([]byte, sha256.Size)}
+		}
+		return clip.SealCopy(ev.ID, ev.Origin, ev.Time, cert.Raw, nil, testReaders.of(t), clip.Content{Kind: ev.Kind, Via: ev.Via, Text: ev.Text, Media: ev.Media}, blob, clip.NewKey(), key)
 	}}
 	nc := Config{
 		Identity: id, Role: role,

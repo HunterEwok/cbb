@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/crypto/chacha20poly1305"
+	"io"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -186,6 +187,62 @@ func OpenSegment(key []byte, i uint64, last bool, sealed []byte) ([]byte, error)
 		return nil, errors.New("clip: a blob's segment does not open: it was changed or is from another copy")
 	}
 	return p, nil
+}
+
+// SealBlob seals the n bytes of parts that src gives, one after another,
+// into a blob under the copy's key, which it writes to dst, and returns
+// the blob's size and SHA-256 (docs/protocol.md, section 4, "The blob").
+func SealBlob(key []byte, src io.Reader, n int64, dst io.Writer) (*Blob, error) {
+	if n <= 0 || n > MaxMedia {
+		return nil, fmt.Errorf("clip: a blob of %d bytes", n)
+	}
+	h := sha256.New()
+	w := io.MultiWriter(dst, h)
+	buf := make([]byte, Segment)
+	segs := uint64((n + Segment - 1) / Segment)
+	for i := range segs {
+		m := min(int64(Segment), n-int64(i)*Segment)
+		if _, err := io.ReadFull(src, buf[:m]); err != nil {
+			return nil, fmt.Errorf("clip: reading the parts of a blob: %w", err)
+		}
+		seg, err := SealSegment(key, i, i == segs-1, buf[:m])
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(seg); err != nil {
+			return nil, err
+		}
+	}
+	return &Blob{Size: int64(segs) * SealedSegment, SHA256: h.Sum(nil)}, nil
+}
+
+// OpenBlob opens the sealed blob src under the copy's key and writes the
+// n bytes of parts it holds to dst; the zeros after them must be zeros.
+// The caller has checked the blob against its SHA-256, and checks each
+// part against its own.
+func OpenBlob(key []byte, src io.Reader, b *Blob, n int64, dst io.Writer) error {
+	if b == nil || n <= 0 || b.Size != BlobSize(n) {
+		return errors.New("clip: the blob does not fit its manifest")
+	}
+	segs := uint64(b.Size / SealedSegment)
+	buf := make([]byte, SealedSegment)
+	for i := range segs {
+		if _, err := io.ReadFull(src, buf); err != nil {
+			return fmt.Errorf("clip: reading a blob: %w", err)
+		}
+		plain, err := OpenSegment(key, i, i == segs-1, buf)
+		if err != nil {
+			return err
+		}
+		m := min(int64(Segment), n-int64(i)*Segment)
+		if slices.ContainsFunc(plain[m:], func(c byte) bool { return c != 0 }) {
+			return errors.New("clip: a blob's padding is not zeros")
+		}
+		if _, err := dst.Write(plain[:m]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Validate checks the rules a copy's content keeps, whatever its blob.
@@ -565,13 +622,13 @@ func EventOf(s *Sealed, me string, secret []byte) (ev Event, err error) {
 	if s.IsMark() {
 		return ev, nil
 	}
-	c, _, err := s.Open(me, secret)
+	c, key, err := s.Open(me, secret)
 	switch {
 	case errors.Is(err, ErrNotReader):
 		return ev, nil
 	case err != nil:
 		return ev, err
 	}
-	ev.Kind, ev.Via, ev.Text, ev.Media, ev.Unread = c.Kind, c.Via, c.Text, c.Media, false
+	ev.Kind, ev.Via, ev.Text, ev.Media, ev.Key, ev.Unread = c.Kind, c.Via, c.Text, c.Media, key, false
 	return ev, nil
 }

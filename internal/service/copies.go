@@ -52,8 +52,19 @@ func (s *Service) sealCopy(ev clip.Event) (*clip.Sealed, error) {
 	if k.id.Issuer != nil {
 		issuer = k.id.Issuer.Raw
 	}
+	key, blob := clip.NewKey(), (*clip.Blob)(nil)
+	if ev.Media != nil {
+		// copyMedia sealed the parts into the blob already, under the
+		// copy's key.
+		v, ok := s.ownCopies.Load(ev.Media)
+		if !ok {
+			return nil, errors.New("the copy's images and files were not sealed")
+		}
+		mc := v.(*mediaCopy)
+		key, blob = mc.key, mc.blob
+	}
 	return clip.SealCopy(ev.ID, ev.Origin, ev.Time, k.id.Cert.Raw, issuer, readers,
-		clip.Content{Kind: ev.Kind, Via: ev.Via, Text: ev.Text, Media: ev.Media}, nil, clip.NewKey(), k.id.Key)
+		clip.Content{Kind: ev.Kind, Via: ev.Via, Text: ev.Text, Media: ev.Media}, blob, key, k.id.Key)
 }
 
 // takeCopy checks a copy a peer sent against the group's records and

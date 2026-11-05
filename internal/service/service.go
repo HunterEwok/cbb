@@ -252,6 +252,7 @@ type Service struct {
 	serverKeys  *group.ServerKeys      // this device's keys for the servers, under recMu as records
 	sealSecret  []byte                 // this device's secret for sealed messages (internal/seal); nil if it could not be loaded
 	copyKeys    atomic.Pointer[sealer] // what copies are sealed and opened with; see sealer
+	ownCopies   sync.Map               // the images and files this member copies now: *clip.Manifest to *mediaCopy, until sealed
 	sealPublic  []byte                 // its public key, which the hello offers
 	credChanged chan struct{}          // closed when creds change, under recMu
 	credMu      sync.Mutex             // serialises refreshCredential, taken before mu and recMu

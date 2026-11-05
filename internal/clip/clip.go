@@ -169,6 +169,9 @@ type Event struct {
 	// is a mark, or a copy not sealed to this member. Kind, Via, Text and
 	// Media are then empty, and the event is current only for ordering.
 	Unread bool `json:"-"`
+	// Key is the copy's key, which opens its blob, when this member
+	// opened the copy (EventOf).
+	Key []byte `json:"-"`
 }
 
 // IsMark reports whether e is the mark of a secret: the event without its
@@ -183,7 +186,7 @@ func (e Event) IsMark() bool {
 // Mark returns the mark of a secret: the event without its payload, or,
 // unsealed, without its text.
 func (e Event) Mark() Event {
-	e.Text = ""
+	e.Text, e.Key = "", nil
 	if e.Sealed != nil {
 		e.Sealed = e.Sealed.Mark()
 	}

@@ -13,6 +13,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"errors"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -504,4 +505,40 @@ func refusedAt(r copyRefuse) string {
 		return "open"
 	}
 	return ""
+}
+
+// TestBlobRoundTrip: parts sealed into a blob open to the same bytes, and a
+// blob cut short, changed or opened with another key does not.
+func TestBlobRoundTrip(t *testing.T) {
+	key := NewKey()
+	for _, n := range []int64{1, Segment - 1, Segment, Segment + 1, 3*Segment + 7} {
+		plain := make([]byte, n)
+		rand.Read(plain)
+		var sealed bytes.Buffer
+		b, err := SealBlob(key, bytes.NewReader(plain), n, &sealed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sum := sha256.Sum256(sealed.Bytes()); b.Size != BlobSize(n) || int64(sealed.Len()) != b.Size || !bytes.Equal(sum[:], b.SHA256) {
+			t.Fatalf("%d bytes: blob %d bytes, wrote %d", n, b.Size, sealed.Len())
+		}
+		var got bytes.Buffer
+		if err := OpenBlob(key, bytes.NewReader(sealed.Bytes()), b, n, &got); err != nil || !bytes.Equal(got.Bytes(), plain) {
+			t.Fatalf("%d bytes: open = %v, same %v", n, err, bytes.Equal(got.Bytes(), plain))
+		}
+		if err := OpenBlob(NewKey(), bytes.NewReader(sealed.Bytes()), b, n, io.Discard); err == nil {
+			t.Errorf("%d bytes: opens with another key", n)
+		}
+		changed := bytes.Clone(sealed.Bytes())
+		changed[len(changed)/2] ^= 1
+		if err := OpenBlob(key, bytes.NewReader(changed), b, n, io.Discard); err == nil {
+			t.Errorf("%d bytes: a changed blob opens", n)
+		}
+		if b.Size > SealedSegment {
+			short := &Blob{Size: b.Size - SealedSegment, SHA256: b.SHA256}
+			if err := OpenBlob(key, bytes.NewReader(sealed.Bytes()), short, n-Segment, io.Discard); err == nil {
+				t.Errorf("%d bytes: a blob cut short opens", n)
+			}
+		}
+	}
 }

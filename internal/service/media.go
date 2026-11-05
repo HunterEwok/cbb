@@ -9,9 +9,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -24,10 +26,12 @@ import (
 )
 
 // Fetching images and files (design.md, "Manifest and chunks"): once the
-// engine writes a media event, the service fetches every part it lacks,
-// from the origin if it can, else from any peer that serves content,
-// checks each against its hash and keeps it in the cache. A newer write
-// stops the fetch. The watchers whose clipboard takes images or files get
+// engine writes a media event, the service fetches the copy's sealed blob
+// (docs/protocol.md, section 4, "The blob"), from the origin if it can,
+// else from any peer that serves content, checks it against its hash and
+// keeps it in the cache, then opens it into the parts and checks each
+// against its own. A hub that does not read the copy fetches only the
+// blob, to serve it. A newer write stops the fetch. The watchers whose clipboard takes images or files get
 // such a copy once it has arrived; the others get the copy's plain-text
 // alternative.
 
@@ -40,9 +44,38 @@ const (
 	fetchRetry = 2 * time.Second
 )
 
+// mediaCopy is a copy of images or files as the cache knows it: its
+// manifest, nil when this member does not read the copy; the sealed blob of
+// its parts, nil when they hold no bytes; and the copy's key, which opens
+// the blob, nil when this member does not read the copy or made it.
+type mediaCopy struct {
+	m    *clip.Manifest
+	blob *clip.Blob
+	key  []byte
+}
+
+// same reports whether c and o are the same copy.
+func (c *mediaCopy) same(o *mediaCopy) bool {
+	switch {
+	case c == nil || o == nil:
+		return c == o
+	case c.blob != nil && o.blob != nil:
+		return bytes.Equal(c.blob.SHA256, o.blob.SHA256)
+	}
+	return c.m != nil && c.m == o.m
+}
+
+// size is the size of the copy as fetched: its sealed blob's.
+func (c *mediaCopy) size() int64 {
+	if c.blob != nil {
+		return c.blob.Size
+	}
+	return 0
+}
+
 // fetchRun is the fetch of one copy.
 type fetchRun struct {
-	m       *clip.Manifest
+	c       *mediaCopy
 	origin  group.DeviceID
 	cancel  context.CancelFunc
 	done    chan struct{} // closed when the fetch ended; err says how
@@ -75,7 +108,7 @@ func (s *Service) mediaWritten(w node.Write) (node.Write, bool) {
 		s.setMedia(nil, "", nil)
 		return w, true
 	}
-	s.setMedia(w.Media, w.Origin, s.groupCtx)
+	s.setMedia(&mediaCopy{m: w.Media, blob: w.Blob, key: w.Key}, w.Origin, s.groupCtx)
 	if w.Text == "" {
 		return node.Write{}, false
 	}
@@ -84,7 +117,7 @@ func (s *Service) mediaWritten(w node.Write) (node.Write, bool) {
 
 // setMedia makes m the current copy of the cache, stopping the fetch of an
 // earlier one, and, with ctx, fetches what it lacks from the peers.
-func (s *Service) setMedia(m *clip.Manifest, origin group.DeviceID, ctx context.Context) {
+func (s *Service) setMedia(m *mediaCopy, origin group.DeviceID, ctx context.Context) {
 	if s.content == nil {
 		return
 	}
@@ -92,19 +125,19 @@ func (s *Service) setMedia(m *clip.Manifest, origin group.DeviceID, ctx context.
 	defer s.mediaMu.Unlock()
 	prev := s.fetch
 	if prev != nil {
-		if m != nil && prev.m == m {
+		if m != nil && prev.c.same(m) {
 			return
 		}
 		prev.cancel()
 		s.fetch = nil
 	}
 	s.content.setCurrent(m, s.limits.Home)
-	if m == nil || ctx == nil || s.content.complete(m) {
+	if m == nil || ctx == nil || s.holds(m) {
 		return
 	}
 	s.fetchFailed = ""
-	if m.Size > s.limits.Home {
-		err := &errTooLarge{size: m.Size, limit: s.limits.Home, from: string(origin)}
+	if m.size() > s.limits.Home {
+		err := &errTooLarge{size: m.size(), limit: s.limits.Home, from: string(origin)}
 		go func() {
 			// Its name needs locks that the caller may hold.
 			if name := s.deviceName(origin); name != "" {
@@ -120,7 +153,7 @@ func (s *Service) setMedia(m *clip.Manifest, origin group.DeviceID, ctx context.
 		return
 	}
 	fctx, cancel := context.WithTimeout(ctx, fetchFor)
-	run := &fetchRun{m: m, origin: origin, cancel: cancel, done: make(chan struct{})}
+	run := &fetchRun{c: m, origin: origin, cancel: cancel, done: make(chan struct{})}
 	s.fetch = run
 	go func() {
 		defer cancel()
@@ -132,27 +165,39 @@ func (s *Service) setMedia(m *clip.Manifest, origin group.DeviceID, ctx context.
 		run.err = err
 		if err != nil && !errors.Is(err, context.Canceled) {
 			s.fetchFailed = err.Error()
-			s.logf("cbb: fetching a copy of %s: %v", SizeText(m.Size), err)
+			s.logf("cbb: fetching a copy of %s: %v", SizeText(m.size()), err)
 		} else if err == nil {
-			s.logf("cbb: fetched a copy of %s", SizeText(m.Size))
+			s.logf("cbb: fetched a copy of %s", SizeText(m.size()))
 		}
 		s.mediaMu.Unlock()
 		close(run.done)
-		if !errors.Is(err, context.Canceled) {
-			s.mediaArrived(m, err == nil)
+		if !errors.Is(err, context.Canceled) && m.m != nil {
+			s.mediaArrived(m.m, err == nil)
 		}
 	}()
 }
 
-// fetchAll fetches the parts of run's copy that the cache lacks.
+// holds reports whether the cache holds what this member keeps of m: the
+// parts of a copy it reads, the blob of one it only passes on.
+func (s *Service) holds(m *mediaCopy) bool {
+	if m.m != nil {
+		return s.content.complete(m.m)
+	}
+	return m.blob == nil || s.content.has([sha256.Size]byte(m.blob.SHA256))
+}
+
+// fetchAll fetches the blob of run's copy, unless the cache holds it,
+// and opens it into the parts when this member reads the copy.
 func (s *Service) fetchAll(ctx context.Context, run *fetchRun) error {
-	for _, p := range run.m.Parts {
-		if p.Dir || s.content.has([sha256.Size]byte(p.SHA256)) {
-			run.fetched.Add(p.Size)
-			continue
-		}
+	c := run.c
+	if c.blob == nil {
+		return errors.New("the copy holds bytes but names no blob of them")
+	}
+	if s.content.has([sha256.Size]byte(c.blob.SHA256)) {
+		run.fetched.Add(c.blob.Size)
+	} else {
 		for {
-			err := s.fetchPart(ctx, run, p)
+			err := s.fetchBlob(ctx, run)
 			if err == nil {
 				break
 			}
@@ -165,19 +210,25 @@ func (s *Service) fetchAll(ctx context.Context, run *fetchRun) error {
 			case errors.As(err, &large):
 				return err
 			}
-			s.logf("cbb: fetching a part of %s: %v; trying again", SizeText(p.Size), err)
+			s.logf("cbb: fetching a copy of %s: %v; trying again", SizeText(c.blob.Size), err)
 			select {
 			case <-time.After(fetchRetry):
 			case <-ctx.Done():
 			}
 		}
 	}
-	return nil
+	if c.m == nil || s.content.complete(c.m) {
+		return nil
+	}
+	if c.key == nil {
+		return errors.New("this device does not read the copy")
+	}
+	return s.openBlob(c)
 }
 
-// fetchPart fetches one part from the first peer that gives it, the
+// fetchBlob fetches the copy's blob from the first peer that gives it, the
 // origin first, and keeps it in the cache if it matches its hash.
-func (s *Service) fetchPart(ctx context.Context, run *fetchRun, p clip.Part) error {
+func (s *Service) fetchBlob(ctx context.Context, run *fetchRun) error {
 	s.mu.Lock()
 	nd := s.nd
 	s.mu.Unlock()
@@ -203,13 +254,13 @@ func (s *Service) fetchPart(ctx context.Context, run *fetchRun, p clip.Part) err
 	s.mediaMu.Unlock()
 	var last error
 	for _, q := range peers {
-		if away.IsValid() && q.Local == away && run.m.Size > limit {
-			last = &errTooLarge{size: run.m.Size, limit: limit, from: q.Name, away: true}
+		if away.IsValid() && q.Local == away && run.c.size() > limit {
+			last = &errTooLarge{size: run.c.size(), limit: limit, from: q.Name, away: true}
 			continue
 		}
 		name := q.Name
 		run.from.Store(&name)
-		err := s.fetchFrom(ctx, nd, q.ID, run, p)
+		err := s.fetchFrom(ctx, nd, q.ID, run)
 		if err == nil || ctx.Err() != nil {
 			return err
 		}
@@ -218,21 +269,22 @@ func (s *Service) fetchPart(ctx context.Context, run *fetchRun, p clip.Part) err
 	return last
 }
 
-// fetchFrom fetches one part from peer, continuing what an earlier fetch
-// left.
-func (s *Service) fetchFrom(ctx context.Context, nd *node.Node, peer group.DeviceID, run *fetchRun, p clip.Part) error {
-	sum := [sha256.Size]byte(p.SHA256)
+// fetchFrom fetches the copy's blob from peer, continuing what an earlier
+// fetch left.
+func (s *Service) fetchFrom(ctx context.Context, nd *node.Node, peer group.DeviceID, run *fetchRun) error {
+	b := run.c.blob
+	sum := [sha256.Size]byte(b.SHA256)
 	f, have, h, err := s.content.partial(sum)
 	defer s.content.fetchEnded(sum)
 	if err != nil {
 		return err
 	}
-	if have > p.Size {
+	if have > b.Size {
 		s.content.discard(f)
-		return errors.New("the cache held more of the part than it has")
+		return errors.New("the cache held more of the copy than it has")
 	}
 	run.fetched.Add(have)
-	err = nd.Fetch(ctx, peer, sum, p.Size, have, func(off int64, data []byte) error {
+	err = nd.Fetch(ctx, peer, sum, b.Size, have, func(off int64, data []byte) error {
 		if _, err := f.WriteAt(data, off); err != nil {
 			return err
 		}
@@ -245,12 +297,130 @@ func (s *Service) fetchFrom(ctx context.Context, nd *node.Node, peer group.Devic
 		run.fetched.Add(-have)
 		return err
 	}
-	if !bytes.Equal(h.Sum(nil), p.SHA256) {
+	if !bytes.Equal(h.Sum(nil), b.SHA256) {
 		s.content.discard(f)
-		run.fetched.Add(-p.Size)
-		return errors.New("the part does not match its hash")
+		run.fetched.Add(-b.Size)
+		return errors.New("the copy does not match its hash")
 	}
-	return s.content.commit(f, sum, p.Size)
+	if err := s.content.commit(f, sum, b.Size); err != nil {
+		return err
+	}
+	s.content.markBlob(sum)
+	return nil
+}
+
+// openBlob opens the copy's blob, which the cache holds, into its parts,
+// and keeps each in the cache if it matches its hash.
+func (s *Service) openBlob(c *mediaCopy) error {
+	r, size, ok := s.content.Open([sha256.Size]byte(c.blob.SHA256))
+	if !ok {
+		return errors.New("the copy left the cache before it was opened")
+	}
+	defer closeReader(r)
+	w := &partWriter{c: s.content}
+	for _, p := range c.m.Parts {
+		if !p.Dir {
+			w.parts = append(w.parts, p)
+		}
+	}
+	defer w.abort()
+	if err := clip.OpenBlob(c.key, io.NewSectionReader(r, 0, size), c.blob, c.m.Size, w); err != nil {
+		return fmt.Errorf("opening the copy: %w", err)
+	}
+	return w.finish()
+}
+
+// closeReader closes a reader the cache opened.
+func closeReader(r io.ReaderAt) {
+	if c, ok := r.(io.Closer); ok {
+		c.Close()
+	}
+}
+
+// partWriter takes the bytes of a copy's parts, one after another, as its
+// blob opens, and keeps each part in the cache once it matches its hash.
+type partWriter struct {
+	c     *contentStore
+	parts []clip.Part // the parts that hold bytes, in order
+	f     *os.File    // the file of the part being written
+	h     hash.Hash
+	n     int64 // the bytes of it written
+}
+
+func (w *partWriter) Write(b []byte) (int, error) {
+	total := len(b)
+	for len(b) > 0 {
+		if err := w.next(); err != nil {
+			return 0, err
+		}
+		p := w.parts[0]
+		k := min(int64(len(b)), p.Size-w.n)
+		if _, err := w.f.Write(b[:k]); err != nil {
+			return 0, err
+		}
+		w.h.Write(b[:k])
+		w.n += k
+		b = b[k:]
+		if w.n == p.Size {
+			if err := w.keep(); err != nil {
+				return 0, err
+			}
+		}
+	}
+	return total, nil
+}
+
+// next makes the file of the next part that holds bytes, keeping the empty
+// ones before it.
+func (w *partWriter) next() error {
+	for w.f == nil {
+		if len(w.parts) == 0 {
+			return errors.New("the copy holds more bytes than its parts")
+		}
+		f, err := w.c.temp()
+		if err != nil {
+			return err
+		}
+		w.f, w.h, w.n = f, sha256.New(), 0
+		if w.parts[0].Size == 0 {
+			if err := w.keep(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// keep checks the part written against its hash and keeps it.
+func (w *partWriter) keep() error {
+	p, f := w.parts[0], w.f
+	w.parts, w.f = w.parts[1:], nil
+	if !bytes.Equal(w.h.Sum(nil), p.SHA256) {
+		w.c.discard(f)
+		return errors.New("a part of the copy does not match its hash")
+	}
+	return w.c.commit(f, [sha256.Size]byte(p.SHA256), p.Size)
+}
+
+// finish keeps the empty parts at the end, and fails when a part is short.
+func (w *partWriter) finish() error {
+	for len(w.parts) > 0 {
+		if w.f != nil || w.parts[0].Size != 0 {
+			return errors.New("the copy holds fewer bytes than its parts")
+		}
+		if err := w.next(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// abort removes the file of a part not written whole.
+func (w *partWriter) abort() {
+	if w.f != nil {
+		w.c.discard(w.f)
+		w.f = nil
+	}
 }
 
 // relayed takes an event this member passes on without writing it
@@ -270,19 +440,23 @@ func (s *Service) relayed(w node.Write) {
 	} else if cur, ok := e.Current(); !ok || cur.ID != w.ID {
 		return
 	}
-	if w.Kind != clip.Media || w.Media == nil {
+	if w.Blob == nil {
 		s.setMedia(nil, "", nil)
 		return
+	}
+	m := &mediaCopy{m: w.Media, blob: w.Blob, key: w.Key}
+	if w.Key == nil {
+		m.m = nil
 	}
 	s.mediaMu.Lock()
 	limit := s.limits.Away
 	s.mediaMu.Unlock()
 	ctx := s.groupCtx
-	if w.Media.Size > limit {
-		s.logf("cbb: not passing a copy of %s on to the members away from home: it is over this hub's limit of %s away from home", SizeText(w.Media.Size), SizeText(limit))
+	if m.size() > limit {
+		s.logf("cbb: not passing a copy of %s on to the members away from home: it is over this hub's limit of %s away from home", SizeText(m.size()), SizeText(limit))
 		ctx = nil
 	}
-	s.setMedia(w.Media, w.Origin, ctx)
+	s.setMedia(m, w.Origin, ctx)
 }
 
 // serves reports whether the member serves the part sum on a connection
@@ -330,7 +504,7 @@ func (s *Service) mediaStatus() *control.Media {
 	defer s.mediaMu.Unlock()
 	st := &control.Media{MaxCopy: s.limits.Home, MaxCopyAway: s.limits.Away, Failed: s.fetchFailed}
 	if run := s.fetch; run != nil && run.err == nil && !closed(run.done) {
-		st.Fetching, st.Fetched = run.m.Size, run.fetched.Load()
+		st.Fetching, st.Fetched = run.c.size(), run.fetched.Load()
 		if from := run.from.Load(); from != nil {
 			st.From = *from
 		}
@@ -428,7 +602,13 @@ func (s *Service) copyMedia(c net.Conn, r *control.Reader, m *control.Message) e
 	if err := man.Validate(); err != nil {
 		return err
 	}
-	s.setMedia(man, "", nil)
+	mc, err := s.sealBlob(man)
+	if err != nil {
+		return fmt.Errorf("sealing the copy: %w", err)
+	}
+	s.setMedia(mc, "", nil)
+	s.ownCopies.Store(man, mc)
+	defer s.ownCopies.Delete(man)
 	if copied {
 		return s.withNode(func(nd *node.Node) error {
 			_, err := nd.CopiedMedia(man, string(m.Payload), clip.Copy)
@@ -436,6 +616,43 @@ func (s *Service) copyMedia(c net.Conn, r *control.Reader, m *control.Message) e
 		})
 	}
 	return s.withNode(func(nd *node.Node) error { return nd.SendMedia(man, string(m.Payload), clip.Copy) })
+}
+
+// sealBlob seals the parts of a copy this member makes, which the cache
+// holds, into its blob under a new key, and keeps the blob in the cache.
+func (s *Service) sealBlob(m *clip.Manifest) (*mediaCopy, error) {
+	mc := &mediaCopy{m: m, key: clip.NewKey()}
+	if m.Size == 0 {
+		return mc, nil
+	}
+	var rs []io.Reader
+	for _, p := range m.Parts {
+		if p.Dir || p.Size == 0 {
+			continue
+		}
+		r, size, ok := s.content.Open([sha256.Size]byte(p.SHA256))
+		if !ok || size != p.Size {
+			return nil, errors.New("a part of the copy left the cache; copy it again")
+		}
+		defer closeReader(r)
+		rs = append(rs, io.NewSectionReader(r, 0, size))
+	}
+	f, err := s.content.temp()
+	if err != nil {
+		return nil, err
+	}
+	b, err := clip.SealBlob(mc.key, io.MultiReader(rs...), m.Size, f)
+	if err != nil {
+		s.content.discard(f)
+		return nil, err
+	}
+	sum := [sha256.Size]byte(b.SHA256)
+	if err := s.content.commit(f, sum, b.Size); err != nil {
+		return nil, err
+	}
+	s.content.markBlob(sum)
+	mc.blob = b
+	return mc, nil
 }
 
 // receivePart reads size bytes of data messages into the cache.
@@ -485,7 +702,11 @@ func (s *Service) pasteMedia(ctx context.Context, c net.Conn) error {
 			return errors.New("the group's copy is no images or files")
 		}
 		man, text = ev.Media, ev.Text
-		s.setMedia(man, group.DeviceID(ev.Origin), s.groupContext())
+		mc := &mediaCopy{m: man, key: ev.Key}
+		if ev.Sealed != nil {
+			mc.blob = ev.Sealed.Blob
+		}
+		s.setMedia(mc, group.DeviceID(ev.Origin), s.groupContext())
 	}
 	if err := s.waitMedia(ctx, c, man); err != nil {
 		return err
@@ -539,7 +760,7 @@ func (s *Service) waitMedia(ctx context.Context, c net.Conn, man *clip.Manifest)
 		s.mediaMu.Lock()
 		run, failed := s.fetch, s.fetchFailed
 		s.mediaMu.Unlock()
-		if run == nil || run.m != man {
+		if run == nil || run.c.m != man {
 			if failed != "" {
 				return fmt.Errorf("the copy's images or files did not arrive: %s", failed)
 			}
@@ -583,7 +804,7 @@ func (s *Service) nodeContent() node.Content {
 	if s.content == nil {
 		return releaseContent{s}
 	}
-	return contents{s.content, releaseContent{s}}
+	return contents{blobStore{s.content}, releaseContent{s}}
 }
 
 // contentSweepEvery is how often the service deletes the parts of replaced

@@ -243,11 +243,21 @@ type Write struct {
 	Media  *clip.Manifest
 	ID     string
 	Origin group.DeviceID
+	// Blob is the sealed blob of the copy's images and files, which a
+	// member fetches by its SHA-256 (docs/protocol.md, section 4, "The
+	// blob"), and Key the copy's key that opens it, nil when this member
+	// does not read the copy.
+	Blob *clip.Blob
+	Key  []byte
 }
 
 // write makes the Write of an event.
 func write(ev *clip.Event, seq uint64) Write {
-	return Write{Text: ev.Text, Kind: ev.Kind, Via: ev.Via, Seq: seq, Media: ev.Media, ID: ev.ID, Origin: group.DeviceID(ev.Origin)}
+	w := Write{Text: ev.Text, Kind: ev.Kind, Via: ev.Via, Seq: seq, Media: ev.Media, ID: ev.ID, Origin: group.DeviceID(ev.Origin), Key: ev.Key}
+	if ev.Sealed != nil {
+		w.Blob = ev.Sealed.Blob
+	}
+	return w
 }
 
 // Peer is a connected member.
