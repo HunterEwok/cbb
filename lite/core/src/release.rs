@@ -127,14 +127,26 @@ pub struct Status {
 }
 
 /// The body of entries.json, signed by a release or channel key: where the
-/// project's forwarders are entered (docs/protocol.md, section 16, "Entry
-/// points"); their keys stay in keys.json.
+/// project's forwarders and relays are entered (docs/protocol.md, section
+/// 16, "Entry points"); their keys stay in keys.json.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Entries {
     pub seq: u64,
     pub time_ms: i64,
     pub expires_ms: i64,
     pub forwarders: Vec<EntryForwarder>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relays: Vec<EntryRelay>,
+}
+
+/// One of the project's blind relays in entries.json.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct EntryRelay {
+    /// Its address as keys.json names its key, host:port.
+    pub name: String,
+    /// Where it is reached now, host:port; none for its name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub endpoints: Vec<String>,
 }
 
 /// One of the project's forwarders in entries.json.
@@ -316,6 +328,8 @@ fn is_entry_path(s: &str) -> bool {
 /// The bounds of entries.json.
 const MAX_ENTRY_FORWARDERS: usize = 16;
 const MAX_ENTRY_VLESS: usize = 8;
+const MAX_ENTRY_RELAYS: usize = 16;
+const MAX_ENTRY_ENDPOINTS: usize = 8;
 
 pub(crate) fn decode_entries(body: &[u8]) -> Result<Entries> {
     let e: Entries = decode(body, "entries")?;
@@ -338,6 +352,21 @@ pub(crate) fn decode_entries(body: &[u8]) -> Result<Entries> {
             if v.transport != "xhttp" || !is_site(&v.server_name) || v.port == 0 || !is_entry_path(&v.path) {
                 return Err(Error::msg(format!("a way in to {} is not usable", f.name)));
             }
+        }
+    }
+    if e.relays.len() > MAX_ENTRY_RELAYS {
+        return Err(Error::msg("entries.json has too long a list of relays"));
+    }
+    let mut names = BTreeSet::new();
+    for r in &e.relays {
+        if !is_entry_name(&r.name) || !names.insert(r.name.as_str()) {
+            return Err(Error::msg(format!("{:?} is not a relay's name, or twice", r.name)));
+        }
+        if r.endpoints.len() > MAX_ENTRY_ENDPOINTS {
+            return Err(Error::msg(format!("{} has too many addresses", r.name)));
+        }
+        if let Some(ep) = r.endpoints.iter().find(|ep| !is_entry_name(ep)) {
+            return Err(Error::msg(format!("{ep:?} is not an address of {}", r.name)));
         }
     }
     Ok(e)

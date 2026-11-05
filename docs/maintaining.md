@@ -277,7 +277,20 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   on cbb.tools signs it again with the channel key, the same forwarders and a higher number,
   `take` brings that into the branch only when it names the same forwarders, `due` reminds
   when it runs out, and `mirror` serves the newest copy that checks out. A blocked way in is
-  replaced by signing a new list with another `in.json`, without a release.
+  replaced by signing a new list with another `in.json`, without a release. `in.json` may
+  also name where the project's relay is reached, `"relays": [{"name": "cbb.tools:8765",
+  "endpoints": ["relay.cbb.tools:8765"]}]` (no `endpoints`: its name), for moving it to
+  another server; the devices on it follow at their next failed registration.
+- **A new key for the project's forwarder or relay**, without a release: make the new key
+  file beside the running one, take its public key (`openssl pkey -in relay.pem -pubout -out
+  relay-2.pem`; the WireGuard block of a relay's file is skipped), and on the Mac
+  `release-sign renew -relay cbb.tools:8765=relay-2.pem` (`-forwarder cbb.tools:8764=...` for
+  the forwarder), which keeps the old key listed. Wait until the mirror and the branch serve
+  the new `keys.json` and a few days for the devices to get it (`cbb update` once a day, the
+  group, and a device that fails at the relay fetches it from the mirror itself), then switch
+  the server to the new key file. After a few more days drop the old one: `release-sign renew
+  -drop <the old pin>`. `keys.json` holds at most 8 keys in all, so drop old ones before
+  adding more.
 - **Reminders**: the `channel` workflow opens the issue "Release channel: renewal due" when
   the branch's `keys.json` expires within 21 days (run `release-sign renew -new-keys` on the
   Mac with a YubiKey) or its `stable.json` within 10, which means cbb.tools stopped renewing
