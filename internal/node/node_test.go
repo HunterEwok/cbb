@@ -6,6 +6,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -25,6 +26,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/group/grouptest"
 	"github.com/HunterEwok/cbb/internal/hlc"
 	signed "github.com/HunterEwok/cbb/internal/release"
+	"github.com/HunterEwok/cbb/internal/seal"
 	"github.com/HunterEwok/cbb/internal/testnet"
 	"github.com/HunterEwok/cbb/internal/uptime"
 )
@@ -40,10 +42,15 @@ func (c *clock) advance(d time.Duration) { c.d.Add(int64(d)) }
 // member is a node with its engine and the writes it received.
 type member struct {
 	*Node
+	t      *testing.T
 	id     *group.Identity
 	engine *clip.Engine
 	writes chan Write
 	peers  chan int // len(Peers()) at each OnPeers call
+	// blobs, when set, holds the parts of this member's copies of images
+	// and files, and gets the blob each is sealed into, for a peer that
+	// opens it; otherwise a copy names a blob nobody holds.
+	blobs *memContent
 }
 
 var (
@@ -90,10 +97,27 @@ func newMember(t *testing.T, role Role, opts ...option) *member {
 		t.Fatal(err)
 	}
 	id := &group.Identity{ID: devID, Key: key, Cert: cert, GroupCA: group.CA{Cert: admin.GroupCA.Cert}}
-	m := &member{id: id, writes: make(chan Write, 1024), peers: make(chan int, 1024)}
-	ec := clip.Config{Self: string(devID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil)}
+	m := &member{t: t, id: id, writes: make(chan Write, 1024), peers: make(chan int, 1024)}
+	secret := testReaders.add(t, devID)
+	ec := clip.Config{Self: string(devID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil), Seal: func(ev clip.Event) (*clip.Sealed, error) {
+		// The node passes a copy's blob on by its name alone; most of these
+		// tests fetch parts by their own hashes.
+		var blob *clip.Blob
+		k := clip.NewKey()
+		if ev.Media != nil && ev.Media.Size > 0 {
+			blob = &clip.Blob{Size: clip.BlobSize(ev.Media.Size), SHA256: make([]byte, sha256.Size)}
+			if m.blobs != nil {
+				var err error
+				if blob, err = m.blobs.sealBlob(k, ev.Media); err != nil {
+					return nil, err
+				}
+			}
+		}
+		return clip.SealCopy(ev.ID, ev.Origin, ev.Time, cert.Raw, nil, testReaders.of(t), clip.Content{Kind: ev.Kind, Via: ev.Via, Text: ev.Text, Media: ev.Media}, blob, k, key)
+	}}
 	nc := Config{
 		Identity: id, Role: role,
+		TakeCopy:  func(_ group.DeviceID, s *clip.Sealed) (clip.Event, error) { return takeTestCopy(s, devID, secret) },
 		OnWrite:   func(w Write) { m.writes <- w },
 		PingEvery: 50 * time.Millisecond, Timeout: 300 * time.Millisecond,
 		Logf: t.Logf,
@@ -107,6 +131,70 @@ func newMember(t *testing.T, role Role, opts ...option) *member {
 	m.Node = New(nc)
 	t.Cleanup(m.Close)
 	return m
+}
+
+// testReaders are, for each test, its members, which its copies are sealed
+// to, as the records of a group would give.
+var testReaders = readerSet{readers: map[string][]clip.Reader{}}
+
+type readerSet struct {
+	mu      sync.Mutex
+	readers map[string][]clip.Reader // by the test's name
+}
+
+// add makes a secret for sealed messages for dev, a member of the test t,
+// and adds it to the test's readers.
+func (r *readerSet) add(t *testing.T, dev group.DeviceID) []byte {
+	t.Helper()
+	secret, err := seal.GenerateSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, err := seal.PublicKey(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.readers[t.Name()]; !ok {
+		// A test run again (-count) starts with no readers.
+		t.Cleanup(func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			delete(r.readers, t.Name())
+		})
+	}
+	r.readers[t.Name()] = append(r.readers[t.Name()], clip.Reader{ID: string(dev), Seal: pub})
+	return secret
+}
+
+// addKey adds dev, with its public key for sealed messages, to the readers
+// of the test t.
+func (r *readerSet) addKey(t *testing.T, dev group.DeviceID, pub []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.readers[t.Name()] = append(r.readers[t.Name()], clip.Reader{ID: string(dev), Seal: pub})
+}
+
+func (r *readerSet) of(t *testing.T) []clip.Reader {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.readers[t.Name()])
+}
+
+// takeTestCopy checks a copy as a member of the tests' group, which keeps
+// no records: the copy's own certificate must be from the group CA and
+// have signed it.
+func takeTestCopy(s *clip.Sealed, me group.DeviceID, secret []byte) (clip.Event, error) {
+	if err := s.Validate(); err != nil {
+		return clip.Event{}, err
+	}
+	cert, err := x509.ParseCertificate(s.Cert)
+	if err != nil || cert.CheckSignatureFrom(admin.GroupCA.Cert) != nil || !s.Verifies(cert) {
+		return clip.Event{}, errors.New("the copy is not from a member, or not signed by it")
+	}
+	ev, _ := clip.EventOf(s, string(me), secret)
+	return ev, nil
 }
 
 // link connects client to server and returns channels with the result of
@@ -215,13 +303,20 @@ func (r *raw) send(m *message) {
 
 func (r *raw) hello(h clip.Hello) {
 	r.t.Helper()
-	data, _ := json.Marshal(h)
+	out := struct {
+		Wall    int64 `json:"wall_ms"`
+		Current any   `json:"current,omitempty"`
+	}{Wall: h.Wall}
+	if h.Current != nil {
+		out.Current = wireOf(*h.Current)
+	}
+	data, _ := json.Marshal(out)
 	r.send(&message{Type: typeHello, Role: Full, Hello: data})
 }
 
 func (r *raw) event(ev clip.Event) {
 	r.t.Helper()
-	data, _ := json.Marshal(ev)
+	data, _ := json.Marshal(wireOf(ev))
 	r.send(&message{Type: typeEvent, Event: data})
 }
 
@@ -243,7 +338,25 @@ var eventClock = hlc.NewClock(nil, hlc.Timestamp{}, nil)
 
 // newEvent makes an event with a timestamp after every earlier one.
 func newEvent(origin *member, text string) clip.Event {
-	return clip.Event{ID: clip.NewID(), Origin: string(origin.id.ID), Time: eventClock.Now(), Kind: clip.Text, Text: text}
+	ev := clip.Event{ID: clip.NewID(), Origin: string(origin.id.ID), Time: eventClock.Now(), Kind: clip.Text, Text: text}
+	s, err := clip.SealCopy(ev.ID, ev.Origin, ev.Time, origin.id.Cert.Raw, nil, testReaders.of(origin.t),
+		clip.Content{Kind: ev.Kind, Text: text}, nil, clip.NewKey(), origin.id.Key)
+	if err != nil {
+		panic(err)
+	}
+	ev.Sealed = s
+	return ev
+}
+
+// wireOf is an event as it travels: its sealed copy with its age, or, for
+// a test of what a member refuses, the event in the open.
+func wireOf(ev clip.Event) any {
+	if ev.Sealed == nil {
+		return ev
+	}
+	s := *ev.Sealed
+	s.Age = ev.Age
+	return s
 }
 
 func TestCopyReachesTheOtherMember(t *testing.T) {
@@ -441,19 +554,30 @@ func TestSilentPeerIsDropped(t *testing.T) {
 
 func TestStalledPeerIsDropped(t *testing.T) {
 	// A peer that stops reading fills the socket and then the queue; the
-	// node drops it instead of waiting.
-	pi, mac := newMember(t, Full, withTimers(time.Second, 3*time.Second)), newMember(t, Full)
+	// node drops it instead of waiting for its Timeout. Each copy is
+	// sealed, which takes a while on a slow machine, so the Timeout is
+	// long and the copies stop once the peer is gone.
+	const timeout = 20 * time.Second
+	pi, mac := newMember(t, Full, withTimers(time.Second, timeout)), newMember(t, Full)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	waitPeers(t, pi, 1)
 	start := time.Now()
 	text := strings.Repeat("x", 4096)
-	for i := range 2000 {
+	dropped := false
+	for i := 0; i < 2000 && !dropped; i++ {
 		pi.Copied(fmt.Sprintf("%d %s", i, text), clip.Text, clip.Copy)
+		select {
+		case <-r.done:
+			dropped = true
+		default:
+		}
 	}
-	wait(t, r.done, "a stalled peer to be dropped")
-	if d := time.Since(start); d > 2*time.Second {
-		t.Errorf("dropping a stalled peer took %v", d)
+	if !dropped {
+		wait(t, r.done, "a stalled peer to be dropped")
+	}
+	if d := time.Since(start); d > timeout/2 {
+		t.Errorf("dropping a stalled peer took %v, as if it waited for the Timeout", d)
 	}
 }
 
@@ -549,17 +673,24 @@ func TestByeEndsTheConnectionAtOnce(t *testing.T) {
 }
 
 func TestQueuedEventsGoOutBeforeTheGoodbye(t *testing.T) {
-	pi, mac := newMember(t, Full), newMember(t, Full)
+	// The raw peer answers no pings while the copies are made, and sealing
+	// them takes a while on a slow machine, so the Timeout is long.
+	pi, mac := newMember(t, Full, withTimers(time.Second, 10*time.Second)), newMember(t, Full)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	waitPeers(t, pi, 1)
 	for i := range 20 {
 		pi.Copied(fmt.Sprintf("last copy %d", i), clip.Text, clip.Copy)
 	}
+	// The peer reads while the node closes: twenty sealed copies can be
+	// more than a small socket buffer (FreeBSD's) holds, and the writes
+	// before the goodbye have only a second.
+	got := make(chan []*message, 1)
+	go func() { got <- r.frames(3 * time.Second) }()
 	pi.Close()
 	var events int
 	var bye bool
-	for _, m := range r.frames(time.Second) {
+	for _, m := range <-got {
 		switch m.Type {
 		case typeEvent:
 			events++

@@ -1276,8 +1276,14 @@ final class LiveGroup: GroupController {
     /// Starts finding and dialing the computers, once there is a group.
     private func startSync() throws {
         guard let g = state, node == nil else { return }
-        let id = try identity(g, memberSigner())
+        let signer = try memberSigner()
+        let id = try identity(g, signer)
         let box = RecordBox(groupCA: g.groupCA, set: g.records)
+        // The copies this phone makes are sealed to the group's readers and
+        // signed; the others' are checked and opened (docs/protocol.md,
+        // section 4).
+        let copies = CopyKeys(device: g.device, cert: g.memberCert, issuer: g.memberIssuer, signer: signer,
+                              secret: try SealKey.secret(), records: { box.snapshot })
         box.onAdd = { [weak self] set in Task { @MainActor in self?.adopt(set) } }
         let credentials = CredentialBox(url: credentialsURL, group: g)
         credentials.onAdd = { [weak self] in Task { @MainActor in self?.refreshCredentials() } }
@@ -1368,7 +1374,7 @@ final class LiveGroup: GroupController {
                               onEvidence: { [weak self] peer, chain, e in
                                   Task { @MainActor in await self?.evidenceReceived(from: peer, chain: chain, e) }
                               },
-                              content: content, credentials: credentials)
+                              content: content, credentials: credentials, copies: copies)
         nodeRef.value = node
         let relay = Relay(group: g.tag)
         relay.allowed = Self.allowed(g)
@@ -1948,6 +1954,7 @@ final class LiveGroup: GroupController {
 
         var digest: String? { lock.withLock { set.digest } }
         var all: [Member.Record] { lock.withLock { set.records } }
+        var snapshot: RecordSet { lock.withLock { set } }
 
         func add(_ rs: [Member.Record]) -> [Member.Record] {
             let (fresh, now): ([Member.Record], RecordSet) = lock.withLock {
@@ -2095,9 +2102,9 @@ final class LiveGroup: GroupController {
         if let t = board, !t.isEmpty, t != usable?.text {
             guard await connected(node) else { throw PendingGroup.Failure.noComputers }
             if let image {
-                await node.send(text: "", kind: .text, media: Content.manifest(store: content, data: [(image.type, image.data)]))
+                _ = try await node.send(text: "", kind: .text, media: Content.manifest(store: content, data: [(image.type, image.data)]))
             } else {
-                await node.send(text: t, kind: .text)
+                _ = try await node.send(text: t, kind: .text)
             }
             return .sent(to: devices.filter { online.contains($0.id) && !$0.isSelf }.map(\.name).sorted())
         }
@@ -2153,26 +2160,26 @@ final class LiveGroup: GroupController {
             }
             return parts.dropFirst().reduce(root.appendingPathComponent(renamed[parts[0]]!)) { $0.appendingPathComponent($1) }
         }
+        // The copy's sealed blob holds the bytes of all its files, fetched
+        // and opened before any is written.
+        var data = try await Content.parts(from: node, event: e, limit: Images.maxCopy)[...]
         for p in m.parts {
-            guard let path = p.path else { continue }
+            guard let path = p.path else {
+                if !p.dir { data = data.dropFirst() }
+                continue
+            }
             let url = target(path)
             if p.dir {
                 try fm.createDirectory(at: url, withIntermediateDirectories: true)
                 continue
             }
+            let bytes = data.popFirst() ?? Data()
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             let tmp = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).part")
-            fm.createFile(atPath: tmp.path, contents: nil)
-            let h = try FileHandle(forWritingTo: tmp)
             do {
-                if p.size > 0 {
-                    try await Content.fetch(from: node, event: e, part: p, limit: Images.maxCopy,
-                                            start: { try h.truncate(atOffset: 0) }, sink: { try h.write(contentsOf: $0) })
-                }
-                try h.close()
+                try bytes.write(to: tmp)
                 try fm.moveItem(at: tmp, to: url)
             } catch {
-                try? h.close()
                 try? fm.removeItem(at: tmp)
                 throw error
             }

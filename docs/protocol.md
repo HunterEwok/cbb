@@ -1162,6 +1162,7 @@ Header fields (all omitted when empty):
 | `obfuscate` | bool | `away hub`: speak AmneziaWG instead of plain WireGuard (section 11) |
 | `vless` | bool | `away hub`: the clients reach the forwarder over VLESS where UDP does not pass, with AmneziaWG on (section 11) |
 | `keep` | bool | `away hub`: keep the hub's addresses, port and forwarder where the message gives none, changing only `obfuscate` and `vless` (the apps' setting) |
+| `forward_only` | bool | `away hub` with `device`: make that computer, which is no admin, a hub that only passes copies on, first signing it a device record with `forward_only` (section 11, "Two kinds of hub") |
 | `invite` | string | the text of a remote invitation: made by `invite`, used by `join` (section 12) |
 | `joining` | object | `invite`: a device to confirm before it is admitted, `{id, name, os, fingerprint}` |
 

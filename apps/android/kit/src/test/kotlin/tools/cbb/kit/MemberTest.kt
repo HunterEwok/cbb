@@ -45,13 +45,15 @@ class MemberTest {
         assertEquals(Member.Role.FULL, hello.role)
         assertEquals("pi", hello.hello.name)
         assertEquals("q83vEjRWeJA=", hello.hello.records)
-        assertEquals("hello <world> & \"you\" / ✓", hello.hello.current?.text)
+        // Copies travel sealed: the hello's copy shows its header only, unread.
+        assertEquals(true, hello.hello.current?.unread)
+        assertEquals(true, hello.hello.current?.sealed?.isValid)
         assertEquals(Member.Timestamp(1_761_024_000_000, 3), hello.hello.current?.time)
         assertEquals(1500L, hello.hello.current?.ageMS)
         val mark = assertIs<Member.Message.Hello>(decoded[1]).hello.current!!
         assertTrue(mark.isMark)
-        assertEquals(Member.Via.PHONE, mark.via)
-        assertEquals(Member.Via.UNIVERSAL_CLIPBOARD, assertIs<Member.Message.Event>(decoded[5]).event?.via)
+        assertEquals(32, mark.sealed?.payloadSHA256?.size)
+        assertEquals(false, assertIs<Member.Message.Event>(decoded[5]).event?.sealed?.isMark)
         assertEquals(Member.Message.Ping, decoded[6])
         assertEquals(Member.Message.Bye, decoded[7])
         assertEquals(Member.Message.Cert("member certificate DER".toByteArray()), decoded[8])

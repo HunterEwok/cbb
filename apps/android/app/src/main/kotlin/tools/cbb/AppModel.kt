@@ -15,6 +15,7 @@ import tools.cbb.kit.GroupAlert
 import tools.cbb.kit.Arrangement
 import tools.cbb.kit.Core
 import tools.cbb.kit.Content
+import tools.cbb.kit.CopyKeys
 import tools.cbb.kit.InvitationWindow
 import tools.cbb.kit.JoinCode
 import tools.cbb.kit.MemberNode
@@ -1158,7 +1159,9 @@ class AppModel(private val app: Context) {
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large
             is Arrangement.Refused -> R.string.error_arrangement
-            is MemberNode.MissingException, is MemberNode.ProtocolException -> R.string.error_image_unavailable
+            is Content.Unread -> R.string.error_copy_unread
+            is CopyKeys.NoRecords -> R.string.error_copy_no_records
+            is MemberNode.MissingException, is MemberNode.ProtocolException, is Content.Mismatch -> R.string.error_image_unavailable
             is PairingMember.Failure ->
                 if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_wrong_code else R.string.error_refused
             is PhoneGroup.Failure -> R.string.error_generic

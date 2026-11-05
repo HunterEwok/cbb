@@ -64,7 +64,7 @@ func TestLeftPartsSwept(t *testing.T) {
 	// One of the current copy stays, one a fetch writes too.
 	cur := [sha256.Size]byte{0xc0}
 	left(cur)
-	store.setCurrent(&clip.Manifest{Size: limit, Parts: []clip.Part{{SHA256: cur[:], Size: limit}}}, limit)
+	store.setCurrent(&mediaCopy{m: &clip.Manifest{Size: limit, Parts: []clip.Part{{SHA256: cur[:], Size: limit}}}}, limit)
 	busy := [sha256.Size]byte{0xb0}
 	f, _, _, err := store.partial(busy)
 	if err != nil {
@@ -111,8 +111,8 @@ func TestReplacedPartsSweptWithoutNextCopy(t *testing.T) {
 	if err := store.commit(f, sum, int64(len(data))); err != nil {
 		t.Fatal(err)
 	}
-	store.setCurrent(&clip.Manifest{Size: int64(len(data)), Parts: []clip.Part{{SHA256: sum[:], Size: int64(len(data))}}}, limit)
-	store.setCurrent(&clip.Manifest{Size: 0}, limit) // a text copy replaces it, and nothing follows
+	store.setCurrent(&mediaCopy{m: &clip.Manifest{Size: int64(len(data)), Parts: []clip.Part{{SHA256: sum[:], Size: int64(len(data))}}}}, limit)
+	store.setCurrent(&mediaCopy{m: &clip.Manifest{Size: 0}}, limit) // a text copy replaces it, and nothing follows
 
 	s := &Service{content: store, limits: mediaLimits{Home: limit, Away: limit}}
 	ctx, cancel := context.WithCancel(context.Background())

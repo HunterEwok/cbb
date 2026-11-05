@@ -49,6 +49,9 @@ object Records {
         /** The device's public key for sealed messages (docs/protocol.md, section 15). */
         var seal: ByteArray? = null
 
+        /** A hub that only passes copies on: none is sealed to it (docs/protocol.md, section 4). */
+        var forwardOnly = false
+
         // revoke, freeze
         var keys: List<ByteArray>? = null
 
@@ -95,6 +98,7 @@ object Records {
                 "proof" to s(proof),
                 "holds_root" to if (holdsRoot) JsonPrimitive(true) else null,
                 "seal" to b(seal),
+                "forward_only" to if (forwardOnly) JsonPrimitive(true) else null,
                 "keys" to once(keys),
                 "records" to once(records),
                 "root" to b(root),
@@ -257,6 +261,8 @@ class RecordSet {
         val freezes: List<ByteArray> = emptyList(),
         /** Its public key for sealed messages, which commands for it are sealed to; null when its record has none. */
         val seal: ByteArray? = null,
+        /** A hub that only passes copies on, which no copy is sealed to. */
+        val forwardOnly: Boolean = false,
     ) {
         /** Whether it is an admin with the power p. */
         fun may(p: String): Boolean = admin && p in powers
@@ -265,7 +271,8 @@ class RecordSet {
             other is Device && id == other.id && name == other.name && role == other.role && os == other.os && store == other.store &&
                 kind == other.kind && proof == other.proof && key.contentEquals(other.key) && admin == other.admin &&
                 adminKey.contentEqualsOrNull(other.adminKey) && frozen == other.frozen && keys.sameAs(other.keys) &&
-                powers == other.powers && commands == other.commands && freezes.sameAs(other.freezes)
+                powers == other.powers && commands == other.commands && freezes.sameAs(other.freezes) &&
+                forwardOnly == other.forwardOnly
 
         override fun hashCode(): Int = id.hashCode()
 
@@ -292,6 +299,7 @@ class RecordSet {
                     commands = o.strings("commands"),
                     freezes = o.optBytesList("freezes").orEmpty(),
                     seal = o.optBytes("seal"),
+                    forwardOnly = o.optBool("forward_only") ?: false,
                 )
             }
         }
@@ -456,6 +464,24 @@ class RecordSet {
             *extra,
         )
         return Core.run(op, args) as? JsonObject ?: throw Core.Mismatch("the answer to $op is not an object")
+    }
+
+    /**
+     * Seals a copy this member made to the readers the set names
+     * (group_seal_copy, docs/protocol.md, section 4, "Sealing") and signs it
+     * with signer, the member key of cert; key sealed the blob of its images
+     * or files, if it has one.
+     */
+    fun sealCopy(e: Member.Event, cert: ByteArray, issuer: ByteArray?, key: ByteArray?, blob: Blob?, signer: CertificateSigner): Sealed {
+        val a = ask("group_seal_copy", *e.sealArgs(cert, issuer, key, blob))
+        val s = a.optObject("event")?.let { Sealed.fromJson(it) } ?: throw Core.Mismatch("the answer to group_seal_copy has no event")
+        val toSign = a.optBytes("to_sign") ?: throw Core.Mismatch("the answer to group_seal_copy has nothing to sign")
+        return s.with(sig = signer.signature(toSign))
+    }
+
+    /** Checks a copy's origin and signature against the set, as a member does before it keeps or passes the copy on (group_check_copy). */
+    fun checkCopy(s: Sealed) {
+        ask("group_check_copy", "event" to s.toJson())
     }
 
     /** Asks the core what the set says again: after the clock moved, as a claim's delay runs out. */

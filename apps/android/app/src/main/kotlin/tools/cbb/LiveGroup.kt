@@ -34,6 +34,7 @@ import tools.cbb.kit.Member
 import tools.cbb.kit.MemberDialer
 import tools.cbb.kit.MemberListener
 import tools.cbb.kit.MemberNode
+import tools.cbb.kit.CopyKeys
 import tools.cbb.kit.MemoryContent
 import tools.cbb.kit.Pairing
 import tools.cbb.kit.PairingJoiner
@@ -1845,6 +1846,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             onEvidence = ::evidenceReceived,
             content = content,
             credentials = Credentials(),
+            // The copies this phone makes are sealed to the group's readers
+            // and signed; the others' are checked and opened (docs/protocol.md,
+            // section 4). Without its secret the phone still seals, and the
+            // copies sealed to it stay unread.
+            copies = CopyKeys(
+                g.device, g.memberCert, g.memberIssuer, member, sealSecret() ?: ByteArray(0),
+            ) { synchronized(lock) { state?.records } },
             adminCA = { key -> synchronized(lock) { state?.computerAdminCA(key) } },
             // A copy of a moment ago from another device; an older one, as a
             // hello brings it on connecting, would overwrite what the phone

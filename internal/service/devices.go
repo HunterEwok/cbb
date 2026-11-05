@@ -762,7 +762,7 @@ func (s *Service) rename(target, name string) (string, error) {
 	}
 	s.awaitRecords(id)
 	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(rec.ID), Name: name, Role: rec.Role,
-		OS: rec.OS, Key: &rec.Key, Admin: rec.AdminKey, Powers: rec.Powers, Commands: rec.Commands, Store: rec.Store, Kind: rec.Kind, Proof: rec.Proof, Seal: rec.Seal})
+		OS: rec.OS, Key: &rec.Key, Admin: rec.AdminKey, Powers: rec.Powers, Commands: rec.Commands, Store: rec.Store, Kind: rec.Kind, Proof: rec.Proof, Seal: rec.Seal, ForwardOnly: rec.ForwardOnly})
 	if err != nil {
 		return "", err
 	}

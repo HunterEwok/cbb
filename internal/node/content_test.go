@@ -36,6 +36,26 @@ func (m *memContent) put(b []byte) clip.Part {
 	return clip.Part{Size: int64(len(b)), SHA256: sum[:]}
 }
 
+// sealBlob seals the parts of man, which m holds, into a blob under key,
+// and keeps the blob too.
+func (m *memContent) sealBlob(key []byte, man *clip.Manifest) (*clip.Blob, error) {
+	var rs []io.Reader
+	m.mu.Lock()
+	for _, p := range man.Parts {
+		if !p.Dir {
+			rs = append(rs, bytes.NewReader(m.parts[[sha256.Size]byte(p.SHA256)]))
+		}
+	}
+	m.mu.Unlock()
+	var out bytes.Buffer
+	b, err := clip.SealBlob(key, io.MultiReader(rs...), man.Size, &out)
+	if err != nil {
+		return nil, err
+	}
+	m.put(out.Bytes())
+	return b, nil
+}
+
 func (m *memContent) Open(sum [sha256.Size]byte) (io.ReaderAt, int64, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

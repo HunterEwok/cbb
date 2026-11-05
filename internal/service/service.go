@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/actions"
@@ -245,14 +246,16 @@ type Service struct {
 	// tpmOpening is held while the TPM opens a root's credential, one at
 	// a time.
 	tpmOpening  sync.Mutex
-	recMu       sync.Mutex         // guards records; taken after mu, never before
-	records     *group.Records     // the group's device records; nil while in no group
-	creds       *group.Credentials // the group's server credentials, under recMu as records
-	serverKeys  *group.ServerKeys  // this device's keys for the servers, under recMu as records
-	sealSecret  []byte             // this device's secret for sealed messages (internal/seal); nil if it could not be loaded
-	sealPublic  []byte             // its public key, which the hello offers
-	credChanged chan struct{}      // closed when creds change, under recMu
-	credMu      sync.Mutex         // serialises refreshCredential, taken before mu and recMu
+	recMu       sync.Mutex             // guards records; taken after mu, never before
+	records     *group.Records         // the group's device records; nil while in no group
+	creds       *group.Credentials     // the group's server credentials, under recMu as records
+	serverKeys  *group.ServerKeys      // this device's keys for the servers, under recMu as records
+	sealSecret  []byte                 // this device's secret for sealed messages (internal/seal); nil if it could not be loaded
+	copyKeys    atomic.Pointer[sealer] // what copies are sealed and opened with; see sealer
+	ownCopies   sync.Map               // the images and files this member copies now: *clip.Manifest to *mediaCopy, until sealed
+	sealPublic  []byte                 // its public key, which the hello offers
+	credChanged chan struct{}          // closed when creds change, under recMu
+	credMu      sync.Mutex             // serialises refreshCredential, taken before mu and recMu
 
 	// The newest signed release the group passed around (releases.go);
 	// relMu guards it, taken alone.
@@ -500,7 +503,7 @@ func (s *Service) startGroup(id *group.Identity) error {
 	if err != nil {
 		s.logf("cbb: the sync mode: %v; using shared", err)
 	}
-	eng := clip.New(clip.Config{Self: string(id.ID), Clock: s.clock, Mode: mode, Wall: s.cfg.now})
+	eng := clip.New(clip.Config{Self: string(id.ID), Clock: s.clock, Mode: mode, Wall: s.cfg.now, Seal: s.sealCopy})
 	s.recMu.Lock()
 	s.records = s.loadRecords(id)
 	s.creds = s.loadCredentials(id, s.records)
@@ -513,8 +516,10 @@ func (s *Service) startGroup(id *group.Identity) error {
 	s.tunMu.Unlock()
 	tunKey, tunPSK := tunnelKey(tun)
 	s.loadSealSecretLocked()
+	s.setSealer(id, s.sealSecret, s.sealPublic)
 	nd := node.New(node.Config{
-		Content: s.nodeContent(), Identity: id, Role: s.cfg.Role, Name: s.cfg.Name, OS: s.cfg.OS, Device: s.cfg.Device, Engine: eng, KeyStore: s.keyStore(id), Actions: s.actionsOn,
+		TakeCopy: s.takeCopy,
+		Content:  s.nodeContent(), Identity: id, Role: s.cfg.Role, Name: s.cfg.Name, OS: s.cfg.OS, Device: s.cfg.Device, Engine: eng, KeyStore: s.keyStore(id), Actions: s.actionsOn,
 		OnWrite: s.write, OnRelay: s.relayed, Serves: s.serves, OnPeers: s.peersChanged, OnCert: s.certRenewed, OnAdmin: s.becomeAdmin, OnCommand: s.command,
 		Now: s.cfg.now, Logf: s.logf,
 		Records: recordStore{s}, Credentials: credentialStore{s}, Releases: releaseStore{s}, Entries: entriesStore{s}, Allow: s.allow, NoSecrets: s.noSecretsTo,

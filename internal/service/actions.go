@@ -47,6 +47,8 @@ func (s *Service) act(body group.CommandBody, c group.Record, from sender) node.
 	switch {
 	case err != nil:
 		res.Status, res.Reason = node.ResultFailed, fmt.Sprintf("reading the quick actions: %v", err)
+	case s.forwardOnly():
+		res.Reason = errForwardOnly.Error()
 	case !set.Has(body.Action):
 		res.Reason = fmt.Sprintf("this device has no action %q", body.Action)
 	default:

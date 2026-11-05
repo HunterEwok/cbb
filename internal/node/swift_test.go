@@ -8,9 +8,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -27,8 +29,10 @@ import (
 
 // TestSwiftMemberTLS runs the phone app's member code against this node
 // over real TLS: cbb-interop (apps/ios/CBBKit), named by
-// CBB_SWIFT_INTEROP_TLS on macOS, makes a key in the keychain, gets
-// a member certificate for it, dials, sends a text, and waits for one.
+// CBB_SWIFT_INTEROP_TLS on macOS, makes a key in the keychain and a secret
+// for sealed messages, gets a member certificate and the group's records,
+// dials, sends a sealed text, and waits for one; a picture goes each way
+// in its sealed blob.
 func TestSwiftMemberTLS(t *testing.T) {
 	tool := os.Getenv("CBB_SWIFT_INTEROP_TLS")
 	if tool == "" {
@@ -36,6 +40,7 @@ func TestSwiftMemberTLS(t *testing.T) {
 	}
 	var store memContent
 	server := newMember(t, Full, withContent(&store))
+	server.blobs = &store
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -81,12 +86,37 @@ func TestSwiftMemberTLS(t *testing.T) {
 	if !ok {
 		fail("the key is not ECDSA")
 	}
+	if !lines.Scan() || !strings.HasPrefix(lines.Text(), "seal ") {
+		fail("no seal line")
+	}
+	phoneSeal, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(lines.Text(), "seal "))
+	if err != nil {
+		fail("the key for sealed messages: %v", err)
+	}
 	phoneID := group.NewDeviceID()
 	cert, err := admin.GroupCA.IssueMember(phoneID, ecPub, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Fprintf(stdin, "cert %s\nca %s\n", base64.StdEncoding.EncodeToString(cert.Raw), base64.StdEncoding.EncodeToString(admin.GroupCA.Cert.Raw))
+	// The records name both, with their keys for sealed messages, so each
+	// seals its copies to the other.
+	testReaders.addKey(t, phoneID, phoneSeal)
+	var serverSeal []byte
+	for _, r := range testReaders.of(t) {
+		if r.ID == string(server.id.ID) {
+			serverSeal = r.Seal
+		}
+	}
+	serverKey, phoneKey := group.KeyHashOf(server.id.Cert), group.KeyHashOf(cert)
+	recs, err := json.Marshal([]group.Record{
+		server.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(server.id.ID), Name: "pi", Role: group.RoleFull, Key: &serverKey, Seal: serverSeal}),
+		server.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(phoneID), Name: "iPhone", Role: group.RolePhone, Key: &phoneKey, Seal: phoneSeal}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(stdin, "cert %s\nca %s\nrecords %s\n", base64.StdEncoding.EncodeToString(cert.Raw), base64.StdEncoding.EncodeToString(admin.GroupCA.Cert.Raw),
+		base64.StdEncoding.EncodeToString(recs))
 
 	ln.(*net.TCPListener).SetDeadline(time.Now().Add(30 * time.Second))
 	raw, err := ln.Accept()
@@ -122,13 +152,21 @@ func TestSwiftMemberTLS(t *testing.T) {
 			fail("the phone sent no picture")
 		}
 	}
-	if w.Media == nil || len(w.Media.Parts) != 1 || w.Media.Parts[0].Type != clip.TypePNG {
+	if w.Media == nil || len(w.Media.Parts) != 1 || w.Media.Parts[0].Type != clip.TypePNG || w.Blob == nil || w.Key == nil {
 		fail("the phone's picture %+v", w)
 	}
-	got, err := fetchAll(context.Background(), server, &member{id: &group.Identity{ID: phoneID}}, w.Media.Parts[0], 0)
+	sealed, err := fetchAll(context.Background(), server, &member{id: &group.Identity{ID: phoneID}}, clip.Part{SHA256: w.Blob.SHA256, Size: w.Blob.Size}, 0)
 	if err != nil {
 		fail("fetching the phone's picture: %v", err)
 	}
+	if sum := sha256.Sum256(sealed); !bytes.Equal(sum[:], w.Blob.SHA256) {
+		fail("the phone's picture does not match its hash")
+	}
+	var opened bytes.Buffer
+	if err := clip.OpenBlob(w.Key, bytes.NewReader(sealed), w.Blob, w.Media.Size, &opened); err != nil {
+		fail("opening the phone's picture: %v", err)
+	}
+	got := opened.Bytes()
 	slices.Reverse(got)
 	if !bytes.Equal(got, png) {
 		fail("the phone's picture is not Go's reversed")

@@ -174,12 +174,13 @@ type Header struct {
 	ForwarderKey string   `json:"forwarder_key,omitempty"`
 	Relay        string   `json:"relay,omitempty"` // away relay: the relay's address, with its key in RelayKey
 	RelayKey     string   `json:"relay_key,omitempty"`
-	Obfuscate    bool     `json:"obfuscate,omitempty"` // away hub: speak AmneziaWG instead of plain WireGuard
-	VLESS        bool     `json:"vless,omitempty"`     // away hub: the clients come only over VLESS to the forwarder
-	Keep         bool     `json:"keep,omitempty"`      // away hub: keep the hub's addresses, port and forwarder where the message gives none
-	Consent      bool     `json:"consent,omitempty"`   // away on, join with an invitation, admin of a device with file keys: the user agreed to what the warning says; answer: yes
-	Invite       string   `json:"invite,omitempty"`    // the text of a remote invitation: made by invite, used by join
-	Joining      *Joining `json:"joining,omitempty"`   // invite: a device to confirm, before it is admitted
+	Obfuscate    bool     `json:"obfuscate,omitempty"`    // away hub: speak AmneziaWG instead of plain WireGuard
+	VLESS        bool     `json:"vless,omitempty"`        // away hub: the clients come only over VLESS to the forwarder
+	Keep         bool     `json:"keep,omitempty"`         // away hub: keep the hub's addresses, port and forwarder where the message gives none
+	ForwardOnly  bool     `json:"forward_only,omitempty"` // away hub with a device: make it a hub that only passes copies on, reading none
+	Consent      bool     `json:"consent,omitempty"`      // away on, join with an invitation, admin of a device with file keys: the user agreed to what the warning says; answer: yes
+	Invite       string   `json:"invite,omitempty"`       // the text of a remote invitation: made by invite, used by join
+	Joining      *Joining `json:"joining,omitempty"`      // invite: a device to confirm, before it is admitted
 	Status       *Status  `json:"status,omitempty"`
 	Devices      []Device `json:"devices,omitempty"`
 

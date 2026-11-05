@@ -18,12 +18,12 @@ import (
 )
 
 // The content of images and files (docs/protocol.md, section 4, "Content"):
-// a member that wants a part of a media event sends get, with the part's
-// SHA-256 and a range, to a peer whose hello says it serves content, and
-// the peer answers with binary chunk frames, or missing when it does not
-// hold the part. Chunks go out only while no other message waits, and do
-// not count against the queue limit, so events keep flowing during a
-// large transfer.
+// a member that wants the sealed blob of a media event, a part as this file
+// calls any file served by its hash, sends get, with its SHA-256 and a
+// range, to a peer whose hello says it serves content, and the peer answers
+// with binary chunk frames, or missing when it does not hold the part.
+// Chunks go out only while no other message waits, and do not count
+// against the queue limit, so events keep flowing during a large transfer.
 
 const (
 	// ChunkSize is the most bytes of a part one chunk carries.

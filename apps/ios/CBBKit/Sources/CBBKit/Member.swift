@@ -8,7 +8,7 @@ import Foundation
 /// pings, records and goodbyes.
 public enum Member {
     /// The ALPN protocol of member connections.
-    public static let alpn = "cbb/2"
+    public static let alpn = "cbb/3"
     /// The feature of the hello (section 4, "Hello") that says the sender
     /// serves the content of media events, and how many names of the
     /// hello's features a receiver reads.
@@ -104,7 +104,8 @@ public enum Member {
         }
     }
 
-    /// One copy, as it travels between members.
+    /// One copy as the engine holds it: its header, and its content once
+    /// this member opened it. It travels sealed (Sealed).
     public struct Event: Codable, Equatable, Sendable {
         public var id: String
         public var origin: String
@@ -118,8 +119,18 @@ public enum Member {
         public var text: String
         /// The content of a media event, which only it has.
         public var media: Media.Manifest?
+        /// The copy as it travels, sealed end to end (docs/protocol.md,
+        /// section 4); nil for an event of an engine without keys, as in
+        /// tests of the engine alone.
+        public var sealed: Sealed?
+        /// Whether this member does not know the event's content: a mark,
+        /// or a copy not sealed to this member. kind, via, text and media
+        /// are then empty, and the event is current only for ordering.
+        public var unread = false
+        /// The copy's key, which opens its blob, when this member opened it.
+        public var key: Data?
 
-        enum CodingKeys: String, CodingKey { case id, origin, via, time, ageMS = "age_ms", kind, text, media }
+        enum CodingKeys: String, CodingKey { case id, origin, via, time, ageMS = "age_ms", kind, text, media, wraps }
 
         public init(id: String, origin: String, via: Via = .copy, time: Timestamp, ageMS: Int64 = 0, kind: Kind, text: String,
                     media: Media.Manifest? = nil) {
@@ -129,6 +140,11 @@ public enum Member {
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
+            // On the wire a copy is sealed.
+            if c.contains(.wraps) {
+                self = Event(sealed: try Sealed(from: decoder))
+                return
+            }
             id = try c.decode(String.self, forKey: .id)
             origin = try c.decode(String.self, forKey: .origin)
             via = try c.decodeIfPresent(Via.self, forKey: .via) ?? .copy
@@ -140,6 +156,11 @@ public enum Member {
         }
 
         public func encode(to encoder: Encoder) throws {
+            if var s = sealed {
+                s.ageMS = ageMS
+                try s.encode(to: encoder)
+                return
+            }
             var c = encoder.container(keyedBy: CodingKeys.self)
             try c.encode(id, forKey: .id)
             try c.encode(origin, forKey: .origin)
@@ -151,15 +172,25 @@ public enum Member {
             try c.encodeIfPresent(media, forKey: .media)
         }
 
-        /// Whether it is the mark of a secret: the event without its text.
-        public var isMark: Bool { kind == .secret && text.isEmpty }
+        /// Whether it is the mark of a secret: the event without its
+        /// payload, or, unsealed, without its text.
+        public var isMark: Bool { sealed.map(\.isMark) ?? (kind == .secret && text.isEmpty) }
 
-        /// The mark of this event: a secret without its text, as a hello
-        /// carries it.
+        /// The mark of this event: a secret without its payload and text,
+        /// as a hello carries it.
         public var mark: Event {
             var m = self
-            if kind == .secret { m.text = "" }
+            if kind == .secret && !unread {
+                (m.text, m.key) = ("", nil)
+                m.sealed = sealed?.mark
+            }
             return m
+        }
+
+        /// Whether f carries the payload whose hash this mark has.
+        func samePayload(_ f: Event) -> Bool {
+            guard let s = sealed, let t = f.sealed else { return true }
+            return t.payload != nil && s.payloadHash == t.payloadHash
         }
 
         /// Checks an event received from another member, as Go's
@@ -167,6 +198,8 @@ public enum Member {
         public var isValid: Bool {
             guard GroupCertificates.isDeviceID(id), GroupCertificates.isDeviceID(origin),
                   !time.isZero, time.wall <= Timestamp.maxWall, ageMS >= 0 else { return false }
+            if let sealed, !sealed.isValid || sealed.id != id || sealed.origin != origin || sealed.time != time { return false }
+            if unread { return sealed != nil }
             if (kind == .media) != (media != nil) { return false }
             if isMark { return true }
             if let media {

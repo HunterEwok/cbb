@@ -66,14 +66,16 @@ final class MemberTests: XCTestCase {
         XCTAssertEqual(role, .full)
         XCTAssertEqual(h.name, "pi")
         XCTAssertEqual(h.records, "q83vEjRWeJA=")
-        XCTAssertEqual(h.current?.text, "hello <world> & \"you\" / ✓")
+        // Copies travel sealed: the hello's copy shows its header only, unread.
+        XCTAssertEqual(h.current?.unread, true)
+        XCTAssertEqual(h.current?.sealed?.isValid, true)
         XCTAssertEqual(h.current?.time, Member.Timestamp(wall: 1_761_024_000_000, logical: 3))
         XCTAssertEqual(h.current?.ageMS, 1500)
         guard case let .hello(_, markHello) = decoded[1] else { return XCTFail() }
         XCTAssertEqual(markHello.current?.isMark, true)
-        XCTAssertEqual(markHello.current?.via, .phone)
+        XCTAssertEqual(markHello.current?.sealed?.payloadSHA256?.count, 32)
         guard case let .event(univ?) = decoded[5] else { return XCTFail() }
-        XCTAssertEqual(univ.via, .universalClipboard)
+        XCTAssertEqual(univ.sealed?.isMark, false)
         XCTAssertEqual(decoded[6], .ping)
         XCTAssertEqual(decoded[7], .bye)
         XCTAssertEqual(decoded[8], .cert(Data("member certificate DER".utf8)))
@@ -256,7 +258,7 @@ final class MemberTests: XCTestCase {
         XCTAssertEqual(e.received(old), .init(forward: old, changed: false))
         XCTAssertEqual(e.usable?.text, "first")
         // A local event is later than everything seen.
-        let mine = e.local(text: "from the phone", kind: .text)
+        let mine = try e.local(text: "from the phone", kind: .text)
         XCTAssertTrue(mine.isLater(than: a))
         XCTAssertEqual(mine.via, .phone)
         XCTAssertEqual(e.usable?.text, "from the phone")
@@ -289,12 +291,12 @@ final class MemberTests: XCTestCase {
         let a = MemberNode(engine: SyncEngine(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", clock: HybridClock()), name: "iPhone")
         let b = MemberNode(engine: SyncEngine(device: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", clock: HybridClock()), name: "pi", role: .full,
                            onChange: { changes.add($0.text) })
-        await a.send(text: "before", kind: .text)
+        try await a.send(text: "before", kind: .text)
         let ta = Task { try await a.serve(pa) }
         let tb = Task { try await b.serve(pb) }
         // b gets a's current event from its hello, then a later event.
         try await waitUntil { changes.all.contains("before") }
-        await a.send(text: "after", kind: .text)
+        try await a.send(text: "after", kind: .text)
         try await waitUntil { changes.all.contains("after") }
         let bPeers = await b.peers
         XCTAssertEqual(bPeers, 1)
@@ -325,9 +327,9 @@ final class MemberTests: XCTestCase {
                            onChange: { changes.add($0.text) })
         let ta = Task { try await a.serve(pa) }
         let tb = Task { try await b.serve(pb) }
-        await a.send(text: "plain", kind: .text)
+        try await a.send(text: "plain", kind: .text)
         try await waitUntil { changes.all.contains("plain") }
-        await a.send(text: "hunter2", kind: .secret)
+        try await a.send(text: "hunter2", kind: .secret)
         try await waitUntil { changes.all.contains("") }
         XCTAssertFalse(changes.all.contains("hunter2"))
         await a.closeAll()
@@ -336,14 +338,15 @@ final class MemberTests: XCTestCase {
     }
 
     func testFramesForGo() throws {
-        // The frames Go decodes in TestSwiftMemberFrames.
-        // Fixed values, so the file changes only with the encoding.
-        let origin = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        let ev = Member.Event(id: "0123456789abcdef0123456789abcdef", origin: origin, via: .phone,
-                              time: .init(wall: 1_761_024_000_000, logical: 0), ageMS: 12, kind: .text, text: "from Swift / <ok>")
-        let secret = Member.Event(id: "fedcba9876543210fedcba9876543210", origin: origin, via: .phone,
-                                  time: .init(wall: 1_761_024_000_000, logical: 1), ageMS: 0, kind: .secret, text: "hunter2")
-        let hello = Member.Hello(wallMS: 1_761_024_000_500, current: secret.mark, name: "iPhone")
+        // The frames Go decodes in TestSwiftMemberFrames: copies sealed by a
+        // phone of a group, which Go checks for their shape.
+        let keys = try TestCopies()
+        let engine = SyncEngine(device: keys.idA, clock: HybridClock())
+        engine.seal = { try keys.a.seal($0, key: $1, blob: $2) }
+        let ev = try engine.local(text: "from Swift / <ok>", kind: .text)
+        let secret = try engine.local(text: "hunter2", kind: .secret)
+        let hello = engine.hello(name: "iPhone")
+        XCTAssertEqual(hello.current?.isMark, true)
         let frames = try [
             Member.encode(.hello(.phone, hello)),
             Member.encode(.event(ev)),
@@ -351,6 +354,10 @@ final class MemberTests: XCTestCase {
             Member.encode(.ping),
             Member.encode(.bye),
         ]
+        // The other side opens what is sealed to it.
+        XCTAssertEqual(try keys.b.take(ev.sealed!).text, "from Swift / <ok>")
+        XCTAssertEqual(try keys.b.take(secret.sealed!).kind, .secret)
+        XCTAssertEqual(try keys.b.take(secret.sealed!.mark).unread, true)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted]
         let data = try enc.encode(frames)

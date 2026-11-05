@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
 use crate::certs::{is_id, random_bytes, random_id};
+use crate::copy::{KEY_SIZE, Sealed};
 use crate::error::{Error, Result};
 use crate::hlc::{Clock, Timestamp};
 use crate::media::{MAX_ALT_TEXT, Manifest};
@@ -65,7 +66,8 @@ impl Via {
     }
 }
 
-/// One copy, as it travels between members.
+/// One copy as the engine holds it: its header, and its content once this
+/// member opened it. It travels sealed (crate::copy::Sealed).
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct Event {
     #[serde(default)]
@@ -85,17 +87,75 @@ pub struct Event {
     /// The content of a media event, which only it has.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media: Option<Manifest>,
+    /// The copy as it travels, sealed end to end (docs/protocol.md,
+    /// section 4); None for an event of an engine without a sealer, as in
+    /// tests of the engine alone.
+    #[serde(skip)]
+    pub sealed: Option<Sealed>,
+    /// This member does not know the event's content: it is a mark, or a
+    /// copy not sealed to this member. kind, via, text and media are then
+    /// empty, and the event is current only for ordering.
+    #[serde(skip)]
+    pub unread: bool,
+    /// The copy's key, which opens its blob, when this member opened it.
+    #[serde(skip)]
+    pub key: Option<[u8; KEY_SIZE]>,
 }
 
 impl Event {
+    /// The engine's event of a copy that arrived sealed, before it is
+    /// opened: its header, unread.
+    pub fn of(s: Sealed) -> Event {
+        Event {
+            id: s.id.clone(),
+            origin: s.origin.clone(),
+            time: s.time,
+            age: s.age,
+            sealed: Some(s),
+            unread: true,
+            ..Event::default()
+        }
+    }
+
     /// Reports whether this is the mark of a secret: the event without its
-    /// text.
+    /// payload, or, unsealed, without its text.
     pub fn is_mark(&self) -> bool {
-        self.kind == Kind::Secret && self.text.is_empty()
+        match &self.sealed {
+            Some(s) => s.is_mark(),
+            None => self.kind == Kind::Secret && self.text.is_empty(),
+        }
+    }
+
+    /// The mark of a secret: the event without its payload, or, unsealed,
+    /// without its text.
+    pub fn mark(&self) -> Event {
+        let mut m = self.clone();
+        m.text.clear();
+        m.key = None;
+        m.sealed = self.sealed.as_ref().map(Sealed::mark);
+        m
+    }
+
+    /// Reports whether f has the payload whose hash the mark self carries.
+    fn same_payload(&self, f: &Event) -> bool {
+        match (&self.sealed, &f.sealed) {
+            (Some(a), Some(b)) => a.payload_hash() == b.payload_hash(),
+            (None, None) => true,
+            _ => false,
+        }
     }
 
     /// Checks an event received from another member.
     pub fn validate(&self) -> Result<()> {
+        if self.unread {
+            if self.sealed.is_none() {
+                return Err(Error::msg("an unread event without its sealed copy"));
+            }
+            if !is_id(&self.id) || !is_id(&self.origin) || self.time.is_zero() || !self.time.valid() || self.age < 0 {
+                return Err(Error::msg("bad event ID, origin, timestamp or age"));
+            }
+            return Ok(());
+        }
         if !is_id(&self.id) {
             return Err(Error::msg("bad event ID"));
         }
@@ -250,8 +310,13 @@ pub struct Engine {
     wall: Box<dyn Fn() -> i64 + Send + Sync>,
     uptime: Box<dyn Fn() -> Duration + Send + Sync>,
     key: [u8; 32],
+    seal: Mutex<Option<SealFn>>,
     inner: Mutex<Inner>,
 }
+
+/// Seals an event this member makes to the group's readers and signs it
+/// (docs/protocol.md, section 4, "Sealing").
+pub type SealFn = Box<dyn Fn(&Event) -> Result<Sealed> + Send + Sync>;
 
 impl Engine {
     pub fn new(
@@ -266,6 +331,7 @@ impl Engine {
             wall,
             uptime,
             key: random_bytes::<32>(),
+            seal: Mutex::new(None),
             inner: Mutex::new(Inner {
                 current: Event::default(),
                 copied_at: Duration::ZERO,
@@ -284,6 +350,12 @@ impl Engine {
                 mode: Mode::Shared,
             }),
         }
+    }
+
+    /// Seals each event this member makes from now on with seal; an error
+    /// leaves the copy unmade.
+    pub fn set_seal(&self, seal: SealFn) {
+        *self.seal.lock() = Some(seal);
     }
 
     /// The sync mode.
@@ -366,7 +438,7 @@ impl Engine {
             }
             return Ok(None);
         }
-        Ok(Some(self.new_event(&mut st, text, kind, via, sum, now)))
+        Ok(Some(self.new_event(&mut st, text, kind, via, sum, now)?))
     }
 
     /// Makes an event from a deliberate action; it always makes one, and the
@@ -383,28 +455,31 @@ impl Engine {
         if has_secret(&st, &sum, now) {
             kind = Kind::Secret;
         }
+        let held = local_has(&st, text, now);
+        let ev = self.new_event(&mut st, text, kind, via, sum, now)?;
         let mut out = Outcome::default();
-        if !local_has(&st, text, now) {
+        if !held {
             st.seq = st.seq.saturating_add(1);
             out.write = true;
             out.seq = st.seq;
             add_written(&mut st, sum, now);
         }
-        let ev = self.new_event(&mut st, text, kind, via, sum, now);
         Ok((ev, out))
     }
 
-    fn new_event(&self, st: &mut Inner, text: &str, kind: Kind, via: Via, sum: Sum, now: Duration) -> Event {
-        let ev = Event {
+    fn new_event(&self, st: &mut Inner, text: &str, kind: Kind, via: Via, sum: Sum, now: Duration) -> Result<Event> {
+        let mut ev = Event {
             id: random_id(),
             origin: self.self_id.clone(),
             via,
             time: self.clock.now(),
-            age: 0,
             kind,
             text: text.to_string(),
-            media: None,
+            ..Event::default()
         };
+        if let Some(seal) = self.seal.lock().as_ref() {
+            ev.sealed = Some(seal(&ev).map_err(|e| e.context("seal the copy"))?);
+        }
         add_seen(st, &ev.id);
         st.current = ev.clone();
         st.copied_at = now;
@@ -413,7 +488,7 @@ impl Engine {
             add_secret(st, sum, now);
         }
         st.offline_copy = !st.synced || st.peers.is_empty();
-        ev
+        Ok(ev)
     }
 
     /// Applies an event a peer delivered.
@@ -434,11 +509,9 @@ impl Engine {
         *n = n.saturating_add(1);
         let mut h = Hello { wall: (self.wall)(), current: None };
         if !st.current.id.is_empty() {
-            let mut ev = self.with_age(&st, (self.uptime)());
-            if ev.kind == Kind::Secret {
-                ev.text.clear();
-            }
-            h.current = Some(ev);
+            let ev = self.with_age(&st, (self.uptime)());
+            // A reader sends a secret only as its mark.
+            h.current = Some(if ev.kind == Kind::Secret && !ev.unread { ev.mark() } else { ev });
         }
         h
     }
@@ -475,7 +548,9 @@ impl Engine {
     pub fn reconcile(&self, peer: &str, mut h: Hello) -> Result<Outcome> {
         if let Some(c) = &h.current {
             c.validate()?;
-            if c.kind == Kind::Secret && !c.is_mark() {
+            // Sealed, a secret may come in a hello from a member that cannot
+            // read it, and so cannot tell it from a text.
+            if c.sealed.is_none() && c.kind == Kind::Secret && !c.is_mark() {
                 return Err(Error::msg("a hello must not carry a secret's text"));
             }
             if self.clock.ahead(c.time) {
@@ -510,9 +585,12 @@ impl Engine {
             if st.current.id != ev.id {
                 return Outcome::default();
             }
-            // The full event may follow the mark of the same secret.
-            if st.current.is_mark() && !ev.is_mark() {
-                add_secret(st, self.sum(&ev.text), now);
+            // The full event may follow the mark of the same secret: its
+            // payload, and its text when this member reads it.
+            if st.current.is_mark() && !ev.is_mark() && st.current.same_payload(&ev) {
+                if !ev.unread {
+                    add_secret(st, self.sum(&ev.text), now);
+                }
                 st.copied_at = now.saturating_sub(age);
                 st.current = ev.clone();
                 return self.decide_write(st, Outcome { forward: Some(ev), ..Default::default() }, now);
@@ -524,7 +602,7 @@ impl Engine {
         }
         self.clock.observe(ev.time);
         add_seen(st, &ev.id);
-        if ev.kind == Kind::Secret && !ev.is_mark() {
+        if ev.kind == Kind::Secret && !ev.is_mark() && !ev.unread {
             add_secret(st, self.sum(&ev.text), now);
         }
         let out = Outcome { forward: Some(ev.clone()), ..Default::default() };
@@ -562,7 +640,7 @@ impl Engine {
     }
 
     fn live(&self, st: &Inner, now: Duration) -> bool {
-        if st.current.id.is_empty() || st.current.is_mark() {
+        if st.current.id.is_empty() || st.current.is_mark() || st.current.unread {
             return false;
         }
         st.current.kind != Kind::Secret || now.saturating_sub(st.copied_at) < SECRET_TTL
@@ -666,7 +744,7 @@ mod tests {
             age: 0,
             kind: Kind::Text,
             text: "x".to_string(),
-            media: None,
+            ..Event::default()
         };
         assert!(e.received(event(crate::hlc::MAX_WALL)).is_err());
         let out = e.reconcile(B, Hello { wall: now, current: Some(event(crate::hlc::MAX_WALL)) }).unwrap();
@@ -695,6 +773,7 @@ mod tests {
             kind: Kind::Media,
             text: String::new(),
             media: Some(Manifest { size: 3, parts: alloc::vec![png] }),
+            ..Event::default()
         };
         let out = a.received(ev.clone()).unwrap();
         assert!(out.forward.is_some() && !out.write);
@@ -796,6 +875,42 @@ mod tests {
         let mut bad = cur.clone();
         bad.text = "hunter2".into();
         assert!(a.reconcile(B, Hello { wall: 0, current: Some(bad) }).is_err());
+    }
+
+    /// A copy not sealed to this member orders the group's copies but is
+    /// never written; a mark takes only the full copy whose payload it names.
+    #[test]
+    fn sealed_copies() {
+        let t = Arc::new(AtomicU64::new(100_000));
+        let a = engine(A, t.clone());
+        a.reconcile(B, Hello { wall: 1_761_024_000_000, current: None }).unwrap();
+        a.connected(B);
+        let sealed = |id: &str, logical: u32, payload: &[u8]| {
+            let mut s = Sealed::default();
+            (s.id, s.origin, s.payload) = (id.into(), B.into(), payload.to_vec());
+            s.time = Timestamp { wall: 1_761_024_000_000 + 100_000, logical };
+            s
+        };
+        let unread = Event::of(sealed("11aa0000000000000000000000000000", 0, b"for others"));
+        let out = a.received(unread).unwrap();
+        assert!(out.forward.is_some() && !out.write);
+        assert!(a.current().is_none());
+
+        // The mark of a secret, then a full copy with another payload, then
+        // the one it names.
+        let full = sealed("22bb0000000000000000000000000000", 1, b"hunter2 sealed");
+        let read = |s: Sealed| Event { kind: Kind::Secret, text: "hunter2".into(), unread: false, ..Event::of(s) };
+        let out = a.received(Event::of(full.mark())).unwrap();
+        assert!(out.forward.is_some() && !out.write);
+        let other = sealed("22bb0000000000000000000000000000", 1, b"something else");
+        assert!(a.received(read(other)).unwrap().forward.is_none());
+        let out = a.received(read(full)).unwrap();
+        assert!(out.forward.is_some() && out.write);
+        assert_eq!(a.current().unwrap().text, "hunter2");
+        // The hello carries the mark only.
+        let h = a.connected(B);
+        let cur = h.current.unwrap();
+        assert!(cur.is_mark() && cur.text.is_empty() && cur.sealed.unwrap().payload.is_empty());
     }
 
     #[test]
