@@ -34,6 +34,7 @@
 package clip
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -159,13 +160,56 @@ type Event struct {
 	Text   string        `json:"text"` // empty only in the mark of a secret, and in media without a text
 	// Media is the content of a media event, which only it has.
 	Media *Manifest `json:"media,omitempty"`
+
+	// Sealed is the copy as it travels between members, sealed end to end
+	// (docs/protocol.md, section 4); nil for an event of an engine without
+	// a sealer, as in tests of the engine alone.
+	Sealed *Sealed `json:"-"`
+	// Unread says that this member does not know the event's content: it
+	// is a mark, or a copy not sealed to this member. Kind, Via, Text and
+	// Media are then empty, and the event is current only for ordering.
+	Unread bool `json:"-"`
 }
 
-// IsMark reports whether e is the mark of a secret: the event without its text.
-func (e Event) IsMark() bool { return e.Kind == Secret && e.Text == "" }
+// IsMark reports whether e is the mark of a secret: the event without its
+// payload, or, unsealed, without its text.
+func (e Event) IsMark() bool {
+	if e.Sealed != nil {
+		return e.Sealed.IsMark()
+	}
+	return e.Kind == Secret && e.Text == ""
+}
+
+// Mark returns the mark of a secret: the event without its payload, or,
+// unsealed, without its text.
+func (e Event) Mark() Event {
+	e.Text = ""
+	if e.Sealed != nil {
+		e.Sealed = e.Sealed.Mark()
+	}
+	return e
+}
+
+// samePayload reports whether f has the payload whose hash the mark e
+// carries.
+func (e Event) samePayload(f Event) bool {
+	if e.Sealed == nil || f.Sealed == nil {
+		return e.Sealed == nil && f.Sealed == nil
+	}
+	return bytes.Equal(e.Sealed.PayloadHash(), f.Sealed.PayloadHash())
+}
 
 // Validate checks an event received from another member.
 func (e Event) Validate() error {
+	if e.Unread {
+		switch {
+		case e.Sealed == nil:
+			return errors.New("clip: an unread event without its sealed copy")
+		case !isID(e.ID), !isID(e.Origin), e.Time.IsZero() || !e.Time.Valid(), e.Age < 0:
+			return errors.New("clip: bad event ID, origin, timestamp or age")
+		}
+		return nil
+	}
 	switch {
 	case !isID(e.ID):
 		return errors.New("clip: bad event ID")
@@ -257,6 +301,10 @@ type Config struct {
 	RejoinWindow time.Duration        // DefaultRejoinWindow if zero
 	SecretMemory time.Duration        // DefaultSecretMemory if zero
 	Mode         Mode                 // the sync mode at the start; SetMode changes it
+	// Seal, if set, seals each event this member makes to the group's
+	// readers and signs it (docs/protocol.md, section 4, "Sealing"); an
+	// error leaves the copy unmade.
+	Seal func(Event) (*Sealed, error)
 }
 
 // Engine holds the state of one member. It is safe for concurrent use.
@@ -456,7 +504,11 @@ func (e *Engine) Copied(text string, kind Kind, via Via) (Event, bool, error) {
 		}
 		return Event{}, false, nil
 	}
-	return e.newEvent(text, kind, via, sum, now), true, nil
+	ev, err := e.newEvent(text, kind, via, sum, now)
+	if err != nil {
+		return Event{}, false, err
+	}
+	return ev, true, nil
 }
 
 // Send makes an event from a deliberate action: the iPhone button,
@@ -476,13 +528,18 @@ func (e *Engine) Send(text string, kind Kind, via Via) (Event, Result, error) {
 	if e.secrets.has(sum, now, e.cfg.SecretMemory) {
 		kind = Secret
 	}
+	held := e.localHas(text, now)
+	ev, err := e.newEvent(text, kind, via, sum, now)
+	if err != nil {
+		return Event{}, Result{}, err
+	}
 	var res Result
-	if !e.localHas(text, now) {
+	if !held {
 		e.seq++
 		res.Write, res.Seq = true, e.seq
 		e.written.add(sum, now)
 	}
-	return e.newEvent(text, kind, via, sum, now), res, nil
+	return ev, res, nil
 }
 
 // SendMedia makes a media event from a deliberate action, such as cbb copy
@@ -498,13 +555,18 @@ func (e *Engine) SendMedia(m *Manifest, text string, via Via) (Event, Result, er
 	defer e.mu.Unlock()
 	now := e.cfg.Uptime()
 	e.settle(now)
+	held := e.localHolds(ev, now)
+	ev, err := e.newMedia(ev, now)
+	if err != nil {
+		return Event{}, Result{}, err
+	}
 	var res Result
-	if !e.localHolds(ev, now) {
+	if !held {
 		e.seq++
 		res.Write, res.Seq = true, e.seq
 		e.written.add(e.sum(ev.key()), now)
 	}
-	return e.newMedia(ev, now), res, nil
+	return ev, res, nil
 }
 
 // CopiedMedia records images or files that a clipboard watcher reported,
@@ -530,7 +592,11 @@ func (e *Engine) CopiedMedia(m *Manifest, text string, via Via) (Event, bool, er
 		e.local = localText{text: text, kind: Media, media: m, at: now}
 		return Event{}, false, nil
 	}
-	return e.newMedia(ev, now), true, nil
+	ev, err := e.newMedia(ev, now)
+	if err != nil {
+		return Event{}, false, err
+	}
+	return ev, true, nil
 }
 
 func checkMedia(ev Event) error {
@@ -548,13 +614,29 @@ func checkMedia(ev Event) error {
 
 // newMedia makes a local media event current and the local clipboard's
 // content.
-func (e *Engine) newMedia(ev Event, now time.Duration) Event {
+func (e *Engine) newMedia(ev Event, now time.Duration) (Event, error) {
 	ev.ID, ev.Origin, ev.Time = NewID(), e.cfg.Self, e.cfg.Clock.Now()
+	if err := e.seal(&ev); err != nil {
+		return Event{}, err
+	}
 	e.seen.add(ev.ID)
 	e.current, e.copiedAt = ev, now
 	e.local = localText{text: ev.Text, kind: Media, media: ev.Media, at: now}
 	e.offlineCopy = !e.synced || len(e.peers) == 0
-	return ev
+	return ev, nil
+}
+
+// seal seals a new event with Config.Seal, if set.
+func (e *Engine) seal(ev *Event) error {
+	if e.cfg.Seal == nil {
+		return nil
+	}
+	s, err := e.cfg.Seal(*ev)
+	if err != nil {
+		return fmt.Errorf("clip: seal the copy: %w", err)
+	}
+	ev.Sealed = s
+	return nil
 }
 
 func checkCopy(text string, kind Kind, via Via) error {
@@ -568,8 +650,11 @@ func checkCopy(text string, kind Kind, via Via) error {
 }
 
 // newEvent makes a local event current and the local clipboard's text.
-func (e *Engine) newEvent(text string, kind Kind, via Via, sum [sha256.Size]byte, now time.Duration) Event {
+func (e *Engine) newEvent(text string, kind Kind, via Via, sum [sha256.Size]byte, now time.Duration) (Event, error) {
 	ev := Event{ID: NewID(), Origin: e.cfg.Self, Via: via, Time: e.cfg.Clock.Now(), Kind: kind, Text: text}
+	if err := e.seal(&ev); err != nil {
+		return Event{}, err
+	}
 	e.seen.add(ev.ID)
 	e.current, e.copiedAt = ev, now
 	e.local = localText{text: text, kind: kind, at: now}
@@ -577,7 +662,7 @@ func (e *Engine) newEvent(text string, kind Kind, via Via, sum [sha256.Size]byte
 		e.secrets.add(sum, now)
 	}
 	e.offlineCopy = !e.synced || len(e.peers) == 0
-	return ev
+	return ev, nil
 }
 
 // Result tells the caller what to do with a received event.
@@ -632,8 +717,9 @@ func (e *Engine) Connected(peer string) Hello {
 	h := Hello{Wall: e.cfg.Wall().UnixMilli()}
 	if e.current.ID != "" {
 		ev := e.withAge()
-		if ev.Kind == Secret {
-			ev.Text = ""
+		if ev.Kind == Secret && !ev.Unread {
+			// A reader sends a secret only as its mark.
+			ev = ev.Mark()
 		}
 		h.Current = &ev
 	}
@@ -679,7 +765,9 @@ func (e *Engine) Reconcile(peer string, h Hello) (Result, error) {
 		if err := h.Current.Validate(); err != nil {
 			return Result{}, err
 		}
-		if h.Current.Kind == Secret && !h.Current.IsMark() {
+		if h.Current.Sealed == nil && h.Current.Kind == Secret && !h.Current.IsMark() {
+			// Sealed, a secret may come in a hello from a member that
+			// cannot read it, and so cannot tell it from a text.
 			return Result{}, errors.New("clip: a hello must not carry a secret's text")
 		}
 		if e.cfg.Clock.Ahead(h.Current.Time) {
@@ -720,10 +808,13 @@ func (e *Engine) receive(ev Event) Result {
 		if e.current.ID != ev.ID {
 			return Result{}
 		}
-		// The full event may follow the mark of the same secret: take its text.
-		if e.current.IsMark() && !ev.IsMark() {
+		// The full event may follow the mark of the same secret: take its
+		// payload, and its text when this member reads it.
+		if e.current.IsMark() && !ev.IsMark() && e.current.samePayload(ev) {
 			e.current, e.copiedAt = ev, now-age
-			e.secrets.add(e.sum(ev.Text), now)
+			if !ev.Unread {
+				e.secrets.add(e.sum(ev.Text), now)
+			}
 			fwd := ev
 			return e.decideWrite(Result{Forward: &fwd}, now)
 		}
@@ -737,7 +828,7 @@ func (e *Engine) receive(ev Event) Result {
 	}
 	e.cfg.Clock.Observe(ev.Time)
 	e.seen.add(ev.ID)
-	if ev.Kind == Secret && !ev.IsMark() {
+	if ev.Kind == Secret && !ev.IsMark() && !ev.Unread {
 		e.secrets.add(e.sum(ev.Text), now)
 	}
 	fwd := ev
@@ -783,7 +874,7 @@ func (e *Engine) inRejoinWindow(now time.Duration) bool {
 
 // live reports whether the group's current event has a text that may be used.
 func (e *Engine) live() bool {
-	if e.current.ID == "" || e.current.IsMark() {
+	if e.current.ID == "" || e.current.IsMark() || e.current.Unread {
 		return false
 	}
 	return e.current.Kind != Secret || e.cfg.Uptime()-e.copiedAt < e.cfg.SecretTTL
