@@ -315,7 +315,7 @@ final class LiveGroup: GroupController {
                   keysInFile: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.file,
                   rootless: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.rootless, frozen: $0.frozen,
                   device: $0.id == g.device ? Self.ownDevice : infos[$0.id], mode: $0.id == g.device ? modeBox.mode : modes[$0.id],
-                  actions: actions[$0.id] ?? [], mayHub: g.records.mayHost($0.id))
+                  actions: actions[$0.id] ?? [], mayHub: g.records.mayHost($0.id), forwardOnly: $0.forwardOnly)
         }
     }
 
@@ -1523,11 +1523,30 @@ final class LiveGroup: GroupController {
     /// it is: a hub hands the computer its clients, and with sync away from
     /// home on this phone hands itself and keeps the computer's offer. The
     /// computer must have sync away from home on; only its own user turns
-    /// that on. A computer that is no admin yet becomes one first, on the
-    /// root.
-    func makeHub(_ id: String) async throws {
+    /// that on. A hub that reads the copies is an admin: a computer that is
+    /// no admin yet becomes one first, on the root. With forwardOnly the
+    /// computer stays no admin and only passes the copies on, which no key
+    /// level limits: this phone signs its record so first, and no copy is
+    /// sealed to it from then on.
+    func makeHub(_ id: String, forwardOnly: Bool = false) async throws {
         guard let node else { throw MemberNode.Failure.notConnected }
-        if state?.records.mayHost(id) != true { try await makeAdmin(id, allowFileKey: false) }
+        let current = state?.devices.first { $0.id == id }
+        if forwardOnly {
+            if current?.forwardOnly != true {
+                let ca = try await caSigner(reason: String(localized: "Make a computer a hub", bundle: .app))
+                guard var g = state else { return }
+                if let r = try g.markForwardOnly(device: id, caSigner: ca, now: Date()) {
+                    try g.save(to: file)
+                    state = g
+                    groupChanged()
+                    await node.sendRecords([r])
+                }
+            }
+        } else if state?.records.mayHost(id) != true || current?.forwardOnly == true {
+            // A hub that reads the copies is an admin; making it one ends
+            // its passing on only.
+            try await makeAdmin(id, allowFileKey: false)
+        }
         var forwarder = hub?.forwarder
         if forwarder == nil { forwarder = await Self.projectForwarder() }
         guard let fw = forwarder else { throw HubOnPhone.Failure.notRunning }

@@ -53,12 +53,22 @@ struct DeviceDetail: View {
             Text("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.")
         }
         .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing) {
-            Button { if let d = device { Task { await model.makeHub(d) } } } label: { Text("Make it a hub") }
+            // A hub that reads the copies is an admin, whose keys the
+            // group's key level checks; one that only passes them on is no
+            // admin and needs no such keys.
+            if let d = device, d.mayHub, !d.forwardOnly {
+                Button { Task { await model.makeHub(d) } } label: { Text("A hub that reads the copies") }
+            }
+            if let d = device, mayPassOn(d) {
+                Button { Task { await model.makeHub(d, forwardOnly: true) } } label: { Text("A hub that only passes them on") }
+            }
         } message: {
             if device?.isSelf == true {
                 Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
             } else {
                 Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.")
+                    + Text(verbatim: " ")
+                    + Text("A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware.")
             }
         }
         .confirmationDialog(Text("Freeze \(device?.name ?? "")?"), isPresented: $freezing) {
@@ -121,6 +131,10 @@ struct DeviceDetail: View {
             }
             line
             row(Text("Role"), Text(d.roleTitle))
+            if d.forwardOnly {
+                line
+                row(Text("Copies"), Text("Passes them on, reads none"))
+            }
             if let standing = d.standing {
                 line
                 row(Text("In the group"), Text(standing))
@@ -197,6 +211,12 @@ struct DeviceDetail: View {
         }
     }
 
+    /// Whether this Mac, an admin, can make d a hub that only passes the
+    /// copies on: another computer that is no admin and not rootless.
+    private func mayPassOn(_ d: Control.Device) -> Bool {
+        !d.isSelf && !d.admin && !d.root && !d.frozen && d.role == "full" && d.store != "rootless"
+    }
+
     private func row(_ label: Text, _ value: Text) -> some View {
         HStack {
             label.foregroundStyle(palette.textDim)
@@ -236,7 +256,10 @@ struct DeviceDetail: View {
                 }
                 // This Mac needs sync away from home on; another computer
                 // is told, and refuses while it is off there.
-                if d.mayHub, !d.frozen, d.role == "full", !d.isSelf || (model.awayOn && model.status?.away?.hub != true) {
+                // A computer that is no admin, but a rootless install, can be
+                // a hub that only passes the copies on.
+                if !d.frozen, d.role == "full",
+                   (d.mayHub && (!d.isSelf || (model.awayOn && model.status?.away?.hub != true))) || mayPassOn(d) {
                     line
                     action("antenna.radiowaves.left.and.right", "Make it a hub") { hubbing = true }
                 }

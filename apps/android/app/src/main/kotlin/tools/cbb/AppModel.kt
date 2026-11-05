@@ -985,14 +985,15 @@ class AppModel(private val app: Context) {
     }
 
     /**
-     * Makes a connected admin computer a hub of the group as well
-     * (docs/protocol.md, section 11, "Several hubs"); the reason it
+     * Makes a connected computer a hub of the group as well
+     * (docs/protocol.md, section 11, "Several hubs"): one that reads the
+     * copies, an admin, or one that only passes them on; the reason it
      * refused, if it does, shows under the message.
      */
-    suspend fun makeHub(id: String) {
+    suspend fun makeHub(id: String, forwardOnly: Boolean = false) {
         message = try {
-            group.makeHub(id)
-            Note(R.string.made_hub)
+            group.makeHub(id, forwardOnly)
+            Note(if (forwardOnly) R.string.made_hub_forward_only else R.string.made_hub)
         } catch (e: CancellationException) {
             throw e
         } catch (e: LiveGroup.CommandRefused) {
@@ -1168,6 +1169,7 @@ class AppModel(private val app: Context) {
             is PhoneGroup.FileKey -> R.string.error_file_key
             is PhoneGroup.BelowKeyLevel -> R.string.error_below_key_level
             is PhoneGroup.Rootless -> R.string.error_rootless
+            is PhoneGroup.ReadsCopies -> R.string.error_reads_copies
             is PairingJoiner.Failure -> R.string.error_join
             is Keys.NoScreenLock -> R.string.error_no_screen_lock
             is Keys.NoBiometric -> R.string.error_no_biometric

@@ -1461,6 +1461,36 @@
         }
       }
     },
+    "A hub that only passes them on" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который только пересылает"
+          }
+        }
+      }
+    },
+    "A hub that reads the copies" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который читает копии"
+          }
+        }
+      }
+    },
+    "A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который читает копии, — это админ. Хаб, который только пересылает, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование."
+          }
+        }
+      }
+    },
     "A name has 1 to 64 characters.": {
       "localizations": {
         "ru": {
@@ -1750,6 +1780,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Подключение к хабу через туннель…"
+          }
+        }
+      }
+    },
+    "Copies" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копии"
           }
         }
       }
@@ -2320,6 +2360,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Орбита"
+          }
+        }
+      }
+    },
+    "Passes them on, reads none" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пересылает, не читает"
           }
         }
       }
@@ -3594,6 +3644,16 @@
         }
       }
     },
+    "An admin reads the copies, so it is a hub that reads them too, not one that only passes them on." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Админ читает копии, поэтому и хаб из него тоже читающий, а не тот, что только пересылает."
+          }
+        }
+      }
+    },
     "An invitation needs the hub registered with its forwarder. Check the forwarder above.": {
       "localizations": {
         "ru": {
@@ -4410,6 +4470,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сделать компьютер хабом"
+          }
+        }
+      }
+    },
+    "It is a hub now that only passes the copies on: your devices reach the group through it when they are away from home, and it reads none of them." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь это хаб, который только пересылает копии: вне дома ваши устройства связываются с группой через него, а сам он ни одной не читает."
           }
         }
       }

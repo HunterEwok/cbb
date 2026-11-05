@@ -306,6 +306,12 @@
     <string name="make_hub_body">Your devices then reach the group through it when they are away from home, through the project\'s forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.</string>
     <string name="made_hub">It is a hub now: your devices reach the group through it when they are away from home.</string>
     <string name="make_hub_refused">The computer did not become a hub.</string>
+    <string name="make_hub_reads">A hub that reads the copies</string>
+    <string name="make_hub_forward_only">A hub that only passes them on</string>
+    <string name="make_hub_kinds_body">A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware.</string>
+    <string name="made_hub_forward_only">It is a hub now that only passes the copies on: your devices reach the group through it when they are away from home, and it reads none of them.</string>
+    <string name="copies">Copies</string>
+    <string name="copies_forward_only">Passes them on, reads none</string>
     <string name="reason_make_hub">Make a computer a hub</string>
     <string name="hub_move_not_running">The hub can move only while it runs with a forwarder.</string>
     <string name="relay_title">Blind relay</string>
@@ -478,6 +484,7 @@
     <string name="key_level_saved">Saved. Every device of the group follows it.</string>
     <string name="key_level_own_key">This phone\'s own key is not proven, so the group cannot ask for proven keys yet.</string>
     <string name="error_below_key_level">The group\'s admin keys setting does not let this device\'s keys be an admin. Change it in Settings, Admin keys.</string>
+    <string name="error_reads_copies">An admin reads the copies, so it is a hub that reads them too, not one that only passes them on.</string>
     <string name="make_admin_files_body">The group then lets keys in files be admins and hubs (Settings, Admin keys).</string>
     <string name="recovery_title">Recovery key</string>
     <string name="recovery_made">Made on %1$s.</string>

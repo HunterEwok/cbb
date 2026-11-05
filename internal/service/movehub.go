@@ -465,6 +465,8 @@ func (s *Service) markForwardOnly(id *group.Identity, nd *node.Node, dev group.D
 		return fmt.Errorf("%s is an admin; only a computer that is no admin only passes copies on", rec.Name)
 	case rec.Role != group.RoleFull:
 		return fmt.Errorf("%s is no computer; only a computer only passes copies on", rec.Name)
+	case rec.Store == group.StoreRootless:
+		return fmt.Errorf("%s is installed without root, and such a computer is never a hub (D-79)", rec.Name)
 	}
 	s.recMu.Lock()
 	rootDevice := s.records.RootDevice()

@@ -613,6 +613,7 @@ function renderDetail() {
   const standing = d.self ? (d.admin ? t("This computer · admin") : t("This computer"))
     : d.frozen ? t("frozen") : d.root ? t("root") : d.admin ? t("admin") : "";
   if (standing) lines.push([t("In the group"), standing]);
+  if (d.forward_only) lines.push([t("Copies"), t("Passes them on, reads none")]);
   if (d.hub) lines.push([t("Away from home"), state.status?.away?.hub_device === d.id ? t("The group's hub, in use now") : t("The group's hub")]);
   if (d.mode) lines.push([t("Sync mode"), modeName(d.mode)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
@@ -627,7 +628,10 @@ function renderDetail() {
     if (me.root && !d.admin && !d.frozen && d.role === "full") actions.push(["admin", t("Make it an admin")]);
     // This computer needs sync away from home on; another one is told, and
     // refuses while it is off there.
-    if (d.may_hub && !d.frozen && d.role === "full" && (!d.self || (state.status?.away && !state.status.away.hub))) actions.push(["hub", t("Make it a hub")]);
+    // A hub that reads the copies is an admin; any other computer, but a
+    // rootless install, can be a hub that only passes them on.
+    if (d.may_hub && !d.forward_only && !d.frozen && d.role === "full" && (!d.self || (state.status?.away && !state.status.away.hub))) actions.push(["hub", t("Make it a hub that reads the copies")]);
+    if (!d.self && !d.admin && !d.root && !d.frozen && d.role === "full" && d.store !== "rootless") actions.push(["hub-forward", t("Make it a hub that only passes them on")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   // Any computer leaves by itself; the root only when it is alone, which the service checks.
@@ -704,7 +708,11 @@ async function deviceAction(action) {
     case "hub":
       if (await ask(t("Make %s a hub?", d.name), d.self
         ? t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
-        : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on."), t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id);
+        : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on."), t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id, false);
+      break;
+    case "hub-forward":
+      if (await ask(t("Make %s a hub?", d.name), t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.") +
+        " " + t("A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware."), t("Make it a hub"))) await act("MakeHub", d.id, true);
       break;
     case "terms":
       await call("OpenTerms").catch((e) => console.error("OpenTerms", e));
