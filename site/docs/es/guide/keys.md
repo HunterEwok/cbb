@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e105316b2bdb -->
+<!-- source: bb4c4f917772 -->
 # Claves y atestación
 
 Cada dispositivo de un grupo tiene claves: una demuestra a los demás quién es, y las claves de la raíz y de los administradores añaden y quitan dispositivos. El lugar donde un dispositivo guarda sus claves decide lo que se lleva un ladrón con él. Esta página dice dónde guarda las suyas cada tipo de dispositivo, cómo puede comprobarlo el grupo y qué nivel de rigor elegir. Las reglas exactas están en el [protocolo](../protocol.md), sección 17.
@@ -27,15 +27,30 @@ Un dispositivo puede decir que su clave está en hardware, pero un programa modi
 
 ## Los tres niveles
 
-Tu grupo tiene un nivel, que decide cuánta certeza necesita el grupo antes de que un dispositivo pueda actuar como raíz, administrador o hub.
+Tu grupo tiene un nivel, que decide cuán seguro debe estar el grupo antes de que un dispositivo
+pueda actuar como raíz o como administrador. Un hub que lee las copias es un administrador, así
+que el nivel se le aplica también. Un hub que solo pasa las copias no necesita nivel: las copias
+se sellan de extremo a extremo para los demás dispositivos y nunca para él, así que quien copie
+sus claves puede retrasar copias y ver lo que ve cualquier dispositivo intermedio
+([privacidad](privacy.md#what-the-devices-in-between-see)), y no leer ninguna.
 
-1. **Estricto.** Solo el hardware demostrado puede ser la raíz, un administrador o el hub. Para demostrar más dispositivos, este nivel también consulta servicios ajenos a tu casa: Apple para App Attest, e Intel o AMD para algunos certificados TPM. Esos servicios se enteran de que un dispositivo de ese tipo preguntó, desde tu dirección. Las cadenas de Android solo cuentan cuando llegaron mediante el Remote Key Provisioning de Google.
-2. **Hardware (por defecto, recomendado).** Las claves en hardware pueden ser la raíz, un administrador o el hub, demostradas o no. Las pruebas que no necesitan ningún servicio externo (Android, TPM con su certificado en el chip) se siguen comprobando y mostrando. Nada sobre tus dispositivos sale de tu casa, aparte de obtener la copia de revocación de `cbb.tools`, que es el mismo archivo para todos.
+1. **Estricto.** Solo el hardware demostrado puede ser la raíz o un administrador. Para demostrar
+   más dispositivos, este nivel también consulta servicios fuera de tu casa: a Apple para App
+   Attest, y a Intel o AMD para algunos certificados TPM. Esos servicios saben que un dispositivo
+   de ese tipo preguntó, desde tu dirección. Las cadenas de Android cuentan solo cuando llegaron
+   a través de Remote Key Provisioning de Google.
+2. **Hardware (el predeterminado, recomendado).** Las claves en hardware pueden ser la raíz o un
+   administrador, demostradas o no. Las pruebas que no necesitan un servicio externo (Android,
+   los TPM con su certificado en el chip) se siguen comprobando y mostrando. Nada sobre tus
+   dispositivos sale de tu casa, aparte de descargar la copia de revocación de `cbb.tools`, que
+   es el mismo archivo para todos.
 3. **Archivos permitidos (el menos seguro).** Un dispositivo con las claves en un archivo también puede ser administrador, tras una advertencia: quien copie el archivo actúa como administrador hasta que otro administrador quite el dispositivo. Un ordenador cuyas claves no están en un TPM ni en el Secure Enclave solo llega a administrador de esta manera (`cbb admin -allow-file-key`, o la advertencia del cuadro «Make it an admin» del teléfono).
 
 El nivel 2 es el predeterminado porque mantiene las claves fuera de los archivos siempre que el hardware lo permite, sin decir a ningún servicio externo qué dispositivos tienes.
 
-Un ordenador instalado sin `sudo` ([sin root](install.md#without-sudo-rootless)) nunca es la raíz, un administrador ni el hub, en ningún nivel: cualquier programa de su usuario puede leer sus claves.
+Un ordenador instalado sin `sudo` ([sin root](install.md#without-sudo-rootless)) nunca es la
+raíz, un administrador ni un hub de ningún tipo, en ningún nivel: cualquier programa de su
+usuario puede leer sus claves.
 
 ## Si se pierde un dispositivo
 

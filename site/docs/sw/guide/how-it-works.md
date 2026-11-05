@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 11b1348d8420 -->
+<!-- source: 1e2dc830708b -->
 # Jinsi inavyofanya kazi
 
 Ukurasa huu unaeleza Copy Beyond Borders kwa picha: nani yumo kwenye kikundi, jinsi vifaa vinavyopatana nyumbani, na kila njia ambayo vinaweza kuendelea kuwasiliana vikiwa mbali. Kanuni kamili ziko kwenye [muundo](../design.md); huzihitaji ili kuutumia.
 
 ## Kikundi
 
-Vifaa vyako huunda **kikundi**. Ni vifaa ulivyoviruhusu tu vinavyokuwa ndani yake, na huzungumza kati yao tu, kila mara kwa usimbaji fiche (TLS). Kila kifaa kina jukumu:
+Vifaa vyako huunda **kikundi**. Ni vifaa unavyoviruhusu tu vinavyokuwa ndani yake, na huzungumza wao kwa wao tu, kila mara kwa usimbaji (TLS). Juu ya hilo kila nakala imesimbwa mwisho hadi mwisho: kifaa kinachonakili huifunga kwa ajili ya vifaa vya kikundi vinavyosoma nakala na kuitia sahihi, kwa hiyo kifaa kinachoipitisha tu hakiwezi kuisoma, kuibadilisha wala kuighushi. Kila kifaa kina jukumu:
 
 | Jukumu | Nani | Kinafanya nini |
 |---|---|---|
@@ -15,7 +15,7 @@ Vifaa vyako huunda **kikundi**. Ni vifaa ulivyoviruhusu tu vinavyokuwa ndani yak
 | **Mwanachama** | kila kompyuta na kila simu | husawazisha ubao wa kunakili |
 | **Mwanachama mwepesi** | kifaa kidogo cha Linux: kipanga njia, Raspberry Pi Zero | husawazisha, hakiongezi mtu yeyote ([mwanachama mwepesi](../../lite/README.md)) |
 | **Mwanachama bila root** | kompyuta ya Linux iliyosakinishwa bila `sudo` | husawazisha kama mwanachama, lakini kamwe si mzizi, msimamizi wala kitovu ([tazama hapa chini](#rootless-members)) |
-| **Kitovu** | kompyuta ya msimamizi nyumbani, au simu wakati programu yake imefunguliwa, ukipenda | huwezesha vifaa vyako kusawazisha vikiwa mbali na nyumbani |
+| **Kitovu** | kompyuta nyumbani, au simu wakati programu yake imefunguliwa, ukipenda | huwezesha vifaa vyako kusawazisha vikiwa mbali na nyumbani; kinachopitisha nakala tu hakisomi yoyote |
 
 Funguo za simu hutengenezwa ndani ya chipu yake ya usalama (Secure Enclave, Keystore ya Android) na hazitoki kamwe; kila sahihi kwa ufunguo wa mzizi wa kikundi au ufunguo wa msimamizi huomba uso wako, alama ya kidole au nambari ya siri, huku ufunguo ambao simu husawazisha nao ukifanya kazi bila kuuliza. Kompyuta huweka funguo zake kwenye faili ambazo Copy Beyond Borders pekee ndiyo huzisoma.
 
@@ -50,7 +50,7 @@ Laptopu au simu inapoondoka nyumbani, inahitaji njia ya kurudi. Kompyuta moja ny
 
 ![Mbali na nyumbani, laptopu na simu hufikia kitovu cha nyumbani kupitia handaki la WireGuard la kikundi](../images/hub.svg)
 
-- Kitovu ni kompyuta yako mwenyewe, na lazima kiwe msimamizi: Linux, Windows, Mac, FreeBSD au kipanga njia. Kitovu ni mwanachama kamili wa kikundi: husoma ubao wa kunakili kama kifaa chako chochote, ndiyo maana lazima kiwe chako.
+- Kitovu ni kompyuta yako mwenyewe: Linux, Windows, Mac, FreeBSD au kipanga njia. Ni cha mojawapo ya aina mbili. **Kitovu kinachosoma nakala** ni msimamizi, kwa hiyo nakala hufungwa kwa ajili yake kama kwa vifaa vyako vingine. **Kitovu kinachopitisha nakala tu** kinaweza kuwa kompyuta yoyote ya kikundi, kwa mfano Raspberry Pi yenye funguo zake kwenye faili: nakala hufungwa mwisho hadi mwisho bila kukihusisha, kwa hiyo hakisomi yoyote, na funguo zake hazihitaji chipu ya usalama.
 - Kipanga njia chako huelekeza mlango mmoja wa UDP (8764) kwenye kitovu, ili intaneti iweze kukifikia.
 - Kitovu si lazima kibaki kimewashwa. Kikiwa kimezimwa, hakuna kinachosawazishwa ukiwa mbali na nyumbani, na vifaa vilivyo nyumbani bado husawazisha bila hicho.
 - Vifaa hupata maelezo ya kitovu vikiwa nyumbani, kwa hiyo washa usawazishaji ukiwa mbali na nyumbani kabla ya kuondoka.
@@ -88,7 +88,7 @@ Kikundi cha simu pekee, au simu na Mac, hakina kompyuta ya kuwa kitovu. Njia mbi
 
 ![Relei pofu huunganisha laptopu iliyo mbali na Mac iliyo nyumbani; usimbaji fiche hupita ndani yake mwisho hadi mwisho](../images/relay.svg)
 
-Kikundi kinaweza kuwa na vitovu kadhaa: mzizi na kila msimamizi aliyeweka kitovu. Vifaa vilivyo mbali na nyumbani hutumia cha kwanza kinachojibu, simu zikiwa za kwanza, kwa hiyo kikundi cha simu na kompyuta kinaendelea kufanya kazi programu ya simu ikiwa imefungwa.
+Kikundi kinaweza kuwa na vitovu kadhaa: mzizi, kila msimamizi aliye na kitovu kilichowekwa, na vitovu vinavyopitisha nakala tu. Vifaa vilivyo mbali na nyumbani hutumia cha kwanza kinachojibu, simu kwanza, kwa hiyo kikundi cha simu na kompyuta huendelea kufanya kazi wakati programu ya simu imefungwa.
 
 **Imepangwa:** relei pofu kwenye `cbb.tools` kwa kila mtu asiyetaka kuendesha kitovu au relei. Itaona ni vifaa vipi vinavyozungumza na lini, kamwe isione kinachonakiliwa, na wewe mwenyewe ndiye unayeiwasha.
 
@@ -96,7 +96,8 @@ Kikundi kinaweza kuwa na vitovu kadhaa: mzizi na kila msimamizi aliyeweka kitovu
 
 | Seva | Inasoma ubao wa kunakili | Inajua ni vifaa vipi vyako vinavyozungumza, na lini | Ni ya nani |
 |---|---|---|---|
-| Kitovu | ndiyo, ni kifaa chako | ndiyo | chako |
+| Kitovu kinachosoma nakala | ndiyo, ni kifaa chako na msimamizi | ndiyo | chako |
+| Kitovu kinachopitisha nakala tu | hapana: nakala zimefungwa bila kukihusisha | ndiyo | chako |
 | Kisambazaji | hapana | hapana: huona anwani ambazo pakiti zilizosimbwa hutoka na zinazoelekea kwenye kitovu chako, lini na ukubwa wake | chako, au cha mradi kwenye `cbb.tools` |
 | Relei pofu | hapana | ndiyo | chako (moja kwenye `cbb.tools` imepangwa) |
 

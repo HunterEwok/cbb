@@ -1,17 +1,56 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0eb5464abc4a -->
+<!-- source: 8cc314e35203 -->
 # Privacidad: quién ve qué
 
-Para quien quiere saber qué sale de sus dispositivos. Copy Beyond Borders no tiene cuentas, ni nube, ni telemetría: lo que copias va solo a los dispositivos de tu grupo, y cada dispositivo del grupo puede leerlo. Por el camino va cifrado entre cada dos dispositivos, así que ningún servidor ni red intermedia puede leerlo. Esta página enumera todo lo demás que alguien ajeno al grupo puede ver, y cómo desactivarlo.
+Para quien quiera saber qué sale de sus dispositivos. Copy Beyond Borders no tiene cuentas, ni
+nube, ni telemetría: lo que copias va cifrado de extremo a extremo, sellado en el dispositivo que
+lo copia para los dispositivos de tu grupo que leen copias, y nada más puede abrirlo: ni un
+servidor, ni una red, ni un dispositivo intermedio. Esta página dice qué pueden ver aún los
+dispositivos que pasan una copia, y todo lo que puede ver alguien fuera del grupo, y cómo
+desactivarlo.
 
 ## Lo que copias
 
-Los textos, las imágenes y los archivos pasan solo entre los dispositivos de tu grupo, dentro de TLS 1.3 con los certificados propios del grupo. Fuera de casa pasan además dentro de WireGuard, a través de tu hub, y quizá a través de un reenviador o un relé. Ningún servidor, red o proveedor puede leerlos, incluidos los servidores del proyecto. Un dispositivo que se quita del grupo no recibe nada más.
+Los textos, las imágenes y los archivos van cifrados de extremo a extremo. El dispositivo que
+copia cifra cada copia con una clave creada solo para ella, envuelve esa clave para cada
+dispositivo del grupo que lee copias (X-Wing, que une X25519 y el poscuántico ML-KEM-768) y firma
+la copia con su clave de miembro. Solo esos dispositivos pueden abrirla; cada dispositivo
+comprueba la firma, así que ninguno puede cambiar una copia ni hacer una en nombre de otro. Luego
+la copia sellada viaja dentro de TLS 1.3 con los certificados propios del grupo, y fuera de casa
+también dentro de WireGuard, a través de tu hub y quizá de un reenviador o un relé. Ningún
+servidor, red ni proveedor puede leerla, ni siquiera los servidores del proyecto. Un dispositivo
+que se quita del grupo ya no recibe nada, y uno que se une lee las copias desde la siguiente, no
+las hechas antes.
 
-Hay dos excepciones, y ambas son decisión tuya:
+## Lo que ven los dispositivos intermedios
+
+Una copia llega a menudo a un dispositivo a través de otro: a través del hub fuera de casa, o de
+un ordenador que la pasa en casa. Esos dispositivos no leen nada de una copia que no esté sellada
+para ellos, pero pasarla necesita un poco, que queda fuera del sello:
+
+- **Qué dispositivo la envió, y cuándo.** La hora decide qué copia es la más nueva, lo que
+  necesita cada dispositivo, incluido un hub que solo pasa las copias.
+- **Para qué dispositivos está sellada.** Es la lista de dispositivos del grupo, que ya conocen.
+- **Su tamaño por escalones** (1, 4, 16, 64 y 256 KB, 1 MB, y luego cada megabyte más), y si
+  lleva una imagen o archivos, con su total redondeado a 64 KB. Todos los archivos de una copia
+  son un solo trozo sellado, así que no se ve cuántos son.
+
+Lo que nunca se ve: si es un texto, un secreto, una imagen o archivos; el texto; los nombres de
+los archivos; el tamaño exacto.
+
+## Excepciones
+
+Las dos dependen de ti:
 
 - Un **Roku** añadido con `cbb remote add -roku -consent` recibe su texto como HTTP sin cifrar en tu red doméstica ([teclados y televisores](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
-- Un **hub** es uno de tus propios dispositivos, así que lee las copias como cualquier otro miembro y las pasa a los demás. El portapapeles no va cifrado de extremo a extremo, del dispositivo que copia al que pega: cada dispositivo del grupo lo lee. Solo las órdenes, como un pegado remoto o una acción rápida, van selladas para el único dispositivo al que van dirigidas, así que un hub que las pasa no puede leerlas ([pegado remoto](remote-paste.md)).
+- Un **hub que lee las copias** es un administrador que tú elegiste, así que las copias se sellan
+  para él como para tus otros dispositivos. Un ordenador siempre encendido cuyas claves están
+  solo en un archivo, como una Raspberry Pi, conviértelo mejor en un **hub que solo pasa las
+  copias**: no se sella ninguna copia para él, así que no lee ninguna
+  ([fuera de casa](away-from-home.md)). Las órdenes, como un pegado remoto o una acción rápida,
+  se sellan en ambos casos para el único dispositivo al que van ([pegado remoto](remote-paste.md)).
+- Un **Apple Watch** o un reloj **Wear OS** recibe las copias de su teléfono por el canal que el
+  propio sistema cifra entre los dos, no selladas por Copy Beyond Borders.
 
 ## Todos los demás
 
