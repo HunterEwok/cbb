@@ -50,6 +50,10 @@ pub struct Message {
     /// In a result message, the answer to a command.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<CommandResult>,
+    /// In a reach message, the members a computer is connected to (section
+    /// 4, "Reach"), kept as it came: the lite member shows no devices.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reach: Option<Value>,
 }
 
 /// The answer to a command (section 15): `done`, `refused` or `failed`, and

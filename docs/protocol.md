@@ -428,7 +428,7 @@ Message object:
 
 1. After the TLS handshake each side MUST send its hello first, without waiting for the other's.
 2. Then events follow, in any number, interleaved with pings, records messages, `admin`,
-   `tunnel`, `hubs`, `credentials` (section 18), `command` and `result`
+   `tunnel`, `hubs`, `credentials` (section 18), `command`, `result` and `reach`
    messages, `evidence` (section 17), `release` (section 16), `get`, `missing` and `chunk`
    frames ("Content", below), and at most one `cert`.
 3. A side that has written nothing for 5 s MUST send `ping`. Every frame written resets that
@@ -619,6 +619,24 @@ them, by hash, and gets them in binary frames. The Go code is `internal/node/con
 Ages: a sender MUST add the time an event waited in its outgoing queue to `age_ms` (saturating at
 the largest int64). A receiver caps `age_ms` at 365 days and turns it into a local time:
 copied at = now - age. The hybrid clock is never used for durations.
+
+### Reach
+
+```
+{"t":"reach","reach":["<device id>","..."]}
+```
+
+A computer tells each phone connected to it which other members it is connected to now,
+their hellos received: `reach` holds their device IDs, sorted, at most 256, without the
+phone's own, and is absent when there are none. It sends one after the phone's hello and
+another whenever that set changes. Away from home a phone connects only to a hub, which
+passes the phone's commands on to the members behind it (section 15), so the phone shows a
+member that a connected member reaches as online through it. Each message replaces the
+last from that connection, and the connection's end drops it. The list is shown, never
+trusted: a member may leave a device out or name one it does not reach, as it could drop
+the commands it should pass on. A receiver ignores an ID that is not valid or that no
+device record of the group names. The lite member and the phones send none for now, and
+a member that does not know the message ignores it.
 
 ## 5. Sync semantics
 

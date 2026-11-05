@@ -190,6 +190,14 @@ public actor MemberNode {
         Set(conns.values.compactMap { $0.peerRole != nil ? $0.peer : nil })
     }
 
+    /// The device IDs of the members that the connected computers say they
+    /// are connected to (section 4, "Reach"), without those connected here:
+    /// away from home the hub passes commands on to them.
+    public var reached: Set<String> {
+        let direct = connected
+        return Set(conns.values.filter { $0.peerRole != nil }.flatMap(\.reach)).subtracting(direct).subtracting([engine.device])
+    }
+
     /// The admin keys that the connected computers offer in their hello, by
     /// device ID, where the caller of serve named them: the computers the
     /// root can make admins (section 10, "A computer as admin").
@@ -446,6 +454,8 @@ public actor MemberNode {
                 c.fetching(g.sha256)?.end(Failure.missing)
             case let .chunk(ch):
                 c.fetching(ch.sha256)?.push(ch)
+            case let .reach(ids):
+                c.reach = ids
             case .bye:
                 return
             default:
@@ -840,6 +850,13 @@ public actor MemberNode {
             set { lock.withLock { _mode = newValue } }
         }
         private var _mode: String?
+        /// The other members the peer says it is connected to, from its
+        /// last reach message.
+        var reach: [String] {
+            get { lock.withLock { _reach } }
+            set { lock.withLock { _reach = newValue } }
+        }
+        private var _reach: [String] = []
 
         init(transport: ClosableTransport, peer: String?) { (self.transport, self.peer) = (transport, peer) }
 
