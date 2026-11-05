@@ -436,17 +436,18 @@ func TestSwiftMemberFrames(t *testing.T) {
 			if m.Type != typeHello || m.Role != Phone {
 				t.Fatalf("frame 0 is %s from %q, want the phone's hello", m.Type, m.Role)
 			}
-			h, extra, err := decodeHello(m.Hello)
-			if err != nil || h.Current == nil || h.Current.Validate() != nil || extra.Name != "iPhone" {
-				t.Errorf("the hello: %+v %+v, %v", h, extra, err)
+			_, extra, err := decodeHello(m.Hello)
+			if err != nil || extra.current == nil || extra.current.Validate() != nil || extra.Name != "iPhone" {
+				t.Errorf("the hello: %+v, %v", extra, err)
 			}
-			if h.Current != nil && h.Current.Kind == clip.Secret && h.Current.Text != "" {
-				t.Error("the hello carries a secret's text")
+			// The phone's current copy is a secret, which a hello carries only as its mark.
+			if extra.current != nil && !extra.current.IsMark() {
+				t.Error("the hello carries a secret's payload")
 			}
 		case m.Type == typeEvent:
-			var e clip.Event
-			if err := json.Unmarshal(m.Event, &e); err != nil || e.Validate() != nil {
-				t.Errorf("frame %d: an event that Go refuses: %s, %v", i, m.Event, err)
+			var s clip.Sealed
+			if err := json.Unmarshal(m.Event, &s); err != nil || s.Validate() != nil || s.IsMark() {
+				t.Errorf("frame %d: a copy that Go refuses: %s, %v", i, m.Event, err)
 			}
 		case m.Type != typePing && m.Type != typeBye:
 			t.Errorf("frame %d: unexpected type %q", i, m.Type)
