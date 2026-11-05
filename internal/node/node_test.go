@@ -673,7 +673,9 @@ func TestByeEndsTheConnectionAtOnce(t *testing.T) {
 }
 
 func TestQueuedEventsGoOutBeforeTheGoodbye(t *testing.T) {
-	pi, mac := newMember(t, Full), newMember(t, Full)
+	// The raw peer answers no pings while the copies are made, and sealing
+	// them takes a while on a slow machine, so the Timeout is long.
+	pi, mac := newMember(t, Full, withTimers(time.Second, 10*time.Second)), newMember(t, Full)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	waitPeers(t, pi, 1)
