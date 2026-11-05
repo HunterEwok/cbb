@@ -181,7 +181,7 @@ func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[stri
 		if err != nil {
 			return err
 		}
-		out, err := runOut(ctx, d, feedEnv(at)+" sh /tmp/get.sh --lite --no-firewall", 3*time.Minute)
+		out, err := runOut(ctx, d, feedEnv(at)+" sh /tmp/get.sh --lite --no-firewall --no-pair", 3*time.Minute)
 		fmt.Fprintf(r.out, "I1 get.sh --lite: %s\n", strings.Join(strings.Fields(out), " "))
 		if err != nil {
 			return err
