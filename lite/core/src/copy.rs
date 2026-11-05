@@ -139,8 +139,10 @@ fn mac(key: &[u8]) -> Result<Hmac<Sha256>> {
 }
 
 fn hkdf(key: &[u8; KEY_SIZE], info: &[u8]) -> Result<[u8; 32]> {
-    // HKDF-SHA256 with no salt (a salt of 32 zero bytes) and one block.
-    let mut ext = mac(&[0u8; 32])?;
+    // HKDF-SHA256 with no salt and one block. HMAC pads its key with zeros
+    // to the block, so the empty key is the salt of 32 zero bytes that
+    // RFC 5869 takes for none.
+    let mut ext = mac(&[])?;
     ext.update(key);
     let prk = ext.finalize().into_bytes();
     let mut exp = mac(&prk)?;
@@ -154,9 +156,17 @@ fn cipher(key: &[u8; 32]) -> ChaCha20Poly1305 {
 }
 
 fn segment_nonce(i: u64) -> Nonce {
-    let mut n = [0u8; 12];
-    n[4..].copy_from_slice(&i.to_be_bytes());
-    n.into()
+    // Four zero bytes, then the index: each segment's nonce is its place.
+    let mut n = Nonce::default();
+    if let Some(tail) = n.get_mut(4..) {
+        tail.copy_from_slice(&i.to_be_bytes());
+    }
+    n
+}
+
+/// The payload's nonce: zeros, since the payload key seals nothing else.
+fn payload_nonce() -> Nonce {
+    Nonce::default()
 }
 
 fn segment_aad(last: bool) -> [u8; 9] {
@@ -486,7 +496,7 @@ impl Sealed {
             .map_err(|_| Error::msg("the copy's key does not open with this device's key"))?;
         let k: [u8; KEY_SIZE] = k.as_slice().try_into().map_err(|_| Error::msg("the copy's key is not 32 bytes"))?;
         let plain = cipher(&hkdf(&k, PAYLOAD_INFO)?)
-            .decrypt(&[0u8; 12].into(), Payload { msg: &self.payload, aad: &h })
+            .decrypt(&payload_nonce(), Payload { msg: &self.payload, aad: &h })
             .map_err(|_| Error::msg("the copy does not open: it was changed"))?;
         let c = Content::decode(&plain)?;
         let size = c.media.as_ref().map_or(0, |m| m.size);
@@ -590,7 +600,7 @@ fn seal_with(
     let h = header_hash(id, origin, &time, &ids, blob.as_ref());
     let plain = content.encode()?;
     let payload = cipher(&hkdf(key, PAYLOAD_INFO)?)
-        .encrypt(&[0u8; 12].into(), Payload { msg: &plain, aad: &h })
+        .encrypt(&payload_nonce(), Payload { msg: &plain, aad: &h })
         .map_err(|_| Error::msg("the copy cannot be sealed"))?;
     let mut wraps = Vec::with_capacity(readers.len());
     for (i, (to, public)) in readers.iter().enumerate() {
