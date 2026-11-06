@@ -766,7 +766,9 @@ func (ep *epoch) permitted(r *rec) bool {
 	b := &r.Body
 	switch b.Type {
 	case TypeDevice:
-		return ep.has(a, PowerAdmit) && b.Admin == nil && !b.HoldsRoot && b.Role != "phone" && b.Role != "watch" &&
+		// A phone without an admin key is a member like a computer; only a
+		// root names an admin key or records a watch.
+		return ep.has(a, PowerAdmit) && b.Admin == nil && !b.HoldsRoot && b.Role != "watch" &&
 			(!b.ForwardOnly || ep.has(a, PowerHub))
 	case TypeRevoke:
 		for _, k := range b.Keys {

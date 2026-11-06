@@ -90,12 +90,12 @@ export function kindOf(d) {
   if (d.role === "lite") return "board";
   if (d.role === "watch") return "watch";
   if (d.os === "macos") return "laptop";
-  if (d.os === "ios" || d.os === "android") return "phone";
+  if (["ios", "android", "aurora", "sailfish"].includes(d.os)) return "phone";
   return "desktop";
 }
 
 const systems = {
-  linux: "Linux", windows: "Windows", macos: "macOS", ios: "iOS", android: "Android", watchos: "watchOS", wearos: "Wear OS",
+  linux: "Linux", windows: "Windows", macos: "macOS", ios: "iOS", android: "Android", aurora: "Aurora OS", sailfish: "Sailfish OS", watchos: "watchOS", wearos: "Wear OS",
 };
 
 export function systemWithVersion(d) {

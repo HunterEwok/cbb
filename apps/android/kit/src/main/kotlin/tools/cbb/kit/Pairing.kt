@@ -107,7 +107,7 @@ object Pairing {
     /** The joiner's CPace associated data. */
     data class Info(
         val name: String,
-        /** "linux", "windows", "macos", "ios" for an iPhone with the app, "android", or "none" for a lite member's firmware. */
+        /** "linux", "windows", "macos", "ios" for an iPhone with the app, "android", "aurora", "sailfish", or "none" for a lite member's firmware. */
         val os: String,
         /** A phone's admin key, a SubjectPublicKeyInfo, for the admin CA the root may issue it; only from a phone. */
         val adminKey: ByteArray? = null,
@@ -153,7 +153,7 @@ object Pairing {
         override fun hashCode(): Int = name.hashCode()
 
         companion object {
-            val OSES = setOf("linux", "windows", "macos", "ios", "android")
+            val OSES = setOf("linux", "windows", "macos", "ios", "android", "aurora", "sailfish")
 
             /** The role of a lite member. */
             const val LITE = "lite"
@@ -165,7 +165,10 @@ object Pairing {
             fun adminProofMessage(sessionID: ByteArray): ByteArray = "cbb pairing admin key".toByteArray() + byteArrayOf(0) + sessionID
 
             /** Whether a joiner's OS is a phone's, which joins as a phone and may become an admin. */
-            fun isPhone(os: String): Boolean = os == "ios" || os == "android"
+            fun isPhone(os: String): Boolean = os in PHONE_OSES
+
+            /** The systems of phones with the app. */
+            val PHONE_OSES = setOf("ios", "android", "aurora", "sailfish")
 
             fun decode(data: ByteArray): Info? {
                 val o = Wire.parse(data) ?: return null

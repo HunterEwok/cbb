@@ -10,11 +10,13 @@
 #                         ANDROID_NDK_HOME and cargo-ndk)
 #   bind.sh host OUT      OUT/libcbb_ffi.a, for the Swift kit's tests on this computer:
 #                         swift test -Xlinker -LOUT
+#   bind.sh aurora OUT    OUT/arm/libcbb_ffi.a and OUT/arm64/libcbb_ffi.a, for the
+#                         Aurora and Sailfish app (apps/silica/build.sh)
 # OUT is made absolute; nothing it writes belongs in git. The Kotlin kit's
 # tests build the host's shared library themselves (apps/android/kit).
 set -eu
 if [ $# -ne 2 ]; then
-	echo "usage: bind.sh ios|android|host OUT" >&2
+	echo "usage: bind.sh ios|android|host|aurora OUT" >&2
 	exit 2
 fi
 target=$1
@@ -57,6 +59,19 @@ host)
 	# which the tests would then have to find at run time.
 	cargo build --locked -p cbb-ffi --release
 	cp target/release/libcbb_ffi.a "$out/"
+	;;
+aurora)
+	# The Aurora and Sailfish apps' static libraries, by qmake's QT_ARCH. Only
+	# the static library: building the shared one needs the SDK's linker.
+	# With join: the app joins by its QR code with its key in OP-TEE.
+	for pair in arm:armv7-unknown-linux-gnueabihf arm64:aarch64-unknown-linux-gnu; do
+		arch=${pair%%:*}
+		t=${pair#*:}
+		rustup target add "$t" >/dev/null
+		cargo rustc --locked -p cbb-ffi --features join --lib --release --target "$t" --crate-type staticlib
+		mkdir -p "$out/$arch"
+		cp "target/$t/release/libcbb_ffi.a" "$out/$arch/"
+	done
 	;;
 *)
 	echo "bind.sh: unknown target $target" >&2

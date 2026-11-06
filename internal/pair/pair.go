@@ -96,9 +96,9 @@ var (
 	ErrTooMany   = errors.New("pair: three failed attempts; the pairing window is closed")
 	ErrRefused   = errors.New("pair: the other device refused the pairing")
 	ErrDeclined  = errors.New("pair: the admin did not confirm the device")
-	// ErrPhoneNeedsRoot is a phone that tried to join through an admin
-	// computer: only the group's root admits a phone.
-	ErrPhoneNeedsRoot = errors.New("pair: a phone joins a computer's group only through the group's root (cbb pair -admin there)")
+	// ErrPhoneNeedsRoot is a phone that offered an admin key to an admin
+	// computer: only the group's root makes a phone an admin.
+	ErrPhoneNeedsRoot = errors.New("pair: a phone that would be an admin joins only through the group's root (cbb pair -admin there)")
 	// ErrAdminNotAllowed is a phone that offered an admin key to a window
 	// that makes no admins: only cbb pair -admin on the root opens one.
 	ErrAdminNotAllowed = errors.New("pair: the phone asked to be an admin, and this pairing window makes no admins; to make it one, run cbb pair -admin on the group's root")
@@ -238,7 +238,7 @@ const RoleLite = "lite"
 // Phone reports whether the joiner is a phone with the app, which joins a
 // computer's group only through its root (docs/protocol.md, section 6, "A
 // phone joins a computer's group").
-func (i Info) Phone() bool { return i.Role == "" && (i.OS == group.OSiOS || i.OS == group.OSAndroid) }
+func (i Info) Phone() bool { return i.Role == "" && group.PhoneOS(i.OS) }
 
 // parseAdminKey reads a phone's admin key, a P-256 SubjectPublicKeyInfo.
 func parseAdminKey(spki []byte) (*ecdsa.PublicKey, error) {

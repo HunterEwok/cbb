@@ -1127,8 +1127,14 @@ func TestPowers(t *testing.T) {
 	if d := findDevice(s, w.ids["A"]); d == nil || d.Frozen {
 		t.Errorf("A was frozen by a computer admin: %+v", d)
 	}
-	if findDevice(s, w.ids["phone2"]) != nil {
-		t.Error("a computer admin admitted a phone")
+	// A phone without an admin key is a member any admin with admit adds;
+	// naming an admin key stays the root's.
+	if d := findDevice(s, w.ids["phone2"]); d == nil || d.Role != "phone" || d.Admin != nil {
+		t.Errorf("a computer admin did not admit a phone as a member: %+v", d)
+	}
+	w.makeAdmin("phone2", "phone", phonePowers) // the root makes it an admin later
+	if d := findDevice(w.evalAll(nil), w.ids["phone2"]); d == nil || d.Admin == nil {
+		t.Errorf("the root did not make the admitted phone an admin: %+v", d)
 	}
 }
 

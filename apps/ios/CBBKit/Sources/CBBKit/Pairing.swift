@@ -69,7 +69,7 @@ public enum Pairing {
     /// The joiner's CPace associated data.
     public struct Info: Codable, Equatable {
         public var name: String
-        public var os: String // "linux", "windows", "macos", or "ios" or "android" for a phone with the app; "none" for firmware
+        public var os: String // "linux", "windows", "macos", or "ios", "android", "aurora" or "sailfish" for a phone with the app; "none" for firmware
         /// A phone's admin key, a SubjectPublicKeyInfo, for the admin CA the
         /// root may issue it; only from a phone.
         public var adminKey: Data?
@@ -121,7 +121,7 @@ public enum Pairing {
 
         /// Whether it comes from a phone with the app, an iPhone or an
         /// Android phone, which joins as a phone and may become an admin.
-        public var isPhone: Bool { os == "ios" || os == "android" }
+        public var isPhone: Bool { ["ios", "android", "aurora", "sailfish"].contains(os) }
 
         /// Checks it as the member does: a known OS, a printable name of 1
         /// to 64 bytes, a known role, and an admin key only from a phone, a
@@ -145,7 +145,7 @@ public enum Pairing {
         }
 
         public var isValid: Bool {
-            guard ["linux", "windows", "macos", "ios", "android"].contains(os) || (os == "none" && role == Self.lite), !name.isEmpty, name.utf8.count <= 64,
+            guard ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish"].contains(os) || (os == "none" && role == Self.lite), !name.isEmpty, name.utf8.count <= 64,
                   name.unicodeScalars.allSatisfy(Self.printable),
                   role == nil || role == Self.lite else { return false }
             if let seal, seal.count != Self.sealKeySize { return false }
