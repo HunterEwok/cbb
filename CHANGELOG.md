@@ -7,6 +7,14 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Every device's page in the Mac app and the tray app has a line for the hub: "Make it a
+  hub" on this computer even with sync away from home off, which it then turns on in the
+  same step after its question (`cbb global hub -away-on`); "This is the group's hub" with
+  "Stop being the hub" on a hub, for this computer or, on an admin, for another device; and,
+  on a device that can never be a hub (a phone outside its own app, a lite member, a watch,
+  a computer without root, one that is no admin), the line dimmed with the reason.
+  `cbb global hub off [-on DEVICE] [-yes]` stops a hub: its clients go to the next hub, and
+  the devices that keep its offer forget it; without another hub it asks first.
 - The lite member starts pairing as soon as it is installed: when it runs in no group and the
   installer's output is a terminal, `get.sh --lite` and the Linux and OpenWrt `install.sh` run
   `cbb pair` at the end and show the QR code, since small devices often have no keyboard.

@@ -128,6 +128,9 @@ enum Control {
         var osVersion: String?
         var version: String?
         var mac: String?
+        /// Where its keys live: file, hardware, proven or rootless; nil
+        /// when its member does not say.
+        var store: String?
         var admin = false
         var root = false
         var frozen = false
@@ -145,7 +148,7 @@ enum Control {
         var mode: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, name, role, os, form, version, mac, admin, root, frozen, online, mode, hub
+            case id, name, role, os, form, version, mac, store, admin, root, frozen, online, mode, hub
             case osVersion = "os_version"
             case lastSeenMS = "last_seen_ms"
             case isSelf = "self"
@@ -169,6 +172,7 @@ enum Control {
             osVersion = try c.decodeIfPresent(String.self, forKey: .osVersion)
             version = try c.decodeIfPresent(String.self, forKey: .version)
             mac = try c.decodeIfPresent(String.self, forKey: .mac)
+            store = try c.decodeIfPresent(String.self, forKey: .store)
             admin = try c.decodeIfPresent(Bool.self, forKey: .admin) ?? false
             root = try c.decodeIfPresent(Bool.self, forKey: .root) ?? false
             frozen = try c.decodeIfPresent(Bool.self, forKey: .frozen) ?? false
