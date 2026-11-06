@@ -498,3 +498,130 @@ fn answers_wait_only_while_open() {
     d.call(0xE000, 0x0100, 0);
     assert_eq!(d.cpu.registers().get16(Reg16::DE), 0, "no frame dropped");
 }
+
+impl Driver {
+    /// Call 9: the start in the background; its E.
+    fn boot(&mut self, d: u8, e: u8) -> u8 {
+        self.call(0xE000, 0x0900, (d as u16) << 8 | e as u16);
+        assert!(
+            !self.cpu.registers().get_flag(iz80::Flag::C),
+            "call 9 refused"
+        );
+        self.cpu.registers().get8(Reg8::E)
+    }
+
+    fn arm(&mut self, line: &[u8]) {
+        self.boot(0, 0);
+        for &b in line {
+            self.boot(1, b);
+        }
+        self.boot(2, 0);
+    }
+
+    fn enabled(&mut self) -> bool {
+        self.call(0xE000, 0x0300, 0);
+        self.cpu.registers().get16(Reg16::DE) != 0
+    }
+}
+
+/// Just after power-on the driver waits for NextPi's shell, pressing Enter
+/// now and then, types the line once the shell is quiet, and turns itself
+/// on when the link says CBBLINK, the rest of the Pi's bytes then frames.
+#[test]
+fn starts_the_network_once_the_pi_is_up() {
+    let mut d = Driver::new();
+    let line = b"cbb next link -to 192.168.0.175:8764 -serve 8764:8764\n";
+    d.arm(line);
+    assert_eq!(d.boot(3, 0), 1, "waits for the prompt");
+    // Boot messages, but no prompt: an Enter every two seconds.
+    for i in 0..300 {
+        if i % 10 == 0 {
+            d.next.pi.rx.extend(b"[    3.1] systemd: starting\r\n");
+        }
+        d.interrupt();
+        assert!(!d.enabled());
+    }
+    let enters = d.next.pi.tx.iter().filter(|&&b| b == b'\n').count();
+    assert!((2..=4).contains(&enters), "{enters} Enters in six seconds");
+    assert!(
+        d.next.pi.tx.iter().all(|&b| b == b'\n'),
+        "only Enters before the prompt"
+    );
+    d.next.pi.tx.clear();
+    d.next.pi.rx.extend(b"NextPi ready\r\nSU");
+    d.interrupt();
+    d.next.pi.rx.extend(b"P>");
+    d.interrupt();
+    assert_eq!(d.boot(3, 0), 2, "the prompt: waits for quiet");
+    for _ in 0..30 {
+        d.interrupt();
+    }
+    // An Enter may still have gone just before the prompt came.
+    let typed: Vec<u8> = d
+        .next
+        .pi
+        .tx
+        .iter()
+        .copied()
+        .skip_while(|&b| b == b'\n')
+        .collect();
+    assert_eq!(typed, line, "the line, once");
+    assert_eq!(d.boot(3, 0), 4, "waits for the link");
+    // The shell's echo, then CBBLINK and a frame in the same burst.
+    d.next.pi.rx.extend(&line[..line.len() - 1]);
+    d.next.pi.rx.extend(b"\r\nCBBLINK\r\n");
+    d.next.pi.rx.extend(frame(b'e', b"AT\r\n"));
+    d.interrupt();
+    assert!(d.enabled(), "on");
+    assert_eq!(d.boot(3, 0), 7);
+    d.next.pi.tx.clear();
+    d.interrupt();
+    assert_eq!(
+        d.next.esp.tx, b"AT\r\n",
+        "the frame after CBBLINK went to the ESP"
+    );
+    let kinds: Vec<u8> = d.pi_frames().iter().map(|f| f.0).collect();
+    assert!(kinds.contains(&b'H'), "a hello: {kinds:?}");
+    assert_eq!(d.next.select, 0x40, "the UART selection is kept");
+}
+
+/// A Pi that never shows its prompt: after three minutes the start gives
+/// up, says so in its state, and the driver stays off; turning the driver
+/// off ends a start that waits.
+#[test]
+fn gives_up_when_the_pi_does_not_start() {
+    let mut d = Driver::new();
+    d.arm(b"cbb next link\n");
+    for _ in 0..9000 {
+        d.interrupt();
+    }
+    assert_eq!(d.boot(3, 0), 5, "no prompt");
+    assert!(!d.enabled());
+    assert_eq!(d.next.pi.tx.last(), Some(&3), "Ctrl-C at the end");
+    d.next.pi.tx.clear();
+    d.next.pi.rx.extend(b"SUP>");
+    for _ in 0..40 {
+        d.interrupt();
+    }
+    assert!(d.next.pi.tx.is_empty(), "nothing typed after giving up");
+    d.arm(b"cbb next link\n");
+    d.call(0xE000, 0x0200, 0); // off
+    assert_eq!(d.boot(3, 0), 0);
+    d.next.pi.rx.extend(b"SUP>");
+    for _ in 0..40 {
+        d.interrupt();
+    }
+    assert!(d.next.pi.tx.is_empty());
+}
+
+/// The line holds 255 bytes; one more is refused.
+#[test]
+fn the_line_has_room_for_255_bytes() {
+    let mut d = Driver::new();
+    d.boot(0, 0);
+    for _ in 0..255 {
+        d.boot(1, b'x');
+    }
+    d.call(0xE000, 0x0900, 0x0100 | b'x' as u16);
+    assert!(d.cpu.registers().get_flag(iz80::Flag::C));
+}

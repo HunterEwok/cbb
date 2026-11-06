@@ -93,6 +93,10 @@ class AppModel(private val app: Context) {
     var busy by mutableStateOf(false)
         private set
 
+    /** How many times a device being added that has not answered yet was dialed again; 0 before that. */
+    var retries by mutableStateOf(0)
+        private set
+
     /** The QR code this phone shows while it waits to join a group. */
     var joinCode by mutableStateOf<JoinCode?>(null)
         private set
@@ -259,8 +263,9 @@ class AppModel(private val app: Context) {
             return false
         }
         busy = true
+        retries = 0
         try {
-            group.admit(jc)
+            group.admit(jc) { retries++ }
             phase = Phase.HOME
             message = null
             return true
@@ -271,6 +276,7 @@ class AppModel(private val app: Context) {
             return false
         } finally {
             busy = false
+            retries = 0
             update()
         }
     }

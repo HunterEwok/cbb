@@ -75,8 +75,13 @@ QR code shows at once, as `.cbb pair` shows it.
 adds `.cbb net on` to it as its last line, after the user's own lines (or writes one with
 only that line), and `.cbb uninstall` takes the line out again and leaves the rest as it
 was. A program that never ends, or ends in `.core`, never reaches it; then start the network
-by hand. In the first two minutes after power-on `.cbb net on` waits up to a minute and a
-half for NextPi, which takes about half a minute to start.
+by hand. In the first two minutes after power-on `.cbb net on` does not wait for NextPi,
+which takes up to a minute to start: it finds the computer through the ESP, hands the line
+that starts the link to the driver and returns, so BASIC goes on at once. The driver (call 9)
+presses Enter on the Pi's line every two seconds until NextPi's shell shows `SUP>`, types the
+line once the shell is quiet, and turns itself on when the link says `CBBLINK`; it gives up
+after three minutes. Until then `.cbb net` says that the network starts once the Pi is up,
+`.cbb net off` cancels it, and the other commands wait.
 
 A `CBB` fetched into `/cbb` by an earlier manual still works there as `../CBB`; `.cbb update`
 replaces the one it runs as, `C:/DOT/CBB` first.
