@@ -1114,7 +1114,7 @@ func TestForwardOnlyHub(t *testing.T) {
 	waitFor(t, "the Mac takes the deck's record", func() bool {
 		for _, d := range mac.devices(t) {
 			if d.Name == "deck" {
-				return d.MayHub
+				return d.MayHub && d.ForwardOnly
 			}
 		}
 		return false

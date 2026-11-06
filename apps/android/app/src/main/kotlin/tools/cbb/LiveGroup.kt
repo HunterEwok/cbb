@@ -130,8 +130,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val mode: String? = null,
         /** The quick actions its hello says are on, while it is connected. */
         val actions: List<String> = emptyList(),
-        /** The records let it be a hub: the root's own device or an admin with the hub power. */
+        /** The records let it be a hub: the root's own device, an admin with the hub power, or a hub that only passes copies on. */
         val mayHub: Boolean = false,
+        /** A hub that only passes the copies on: none is sealed to it. */
+        val forwardOnly: Boolean = false,
         /** Where it stands among the group's hubs, as this phone knows: null when it is none. */
         val hub: HubMark? = null,
         /**
@@ -306,6 +308,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     mode = if (it.id == g.device) syncMode else modes[it.id],
                     actions = acts[it.id].orEmpty(),
                     mayHub = g.records.mayHost(it.id),
+                    forwardOnly = it.forwardOnly,
                     hub = when {
                         it.id == g.device -> if (selfHub) HubMark.HUB else null
                         it.id == inUse -> HubMark.IN_USE
@@ -1415,18 +1418,37 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Makes a connected admin computer a hub of the group as well
+     * Makes a connected computer a hub of the group as well
      * (docs/protocol.md, section 11, "Several hubs"): a hub command signed
      * with this phone's root or admin key, reached through this phone's
      * forwarder or else the project's. This phone stays what it is: a hub
      * hands the computer its clients, and with sync away from home on this
      * phone hands itself and keeps the computer's offer. The computer must
-     * have sync away from home on; only its own user turns that on. A
-     * computer that is no admin yet becomes one first, on the root.
+     * have sync away from home on; only its own user turns that on. A hub
+     * that reads the copies is an admin: a computer that is no admin yet
+     * becomes one first, on the root. With forwardOnly the computer stays
+     * no admin and only passes the copies on, which no key level limits:
+     * this phone signs its record so first, and no copy is sealed to it
+     * from then on.
      */
-    suspend fun makeHub(id: String) {
+    suspend fun makeHub(id: String, forwardOnly: Boolean = false) {
         val n = currentNode ?: throw MemberNode.ProtocolException("the device is not connected")
-        if (copyOfState()?.records?.mayHost(id) != true) makeAdmin(id)
+        val current = copyOfState()?.devices?.firstOrNull { it.id == id }
+        if (forwardOnly) {
+            if (current?.forwardOnly != true) {
+                val ca = caSigner(R.string.reason_make_hub)
+                val g = copyOfState() ?: return
+                val r = withContext(Dispatchers.IO) { g.markForwardOnly(id, ca, Instant.now()) }
+                if (r != null) {
+                    withContext(Dispatchers.IO) { adopt(g) }
+                    published(listOf(r))
+                }
+            }
+        } else if (copyOfState()?.records?.mayHost(id) != true || current?.forwardOnly == true) {
+            // A hub that reads the copies is an admin; making it one ends
+            // its passing on only.
+            makeAdmin(id)
+        }
         val h = synchronized(lock) { hub }
         val fw = h?.forwarder ?: withContext(Dispatchers.IO) { HubState.Forwarder.project() } ?: throw HubOnPhone.NotRunning()
         val ca = caSigner(R.string.reason_make_hub)

@@ -376,10 +376,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - Done in 0.6: Android's automatic sending skips a copy that carries
       `android.content.extra.IS_SENSITIVE`, as the computers skip the password managers'
       marks.
-    - Done in 0.6: no "end to end" for the clipboard in the guides (privacy, how it works,
-      networks that block VPNs) and the README, which say that every device of the group,
-      the hub included, reads what is copied, and that only commands are sealed to their
-      receiver; the forwarder's addresses, timing and sizes on the site and in the guides;
+    - Done in 0.6: the guides (privacy, how it works, keys, away from home) and the README
+      say "end to end" for the clipboard only once it was true (D-84): who reads the copies,
+      the two kinds of hub, and what the devices that pass a copy on still see; the forwarder's addresses, timing and sizes on the site and in the guides;
       the status notes and the README's status link in the guides of keys and away from
       home; "each signature" of the root's and the admins' keys only; "only over TLS" linking what is not encrypted; winget named only where
       it says "once the package is in winget's repository"; docs/security-audit.md says it

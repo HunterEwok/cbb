@@ -126,9 +126,14 @@ enum Control {
         var online = false
         var lastSeenMS: Int64 = 0
         var isSelf = false
-        /// The records let it be a hub: the root's own device or an admin
-        /// with the hub power.
+        /// The records let it be a hub: the root's own device, an admin
+        /// with the hub power, or a hub that only passes copies on.
         var mayHub = false
+        /// A hub that only passes the copies on: none is sealed to it.
+        var forwardOnly = false
+        /// Where its keys live, as the service knows; "rootless" for an
+        /// install without root, which is never a hub.
+        var store: String?
         /// One of the group's hubs, as the service knows: this Mac while it
         /// is a hub, or a hub whose offer it keeps.
         var hub = false
@@ -137,7 +142,8 @@ enum Control {
         var mode: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, name, role, os, form, version, mac, admin, root, frozen, online, mode, hub
+            case id, name, role, os, form, version, mac, admin, root, frozen, online, mode, hub, store
+            case forwardOnly = "forward_only"
             case osVersion = "os_version"
             case lastSeenMS = "last_seen_ms"
             case isSelf = "self"
@@ -168,6 +174,8 @@ enum Control {
             lastSeenMS = try c.decodeIfPresent(Int64.self, forKey: .lastSeenMS) ?? 0
             isSelf = try c.decodeIfPresent(Bool.self, forKey: .isSelf) ?? false
             mayHub = try c.decodeIfPresent(Bool.self, forKey: .mayHub) ?? false
+            forwardOnly = try c.decodeIfPresent(Bool.self, forKey: .forwardOnly) ?? false
+            store = try c.decodeIfPresent(String.self, forKey: .store)
             hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
             mode = try c.decodeIfPresent(String.self, forKey: .mode)
         }

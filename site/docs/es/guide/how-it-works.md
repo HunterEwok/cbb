@@ -1,12 +1,16 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 11b1348d8420 -->
+<!-- source: 1e2dc830708b -->
 # Cómo funciona
 
 Esta página explica Copy Beyond Borders con imágenes: quién forma parte de un grupo, cómo se encuentran los dispositivos en casa y todas las formas en que pueden seguir en contacto cuando están fuera. Las reglas exactas están en el [diseño](../design.md); no las necesitas para usarlo.
 
 ## El grupo
 
-Tus dispositivos forman un **grupo**. Solo pertenecen a él los dispositivos que tú dejas entrar, y hablan únicamente entre sí, siempre cifrados (TLS). Cada dispositivo tiene un rol:
+Tus dispositivos forman un **grupo**. Solo pertenecen a él los dispositivos que dejas entrar, y
+hablan solo entre sí, siempre cifrados (TLS). Además, cada copia va cifrada de extremo a extremo:
+el dispositivo que copia la sella para los dispositivos del grupo que leen copias y la firma, así
+que un dispositivo que solo la pasa no puede leerla, cambiarla ni falsificarla. Cada dispositivo
+tiene un rol:
 
 | Rol | Quién | Qué hace |
 |---|---|---|
@@ -15,7 +19,7 @@ Tus dispositivos forman un **grupo**. Solo pertenecen a él los dispositivos que
 | **Miembro** | cada ordenador y cada teléfono | sincroniza el portapapeles |
 | **Miembro ligero** | un dispositivo Linux pequeño: un router, una Raspberry Pi Zero | sincroniza, nunca añade a nadie ([miembro ligero](../../lite/README.md)) |
 | **Miembro sin root** | un ordenador Linux instalado sin `sudo` | sincroniza como un miembro, pero nunca es la raíz, un administrador ni un hub ([más abajo](#rootless-members)) |
-| **Hub** | un ordenador administrador en casa, o un teléfono mientras su app está abierta, si quieres uno | permite que tus dispositivos sincronicen cuando están fuera de casa |
+| **Hub** | un ordenador en casa, o un teléfono mientras su app está abierta, si quieres uno | permite que tus dispositivos sincronicen cuando están fuera de casa; uno que solo pasa las copias no lee ninguna |
 
 Las claves del teléfono se crean en su chip de seguridad (el Secure Enclave, el Keystore de Android) y nunca salen de él; cada firma con la clave raíz del grupo o con una clave de administrador pide tu cara, tu huella o tu código, mientras que la clave con la que sincroniza funciona sin preguntar. Un ordenador guarda sus claves en archivos que solo lee Copy Beyond Borders.
 
@@ -50,7 +54,12 @@ Cuando un portátil o un teléfono sale de casa, necesita un camino de vuelta. U
 
 ![Fuera de casa, el portátil y el teléfono llegan al hub de casa por el túnel WireGuard del grupo](../images/hub.svg)
 
-- El hub es tu propio ordenador y debe ser administrador: Linux, Windows, un Mac, FreeBSD o un router. El hub es un miembro de pleno derecho del grupo: lee el portapapeles como cualquiera de tus dispositivos, y por eso tiene que ser tuyo.
+- El hub es tu propio ordenador: Linux, Windows, un Mac, FreeBSD o un router. Es de uno de dos
+  tipos. **Un hub que lee las copias** es un administrador, así que las copias se sellan para él
+  como para tus otros dispositivos. **Un hub que solo pasa las copias** puede ser cualquier
+  ordenador del grupo, por ejemplo una Raspberry Pi con sus claves en un archivo: las copias se
+  sellan de extremo a extremo sin incluirlo, así que no lee ninguna, y sus claves no necesitan un
+  chip de seguridad.
 - Tu router redirige un puerto UDP (8764) al hub, para que internet pueda llegar a él.
 - El hub no tiene por qué estar siempre encendido. Mientras está apagado, nada se sincroniza fuera de casa, y los dispositivos que están en casa siguen sincronizando sin él.
 - Los dispositivos obtienen los datos del hub mientras están en casa, así que activa la sincronización fuera de casa antes de salir.
@@ -88,7 +97,10 @@ Un grupo de solo teléfonos, o de teléfonos y un Mac, no tiene un ordenador que
 
 ![Un relé ciego une el portátil que está fuera y el Mac que está en casa; el cifrado va de extremo a extremo a través de él](../images/relay.svg)
 
-Un grupo puede tener varios hubs: la raíz y cada administrador que tenga un hub configurado. Los dispositivos que están fuera de casa usan el primero que responde, empezando por los teléfonos, así que un grupo de teléfonos y un ordenador sigue funcionando mientras la app del teléfono está cerrada.
+Un grupo puede tener varios hubs: la raíz, cada administrador con un hub configurado y los hubs
+que solo pasan las copias. Los dispositivos fuera de casa usan el primero que responde, primero
+los teléfonos, así que un grupo de teléfonos y un ordenador sigue funcionando mientras la app del
+teléfono está cerrada.
 
 **Previsto:** un relé ciego en `cbb.tools` para quien no quiera ejecutar un hub ni un relé. Verá qué dispositivos se comunican y cuándo, nunca lo que copian, y lo activas tú mismo.
 
@@ -96,7 +108,8 @@ Un grupo puede tener varios hubs: la raíz y cada administrador que tenga un hub
 
 | Servidor | Lee el portapapeles | Sabe qué dispositivos tuyos se comunican, y cuándo | De quién es |
 |---|---|---|---|
-| Hub | sí, es tu dispositivo | sí | tuyo |
+| Hub que lee las copias | sí, es tu dispositivo y un administrador | sí | tuyo |
+| Hub que solo pasa las copias | no: las copias se sellan sin incluirlo | sí | tuyo |
 | Reenviador | no | no: ve las direcciones de las que vienen los paquetes cifrados y que van a tu hub, cuándo y sus tamaños | tuyo, o del proyecto en `cbb.tools` |
 | Relé ciego | no | sí | tuyo (está previsto uno en `cbb.tools`) |
 

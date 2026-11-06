@@ -161,6 +161,9 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// rootless install, which is never an admin (D-79).
     public enum Failure: Error, Equatable {
         case cannotRemoveItself, unknownDevice, notAdmin, cannotRemoveRoot, notRoot, notAComputer, frozen, notFrozen, invalidName, fileKey, rootless
+        /// An admin, or the root's own device, reads the copies: it is no
+        /// hub that only passes them on.
+        case readsCopies
         /// The root did not give this admin the power to take the group over.
         case noTakeover
         /// This admin's claim to take the group over waits already.
@@ -543,6 +546,22 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// device counts (section 10). An admin renames any device, itself and
     /// the root included. name is trimmed; it must have 1 to 64 bytes and
     /// no control characters.
+    /// Signs the device record that makes a computer that is no admin a hub
+    /// that only passes the copies on (docs/protocol.md, section 11, "Two
+    /// kinds of hub"): `forward_only`, which no key level limits; from then
+    /// on no copy is sealed to it. nil when its record says so already.
+    public mutating func markForwardOnly(device: String, caSigner: CertificateSigner, now: Date) throws -> Member.Record? {
+        guard isAdmin else { throw Failure.notAdmin }
+        guard let d = devices.first(where: { $0.id == device }) else { throw Failure.unknownDevice }
+        if d.forwardOnly { return nil }
+        guard d.role == "full" else { throw Failure.notAComputer }
+        guard !d.frozen else { throw Failure.frozen }
+        guard d.store != Records.rootless else { throw Failure.rootless }
+        guard d.adminKey == nil, device != records.rootDevice else { throw Failure.readsCopies }
+        return try record(device: device, name: d.name, role: d.role, os: d.os, key: d.key, store: d.store, kind: d.kind, proof: d.proof,
+                          seal: d.seal, forwardOnly: true, caSigner: caSigner, now: now)
+    }
+
     public mutating func rename(device: String, to name: String, caSigner: CertificateSigner, now: Date) throws -> Member.Record {
         guard isAdmin else { throw Failure.notAdmin }
         guard let d = devices.first(where: { $0.id == device }) else { throw Failure.unknownDevice }

@@ -118,6 +118,7 @@ private fun Summary(d: LiveGroup.Device) {
             add(Line(stringResource(R.string.mac_address), stringResource(R.string.hidden_by_system), dim = true))
         }
         add(Line(stringResource(R.string.role), stringResource(roleTitle(d.role, d.rootless))))
+        if (d.forwardOnly) add(Line(stringResource(R.string.copies), stringResource(R.string.copies_forward_only)))
         d.standing?.let { add(Line(stringResource(R.string.in_the_group), stringResource(it))) }
         d.hub?.let { add(Line(stringResource(R.string.away_title), stringResource(if (it == LiveGroup.HubMark.IN_USE) R.string.group_hub_in_use else R.string.group_hub))) }
         d.mode?.let { m -> modeTitle(m)?.let { add(Line(stringResource(R.string.sync_mode), stringResource(it))) } }
@@ -168,6 +169,41 @@ private fun modeNote(mode: String) = when (mode) {
     else -> R.string.mode_send_note
 }
 
+/**
+ * The kind of hub a computer becomes: one that reads the copies is an admin,
+ * whose keys the group's key level checks; one that only passes them on is
+ * no admin and needs no such keys.
+ */
+@Composable
+private fun HubChoice(d: LiveGroup.Device, dismiss: () -> Unit, choose: (forwardOnly: Boolean) -> Unit) {
+    val palette = LocalPalette.current
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text(stringResource(R.string.make_hub_title, d.name)) },
+        text = { Text(stringResource(R.string.make_hub_body) + " " + stringResource(R.string.make_hub_kinds_body)) },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                if (d.admin || d.canMakeAdmin) {
+                    TextButton(onClick = {
+                        dismiss()
+                        choose(false)
+                    }) { Text(stringResource(R.string.make_hub_reads), color = palette.accent) }
+                }
+                if (!d.admin && !d.isRoot) {
+                    TextButton(onClick = {
+                        dismiss()
+                        choose(true)
+                    }) { Text(stringResource(R.string.make_hub_forward_only), color = palette.accent) }
+                }
+                TextButton(onClick = dismiss) { Text(stringResource(R.string.cancel)) }
+            }
+        },
+        containerColor = palette.surface,
+        titleContentColor = palette.text,
+        textContentColor = palette.textDim,
+    )
+}
+
 /** The actions an admin phone has for it; a phone that is no admin has only its own sync mode. */
 @Composable
 private fun Actions(model: AppModel, d: LiveGroup.Device) {
@@ -202,7 +238,8 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
             Action("★", stringResource(R.string.make_admin)) { promoting = true }
         }
         // An admin computer, or one the root makes an admin first; this phone is the hub under Settings.
-        if (!d.isSelf && d.online && !d.throughHub && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin)) {
+        // A computer that is no admin can be a hub that only passes the copies on.
+        if (!d.isSelf && d.online && !d.throughHub && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
             HorizontalDivider(color = palette.line)
             Action("⌁", stringResource(R.string.make_hub)) { hubbing = true }
         }
@@ -245,14 +282,7 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
             dismiss = { promoting = false },
         ) { scope.launch { model.makeAdmin(d.id) } }
     }
-    if (hubbing) {
-        Confirm(
-            title = stringResource(R.string.make_hub_title, d.name),
-            body = stringResource(R.string.make_hub_body),
-            action = stringResource(R.string.make_hub),
-            dismiss = { hubbing = false },
-        ) { scope.launch { model.makeHub(d.id) } }
-    }
+    if (hubbing) HubChoice(d, dismiss = { hubbing = false }) { forwardOnly -> scope.launch { model.makeHub(d.id, forwardOnly) } }
     if (pasting) PasteOn(model, d, dismiss = { pasting = false })
     if (acting) QuickActions(model, d, dismiss = { acting = false })
     if (renaming) Rename(d, dismiss = { renaming = false }) { name -> scope.launch { model.rename(d.id, name) } }

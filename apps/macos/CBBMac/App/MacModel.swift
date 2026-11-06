@@ -226,10 +226,18 @@ final class MacModel: ObservableObject {
     func freeze(_ id: String) async { await admin(["freeze", id], done: String(localized: "Frozen.")) }
     /// Makes a device a hub of the group for sync away from home, reached
     /// through the project's forwarder: this Mac as cbb global hub does, or
-    /// another admin computer, to which cbb sends a signed hub command.
-    func makeHub(_ d: Control.Device) async {
-        let args = d.isSelf ? ["global", "hub", "-firewall", "no"] : ["global", "hub", "-on", d.id]
-        await admin(args, done: String(localized: "It is a hub now."))
+    /// another computer, to which cbb sends a signed hub command. A hub that
+    /// reads the copies is an admin; with forwardOnly a computer that is no
+    /// admin becomes a hub that only passes them on and reads none.
+    func makeHub(_ d: Control.Device, forwardOnly: Bool = false) async {
+        if d.isSelf {
+            await admin(["global", "hub", "-firewall", "no"], done: String(localized: "It is a hub now."))
+        } else if forwardOnly {
+            await admin(["global", "hub", "-on", d.id, "-forward-only"],
+                        done: String(localized: "It is a hub now that only passes the copies on, and reads none of them."))
+        } else {
+            await admin(["global", "hub", "-on", d.id], done: String(localized: "It is a hub now."))
+        }
     }
     /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
     enum HubTunnel: String, CaseIterable, Identifiable {

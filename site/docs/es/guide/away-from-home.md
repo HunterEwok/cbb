@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: abe1226503bd -->
+<!-- source: f26cbe3cc94c -->
 # Fuera de casa
 
 En casa, tus dispositivos se sincronizan solos. Para seguir sincronizando cuando un portátil o un teléfono está en otro sitio, un ordenador de casa se convierte en el **hub** del grupo, y los dispositivos que viajan llegan a él por el túnel cifrado del propio grupo. Las imágenes de cada caso están en [Cómo funciona](how-it-works.md#away-from-home-the-hub).
@@ -10,9 +10,27 @@ La sincronización fuera de casa está desactivada hasta que la actives, en el h
 
 ## 1. Elige el hub
 
-El hub es un ordenador que es administrador del grupo: Linux, Windows, un Mac, FreeBSD o un router con OpenWrt u OPNsense. Lo mejor es uno que esté siempre encendido: un servidor doméstico, un NAS, una Raspberry Pi. Un NAS con Docker solo puede ser el hub si sus claves están en un archivo, cosa que rechaza a menos que lo permitas ([README de la imagen](../../packaging/docker/README.md#keys)). Un ordenador que enciendes solo cuando lo necesitas también sirve; mientras el hub está apagado, nada se sincroniza fuera de casa, y todo lo que está en casa sigue sincronizando.
+El hub es un ordenador: Linux, Windows, un Mac, FreeBSD o un router con OpenWrt u OPNsense. El
+mejor está siempre encendido: un servidor doméstico, un NAS, una Raspberry Pi. Un ordenador que
+enciendes solo cuando lo necesitas también sirve; mientras el hub está apagado, nada se
+sincroniza fuera de casa, y en casa todo sigue sincronizándose.
 
-En un grupo creado en un teléfono, convierte primero ese ordenador en administrador: en el teléfono, pulsa el ordenador y **Make it an admin**.
+Un hub es de uno de dos tipos, y eliges cuál al nombrarlo:
+
+- **Un hub que lee las copias** es un administrador del grupo, así que las copias se sellan para
+  él como para tus otros dispositivos, y el [nivel de claves](keys.md#the-three-levels) del
+  grupo se aplica a sus claves. En un grupo creado en un teléfono, el teléfono hace primero
+  administrador al ordenador.
+- **Un hub que solo pasa las copias** es cualquier otro ordenador del grupo. Las copias se sellan
+  de extremo a extremo para tus otros dispositivos y nunca para él, así que no lee ninguna, y sus
+  claves no necesitan un chip de seguridad: una Raspberry Pi o un NAS en Docker con sus claves en
+  un archivo es una buena opción. No hace, lee ni pega copias propias.
+
+En el teléfono, toca el ordenador, luego **Make it a hub** y el tipo; la app del Mac y la app
+de la bandeja preguntan lo mismo. Desde un ordenador administrador,
+`sudo cbb global hub -on DEVICE -forward-only` convierte otro ordenador en un hub que solo pasa
+las copias. Antes debe estar activada allí la sincronización fuera de casa (paso 2 más abajo,
+con `sudo cbb global on`).
 
 ## 2. Actívalo en el hub
 
