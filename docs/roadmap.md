@@ -466,6 +466,33 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     the device's user consents once, at install, at pairing or in the app, and the root or an
     admin then turns it on and makes hubs from the app, without a command on each computer
     (see [Consent to sync away from home](#consent-to-sync-away-from-home)).
+- **59.** **Planned for 0.6, before the release (the owner, 2026-11-06).** The stores' signing,
+    set up before 0.6 is tagged, since an Android app's key can never change once its APKs
+    are installed:
+    - One release key for every Android channel. The keystore on the maintainer's Mac
+      (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`) is not the one the
+      maintainer's notes recorded on 2026-10-30 (`EF:11:AF:72:…:7A:CD:F6:C6`); no release is
+      signed with either, since 0.5.0 carries the lost key. Pick one, check that the
+      environment **release** holds it (a manual run of the release workflow prints the
+      APK's certificate), keep its backups, and write its fingerprint in
+      docs/maintaining.md, "Android signing key".
+    - RuStore, Android: upload the release's signed `cbb-X.Y.Z.apk`, not an AAB, so that
+      RuStore never holds the key and its copy, the GitHub APK and F-Droid's share one
+      certificate. The app already leaves a copy from a store to its store (docs/apps.md,
+      "Updates").
+    - RuStore, Aurora OS: the developer certificate with the profile `regular` (issued
+      2025-12-05 by Open Mobile Platform's root, valid until 2049) signs the Aurora build's
+      RPM; the public test key ("Noname developer") signs only test builds. What a
+      `regular` app may do on Aurora 5.1.5 was measured on a device (2026-11-06): it listens
+      and is reached over Wi-Fi in the background, mDNS works both ways, the OP-TEE
+      PKCS#11 token "USER" offers P-256, Ed25519 and AES, it writes the clipboard from the
+      background but reads another app's copy only in the foreground (so the phone sends
+      on a gesture: opening the app, its cover action or Share), and a second executable in
+      the package is installed without its execute bit.
+    - F-Droid: the steps in docs/maintaining.md, "F-Droid", with `AllowedAPKSigningKeys`
+      set to the chosen key's certificate. The fdroid flavor already has no update of its
+      own (`SELF_UPDATE` false, no installer permission), as F-Droid's inclusion policy
+      requires: an app it publishes must not download or install code outside F-Droid.
 
 ## Devices that are hard to type into
 
