@@ -489,7 +489,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       "Updates").
     - RuStore, Aurora OS: the developer certificate with the profile `regular` (issued
       2025-12-05 by Open Mobile Platform's root, valid until 2049) signs the Aurora build's
-      RPM; the public test key ("Noname developer") signs only test builds. What a
+      RPM, and every test build that reaches a phone too (the workflow `aurora`, after the
+      maintainer's approval): not the public test key ("Noname developer"), which 5.2's
+      installer refuses, and a change of certificate installs only after the app is removed,
+      which removes its key. What a
       `regular` app may do on Aurora 5.1.5 was measured on a device (2026-11-06): it listens
       and is reached over Wi-Fi in the background, mDNS works both ways, the OP-TEE
       PKCS#11 token makes non-extractable P-256 keys that sign, it writes the clipboard from the
