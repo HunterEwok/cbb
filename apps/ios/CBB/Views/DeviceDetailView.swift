@@ -123,7 +123,7 @@ struct DeviceDetailView: View {
                 Text(d.name).font(.system(.title2, design: .monospaced).weight(.bold)).lineLimit(2)
                 HStack(spacing: 6) {
                     OnlineDot(online: d.online)
-                    (d.online ? Text("online") : Text("offline"))
+                    (d.throughHub ? Text("online through the hub") : d.online ? Text("online") : Text("offline"))
                         .foregroundStyle(d.online ? palette.accent : palette.textDim)
                 }
                 .font(.subheadline)
@@ -220,7 +220,7 @@ struct DeviceDetailView: View {
                 }
                 // An admin computer, or one the root makes an admin first;
                 // this phone is the hub under Settings.
-                if !d.isSelf, d.online, d.role == "full", !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin {
+                if !d.isSelf, d.online, !d.throughHub, d.role == "full", !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin {
                     Divider().overlay(palette.line)
                     action(Text("Make it a hub"), "antenna.radiowaves.left.and.right") { hubbing = true }
                 }

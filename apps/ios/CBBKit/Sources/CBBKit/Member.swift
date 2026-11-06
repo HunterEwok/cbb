@@ -14,6 +14,8 @@ public enum Member {
     /// hello's features a receiver reads.
     static let featureMedia = "media"
     static let maxFeatures = 32
+    /// The most device IDs of a reach message (section 4, "Reach").
+    static let maxReach = 256
     /// Frames larger than this close the connection.
     public static let maxFrame = 7 << 20
     /// The most bytes of a part one chunk carries (section 4, "Content").
@@ -661,6 +663,10 @@ public enum Member {
         case missing(Get)
         /// A piece of a part, in a binary frame.
         case chunk(Chunk)
+        /// From a computer: the device IDs of the other members it is
+        /// connected to now (section 4, "Reach"), its valid ones, at most
+        /// maxReach.
+        case reach([String])
         /// A type from a newer version, ignored.
         case unknown(String)
     }
@@ -761,6 +767,7 @@ public enum Member {
         case "evidence": return w.evidence?.value.map { .evidence($0) } ?? .unknown(w.t)
         case "get": return w.get?.value.map { .get($0) } ?? .unknown(w.t)
         case "missing": return w.get?.value.map { .missing($0) } ?? .unknown(w.t)
+        case "reach": return .reach(Array((w.reach?.value ?? []).filter(GroupCertificates.isDeviceID).prefix(maxReach)))
         default: return .unknown(w.t)
         }
     }
@@ -808,13 +815,14 @@ public enum Member {
         var evidence: Lenient<Evidence>?
         var get: Lenient<Get>?
         var entries: Lenient<Releases.EntriesSet>?
+        var reach: Lenient<[String]>?
     }
 
     struct WireOut: Encodable {
         let m: Message
         init(_ m: Message) { self.m = m }
 
-        enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get, entries }
+        enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get, entries, reach }
         enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features, group_ca, entries_seq, entries_keys_seq }
 
         func encode(to encoder: Encoder) throws {
@@ -882,6 +890,9 @@ public enum Member {
             case let .missing(g):
                 try c.encode("missing", forKey: .t)
                 try c.encode(g, forKey: .get)
+            case let .reach(ids):
+                try c.encode("reach", forKey: .t)
+                if !ids.isEmpty { try c.encode(ids, forKey: .reach) }
             case .chunk:
                 throw WireError.notAMessage // a binary frame
             case let .unknown(t): try c.encode(t, forKey: .t)

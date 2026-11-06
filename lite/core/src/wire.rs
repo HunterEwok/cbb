@@ -54,6 +54,10 @@ pub struct Message {
     /// (section 16, "Entry points"), decoded on their own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entries: Option<Value>,
+    /// In a reach message, the members a computer is connected to (section
+    /// 4, "Reach"), kept as it came: the lite member shows no devices.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reach: Option<Value>,
 }
 
 /// The answer to a command (section 15): `done`, `refused` or `failed`, and

@@ -1378,3 +1378,38 @@ func TestNoSecretsSendsTheMark(t *testing.T) {
 		t.Errorf("a secret was written as %v", w.Kind)
 	}
 }
+
+func TestReachTellsPhonesWhoIsConnected(t *testing.T) {
+	// The hub tells a phone the other members it is connected to, and
+	// again when that changes; a computer gets none.
+	hub, pi := newMember(t, Full, withTimers(50*time.Millisecond, 5*time.Second)), newMember(t, Lite)
+	piDone, _ := link(t, pi, hub)
+	waitPeers(t, hub, 1)
+	reaches := func(r *raw, d time.Duration) [][]group.DeviceID {
+		var out [][]group.DeviceID
+		for _, m := range r.frames(d) {
+			if m.Type == typeReach {
+				out = append(out, m.Reach)
+			}
+		}
+		return out
+	}
+	phone := rawPeer(t, hub, newMember(t, Phone))
+	phone.send(&message{Type: typeHello, Role: Phone, Hello: json.RawMessage(`{"wall_ms":0}`)})
+	if got := reaches(phone, 150*time.Millisecond); len(got) != 1 || !slices.Equal(got[0], []group.DeviceID{pi.id.ID}) {
+		t.Fatalf("the phone got reach %v, want once [%s]", got, pi.id.ID)
+	}
+	macID := newMember(t, Full)
+	mac := rawPeer(t, hub, macID)
+	mac.hello(clip.Hello{})
+	if got := reaches(mac, 150*time.Millisecond); len(got) != 0 {
+		t.Errorf("a computer got reach %v", got)
+	}
+	// The phone hears of the Mac, and then of the Pi's going.
+	pi.Close()
+	wait(t, piDone, "the Pi")
+	got := reaches(phone, 250*time.Millisecond)
+	if len(got) == 0 || !slices.Equal(got[len(got)-1], []group.DeviceID{macID.id.ID}) {
+		t.Errorf("the phone got reach %v after the Pi went, want it to end with [%s]", got, macID.id.ID)
+	}
+}
