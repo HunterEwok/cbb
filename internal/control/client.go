@@ -48,6 +48,17 @@ func IsAdmin(op string) bool {
 	return true
 }
 
+// NeedsAdmin reports whether the service takes the request h only on its
+// admin socket: IsAdmin of its operation, except a mute or unmute of this
+// device's receiving, which changes nothing for the group (design.md,
+// "Muting a device").
+func NeedsAdmin(h Header) bool {
+	if (h.Op == OpMute || h.Op == OpUnmute) && h.Device == "" {
+		return false
+	}
+	return IsAdmin(h.Op)
+}
+
 // DialFor connects to the socket that takes the operation op: the admin
 // socket for an operation that changes the group, the control socket for
 // the others.

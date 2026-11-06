@@ -49,7 +49,11 @@ func cmdMute(args []string, unmute bool, stdout, stderr io.Writer) int {
 		}
 		h.ForMS = dur.Milliseconds()
 	}
-	c, err := control.DialFor(h.Op)
+	dial := func() (*control.Client, error) { return control.Dial(control.SocketPath()) }
+	if control.NeedsAdmin(h) {
+		dial = func() (*control.Client, error) { return control.DialFor(h.Op) }
+	}
+	c, err := dial()
 	if err != nil {
 		return fail(stderr, err)
 	}

@@ -117,7 +117,7 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		return
 	}
 	c.SetReadDeadline(time.Time{})
-	if control.IsAdmin(m.Op) && !admin {
+	if control.NeedsAdmin(m.Header) && !admin {
 		fail(c, fmt.Errorf("%q changes the group, so the service takes it only on its admin socket, which only the administrator reaches", m.Op))
 		return
 	}

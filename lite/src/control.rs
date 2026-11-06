@@ -309,6 +309,10 @@ pub fn is_admin(op: &str) -> bool {
             | "write"
             | "inject"
             | "injected"
+            // This device's own pause of receiving (design.md, "Muting a
+            // device"); the lite member mutes no other device.
+            | "mute"
+            | "unmute"
     )
 }
 
