@@ -185,6 +185,12 @@ struct DeviceDetail: View {
                     .labelsHidden()
                 line
                 row(Text("Forwarder"), away.forwarder.map { Text(verbatim: $0.endpoint).monospaced() } ?? Text("none"))
+                if away.forwarder?.entriesStale == true {
+                    Label {
+                        Text("The list of the project's entry points is out of date, and the forwarder does not answer on the ways this Mac knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on.")
+                    } icon: { Image(systemName: "exclamationmark.triangle") }
+                        .font(.footnote)
+                }
                 Link(destination: URL(string: "https://cbb.tools/?p=terms.html")!) { Text("Terms of the project's servers") }
                     .font(.footnote)
                 action("arrow.triangle.swap", "Change the forwarder…") {

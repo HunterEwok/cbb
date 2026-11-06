@@ -55,12 +55,13 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 		Send:        h.Send,
 		Allowed:     netguard.Allowed,
 		Report: func(r forward.Report) {
+			stale := s.entriesStale(fw, r.Err)
 			s.tunMu.Lock()
 			defer s.tunMu.Unlock()
 			if s.tunRun == nil || s.tunRun.hub != h {
 				return
 			}
-			f := &control.Forwarder{Endpoint: fw.Endpoint.String(), Registered: r.Registered, OverVLESS: r.OverVLESS}
+			f := &control.Forwarder{Endpoint: fw.Endpoint.String(), Registered: r.Registered, OverVLESS: r.OverVLESS, EntriesStale: stale}
 			if r.Seen.IsValid() {
 				f.Seen = r.Seen.String()
 			}
@@ -87,6 +88,13 @@ func (s *Service) registerForwarderLocked(ctx context.Context, h *tunnel.Hub, st
 		defer s.wg.Done()
 		forward.Register(ctx, cfg)
 	}()
+}
+
+// entriesStale reports whether a hub that could not register with fw
+// (err) should be told its list of entry points is out of date: fw is the
+// project's forwarder and this device holds no list that has not expired.
+func (s *Service) entriesStale(fw *tunnel.ForwarderLink, err error) bool {
+	return err != nil && fw.Project && s.heldEntries() == nil
 }
 
 // hubVLESS returns the ways the hub reaches its forwarder over VLESS when

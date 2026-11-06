@@ -161,6 +161,7 @@
     <string name="hub_home_only">The hub at home only: add a forwarder for sync away from home.</string>
     <string name="hub_registering">Registering with the forwarder…</string>
     <string name="hub_registered">Registered with the forwarder: devices away from home reach this phone.</string>
+    <string name="hub_entries_stale">The list of the project\'s entry points is out of date, and the forwarder does not answer on the ways this phone knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on when this phone meets it.</string>
     <string name="hub_failed">The forwarder does not take this phone. Check its address and key.</string>
     <string name="hub_on_home">On a home network: devices here connect to this phone.</string>
     <string name="hub_not_home">This network is not one of the hub\'s home networks: devices here do not see this phone.</string>

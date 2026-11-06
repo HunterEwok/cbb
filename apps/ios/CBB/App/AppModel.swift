@@ -321,6 +321,10 @@ final class AppModel: ObservableObject {
         /// Why the forwarder does not take it, as cbbtun says.
         var error: String?
         var forwarder: HubState.Forwarder?
+        /// The project's forwarder does not take it and the phone holds no
+        /// signed entry points that have not expired (docs/protocol.md,
+        /// section 16): a new list may be what it needs.
+        var entriesStale = false
         var home = false
         var clients = 0
         /// How its tunnel hides.

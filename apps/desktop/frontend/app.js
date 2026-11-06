@@ -206,6 +206,9 @@ function hubCard(d) {
   return `<div class="card"><div class="dim small">${esc(t("How the hub's tunnel hides"))}</div><div class="segmented">` +
     tunnels.map((m) => `<button type="button" data-tunnel="${m}" aria-checked="${m === cur}" ${state.busy ? "disabled" : ""}>${esc(tunnelName(m))}</button>`).join("") +
     `</div><div class="line"><span class="dim">${esc(t("Forwarder"))}</span><span class="value mono">${esc(fwd)}</span></div>` +
+    // The project's forwarder does not answer and the list of its entry
+    // points has expired (docs/protocol.md, section 16).
+    (a.forwarder?.entries_stale ? `<p class="small">⚠ ${esc(t("The list of the project's entry points is out of date, and the forwarder does not answer on the ways this device knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on."))}</p>` : "") +
     `<div class="actions"><button data-action="forwarder" ${state.busy ? "disabled" : ""}>${esc(t("Change the forwarder…"))}</button>` +
     `<button data-action="terms">${esc(t("Terms of the project's servers"))}</button></div></div>`;
 }

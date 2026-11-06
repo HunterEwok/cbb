@@ -42,6 +42,12 @@ class HubOnPhoneTest {
             shown = records
         }
 
+        var ways: String? = null
+
+        override fun setProjectWays(ways: String) {
+            this.ways = ways
+        }
+
         override fun status(): String = report
 
         var invited: List<Any>? = null
@@ -196,6 +202,7 @@ class HubOnPhoneTest {
         assertTrue(t.held.contains(pc))
         assertEquals("203.0.113.9:8764", t.registered!![0])
         assertTrue(t.shown.contains("\"body\""))
+        assertEquals(null, t.ways) // a forwarder of the user's own gets none of the project's ways in
         h.start(group()) // running already
         assertEquals(1, tunnels.started.size)
         assertEquals(HubOnPhone.Status.REGISTERING, h.status(paused = false).first)

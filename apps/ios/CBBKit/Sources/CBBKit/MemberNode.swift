@@ -50,6 +50,17 @@ public protocol CredentialKeeper: AnyObject, Sendable {
     func add(_ credentials: [ServerCredentials.Credential]) -> [ServerCredentials.Credential]
 }
 
+/// Keeps the newest signed entry points for a node (docs/protocol.md,
+/// section 16, "Entry points"): peers send them after the hello, and the
+/// phone's hub registers through the ways in they name. The phone takes
+/// them and passes none on.
+public protocol EntriesKeeper: AnyObject, Sendable {
+    /// The seq of the list held and of its keys.json, nil for none.
+    var order: (keys: UInt64, seq: UInt64)? { get }
+    /// Takes a list a peer sent when it checks out and is newer.
+    func add(_ set: Releases.EntriesSet)
+}
+
 public extension RecordStore {
     func refused(chain: [Data]) -> String? { nil }
     func mayHost(_ device: String, chain: [Data]) -> Bool { true }
@@ -103,6 +114,8 @@ public actor MemberNode {
     private let copies: CopyKeys?
     /// Why the last copy a peer sent was dropped, for the app's log.
     public private(set) var lastDropped: String?
+    /// The signed entry points; nil takes none.
+    private let entries: EntriesKeeper?
     /// This phone's sync mode, which the hellos state; nil for a phone
     /// without one, which shares.
     public private(set) var mode: String?
@@ -167,12 +180,13 @@ public actor MemberNode {
                 onEvidence: @escaping @Sendable (String?, [Data], Member.Evidence) -> Void = { _, _, _ in },
                 content: ContentStore? = nil,
                 credentials: CredentialKeeper? = nil,
-                copies: CopyKeys? = nil) {
+                copies: CopyKeys? = nil,
+                entries: EntriesKeeper? = nil) {
         (self.engine, self.name, self.role, self.records, self.renew, self.adminCA, self.onChange, self.onCert) =
             (engine, name, role, records, renew, adminCA, onChange, onCert)
         (self.tunnelKey, self.tunnelPSK, self.onTunnel, self.hub, self.os, self.device) = (tunnelKey, tunnelPSK, onTunnel, hub, os, device?.cleaned)
         (self.hubShare, self.onHubs, self.mode, self.onCommand, self.onEvidence) = (hubShare, onHubs, mode, onCommand, onEvidence)
-        (self.content, self.credentials, self.copies) = (content, credentials, copies)
+        (self.content, self.credentials, self.copies, self.entries) = (content, credentials, copies, entries)
         if let copies { engine.seal = { try copies.seal($0, key: $1, blob: $2) } }
     }
 
@@ -355,6 +369,7 @@ public actor MemberNode {
         // A phone's keys are in the Secure Enclave or the Keystore.
         hello.keyStore = Records.hardware
         hello.media = content != nil
+        if let o = entries?.order { (hello.entriesKeysSeq, hello.entriesSeq) = (o.keys, o.seq) }
         c.enqueue(.hello(role, hello))
         let writer = Task { await c.runWriter() }
         let watchdog = Task { await c.runWatchdog() }
@@ -435,6 +450,8 @@ public actor MemberNode {
                 if let p = c.peer, records?.mayHost(p, chain: t.peerChain) != false { onTunnel(p, o) }
             case let .hubs(share):
                 if let p = c.peer, records?.mayHost(p, chain: t.peerChain) != false { onHubs(p, t.peerChain, share) }
+            case let .entries(set):
+                entries?.add(set)
             case let .credentials(cs) where !cs.isEmpty && cs.count <= ServerCredentials.maxCredentials:
                 if let fresh = credentials?.add(cs), !fresh.isEmpty { sendCredentials(fresh, except: id) }
             case let .records(rs):

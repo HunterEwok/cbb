@@ -194,6 +194,7 @@
   "Forwarder": "Форвардер",
   "none": "нет",
   "Change the forwarder…": "Сменить форвардер…",
+  "The list of the project's entry points is out of date, and the forwarder does not answer on the ways this device knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on.": "Список точек входа проекта устарел, а форвардер не отвечает ни одним путём, известным этому устройству. Обновите CBB на компьютере группы или импортируйте там новый список командой cbb global entries import: группа передаст его дальше.",
   "Change the forwarder": "Сменить форвардер",
   "Your own forwarder's address and key, as cbb forward prints them, with a space between; leave it empty for the project's forwarder at cbb.tools.": "Адрес и ключ своего форвардера, как их печатает cbb forward, через пробел; оставьте пустым для форвардера проекта на cbb.tools.",
   "Give the forwarder's address and its key, such as 203.0.113.9:8764 and the key cbb forward prints.": "Укажите адрес форвардера и его ключ, например 203.0.113.9:8764 и ключ, который печатает cbb forward.",

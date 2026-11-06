@@ -1218,7 +1218,7 @@ func (n *Node) sendEntries(e *EntriesSet, from *conn) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	for _, c := range n.conns {
-		if c != from && takesRelease(c.role()) {
+		if c != from && takesEntries(c.role()) {
 			c.enqueue(outgoing{entries: e})
 		}
 	}
@@ -1228,6 +1228,10 @@ func (n *Node) sendEntries(e *EntriesSet, from *conn) {
 // release: the computers and the lite members; the phones' apps update
 // from their stores.
 func takesRelease(r Role) bool { return r == Full || r == Lite }
+
+// takesEntries reports whether a peer of the role gets the signed entry
+// points: every member, the phones too, whose hubs register through them.
+func takesEntries(r Role) bool { return r != "" }
 
 // sendRecords sends records to every connection that sent its hello,
 // except the one they came from.
@@ -1797,7 +1801,7 @@ func (c *conn) reader() error {
 				}
 			}
 			if st := c.n.cfg.Entries; st != nil {
-				if e, o := st.Current(); e != nil && o.After(ReleaseOrder{extra.EntriesKeys, extra.EntriesSeq}) && takesRelease(c.role()) {
+				if e, o := st.Current(); e != nil && o.After(ReleaseOrder{extra.EntriesKeys, extra.EntriesSeq}) && takesEntries(c.role()) {
 					c.enqueue(outgoing{entries: e})
 				}
 			}
