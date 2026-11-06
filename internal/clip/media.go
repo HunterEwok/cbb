@@ -4,12 +4,16 @@
 package clip
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/HunterEwok/cbb/internal/core"
+	"github.com/HunterEwok/cbb/internal/strict"
 
 	"github.com/HunterEwok/cbb/internal/jsonnum"
 )
@@ -62,6 +66,33 @@ func (m *Manifest) UnmarshalJSON(data []byte) error {
 	}
 	type plain Manifest
 	return json.Unmarshal(data, (*plain)(m))
+}
+
+// ParseManifest reads a manifest received from another member
+// (docs/protocol.md, section 4, "Media"): in the strict form of signed
+// bodies and in its canonical form, with no member its table does not
+// name, and valid. A build that links the Rust core asks it first, so that
+// every program takes the same manifests.
+func ParseManifest(b []byte) (*Manifest, error) {
+	if checked, err := core.CheckBody(core.KindManifest, b); checked && err != nil {
+		return nil, fmt.Errorf("clip: a manifest: %w", err)
+	}
+	if err := strict.CheckCanonical(b, "parts", "size"); err != nil {
+		return nil, fmt.Errorf("clip: a manifest is not in the strict form: %w", err)
+	}
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.DisallowUnknownFields()
+	// plain has no UnmarshalJSON, which would read without the decoder's
+	// refusal of unknown members.
+	type plain Manifest
+	m := new(Manifest)
+	if err := d.Decode((*plain)(m)); err != nil {
+		return nil, fmt.Errorf("clip: a manifest: %w", err)
+	}
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // Part is one item of a manifest: a piece of clipboard data of a Type, or a

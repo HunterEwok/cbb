@@ -36,6 +36,7 @@ const TYPES: [&str; 3] = ["image/png", "image/jpeg", "text/html"];
 
 /// What a media event's content is.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Manifest {
     #[serde(default)]
     pub size: i64,
@@ -46,6 +47,7 @@ pub struct Manifest {
 /// One item of a manifest: clipboard data of a type, or a file or folder at
 /// a path.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Part {
     #[serde(rename = "type", default, skip_serializing_if = "String::is_empty")]
     pub kind: String,
@@ -55,8 +57,7 @@ pub struct Part {
     pub dir: bool,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub size: i64,
-    /// Absent (or null) for a folder; "" is a hash of no bytes, which no
-    /// part has.
+    /// Absent for a folder; "" is a hash of no bytes, which no part has.
     #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<Vec<u8>>,
 }
@@ -75,8 +76,13 @@ impl Manifest {
         self.parts.first().is_some_and(|p| !p.path.is_empty())
     }
 
-    /// Checks a manifest received from another member.
+    /// Reads a manifest received from another member: in the strict form
+    /// of signed bodies and in its canonical form, with no member its
+    /// table does not name (docs/protocol.md, section 4, "Media"), and
+    /// valid.
     pub fn parse(data: &[u8]) -> Result<Manifest> {
+        crate::strict::check_canonical(data, &["parts", "size"])
+            .map_err(|e| e.context("the manifest is not in the strict form"))?;
         let m: Manifest = serde_json::from_slice(data).map_err(|e| Error::with("the manifest is not valid", e))?;
         m.validate()?;
         Ok(m)

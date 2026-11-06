@@ -51,7 +51,8 @@ these words depends on it.
   device's pseudonym at a relay all use it.
 - **Signed bodies.** The body of a record (section 10), of a command (section 15), of a
   release file (section 16) and of a server credential (section 18) is signed as bytes and
-  passed on unchanged, so every member MUST read it alike. A receiver
+  passed on unchanged, so every member MUST read it alike; a copy's manifest (section 4,
+  "Media") is read by the same rules, in their canonical form, although nobody signs it. A receiver
   MUST refuse a body that breaks any of these rules, before it reads a field, and so MUST
   a signer's own code before it signs. Each rule has a name, which the vectors cite:
   - `form/object`: the body is one JSON object in UTF-8, with nothing but whitespace (space,
@@ -644,7 +645,7 @@ Part:
 |-------|------|---------|
 | `type` | string or absent | clipboard data: `image/png`, `image/jpeg` or `text/html`, each at most once, so three parts at most today; an unknown type is refused, and the limit for types added later is 8 |
 | `path` | string or absent | a copy of files: the file's or folder's path, names joined by `/`, each path once, compared byte for byte (case matters) |
-| `dir` | bool or absent | with `path`: `true` for a folder, which has no `size` or `sha256`: the field is absent or null, never an empty string |
+| `dir` | bool or absent | with `path`: `true` for a folder, which has no `size` or `sha256`: the field is absent, never null or an empty string |
 | `size` | integer or absent | the part's bytes; absent means 0 |
 | `sha256` | string | the SHA-256 of the part's bytes, 32 bytes in base64; absent only for a folder |
 
@@ -662,13 +663,16 @@ before the first dot (`COM0_`, `CON _.txt`), and a sender SHOULD give its own na
 before it sends them; `testdata/interop/media-names.json` holds the cases. The paths are
 checked as the receiver writes them too: a receiver MUST refuse a manifest in which a name
 grows past 255 bytes or a path past 4096 bytes that way, two paths become one (`COM0.txt`
-and `COM0_.txt`), or a file becomes one that another path goes through. Every number in a manifest is an integer written as in signed
-bodies (Conventions, "Signed bodies"): no `-0`, fraction or exponent. A receiver MUST refuse a
-manifest that breaks any of these rules (the vectors of
-`strict-generated-*.json` cite them as `manifests/size` and `manifests/parts`; a manifest is no
-signed body, so only its numbers have the strict form),
-and MUST NOT follow or create links when it writes a copy of files. The Go code is
-`internal/clip/media.go`.
+and `COM0_.txt`), or a file becomes one that another path goes through. A manifest is read by
+the rules of signed bodies (Conventions, "Signed bodies"), although nobody signs it, and in
+their canonical form, as the Content carries it: exact names, each once, none that the tables
+above do not name, no null, valid UTF-8, integers without `-0`, fraction or exponent in the
+range of int64, and the members of every object in bytewise order of their names. A receiver
+MUST refuse a manifest that breaks any of these rules (the vectors of
+`strict-generated-*.json` cite them as `manifests/size`, `manifests/parts` and the `form/`
+rules), and MUST NOT follow or create links when it writes a copy of files. The Go code is
+`internal/clip/media.go`, and the Rust core's `media.rs` reads it for the lite member and the
+phones.
 
 Inside the Content the manifest is JSON such as
 `{"size":1234,"parts":[{"path":"trip","dir":true},{"path":"trip/a.jpg","size":1234,"sha256":"AQEB..."}]}`;

@@ -80,6 +80,17 @@ object Media {
         )
 
         companion object {
+            /**
+             * Reads a manifest received from another member (docs/protocol.md, section 4, "Media"): the Rust core decides
+             * whether it is taken, in the strict form of signed bodies and in its canonical form, with no member its table
+             * does not name; null when it is not.
+             */
+            fun parse(body: ByteArray): Manifest? {
+                if (Core.bodyRefusal("manifest", body) != null) return null
+                val m = runCatching { Wire.parse(body)?.let { fromJson(it) } }.getOrNull() ?: return null
+                return m.takeIf { it.isValid }
+            }
+
             fun fromJson(o: JsonObject): Manifest = Manifest(
                 o.optLong("size") ?: 0,
                 o.optArray("parts")?.map { Part.fromJson(it as? JsonObject ?: throw WireTypeException("parts: not an object")) } ?: emptyList(),

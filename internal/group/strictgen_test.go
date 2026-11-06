@@ -442,36 +442,53 @@ func commandKinds() []genKind {
 	}
 }
 
-// manifestKinds returns the manifests of section 4, "Media": they are not
-// signed bodies, so only their numbers have the strict form.
+// manifestKinds returns the manifests of section 4, "Media": they are read
+// by the rules of signed bodies, in their canonical form, so each part's
+// members are in bytewise order of their names too.
 func manifestKinds() []genKind {
 	h := genB64(32, 7)
-	png := `{"type":"image/png","size":3,"sha256":` + h + `}`
-	part := func(m string) string { return `[` + m + `]` }
-	data := genBody{{"size", "3"}, {"parts", part(png)}}
-	files := genBody{{"size", "3"}, {"parts", `[{"path":"d","dir":true},{"path":"d/f","size":3,"sha256":` + h + `}]`}}
+	// pt writes a part with its members in order.
+	pt := func(m ...genMember) string { return string(genBody(m).sorted().bytes()) }
+	png := pt(genMember{"type", `"image/png"`}, genMember{"size", "3"}, genMember{"sha256", h})
+	list := func(parts ...string) string { return `[` + strings.Join(parts, ",") + `]` }
 	file := func(path string) string {
-		return `[{"path":` + path + `,"size":3,"sha256":` + h + `}]`
+		return list(pt(genMember{"path", path}, genMember{"size", "3"}, genMember{"sha256", h}))
 	}
-	size := append([]genValue{bad("of 2, less than its parts", "2"), bad("of 4, more than its parts", "4"), bad("of -3", "-3")}, genIntForm()...)
-	partOf := func(fields string) string { return part(`{"type":"image/png"` + fields + `}`) }
+	fileOf := func(path, size string) string {
+		return pt(genMember{"path", path}, genMember{"size", size}, genMember{"sha256", h})
+	}
+	folder := func(m ...genMember) string {
+		return pt(append([]genMember{{"path", `"d"`}, {"dir", "true"}}, m...)...)
+	}
+	data := genBody{{"size", "3"}, {"parts", list(png)}}
+	files := genBody{{"size", "3"}, {"parts", list(folder(), fileOf(`"d/f"`, "3"))}}
+	// The strict kinds test the form of integers (genIntForm) by themselves.
+	size := []genValue{bad("of 2, less than its parts", "2"), bad("of 4, more than its parts", "4"), bad("of -3", "-3")}
+	// partOf writes a part of type image/png with the other members m.
+	partOf := func(m ...genMember) string { return list(pt(append([]genMember{{"type", `"image/png"`}}, m...)...)) }
+	typed := func(typ, size string) string {
+		return pt(genMember{"type", typ}, genMember{"size", size}, genMember{"sha256", h})
+	}
 	dataParts := []genValue{
-		ok("of the three types", `[`+png+`,{"type":"image/jpeg","size":0,"sha256":`+h+`},{"type":"text/html","size":0,"sha256":`+h+`}]`),
-		ok("with an unknown member", partOf(`,"size":3,"sha256":`+h+`,"later":{"a":1}`)),
+		ok("of the three types", list(png, typed(`"image/jpeg"`, "0"), typed(`"text/html"`, "0"))),
+		bad("with an unknown member", partOf(genMember{"size", "3"}, genMember{"sha256", h}, genMember{"later", `{"a":1}`})),
+		bad("with its members out of order", list(`{"type":"image/png","size":3,"sha256":`+h+`}`)),
+		bad("with spaces", list(`{"sha256": `+h+`, "size": 3, "type": "image/png"}`)),
 		bad("empty", `[]`),
-		bad("of an unknown type", part(`{"type":"image/gif","size":3,"sha256":`+h+`}`)),
-		bad("of a type twice", `[`+png+`,{"type":"image/png","size":0,"sha256":`+h+`}]`),
-		bad("of a part without a hash", partOf(`,"size":3`)),
-		bad("of a hash of 31 bytes", partOf(`,"size":3,"sha256":`+genB64(31, 7))),
-		bad("of an empty hash", partOf(`,"size":3,"sha256":""`)),
-		bad("of a type as a number", part(`{"type":1,"size":3,"sha256":`+h+`}`)),
-		bad("of a size as a string", partOf(`,"size":"3","sha256":`+h)),
-		bad("of a negative size", partOf(`,"size":-1,"sha256":`+h)),
-		bad("of a size of negative zero", partOf(`,"size":-0,"sha256":`+h)),
-		bad("of a size with a fraction", partOf(`,"size":3.0,"sha256":`+h)),
-		bad("of a size with an exponent", partOf(`,"size":3e0,"sha256":`+h)),
-		bad("of a type and a path", partOf(`,"path":"f","size":3,"sha256":`+h)),
-		bad("of a type and a folder", partOf(`,"dir":true,"size":3,"sha256":`+h)),
+		bad("of an unknown type", list(typed(`"image/gif"`, "3"))),
+		bad("of a type twice", list(png, typed(`"image/png"`, "0"))),
+		bad("of a part without a hash", partOf(genMember{"size", "3"})),
+		bad("of a hash of 31 bytes", partOf(genMember{"size", "3"}, genMember{"sha256", genB64(31, 7)})),
+		bad("of an empty hash", partOf(genMember{"size", "3"}, genMember{"sha256", `""`})),
+		bad("of a null hash", partOf(genMember{"size", "3"}, genMember{"sha256", "null"})),
+		bad("of a type as a number", list(typed("1", "3"))),
+		bad("of a size as a string", partOf(genMember{"size", `"3"`}, genMember{"sha256", h})),
+		bad("of a negative size", partOf(genMember{"size", "-1"}, genMember{"sha256", h})),
+		bad("of a size of negative zero", partOf(genMember{"size", "-0"}, genMember{"sha256", h})),
+		bad("of a size with a fraction", partOf(genMember{"size", "3.0"}, genMember{"sha256", h})),
+		bad("of a size with an exponent", partOf(genMember{"size", "3e0"}, genMember{"sha256", h})),
+		bad("of a type and a path", partOf(genMember{"path", `"f"`}, genMember{"size", "3"}, genMember{"sha256", h})),
+		bad("of a type and a folder", partOf(genMember{"dir", "true"}, genMember{"size", "3"}, genMember{"sha256", h})),
 		bad("of a part as a list", `[[1]]`),
 	}
 	fileParts := []genValue{
@@ -480,8 +497,9 @@ func manifestKinds() []genKind {
 		ok("of a name with a dot inside", file(`"a.b"`)),
 		ok("of a name in another script", file("\"\u0444\u0430\u0439\u043b\"")),
 		ok("of a name like a reserved one", file(`"CONSOLE"`)),
-		ok("of a folder with a null hash", `[{"path":"d","dir":true,"sha256":null},{"path":"d/f","size":3,"sha256":`+h+`}]`),
-		ok("of a file that is not a folder", `[{"path":"f","dir":false,"size":3,"sha256":`+h+`}]`),
+		ok("of a file that is not a folder", list(pt(genMember{"path", `"f"`}, genMember{"dir", "false"}, genMember{"size", "3"}, genMember{"sha256", h}))),
+		bad("of a folder with a null hash", list(folder(genMember{"sha256", "null"}), fileOf(`"d/f"`, "3"))),
+		bad("of a folder with a null size", list(folder(genMember{"size", "null"}), fileOf(`"d/f"`, "3"))),
 		bad("of a name of 256 bytes", file(`"`+strings.Repeat("a", 256)+`"`)),
 		bad("of an empty path", file(`""`)),
 		bad("of an empty name", file(`"d//f"`)),
@@ -498,29 +516,29 @@ func manifestKinds() []genKind {
 		bad("of a less-than sign", file(`"f<"`)),
 		bad("of a pipe", file(`"f|"`)),
 		bad("of a control character", file(`"f\u0001"`)),
-		bad("of DEL", file(`"f\u007f"`)),
-		bad("of a C1 control character", file(`"f\u0085"`)),
+		bad("of DEL", file("\"f\x7f\"")),
+		bad("of a C1 control character", file("\"f\u0085\"")),
 		bad("of CON", file(`"CON"`)),
 		bad("of con.txt", file(`"con.txt"`)),
 		bad("of COM1", file(`"COM1"`)),
 		bad("of LPT9", file(`"d/lpt9.log"`)),
 		bad("of NUL", file(`"NUL"`)),
-		bad("of a path twice", `[{"path":"f","size":3,"sha256":`+h+`},{"path":"f","size":0,"sha256":`+h+`}]`),
-		bad("of a file inside a file", `[{"path":"f","size":3,"sha256":`+h+`},{"path":"f/g","size":0,"sha256":`+h+`}]`),
-		bad("of a folder with a size", `[{"path":"d","dir":true,"size":1},{"path":"d/f","size":2,"sha256":`+h+`}]`),
-		bad("of a folder with a hash", `[{"path":"d","dir":true,"sha256":`+h+`},{"path":"d/f","size":3,"sha256":`+h+`}]`),
-		bad("of a folder with an empty hash", `[{"path":"d","dir":true,"sha256":""},{"path":"d/f","size":3,"sha256":`+h+`}]`),
-		bad("of a file and clipboard data", `[{"path":"f","size":3,"sha256":`+h+`},{"type":"image/png","size":0,"sha256":`+h+`}]`),
-		bad("of a folder as a string", `[{"path":"d","dir":"true"},{"path":"d/f","size":3,"sha256":`+h+`}]`),
-		bad("of a path as a number", `[{"path":1,"size":3,"sha256":`+h+`}]`),
+		bad("of a path twice", list(fileOf(`"f"`, "3"), fileOf(`"f"`, "0"))),
+		bad("of a file inside a file", list(fileOf(`"f"`, "3"), fileOf(`"f/g"`, "0"))),
+		bad("of a folder with a size", list(folder(genMember{"size", "1"}), fileOf(`"d/f"`, "2"))),
+		bad("of a folder with a hash", list(folder(genMember{"sha256", h}), fileOf(`"d/f"`, "3"))),
+		bad("of a folder with an empty hash", list(folder(genMember{"sha256", `""`}), fileOf(`"d/f"`, "3"))),
+		bad("of a file and clipboard data", list(fileOf(`"f"`, "3"), typed(`"image/png"`, "0"))),
+		bad("of a folder as a string", list(pt(genMember{"path", `"d"`}, genMember{"dir", `"true"`}), fileOf(`"d/f"`, "3"))),
+		bad("of a path as a number", list(pt(genMember{"path", "1"}, genMember{"size", "3"}, genMember{"sha256", h}))),
 		bad("of a path of 4097 bytes", file(`"`+strings.Repeat(strings.Repeat("a", 255)+"/", 16)+"a"+`"`)),
 	}
 	return []genKind{
-		{section: "manifests", name: "clipboard data", base: data, fields: []genField{
+		{section: "manifests", name: "clipboard data", base: data, strict: true, canonical: true, fields: []genField{
 			{"size", jInt, true, size},
 			{"parts", jArray, true, dataParts},
 		}},
-		{section: "manifests", name: "files", base: files, fields: []genField{
+		{section: "manifests", name: "files", base: files, strict: true, whole: true, canonical: true, fields: []genField{
 			{"size", jInt, true, nil},
 			{"parts", jArray, true, fileParts},
 		}},
@@ -694,7 +712,7 @@ func makeGenVectors() genVectors {
 	// The limits of a manifest's size.
 	big := func(n string, valid bool) genVector {
 		return genVector{Name: "clipboard data: a part of " + n + " bytes", Rule: "manifests/size", Valid: valid,
-			Body: []byte(`{"size":` + n + `,"parts":[{"type":"image/png","size":` + n + `,"sha256":` + genB64(32, 7) + `}]}`)}
+			Body: []byte(`{"parts":[{"sha256":` + genB64(32, 7) + `,"size":` + n + `,"type":"image/png"}],"size":` + n + `}`)}
 	}
 	v.Manifests = append(v.Manifests, big("0", true), big("1073741824", true), big("1073741825", false), big(two53, false))
 	seen := map[string]bool{}
