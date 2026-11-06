@@ -1831,15 +1831,33 @@ jobs:
             "$adb" shell settings put global "$s" 0
           done
           # The emulator has a mobile network beside its Wi-Fi, and the
-          # default network can move to it, while the tests that make the
-          # phone's network home (c1_phoneHub) need the Wi-Fi: mobile data
-          # goes off, and the Wi-Fi is waited for.
-          "$adb" shell svc data disable
-          for _ in $(seq 30); do
-            "$adb" shell ip route get 8.8.8.8 2>/dev/null | grep -q 'dev wlan0' && break
+          # default network can stay on it, while the tests that make the
+          # phone's network home (c1_phoneHub) need the Wi-Fi. Mobile data
+          # goes off in the emulated modem and in Android; right after boot
+          # telephony can drop the request, so it is asked again until the
+          # Wi-Fi carries the default route, with the Wi-Fi turned off and
+          # on once halfway. A suite that would fail on that later stops
+          # here and says what the phone's networks are.
+          wifi_default() { "$adb" shell ip route get 8.8.8.8 2>/dev/null | grep -q 'dev wlan0'; }
+          for i in $(seq 60); do
+            "$adb" emu gsm data off >/dev/null 2>&1 || true
+            "$adb" shell svc data disable || true
+            wifi_default && break
+            if [ "$i" = 30 ]; then
+              "$adb" shell svc wifi disable || true
+              sleep 2
+              "$adb" shell svc wifi enable || true
+            fi
             sleep 2
           done
-          "$adb" shell ip route get 8.8.8.8 | grep -q 'dev wlan0' || echo "::warning::the emulator's default network is not its Wi-Fi"
+          if wifi_default; then
+            echo "the emulator's default network is its Wi-Fi after $i tries"
+          else
+            "$adb" shell ip route get 8.8.8.8 || true
+            "$adb" shell dumpsys connectivity | grep -E 'Active default network|NetworkAgentInfo\{' | cut -c1-400 || true
+            echo "::error::the emulator's default network is not its Wi-Fi"
+            exit 1
+          fi
       - name: the phone suite
         run: go run ./tools/bench -cbb "$RUNNER_TEMP/cbb" -android apps/android -report "$RUNNER_TEMP/phone" phone
       - name: the emulator's log

@@ -10,6 +10,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -58,6 +59,16 @@ class GroupTest {
         else GrantPermissionRule.grant(Manifest.permission.CAMERA)
 
     private val context: Context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    /** The phone's networks for a failure message: which is the default, each one's capabilities and addresses. */
+    @Suppress("DEPRECATION")
+    private fun networks(): String {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return "no ConnectivityManager"
+        val active = cm.activeNetwork
+        return cm.allNetworks.joinToString("; ", prefix = "default ${active ?: "none"}: ") { n ->
+            "$n ${cm.getNetworkCapabilities(n)} ${cm.getLinkProperties(n)?.linkAddresses}"
+        }
+    }
     private lateinit var model: AppModel
 
     private fun str(id: Int) = context.getString(id)
@@ -453,7 +464,7 @@ class GroupTest {
 
             // "This is my home network".
             runBlocking { model.addHomeNetwork() }
-            assertEquals("adding the home network says", null, model.hubNote)
+            assertEquals("adding the home network says (${networks()})", null, model.hubNote)
             assertTrue("the hub does not count this network as home: ${model.hub}", hubNow().home)
         } finally {
             runCatching { Bench.run(Bench.PC, CUT_HOME.replace(" -A ", " -D ")) }
