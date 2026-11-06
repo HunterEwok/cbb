@@ -74,6 +74,10 @@ type State struct {
 	Endpoints  []netip.AddrPort
 	ListenPort int
 	Members    []Member
+	// Retired tells that this member stopped being a hub and is none now:
+	// it tells the peers that keep its offer to forget it (section 11,
+	// "Stopping a hub").
+	Retired bool
 
 	// Obfuscation, on the hub, is the group's AmneziaWG settings, which
 	// it gives its clients; nil for plain WireGuard.
@@ -235,6 +239,7 @@ type stateFile struct {
 	Group      string           `json:"group,omitempty"`
 	Hubs       []hubFile        `json:"hubs,omitempty"`
 	IsHub      bool             `json:"is_hub,omitempty"`
+	Retired    bool             `json:"retired,omitempty"`
 	Endpoints  []netip.AddrPort `json:"endpoints,omitempty"`
 	ListenPort int              `json:"listen_port,omitempty"`
 	Members    []memberFile     `json:"members,omitempty"`
@@ -315,7 +320,7 @@ func LoadState(dir string) (*State, error) {
 	if f.Version != 1 {
 		return nil, fmt.Errorf("%s: unknown version %d", StateFile, f.Version)
 	}
-	s := &State{Group: f.Group, IsHub: f.IsHub, Endpoints: f.Endpoints, ListenPort: f.ListenPort, KeysInFile: f.KeysInFile,
+	s := &State{Group: f.Group, IsHub: f.IsHub, Retired: f.Retired, Endpoints: f.Endpoints, ListenPort: f.ListenPort, KeysInFile: f.KeysInFile,
 		Obfuscation: f.Obfuscation, ServingFor: f.ServingFor, NextFor: f.NextFor}
 	if f.NextAt != 0 {
 		s.NextAt = time.UnixMilli(f.NextAt)
@@ -375,7 +380,7 @@ func (s *State) Save(dir string) error {
 	if err := s.seal(); err != nil {
 		return err
 	}
-	f := stateFile{Version: 1, Group: s.Group, IsHub: s.IsHub, Endpoints: s.Endpoints, ListenPort: s.ListenPort, KeysInFile: s.KeysInFile,
+	f := stateFile{Version: 1, Group: s.Group, IsHub: s.IsHub, Retired: s.Retired, Endpoints: s.Endpoints, ListenPort: s.ListenPort, KeysInFile: s.KeysInFile,
 		Obfuscation: s.Obfuscation}
 	f.KeyTPM, f.KeySE = splitSealed(s.sealed.blob)
 	if s.sealed.blob == nil {

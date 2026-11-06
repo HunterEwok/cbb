@@ -42,7 +42,7 @@ const (
 	OpFreeze      = "freeze"         // client → service: freeze the admin computer Name names
 	OpThaw        = "thaw"           // client → service: on the root, unfreeze the admin computer Name names
 	OpResolve     = "resolve"        // client → service: on the root, void both histories of every key that signed two; Name answers whose
-	OpAway        = "away"           // client → service: Name "on", "off", "hub", "move" (to Device) or "relay": sync away from home
+	OpAway        = "away"           // client → service: Name "on", "off", "hub", "hub-off", "move" (to Device) or "relay": sync away from home
 	OpMode        = "mode"           // client → service: Name "own", "shared", "receive" or "send": the sync mode
 	OpNetwork     = "network"        // client → service: take the networks this device is on now as known
 	OpAdmin       = "admin"          // client → service: on the root, make the device Name names an admin
@@ -178,6 +178,7 @@ type Header struct {
 	VLESS        bool     `json:"vless,omitempty"`     // away hub: the clients come only over VLESS to the forwarder
 	Keep         bool     `json:"keep,omitempty"`      // away hub: keep the hub's addresses, port and forwarder where the message gives none
 	Consent      bool     `json:"consent,omitempty"`   // away on, join with an invitation, admin of a device with file keys: the user agreed to what the warning says; answer: yes
+	Force        bool     `json:"force,omitempty"`     // away hub-off: stop the hub even though the group has no other one
 	Invite       string   `json:"invite,omitempty"`    // the text of a remote invitation: made by invite, used by join
 	Joining      *Joining `json:"joining,omitempty"`   // invite: a device to confirm, before it is admitted
 	Status       *Status  `json:"status,omitempty"`

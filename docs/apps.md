@@ -153,6 +153,10 @@ they look, so both apps are built to the same plan.
    `NewVLESSID` and keeps them while that choice stays, and the clients get them the next
    time they meet the hub at home); and on Android
    "Keep the hub running in the background", which lets the foreground service keep it.
+   The switch stays in Settings, and the phone's own page in the device list has no "Make it
+   a hub", unlike the computers' apps: a phone is the hub only while its app is open (on
+   Android also in the background, at the cost of the battery), so a computer that is always
+   on is the better hub, and the apps do not put the phone forward for it.
    While the phone is the hub, the switch for its own sync away from home is hidden: a hub
    is nobody's client. Home says "This phone is the hub: sync works while the app is open".
    The hub's WireGuard key, its forwarder, its home networks and its clients sit with the
@@ -328,12 +332,21 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   the `ShowErrorDetails` default either way).
 - What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from
   home, "Make it a hub" for this Mac or, on an admin, for another admin computer (`cbb global
-  hub -on`), and on this Mac while it is a hub how its tunnel hides (WireGuard, AmneziaWG,
+  hub -on`), "Stop being the hub" (`cbb global hub off`, with `-on` for another device), and on this Mac while it is a hub how its tunnel hides (WireGuard, AmneziaWG,
   VLESS) and its forwarder (`cbb global hub -keep`, the tray app's page of this computer
   the same), the sync mode of this Mac or, on an admin, of another computer: `cbb mode -on`) goes only through the admin socket, which only root reaches, so the app runs
   `cbb` with administrator privileges (`Admin`, `do shell script … with administrator
   privileges`): macOS asks for the password, as `sudo cbb` does in Terminal. With error
   details on, `CBB_DEBUG=1` makes cbb name the error underneath.
+- **The hub's line**: every device's page has one, so that what a device cannot do shows
+  as such. On a hub it says "This is the group's hub" with "Stop being the hub" (on this Mac,
+  or on an admin for another device), which warns first when the group has no other hub. On a
+  device that may be a hub it is "Make it a hub"; on this Mac with sync away from home off,
+  its question says that a hub needs it and turns it on in the same step (`cbb global hub
+  -away-on`): the consent to sync away from home is given on this Mac. Elsewhere the line is
+  dimmed with the reason: a phone is a hub only from its own app's Settings, a lite member,
+  a watch and a computer without root never, a frozen device once the root unfreezes it, and
+  a computer that is no admin once the root makes it one.
 - **Remote paste**: only an app may press keys on a Mac, once its user allowed it in
   Accessibility, so the app is the Mac's paste target (`PasteTarget`), not the service or its
   agent. While it is open it keeps a `watch` connection with `inject` `desktop` and
@@ -382,6 +395,8 @@ service and its clipboard agent keep syncing without it.
   prompt on Windows (an elevated PowerShell started with `ShellExecuteEx`'s `runas`, each
   argument a single-quoted literal, its output read back from a file). A dismissed prompt
   changes nothing and says nothing.
+- **The hub's line**: on every device's page, as in the Mac app (`hubLine` in `app.js`,
+  `MakeHub` and `StopHub` in `desk.go`).
 - **Join a phone's group**: a computer in no group shows the button, which runs `cbb pair
   -app FILE` as the administrator, as the Mac app does: the dialog shows the QR code cbb
   writes into the file the app made, and Cancel removes the file. On Linux the file is
