@@ -168,6 +168,35 @@ const tunnels = ["plain", "obfuscate", "vless"];
 const tunnelName = (m) => ({ plain: "WireGuard", obfuscate: "AmneziaWG", vless: "VLESS" })[m];
 const hubTunnel = (a) => a?.vless ? "vless" : a?.obfuscated ? "obfuscate" : "plain";
 
+// noHub says why d cannot be a hub, "" when it can: a phone only from its
+// own app, never a lite member, a watch or a computer without root, and a
+// computer only as the root or an admin with the hub power.
+function noHub(d, me) {
+  const never = { phone: "A phone is a hub only from its own app's Settings, while the app is open.", lite: "A lite member is never a hub.", watch: "A watch is never a hub." }[d.role];
+  if (never) return t(never);
+  if (d.store === "rootless") return t("It runs without administrator rights, so it is never a hub.");
+  if (d.frozen) return t("It is frozen: the root unfreezes it first.");
+  // A hub that reads the copies is the root or an admin; an admin makes any
+  // other computer a hub that only passes them on.
+  if (d.self && (!d.may_hub || d.forward_only)) return t("Only the group's root or an admin is a hub that reads the copies; an admin makes this computer a hub that only passes them on.");
+  if (!d.self && !me?.admin) return t("Only an admin makes another device a hub.");
+  return "";
+}
+
+// hubLine is on every device's page: whether it is a hub and what this
+// computer may do about it, or why it can never be one.
+function hubLine(d, me) {
+  const busy = state.busy ? "disabled" : "";
+  if (d.self ? state.status?.away?.hub : d.hub) {
+    const stop = me?.admin || d.self ? `<button data-action="unhub" class="danger" ${busy}>${esc(t("Stop being the hub"))}</button>` : "";
+    return `<div class="card actions"><div class="line"><span>${esc(t("This is the group's hub"))}</span></div>${stop}</div>`;
+  }
+  const why = noHub(d, me);
+  if (why) return `<div class="card actions"><button disabled>${esc(t("Make it a hub"))}</button><p class="dim small">${esc(why)}</p></div>`;
+  if (d.may_hub && !d.forward_only) return `<div class="card actions"><button data-action="hub" ${busy}>${esc(t("Make it a hub that reads the copies"))}</button></div>`;
+  return `<div class="card actions"><button data-action="hub-forward" ${busy}>${esc(t("Make it a hub that only passes them on"))}</button></div>`;
+}
+
 // The hub's own settings, on this computer's page while it is a hub.
 function hubCard(d) {
   const a = state.status?.away;
@@ -626,12 +655,6 @@ function renderDetail() {
     if (d.frozen && me.root) actions.push(["unfreeze", t("Unfreeze")]);
     if (!d.self && d.admin && !d.root && !d.frozen && d.role === "full") actions.push(["freeze", t("Freeze"), true]);
     if (me.root && !d.admin && !d.frozen && d.role === "full") actions.push(["admin", t("Make it an admin")]);
-    // This computer needs sync away from home on; another one is told, and
-    // refuses while it is off there.
-    // A hub that reads the copies is an admin; any other computer, but a
-    // rootless install, can be a hub that only passes them on.
-    if (d.may_hub && !d.forward_only && !d.frozen && d.role === "full" && (!d.self || (state.status?.away && !state.status.away.hub))) actions.push(["hub", t("Make it a hub that reads the copies")]);
-    if (!d.self && !d.admin && !d.root && !d.frozen && d.role === "full" && d.store !== "rootless") actions.push(["hub-forward", t("Make it a hub that only passes them on")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   // Any computer leaves by itself; the root only when it is alone, which the service checks.
@@ -644,6 +667,7 @@ function renderDetail() {
     // lite members have no modes yet and refuse.
     (me?.admin && !d.self && d.online && d.role === "full"
       ? `<div class="card"><div class="dim small">${esc(t("Sync mode"))}</div><div class="segmented">${modeButtons(d.mode, d.id)}</div></div>` : "") +
+    hubLine(d, me) +
     hubCard(d) +
     (actions.length
       ? `<div class="card actions">${actions.map(([a, label, danger]) => `<button data-action="${a}"${danger ? ' class="danger"' : ""} ${state.busy ? "disabled" : ""}>${esc(label)}</button>`).join("")}</div>` : "") +
@@ -705,15 +729,30 @@ async function deviceAction(action) {
     case "admin":
       if (await ask(t("Make %s an admin?", d.name), t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe."), t("Make it an admin"))) await act("MakeAdmin", d.id);
       break;
-    case "hub":
-      if (await ask(t("Make %s a hub?", d.name), d.self
-        ? t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
-        : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on."), t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id, false);
+    case "hub": {
+      // This computer turns sync away from home on with its hub, by its
+      // user's word here; another one must have it on already.
+      const awayOn = d.self && !state.status?.away;
+      const text = awayOn
+        ? t("A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.")
+        : d.self
+          ? t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
+          : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.");
+      if (await ask(t("Make %s a hub?", d.name), text, t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id, awayOn, false);
       break;
+    }
     case "hub-forward":
       if (await ask(t("Make %s a hub?", d.name), t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.") +
-        " " + t("A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware."), t("Make it a hub"))) await act("MakeHub", d.id, true);
+        " " + t("A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware."), t("Make it a hub"))) await act("MakeHub", d.id, false, true);
       break;
+    case "unhub": {
+      const other = state.devices.some((x) => x.id !== d.id && x.hub);
+      const text = other
+        ? t("Your devices away from home then go through the group's next hub.")
+        : t("The group has no other hub: your devices away from home stop syncing until a device is a hub again. To keep them syncing, make another computer a hub first.");
+      if (await ask(t("Stop %s being the hub?", d.name), text, t("Stop being the hub"))) await act("StopHub", d.self ? "" : d.id);
+      break;
+    }
     case "terms":
       await call("OpenTerms").catch((e) => console.error("OpenTerms", e));
       break;

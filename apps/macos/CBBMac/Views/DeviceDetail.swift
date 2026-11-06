@@ -15,6 +15,7 @@ struct DeviceDetail: View {
     @State private var freezing = false
     @State private var thawing = false
     @State private var hubbing = false
+    @State private var unhubbing = false
     @State private var leaving = false
     @State private var renaming = false
     @State private var newName = ""
@@ -63,12 +64,23 @@ struct DeviceDetail: View {
                 Button { Task { await model.makeHub(d, forwardOnly: true) } } label: { Text("A hub that only passes them on") }
             }
         } message: {
-            if device?.isSelf == true {
+            if device?.isSelf == true, !model.awayOn {
+                Text("A hub needs sync away from home, which is off on this Mac, so this turns it on first. Your devices then reach the group through this Mac when they are away from home, through the project's forwarder at cbb.tools.")
+            } else if device?.isSelf == true {
                 Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
             } else {
                 Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.")
                     + Text(verbatim: " ")
                     + Text("A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware.")
+            }
+        }
+        .confirmationDialog(Text("Stop \(device?.name ?? "") being the hub?"), isPresented: $unhubbing) {
+            Button(role: .destructive) { if let d = device { Task { await model.stopHub(d) } } } label: { Text("Stop being the hub") }
+        } message: {
+            if let d = device, model.otherHub(than: d) {
+                Text("Your devices away from home then go through the group's next hub.")
+            } else {
+                Text("The group has no other hub: your devices away from home stop syncing until a device is a hub again. To keep them syncing, make another computer a hub first.")
             }
         }
         .confirmationDialog(Text("Freeze \(device?.name ?? "")?"), isPresented: $freezing) {
@@ -234,7 +246,13 @@ struct DeviceDetail: View {
             Text("This Mac is no admin of the group: the phone or an admin computer adds and removes devices.")
                 .font(.footnote).foregroundStyle(palette.textDim)
             if d.isSelf {
-                leaveAction.glassTile(cornerRadius: Tokens.radiusCard).disabled(model.busy)
+                VStack(alignment: .leading, spacing: 0) {
+                    hubLine(d)
+                    line
+                    leaveAction
+                }
+                .glassTile(cornerRadius: Tokens.radiusCard)
+                .disabled(model.busy)
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {
@@ -254,15 +272,8 @@ struct DeviceDetail: View {
                     line
                     action("star", "Make it an admin") { promoting = true }
                 }
-                // This Mac needs sync away from home on; another computer
-                // is told, and refuses while it is off there.
-                // A computer that is no admin, but a rootless install, can be
-                // a hub that only passes the copies on.
-                if !d.frozen, d.role == "full",
-                   (d.mayHub && (!d.isSelf || (model.awayOn && model.status?.away?.hub != true))) || mayPassOn(d) {
-                    line
-                    action("antenna.radiowaves.left.and.right", "Make it a hub") { hubbing = true }
-                }
+                line
+                hubLine(d)
                 // The phones and lite members have no modes yet and refuse.
                 if !d.isSelf, d.online, d.role == "full" {
                     line
@@ -292,6 +303,54 @@ struct DeviceDetail: View {
                 Text(verbatim: message).font(.callout).foregroundStyle(palette.textDim).textSelection(.enabled)
             }
         }
+    }
+
+    /// Whether it is a hub, and what this Mac may do about it: always
+    /// there, so that a device that can never be a hub says why.
+    @ViewBuilder private func hubLine(_ d: Control.Device) -> some View {
+        if d.isSelf ? model.status?.away?.hub == true : d.hub {
+            Label { Text("This is the group's hub") } icon: { Image(systemName: "antenna.radiowaves.left.and.right") }
+                .foregroundStyle(palette.text)
+                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                .padding(.horizontal, Tokens.spacingMedium)
+            if model.isAdmin || d.isSelf {
+                line
+                action("antenna.radiowaves.left.and.right.slash", "Stop being the hub", danger: true) { unhubbing = true }
+            }
+        } else if let why = noHub(d) {
+            VStack(alignment: .leading, spacing: 2) {
+                Label { Text("Make it a hub") } icon: { Image(systemName: "antenna.radiowaves.left.and.right") }
+                Text(why).font(.footnote)
+            }
+            .foregroundStyle(palette.textDim)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+            .padding(.horizontal, Tokens.spacingMedium)
+            .padding(.vertical, 6)
+            .accessibilityElement(children: .combine)
+        } else {
+            action("antenna.radiowaves.left.and.right", "Make it a hub") { hubbing = true }
+        }
+    }
+
+    /// Why d cannot be a hub, nil when it can: a phone only from its own
+    /// app, never a lite member, a watch or a computer without root, and a
+    /// computer only as the root or an admin with the hub power. Another
+    /// computer turns sync away from home on itself, and is told so.
+    private func noHub(_ d: Control.Device) -> LocalizedStringKey? {
+        switch d.role {
+        case "phone": return "A phone is a hub only from its own app's Settings, while the app is open."
+        case "lite": return "A lite member is never a hub."
+        case "watch": return "A watch is never a hub."
+        default: break
+        }
+        if d.store == "rootless" { return "It runs without administrator rights, so it is never a hub." }
+        if d.frozen { return "It is frozen: the root unfreezes it first." }
+        // A hub that reads the copies is the root or an admin; an admin
+        // makes any other computer a hub that only passes them on.
+        if d.isSelf, !d.mayHub || d.forwardOnly { return "Only the group's root or an admin is a hub: the root makes this Mac an admin first." }
+        if !d.isSelf, !model.isAdmin { return "Only an admin makes another device a hub." }
+        if !d.isSelf, !d.mayHub || d.forwardOnly, !mayPassOn(d) { return "Only the group's root or an admin is a hub: make it an admin first." }
+        return nil
     }
 
     /// This Mac leaves its group; the root only when it is alone, which

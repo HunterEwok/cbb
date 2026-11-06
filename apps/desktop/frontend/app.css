@@ -142,6 +142,8 @@ main { flex: 1; display: flex; min-height: 0; }
 .actions button { display: block; width: 100%; text-align: left; border: none; border-radius: 0; background: transparent; padding: 12px 16px; color: var(--accent); }
 .actions button + button { border-top: 1px solid var(--line); }
 .actions button.danger { color: var(--danger); }
+.actions .line + button { border-top: 1px solid var(--line); }
+.actions button:disabled + p { margin: 0; padding: 0 16px 12px; }
 
 .notice { height: 100%; display: grid; place-content: center; text-align: center; gap: 8px; max-width: 460px; margin: 0 auto; user-select: text; white-space: pre-wrap; }
 .notice .big { font-size: 40px; color: var(--accent); }

@@ -226,18 +226,32 @@ final class MacModel: ObservableObject {
     func freeze(_ id: String) async { await admin(["freeze", id], done: String(localized: "Frozen.")) }
     /// Makes a device a hub of the group for sync away from home, reached
     /// through the project's forwarder: this Mac as cbb global hub does, or
-    /// another computer, to which cbb sends a signed hub command. A hub that
-    /// reads the copies is an admin; with forwardOnly a computer that is no
-    /// admin becomes a hub that only passes them on and reads none.
+    /// another computer, to which cbb sends a signed hub command. This Mac
+    /// turns sync away from home on with it where it is off, after the
+    /// question the app showed, which cbb asks again. A hub that reads the
+    /// copies is an admin; with forwardOnly a computer that is no admin
+    /// becomes a hub that only passes them on and reads none.
     func makeHub(_ d: Control.Device, forwardOnly: Bool = false) async {
-        if d.isSelf {
-            await admin(["global", "hub", "-firewall", "no"], done: String(localized: "It is a hub now."))
-        } else if forwardOnly {
+        if !d.isSelf, forwardOnly {
             await admin(["global", "hub", "-on", d.id, "-forward-only"],
                         done: String(localized: "It is a hub now that only passes the copies on, and reads none of them."))
-        } else {
-            await admin(["global", "hub", "-on", d.id], done: String(localized: "It is a hub now."))
+            return
         }
+        let turnOn = d.isSelf && !awayOn
+        var args = d.isSelf ? ["global", "hub", "-firewall", "no"] : ["global", "hub", "-on", d.id]
+        if turnOn { args.insert("-away-on", at: 2) }
+        await admin(args, answer: turnOn, done: String(localized: "It is a hub now."))
+    }
+    /// Makes a hub stop being one: this Mac, or another device, to which
+    /// cbb sends a signed hub command. Its clients go to the next hub; the
+    /// app warned first when there is none.
+    func stopHub(_ d: Control.Device) async {
+        let args = d.isSelf ? ["global", "hub", "off", "-yes"] : ["global", "hub", "off", "-on", d.id, "-yes"]
+        await admin(args, done: String(localized: "It is no hub any more."))
+    }
+    /// Whether the group has a hub other than d that this Mac knows of.
+    func otherHub(than d: Control.Device) -> Bool {
+        devices.contains { $0.id != d.id && $0.hub }
     }
     /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
     enum HubTunnel: String, CaseIterable, Identifiable {

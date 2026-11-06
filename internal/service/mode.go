@@ -192,6 +192,9 @@ func (s *Service) command(peer group.DeviceID, c group.Record) node.Result {
 	}
 	switch body.Type {
 	case group.CommandHub:
+		if body.Hub != nil && body.Hub.Stop {
+			return s.hubStopped(body)
+		}
 		return s.takeHub(body)
 	case group.CommandPaste:
 		return s.pasted(body, c, from)

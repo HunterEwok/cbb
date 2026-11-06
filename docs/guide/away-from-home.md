@@ -46,6 +46,9 @@ sudo cbb global on                        # read what it says about the keys, ty
 sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches your home at
 ```
 
+In the Mac app or the tray app, open the computer's own page and choose **Make it a hub**: it
+asks once and turns sync away from home on with it, through the project's forwarder.
+
 - **The address** is your home's public IP address (IPv4 or IPv6), or a name that points
   to it. Your router's status page shows it, or a site such as `ifconfig.me`.
 - **The router** must forward UDP port 8764 to the hub. Look for "port forwarding" or
@@ -136,7 +139,10 @@ Other ways to join from afar, through SSH or your own VPN, are in
 
 ## No computer for a hub
 
-A phone can be the hub while its app is open (Settings, **This phone as the hub**). Or the
+A phone can be the hub while its app is open (Settings, **This phone as the hub**). The
+switch is only in Settings, not on the phone's page in the device list as on a computer: a
+phone serves only while its app is open (an Android phone also in the background, at the cost
+of its battery), so a computer that is always on is the better hub. Or the
 devices meet at a **blind relay** on a server of your own instead of a hub: the computers with
 `cbb global relay`, the phones under **Blind relay** in Settings. The relay cannot read the
 clipboard but sees which devices talk, when and how much. See
@@ -146,6 +152,13 @@ The project runs a blind relay at `cbb.tools` that any group can use: `sudo cbb 
 knows its address and key, and keeps up by itself when the project changes them.
 
 ## Turning it off
+
+To stop a computer being the hub but keep syncing away from home on it, run
+`sudo cbb global hub off` there, or choose **Stop being the hub** on its page in the Mac app
+or the tray app; an admin can do it for another computer too (`sudo cbb global hub off -on
+NAME`). The devices connected to it go to the group's next hub. When there is no other hub,
+it asks first, since the devices away from home then stop syncing until a device is a hub
+again.
 
 ```sh
 sudo cbb global off

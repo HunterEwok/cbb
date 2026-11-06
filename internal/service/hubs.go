@@ -571,13 +571,39 @@ func offerOf(h tunnel.HubLink) node.TunnelOffer {
 // hubShare is what this hub shares with peer, a device that may be a hub:
 // its offer, whether it serves, and its clients, itself among them; nil
 // when this device is no hub or peer may not be one.
+//
+// A device that stopped being a hub tells the computers and the devices
+// that may be hubs instead that it is none, so that they forget its offer.
 func (s *Service) hubShare(peer group.DeviceID) *node.HubShare {
-	if !s.mayHost(peer) {
-		return nil
-	}
+	may, full := s.mayHost(peer), s.roleOfDevice(peer) == group.RoleFull
 	s.tunMu.Lock()
 	defer s.tunMu.Unlock()
+	if st := s.tunnel; st != nil && !st.IsHub && st.Retired {
+		if may || full {
+			return &node.HubShare{Stopped: true}
+		}
+		return nil
+	}
+	if !may {
+		return nil
+	}
 	return s.hubShareLocked(peer)
+}
+
+// roleOfDevice is the role the records give dev, "" when they do not
+// list it.
+func (s *Service) roleOfDevice(dev group.DeviceID) string {
+	s.recMu.Lock()
+	defer s.recMu.Unlock()
+	if s.records == nil {
+		return ""
+	}
+	for _, d := range s.records.Devices() {
+		if d.ID == dev {
+			return d.Role
+		}
+	}
+	return ""
 }
 
 func (s *Service) hubShareLocked(peer group.DeviceID) *node.HubShare {
@@ -630,6 +656,22 @@ func (s *Service) hubsShared(from group.DeviceID, chain []*x509.Certificate, h n
 	defer s.tunMu.Unlock()
 	st := s.tunnel
 	if st == nil || st.Relay != nil {
+		return nil
+	}
+	if h.Stopped {
+		// The sender is no hub any more: its offer goes.
+		lost := st.ForgetHubs(func(l tunnel.HubLink) bool { return l.Device != string(from) })
+		if len(lost) == 0 {
+			return nil
+		}
+		s.logf("cbb: %s is no hub of the group any more; its offer is forgotten", from)
+		if err := st.Save(s.cfg.StateDir); err != nil {
+			return fmt.Errorf("saving the tunnel state: %w", err)
+		}
+		if s.tunUsing == string(from) {
+			s.stopTunnelLocked()
+			s.runTunnelLocked()
+		}
 		return nil
 	}
 	save, peers := false, false

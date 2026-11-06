@@ -251,8 +251,11 @@ func (b *CommandBody) Open(secret []byte) error {
 // A HubOrder is what a hub command tells the new hub: where its clients
 // reach it away from home (a forwarder, its own addresses, or both) and the
 // clients of the old hub, each with the tunnel key and the preshared key it
-// has, so that they move without meeting the new hub first.
+// has, so that they move without meeting the new hub first. An order with
+// Stop and nothing else tells the receiver, a hub, to stop being one
+// (docs/protocol.md, section 11, "Stopping a hub").
 type HubOrder struct {
+	Stop      bool          `json:"stop,omitempty"`
 	Forwarder *HubForwarder `json:"forwarder,omitempty"`
 	Endpoints []string      `json:"endpoints,omitempty"` // "ip:port" or "[ipv6]:port"
 	Clients   []HubClient   `json:"clients,omitempty"`
@@ -634,6 +637,10 @@ func (b *CommandBody) checkPaste() error {
 
 func (o *HubOrder) check() error {
 	switch {
+	case o.Stop && (o.Forwarder != nil || len(o.Endpoints) > 0 || len(o.Clients) > 0):
+		return errors.New("group: a hub command that stops a hub carries a forwarder, addresses or clients")
+	case o.Stop:
+		return nil
 	case o.Forwarder == nil && len(o.Endpoints) == 0:
 		return errors.New("group: a hub command gives no forwarder and no address")
 	case len(o.Endpoints) > 8:

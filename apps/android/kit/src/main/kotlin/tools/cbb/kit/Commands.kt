@@ -424,6 +424,13 @@ object Commands {
             (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: throw WireTypeException("endpoints: not a string")
         }
         val clients = h.optArray("clients").orEmpty().map { it as? JsonObject ?: throw WireTypeException("clients: not an object") }
+        // An order to stop being a hub carries nothing else.
+        if (h.optBool("stop") == true) {
+            if (forwarder != null || endpoints.isNotEmpty() || clients.isNotEmpty()) {
+                throw Refused("a hub command that stops a hub carries a forwarder, addresses or clients")
+            }
+            return
+        }
         if (forwarder == null && endpoints.isEmpty()) throw Refused("a hub command gives no forwarder and no address")
         if (endpoints.size > 8) throw Refused("a hub command gives too many addresses")
         if (clients.size > MAX_HUB_CLIENTS) throw Refused("a hub command hands over too many clients")

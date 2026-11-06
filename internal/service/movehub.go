@@ -129,7 +129,7 @@ func (s *Service) takeHub(body group.CommandBody) node.Result {
 		return refuse(node.ResultRefused, "this computer meets the others at a blind relay; a group with a relay has no hub")
 	}
 	old := *st
-	st.IsHub, st.Endpoints, st.Forwarder, st.Obfuscation = true, eps, fw, nil
+	st.IsHub, st.Retired, st.Endpoints, st.Forwarder, st.Obfuscation = true, false, eps, fw, nil
 	st.Members = append([]tunnel.Member(nil), old.Members...)
 	// The old hub is no hub any more.
 	st.Hubs = slices.DeleteFunc(slices.Clone(old.Hubs), func(h tunnel.HubLink) bool { return h.Device == string(body.By) })

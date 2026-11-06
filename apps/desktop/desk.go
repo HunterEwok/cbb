@@ -278,7 +278,7 @@ func (d *Desk) Fetch() {
 	})
 }
 
-// Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, SetAway and SetMode change the group:
+// Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, StopHub, SetAway and SetMode change the group:
 // cbb does them as the administrator (admin_*.go), after the system asks.
 // MakeAdmin's dialog warns that the computer's key is a file, which
 // -allow-file-key consents to.
@@ -297,21 +297,36 @@ func (d *Desk) Leave() {
 func (d *Desk) Freeze(id string)   { d.admin([]string{"freeze", id}, false, "Frozen.") }
 func (d *Desk) Unfreeze(id string) { d.admin([]string{"unfreeze", id}, false, "Unfrozen.") }
 
-// MakeHub makes a device a hub of the group for sync away from home,
-// reached through the project's forwarder: this computer as cbb global hub
-// does, or with id another computer, to which cbb sends a signed hub
-// command; there sync away from home must be on already. A hub that reads
-// the copies is an admin; with forwardOnly a computer that is no admin
-// becomes a hub that only passes them on and reads none.
-func (d *Desk) MakeHub(id string, forwardOnly bool) {
+// MakeHub makes a device a hub of the group for sync away from home:
+// this computer, when id is empty, at the addresses cbb global hub finds as
+// it does, turning sync away from home on with it when awayOn is set (the
+// user said yes to the app's question), or with id another computer, to
+// which cbb sends a signed hub command; there sync away from home must be
+// on already. A hub that reads the copies is an admin; with forwardOnly a
+// computer that is no admin becomes a hub that only passes them on and
+// reads none.
+func (d *Desk) MakeHub(id string, awayOn, forwardOnly bool) {
 	switch {
-	case id == "":
-		d.admin([]string{"global", "hub", "-firewall", "no"}, false, "It is a hub now.")
-	case forwardOnly:
+	case id != "" && forwardOnly:
 		d.admin([]string{"global", "hub", "-on", id, "-forward-only"}, false, "It is a hub now that only passes the copies on, and reads none of them.")
-	default:
+	case id != "":
 		d.admin([]string{"global", "hub", "-on", id}, false, "It is a hub now.")
+	case awayOn:
+		d.admin([]string{"global", "hub", "-firewall", "no", "-away-on"}, true, "It is a hub now.")
+	default:
+		d.admin([]string{"global", "hub", "-firewall", "no"}, false, "It is a hub now.")
 	}
+}
+
+// StopHub makes a hub stop being one: this computer, or with id another
+// device, to which cbb sends a signed hub command. Its clients go to the
+// next hub; the app warned first when there is none.
+func (d *Desk) StopHub(id string) {
+	args := []string{"global", "hub", "off", "-yes"}
+	if id != "" {
+		args = []string{"global", "hub", "off", "-on", id, "-yes"}
+	}
+	d.admin(args, false, "It is no hub any more.")
 }
 
 // SetHub sets how this hub's tunnel hides (plain, obfuscate for

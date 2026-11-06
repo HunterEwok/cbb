@@ -208,5 +208,19 @@
   "Leave the group?": "Выйти из группы?",
   "Leave": "Выйти",
   "This computer's keys and the group's files here are deleted, and remote paste and the quick actions are turned off; the rest of the settings stay. It can then join this group or another one. The group lists it until an admin removes it.": "Ключи этого компьютера и файлы группы на нём удаляются, удалённая вставка и быстрые действия выключаются, остальные настройки остаются. Потом он может войти в эту группу или в другую. В списке группы он остаётся, пока его не удалит админ.",
-  "Left the group. This computer can join a group again.": "Вы вышли из группы. Этот компьютер может снова войти в группу."
+  "Left the group. This computer can join a group again.": "Вы вышли из группы. Этот компьютер может снова войти в группу.",
+  "A phone is a hub only from its own app's Settings, while the app is open.": "Телефон становится хабом только в настройках своего приложения и только пока приложение открыто.",
+  "A lite member is never a hub.": "Лёгкий участник не бывает хабом.",
+  "A watch is never a hub.": "Часы не бывают хабом.",
+  "It runs without administrator rights, so it is never a hub.": "Он работает без прав администратора, поэтому не бывает хабом.",
+  "It is frozen: the root unfreezes it first.": "Он заморожен: сначала корень должен его разморозить.",
+  "Only the group's root or an admin is a hub that reads the copies; an admin makes this computer a hub that only passes them on.": "Хабом, который читает копии, бывает только корень группы или админ; хабом, который только пересылает, этот компьютер делает админ.",
+  "Only an admin makes another device a hub.": "Сделать хабом другое устройство может только админ.",
+  "Stop being the hub": "Перестать быть хабом",
+  "This is the group's hub": "Это хаб группы",
+  "A hub needs sync away from home, which is off on this computer, so this turns it on first. Your devices then reach the group through this computer when they are away from home, through the project's forwarder at cbb.tools.": "Хабу нужна синхронизация вне дома, а на этом компьютере она выключена, поэтому сначала она включится. Вне дома ваши устройства будут связываться с группой через этот компьютер, через форвардер проекта на cbb.tools.",
+  "Your devices away from home then go through the group's next hub.": "Вне дома ваши устройства пойдут через следующий хаб группы.",
+  "The group has no other hub: your devices away from home stop syncing until a device is a hub again. To keep them syncing, make another computer a hub first.": "Другого хаба в группе нет: вне дома ваши устройства перестанут синхронизироваться, пока какое-нибудь устройство снова не станет хабом. Чтобы они не теряли связь, сначала сделайте хабом другой компьютер.",
+  "Stop %s being the hub?": "%s перестанет быть хабом?",
+  "It is no hub any more.": "Больше не хаб."
 }

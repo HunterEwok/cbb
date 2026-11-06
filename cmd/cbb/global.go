@@ -61,17 +61,22 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       cbb global off [-yes]          turn it off here and forget its keys\n" +
 		"       cbb global off -on DEVICE      on an admin: turn it off on another device, whose own user\n" +
 		"                                      turns it on again\n" +
-		"       cbb global hub [-keep] [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder default|address:port -forwarder-key KEY] [-vless] [address:port...]\n" +
+		"       cbb global hub [-away-on] [-keep] [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder default|address:port -forwarder-key KEY] [-vless] [address:port...]\n" +
 		"                                      make this device the group's hub, reached at these addresses\n" +
 		"                                      or through the forwarder (without addresses, the project's at\n" +
 		"                                      " + forward.ProjectHost + "); -obfuscate for networks that block WireGuard,\n" +
-		"                                      -vless for clients that reach the forwarder only over VLESS\n" +
+		"                                      -vless for clients that reach the forwarder only over VLESS;\n" +
+		"                                      -away-on turns sync away from home on here first\n" +
 		"       cbb global hub -on DEVICE [-forward-only] [-forwarder default|address:port -forwarder-key KEY] [address:port...]\n" +
 		"                                      on an admin: make DEVICE, an admin computer with sync away from\n" +
 		"                                      home on, a hub of the group as well, reached through the forwarder\n" +
 		"                                      (without addresses, the project's) or at these addresses;\n" +
 		"                                      -forward-only makes any computer that is no admin a hub that only\n" +
 		"                                      passes the copies on, sealed, and reads none\n" +
+		"       cbb global hub off [-on DEVICE] [-yes]\n" +
+		"                                      stop being one of the group's hubs, or on an admin make DEVICE\n" +
+		"                                      stop; its clients go to the next hub, and without one -yes\n" +
+		"                                      agrees that they stop syncing away from home\n" +
 		"       cbb global move DEVICE [-forwarder default|address:port -forwarder-key KEY] [address:port...]\n" +
 		"                                      on the hub: make DEVICE, an admin computer with sync away from\n" +
 		"                                      home on, the hub in its place, reached through this hub's\n" +
@@ -160,6 +165,17 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return cmdGlobalAllow(stdout, stderr)
 	case "hub":
+		if len(args) > 1 && args[1] == "off" {
+			fs := flag.NewFlagSet("global hub off", flag.ContinueOnError)
+			fs.SetOutput(stderr)
+			on := fs.String("on", "", "on an admin: make the device DEVICE, a hub, stop being one")
+			yes := fs.Bool("yes", false, "stop the hub even when the group has no other one")
+			if fs.Parse(args[2:]) != nil || fs.NArg() != 0 {
+				return 2
+			}
+			h.Name, h.Device, h.Force = "hub-off", *on, *yes
+			break
+		}
 		fs := flag.NewFlagSet("global hub", flag.ContinueOnError)
 		fs.SetOutput(stderr)
 		port := fs.Int("port", 0, "the UDP port the hub listens on (default 8764)")
@@ -170,6 +186,7 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		vlessOnly := fs.Bool("vless", false, "the clients reach the forwarder over VLESS, which looks like HTTPS to a website, where AmneziaWG over UDP does not pass")
 		on := fs.String("on", "", "on an admin: make the device DEVICE, an admin computer with sync away from home on, a hub of the group")
 		forwardOnly := fs.Bool("forward-only", false, "with -on: make DEVICE, a computer that is no admin, a hub that only passes the copies on and reads none")
+		awayOn := fs.Bool("away-on", false, "turn sync away from home on here first where it is off, after the question of cbb global on")
 		keep := fs.Bool("keep", false, "on a hub: keep its addresses, port and forwarder where none are given, changing only how its tunnel hides (-obfuscate, -vless)")
 		if fs.Parse(args[1:]) != nil {
 			return 2
@@ -182,13 +199,33 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "cbb: -keep changes this hub's own settings; -on makes another device a hub")
 			return 2
 		}
-		if *on != "" && (*port != 0 || *obfuscate || *vlessOnly || firewall != "ask") {
+		if *on != "" && (*port != 0 || *obfuscate || *vlessOnly || *awayOn || firewall != "ask") {
 			fmt.Fprintln(stderr, "cbb: -on takes only -forwarder, -forwarder-key and the new hub's addresses; its own settings stay its own")
 			return 2
 		}
 		if *on == "" {
 			if err := checkAwayNet(); err != nil {
 				return fail(stderr, err)
+			}
+			// A hub needs sync away from home on here, which this device's
+			// own user turns on: -away-on asks the question of cbb global on.
+			if *awayOn {
+				if *keep {
+					fmt.Fprintln(stderr, "cbb: -keep changes a hub's settings; -away-on comes with making this device a hub")
+					return 2
+				}
+				fmt.Fprint(stdout, "A hub needs sync away from home, so this turns it on here first, where it is off.\n\n")
+				fmt.Fprint(stdout, keysWarning)
+				fmt.Fprint(stdout, "Type yes to turn sync away from home on and make this device a hub: ")
+				line, err := readLine(stdin)
+				if err != nil {
+					return fail(stderr, err)
+				}
+				if !strings.EqualFold(strings.TrimSpace(line), "yes") {
+					fmt.Fprintln(stdout, "Nothing changed.")
+					return 1
+				}
+				h.Consent = true
 			}
 		}
 		if !slices.Contains([]string{"ask", "yes", "no"}, firewall) {
@@ -311,6 +348,10 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
+	if h.Name == "hub-off" && h.Device != "" {
+		fmt.Fprintf(stdout, "%s is no hub of the group any more.\n", h.Device)
+		return 0
+	}
 	if h.Device != "" && args[0] == "hub" {
 		if h.ForwardOnly {
 			fmt.Fprintf(stdout, "%s is a hub of the group now; it passes the copies on, sealed, and reads none.\n", h.Device)
@@ -338,7 +379,9 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		syncHubPort(stdin, stdout, m.Status.Away, firewall)
 		writeAway(stdout, m.Status.Away)
 	}
-	if args[0] == "hub" {
+	if h.Name == "hub-off" {
+		fmt.Fprintln(stdout, "This device is no hub of the group any more.")
+	} else if args[0] == "hub" {
 		fmt.Fprint(stdout, hubNote)
 	}
 	return 0

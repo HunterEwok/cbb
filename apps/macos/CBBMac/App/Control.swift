@@ -120,6 +120,9 @@ enum Control {
         var osVersion: String?
         var version: String?
         var mac: String?
+        /// Where its keys live: file, hardware, proven or rootless; nil
+        /// when its member does not say.
+        var store: String?
         var admin = false
         var root = false
         var frozen = false
@@ -131,9 +134,6 @@ enum Control {
         var mayHub = false
         /// A hub that only passes the copies on: none is sealed to it.
         var forwardOnly = false
-        /// Where its keys live, as the service knows; "rootless" for an
-        /// install without root, which is never a hub.
-        var store: String?
         /// One of the group's hubs, as the service knows: this Mac while it
         /// is a hub, or a hub whose offer it keeps.
         var hub = false
@@ -142,7 +142,7 @@ enum Control {
         var mode: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, name, role, os, form, version, mac, admin, root, frozen, online, mode, hub, store
+            case id, name, role, os, form, version, mac, store, admin, root, frozen, online, mode, hub
             case forwardOnly = "forward_only"
             case osVersion = "os_version"
             case lastSeenMS = "last_seen_ms"
@@ -167,6 +167,7 @@ enum Control {
             osVersion = try c.decodeIfPresent(String.self, forKey: .osVersion)
             version = try c.decodeIfPresent(String.self, forKey: .version)
             mac = try c.decodeIfPresent(String.self, forKey: .mac)
+            store = try c.decodeIfPresent(String.self, forKey: .store)
             admin = try c.decodeIfPresent(Bool.self, forKey: .admin) ?? false
             root = try c.decodeIfPresent(Bool.self, forKey: .root) ?? false
             frozen = try c.decodeIfPresent(Bool.self, forKey: .frozen) ?? false
@@ -175,7 +176,6 @@ enum Control {
             isSelf = try c.decodeIfPresent(Bool.self, forKey: .isSelf) ?? false
             mayHub = try c.decodeIfPresent(Bool.self, forKey: .mayHub) ?? false
             forwardOnly = try c.decodeIfPresent(Bool.self, forKey: .forwardOnly) ?? false
-            store = try c.decodeIfPresent(String.self, forKey: .store)
             hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
             mode = try c.decodeIfPresent(String.self, forKey: .mode)
         }

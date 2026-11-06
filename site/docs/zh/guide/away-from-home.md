@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f26cbe3cc94c -->
+<!-- source: 0ee54fa655f3 -->
 # 离家使用
 
 在家时，你的设备会自动同步。要让笔记本或手机在别处也能继续同步，需要让家里的一台电脑成为群组的**中枢**，外出的设备通过群组自己的加密隧道连接到它。各种情形的图示见[工作原理](how-it-works.md#away-from-home-the-hub)。
@@ -27,6 +27,8 @@
 sudo cbb global on                        # read what it says about the keys, type yes
 sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches your home at
 ```
+
+在 Mac 应用或托盘应用中，打开这台电脑自己的页面并选择 **Make it a hub**：它会询问一次，并随之通过项目的转发器开启离家同步。
 
 - **地址**是你家的公网 IP 地址（IPv4 或 IPv6），或指向它的域名。路由器的状态页面会显示它，也可以用 `ifconfig.me` 之类的网站查看。
 - **路由器**必须把 UDP 端口 8764 转发给中枢。在其设置中查找“端口转发”或“虚拟服务器”。
@@ -88,9 +90,13 @@ sudo cbb invite        # on the hub: writes cbb.cbbinvite, valid for an hour
 
 手机在应用打开期间可以当中枢（设置，**This phone as the hub**）。或者，让设备在你自己服务器上的**盲中继**碰面，而不用中枢：电脑使用 `cbb global relay`，手机在设置的 **Blind relay** 下设置。中继无法读取剪贴板，但能看到哪些设备在通信、何时通信以及通信量。参见[运行自己的服务器](../admin/self-hosting.md#a-blind-relay)。
 
+**This phone as the hub** 开关只在设置里，而不像电脑那样出现在设备列表中手机的页面上：手机只在应用打开期间当中枢（Android 手机也可在后台，但耗电），所以一直开着的电脑是更好的中枢。
+
 以后将提供：`cbb.tools` 上任何群组都能使用的盲中继。
 
 ## 关闭
+
+要让一台电脑不再当中枢、但继续离家同步，在它上面运行 `sudo cbb global hub off`，或在 Mac 应用或托盘应用中它的页面上选择 **Stop being the hub**；管理员也可以对另一台电脑这样做（`sudo cbb global hub off -on 名称`）。连接到它的设备会转到群组的下一个中枢。如果没有其他中枢，它会先询问，因为离家的设备在某个设备再次成为中枢之前将停止同步。
 
 ```sh
 sudo cbb global off
