@@ -112,7 +112,16 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **28.** The blind relay: the open relay (`cbb relay -open`) with its limits, the choice in `cbb
     global relay` and in both phone apps, and the guide ([running your own
     servers](admin/self-hosting.md)) and the project's open relay on `cbb.tools` (`cbb global
-    relay default`) are done. Next: AmneziaWG and VLESS on the relay.
+    relay default`) are done, and so is a new key or address for the project's relay without
+    a release (`keys.json` and `entries.json`, [maintaining.md](maintaining.md)). Next:
+    - the relay's own key in the signed `keys.json` from the first `release-sign publish`
+      (`-relay cbb.tools:8765=...`), before the relay ever gets a new key;
+    - the rotation run once on the Windows virtual machine, as the other changes;
+    - "The project's relay" in both phone apps and on the lite member: today a phone enters
+      the relay's address and key by hand and the lite member has no relay; the kits would
+      take the relay's keys and address from the signed lists they already keep, as `cbb`
+      does;
+    - AmneziaWG and VLESS on the relay.
 - **29.** Secure updates: `cbb update`, automatic updates, the release passed through the group,
     the Android APK's own updates and the lite member's on Linux and OpenWrt are done
     ([design](design.md#secure-updates)); the project's root and release keys wait for the
