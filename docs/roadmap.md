@@ -509,12 +509,20 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     for the community to try, as the Android app first was.
     Sailfish has no TEE key through PKCS#11, so its key is a file (level 3). Its key fits
     [Key levels](#key-levels) as the other phones' do:
-    - Level 2, "hardware", the default: the app checks that its member key is in OP-TEE,
-      not in a software token that sets the same flags: `/dev/tee0` and `libckteec` are
-      there, the token is the initialized "Aurora TA" one in a hardware slot, and a P-256
-      key made with `CKA_TOKEN`, `CKA_SENSITIVE` and not `CKA_EXTRACTABLE` reads back
-      `CKA_NEVER_EXTRACTABLE` and `CKA_ALWAYS_SENSITIVE`, refuses its value, signs, and is
-      still there after a restart. Nothing about the device leaves the group (D-47).
+    - Level 2, "hardware", the default. How the key is kept, measured on the R570E with
+      5.1.5 (2026-11-06): the app asks Aurora's QCA keystore (provider
+      `qca-aurora-pkcs11`, keystore `USERAPP`, PKCS#11 provider `cktee`, PIN `0000`) once
+      to initialize its token, which gives the app a slot of its own in OP-TEE (model
+      "Aurora TA"; another app sees the same slot number empty); then, through `libckteec`
+      directly, it logs in with that PIN and keeps a P-256 key there with `CKA_TOKEN`,
+      `CKA_SENSITIVE` and not `CKA_EXTRACTABLE`. The key is found again after the app's
+      restart and the phone's reboot, refuses its value and signs. QCA itself handles only
+      RSA and GOST keys and aborts the process when the keystore holds an EC key, so the
+      app never calls QCA again once its key is there. The app checks that the key is in
+      OP-TEE, not in a software token that sets the same flags: `/dev/tee0` and
+      `libckteec` are there, the token is the initialized "Aurora TA" one, and the key
+      reads back `CKA_NEVER_EXTRACTABLE` and `CKA_ALWAYS_SENSITIVE`. Nothing about the
+      device leaves the group (D-47).
     - Level 1, "proven", only when the group's user chooses it, as everywhere, and only
       if Aurora offers key attestation (a proof that the key was made in the TEE, not only
       that the system is unmodified): 5.1.5 has none, and whether the attestation that 5.2's
@@ -526,10 +534,11 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       admin without the user's consent.
     - A phone without OP-TEE keeps its key in a file and is an admin or the hub only at
       level 3, after the user allows it.
-    - Still to check on a device: a key that lasts across restarts needs `C_Login` with the
-      token's user PIN, and how a sandboxed app gets it; whether another app sees our keys
-      in the same slot (`/dev/tee0` is open to every process); Ed25519 generation, which
-      the token lists but refused with `CKR_TEMPLATE_INCONSISTENT`.
+    - Ed25519 works in the same token when the template names `CKA_KEY_TYPE`
+      (`CKK_EC_EDWARDS`) and `CKA_EC_PARAMS` is the printable string `edwards25519`;
+      `CKM_EDDSA` needs a `CK_EDDSA_PARAMS`, since `libckteec` crashes on a null parameter.
+    - Still to check on a device: whether removing the app removes its token, so that a
+      reinstall starts as a new device.
 
 ## Devices that are hard to type into
 
