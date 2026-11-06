@@ -382,8 +382,10 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q qemu-user qemu-user-binfmt
       - name: go test the network, the group and the service under qemu-mips
+        # Emulated, internal/service takes close to go test's default 10
+        # minutes (586 and 597 seconds in runs that passed), so it gets 20.
         run: >-
-          go test -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./cmd/cbb ./internal/clip ./internal/control ./internal/group
+          go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./cmd/cbb ./internal/clip ./internal/control ./internal/group
           ./internal/hlc ./internal/mdns ./internal/netguard ./internal/node ./internal/openwrt
           ./internal/pair ./internal/service ./internal/sysinfo ./internal/tunnel ./internal/uptime
           ./internal/vless </dev/null
