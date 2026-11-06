@@ -1956,7 +1956,7 @@ jobs:
         run: |
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
-          cargo clippy --locked -p cbb-ffi --features join --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
       - name: cargo test (the interop vectors in testdata/interop too), with coverage
@@ -2130,8 +2130,8 @@ jobs:
       - name: the Aurora app's joining through lite/ffi joins a computer's group as a phone
         working-directory: .
         run: |
-          (cd lite && cargo build --locked --release -p cbb-ffi --features join --example join-on-linux)
-          CBB_JOIN_ON_LINUX="$PWD/lite/target/release/examples/join-on-linux" go test -race ./internal/service -run TestFFIJoiner -v
+          (cd lite && cargo build --locked --release -p cbb-ffi --features member --example phone-on-linux)
+          CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run TestFFIPhone -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64

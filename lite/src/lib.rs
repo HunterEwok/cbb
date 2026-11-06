@@ -31,6 +31,7 @@ pub mod node;
 pub mod pair;
 mod pastehelper;
 pub mod peer;
+pub mod phone;
 pub mod records;
 mod remotepaste;
 mod rootless;

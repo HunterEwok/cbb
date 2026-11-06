@@ -88,9 +88,21 @@ pub type OnCommand = Arc<dyn Fn(&DeviceId, &Record) -> wire::CommandResult + Sen
 type TunnelKeys = Option<(Vec<u8>, Vec<u8>)>;
 
 /// The lite member's set of connections.
+/// How the member presents itself in its hellos: the lite member, or a
+/// phone's app that runs it (crate::phone).
+#[derive(Clone)]
+pub struct Presence {
+    pub role: String,
+    pub name: String,
+    pub os: String,
+    /// Where the device key is: "file", "rootless" or "hardware".
+    pub key_store: String,
+    pub device: cbb_core::wire::DeviceInfo,
+}
+
 pub struct Node {
     ident: RwLock<Arc<Identity>>,
-    name: String,
+    presence: Arc<Presence>,
     pub engine: Arc<Engine>,
     records: Arc<Mutex<Records>>,
     state_dir: PathBuf,
@@ -150,7 +162,13 @@ impl Node {
         let entries = Arc::new(Entries::open(&state_dir, crate::update::release_roots(), uptime::wall_ms(), &*log));
         Node {
             ident: RwLock::new(Arc::new(ident)),
-            name: name.to_string(),
+            presence: Arc::new(Presence {
+                role: "lite".into(),
+                name: name.to_string(),
+                os: "linux".into(),
+                key_store: if crate::rootless::is() { "rootless" } else { "file" }.into(),
+                device: crate::device::own().clone(),
+            }),
             engine,
             records: Arc::new(Mutex::new(records)),
             state_dir,
@@ -165,6 +183,12 @@ impl Node {
             home: Mutex::new(HashMap::new()),
             entries,
         }
+    }
+
+    /// The node presenting itself as p in its hellos, before it connects.
+    pub fn presenting(mut self, p: Presence) -> Node {
+        self.presence = Arc::new(p);
+        self
     }
 
     /// Sets the tunnel key and preshared key the hellos offer from now on,
@@ -544,11 +568,11 @@ impl Node {
         let writer = {
             let c = c.clone();
             let records = self.records.clone();
-            let name = self.name.clone();
+            let who = self.presence.clone();
             let key = self.tunnel_key.clone();
             let log = self.log.clone();
             let entries = self.entries.clone();
-            std::thread::spawn(move || writer(&c, rx, &records, &name, &key, &entries, &*log))
+            std::thread::spawn(move || writer(&c, rx, &records, &who, &key, &entries, &*log))
         };
         let res = self.reader(&c);
         c.close(false);
@@ -855,7 +879,7 @@ fn writer(
     c: &Conn,
     rx: mpsc::Receiver<Out>,
     records: &Mutex<Records>,
-    name: &str,
+    who: &Presence,
     key: &RwLock<TunnelKeys>,
     entries: &Entries,
     log: &(dyn Fn(&str) + Send + Sync),
@@ -869,13 +893,14 @@ fn writer(
                 Some(wire::hello(
                     &h,
                     records.lock().unwrap().digest(),
-                    name,
-                    "linux",
-                    crate::device::own(),
+                    &who.role,
+                    &who.name,
+                    &who.os,
+                    &who.device,
                     key.read().unwrap().as_ref().filter(|_| !c.records_only).map(|(k, p)| (k.as_slice(), p.as_slice())),
                     mode.name(),
                     &actions,
-                    if crate::rootless::is() { "rootless" } else { "file" },
+                    &who.key_store,
                     crate::sealkey::public(),
                     if c.records_only { (0, 0) } else { entries.order(uptime::wall_ms()) },
                 ))

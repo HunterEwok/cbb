@@ -198,14 +198,14 @@ func TestEmbassyJoiner(t *testing.T) {
 	}
 }
 
-// TestFFIJoiner: the Aurora app's joining through lite/ffi's C functions
-// (cbb_join_*), run by the example join-on-linux with a software key in
-// place of the phone's OP-TEE key, joins a computer's group as a phone.
-// CBB_JOIN_ON_LINUX names the binary.
-func TestFFIJoiner(t *testing.T) {
-	bin := os.Getenv("CBB_JOIN_ON_LINUX")
+// TestFFIPhone runs the Aurora app's core through lite/ffi's C functions
+// with a software key (the example phone-on-linux, CBB_PHONE_ON_LINUX): the
+// phone shows its QR code, the service admits it as cbb pair -qr does, and
+// then the phone's member dials the service and syncs with it both ways.
+func TestFFIPhone(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
-		t.Skip("CBB_JOIN_ON_LINUX is not set")
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -218,23 +218,54 @@ func TestFFIJoiner(t *testing.T) {
 	}
 	addr := ln.Addr().String()
 	ln.Close()
-	join := exec.Command(bin, "-addr", addr, "-name", "aurora phone")
-	join.Stderr = testWriter{t, "join-on-linux: ", nil}
-	out, err := join.StdoutPipe()
+	app := exec.Command(bin, "-addr", addr, "-name", "aurora phone", "-dir", t.TempDir(), "-peer", pi.addr())
+	app.Stderr = testWriter{t, "phone-on-linux: ", nil}
+	out, err := app.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := join.Start(); err != nil {
+	in, err := app.StdinPipe()
+	if err != nil {
 		t.Fatal(err)
 	}
-	defer join.Process.Kill()
-	var qr string
-	sc := bufio.NewScanner(out)
-	for qr == "" && sc.Scan() {
-		if line, ok := strings.CutPrefix(sc.Text(), "QR: "); ok {
-			qr = line
+	if err := app.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		in.Close()
+		app.Process.Kill()
+		app.Wait()
+	}()
+	lines := make(chan string, 64)
+	go func() {
+		sc := bufio.NewScanner(out)
+		for sc.Scan() {
+			if l, ok := strings.CutPrefix(sc.Text(), "LOG "); ok {
+				t.Logf("phone-on-linux: %s", l)
+				continue
+			}
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	next := func(prefix string) string {
+		t.Helper()
+		deadline := time.After(joinTimeout)
+		for {
+			select {
+			case l, ok := <-lines:
+				if !ok {
+					t.Fatalf("phone-on-linux ended before %q", prefix)
+				}
+				if rest, ok := strings.CutPrefix(l, prefix); ok {
+					return rest
+				}
+			case <-deadline:
+				t.Fatalf("phone-on-linux printed no %q", prefix)
+			}
 		}
 	}
+	qr := next("QR: ")
 	// The service admits it as cbb pair -qr does.
 	jc, ok := phone.ParseJoinQR(qr)
 	if !ok {
@@ -253,14 +284,29 @@ func TestFFIJoiner(t *testing.T) {
 	if phoneDev == nil || phoneDev.OS != group.OSAurora || phoneDev.Role != group.RolePhone {
 		t.Fatalf("the phone is listed as %+v", phoneDev)
 	}
-	var rest strings.Builder
-	for sc.Scan() {
-		rest.WriteString(sc.Text() + "\n")
+	if joined := next("Joined "); !strings.HasSuffix(joined, " "+pi.status(t).Group) {
+		t.Fatalf("phone-on-linux joined %q, not the group %s", joined, pi.status(t).Group)
 	}
-	if err := join.Wait(); err != nil || !strings.Contains(rest.String(), "Joined ") ||
-		!strings.Contains(rest.String(), " "+pi.status(t).Group) {
-		t.Fatalf("join-on-linux: %v; %s", err, rest.String())
+
+	// The phone's member dials the service, with its key outside the core.
+	waitFor(t, "the phone connected", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+	// Its hello presents it as the phone it is, not as a lite member.
+	for _, d := range pi.devices(t) {
+		if d.Name == "aurora phone" && (d.OS != group.OSAurora || d.Store != "hardware" || d.Form != "phone" || d.OSVersion != "Aurora OS 5.1.5") {
+			t.Fatalf("the connected phone is listed as %+v", d)
+		}
 	}
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the phone"); err != nil {
+		t.Fatal(err)
+	}
+	if got := next("WRITE "); got != "text to the phone" {
+		t.Fatalf("the phone got %q", got)
+	}
+	fmt.Fprintln(in, "COPY from the phone")
+	waitFor(t, "the service has the phone's text", func() bool { return pi.paste(t) == "from the phone" })
 }
 
 // dialJoiner plays the phone that scanned a listening joiner's QR code: it

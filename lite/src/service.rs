@@ -336,7 +336,7 @@ pub fn new_device_mode(dir: &Path) -> Result<()> {
 }
 
 /// The hybrid clock, which never goes back before the mark it saved.
-fn clock(dir: &Path) -> Clock {
+pub(crate) fn clock(dir: &Path) -> Clock {
     let path = dir.join(MARK_FILE);
     let mark = std::fs::read_to_string(&path).ok().and_then(|s| Timestamp::parse(s.trim())).unwrap_or_default();
     let (floor, reset) = hlc::floor(mark, uptime::wall_ms());

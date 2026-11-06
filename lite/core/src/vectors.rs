@@ -453,6 +453,7 @@ fn hello_actions() {
         wire::hello(
             &h,
             String::new(),
+            "lite",
             "pi",
             "linux",
             &wire::DeviceInfo::default(),
