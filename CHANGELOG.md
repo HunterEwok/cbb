@@ -11,7 +11,12 @@ All notable changes to cbb are documented in this file. The format follows
   the Rust core it links and keeps the phone's P-256 key in its own OP-TEE token, initialized
   once through Aurora's QCA keystore and used through PKCS#11 after that. It joins a group
   by its QR code: the phone listens, a phone or a computer of the group scans the code and
-  dials in, and the phone keeps its certificate and the group's records. It does not sync yet.
+  dials in, and the phone keeps its certificate and the group's records. Then it syncs as a
+  member: it dials the members it finds, puts what they send into the clipboard (a secret
+  leaves it when its time is up) and sends what the user copied when the app comes to the
+  front or from the pull-down menu, since Aurora lets no app read the clipboard in the
+  background. The main page shows the members connected and the last copy; "Leave the group"
+  deletes the membership on the phone.
 - `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
   the device records (docs/protocol.md): every member admits them as phones and shows
   "Aurora OS" and "Sailfish OS".

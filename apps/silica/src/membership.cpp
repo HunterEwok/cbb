@@ -110,6 +110,23 @@ bool Membership::save(Failure *failure) const
     return writeFile(QStringLiteral("member.json"), QJsonDocument(o).toJson(), failure);
 }
 
+bool Membership::remove(Failure *failure)
+{
+    for (const QString &name : {QStringLiteral("member.json"), QStringLiteral("records.json")}) {
+        QFile f(dataDir() + QLatin1Char('/') + name);
+        if (f.exists() && !f.remove()) {
+            *failure = {QStringLiteral("The phone could not leave the group."), QStringLiteral("membership: %1: %2").arg(name, f.errorString())};
+            return false;
+        }
+    }
+    return true;
+}
+
+QString Membership::directory()
+{
+    return dataDir();
+}
+
 QByteArray sealSecret(Failure *failure)
 {
     const QString path = dataDir() + QStringLiteral("/seal.key");

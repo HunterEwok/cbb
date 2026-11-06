@@ -26,6 +26,7 @@ SOURCES += \
     src/core.cpp \
     src/errors.cpp \
     src/join.cpp \
+    src/member.cpp \
     src/membership.cpp \
     src/platform/osinfo.cpp
 HEADERS += \
@@ -33,6 +34,7 @@ HEADERS += \
     src/core.h \
     src/errors.h \
     src/join.h \
+    src/member.h \
     src/membership.h \
     src/platform/keystore.h \
     src/platform/osinfo.h \

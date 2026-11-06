@@ -5,7 +5,6 @@
 
 #include "core.h"
 #include "errors.h"
-#include "platform/keystore.h"
 
 #include <cbb_core.h>
 
@@ -17,43 +16,10 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 
-#include <cstring>
-
 namespace {
 
 // How many wrong codes a listening join takes (pair::MAX_FAILURES).
 const int maxWrongCodes = 3;
-
-// The core's signing callback: the key store signs the digest.
-int32_t signDigest(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
-{
-    Failure failure;
-    const QByteArray der = KeyStore::sign(QByteArray(reinterpret_cast<const char *>(digest), 32), &failure);
-    if (der.isEmpty() || der.size() > 72) {
-        Errors::log(QStringLiteral("join: the key did not sign: %1 %2").arg(failure.message, failure.details));
-        return 1;
-    }
-    std::memcpy(sig, der.constData(), size_t(der.size()));
-    *sigLen = size_t(der.size());
-    return 0;
-}
-
-// An answer of lite/ffi's join functions: its ok, or its error in failure.
-QJsonObject take(uint8_t *answer, size_t len, Failure *failure)
-{
-    if (!answer) {
-        *failure = {QStringLiteral("This build of CBB is broken."), QStringLiteral("join: no answer")};
-        return QJsonObject();
-    }
-    const QJsonObject a = QJsonDocument::fromJson(QByteArray(reinterpret_cast<const char *>(answer), int(len))).object();
-    cbb_free(answer, len);
-    if (a.contains(QStringLiteral("error"))) {
-        const QJsonObject e = a.value(QStringLiteral("error")).toObject();
-        *failure = {e.value(QStringLiteral("message")).toString(), QStringLiteral("join: ") + e.value(QStringLiteral("details")).toString()};
-        return QJsonObject();
-    }
-    return a.value(QStringLiteral("ok")).toObject();
-}
 
 // Whether an address is on the home network, as mDNS would publish it:
 // private IPv4, unique-local IPv6, or link-local.
@@ -122,8 +88,8 @@ void Join::start(const QString &name, const QByteArray &publicKey)
     const QByteArray bytes = QJsonDocument(req).toJson(QJsonDocument::Compact);
     uint8_t *answer = nullptr;
     size_t len = 0;
-    m_join = cbb_join_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), signDigest, nullptr, &answer, &len);
-    const QJsonObject made = take(answer, len, &failure);
+    m_join = cbb_join_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), Core::signDigest, nullptr, &answer, &len);
+    const QJsonObject made = Core::take(answer, len, QStringLiteral("join"), &failure);
     if (!m_join)
         return fail(failure.isNull() ? Failure{QStringLiteral("This build of CBB is broken."), QStringLiteral("join: no joiner")} : failure);
     m_server = new QTcpServer(this);
@@ -172,7 +138,7 @@ void Join::accept()
         }
         size_t len = 0;
         Failure failure;
-        take(cbb_join_accept(m_join, &len), len, &failure);
+        Core::take(cbb_join_accept(m_join, &len), len, QStringLiteral("join"), &failure);
         if (!failure.isNull()) {
             s->abort();
             s->deleteLater();
@@ -206,7 +172,7 @@ void Join::feed(const QByteArray &data)
         return;
     size_t len = 0;
     Failure failure;
-    const QJsonObject step = take(cbb_join_feed(m_join, reinterpret_cast<const uint8_t *>(data.constData()), size_t(data.size()), 0, &len), len, &failure);
+    const QJsonObject step = Core::take(cbb_join_feed(m_join, reinterpret_cast<const uint8_t *>(data.constData()), size_t(data.size()), 0, &len), len, QStringLiteral("join"), &failure);
     if (!failure.isNull())
         return fail(failure);
     m_conn->write(b64(step.value(QStringLiteral("send"))));
@@ -225,7 +191,7 @@ void Join::feed(const QByteArray &data)
         return;
     const Membership m = Membership::fromJoined(step.value(QStringLiteral("joined")).toObject());
     const bool saved = m.save(&failure);
-    const QJsonObject last = take(cbb_join_finish(m_join, saved ? 1 : 0, &len), len, &failure);
+    const QJsonObject last = Core::take(cbb_join_finish(m_join, saved ? 1 : 0, &len), len, QStringLiteral("join"), &failure);
     m_conn->write(b64(last.value(QStringLiteral("send"))));
     m_conn->disconnectFromHost();
     m_conn = nullptr;
