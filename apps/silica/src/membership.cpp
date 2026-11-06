@@ -50,6 +50,8 @@ bool writeFile(const QString &name, const QByteArray &data, Failure *failure)
 
 QString Membership::groupTag() const
 {
+    if (groupCa.isEmpty())
+        return QString();
     return QString::fromLatin1(QCryptographicHash::hash(groupCa, QCryptographicHash::Sha256).left(8).toHex());
 }
 

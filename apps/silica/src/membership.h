@@ -25,7 +25,8 @@ struct Membership
 
     bool isNull() const { return device.isEmpty(); }
 
-    // The group's tag: the first 8 bytes of the group CA's SHA-256, in hex.
+    // The group's tag: the first 8 bytes of the group CA's SHA-256, in hex;
+    // empty when the phone is in no group.
     QString groupTag() const;
 
     // From the core's answer of a join (lite/ffi's cbb_join_feed, joined).
