@@ -3,11 +3,11 @@
 [Desktop Entry]
 Type=Application
 X-Nemo-Application-Type=silica-qt5
-Icon=tools.cbb.CBB
-Exec=/usr/bin/tools.cbb.CBB
+Icon=tools.cbb.aurora
+Exec=/usr/bin/tools.cbb.aurora
 Name=CBB
 
 [X-Application]
 Permissions=Internet
 OrganizationName=tools.cbb
-ApplicationName=CBB
+ApplicationName=aurora

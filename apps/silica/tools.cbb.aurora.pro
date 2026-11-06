@@ -4,7 +4,7 @@
 # The CBB app for Aurora OS and Sailfish OS: one code, a package per system
 # (packaging/<target>). build.sh writes core/ (the Rust core) and icons/ first
 # and passes CBB_TARGET; only src/platform/ and packaging/ differ by target.
-TARGET = tools.cbb.CBB
+TARGET = tools.cbb.aurora
 AURORAAPP_ICONS = 86x86 108x108 128x128 172x172
 
 isEmpty(CBB_TARGET): CBB_TARGET = aurora5
@@ -52,8 +52,8 @@ equals(CBB_TARGET, aurora5) {
 desktop.files = packaging/$$CBB_TARGET/$${TARGET}.desktop
 
 DISTFILES += \
-    qml/tools.cbb.CBB.qml \
+    qml/tools.cbb.aurora.qml \
     qml/pages/MainPage.qml \
     qml/cover/CoverPage.qml \
-    packaging/$$CBB_TARGET/tools.cbb.CBB.desktop \
-    packaging/$$CBB_TARGET/tools.cbb.CBB.spec
+    packaging/$$CBB_TARGET/tools.cbb.aurora.desktop \
+    packaging/$$CBB_TARGET/tools.cbb.aurora.spec

@@ -41,7 +41,7 @@ func TestCheckAndroidVersion(t *testing.T) {
 
 func TestCheckSpecVersions(t *testing.T) {
 	const changelog = "# Changelog\n\n## [Unreleased]\n\n## [0.12.3] - 2026-12-01\n"
-	const spec = "apps/silica/packaging/aurora5/tools.cbb.CBB.spec"
+	const spec = "apps/silica/packaging/aurora5/tools.cbb.aurora.spec"
 	tests := []struct {
 		name string
 		spec string

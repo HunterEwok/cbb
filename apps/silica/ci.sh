@@ -25,7 +25,7 @@ sudo rm -rf "$home/silica/build"
 sudo chroot "$psdk/root" chown -R builder /home/builder/silica
 sudo "$here/psdk.sh" "$psdk" run "~/silica/build.sh rpm AuroraOS-5.1.5.105-base-$arch.default"
 # builder's home is not the caller's to read.
-rpm=$(sudo sh -c "ls $home/silica/build/*/RPMS/tools.cbb.CBB-*.$arch.rpm")
+rpm=$(sudo sh -c "ls $home/silica/build/*/RPMS/tools.cbb.aurora-*.$arch.rpm")
 
 if [ -n "${SIGN_KEY_FILE:-}" ]; then
 	# The key goes into the SDK only for the one command and is removed after.

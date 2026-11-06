@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
-Name:       tools.cbb.CBB
+Name:       tools.cbb.aurora
 Summary:    One clipboard for your phones and computers
 Version:    0.5.0
 Release:    1

@@ -29,7 +29,7 @@ bool showDetails();
 // showDetails(). Logs f either way.
 QString shown(const Failure &f);
 
-// Writes a line to the app's log, ~/.local/share/tools.cbb/CBB/cbb.log, and
+// Writes a line to the app's log, ~/.local/share/tools.cbb/aurora/cbb.log, and
 // to the system's journal.
 void log(const QString &line);
 

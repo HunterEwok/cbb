@@ -621,7 +621,7 @@ gh secret set CBB_AURORA_KEY_PASSWORD -R HunterEwok/cbb --env aurora   # asks fo
 ```
 
 `rpmsign-external` of the Platform SDK signs; it reads the key's password from
-`KEY_PASSPHRASE`. The run's artifacts are the signed `tools.cbb.CBB-X.Y.Z-1.armv7hl.rpm` and
+`KEY_PASSPHRASE`. The run's artifacts are the signed `tools.cbb.aurora-X.Y.Z-1.armv7hl.rpm` and
 `.aarch64.rpm`.
 
 ## F-Droid

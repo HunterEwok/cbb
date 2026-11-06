@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
 {
     QScopedPointer<QGuiApplication> application(Shell::application(argc, argv));
     application->setOrganizationName(QStringLiteral("tools.cbb"));
-    application->setApplicationName(QStringLiteral("CBB"));
+    application->setApplicationName(QStringLiteral("aurora"));
     application->setApplicationVersion(QStringLiteral(CBB_VERSION));
 
     App app;

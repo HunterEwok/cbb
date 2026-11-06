@@ -20,7 +20,7 @@ prepare)
 	command -v magick >/dev/null && convert="magick"
 	for size in 86 108 128 172; do
 		mkdir -p "$here/icons/${size}x$size"
-		$convert "$here/../design/icon/light.png" -resize "${size}x$size" "$here/icons/${size}x$size/tools.cbb.CBB.png"
+		$convert "$here/../design/icon/light.png" -resize "${size}x$size" "$here/icons/${size}x$size/tools.cbb.aurora.png"
 	done
 	;;
 rpm)
@@ -30,7 +30,7 @@ rpm)
 	# land in another's package.
 	mkdir -p "$here/build/$2"
 	cd "$here/build/$2"
-	mb2 --no-snapshot -t "$2" -s "$here/packaging/aurora5/tools.cbb.CBB.spec" build "$here"
+	mb2 --no-snapshot -t "$2" -s "$here/packaging/aurora5/tools.cbb.aurora.spec" build "$here"
 	;;
 *)
 	echo "usage: build.sh prepare | build.sh rpm TARGET" >&2
