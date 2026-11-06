@@ -342,7 +342,7 @@ class GroupTest {
             throw AssertionError("${e.message}; cbb paste -o and the files give:\n$saved")
         }
         val back = "o11-back-$stamp.txt"
-        Bench.run(Bench.PC, "mkdir -p /tmp/o11src && printf 'cbb-bench phone O11 from the computer $stamp' >/tmp/o11src/$back && cbb copy /tmp/o11src/$back")
+        val copied = Bench.run(Bench.PC, "mkdir -p /tmp/o11src && printf 'cbb-bench phone O11 from the computer $stamp' >/tmp/o11src/$back && cbb copy /tmp/o11src/$back 2>&1")
         try {
             until(60, "the phone saves ${Bench.PC}'s file") {
                 runBlocking { model.sync() }
@@ -350,7 +350,7 @@ class GroupTest {
             }
         } catch (e: AssertionError) {
             // Read now, after the last sync, not when the wait began.
-            throw AssertionError("${e.message}; the button says ${model.message?.let { context.getString(it.text) + (it.detail?.let { d -> ": $d" } ?: "") }}; ${model.group.copyState}")
+            throw AssertionError("${e.message}; the button says ${model.message?.let { context.getString(it.text) + (it.detail?.let { d -> ": $d" } ?: "") }}; ${model.group.copyState}; cbb copy said: $copied\n${Bench.PC}'s log:\n${Bench.logs(Bench.PC)}")
         }
         val cr = context.contentResolver
         val uri = cr.query(

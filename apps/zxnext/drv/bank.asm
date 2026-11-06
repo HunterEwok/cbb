@@ -8,7 +8,10 @@
 ; characters of the Pi's key frames one a frame. It also carries .cbb's
 ; commands to the Pi while the network runs (calls 7 and 8): their bytes
 ; in frames to the Pi, the Pi's answers in a ring of their own, which .cbb
-; reads. The frames are those of
+; reads. Just after power-on it starts the network itself (call 9): it
+; waits for NextPi's shell, types the line that starts the link and turns
+; itself on once the link answers, so that BASIC need not wait for the
+; Pi. The frames are those of
 ; the lite member's `cbb next link` (lite/README.md, "The network through
 ; the Next's ESP8266"). It restores the UART selection it found, so the
 ; program in front is not disturbed.
@@ -55,6 +58,20 @@ CAP             equ     $F600   ; the last 64 bytes from the Pi, for .cbb net -d
 CBB_RING        equ     $F800   ; 1 KB: the Pi's answers for .cbb
 CBB_OUT         equ     $FC00   ; .cbb's bytes on their way to the Pi
 CBB_CHUNK       equ     64      ; .cbb's bytes in one frame to the Pi
+START_LINE      equ     $FD00   ; 256 bytes: the line that starts the link (call 9)
+
+; The start in the background (call 9): its states.
+B_PROMPT        equ     1       ; waits for the shell's prompt
+B_QUIET         equ     2       ; then for the shell to be quiet
+B_SEND          equ     3       ; types the line
+B_LINK          equ     4       ; waits for the link's CBBLINK
+B_NO_PROMPT     equ     5       ; failed: no prompt in time
+B_NO_LINK       equ     6       ; failed: the link did not answer
+B_ON            equ     7       ; the network runs
+PROMPT_TICKS    equ     9000    ; three minutes for NextPi to start
+POKE_TICKS      equ     100     ; an Enter every two seconds until then
+QUIET_TICKS     equ     25      ; half a second without a byte
+LINK_TICKS      equ     1000    ; twenty seconds for the link to answer
 
         jp      api             ; $E000
         jp      im              ; $E003
@@ -72,8 +89,10 @@ CBB_CHUNK       equ     64      ; .cbb's bytes in one frame to the Pi
 ; (a frame goes once CBB_CHUNK wait, the rest at the next interrupt),
 ; D = 2 sends what waits, D = 3 that and an empty frame, which stops the
 ; command on the Pi, D = 4 closes; B = 8 the next byte of the Pi's
-; answers in E, with D = 1, or D = 0 for none yet. Carry set for an
-; unknown call.
+; answers in E, with D = 1, or D = 0 for none yet; B = 9 the start in
+; the background: D = 0 empties the line, D = 1 adds the byte E to it,
+; D = 2 starts (the driver must be off), D = 3 gives its state in E
+; (0 none, B_PROMPT..B_ON); call 2 ends it. Carry set for an unknown call.
 api:
         ld      a,b
         cp      1
@@ -86,7 +105,11 @@ api:
 api2:
         cp      2
         jr      nz,api3
+        xor     a
+        ld      (bstate),a      ; a start in the background ends
         ld      a,e
+; Turns the driver on (A = 1) or off (A = 0).
+switch:
         ld      (enabled),a
         and     a
         jr      z,api_ok
@@ -175,22 +198,22 @@ a7_byte:
         ld      (cbb_n),a
         cp      CBB_CHUNK
         ld      hl,cbb_flush
-        jr      z,api_pi
+        jp      z,api_pi
         and     a
         ret
 a7_send:
         ld      hl,cbb_flush
         cp      2
-        jr      z,api_pi
+        jp      z,api_pi
         ld      hl,cbb_stop
         cp      3
-        jr      z,api_pi
+        jp      z,api_pi
         cp      4
-        jr      nz,api_bad
+        jp      nz,api_bad
         jp      cbb_reset       ; D = 4: close
 api8:
         cp      8
-        jr      nz,api_bad
+        jr      nz,api9
         ld      hl,(cbb_head)
         ld      de,(cbb_tail)
         and     a
@@ -211,6 +234,51 @@ api8:
         ld      h,a
         ld      (cbb_head),hl
         inc     d
+        and     a
+        ret
+api9:
+        cp      9
+        jp      nz,api_bad
+        ld      a,d
+        and     a
+        jr      nz,a9_add
+        ld      (blen),a        ; D = 0: an empty line, nothing started
+        ld      (bstate),a
+        ret
+a9_add:
+        cp      1
+        jr      nz,a9_start
+        ld      a,(blen)
+        inc     a
+        jr      z,api_bad       ; 255 bytes at most
+        dec     a
+        ld      l,a
+        ld      h,START_LINE >> 8
+        ld      (hl),e
+        inc     a
+        ld      (blen),a
+        and     a
+        ret
+a9_start:
+        cp      2
+        jr      nz,a9_state
+        ld      hl,PROMPT_TICKS
+        ld      (btick),hl
+        ld      a,1
+        ld      (bpoke),a
+        xor     a
+        ld      (bmatch),a
+        ld      (bpos),a
+        ld      a,B_PROMPT
+        ld      (bstate),a
+        and     a
+        ret
+a9_state:
+        cp      3
+        jp      nz,api_bad
+        ld      a,(bstate)
+        ld      e,a
+        ld      d,0
         and     a
         ret
 api_bad:
@@ -268,7 +336,7 @@ cbb_reset:
 im:
         ld      a,(enabled)
         and     a
-        ret     z
+        jr      z,boot
         ld      bc,PORT_SELECT
         in      a,(c)
         ld      (saved_sel),a
@@ -283,6 +351,166 @@ im:
         ld      a,(saved_sel)
         out     (c),a
         ret
+
+; The start in the background, while the driver is off.
+boot:
+        ld      a,(bstate)
+        dec     a
+        cp      B_LINK
+        ret     nc              ; none, failed or done
+        ld      bc,PORT_SELECT
+        in      a,(c)
+        ld      (saved_sel),a
+        ld      a,SEL_PI
+        out     (c),a
+        call    boot_step
+        ld      bc,PORT_SELECT
+        ld      a,(saved_sel)
+        out     (c),a
+        ret
+
+boot_step:
+        ld      hl,(btick)
+        dec     hl
+        ld      (btick),hl
+        ld      a,h
+        or      l
+        jr      nz,bs_go
+        ld      a,(bstate)      ; the time is up
+        cp      B_PROMPT
+        ld      a,B_NO_PROMPT
+        jr      z,bs_fail
+        ld      a,B_NO_LINK
+bs_fail:
+        ld      (bstate),a
+        ld      a,3             ; Ctrl-C: stop what may run
+        jp      put_raw
+bs_go:
+        ld      a,(bstate)
+        cp      B_SEND
+        jr      z,bs_send
+bs_read:
+        ld      bc,PORT_STATUS
+        in      a,(c)
+        bit     ST_RX,a
+        jr      z,bs_idle
+        inc     b               ; PORT_DATA
+        in      a,(c)
+        call    boot_byte
+        ld      a,(enabled)
+        and     a
+        ret     nz              ; on: the rest are frames, for the next interrupt
+        jr      bs_read
+bs_idle:
+        ld      a,(bstate)
+        cp      B_QUIET
+        jr      z,bs_quiet
+        cp      B_PROMPT
+        ret     nz
+        ld      hl,bpoke        ; no prompt yet: an Enter now and then
+        dec     (hl)
+        ret     nz
+        ld      (hl),POKE_TICKS
+        ld      a,10
+        jp      put_raw
+bs_quiet:
+        ld      hl,bquiet
+        dec     (hl)
+        ret     nz
+        ld      a,B_SEND        ; the shell is quiet: the line goes
+        ld      (bstate),a
+        ld      hl,LINK_TICKS
+        ld      (btick),hl
+        ret
+bs_send:
+        ld      a,(bpos)        ; what fits in the UART's send buffer
+        ld      hl,blen
+        cp      (hl)
+        jr      nz,bs_put
+        ld      a,B_LINK
+        ld      (bstate),a
+        ret
+bs_put:
+        ld      bc,PORT_STATUS
+        in      a,(c)
+        bit     ST_TXFULL,a
+        ret     nz
+        ld      a,(bpos)
+        ld      l,a
+        ld      h,START_LINE >> 8
+        ld      a,(hl)
+        out     (c),a
+        ld      hl,bpos
+        inc     (hl)
+        jr      bs_send
+
+; A byte from the Pi in A, while the start waits: the prompt, then the
+; link's CBBLINK; while the shell should be quiet, any byte waits longer.
+boot_byte:
+        ld      e,a
+        ld      a,(bstate)
+        cp      B_QUIET
+        jr      nz,bb_text
+        ld      a,QUIET_TICKS
+        ld      (bquiet),a
+        ret
+bb_text:
+        ld      hl,prompt_text
+        cp      B_PROMPT
+        jr      z,bb_at
+        ld      hl,ready_text
+bb_at:
+        push    hl
+        ld      a,(bmatch)
+        call    add_hl_a
+        ld      a,(hl)
+        pop     hl
+        cp      e
+        jr      z,bb_more
+        ld      a,(hl)          ; the byte may start the text again
+        cp      e
+        ld      a,0
+        jr      nz,bb_set
+        inc     a
+bb_set:
+        ld      (bmatch),a
+        ret
+bb_more:
+        ld      a,(bmatch)
+        inc     a
+        ld      (bmatch),a
+        call    add_hl_a
+        ld      a,(hl)
+        and     a
+        ret     nz              ; more to come
+        ld      (bmatch),a      ; the whole text
+        ld      a,(bstate)
+        cp      B_PROMPT
+        jr      nz,bb_on
+        ld      a,QUIET_TICKS
+        ld      (bquiet),a
+        ld      a,B_QUIET
+        ld      (bstate),a
+        ret
+bb_on:
+        ld      a,B_ON          ; the link runs: the driver turns on
+        ld      (bstate),a
+        ld      a,1
+        jp      switch
+
+add_hl_a:
+        add     a,l
+        ld      l,a
+        ret     nc
+        inc     h
+        ret
+
+prompt_text:
+        defm    "SUP>"
+        defb    0
+ready_text:
+        defm    "CBBLINK"
+        defb    13, 10, 0
 
 ; Reads the Pi's bytes while the ring for the ESP, and the one for .cbb
 ; while it is open, have room for a whole frame's data, and decodes them.
@@ -780,4 +1008,11 @@ cbb_tail:       defw    0
 cbb_tent:       defw    0
 hello_left:     defb    1
 time_left:      defw    1
+bstate:         defb    0       ; the start in the background (call 9)
+blen:           defb    0       ; the line's bytes at START_LINE
+bpos:           defb    0       ; those typed
+bmatch:         defb    0       ; bytes of the awaited text seen
+bpoke:          defb    0
+bquiet:         defb    0
+btick:          defw    0
 code_end:

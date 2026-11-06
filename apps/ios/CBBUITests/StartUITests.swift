@@ -64,7 +64,9 @@ final class StartUITests: XCTestCase {
             XCTAssertTrue(b.waitForExistence(timeout: 5), "no theme \(theme)")
             XCTAssertTrue(choose(b), "\(theme) is not chosen after a tap")
         }
-        app.segmentedControls.buttons["Dark"].tap()
+        // Each tap is checked, as choose does: a loaded simulator can lose
+        // a tap, and a lost one would look like a choice that was not kept.
+        XCTAssertTrue(choose(app.segmentedControls.buttons["Dark"]), "Dark is not chosen after a tap")
         for colour in Self.colours {
             let b = app.buttons[colour]
             XCTAssertTrue(b.waitForExistence(timeout: 5), "no colour \(colour)")
@@ -73,7 +75,7 @@ final class StartUITests: XCTestCase {
                 XCTAssertFalse(app.buttons[other].isSelected, "\(other) is still chosen with \(colour)")
             }
         }
-        app.buttons["Ocean"].tap()
+        XCTAssertTrue(choose(app.buttons["Ocean"]), "Ocean is not chosen after a tap")
         app.terminate()
 
         app = launch()
@@ -82,8 +84,8 @@ final class StartUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Ocean"].isSelected, "the colour was not kept")
         XCTAssertTrue(app.segmentedControls.buttons["Dark"].isSelected, "the theme was not kept")
         // Back to the defaults for the other tests.
-        app.buttons["Terminal"].tap()
-        app.segmentedControls.buttons["System"].tap()
+        XCTAssertTrue(choose(app.buttons["Terminal"]), "Terminal is not chosen after a tap")
+        XCTAssertTrue(choose(app.segmentedControls.buttons["System"]), "System is not chosen after a tap")
     }
 
     /// U12: the error details switch shows after seven taps on the version,

@@ -293,6 +293,9 @@ pub struct Next {
     files: Vec<Option<File>>,
     pub errh: u16,
     pub drivers: Vec<(u8, Vec<u8>)>,
+    /// cbb.drv's start in the background (call 9): its line and state.
+    pub boot_line: Vec<u8>,
+    pub boot_state: u8,
     /// Whether cbb.drv runs the network (its call 2 switches it).
     pub net: bool,
     /// Whether cbb.drv carries .cbb's commands to the Pi while the network
@@ -635,6 +638,8 @@ impl Run {
             files: Vec::new(),
             errh: 0,
             drivers: Vec::new(),
+            boot_line: Vec::new(),
+            boot_state: 0,
             net: false,
             via: false,
             via_sent: Vec::new(),
@@ -680,8 +685,8 @@ impl Run {
         for (a, v) in sysvars {
             hw.os_write(a, v);
         }
-        // Ten minutes after power-on: .cbb net on waits for NextPi to
-        // start only in the first two (a test sets FRAMES lower for that).
+        // Ten minutes after power-on: .cbb net on leaves the start to the
+        // driver only in the first two (a test sets FRAMES lower for that).
         hw.os_write16(FRAMES, 30_000);
         hw.os_write(FRAMES + 2, 0);
         // The command line, in BASIC's line, ended by ENTER.
@@ -1023,8 +1028,32 @@ impl Run {
         match call {
             2 => {
                 self.hw.net = de != 0;
+                self.hw.boot_state = 0;
                 self.ok();
             }
+            // The start in the background: the line kept, and the state
+            // left waiting for the prompt, as the Pi here never shows it
+            // to a driver.
+            9 => match de >> 8 {
+                0 => {
+                    self.hw.boot_line.clear();
+                    self.hw.boot_state = 0;
+                    self.ok();
+                }
+                1 => {
+                    self.hw.boot_line.push(de as u8);
+                    self.ok();
+                }
+                2 => {
+                    self.hw.boot_state = 1;
+                    self.ok();
+                }
+                3 => {
+                    self.set(Reg16::DE, self.hw.boot_state as u16);
+                    self.ok();
+                }
+                _ => self.carry(true),
+            },
             3 => {
                 self.set(Reg16::DE, self.hw.net as u16);
                 self.ok();

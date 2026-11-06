@@ -50,6 +50,11 @@ final class LiveGroup: GroupController {
     /// How long admitting a device may take once its connection is up:
     /// a computer that stops answering mid-pairing fails then.
     static let pairingDeadline: Duration = .seconds(30)
+    /// How long a device that does not take the connection yet is dialed
+    /// again, every dialPause: one scanned the moment it shows its QR code
+    /// may not listen yet (the ZX Next's network starts a moment later).
+    static let dialRetry: Duration = .seconds(20)
+    static let dialPause: Duration = .seconds(2)
     static let joinAttempts = 3
     /// How long joinComputer browses for a pairing window, and then for a
     /// second one.
@@ -392,7 +397,7 @@ final class LiveGroup: GroupController {
 
     // MARK: Admitting
 
-    func admit(_ code: JoinCode) async throws {
+    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws {
         let ca = try await caSigner(reason: String(localized: "Add a computer to your group", bundle: .app))
         let member = try memberSigner()
         let made = state == nil
@@ -400,50 +405,65 @@ final class LiveGroup: GroupController {
                                                seal: Self.sealKey(), now: Date())
         let id = try identity(g, member)
         var failure: Error?
-        for addr in Self.ordered(code.addrs) {
-            try Task.checkCancellation()
-            guard let (host, port) = Self.split(addr) else { continue }
-            let tls = TLSTransport(host: host, port: port, alpn: Pairing.alpn, identity: id, chain: Self.chain(g)) { leaf in
-                Pairing.fingerprint(cert: leaf) == code.fingerprint
-            }
-            // Closing the connection ends a pairing that takes too long or
-            // that the user cancelled: the pending read fails.
-            let deadline = Task {
-                try await Task.sleep(for: Self.pairingDeadline)
-                tls.close()
-            }
-            defer { deadline.cancel() }
-            do {
-                let admitted = try await withTaskCancellationHandler {
-                    try await tls.start()
-                    defer { tls.close() }
-                    guard let leaf = tls.peerCertificate,
-                          let sid = tls.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else { throw Failure.unreachable }
-                    // The address that answered goes first, for dialing when mDNS does not find the computer.
-                    return try await g.admit(over: tls, code: code.code, joinerCert: leaf, sessionID: sid, caSigner: ca,
-                                             addrs: [addr] + code.addrs.filter { $0 != addr }, now: Date())
-                } onCancel: {
+        let clock = ContinuousClock(), until = clock.now + Self.dialRetry
+        while true {
+            var answered = false
+            for addr in Self.ordered(code.addrs) {
+                try Task.checkCancellation()
+                guard let (host, port) = Self.split(addr) else { continue }
+                let tls = TLSTransport(host: host, port: port, alpn: Pairing.alpn, identity: id, chain: Self.chain(g)) { leaf in
+                    Pairing.fingerprint(cert: leaf) == code.fingerprint
+                }
+                // Closing the connection ends a pairing that takes too long or
+                // that the user cancelled: the pending read fails.
+                let deadline = Task {
+                    try await Task.sleep(for: Self.pairingDeadline)
                     tls.close()
                 }
-                try g.save(to: file)
-                if made { try modeBox.newDevice(); forgetCredentials() }
-                state = g
-                try startSync()
-                groupChanged()
-                // A group made on this phone has it as its hub from the start (D-64).
-                if made { try? await setPhoneHub(true) }
-                await node?.sendRecords(g.records.records)
-                guard admitted.confirmed else { throw Failure.notConfirmed }
-                return
-            } catch let e as PairingMember.Failure {
-                throw e // the computer answered: a wrong code is not worth another address
-            } catch {
-                tls.close()
-                if Task.isCancelled { throw CancellationError() }
-                failure = Self.telling(failure, error)
+                defer { deadline.cancel() }
+                do {
+                    try await tls.start()
+                } catch {
+                    tls.close()
+                    if Task.isCancelled { throw CancellationError() }
+                    failure = Self.telling(failure, error)
+                    continue
+                }
+                answered = true
+                do {
+                    let admitted = try await withTaskCancellationHandler {
+                        defer { tls.close() }
+                        guard let leaf = tls.peerCertificate,
+                              let sid = tls.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else { throw Failure.unreachable }
+                        // The address that answered goes first, for dialing when mDNS does not find the computer.
+                        return try await g.admit(over: tls, code: code.code, joinerCert: leaf, sessionID: sid, caSigner: ca,
+                                                 addrs: [addr] + code.addrs.filter { $0 != addr }, now: Date())
+                    } onCancel: {
+                        tls.close()
+                    }
+                    try g.save(to: file)
+                    if made { try modeBox.newDevice(); forgetCredentials() }
+                    state = g
+                    try startSync()
+                    groupChanged()
+                    // A group made on this phone has it as its hub from the start (D-64).
+                    if made { try? await setPhoneHub(true) }
+                    await node?.sendRecords(g.records.records)
+                    guard admitted.confirmed else { throw Failure.notConfirmed }
+                    return
+                } catch let e as PairingMember.Failure {
+                    throw e // the computer answered: a wrong code is not worth another address
+                } catch {
+                    tls.close()
+                    if Task.isCancelled { throw CancellationError() }
+                    failure = Self.telling(failure, error)
+                }
             }
+            // No address took the connection: the device may not listen yet.
+            if answered || clock.now >= until { throw failure ?? Failure.unreachable }
+            retrying()
+            try await Task.sleep(for: Self.dialPause)
         }
-        throw failure ?? Failure.unreachable
     }
 
     /// Of two failures on different addresses, the one that says more: an

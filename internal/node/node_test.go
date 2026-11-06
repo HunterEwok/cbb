@@ -523,14 +523,36 @@ func TestQueueTimeIsAddedToTheAge(t *testing.T) {
 func TestHelloAfterJoiningTheForwardingSet(t *testing.T) {
 	// The connection joins the forwarding set before the engine makes the
 	// hello: a copy made in between reaches the peer one way or the other.
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	// pi sends nothing while its lock is held, not even its hello: mac's
+	// Timeout is longer than the test holds it, or mac would drop the
+	// silent connection and the hello would never come (a member would
+	// dial again; this test does not).
+	mac, pi := newMember(t, Full, withTimers(50*time.Millisecond, 10*time.Second)), newMember(t, Full)
 	pi.mu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			pi.mu.Unlock()
+		}
+	}()
 	link(t, mac, pi)
-	time.Sleep(200 * time.Millisecond) // the handshake is done; Serve waits for the lock
+	// mac registers its side once the handshake is done (a peer counts in
+	// Peers only after its hello); pi's Serve waits for the lock.
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		mac.mu.Lock()
+		c := mac.conns[pi.id.ID]
+		mac.mu.Unlock()
+		if c != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("mac never registered the connection")
+		}
+	}
 	if _, _, err := pi.engine.Copied("made meanwhile", clip.Text, clip.Copy); err != nil {
-		pi.mu.Unlock()
 		t.Fatal(err)
 	}
+	locked = false
 	pi.mu.Unlock()
 	waitWrite(t, mac, "made meanwhile")
 }

@@ -96,6 +96,8 @@ type dialer struct {
 	// fallback says this one is dialing because the member did not reach
 	// it: a connection that comes up now is this one's (see unreached).
 	fallback bool
+	// wake makes the dialer try at once (see redial).
+	wake chan struct{}
 }
 
 // found handles the members that discovery found. Of two full members the
@@ -149,11 +151,12 @@ func (s *Service) found(peers []mdns.Peer) {
 			continue
 		}
 		ctx, cancel := context.WithCancel(s.groupCtx)
-		s.dialers[id] = &dialer{cancel: cancel, addrs: t.addrs, later: t.later}
+		d := &dialer{cancel: cancel, addrs: t.addrs, later: t.later, wake: make(chan struct{}, 1)}
+		s.dialers[id] = d
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			s.dial(ctx, id, t.later)
+			s.dial(ctx, id, t.later, d.wake)
 		}()
 	}
 }
@@ -200,19 +203,26 @@ func rank(a netip.Addr) int {
 // dial keeps a connection to a member up while it is found: it tries the
 // addresses that discovery last saw in turn, and waits longer after each
 // round that failed. With later, it first waits until no connection to the
-// member has been up for fallbackAfter.
-func (s *Service) dial(ctx context.Context, id group.DeviceID, later bool) {
+// member has been up for fallbackAfter. A signal on wake starts the next
+// round at once, without that wait.
+func (s *Service) dial(ctx context.Context, id group.DeviceID, later bool, wake <-chan struct{}) {
 	backoff := minBackoff
-	letIn := false
+	letIn, woken := false, false
 	for ctx.Err() == nil {
-		if later && !letIn && !s.waitUnconnected(ctx, id) {
-			return
+		if later && !letIn && !woken {
+			ok, w := s.waitUnconnected(ctx, id, wake)
+			if !ok {
+				return
+			}
+			woken = w
 		}
 		s.mu.Lock()
 		var addrs []string
 		if d := s.dialers[id]; d != nil {
 			addrs = d.addrs
-			d.fallback = later
+			// Woken, this one dials because records changed, not because
+			// the member could not reach it.
+			d.fallback = later && !woken
 		}
 		nd := s.nd
 		s.mu.Unlock()
@@ -240,6 +250,7 @@ func (s *Service) dial(ctx context.Context, id group.DeviceID, later bool) {
 			d.fallback = false
 		}
 		s.mu.Unlock()
+		woken = false
 		if letIn {
 			continue
 		}
@@ -247,14 +258,44 @@ func (s *Service) dial(ctx context.Context, id group.DeviceID, later bool) {
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
+			backoff = min(2*backoff, maxBackoff)
+		case <-wake:
+			woken, backoff = true, minBackoff
 		}
-		backoff = min(2*backoff, maxBackoff)
+	}
+}
+
+// redial makes the dialers of the members not connected now try at once.
+// It follows records that may let in devices that were refused, as a thaw
+// does: a refused member would otherwise wait out its backoff, up to
+// maxBackoff, and the device that made the change dials it instead.
+func (s *Service) redial() {
+	s.mu.Lock()
+	nd := s.nd
+	s.mu.Unlock()
+	if nd == nil {
+		return
+	}
+	connected := map[group.DeviceID]bool{}
+	for _, p := range nd.Peers() {
+		connected[p.ID] = true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, d := range s.dialers {
+		if !connected[id] {
+			select {
+			case d.wake <- struct{}{}:
+			default:
+			}
+		}
 	}
 }
 
 // waitUnconnected waits until no connection to the member id has been up
-// for fallbackAfter; it reports false if ctx ended first.
-func (s *Service) waitUnconnected(ctx context.Context, id group.DeviceID) bool {
+// for fallbackAfter, or until a signal on wake, which woken reports; ok is
+// false if ctx ended first.
+func (s *Service) waitUnconnected(ctx context.Context, id group.DeviceID, wake <-chan struct{}) (ok, woken bool) {
 	tick := min(time.Second, s.cfg.fallbackAfter)
 	since := uptime.Now()
 	for {
@@ -268,12 +309,14 @@ func (s *Service) waitUnconnected(ctx context.Context, id group.DeviceID) bool {
 			delete(s.unreached, id)
 			s.mu.Unlock()
 		} else if uptime.Now()-since >= s.cfg.fallbackAfter {
-			return true
+			return true, false
 		}
 		select {
 		case <-ctx.Done():
-			return false
+			return false, false
 		case <-time.After(tick):
+		case <-wake:
+			return true, true
 		}
 	}
 }
