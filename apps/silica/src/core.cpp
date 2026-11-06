@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+#include "core.h"
+
+#include <cbb_core.h>
+
+#include <QJsonDocument>
+
+namespace Core {
+
+QJsonValue call(const QString &op, const QJsonValue &args, Failure *failure)
+{
+    const uint32_t got = cbb_abi();
+    if (got != uint32_t(abi)) {
+        *failure = {QStringLiteral("This build of CBB is broken."),
+                    QStringLiteral("core: the linked core speaks ABI %1, not %2").arg(got).arg(abi)};
+        return QJsonValue();
+    }
+    QJsonObject request{{QStringLiteral("abi"), abi}, {QStringLiteral("op"), op}};
+    if (!args.isNull())
+        request.insert(QStringLiteral("args"), args);
+    const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+    size_t len = 0;
+    uint8_t *answer = cbb_call(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), &len);
+    if (!answer) {
+        *failure = {QStringLiteral("This build of CBB is broken."), QStringLiteral("core: no answer to %1").arg(op)};
+        return QJsonValue();
+    }
+    QJsonParseError parse;
+    const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(reinterpret_cast<const char *>(answer), int(len)), &parse);
+    cbb_free(answer, len);
+    if (!doc.isObject()) {
+        *failure = {QStringLiteral("This build of CBB is broken."),
+                    QStringLiteral("core: the answer to %1 does not read: %2").arg(op, parse.errorString())};
+        return QJsonValue();
+    }
+    const QJsonObject a = doc.object();
+    if (a.contains(QStringLiteral("error"))) {
+        const QJsonObject e = a.value(QStringLiteral("error")).toObject();
+        QString details = QStringLiteral("core: %1 (%2, code %3)")
+                              .arg(op, e.value(QStringLiteral("name")).toString())
+                              .arg(e.value(QStringLiteral("code")).toInt());
+        const QString causes = e.value(QStringLiteral("details")).toString();
+        if (!causes.isEmpty())
+            details += QLatin1Char('\n') + causes;
+        *failure = {e.value(QStringLiteral("message")).toString(), details};
+        return QJsonValue();
+    }
+    if (!a.contains(QStringLiteral("ok"))) {
+        *failure = {QStringLiteral("This build of CBB is broken."),
+                    QStringLiteral("core: the answer to %1 has neither ok nor error").arg(op)};
+        return QJsonValue();
+    }
+    return a.value(QStringLiteral("ok"));
+}
+
+QString versionLine(Failure *failure)
+{
+    const QJsonObject v = call(QStringLiteral("version"), QJsonValue(), failure).toObject();
+    if (!failure->isNull())
+        return QString();
+    const QString source = v.value(QStringLiteral("source")).toString();
+    return QStringLiteral("core %1, abi %2, source %3")
+        .arg(v.value(QStringLiteral("core")).toString())
+        .arg(v.value(QStringLiteral("abi")).toInt())
+        .arg(source.isEmpty() ? QStringLiteral("unknown") : source);
+}
+
+} // namespace Core

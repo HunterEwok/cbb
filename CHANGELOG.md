@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The first build of the app for Aurora OS 5 (`apps/silica`, armv7hl and aarch64): it shows
+  the Rust core it links and keeps the phone's P-256 key in its own OP-TEE token, initialized
+  once through Aurora's QCA keystore and used through PKCS#11 after that. It does not join a
+  group yet.
 - End-to-end encryption of every copy (D-84): the device that copies seals each copy, its
   text, images and files, with a key of its own, wraps that key for every device of the group
   that reads copies (X-Wing: X25519 with ML-KEM-768) and signs the copy with its member key.

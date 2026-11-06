@@ -491,7 +491,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       set to that certificate. The fdroid flavor already has no update of its
       own (`SELF_UPDATE` false, no installer permission), as F-Droid's inclusion policy
       requires: an app it publishes must not download or install code outside F-Droid.
-- **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS, in Qt 5.6 with Silica
+- **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS (`apps/silica`), in Qt 5.6 with Silica
     QML around the Rust core through `cbb_call` (docs/core-api.md), one binary with its
     libraries, since the installer leaves a second executable in a package without its execute
     bit: two packages from one
