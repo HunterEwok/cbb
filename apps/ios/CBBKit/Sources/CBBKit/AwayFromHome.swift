@@ -128,6 +128,12 @@ public actor AwayFromHome {
     private var conn: ClosableTransport?
     private var runner: Task<Void, Never>?
     private var nap: Task<Void, Never>?
+    /// Counts the changes the loop waits for: the loop notes the count as
+    /// it reads the state and waits only while it is the same, so a change
+    /// made while the loop is not waiting (as it connects, or serves a
+    /// connection that the change then closes) is not missed.
+    private var changes = 0
+    private var seen = 0
 
     public private(set) var status = Status.off
     public private(set) var lastError: Error?
@@ -254,6 +260,7 @@ public actor AwayFromHome {
     private func run() async {
         var wait = firstWait
         while !Task.isCancelled {
+            seen = changes
             guard let s = state else {
                 status = .off
                 using = nil
@@ -384,17 +391,21 @@ public actor AwayFromHome {
         return min(wait * 2, isPhone(hub) ? phoneWait : maxWait)
     }
 
-    /// Waits for d, or until something changes; nil waits for a change only.
+    /// Waits for d, or until something changes after the loop last read
+    /// the state; nil waits for a change only.
     private func idle(_ d: Duration?) async {
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, changes == seen else { return }
         let t = Task { _ = try? await Task.sleep(for: d ?? .seconds(86_400)) }
         nap = t
         await t.value
         nap = nil
     }
 
-    /// Ends the current wait, after a change.
-    private func poke() { nap?.cancel() }
+    /// Ends the current wait, or the next one, after a change.
+    private func poke() {
+        changes += 1
+        nap?.cancel()
+    }
 
     /// Where hub is in order; order.count when it is not there.
     static func rank(_ order: [String], _ hub: String) -> Int { order.firstIndex(of: hub) ?? order.count }

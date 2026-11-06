@@ -71,7 +71,7 @@ kits), so a reader that fails in another way also shows as a difference.
   ABI, with `ok` or a listed error code, and that a request answered twice gets the same
   answer.
 
-Manifests are compared but do not fail the run until 0.7 gives them the strict form
+Manifests are compared but do not fail the run until they get the strict form
 ([roadmap](roadmap.md), item 42): `compare -report-only manifest` prints their differences.
 
 A failed run uploads the cases it found (`failures.jsonl`, or the fuzzer's input).
