@@ -502,7 +502,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     package for Sailfish OS, built with the Sailfish SDK for armv7hl
     and aarch64 and published in Jolla's store or OpenRepos: only the installer, the signing
     and the key store differ, so the platform layer keeps them apart from the start and CI
-    builds all the packages; Sailfish ships after the Aurora 5 package works on a phone.
+    builds all the packages. Sailfish ships together with Aurora (the owner, 2026-11-06),
+    tested only in the Sailfish SDK's emulator and marked as not yet tested on a phone,
+    for the community to try, as the Android app first was.
     Sailfish has no TEE key through PKCS#11, so its key is a file (level 3). Its key fits
     [Key levels](#key-levels) as the other phones' do:
     - Level 2, "hardware", the default: the app checks that its member key is in OP-TEE,
