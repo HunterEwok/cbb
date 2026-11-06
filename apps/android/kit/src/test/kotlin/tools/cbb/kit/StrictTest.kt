@@ -66,8 +66,7 @@ class StrictTest {
     @Test
     fun manifests() {
         for ((name, body, valid) in cases("manifests")) {
-            val got = runCatching { Wire.parse(body)?.let { Media.Manifest.fromJson(it) }?.isValid == true }.getOrDefault(false)
-            assertEquals(valid, got, "manifest $name")
+            assertEquals(valid, Media.Manifest.parse(body) != null, "manifest $name")
         }
     }
 
@@ -142,7 +141,7 @@ class StrictTest {
                     } catch (_: Commands.Refused) {
                         false
                     }
-                    else -> runCatching { Wire.parse(body)?.let { Media.Manifest.fromJson(it) }?.isValid == true }.getOrDefault(false)
+                    else -> Media.Manifest.parse(body) != null
                 }
                 val valid = o.getValue("valid").jsonPrimitive.boolean
                 if (got != valid) wrong += "$kind ${o.str("name")} (${o.str("rule")}): valid $valid, got $got"

@@ -156,8 +156,7 @@ func goVerdict(line []byte) (string, error) {
 			"expires_ms", vInt(b.ExpiresMS), "tag", vStr(b.Tag), "key", hex.EncodeToString(b.Key),
 			"hubs", vHashes(b.Hubs), "admins", vHashes(b.Admins), "members", vHashes(b.Members)), nil
 	case "manifest":
-		var m clip.Manifest
-		if json.Unmarshal(c.Body, &m) != nil || m.Validate() != nil {
+		if _, err := clip.ParseManifest(c.Body); err != nil {
 			return "refused", nil
 		}
 		return "taken", nil
