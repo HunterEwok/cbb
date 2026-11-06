@@ -506,8 +506,12 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - Level 1, "proven", only when the group's user chooses it, as everywhere, and only
       if Aurora offers key attestation (a proof that the key was made in the TEE, not only
       that the system is unmodified): 5.1.5 has none, and whether the attestation that 5.2's
-      release notes list covers keys is to be checked in its SDK. Until then an Aurora phone
-      is never "proven".
+      release notes list covers keys is to be checked in its SDK later, with no date, once
+      phones with 5.2 exist. Until then an Aurora phone is never "proven".
+    - The package for Aurora 5 is meant to run on 5.2 too, without level 1; the SDK's 5.2
+      emulator checks it first (the clipboard, which 5.2 reworked, and the network), and,
+      having no OP-TEE, the file key's path: the app says its key is not hardware and is no
+      admin without the user's consent.
     - A phone without OP-TEE keeps its key in a file and is an admin or the hub only at
       level 3, after the user allows it.
     - Still to check on a device: a key that lasts across restarts needs `C_Login` with the
