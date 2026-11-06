@@ -339,6 +339,10 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		}
 		reply(c, control.Header{Status: s.statusWithRemoved(), Done: true}, nil)
 	case control.OpPair:
+		if len(m.Addrs) > 0 {
+			s.pairDial(ctx, c, m)
+			return
+		}
 		s.pair(ctx, c, r, m.Admins)
 	case control.OpJoin:
 		s.join(ctx, c, r, m)
@@ -622,6 +626,58 @@ func (s *Service) pair(ctx context.Context, c net.Conn, r *control.Reader, admin
 	case <-hangup:
 		return
 	case <-ctx.Done():
+		return
+	}
+	res, err := s.windowResult(w)
+	end()
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	reply(c, control.Header{Name: res.Info.Name, Done: true}, nil)
+}
+
+// pairDial admits a joiner that listens (docs/protocol.md section 6, "The
+// joiner listens"), such as a phone that shows its QR code: with the code,
+// the addresses and the fingerprint the QR code carries, it opens the
+// window and dials the joiner, at addresses on the home network only.
+func (s *Service) pairDial(ctx context.Context, c net.Conn, m *control.Message) {
+	code, err := pair.NormalizeCode(m.Code)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	if m.Fingerprint == "" {
+		fail(c, errors.New("the QR code names no certificate fingerprint"))
+		return
+	}
+	w, _, end, err := s.openWindow(code, false)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	defer end()
+	ctx, cancel := context.WithTimeout(ctx, pair.Lifetime)
+	defer cancel()
+	d := net.Dialer{Timeout: handshakeTimeout, Control: netguard.ControlHome}
+	var tried []string
+	joined := false
+	for _, addr := range m.Addrs {
+		raw, err := d.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			tried = append(tried, err.Error())
+			continue
+		}
+		if err := w.Dial(ctx, raw, m.Fingerprint); err != nil {
+			tried = append(tried, fmt.Sprintf("%s: %v", addr, err))
+			continue
+		}
+		joined = true
+		break
+	}
+	if !joined {
+		end()
+		fail(c, fmt.Errorf("could not admit the device that shows the QR code: %s", strings.Join(tried, "; ")))
 		return
 	}
 	res, err := s.windowResult(w)

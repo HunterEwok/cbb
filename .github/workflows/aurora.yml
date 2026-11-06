@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Builds the Aurora app's RPMs from the branch it is run on and signs them with
+# the developer certificate, for a phone: run by hand ("Run workflow"), it
+# waits for the maintainer's approval in the environment aurora, which alone
+# holds the certificate's key (docs/maintaining.md, "Signing for Aurora OS").
+# CI builds the same RPMs unsigned on every pull request.
+name: aurora
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rpm:
+    name: signed RPM (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [armv7hl, aarch64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: aurora # the developer certificate's key
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: room for the Platform SDK
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: the Platform SDK's downloads from the cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/psdk/dl
+          key: aurora-psdk-${{ matrix.arch }}-${{ hashFiles('apps/silica/psdk.sh') }}
+      - name: the RPM, signed (apps/silica/ci.sh)
+        env:
+          ARCH: ${{ matrix.arch }}
+          KEY_BASE64: ${{ secrets.CBB_AURORA_KEY_BASE64 }}
+          CERT_BASE64: ${{ secrets.CBB_AURORA_CERT_BASE64 }}
+          KEY_PASSPHRASE: ${{ secrets.CBB_AURORA_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEY_BASE64" ] || [ -z "$CERT_BASE64" ]; then
+            echo "::error::no developer certificate in the environment aurora's secrets"
+            exit 1
+          fi
+          export SIGN_KEY_FILE="$RUNNER_TEMP/sign-key.pem" SIGN_CERT_FILE="$RUNNER_TEMP/sign-cert.pem"
+          (umask 077 && printf '%s' "$KEY_BASE64" | base64 -d >"$SIGN_KEY_FILE")
+          printf '%s' "$CERT_BASE64" | base64 -d >"$SIGN_CERT_FILE"
+          trap 'rm -f "$SIGN_KEY_FILE"' EXIT
+          sudo apt-get update -q
+          sudo apt-get install -y -q p7zip-full imagemagick
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCH" "$RUNNER_TEMP/rpm"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cbb-aurora5-${{ matrix.arch }}
+          path: ${{ runner.temp }}/rpm/*.rpm
+          retention-days: 14

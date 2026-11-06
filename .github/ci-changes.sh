@@ -25,6 +25,7 @@ macos=false    # the Mac app, which shares the iPhone app's theme
 desktop=false  # the tray app
 android=false  # the Kotlin kit, the Android and Wear OS apps, the F-Droid build
 zxnext=false   # the ZX Spectrum Next dot command
+silica=false   # the app for Aurora OS and Sailfish OS
 design=false   # the design tokens and the icon, which every app and the site use
 site=false     # the website and the documentation it publishes
 all=false
@@ -40,14 +41,15 @@ for f in $files; do
 	tools/site/*) site=true; tools=true ;;
 	tools/sbom/*) core=true; tools=true ;; # the packaging job and the Android job run it
 	tools/*) tools=true ;;
-	# The Rust core's rules, which both phone kits link.
-	lite/core/* | lite/ffi/* | lite/Cargo.toml | lite/Cargo.lock) lite=true; ios=true; android=true ;;
+	# The Rust core's rules, which the phone kits and the Aurora app link.
+	lite/core/* | lite/ffi/* | lite/Cargo.toml | lite/Cargo.lock) lite=true; ios=true; android=true; silica=true ;;
 	lite/*) lite=true ;;
 	apps/ios/*) ios=true; macos=true ;;
 	apps/macos/*) macos=true ;;
 	apps/desktop/*) desktop=true ;;
 	apps/android/*) android=true ;;
 	apps/zxnext/*) zxnext=true ;;
+	apps/silica/*) silica=true ;;
 	site/* | docs/* | *.md | LICENSE) site=true ;;
 	.github/*) ;; # other workflows, templates and settings: no job of ci.yml reads them
 	*) all=true ;;
@@ -57,10 +59,10 @@ done
 # The jobs of one part that also read another's files.
 [ "$core" = false ] || { ios=true; desktop=true; android=true; lite=true; }
 [ "$lite" = false ] || zxnext=true
-[ "$design" = false ] || { ios=true; macos=true; desktop=true; android=true; site=true; }
+[ "$design" = false ] || { ios=true; macos=true; desktop=true; android=true; silica=true; site=true; }
 
 if [ "$all" = true ]; then
-	core=true tools=true lite=true ios=true macos=true desktop=true android=true zxnext=true design=true site=true
+	core=true tools=true lite=true ios=true macos=true desktop=true android=true zxnext=true silica=true design=true site=true
 fi
-printf 'core=%s\ntools=%s\nlite=%s\nios=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\ndesign=%s\nsite=%s\n' \
-	"$core" "$tools" "$lite" "$ios" "$macos" "$desktop" "$android" "$zxnext" "$design" "$site"
+printf 'core=%s\ntools=%s\nlite=%s\nios=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\nsilica=%s\ndesign=%s\nsite=%s\n' \
+	"$core" "$tools" "$lite" "$ios" "$macos" "$desktop" "$android" "$zxnext" "$silica" "$design" "$site"

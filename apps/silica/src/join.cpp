@@ -1,0 +1,251 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+#include "join.h"
+
+#include "core.h"
+#include "errors.h"
+#include "platform/keystore.h"
+
+#include <cbb_core.h>
+
+#include <QHostAddress>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkInterface>
+#include <QTcpServer>
+#include <QTcpSocket>
+
+#include <cstring>
+
+namespace {
+
+// How many wrong codes a listening join takes (pair::MAX_FAILURES).
+const int maxWrongCodes = 3;
+
+// The core's signing callback: the key store signs the digest.
+int32_t signDigest(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
+{
+    Failure failure;
+    const QByteArray der = KeyStore::sign(QByteArray(reinterpret_cast<const char *>(digest), 32), &failure);
+    if (der.isEmpty() || der.size() > 72) {
+        Errors::log(QStringLiteral("join: the key did not sign: %1 %2").arg(failure.message, failure.details));
+        return 1;
+    }
+    std::memcpy(sig, der.constData(), size_t(der.size()));
+    *sigLen = size_t(der.size());
+    return 0;
+}
+
+// An answer of lite/ffi's join functions: its ok, or its error in failure.
+QJsonObject take(uint8_t *answer, size_t len, Failure *failure)
+{
+    if (!answer) {
+        *failure = {QStringLiteral("This build of CBB is broken."), QStringLiteral("join: no answer")};
+        return QJsonObject();
+    }
+    const QJsonObject a = QJsonDocument::fromJson(QByteArray(reinterpret_cast<const char *>(answer), int(len))).object();
+    cbb_free(answer, len);
+    if (a.contains(QStringLiteral("error"))) {
+        const QJsonObject e = a.value(QStringLiteral("error")).toObject();
+        *failure = {e.value(QStringLiteral("message")).toString(), QStringLiteral("join: ") + e.value(QStringLiteral("details")).toString()};
+        return QJsonObject();
+    }
+    return a.value(QStringLiteral("ok")).toObject();
+}
+
+// Whether an address is on the home network, as mDNS would publish it:
+// private IPv4, unique-local IPv6, or link-local.
+bool home(const QHostAddress &a)
+{
+    bool v4 = false;
+    const quint32 ip = a.toIPv4Address(&v4);
+    if (v4)
+        return (ip >> 24) == 10 || (ip >> 20) == (172u << 4 | 1) || (ip >> 16) == (192u << 8 | 168) || (ip >> 16) == (169u << 8 | 254);
+    const Q_IPV6ADDR v6 = a.toIPv6Address();
+    return (v6[0] & 0xfe) == 0xfc || (v6[0] == 0xfe && (v6[1] & 0xc0) == 0x80);
+}
+
+// The addresses for the QR code: this phone's private IPv4 ones, at most four.
+QJsonArray qrAddresses()
+{
+    QJsonArray out;
+    for (const QHostAddress &a : QNetworkInterface::allAddresses()) {
+        if (a.isLoopback() || a.protocol() != QAbstractSocket::IPv4Protocol || !home(a) || (a.toIPv4Address() >> 16) == (169u << 8 | 254))
+            continue;
+        out.append(QStringLiteral("%1:%2").arg(a.toString()).arg(Join::port));
+        if (out.size() == 4)
+            break;
+    }
+    return out;
+}
+
+QByteArray b64(const QJsonValue &v)
+{
+    return QByteArray::fromBase64(v.toString().toLatin1());
+}
+
+} // namespace
+
+Join::Join(QObject *parent) : QObject(parent) {}
+
+Join::~Join()
+{
+    stop();
+}
+
+void Join::start(const QString &name, const QByteArray &publicKey)
+{
+    stop();
+    m_publicKey = publicKey;
+    m_wrongCodes = 0;
+    m_error.clear();
+    Failure failure;
+    const QByteArray secret = sealSecret(&failure);
+    if (secret.isEmpty())
+        return fail(failure);
+    const QJsonObject seal =
+        Core::call(QStringLiteral("seal_public"), QJsonObject{{QStringLiteral("secret"), QString::fromLatin1(secret.toBase64())}}, &failure).toObject();
+    if (!failure.isNull())
+        return fail(failure);
+    const QJsonArray addrs = qrAddresses();
+    if (addrs.isEmpty())
+        return fail({QStringLiteral("Connect the phone to your home Wi-Fi to join a group."), QStringLiteral("join: no private IPv4 address")});
+    const QJsonObject req{
+        {QStringLiteral("name"), name},
+        {QStringLiteral("os"), QStringLiteral("aurora")},
+        {QStringLiteral("public"), QString::fromLatin1(publicKey.toBase64())},
+        {QStringLiteral("seal"), seal.value(QStringLiteral("key"))},
+        {QStringLiteral("addrs"), addrs},
+    };
+    const QByteArray bytes = QJsonDocument(req).toJson(QJsonDocument::Compact);
+    uint8_t *answer = nullptr;
+    size_t len = 0;
+    m_join = cbb_join_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), signDigest, nullptr, &answer, &len);
+    const QJsonObject made = take(answer, len, &failure);
+    if (!m_join)
+        return fail(failure.isNull() ? Failure{QStringLiteral("This build of CBB is broken."), QStringLiteral("join: no joiner")} : failure);
+    m_server = new QTcpServer(this);
+    if (!m_server->listen(QHostAddress::Any, port))
+        return fail({QStringLiteral("The phone cannot listen for the other device."),
+                     QStringLiteral("join: listen on %1: %2").arg(port).arg(m_server->errorString())});
+    connect(m_server, &QTcpServer::newConnection, this, &Join::accept);
+    m_code = made.value(QStringLiteral("code")).toString();
+    m_qr = made.value(QStringLiteral("qr")).toString();
+    m_modules.clear();
+    for (const QJsonValue &row : made.value(QStringLiteral("modules")).toArray())
+        m_modules.append(row.toString());
+    Errors::log(QStringLiteral("join: listening as %1 on %2").arg(made.value(QStringLiteral("device")).toString(),
+                                                                   QString::fromLatin1(QJsonDocument(addrs).toJson(QJsonDocument::Compact))));
+    // With the details on, the QR code's text goes to the log too, so that a
+    // test can admit the phone without a camera; it holds the one-time code.
+    if (Errors::showDetails())
+        Errors::log(QStringLiteral("join: QR: %1").arg(m_qr));
+    setState(QStringLiteral("listening"));
+}
+
+void Join::stop()
+{
+    if (m_conn)
+        m_conn->abort();
+    if (m_server) {
+        m_server->close();
+        m_server->deleteLater();
+        m_server = nullptr;
+    }
+    cbb_join_free(m_join);
+    m_join = nullptr;
+    if (m_state == QStringLiteral("listening") || m_state == QStringLiteral("joining"))
+        setState(QStringLiteral("idle"));
+}
+
+void Join::accept()
+{
+    while (QTcpSocket *s = m_server ? m_server->nextPendingConnection() : nullptr) {
+        // One attempt at a time, and only from the home network.
+        if (m_conn || !home(s->peerAddress())) {
+            Errors::log(QStringLiteral("join: refused a connection from %1").arg(s->peerAddress().toString()));
+            s->abort();
+            s->deleteLater();
+            continue;
+        }
+        size_t len = 0;
+        Failure failure;
+        take(cbb_join_accept(m_join, &len), len, &failure);
+        if (!failure.isNull()) {
+            s->abort();
+            s->deleteLater();
+            return fail(failure);
+        }
+        // The server owns the sockets it hands out and deletes them with
+        // itself, which would drop the joiner's last frame still waiting to
+        // be written when stop() lets the server go after a join. The join
+        // owns the socket instead, and the socket deletes itself once it is
+        // closed.
+        s->setParent(this);
+        m_conn = s;
+        connect(s, &QTcpSocket::readyRead, this, [this, s]() {
+            if (s == m_conn)
+                feed(s->readAll());
+        });
+        connect(s, &QTcpSocket::disconnected, this, [this, s]() {
+            s->deleteLater();
+            if (s == m_conn && m_state == QStringLiteral("joining"))
+                setState(QStringLiteral("listening"));
+        });
+        Errors::log(QStringLiteral("join: a device dialed in from %1").arg(s->peerAddress().toString()));
+        setState(QStringLiteral("joining"));
+        feed(QByteArray());
+    }
+}
+
+void Join::feed(const QByteArray &data)
+{
+    if (!m_join || !m_conn)
+        return;
+    size_t len = 0;
+    Failure failure;
+    const QJsonObject step = take(cbb_join_feed(m_join, reinterpret_cast<const uint8_t *>(data.constData()), size_t(data.size()), 0, &len), len, &failure);
+    if (!failure.isNull())
+        return fail(failure);
+    m_conn->write(b64(step.value(QStringLiteral("send"))));
+    const QString state = step.value(QStringLiteral("state")).toString();
+    if (state == QStringLiteral("failed")) {
+        const QJsonObject e = step.value(QStringLiteral("error")).toObject();
+        Errors::log(QStringLiteral("join: an attempt failed: %1: %2").arg(e.value(QStringLiteral("message")).toString(), e.value(QStringLiteral("details")).toString()));
+        m_conn->disconnectFromHost();
+        m_conn = nullptr;
+        if (step.value(QStringLiteral("wrong_code")).toBool() && ++m_wrongCodes >= maxWrongCodes)
+            return fail({QStringLiteral("The other device showed a wrong code three times. Start again."), QStringLiteral("join: too many wrong codes")});
+        setState(QStringLiteral("listening"));
+        return;
+    }
+    if (state != QStringLiteral("joined"))
+        return;
+    const Membership m = Membership::fromJoined(step.value(QStringLiteral("joined")).toObject());
+    const bool saved = m.save(&failure);
+    const QJsonObject last = take(cbb_join_finish(m_join, saved ? 1 : 0, &len), len, &failure);
+    m_conn->write(b64(last.value(QStringLiteral("send"))));
+    m_conn->disconnectFromHost();
+    m_conn = nullptr;
+    if (!saved)
+        return fail(failure);
+    Errors::log(QStringLiteral("join: joined the group %1 as %2").arg(m.groupTag(), m.device));
+    stop();
+    setState(QStringLiteral("joined"));
+    emit joined(m);
+}
+
+void Join::fail(const Failure &f)
+{
+    m_error = Errors::shown(f);
+    stop();
+    setState(QStringLiteral("failed"));
+}
+
+void Join::setState(const QString &state)
+{
+    m_state = state;
+    emit changed();
+}

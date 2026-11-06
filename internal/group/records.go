@@ -95,27 +95,40 @@ func StoreOf(store, role string) string {
 // Operating systems in device records, hellos and the pairing Info: what
 // the device runs, shown and never trusted for anything else.
 const (
-	OSLinux   = "linux"
-	OSWindows = "windows"
-	OSMacOS   = "macos"
-	OSiOS     = "ios"
-	OSAndroid = "android"
-	OSWatchOS = "watchos"
-	OSWearOS  = "wearos"
-	OSNone    = "none" // firmware without an operating system
+	OSLinux    = "linux"
+	OSWindows  = "windows"
+	OSMacOS    = "macos"
+	OSiOS      = "ios"
+	OSAndroid  = "android"
+	OSAurora   = "aurora"
+	OSSailfish = "sailfish"
+	OSWatchOS  = "watchos"
+	OSWearOS   = "wearos"
+	OSNone     = "none" // firmware without an operating system
 )
 
 // ValidOS reports whether os names a known operating system.
 func ValidOS(os string) bool {
 	switch os {
-	case OSLinux, OSWindows, OSMacOS, OSiOS, OSAndroid, OSWatchOS, OSWearOS, OSNone:
+	case OSLinux, OSWindows, OSMacOS, OSiOS, OSAndroid, OSAurora, OSSailfish, OSWatchOS, OSWearOS, OSNone:
+		return true
+	}
+	return false
+}
+
+// PhoneOS reports whether os is a phone's that runs the app: iOS, Android,
+// Aurora OS or Sailfish OS.
+func PhoneOS(os string) bool {
+	switch os {
+	case OSiOS, OSAndroid, OSAurora, OSSailfish:
 		return true
 	}
 	return false
 }
 
 // OSName names an operating system for the user: "Linux", "Windows",
-// "macOS", "iOS", "Android", "watchOS", "Wear OS", "device" for firmware,
+// "macOS", "iOS", "Android", "Aurora OS", "Sailfish OS", "watchOS", "Wear OS",
+// "device" for firmware,
 // "?" when unknown.
 func OSName(os string) string {
 	switch os {
@@ -129,6 +142,10 @@ func OSName(os string) string {
 		return "iOS"
 	case OSAndroid:
 		return "Android"
+	case OSAurora:
+		return "Aurora OS"
+	case OSSailfish:
+		return "Sailfish OS"
 	case OSWatchOS:
 		return "watchOS"
 	case OSWearOS:

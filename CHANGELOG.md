@@ -14,6 +14,22 @@ All notable changes to cbb are documented in this file. The format follows
   take; any admin ends it, the last command counts, and the hello says a device is muted so
   the devices list shows it. Admin records may now name the commands `mute` and `unmute`; an
   admin made earlier signs them once the root signs its record again.
+- The first build of the app for Aurora OS 5 (`apps/silica`, armv7hl and aarch64): it shows
+  the Rust core it links and keeps the phone's P-256 key in its own OP-TEE token, initialized
+  once through Aurora's QCA keystore and used through PKCS#11 after that. It joins a group
+  by its QR code: the phone listens, a phone or a computer of the group scans the code and
+  dials in, and the phone keeps its certificate and the group's records. It does not sync yet.
+- `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
+  the device records (docs/protocol.md): every member admits them as phones and shows
+  "Aurora OS" and "Sailfish OS".
+- An admin with `admit`, a computer included, admits a phone that offers no admin key as a member
+  (docs/protocol.md, section 10, "Who signs what"); only the root makes a phone an admin.
+- `cbb pair -qr` on the group's root or an admin, on Linux, Windows and macOS alike, admits a
+  device that shows a QR code and waits, such as the Aurora phone: it reads the code's text
+  and dials the device.
+- The Rust core joins a phone by its QR code with a key it does not hold, such as the Aurora
+  app's key in OP-TEE: lite/ffi's `cbb_join_*` functions run the pairing inside the core's TLS
+  and ask the app to sign; a test joins them to a computer's group.
 - End-to-end encryption of every copy (D-84): the device that copies seals each copy, its
   text, images and files, with a key of its own, wraps that key for every device of the group
   that reads copies (X-Wing: X25519 with ML-KEM-768) and signs the copy with its member key.

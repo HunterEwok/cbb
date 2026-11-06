@@ -444,6 +444,83 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     the device's user consents once, at install, at pairing or in the app, and the root or an
     admin then turns it on and makes hubs from the app, without a command on each computer
     (see [Consent to sync away from home](#consent-to-sync-away-from-home)).
+- **59.** **Planned for 0.6, before the release (the owner, 2026-11-06).** The stores' signing,
+    set up before 0.6 is tagged, since an Android app's key can never change once its APKs
+    are installed:
+    - One release key for every Android channel: the key that replaced 0.5.0's on 2026-11-03
+      (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`), which the environment
+      **release** already holds. Write its fingerprint in docs/maintaining.md, "Android
+      signing key"; 0.5.0's APK is signed by the old key, so 0.5.0 does not update to 0.6.0
+      in place (no compatibility before 1.0.0).
+    - RuStore, Android: upload the release's signed `cbb-fdroid-X.Y.Z.apk` (the flavor
+      without an update of its own and without Wear OS), not an AAB, so that RuStore never
+      holds the key and its copy, the GitHub APK and F-Droid's share one certificate. The
+      app already leaves a copy from a store to its store (docs/apps.md,
+      "Updates").
+    - RuStore, Aurora OS: the developer certificate with the profile `regular` (issued
+      2025-12-05 by Open Mobile Platform's root, valid until 2049) signs the Aurora build's
+      RPM, and every test build that reaches a phone too (the workflow `aurora`, after the
+      maintainer's approval): not the public test key ("Noname developer"), which 5.2's
+      installer refuses, and a change of certificate installs only after the app is removed,
+      which removes its key. What a
+      `regular` app may do on Aurora 5.1.5 was measured on a device (2026-11-06): it listens
+      and is reached over Wi-Fi in the background, mDNS works both ways, the OP-TEE
+      PKCS#11 token makes non-extractable P-256 keys that sign, it writes the clipboard from the
+      background but reads another app's copy only in the foreground (so the phone sends
+      on a gesture: opening the app, a notification or Share), and a second executable in
+      the package is installed without its execute bit.
+    - F-Droid: the steps in docs/maintaining.md, "F-Droid", with `AllowedAPKSigningKeys`
+      set to that certificate. The fdroid flavor already has no update of its
+      own (`SELF_UPDATE` false, no installer permission), as F-Droid's inclusion policy
+      requires: an app it publishes must not download or install code outside F-Droid.
+- **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS (`apps/silica`), in Qt 5.6 with Silica
+    QML around the Rust core through `cbb_call` (docs/core-api.md), one binary with its
+    libraries, since the installer leaves a second executable in a package without its execute
+    bit: two packages from one
+    code, one for Aurora 4 and one for Aurora 5 (5.1 and 5.2), since the two have different
+    SDKs, sandbox permissions and installers. The Aurora 5 package is built with the SDK of
+    the oldest 5.x it supports, 5.1.5 (each release has its own SDK on OMP's site), for both
+    armv7hl (phones with a 64-bit kernel and a 32-bit system, such as the F+ R570E) and
+    aarch64, and tested on a 5.1.5 phone first; the app reads `VERSION_ID` in
+    `/etc/os-release` for what differs within a major version. The same code makes a third
+    package for Sailfish OS, built with the Sailfish SDK for armv7hl
+    and aarch64 and published in Jolla's store or OpenRepos: only the installer, the signing
+    and the key store differ, so the platform layer keeps them apart from the start and CI
+    builds all the packages. Sailfish ships together with Aurora (the owner, 2026-11-06),
+    tested only in the Sailfish SDK's emulator and marked as not yet tested on a phone,
+    for the community to try, as the Android app first was.
+    Sailfish has no TEE key through PKCS#11, so its key is a file (level 3). Its key fits
+    [Key levels](#key-levels) as the other phones' do:
+    - Level 2, "hardware", the default. How the key is kept, measured on the R570E with
+      5.1.5 (2026-11-06): the app asks Aurora's QCA keystore (provider
+      `qca-aurora-pkcs11`, keystore `USERAPP`, PKCS#11 provider `cktee`, PIN `0000`) once
+      to initialize its token, which gives the app a slot of its own in OP-TEE (model
+      "Aurora TA"; another app sees the same slot number empty); then, through `libckteec`
+      directly, it logs in with that PIN and keeps a P-256 key there with `CKA_TOKEN`,
+      `CKA_SENSITIVE` and not `CKA_EXTRACTABLE`. The key is found again after the app's
+      restart and the phone's reboot, refuses its value and signs. QCA itself handles only
+      RSA and GOST keys and aborts the process when the keystore holds an EC key, so the
+      app never calls QCA again once its key is there. The app checks that the key is in
+      OP-TEE, not in a software token that sets the same flags: `/dev/tee0` and
+      `libckteec` are there, the token is the initialized "Aurora TA" one, and the key
+      reads back `CKA_NEVER_EXTRACTABLE` and `CKA_ALWAYS_SENSITIVE`. Nothing about the
+      device leaves the group (D-47).
+    - Level 1, "proven", only when the group's user chooses it, as everywhere, and only
+      if Aurora offers key attestation (a proof that the key was made in the TEE, not only
+      that the system is unmodified): 5.1.5 has none, and whether the attestation that 5.2's
+      release notes list covers keys is to be checked in its SDK later, with no date, once
+      phones with 5.2 exist. Until then an Aurora phone is never "proven".
+    - The package for Aurora 5 is meant to run on 5.2 too, without level 1; the SDK's 5.2
+      emulator checks it first (the clipboard, which 5.2 reworked, and the network), and,
+      having no OP-TEE, the file key's path: the app says its key is not hardware and is no
+      admin without the user's consent.
+    - A phone without OP-TEE keeps its key in a file and is an admin or the hub only at
+      level 3, after the user allows it.
+    - Ed25519 works in the same token when the template names `CKA_KEY_TYPE`
+      (`CKK_EC_EDWARDS`) and `CKA_EC_PARAMS` is the printable string `edwards25519`;
+      `CKM_EDDSA` needs a `CK_EDDSA_PARAMS`, since `libckteec` crashes on a null parameter.
+    - Removing the app removes its token and key: a reinstalled app finds its slot
+      uninitialized again, initializes it through QCA and joins as a new device.
 - **61.** **Planned for 0.6, before rc.1 (the owner, 2026-11-06).** Make sure the ways out
     carry only cbb and never lead to the internet: the forwarder, VLESS (REALITY and XHTTP)
     with the mirror, the relay and the hub's tunnel, on every member and both phones. Today

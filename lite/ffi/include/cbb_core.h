@@ -32,6 +32,29 @@ uint8_t *cbb_call(const uint8_t *request, size_t len, size_t *answer_len);
 /* Gives back an answer of cbb_call with the length it wrote; NULL does nothing. */
 void cbb_free(uint8_t *answer, size_t len);
 
+/*
+ * Joining a group by the phone's QR code with a key the core does not hold
+ * (src/join.rs), only in a library built with the feature join (the Aurora
+ * app). The answers are JSON as cbb_call's, given back with cbb_free; the
+ * app does the sockets and passes each connection's bytes.
+ */
+
+/*
+ * Signs the 32-byte SHA-256 digest at digest with the device key: writes an
+ * ECDSA P-256 signature, DER, to sig (72 bytes of room) and its length to
+ * sig_len. Returns 0 when it signed.
+ */
+typedef int32_t (*cbb_sign_fn)(void *ctx, const uint8_t *digest, uint8_t *sig, size_t *sig_len);
+
+typedef struct cbb_join cbb_join;
+
+cbb_join *cbb_join_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, uint8_t **answer,
+                       size_t *answer_len);
+uint8_t *cbb_join_accept(cbb_join *j, size_t *answer_len);
+uint8_t *cbb_join_feed(cbb_join *j, const uint8_t *data, size_t len, int64_t now_ms, size_t *answer_len);
+uint8_t *cbb_join_finish(cbb_join *j, int32_t saved, size_t *answer_len);
+void cbb_join_free(cbb_join *j);
+
 #ifdef __cplusplus
 }
 #endif

@@ -569,6 +569,8 @@ fn os_name(os: &str) -> &str {
         "macos" => "macOS",
         "ios" => "iOS",
         "android" => "Android",
+        "aurora" => "Aurora OS",
+        "sailfish" => "Sailfish OS",
         "none" => "device",
         _ => "?",
     }

@@ -402,6 +402,35 @@ pub fn pair_server(cert: &[u8], key: &[u8], clock: &Clock) -> Result<(rustls::Se
     Ok((cfg, exporter))
 }
 
+/// The joiner's server configuration of pair_server for a device key the
+/// core does not hold: key signs the handshake.
+pub fn pair_server_external(
+    cert: &[u8],
+    key: Arc<dyn crate::identity::ExternalKey>,
+    clock: &Clock,
+) -> Result<(rustls::ServerConfig, Arc<Exporter>)> {
+    let signer: Arc<dyn rustls::sign::SigningKey> = Arc::new(provider::ExternalSigningKey(key));
+    let certified = Arc::new(rustls::sign::CertifiedKey::new(vec![CertificateDer::from(cert.to_vec())], signer));
+    let mut cfg = server_builder(clock)?
+        .with_client_cert_verifier(Arc::new(AnyPeer))
+        .with_cert_resolver(Arc::new(OneCert(certified)));
+    cfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    cfg.send_tls13_tickets = 0;
+    let exporter = Arc::new(Exporter::default());
+    cfg.key_log = exporter.clone();
+    Ok((cfg, exporter))
+}
+
+/// One certificate for every connection.
+#[derive(Debug)]
+struct OneCert(Arc<rustls::sign::CertifiedKey>);
+
+impl rustls::server::ResolvesServerCert for OneCert {
+    fn resolve(&self, _: rustls::server::ClientHello<'_>) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        Some(self.0.clone())
+    }
+}
+
 /// The joiner's client configuration, for dialing a member's open pairing
 /// window. Use a new one for each connection: its Exporter gives the
 /// pairing's sid.

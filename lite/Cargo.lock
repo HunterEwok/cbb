@@ -209,7 +209,11 @@ dependencies = [
 name = "cbb-ffi"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "cbb-core",
+ "p256",
+ "qrcode",
+ "serde",
  "serde_json",
 ]
 

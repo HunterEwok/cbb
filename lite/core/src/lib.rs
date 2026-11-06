@@ -57,6 +57,8 @@ pub mod invite;
 pub mod keyboard;
 pub mod media;
 pub mod pair;
+#[cfg(feature = "tls")]
+pub mod pair_session;
 pub mod recovery;
 pub mod release;
 pub mod seal;

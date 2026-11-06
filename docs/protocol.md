@@ -478,7 +478,7 @@ depends on a version number.
 | `current` | Event or absent | the sender's current event with its age as of sending; for a secret a reader sends only its mark (section 5, "Secrets"), whatever its age; absent when there is none |
 | `records` | string or absent | the digest of the sender's records (section 10) |
 | `name` | string or absent | the sender's device name, 1-64 bytes; a receiver ignores an invalid one |
-| `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos` or `wearos` (section 10) |
+| `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos` or `wearos` (section 10) |
 | `admin_key` | string or absent | from a full member that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
@@ -928,19 +928,19 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 | PRS (password) | the six ASCII digits of the code, or a remote invitation's secret (its raw bytes) |
 | CI (channel identifier) | `"cbb pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
 | sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-cbb-pair-v2`, empty context |
-| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits `ios` and `android` joiners as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, and, only on the group's root, `ios` and `android` joiners as phones ("A phone joins a computer's group" below) |
+| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"\|"aurora"\|"sailfish"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone, `aurora` for Aurora OS, `sailfish` for Sailfish OS) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits the phones' systems (`ios`, `android`, `aurora`, `sailfish`) as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, phones that offer no admin key as members, and, only on the group's root, phones that offer one ("A phone joins a computer's group" below) |
 | ADb (member) | JSON `{"device":"<member device ID>","group":"<group tag>"}` |
 | Ya, Yb | 32-byte X25519 u-coordinates |
 | Tags Ta, Tb | HMAC-SHA-512, 64 bytes |
 
 The AD bytes are used exactly as they travel in the `ad` field. The member MUST check ADa: `os`
-is `linux`, `windows` or `macos`, or `none` with `role` `lite` (an admin phone also takes
-`ios` and `android`); `name` is 1 to 64 bytes of
-printable UTF-8; `admin_key`, when present, comes with `ios` or `android` and is a P-256 key, and
+is `linux`, `windows` or `macos`, `none` with `role` `lite`, or one of the phones' `ios`,
+`android`, `aurora` and `sailfish`; `name` is 1 to 64 bytes of
+printable UTF-8; `admin_key`, when present, comes with a phone's system and is a P-256 key, and
 `admin_proof` comes with it; `role`,
 when present, is `lite`; `seal`, when present, comes from no phone and is 1216 bytes. A lite member (a Linux device without CA keys) gets
-no CA keys and is recorded with role `lite`. Go members
-take no `ios` joiner: only admin phones admit phones.
+no CA keys and is recorded with role `lite`. A Go member that is not the root
+refuses a phone that offers `admin_key`: only the root makes a phone an admin.
 
 ### Frames
 
@@ -987,7 +987,7 @@ peer cannot put words in front of the user.
 | `roots` | array of bytes, DER | only in a group that claims handed to new roots (section 10, "Handing the group over"): those roots in order, the current one last |
 | `records` | array of record envelopes (section 10) | the group's records (section 10), so the new device takes its peers at once; always with `roots`, which they must lead to; otherwise left out when they do not fit in the frame, and the new device gets them over connections that carry records only |
 | `claim_times` | array of `{record, ms}` | with `records` that hold a claim: when the admitting member first held each claim, in Unix milliseconds; the joiner takes a time that is earlier than its own and not in the future, so a claim that took effect there takes effect on the joiner too (section 10, "Handing the group over") |
-| `admin_ca` | bytes, DER | only to a phone (`ios` or `android`) that sent `admin_key`, from the root phone or the root computer: the joiner's admin CA for that key (section 10) |
+| `admin_ca` | bytes, DER | only to a phone (`ios`, `android`, `aurora` or `sailfish`) that sent `admin_key`, from the root phone or the root computer: the joiner's admin CA for that key (section 10) |
 
 The joiner MUST check: the tag of `group_ca` equals ADb `group`; `issuer`, when present, is an
 admin CA under `group_ca` or one of `roots` (section 10); the member's TLS certificate is
@@ -1020,13 +1020,15 @@ plus the browse time.
 A phone joins a group that a computer created through the group's root, as a computer joins
 (the joiner dials, above): `cbb pair -admin` on the root opens a window that may make admins,
 and the phone finds it by mDNS (`p=1`) and takes the six-digit code the user types. Its ADa says
-`ios` or `android` and carries `admin_key`; the root's Welcome then carries `admin_ca` for that
+a phone's system and carries `admin_key`; the root's Welcome then carries `admin_ca` for that
 key, and the root signs the phone's `device` record with role `phone` that names the admin key
 in `admin` with the powers of an admin, `takeover` among them (the table in section 10, "Who
 signs what"). The user chooses that the window makes an admin, never the joiner: any other
 window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
 confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
-phone that offers no admin key, as a TV, joins any window as a member. Before it certifies an
+phone that offers no admin key, such as the Aurora OS app for now, joins any admin's window as a
+member: the admin signs its `device` record with role `phone` and no `admin`, and the root may make
+it an admin later. Before it certifies an
 admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
 `sid` of this connection, so that a key the joiner does not hold, or a proof made for another
 connection, never becomes an admin; the root computer also refuses a key its records name already
@@ -1513,7 +1515,7 @@ and `a`-`f`.
 | `device` | string | `device` | a device ID |
 | `name` | string | `device` | 1 to 64 bytes of UTF-8, no control character (U+0000 to U+001F, U+007F to U+009F) |
 | `role` | string | `device` | `full`, `phone`, `lite` or `watch` |
-| `os` | string | none | `linux`, `windows`, `macos`, `ios`, `android`, `watchos`, `wearos` or `none` |
+| `os` | string | none | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `watchos`, `wearos` or `none` |
 | `key` | string | `device` | a key hash: the member key (for a watch, its admin key) |
 | `admin` | string | `recovery`, `handover` | a key hash: the admin key its admin CA certifies; only in a record a root's own key signed |
 | `powers` | array of strings | none | sorted; from `admit`, `renew`, `remove`, `remove-admins`, `freeze`, `thaw`, `takeover`, `hub`; only with `admin` |
@@ -1554,9 +1556,9 @@ those of the newest such record (the highest `seq` of that root) that names it.
 
 | Record | Signed by |
 |--------|-----------|
-| `device` naming `admin`, or with role `phone` or `watch` | a root's own key |
+| `device` naming `admin`, or with role `watch` | a root's own key |
 | `device` with `forward_only` | a root's own key, or an admin with `admit` and `hub` |
-| other `device` | a root's own key, or an admin with `admit` |
+| other `device`, a phone's without `admin` among them | a root's own key, or an admin with `admit` |
 | `revoke` of member keys | a root's own key, or an admin with `remove` |
 | `revoke` of an admin key, or of the member key of a device whose newest root record names an admin key | a root's own key, or an admin with `remove-admins` |
 | `revoke` of a root key, or of the root's own device | nobody: a root is replaced only by a claim |
@@ -3798,7 +3800,7 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 |---|---|---|
 | Role (hello) | `full`, `lite`, `phone` | 4 |
 | Role (device record) | `full`, `lite`, `phone`, `watch` | 10 |
-| System (`os`) | `linux`, `windows`, `macos`, `ios`, `android`, `watchos`, `wearos`, `none` | 4, 10 |
+| System (`os`) | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `watchos`, `wearos`, `none` | 4, 10 |
 | Device form | `laptop`, `desktop`, `phone`, `tablet`, `tv`, `board`, `server`, `router`, `console`, `watch`, `retro`, `other` | 4 |
 | Event `kind` | `text`, `secret`, `media` | 4 |
 | Event `via` | `copy`, `phone`, `universal-clipboard` | 4 |

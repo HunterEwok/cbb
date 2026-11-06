@@ -13,6 +13,7 @@
 
 use alloc::format;
 use alloc::string::{String, ToString};
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
@@ -22,7 +23,7 @@ use crate::authority::Record;
 use crate::certs::{self, Cert, DeviceId, b64};
 use crate::error::{Context, Error, Result, Wrap};
 use crate::group::{ClaimTime, Records};
-use crate::identity::{self, Identity};
+use crate::identity::{self, ExternalKey, Identity};
 use crate::third_party::cpace;
 use crate::wire;
 
@@ -35,11 +36,13 @@ pub const MAX_FRAME: usize = 64 << 10;
 pub const MAX_FAILURES: u32 = 3;
 
 /// The joiner's CPace associated data. The role tells the admitting member
-/// that this is a lite member, which gets no CA keys and is listed as lite.
+/// that this is a lite member, which gets no CA keys and is listed as lite;
+/// a phone has none.
 #[derive(Serialize)]
 struct Info<'a> {
     name: &'a str,
     os: &'a str,
+    #[serde(skip_serializing_if = "str::is_empty")]
     role: &'a str,
     #[serde(with = "certs::b64", skip_serializing_if = "<[u8]>::is_empty")]
     seal: &'a [u8],
@@ -151,9 +154,10 @@ pub fn new_code() -> String {
 
 /// A device that joins: its new device ID, its key and the self-signed
 /// certificate it pairs with.
+#[derive(Clone)]
 pub struct Joiner {
     pub id: DeviceId,
-    /// The new device key, PKCS #8.
+    /// The new device key, PKCS #8; empty when the key is external.
     pub key: Vec<u8>,
     /// The self-signed certificate it presents in the TLS handshake.
     pub cert: Vec<u8>,
@@ -162,6 +166,12 @@ pub struct Joiner {
     /// for none.
     pub seal: Vec<u8>,
     name: String,
+    /// The system and role its info names: linux and lite for a lite
+    /// member, a phone's system and no role for a phone.
+    os: String,
+    role: String,
+    /// The device key when the core does not hold it.
+    external: Option<Arc<dyn ExternalKey>>,
 }
 
 impl Joiner {
@@ -175,7 +185,46 @@ impl Joiner {
         let key = identity::new_key()?;
         let cert =
             certs::self_signed(&id, &identity::signing_key(&key)?).wrap("cannot make the pairing certificate")?;
-        Ok(Joiner { id, key, cert, seal: Vec::new(), name: name.to_string() })
+        Ok(Joiner {
+            id,
+            key,
+            cert,
+            seal: Vec::new(),
+            name: name.to_string(),
+            os: "linux".into(),
+            role: "lite".into(),
+            external: None,
+        })
+    }
+
+    /// A phone that joins with a key of its own hardware: a new device ID,
+    /// the pairing certificate signed by key, and os, a phone's system
+    /// (docs/protocol.md, section 6, ADa). It joins without an admin key.
+    pub fn with_key(name: &str, os: &str, key: Arc<dyn ExternalKey>) -> Result<Joiner> {
+        if !crate::command::valid_name(name) {
+            return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
+        }
+        if !matches!(os, "ios" | "android" | "aurora" | "sailfish") {
+            return Err(Error::msg(format!("{os} is not a phone's system")));
+        }
+        let id = DeviceId::random();
+        let cert = certs::self_signed_by(&id, &key.public(), &mut |tbs| identity::sign_external(&*key, tbs))
+            .wrap("cannot make the pairing certificate")?;
+        Ok(Joiner {
+            id,
+            key: Vec::new(),
+            cert,
+            seal: Vec::new(),
+            name: name.to_string(),
+            os: os.to_string(),
+            role: String::new(),
+            external: Some(key),
+        })
+    }
+
+    /// The device key when the core does not hold it.
+    pub fn external_key(&self) -> Option<&Arc<dyn ExternalKey>> {
+        self.external.as_ref()
     }
 
     /// The fingerprint of the joiner's certificate that the QR code carries.
@@ -190,17 +239,11 @@ impl Joiner {
     /// the member confirms first then, so a device that does not know the
     /// code learns nothing. Returns the exchange and the first frame to
     /// send.
-    pub fn start(
-        &self,
-        code: &str,
-        member_der: &[u8],
-        sid: &[u8],
-        member_first: bool,
-    ) -> Result<(Exchange<'_>, Vec<u8>)> {
+    pub fn start(&self, code: &str, member_der: &[u8], sid: &[u8], member_first: bool) -> Result<(Exchange, Vec<u8>)> {
         let code = normalize_code(code)?;
         let member_cert = Cert::parse(member_der).wrap("the member's certificate")?;
         let ci = channel_id(member_der, &self.cert);
-        let ad = serde_json::to_vec(&Info { name: &self.name, os: "linux", role: "lite", seal: &self.seal })
+        let ad = serde_json::to_vec(&Info { name: &self.name, os: &self.os, role: &self.role, seal: &self.seal })
             .context("cannot encode the joiner's info")?;
         let (st, msg) = cpace::start(&cpace::Config {
             role: cpace::Role::Initiator,
@@ -213,7 +256,7 @@ impl Joiner {
         let first = frame(&Frame { msg: Some(msg), ad: Some(ad), ..Default::default() })?;
         Ok((
             Exchange {
-                joiner: self,
+                joiner: self.clone(),
                 st,
                 member_cert,
                 member_first,
@@ -231,8 +274,8 @@ impl Joiner {
 /// it returns, passes the member's last frame to [`Exchange::welcome`],
 /// stores the identity it returns, and sends [`done`] with whether it
 /// could. A [`Failure`] may carry a frame to send before closing.
-pub struct Exchange<'a> {
-    joiner: &'a Joiner,
+pub struct Exchange {
+    joiner: Joiner,
     st: cpace::State,
     member_cert: Cert,
     member_first: bool,
@@ -258,7 +301,7 @@ impl From<Error> for Failure {
     }
 }
 
-impl Exchange<'_> {
+impl Exchange {
     /// Takes the member's reply, a frame's JSON, and returns the frame
     /// with this joiner's confirmation.
     pub fn reply(&mut self, body: &[u8]) -> core::result::Result<Vec<u8>, Failure> {
@@ -356,7 +399,10 @@ impl Exchange<'_> {
         if certs::device_of(member_cert).map(|d| d.to_string()).ok().as_deref() != Some(member.device.as_str()) {
             return Err(Error::msg("the member's certificate does not name the member"));
         }
-        id.check()?;
+        match &self.joiner.external {
+            Some(key) => id.check_key(&key.public())?,
+            None => id.check()?,
+        }
         Ok(id)
     }
 }
