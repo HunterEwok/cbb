@@ -334,7 +334,7 @@ impl Node {
                 None,
                 &copy::new_key(),
             )?;
-            d.sealed.sig = cbb_core::identity::sign(&ident.key, &d.to_sign)?;
+            d.sealed.sig = ident.sign(&d.to_sign)?;
             Ok(d.sealed)
         })
     }

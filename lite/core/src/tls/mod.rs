@@ -179,9 +179,32 @@ impl ServerCertVerifier for MemberVerifier {
     }
 }
 
-fn member_chain(id: &Identity) -> (Vec<CertificateDer<'static>>, PrivateKeyDer<'static>) {
+/// This member's certificate chain with its key, the core's own or one
+/// kept outside it (Identity::external).
+fn member_certified(id: &Identity) -> Result<Arc<rustls::sign::CertifiedKey>> {
     let chain = id.chain().into_iter().map(CertificateDer::from).collect();
-    (chain, PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(id.key.clone())))
+    let signer: Arc<dyn rustls::sign::SigningKey> = match &id.external {
+        Some(k) => Arc::new(provider::ExternalSigningKey(k.clone())),
+        None => provider()
+            .key_provider
+            .load_private_key(PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(id.key.clone())))
+            .map_err(|e| Error::with("cannot use the member certificate", TlsError(e)))?,
+    };
+    Ok(Arc::new(rustls::sign::CertifiedKey::new(chain, signer)))
+}
+
+/// One client certificate for every server.
+#[derive(Debug)]
+struct OneClientCert(Arc<rustls::sign::CertifiedKey>);
+
+impl rustls::client::ResolvesClientCert for OneClientCert {
+    fn resolve(&self, _: &[&[u8]], _: &[SignatureScheme]) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        Some(self.0.clone())
+    }
+
+    fn has_certs(&self) -> bool {
+        true
+    }
 }
 
 fn client_builder(clock: &Clock) -> Result<rustls::ConfigBuilder<rustls::ClientConfig, rustls::WantsVerifier>> {
@@ -213,12 +236,11 @@ pub fn member_client(
         root_start: id.root().not_before,
         refused,
     };
-    let (chain, key) = member_chain(id);
+    let certified = member_certified(id)?;
     let mut cfg = client_builder(clock)?
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(verifier))
-        .with_client_auth_cert(chain, key)
-        .map_err(|e| Error::with("cannot use the member certificate", TlsError(e)))?;
+        .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
     cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
     cfg.resumption = rustls::client::Resumption::disabled();
     Ok(cfg)
@@ -293,11 +315,10 @@ pub fn member_server(id: &Identity, refused: Refused, clock: &Clock) -> Result<r
         root_start: id.root().not_before,
         refused,
     };
-    let (chain, key) = member_chain(id);
+    let certified = member_certified(id)?;
     let mut cfg = server_builder(clock)?
         .with_client_cert_verifier(Arc::new(verifier))
-        .with_single_cert(chain, key)
-        .map_err(|e| Error::with("cannot use the member certificate", TlsError(e)))?;
+        .with_cert_resolver(Arc::new(OneCert(certified)));
     cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
     cfg.send_tls13_tickets = 0;
     Ok(cfg)

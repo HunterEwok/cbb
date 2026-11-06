@@ -181,6 +181,7 @@ fn swift_admin() {
             let id = Identity {
                 id: certs::DeviceId::parse(v["device"].as_str().unwrap()).unwrap(),
                 key,
+                external: None,
                 cert: leaf,
                 issuer: Some(admin),
                 group_ca: ca,

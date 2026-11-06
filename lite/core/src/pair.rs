@@ -376,6 +376,7 @@ impl Exchange {
         let mut id = Identity {
             id: self.joiner.id.clone(),
             key: self.joiner.key.clone(),
+            external: self.joiner.external.clone(),
             cert: Cert::parse(&w.cert).wrap("the new member certificate")?,
             issuer: None,
             group_ca,
