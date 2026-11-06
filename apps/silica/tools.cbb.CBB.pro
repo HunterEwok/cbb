@@ -13,7 +13,7 @@ isEmpty(CBB_TARGET): CBB_TARGET = aurora5
 CONFIG += c++11
 QT += network
 
-# The spec's %qmake5 passes VERSION=%{version}.
+# The spec passes VERSION=%{version} to qmake.
 isEmpty(VERSION): VERSION = 0.0.0
 DEFINES += CBB_VERSION=\\\"$$VERSION\\\"
 

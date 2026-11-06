@@ -8,7 +8,7 @@
 #                         apps/design/icon with ImageMagick); needs rustup
 #   build.sh rpm TARGET   builds the RPM in the Platform SDK, where mb2 runs, for
 #                         a target such as AuroraOS-5.1.5.105-base-armv7hl
-# The RPMs land in RPMS/; they are unsigned. Nothing written here belongs in git.
+# The RPMs land in build/TARGET/RPMS/, unsigned. Nothing written here belongs in git.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 case ${1:-} in
@@ -26,8 +26,11 @@ prepare)
 rpm)
 	[ $# -eq 2 ] || { echo "usage: build.sh rpm TARGET" >&2; exit 2; }
 	[ -f "$here/core/include/cbb_core.h" ] || { echo "build.sh: run build.sh prepare first" >&2; exit 1; }
-	cd "$here"
-	mb2 --no-snapshot -t "$2" -s packaging/aurora5/tools.cbb.CBB.spec build
+	# A build folder per target, so that one architecture's objects never
+	# land in another's package.
+	mkdir -p "$here/build/$2"
+	cd "$here/build/$2"
+	mb2 --no-snapshot -t "$2" -s "$here/packaging/aurora5/tools.cbb.CBB.spec" build "$here"
 	;;
 *)
 	echo "usage: build.sh prepare | build.sh rpm TARGET" >&2

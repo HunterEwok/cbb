@@ -25,7 +25,7 @@ CBB syncs the clipboard between your phones and computers on the home network.
 %autosetup
 
 %build
-%qmake5
+%qmake5 VERSION=%{version}
 %make_build
 
 %install
