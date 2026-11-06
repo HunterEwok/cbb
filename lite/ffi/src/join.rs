@@ -83,6 +83,10 @@ struct NewArgs {
     /// The key's public point, SEC1 uncompressed.
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
+    /// The admin key's public point, SEC1 uncompressed, for a phone that
+    /// asks to be an admin (cbb_join_new_admin).
+    #[serde(with = "certs::b64::opt", default)]
+    admin_public: Option<Vec<u8>>,
     /// Its public key for sealed messages, optional.
     #[serde(with = "certs::b64", default)]
     seal: Vec<u8>,
@@ -131,6 +135,10 @@ struct JoinedAnswer {
     /// The records file (docs/core-api.md, "The record set").
     #[serde(with = "certs::b64")]
     records: Vec<u8>,
+    /// The admin CA for the admin key, when the member made the phone an
+    /// admin.
+    #[serde(with = "certs::b64::opt", skip_serializing_if = "Option::is_none")]
+    admin_ca: Option<Vec<u8>>,
 }
 
 #[derive(Serialize)]
@@ -157,12 +165,21 @@ pub(crate) fn answer<T: Serialize>(ok: Result<T>) -> Vec<u8> {
 impl Join {
     /// A joiner from the app's request (NewArgs) and its key's callback,
     /// with its answer.
-    pub fn new(request: &[u8], sign: SignFn, ctx: usize) -> (Option<Join>, Vec<u8>) {
+    /// With admin, the admin key's callback and its context, the phone
+    /// offers the admin key the request names.
+    pub fn new(request: &[u8], sign: SignFn, ctx: usize, admin: Option<(SignFn, usize)>) -> (Option<Join>, Vec<u8>) {
         let made = (|| -> Result<(Join, NewAnswer)> {
             let a: NewArgs = serde_json::from_slice(request)
                 .map_err(|e| Error::msg(format!("the join request does not decode: {e}")))?;
             let key = Arc::new(AppKey { public: a.public, sign, ctx });
             let mut joiner = Joiner::with_key(&a.name, &a.os, key)?;
+            match (admin, a.admin_public) {
+                (Some((sign, ctx)), Some(public)) => {
+                    joiner = joiner.offering_admin_key(Arc::new(AppKey { public, sign, ctx }))?;
+                }
+                (None, None) => {}
+                _ => return Err(Error::msg("the admin key needs both its public key and its callback")),
+            }
             joiner.seal = a.seal;
             let code = if a.code.is_empty() { pair::new_code() } else { pair::normalize_code(&a.code)? };
             let qr = pair::join_qr(&code, &a.addrs, &joiner.fingerprint());
@@ -238,6 +255,7 @@ fn joined_answer(j: &cbb_core::pair_session::Joined, now_ms: i64) -> Result<Join
         group_ca: id.group_ca.der.clone(),
         roots: id.roots.iter().map(|c| c.der.clone()).collect(),
         records: set.to_file()?,
+        admin_ca: j.admin_ca.clone(),
     })
 }
 

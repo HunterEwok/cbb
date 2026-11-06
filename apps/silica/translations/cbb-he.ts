@@ -85,6 +85,10 @@
         <source>This phone keeps no keys for apps.</source>
         <translation>הטלפון הזה לא שומר מפתחות לאפליקציות.</translation>
     </message>
+    <message>
+        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
+        <translation>המכשיר השני לא קיבל את הטלפון הזה כמנהל. רק השורש של הקבוצה ממנה מנהלים: שם, קבלו אותו כמנהל (cbb pair -qr -admin), או הצטרפו בלי להיות מנהל.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -107,6 +111,18 @@
     <message>
         <source>Try again</source>
         <translation>נסה שוב</translation>
+    </message>
+    <message>
+        <source>Join as an admin</source>
+        <translation>הצטרפות כמנהל</translation>
+    </message>
+    <message>
+        <source>Making the admin key…</source>
+        <translation>יוצר את מפתח המנהל…</translation>
+    </message>
+    <message>
+        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
+        <translation>במחשב השורש של הקבוצה, קבלו את הטלפון הזה כמנהל עם הקוד הזה: באפליקציית CBB הוסיפו מכשיר ובחרו לקבל אותו כמנהל, או הריצו cbb pair -qr -admin. השאירו את המסך הזה פתוח.</translation>
     </message>
 </context>
 <context>
@@ -186,6 +202,22 @@
     <message>
         <source>Version</source>
         <translation>גרסה</translation>
+    </message>
+    <message>
+        <source>Join a group as an admin</source>
+        <translation>הצטרפות לקבוצה כמנהל</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>בקבוצה</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>מנהל</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>חבר</translation>
     </message>
 </context>
 </TS>

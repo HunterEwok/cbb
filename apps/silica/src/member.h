@@ -12,6 +12,7 @@
 #include "membership.h"
 
 #include <QByteArray>
+#include <QList>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -49,6 +50,9 @@ public:
 
 signals:
     void changed();
+    // An admin renewed the member certificate, or a takeover made a new
+    // root: the phone keeps them in member.json.
+    void identityChanged(const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots);
 
 private:
     Q_INVOKABLE void event(const QByteArray &json);

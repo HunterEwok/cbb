@@ -85,6 +85,10 @@
         <source>This phone keeps no keys for apps.</source>
         <translation>Este teléfono no guarda claves para las apps.</translation>
     </message>
+    <message>
+        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
+        <translation>El otro dispositivo no admitió este teléfono como administrador. Solo la raíz del grupo nombra administradores: allí, admítelo como administrador (cbb pair -qr -admin), o únete sin ser administrador.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -107,6 +111,18 @@
     <message>
         <source>Try again</source>
         <translation>Reintentar</translation>
+    </message>
+    <message>
+        <source>Join as an admin</source>
+        <translation>Unirse como administrador</translation>
+    </message>
+    <message>
+        <source>Making the admin key…</source>
+        <translation>Creando la clave de administrador…</translation>
+    </message>
+    <message>
+        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
+        <translation>En el ordenador raíz del grupo, admite este teléfono como administrador con este código: en la app CBB, añade un dispositivo y elige admitirlo como administrador, o ejecuta cbb pair -qr -admin. Mantén esta pantalla abierta.</translation>
     </message>
 </context>
 <context>
@@ -186,6 +202,22 @@
     <message>
         <source>Version</source>
         <translation>Versión</translation>
+    </message>
+    <message>
+        <source>Join a group as an admin</source>
+        <translation>Unirse a un grupo como administrador</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>En el grupo</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>Administrador</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>Miembro</translation>
     </message>
 </context>
 </TS>

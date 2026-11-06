@@ -50,6 +50,14 @@ typedef struct cbb_join cbb_join;
 
 cbb_join *cbb_join_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, uint8_t **answer,
                        size_t *answer_len);
+/*
+ * As cbb_join_new, for a phone that asks to be an admin: the request names
+ * "admin_public", the admin key's public point, and admin_sign with
+ * admin_ctx signs with that key. The joined answer carries "admin_ca" when
+ * the member made the phone an admin.
+ */
+cbb_join *cbb_join_new_admin(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, cbb_sign_fn admin_sign,
+                             void *admin_ctx, uint8_t **answer, size_t *answer_len);
 uint8_t *cbb_join_accept(cbb_join *j, size_t *answer_len);
 uint8_t *cbb_join_feed(cbb_join *j, const uint8_t *data, size_t len, int64_t now_ms, size_t *answer_len);
 uint8_t *cbb_join_finish(cbb_join *j, int32_t saved, size_t *answer_len);

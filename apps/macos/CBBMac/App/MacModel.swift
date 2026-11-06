@@ -365,10 +365,33 @@ final class MacModel: ObservableObject {
         try? FileManager.default.removeItem(at: file)
     }
 
-    private func admin(_ arguments: [String], answer: Bool = false, done: String) async {
+    /// Admits the device whose QR code says text, such as a phone with
+    /// Aurora OS or Sailfish OS that waits: cbb pair -qr as the
+    /// administrator, the text on its standard input; with asAdmin, on the
+    /// group's root, a phone that asks to be an admin becomes one.
+    func admitByQR(_ text: String, asAdmin: Bool = false) async {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isWaitingJoiner(text) else {
+            message = String(localized: "This QR code is not of a device that waits to join.")
+            return
+        }
+        await admin(["pair", "-qr"] + (asAdmin ? ["-admin"] : []), input: text + "\n", done: String(localized: "It joined the group."))
+    }
+
+    /// Whether text is the QR code of a device that listens for the member
+    /// that admits it (docs/protocol.md, section 6): a code, an address and
+    /// a fingerprint.
+    nonisolated static func isWaitingJoiner(_ text: String) -> Bool {
+        guard let c = URLComponents(string: text), c.scheme?.lowercased() == "cbb", c.host?.lowercased() == "join" else { return false }
+        let items = c.percentEncodedQueryItems ?? []
+        func has(_ name: String) -> Bool { items.contains { $0.name == name && !($0.value ?? "").isEmpty } }
+        return has("code") && has("addr") && has("fp")
+    }
+
+    private func admin(_ arguments: [String], answer: Bool = false, input: String? = nil, done: String) async {
         let details = Self.showsErrorDetails
         await act {
-            _ = try await Admin.run(arguments, answer: answer, details: details)
+            _ = try await Admin.run(arguments, answer: answer, input: input, details: details)
             return done
         }
     }

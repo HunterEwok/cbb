@@ -454,7 +454,8 @@ permission to paste.
   (BSD-3-Clause), `amnezia-vpn/amneziawg-go` (MIT, a fork of wireguard-go) with gVisor's netstack (Apache-2.0)
   and `google/btree` (Apache-2.0) for the tunnel, and the CPace implementation copied from
   `rsc.io/cmd/mote` v0.1.3 (BSD-3-Clause) into `internal/third_party/cpace`. The lite
-  member uses RustCrypto and rustls (MIT or Apache-2.0).
+  member uses RustCrypto and rustls (MIT or Apache-2.0). The tray app reads QR codes from
+  pictures with `makiuchi-d/gozxing` (Apache-2.0).
 
 ## 6. Runtime view
 

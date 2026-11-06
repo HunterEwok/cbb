@@ -85,6 +85,10 @@
         <source>This phone keeps no keys for apps.</source>
         <translation>لا يحفظ هذا الهاتف مفاتيح للتطبيقات.</translation>
     </message>
+    <message>
+        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
+        <translation>لم يقبل الجهاز الآخر هذا الهاتف كمشرف. جذر المجموعة وحده يعيّن المشرفين: هناك اقبله كمشرف (cbb pair -qr -admin)، أو انضم دون أن تكون مشرفًا.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -107,6 +111,18 @@
     <message>
         <source>Try again</source>
         <translation>أعد المحاولة</translation>
+    </message>
+    <message>
+        <source>Join as an admin</source>
+        <translation>الانضمام كمشرف</translation>
+    </message>
+    <message>
+        <source>Making the admin key…</source>
+        <translation>جارٍ إنشاء مفتاح المشرف…</translation>
+    </message>
+    <message>
+        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
+        <translation>على حاسوب جذر المجموعة، اقبل هذا الهاتف كمشرف بهذا الرمز: في تطبيق CBB أضف جهازًا واختر قبوله كمشرف، أو شغّل cbb pair -qr -admin. أبقِ هذه الشاشة مفتوحة.</translation>
     </message>
 </context>
 <context>
@@ -186,6 +202,22 @@
     <message>
         <source>Version</source>
         <translation>الإصدار</translation>
+    </message>
+    <message>
+        <source>Join a group as an admin</source>
+        <translation>الانضمام إلى مجموعة كمشرف</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>في المجموعة</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>مشرف</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>عضو</translation>
     </message>
 </context>
 </TS>

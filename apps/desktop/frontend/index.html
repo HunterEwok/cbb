@@ -72,6 +72,18 @@
         <li><span data-t>In a group of the phone, scan the QR code it shows with the phone app. In a group of computers, run this on this computer or another admin, as the administrator, and type the code it shows on the new computer:</span> <code>cbb pair</code></li>
       </ol>
       <p class="dim" data-t>A phone joins from the start screen of its app.</p>
+      <div id="admit-box" hidden>
+        <h3 data-t>Admit by QR code</h3>
+        <p class="dim" data-t>A phone with Aurora OS or Sailfish OS shows a QR code and waits. Paste the code's text, or open a picture of it:</p>
+        <textarea id="admit-text" class="field mono" rows="3" spellcheck="false" placeholder="cbb://join?..."></textarea>
+        <input id="admit-file" type="file" accept="image/png,image/jpeg" hidden>
+        <label id="admit-admin-row" class="check" hidden><input type="checkbox" id="admit-admin"> <span data-t>Admit it as an admin: it may then add, remove and renew devices and take the group over after the takeover delay. Only for your own phone.</span></label>
+        <p id="admit-error" class="dim" hidden></p>
+        <div class="buttons">
+          <button type="button" id="admit-picture" class="glass" data-t>Open a picture</button>
+          <button type="button" id="admit" class="accent" data-t>Admit</button>
+        </div>
+      </div>
       <menu><button value="ok" class="accent" data-t>Done</button></menu>
     </form>
   </dialog>

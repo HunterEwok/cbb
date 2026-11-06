@@ -85,6 +85,10 @@
         <source>This phone keeps no keys for apps.</source>
         <translation>Этот телефон не хранит ключи приложений.</translation>
     </message>
+    <message>
+        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
+        <translation>Другое устройство не приняло этот телефон как админа. Админов назначает только корень группы: там примите его как админа (cbb pair -qr -admin) или войдите в группу не как админ.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -107,6 +111,18 @@
     <message>
         <source>Try again</source>
         <translation>Попробовать снова</translation>
+    </message>
+    <message>
+        <source>Join as an admin</source>
+        <translation>Войти как админ</translation>
+    </message>
+    <message>
+        <source>Making the admin key…</source>
+        <translation>Создаётся ключ админа…</translation>
+    </message>
+    <message>
+        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
+        <translation>На корневом компьютере группы примите этот телефон как админа по этому коду: в приложении CBB добавьте устройство и выберите «принять как админа» или выполните cbb pair -qr -admin. Не закрывайте этот экран.</translation>
     </message>
 </context>
 <context>
@@ -186,6 +202,22 @@
     <message>
         <source>Version</source>
         <translation>Версия</translation>
+    </message>
+    <message>
+        <source>Join a group as an admin</source>
+        <translation>Войти в группу как админ</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>В группе</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>Админ</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>Участник</translation>
     </message>
 </context>
 </TS>

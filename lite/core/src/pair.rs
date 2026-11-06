@@ -46,7 +46,16 @@ struct Info<'a> {
     role: &'a str,
     #[serde(with = "certs::b64", skip_serializing_if = "<[u8]>::is_empty")]
     seal: &'a [u8],
+    /// A phone's admin key, a SubjectPublicKeyInfo, and its proof over the
+    /// connection's sid, when it asks to be an admin.
+    #[serde(with = "certs::b64", skip_serializing_if = "<[u8]>::is_empty")]
+    admin_key: &'a [u8],
+    #[serde(with = "certs::b64", skip_serializing_if = "<[u8]>::is_empty")]
+    admin_proof: &'a [u8],
 }
+
+/// What a phone's admin key signs to prove it holds it, before the sid.
+const ADMIN_PROOF_LABEL: &[u8] = b"cbb pairing admin key\x00";
 
 /// The member's CPace associated data.
 #[derive(Deserialize)]
@@ -72,6 +81,9 @@ struct Welcome {
     /// When the member first held each claim of records.
     #[serde(default)]
     claim_times: Vec<ClaimTime>,
+    /// The phone's admin CA for the admin key its info offered.
+    #[serde(with = "b64::opt", default)]
+    admin_ca: Option<Vec<u8>>,
 }
 
 /// Every frame of the exchange; each uses some of the fields.
@@ -172,6 +184,9 @@ pub struct Joiner {
     role: String,
     /// The device key when the core does not hold it.
     external: Option<Arc<dyn ExternalKey>>,
+    /// A phone's admin key, which its info offers so that the root makes it
+    /// an admin.
+    admin: Option<Arc<dyn ExternalKey>>,
 }
 
 impl Joiner {
@@ -194,12 +209,14 @@ impl Joiner {
             os: "linux".into(),
             role: "lite".into(),
             external: None,
+            admin: None,
         })
     }
 
     /// A phone that joins with a key of its own hardware: a new device ID,
     /// the pairing certificate signed by key, and os, a phone's system
-    /// (docs/protocol.md, section 6, ADa). It joins without an admin key.
+    /// (docs/protocol.md, section 6, ADa). It joins without an admin key,
+    /// unless [`Joiner::offering_admin_key`] gives one.
     pub fn with_key(name: &str, os: &str, key: Arc<dyn ExternalKey>) -> Result<Joiner> {
         if !crate::command::valid_name(name) {
             return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
@@ -219,7 +236,19 @@ impl Joiner {
             os: os.to_string(),
             role: String::new(),
             external: Some(key),
+            admin: None,
         })
+    }
+
+    /// The phone joining with an admin key too: only a window that may make
+    /// admins, on the group's root or an admin phone, admits it, and its
+    /// Welcome carries the admin CA for that key.
+    pub fn offering_admin_key(mut self, key: Arc<dyn ExternalKey>) -> Result<Joiner> {
+        if self.role == "lite" {
+            return Err(Error::msg("a lite member is never an admin"));
+        }
+        self.admin = Some(key);
+        Ok(self)
     }
 
     /// The device key when the core does not hold it.
@@ -243,8 +272,24 @@ impl Joiner {
         let code = normalize_code(code)?;
         let member_cert = Cert::parse(member_der).wrap("the member's certificate")?;
         let ci = channel_id(member_der, &self.cert);
-        let ad = serde_json::to_vec(&Info { name: &self.name, os: &self.os, role: &self.role, seal: &self.seal })
-            .context("cannot encode the joiner's info")?;
+        let (admin_key, admin_proof) = match &self.admin {
+            Some(k) => {
+                let mut m = ADMIN_PROOF_LABEL.to_vec();
+                m.extend_from_slice(sid);
+                let proof = identity::sign_external(&**k, &m).wrap("the admin key did not sign")?;
+                (certs::p256_spki_of(&k.public()), proof)
+            }
+            None => (Vec::new(), Vec::new()),
+        };
+        let ad = serde_json::to_vec(&Info {
+            name: &self.name,
+            os: &self.os,
+            role: &self.role,
+            seal: &self.seal,
+            admin_key: &admin_key,
+            admin_proof: &admin_proof,
+        })
+        .context("cannot encode the joiner's info")?;
         let (st, msg) = cpace::start(&cpace::Config {
             role: cpace::Role::Initiator,
             password: code.as_bytes(),
@@ -263,6 +308,7 @@ impl Joiner {
                 member: None,
                 records: RefCell::new(Vec::new()),
                 claim_times: RefCell::new(Vec::new()),
+                admin_ca: RefCell::new(None),
             },
             first,
         ))
@@ -286,6 +332,8 @@ pub struct Exchange {
     /// When the joiner holds each claim of records from, the member's times
     /// where they are earlier.
     claim_times: RefCell<Vec<ClaimTime>>,
+    /// The admin CA the Welcome gave for the phone's admin key.
+    admin_ca: RefCell<Option<Vec<u8>>>,
 }
 
 /// A failed step: the error, and the frame that tells the member, if any.
@@ -353,6 +401,13 @@ impl Exchange {
         self.claim_times.borrow().clone()
     }
 
+    /// The admin CA for the phone's admin key, DER, once welcome took a
+    /// Welcome that made it an admin; the program keeps it with the
+    /// identity.
+    pub fn admin_ca(&self) -> Option<Vec<u8>> {
+        self.admin_ca.borrow().clone()
+    }
+
     /// Checks what the member sent and builds the new identity.
     fn identity(&self, w: &Welcome, member: &MemberAd, now_ms: i64) -> Result<Identity> {
         let member_cert = &self.member_cert;
@@ -404,6 +459,22 @@ impl Exchange {
             Some(key) => id.check_key(&key.public())?,
             None => id.check()?,
         }
+        *self.admin_ca.borrow_mut() = match (&w.admin_ca, &self.joiner.admin) {
+            (None, _) => None,
+            (Some(_), None) => {
+                return Err(Error::msg("the member sent an admin CA, and this device offered no admin key"));
+            }
+            (Some(der), Some(key)) => {
+                let ca = Cert::parse(der).wrap("the admin CA")?;
+                certs::check_admin_ca(&ca, id.root()).wrap("the admin CA")?;
+                if ca.public_key() != key.public().as_slice()
+                    || ca.common_name.as_deref() != Some(format!("cbb admin {}", id.id).as_str())
+                {
+                    return Err(Error::msg("the admin CA is not for this phone's admin key"));
+                }
+                Some(der.clone())
+            }
+        };
         Ok(id)
     }
 }

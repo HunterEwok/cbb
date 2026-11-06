@@ -90,6 +90,16 @@ enum Event<'a> {
     Log {
         line: &'a str,
     },
+    /// The phone's place in the group changed: a certificate an admin
+    /// renewed, or a new root. The app keeps it in its file.
+    Identity {
+        #[serde(with = "certs::b64")]
+        cert: Vec<u8>,
+        #[serde(with = "certs::b64::opt")]
+        issuer: Option<Vec<u8>>,
+        #[serde(with = "certs::b64::list")]
+        roots: Vec<Vec<u8>>,
+    },
 }
 
 #[derive(Serialize)]
@@ -164,6 +174,14 @@ impl Member {
                     };
                     let ttl_ms = w.ttl.map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
                     ev.send(&Event::Write { text: &w.text, kind, ttl_ms });
+                }),
+                keep_identity: Box::new(move |id: &Identity| {
+                    ev.send(&Event::Identity {
+                        cert: id.cert.der.clone(),
+                        issuer: id.issuer.as_ref().map(|c| c.der.clone()),
+                        roots: id.roots.iter().map(|c| c.der.clone()).collect(),
+                    });
+                    Ok(())
                 }),
                 log: Arc::new(move |line: &str| ev.send(&Event::Log { line })),
             })?;

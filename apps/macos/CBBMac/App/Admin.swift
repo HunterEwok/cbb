@@ -21,10 +21,21 @@ enum Admin {
     }
 
     /// Runs cbb with the arguments, typing yes when a question follows
-    /// (cbb global on), and returns what it printed.
-    static func run(_ arguments: [String], answer yes: Bool = false, details: Bool) async throws -> String {
+    /// (cbb global on), or with input as its standard input, and returns
+    /// what it printed. The input goes through a file only the user reads,
+    /// never on a command line, which every program may see.
+    static func run(_ arguments: [String], answer yes: Bool = false, input: String? = nil, details: Bool) async throws -> String {
         guard let cbb = command else { throw Failure.noCommand }
-        let script = appleScript(shell: shellCommand(cbb, arguments, answer: yes, details: details))
+        var inputFile: URL?
+        if let input {
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-input-\(UUID().uuidString).txt")
+            guard FileManager.default.createFile(atPath: file.path, contents: Data(input.utf8), attributes: [.posixPermissions: 0o600]) else {
+                throw Failure.failed(String(localized: "The app could not make the file for cbb."), detail: file.path)
+            }
+            inputFile = file
+        }
+        defer { if let inputFile { try? FileManager.default.removeItem(at: inputFile) } }
+        let script = appleScript(shell: shellCommand(cbb, arguments, answer: yes, input: inputFile?.path, details: details))
         return try await withCheckedThrowingContinuation { done in
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -51,10 +62,10 @@ enum Admin {
 
     /// The shell command line, every argument quoted; CBB_DEBUG makes cbb
     /// name the error underneath, as the app does with error details on.
-    static func shellCommand(_ cbb: String, _ arguments: [String], answer yes: Bool, details: Bool) -> String {
+    static func shellCommand(_ cbb: String, _ arguments: [String], answer yes: Bool, input: String? = nil, details: Bool) -> String {
         let line = ([cbb] + arguments).map(quoted).joined(separator: " ")
         let env = details ? "CBB_DEBUG=1 " : ""
-        return (yes ? "echo yes | " : "") + env + line
+        return (yes ? "echo yes | " : "") + env + line + (input.map { " < " + quoted($0) } ?? "")
     }
 
     /// The shell's single quotes around a word.

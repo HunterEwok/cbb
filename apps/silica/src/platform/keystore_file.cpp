@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 // The member key in a file, for Sailfish OS and Aurora 4, which give an app
-// no key in a TEE: device.key in the app's data folder, readable only by the
-// app, holding the P-256 key the core made (level 3, "file", of "Key levels"
+// no key in a TEE: device.key in the app's data folder (admin.key for the
+// admin key), readable only by the app, holding the P-256 key the core made (level 3, "file", of "Key levels"
 // in docs/roadmap.md). The core signs with it, so no crypto library is linked.
 
 #include "keystore.h"
@@ -23,11 +23,11 @@ namespace KeyStore {
 
 namespace {
 
-QString path()
+QString path(Which which)
 {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(dir);
-    return dir + QStringLiteral("/device.key");
+    return dir + (which == Which::Admin ? QStringLiteral("/admin.key") : QStringLiteral("/device.key"));
 }
 
 QString b64(const QByteArray &b)
@@ -40,9 +40,14 @@ QByteArray b64(const QJsonValue &v)
     return QByteArray::fromBase64(v.toString().toLatin1());
 }
 
-// The key read once, for sign, which runs on the node's threads.
+// The keys read once, for sign, which runs on the node's threads.
 QMutex lock;
-QByteArray pkcs8;
+QByteArray pkcs8[2];
+
+QByteArray &secretOf(Which which)
+{
+    return pkcs8[which == Which::Admin ? 1 : 0];
+}
 
 } // namespace
 
@@ -51,10 +56,10 @@ QString store()
     return QStringLiteral("file");
 }
 
-Key ensure()
+Key ensure(Which which)
 {
     Key key;
-    QFile f(path());
+    QFile f(path(which));
     if (f.exists()) {
         if (!f.open(QIODevice::ReadOnly)) {
             key.failure = {QCoreApplication::translate("Errors", "The phone could not read its key."), QStringLiteral("key: %1: %2").arg(f.fileName(), f.errorString())};
@@ -69,7 +74,7 @@ Key ensure()
             return key;
         }
         QMutexLocker l(&lock);
-        pkcs8 = secret;
+        secretOf(which) = secret;
         key.state = State::Ready;
         return key;
     }
@@ -79,7 +84,7 @@ Key ensure()
         key.failure = failure;
         return key;
     }
-    QSaveFile out(path());
+    QSaveFile out(path(which));
     const QByteArray data = QJsonDocument(made).toJson(QJsonDocument::Compact);
     if (!out.open(QIODevice::WriteOnly) || out.write(data) != data.size() ||
         !out.setPermissions(QFile::ReadOwner | QFile::WriteOwner) || !out.commit()) {
@@ -87,19 +92,19 @@ Key ensure()
         return key;
     }
     QMutexLocker l(&lock);
-    pkcs8 = b64(made.value(QStringLiteral("pkcs8")));
+    secretOf(which) = b64(made.value(QStringLiteral("pkcs8")));
     key.publicKey = b64(made.value(QStringLiteral("public")));
     key.created = true;
     key.state = State::Ready;
     return key;
 }
 
-QByteArray sign(const QByteArray &digest, Failure *failure)
+QByteArray sign(const QByteArray &digest, Failure *failure, Which which)
 {
     QByteArray secret;
     {
         QMutexLocker l(&lock);
-        secret = pkcs8;
+        secret = secretOf(which);
     }
     if (secret.isEmpty()) {
         *failure = {QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("key: sign before ensure")};

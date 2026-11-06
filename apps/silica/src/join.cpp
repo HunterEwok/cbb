@@ -62,10 +62,11 @@ Join::~Join()
     stop();
 }
 
-void Join::start(const QString &name, const QByteArray &publicKey)
+void Join::start(const QString &name, const QString &os, const QByteArray &publicKey, const QByteArray &adminKey)
 {
     stop();
     m_publicKey = publicKey;
+    m_admin = !adminKey.isEmpty();
     m_wrongCodes = 0;
     m_error.clear();
     Failure failure;
@@ -79,17 +80,21 @@ void Join::start(const QString &name, const QByteArray &publicKey)
     const QJsonArray addrs = qrAddresses();
     if (addrs.isEmpty())
         return fail({QCoreApplication::translate("Errors", "Connect the phone to your home Wi-Fi to join a group."), QStringLiteral("join: no private IPv4 address")});
-    const QJsonObject req{
+    QJsonObject req{
         {QStringLiteral("name"), name},
-        {QStringLiteral("os"), QStringLiteral("aurora")},
+        {QStringLiteral("os"), os},
         {QStringLiteral("public"), QString::fromLatin1(publicKey.toBase64())},
         {QStringLiteral("seal"), seal.value(QStringLiteral("key"))},
         {QStringLiteral("addrs"), addrs},
     };
+    if (m_admin)
+        req.insert(QStringLiteral("admin_public"), QString::fromLatin1(adminKey.toBase64()));
     const QByteArray bytes = QJsonDocument(req).toJson(QJsonDocument::Compact);
     uint8_t *answer = nullptr;
     size_t len = 0;
-    m_join = cbb_join_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), Core::signDigest, nullptr, &answer, &len);
+    const auto *data = reinterpret_cast<const uint8_t *>(bytes.constData());
+    m_join = m_admin ? cbb_join_new_admin(data, size_t(bytes.size()), Core::signDigest, nullptr, Core::signAdminDigest, nullptr, &answer, &len)
+                     : cbb_join_new(data, size_t(bytes.size()), Core::signDigest, nullptr, &answer, &len);
     const QJsonObject made = Core::take(answer, len, QStringLiteral("join"), &failure);
     if (!m_join)
         return fail(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("join: no joiner")} : failure);
@@ -183,8 +188,14 @@ void Join::feed(const QByteArray &data)
         Errors::log(QStringLiteral("join: an attempt failed: %1: %2").arg(e.value(QStringLiteral("message")).toString(), e.value(QStringLiteral("details")).toString()));
         m_conn->disconnectFromHost();
         m_conn = nullptr;
-        if (step.value(QStringLiteral("wrong_code")).toBool() && ++m_wrongCodes >= maxWrongCodes)
+        const bool wrongCode = step.value(QStringLiteral("wrong_code")).toBool();
+        if (wrongCode && ++m_wrongCodes >= maxWrongCodes)
             return fail({QCoreApplication::translate("Errors", "The other device showed a wrong code three times. Start again."), QStringLiteral("join: too many wrong codes")});
+        // A window that makes no admins refuses a phone that asks to be one:
+        // the page says so, and keeps waiting for the root.
+        if (m_admin && !wrongCode)
+            m_error = Errors::shown({QCoreApplication::translate("Errors", "The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin."),
+                                     QStringLiteral("join: %1: %2").arg(e.value(QStringLiteral("message")).toString(), e.value(QStringLiteral("details")).toString())});
         setState(QStringLiteral("listening"));
         return;
     }
@@ -198,7 +209,7 @@ void Join::feed(const QByteArray &data)
     m_conn = nullptr;
     if (!saved)
         return fail(failure);
-    Errors::log(QStringLiteral("join: joined the group %1 as %2").arg(m.groupTag(), m.device));
+    Errors::log(QStringLiteral("join: joined the group %1 as %2%3").arg(m.groupTag(), m.device, m.isAdmin() ? QStringLiteral(", an admin") : QString()));
     stop();
     setState(QStringLiteral("joined"));
     emit joined(m);

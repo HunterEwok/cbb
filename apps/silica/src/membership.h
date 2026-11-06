@@ -19,11 +19,13 @@ struct Membership
     QString device;
     QByteArray cert;
     QByteArray issuer; // empty when a root issued cert
+    QByteArray adminCa; // the admin CA for the admin key, when the phone is an admin
     QByteArray groupCa;
     QList<QByteArray> roots;
     QByteArray records; // the records file
 
     bool isNull() const { return device.isEmpty(); }
+    bool isAdmin() const { return !adminCa.isEmpty(); }
 
     // The group's tag: the first 8 bytes of the group CA's SHA-256, in hex;
     // empty when the phone is in no group.
@@ -36,6 +38,9 @@ struct Membership
     static Membership load(Failure *failure);
     // Saves it: the records first, then member.json, each written whole.
     bool save(Failure *failure) const;
+    // Saves member.json alone: the member keeps the records itself once it
+    // runs.
+    bool saveIdentity(Failure *failure) const;
     // Leaves the group on this phone: deletes member.json and the records.
     // The key for sealed messages stays, as the member keeps it for the run.
     static bool remove(Failure *failure);

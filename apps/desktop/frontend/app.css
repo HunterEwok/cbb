@@ -200,3 +200,4 @@ dialog p { white-space: pre-wrap; }
 button.icon[aria-pressed="true"] { background: var(--soft); color: var(--accent); }
 .menu-items { display: flex; flex-direction: column; gap: 8px; }
 .menu-items button { min-height: 40px; text-align: left; }
+.check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
