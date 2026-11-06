@@ -504,9 +504,13 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       key made with `CKA_TOKEN`, `CKA_SENSITIVE` and not `CKA_EXTRACTABLE` reads back
       `CKA_NEVER_EXTRACTABLE` and `CKA_ALWAYS_SENSITIVE`, refuses its value, signs, and is
       still there after a restart. Nothing about the device leaves the group (D-47).
-    - Level 1, "proven", only when the group's user chooses it, as everywhere: once a key
-      attestation API on Aurora 5.2 is confirmed (a proof that the key was made in the TEE,
-      not only that the system is unmodified). Until then an Aurora phone is never "proven".
+    - Level 1, "proven", only when the group's user chooses it, as everywhere: not for
+      Aurora today. Aurora 5.1.5 offers no key attestation (a proof that the key was made in
+      the TEE, not only that the system is unmodified), so an Aurora phone is never
+      "proven" and a group at level 1 does not make it an admin. Later, with no date: look
+      for such an API in the Aurora 5.2 SDK once 5.2 phones exist; the 5.x package is meant
+      to run on 5.2 as it is, without attestation, which the SDK's 5.2 emulator checks
+      first (it has no OP-TEE, so it also runs the path of a key in a file).
     - A phone without OP-TEE keeps its key in a file and is an admin or the hub only at
       level 3, after the user allows it.
     - Still to check on a device: a key that lasts across restarts needs `C_Login` with the
