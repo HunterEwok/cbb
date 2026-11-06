@@ -1639,6 +1639,26 @@ func TestFreezeAnAdmin(t *testing.T) {
 	})
 }
 
+// TestThawReconnectsAtOnce checks that an unfrozen admin connects again
+// at once, not when the dialer's backoff, grown while it was refused, ends.
+func TestThawReconnectsAtOnce(t *testing.T) {
+	var h hub
+	pi := startService(t, &h, "pi")
+	b := startService(t, &h, "b")
+	pairWith(t, pi, b)
+	makeAdmin(t, pi, b)
+	if _, err := pi.do(t, control.Header{Op: control.OpFreeze, Name: "b"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "b is refused", func() bool { return len(pi.status(t).Peers) == 0 })
+	// Refused at 0, 1, 3 and 7 s, the dialer waits 8 s for its next try.
+	time.Sleep(8 * time.Second)
+	if _, err := pi.do(t, control.Header{Op: control.OpThaw, Name: "b"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 3*time.Second, "b connects again", func() bool { return len(pi.status(t).Peers) == 1 })
+}
+
 // TestMacsListen checks that a Mac is a full member like the others: it
 // publishes no role and takes connections, so two Macs keep syncing when
 // no other computer is on.

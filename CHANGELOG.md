@@ -1413,6 +1413,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- An unfrozen admin computer connects again at once: the members that refused
+  it dial it as soon as the unfreeze, or a record that changes the group's root, reaches
+  them. Until now it waited for its next try, up to 30 seconds after many refusals.
 - Away from home, the phone apps showed the devices behind the hub as offline, although
   pastes and other commands reached them through it. A computer now tells the phones
   connected to it which members it reaches (`reach`, docs/protocol.md section 4), and the

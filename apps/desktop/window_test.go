@@ -772,8 +772,13 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// No start-up work that waits on the network or the system, which a
+	// test does not need: the component updater, background requests,
+	// sync, the crash reporter and the system's password store.
 	cmd := exec.CommandContext(ctx, exe, "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run",
-		"--no-default-browser-check", "--remote-debugging-port=0", "--user-data-dir="+profile, "about:blank")
+		"--no-default-browser-check", "--disable-background-networking", "--disable-component-update",
+		"--disable-sync", "--disable-default-apps", "--disable-breakpad", "--password-store=basic",
+		"--remote-debugging-port=0", "--user-data-dir="+profile, "about:blank")
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -781,13 +786,41 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting %s: %v", exe, err)
 	}
+	// What the browser writes goes to the test's message if it gives no
+	// address: the last lines, which say why.
+	var (
+		errMu   sync.Mutex
+		errTail []string
+	)
+	found := make(chan string, 1)
+	go func() {
+		sc := bufio.NewScanner(stderr)
+		for sc.Scan() {
+			line := sc.Text()
+			errMu.Lock()
+			errTail = append(errTail, line)
+			if len(errTail) > 30 {
+				errTail = errTail[1:]
+			}
+			errMu.Unlock()
+			if _, rest, ok := strings.Cut(line, "DevTools listening on "); ok {
+				found <- rest
+			}
+		}
+	}()
+	// Wait closes the pipe, as before: the browser's helpers may keep it
+	// open after the browser ended.
+	done := make(chan struct{})
+	var waitErr error
+	go func() {
+		waitErr = cmd.Wait()
+		close(done)
+	}()
 	var page *cdpPage
 	t.Cleanup(func() {
 		if page != nil {
 			page.do("Browser.close", nil, nil) // ends its helpers too
 		}
-		done := make(chan struct{})
-		go func() { cmd.Wait(); close(done) }()
 		select {
 		case <-done:
 		case <-time.After(10 * time.Second):
@@ -802,15 +835,6 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 			time.Sleep(250 * time.Millisecond)
 		}
 	})
-	found := make(chan string, 1)
-	go func() {
-		sc := bufio.NewScanner(stderr)
-		for sc.Scan() {
-			if _, rest, ok := strings.Cut(sc.Text(), "DevTools listening on "); ok {
-				found <- rest
-			}
-		}
-	}()
 	// Edge started from an elevated console starts itself again without the
 	// rights and ends, so its stderr never names the address; the profile's
 	// DevToolsActivePort does in both cases.
@@ -827,7 +851,16 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 				}
 			}
 			if host == "" && time.Now().After(deadline) {
-				t.Fatalf("%s gave no DevTools address in 30 s", exe)
+				state := "still runs"
+				select {
+				case <-done:
+					state = fmt.Sprintf("ended: %v", waitErr)
+				default:
+				}
+				errMu.Lock()
+				tail := strings.Join(errTail, "\n")
+				errMu.Unlock()
+				t.Fatalf("%s gave no DevTools address in 30 s; it %s; what it wrote last:\n%s", exe, state, tail)
 			}
 		}
 	}
