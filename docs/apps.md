@@ -924,7 +924,7 @@ the app on real devices.
 - `apps/desktop/` — the tray app for Linux and Windows (Go, Wails 3), a Go module of its own.
 - `apps/design/` — tokens and the icon (`icon/light.png` and `icon/dark.png`, the clipboard
   drawings; `go run ./tools/icon` sets each on a fill of its colour as the iPhone app's icon
-  for light and dark mode, and the Android app takes the same drawings; `icon/tray/` holds the single-colour glyph of
+  for light and dark mode, and the Android app takes the same drawings; `icon/aurora.svg` is the Aurora app's launcher icon in the style of Aurora's own (a dark teal tile, the clipboard and the key with circuit traces), with `icon/aurora.png` drawn from it at 1024 px for `apps/silica/build.sh`; `icon/tray/` holds the single-colour glyph of
   the Mac's menu bar and the tray in three states, which the tool copies into the Mac app's asset catalog as template
   images and turns into the tray's symbolic SVGs and white and black PNGs for Linux and white and black ICOs for Windows in `apps/desktop/trayicon`); `go run ./tools/tokens` turns `tokens.json` into
   `apps/ios/CBB/Theme/Tokens.swift` and the Android apps' `Tokens.kt` and fails when a palette misses the
