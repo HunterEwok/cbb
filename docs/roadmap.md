@@ -537,8 +537,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - Ed25519 works in the same token when the template names `CKA_KEY_TYPE`
       (`CKK_EC_EDWARDS`) and `CKA_EC_PARAMS` is the printable string `edwards25519`;
       `CKM_EDDSA` needs a `CK_EDDSA_PARAMS`, since `libckteec` crashes on a null parameter.
-    - Still to check on a device: whether removing the app removes its token, so that a
-      reinstall starts as a new device.
+    - Removing the app removes its token and key: a reinstalled app finds its slot
+      uninitialized again, initializes it through QCA and joins as a new device.
 
 ## Devices that are hard to type into
 
