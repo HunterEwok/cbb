@@ -266,6 +266,12 @@ public enum Member {
         /// keys.json it came with (section 16, "Entry points"); nil for none.
         public var entriesSeq: UInt64?
         public var entriesKeysSeq: UInt64?
+        /// Whether an admin muted the sender, whose copies then do not
+        /// reach the group, and for how long still in milliseconds, 0 for
+        /// until an admin unmutes it (section 4; design.md, "Muting a
+        /// device").
+        public var muted = false
+        public var mutedForMS: Int64 = 0
 
         public init(wallMS: Int64, current: Event? = nil, records: String? = nil, name: String? = nil, os: String? = nil,
                     adminKey: Data? = nil, tunnelKey: Data? = nil, tunnelPSK: Data? = nil, device: DeviceInfo? = nil, mode: String? = nil,
@@ -275,6 +281,15 @@ public enum Member {
                 (wallMS, current, records, name, os, adminKey, tunnelKey)
             (self.tunnelPSK, self.device, self.mode, self.keyStore, self.actions, self.media) = (tunnelPSK, device, mode, keyStore, actions, media)
             (self.groupCA, self.entriesSeq, self.entriesKeysSeq) = (groupCA, entriesSeq, entriesKeysSeq)
+        }
+
+        /// The hello with an admin's mute as a peer's hello says it: a time
+        /// out of range counts as 30 days, as Go reads it.
+        func with(muted: Bool, forMS: Int64) -> Hello {
+            var h = self
+            h.muted = muted
+            h.mutedForMS = muted ? min(max(forMS, 0), Commands.maxMuteMS) : 0
+            return h
         }
     }
 
@@ -784,7 +799,8 @@ public enum Member {
                                       keyStore: h.key_store.flatMap { $0 == Records.file || $0 == Records.hardware || $0 == Records.rootless ? $0 : nil },
                                       actions: Array((h.actions?.value ?? []).filter(Commands.validActionName).prefix(Commands.maxHelloActions)),
                                       media: (h.features?.value ?? []).prefix(Member.maxFeatures).contains(Member.featureMedia),
-                                      groupCA: h.group_ca, entriesSeq: h.entries_seq, entriesKeysSeq: h.entries_keys_seq))
+                                      groupCA: h.group_ca, entriesSeq: h.entries_seq, entriesKeysSeq: h.entries_keys_seq)
+                .with(muted: h.muted ?? false, forMS: h.muted_for_ms ?? 0))
         case "event": return .event(w.event?.value)
         case "ping": return .ping
         case "bye": return .bye
@@ -829,6 +845,8 @@ public enum Member {
         var group_ca: Data?
         var entries_seq: UInt64?
         var entries_keys_seq: UInt64?
+        var muted: Bool?
+        var muted_for_ms: Int64?
     }
 
     struct WireIn: Decodable {
@@ -856,7 +874,7 @@ public enum Member {
         init(_ m: Message) { self.m = m }
 
         enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get, entries, reach }
-        enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features, group_ca, entries_seq, entries_keys_seq }
+        enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features, group_ca, entries_seq, entries_keys_seq, muted, muted_for_ms }
 
         func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
@@ -881,6 +899,10 @@ public enum Member {
                 try hc.encodeIfPresent(h.groupCA, forKey: .group_ca)
                 try hc.encodeIfPresent(h.entriesSeq, forKey: .entries_seq)
                 try hc.encodeIfPresent(h.entriesKeysSeq, forKey: .entries_keys_seq)
+                if h.muted {
+                    try hc.encode(true, forKey: .muted)
+                    try hc.encode(h.mutedForMS, forKey: .muted_for_ms)
+                }
             case let .event(e):
                 try c.encode("event", forKey: .t)
                 try c.encodeIfPresent(e, forKey: .event)

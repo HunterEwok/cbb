@@ -71,7 +71,7 @@ public enum Commands {
     /// The most clients a hub command hands over, as many as a hub keeps.
     public static let maxHubClients = 256
 
-    public enum Failure: Error { case unknownMode(String), badHubOrder, badPaste, badAction(String) }
+    public enum Failure: Error { case unknownMode(String), badHubOrder, badPaste, badAction(String), badMute }
 
     /// The longest name of a quick action, and the most a hello lists.
     public static let maxActionName = 32
@@ -117,6 +117,27 @@ public enum Commands {
                                   adminCA: Data? = nil, seal: Data? = nil, id: String = newID()) throws -> Member.Record {
         let ms = Records.ms(now)
         return try sign(Body(type: "actions-off", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS),
+                        signer: signer, adminCA: adminCA, seal: seal)
+    }
+
+    /// A mute command for the device to: its copies stop reaching the
+    /// group for forMS milliseconds, 0 for until an unmute command
+    /// (design.md, "Muting a device"). Signed as mode.
+    public static func mute(to: String, forMS: Int64 = 0, group: String, by: String, now: Date, signer: CertificateSigner,
+                            adminCA: Data? = nil, seal: Data? = nil, id: String = newID()) throws -> Member.Record {
+        guard (0...maxMuteMS).contains(forMS) else { throw Failure.badMute }
+        let ms = Records.ms(now)
+        return try sign(Body(type: "mute", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS,
+                             for_ms: forMS > 0 ? forMS : nil),
+                        signer: signer, adminCA: adminCA, seal: seal)
+    }
+
+    /// An unmute command for the device to: it ends an admin's mute there.
+    /// Signed as mode.
+    public static func unmute(to: String, group: String, by: String, now: Date, signer: CertificateSigner,
+                              adminCA: Data? = nil, seal: Data? = nil, id: String = newID()) throws -> Member.Record {
+        let ms = Records.ms(now)
+        return try sign(Body(type: "unmute", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS),
                         signer: signer, adminCA: adminCA, seal: seal)
     }
 

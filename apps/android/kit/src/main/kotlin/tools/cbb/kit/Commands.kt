@@ -228,6 +228,37 @@ object Commands {
         seal: ByteArray? = null,
     ): Member.Record = signed("actions-off", to, group, by, now, signer, adminCA, id, seal)
 
+    /**
+     * A mute command for the device to: its copies stop reaching the group for forMS milliseconds, 0 for until an
+     * unmute command (design.md, "Muting a device"). Signed as mode.
+     */
+    fun mute(
+        to: String,
+        forMS: Long,
+        group: String,
+        by: String,
+        now: Instant,
+        signer: CertificateSigner,
+        adminCA: ByteArray? = null,
+        id: String = newID(),
+        seal: ByteArray? = null,
+    ): Member.Record {
+        require(forMS in 0..MAX_MUTE_MS) { "a mute lasts from 0 to $MAX_MUTE_MS ms" }
+        return signed("mute", to, group, by, now, signer, adminCA, id, seal, "for_ms" to if (forMS > 0) Wire.num(forMS) else null)
+    }
+
+    /** An unmute command for the device to: it ends an admin's mute there. Signed as mode. */
+    fun unmute(
+        to: String,
+        group: String,
+        by: String,
+        now: Instant,
+        signer: CertificateSigner,
+        adminCA: ByteArray? = null,
+        id: String = newID(),
+        seal: ByteArray? = null,
+    ): Member.Record = signed("unmute", to, group, by, now, signer, adminCA, id, seal)
+
     /** An away-off command for the device to: it turns sync away from home off there, and its tunnel keys go. Signed as mode. */
     fun awayOff(
         to: String,

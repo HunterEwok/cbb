@@ -119,6 +119,10 @@ public actor MemberNode {
     /// This phone's sync mode, which the hellos state; nil for a phone
     /// without one, which shares.
     public private(set) var mode: String?
+    /// Until when an admin muted this phone, in Unix milliseconds, 0 for
+    /// until an admin unmutes it; nil while it is not muted. The hellos say
+    /// so (section 4).
+    public private(set) var mutedUntilMS: Int64?
     /// The WireGuard public key the hellos offer the group's hubs (section
     /// 11); nil while sync away from home is off.
     public private(set) var tunnelKey: Data?
@@ -192,6 +196,18 @@ public actor MemberNode {
 
     /// Replaces the sync mode that the next connections' hellos state.
     public func set(mode: String?) { self.mode = mode }
+
+    /// Sets the admin's mute that the next connections' hellos report.
+    public func set(mutedUntilMS: Int64?) { self.mutedUntilMS = mutedUntilMS }
+
+    /// The admin's mutes the connected members' hellos report, by device
+    /// ID: until when in Unix milliseconds on this phone's clock, 0 for
+    /// until an admin unmutes it.
+    public var muted: [String: Int64] {
+        var out: [String: Int64] = [:]
+        for c in conns.values { if let p = c.peer, let u = c.mutedUntilMS { out[p] = u } }
+        return out
+    }
 
     /// Replaces the tunnel keys that the next connections' hellos offer;
     /// nil offers none.
@@ -366,6 +382,10 @@ public actor MemberNode {
         hello.tunnelKey = tunnelKey
         hello.tunnelPSK = tunnelKey == nil ? nil : tunnelPSK
         hello.mode = mode
+        if let until = mutedUntilMS {
+            let left = until - Records.ms(Date())
+            if until == 0 { (hello.muted, hello.mutedForMS) = (true, 0) } else if left > 0 { (hello.muted, hello.mutedForMS) = (true, left) }
+        }
         // A phone's keys are in the Secure Enclave or the Keystore.
         hello.keyStore = Records.hardware
         hello.media = content != nil
@@ -405,6 +425,7 @@ public actor MemberNode {
                 c.actions = h.actions
                 c.device = h.device?.cleaned
                 c.mode = h.mode
+                c.mutedUntilMS = h.muted ? (h.mutedForMS > 0 ? Records.ms(Date()) + h.mutedForMS : 0) : nil
                 c.peerMedia = h.media
                 c.peerRole = peerRole
                 var taken = h
@@ -902,6 +923,13 @@ public actor MemberNode {
             set { lock.withLock { _mode = newValue } }
         }
         private var _mode: String?
+        /// Until when the peer's hello says an admin muted it, 0 for until
+        /// an admin unmutes it; nil when not muted.
+        var mutedUntilMS: Int64? {
+            get { lock.withLock { _mutedUntilMS } }
+            set { lock.withLock { _mutedUntilMS = newValue } }
+        }
+        private var _mutedUntilMS: Int64?
         /// The other members the peer says it is connected to, from its
         /// last reach message.
         var reach: [String] {

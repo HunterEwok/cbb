@@ -277,9 +277,13 @@ final class CommandTests: XCTestCase {
             try Commands.actionsOff(to: pc, group: tag, by: by, now: now, signer: root),
             try Commands.paste(to: pc, text: "sealed <text>", group: tag, by: adminBy, now: now, signer: admin, adminCA: adminCA,
                                seal: try Self.sealPublic()),
+            try Commands.mute(to: pc, forMS: 3_600_000, group: tag, by: adminBy, now: now, signer: admin, adminCA: adminCA),
+            try Commands.unmute(to: pc, group: tag, by: by, now: now, signer: root),
         ])
-        // The last one is sealed, for Go to open: a phone opens none.
-        for c in out.commands.dropLast() { XCTAssertNoThrow(try Commands.verify(c, records: set, me: pc, nowMS: Records.ms(now))) }
+        // The eighth is sealed, for Go to open: a phone opens none.
+        for (i, c) in out.commands.enumerated() where i != 7 {
+            XCTAssertNoThrow(try Commands.verify(c, records: set, me: pc, nowMS: Records.ms(now)))
+        }
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try (enc.encode(out) + Data("\n".utf8)).write(to: URL(fileURLWithPath: dir).appendingPathComponent("swift-command.json"))
@@ -382,5 +386,30 @@ final class CommandTests: XCTestCase {
         XCTAssertEqual(Member.cleanReason(String(repeating: "a", count: Member.maxReason - 1) + "é"),
                        String(repeating: "a", count: Member.maxReason - 1))
         XCTAssertLessThanOrEqual(Member.cleanReason(String(repeating: "é", count: 300)).utf8.count, Member.maxReason)
+    }
+
+    /// A mute command carries its time, and none for until an unmute; a
+    /// time past 30 days is refused. The hello carries a mute and reads a
+    /// time out of range as 30 days, as Go does.
+    func testMute() throws {
+        let root = SoftwareSigner()
+        let tag = "0123456789abcdef", by = "0123456789abcdef0123456789abcdef"
+        for (ms, want) in [(Int64(900_000), Int64(900_000)), (0, nil)] {
+            let c = try Commands.mute(to: pc, forMS: ms, group: tag, by: by, now: now, signer: root)
+            XCTAssertEqual(try Commands.parse(c.body).for_ms, want)
+        }
+        XCTAssertThrowsError(try Commands.mute(to: pc, forMS: Commands.maxMuteMS + 1, group: tag, by: by, now: now, signer: root))
+        XCTAssertNil(try Commands.parse(try Commands.unmute(to: pc, group: tag, by: by, now: now, signer: root).body).for_ms)
+
+        var hello = Member.Hello(wallMS: 1)
+        (hello.muted, hello.mutedForMS) = (true, 60_000)
+        let h = try Member.encode(.hello(.phone, hello))
+        XCTAssertEqual(try Member.decode(body: h.dropFirst(4)), .hello(.phone, hello))
+        let none = try Member.encode(.hello(.phone, Member.Hello(wallMS: 1)))
+        XCTAssertFalse(String(decoding: none.dropFirst(4), as: UTF8.self).contains("muted"))
+        let long = Data(#"{"t":"hello","role":"full","hello":{"wall_ms":1,"muted":true,"muted_for_ms":99999999999}}"#.utf8)
+        guard case let .hello(_, got) = try Member.decode(body: long) else { return XCTFail("no hello") }
+        XCTAssertTrue(got.muted)
+        XCTAssertEqual(got.mutedForMS, Commands.maxMuteMS)
     }
 }
