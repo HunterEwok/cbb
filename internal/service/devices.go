@@ -156,6 +156,38 @@ func (s *Service) settleRecords(fresh []group.Record) {
 	if len(fresh) > 0 {
 		s.refreshCredential()
 	}
+	s.applyCopyRules()
+}
+
+// applyCopyRules gives the engine what the records say about the group's
+// copies: how long an incoming copy stays live (docs/protocol.md, section
+// 10, "The copies setting"), and whether the current event's origin is
+// still a member. A copy from a device removed since, or from a root an
+// admin took the group over from, is dropped then, so it is never written
+// later (docs/protocol.md, section 4, "Writing the member's own clipboard").
+func (s *Service) applyCopyRules() {
+	s.mu.Lock()
+	eng := s.eng
+	s.mu.Unlock()
+	if eng == nil {
+		return
+	}
+	id, sealed := eng.CurrentCopy()
+	s.recMu.Lock()
+	if s.records == nil {
+		s.recMu.Unlock()
+		return
+	}
+	window := time.Duration(s.records.State().IncomingMS) * time.Millisecond
+	var refused error
+	if sealed != nil {
+		refused = s.records.CheckCopy(sealed, s.cfg.now())
+	}
+	s.recMu.Unlock()
+	eng.SetLiveWindow(window)
+	if refused != nil && eng.Forget(id) {
+		s.logf("cbb: the group's last copy, from %s, no longer counts and is dropped: %v", sealed.Origin, refused)
+	}
 }
 
 // adoptRootsLocked makes the identity trust the roots the records lead to

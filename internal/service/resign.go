@@ -87,7 +87,7 @@ func (s *Service) noteSigned(id group.KeyHash) {
 // by themselves.
 var resignable = map[string]bool{
 	group.RecordDevice: true, group.RecordRevoke: true, group.RecordFreeze: true,
-	group.RecordThaw: true, group.RecordHubs: true, group.RecordSettings: true,
+	group.RecordThaw: true, group.RecordHubs: true, group.RecordSettings: true, group.RecordCopies: true,
 }
 
 // resignVoided signs again, once the group's root voided both histories of

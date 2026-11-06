@@ -47,6 +47,12 @@ pub const CONFLICT_TWO_HISTORIES: &str = "two_histories";
 pub const MAX_DELAY: i64 = 7 * 24 * 3600 * 1000;
 /// The takeover delay without a settings record (72 hours).
 pub const DEFAULT_DELAY: i64 = 72 * 3600 * 1000;
+/// The bounds of how long an incoming copy stays live, the incoming_ms of a
+/// copies record, and that time without one (one minute), in milliseconds
+/// (docs/protocol.md, section 4, "Writing the member's own clipboard").
+pub const MIN_INCOMING: i64 = 5 * 1000;
+pub const MAX_INCOMING: i64 = 3600 * 1000;
+pub const DEFAULT_INCOMING: i64 = 60 * 1000;
 
 pub const TYPE_DEVICE: &str = "device";
 pub const TYPE_REVOKE: &str = "revoke";
@@ -59,6 +65,7 @@ pub const TYPE_CHECKPOINT: &str = "checkpoint";
 pub const TYPE_HUBS: &str = "hubs";
 pub const TYPE_RECOVERY: &str = "recovery";
 pub const TYPE_HANDOVER: &str = "handover";
+pub const TYPE_COPIES: &str = "copies";
 /// How many devices a hubs record names.
 pub const MAX_HUBS: usize = 16;
 
@@ -245,6 +252,11 @@ pub struct Body {
     /// The user's main hubs, in the order they serve.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+
+    /// How long a copy from another device stays live on each member after
+    /// it arrives, in a copies record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub incoming_ms: Option<i64>,
 }
 
 const COMMON: [&str; 7] = ["v", "alg", "type", "group", "signer", "seq", "time_ms"];
@@ -276,6 +288,7 @@ fn allowed(kind: &str) -> Option<&'static [&'static str]> {
         TYPE_HUBS => &["hubs"],
         TYPE_RECOVERY => &["admin", "cert"],
         TYPE_HANDOVER => &["admin"],
+        TYPE_COPIES => &["incoming_ms"],
         _ => return None,
     })
 }
@@ -313,6 +326,7 @@ impl Body {
         add(!self.heads.is_empty(), "heads");
         add(!self.keep.is_empty(), "keep");
         add(!self.hubs.is_empty(), "hubs");
+        add(self.incoming_ms.is_some(), "incoming_ms");
         n
     }
 
@@ -432,6 +446,10 @@ impl Body {
                 sorted_hashes(&self.keep, "keep")
             }
             TYPE_HUBS => check_hubs(&self.hubs),
+            TYPE_COPIES => match self.incoming_ms {
+                Some(d) if (MIN_INCOMING..=MAX_INCOMING).contains(&d) => Ok(()),
+                _ => Err(Error::msg(format!("a copies record needs incoming_ms from {MIN_INCOMING} to {MAX_INCOMING}"))),
+            },
             TYPE_RECOVERY => {
                 let (Some(admin), false) = (self.admin, self.cert.is_empty()) else {
                     return Err(Error::msg("a recovery record needs admin and cert"));
@@ -743,6 +761,12 @@ pub struct State {
     /// counts; empty when it sets none, which means "hardware".
     #[serde(skip_serializing_if = "String::is_empty")]
     pub key_level: String,
+    /// How long a copy from another device stays live after it arrives,
+    /// from the copies record that counts; none when none counts, which
+    /// means DEFAULT_INCOMING (docs/protocol.md, section 10, "The copies
+    /// setting").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub incoming_ms: Option<i64>,
     /// The admin key of the group's recovery key, from the newest recovery
     /// record of a root on the path, while it is neither revoked nor
     /// frozen (docs/records-v2.md, "The recovery key").
@@ -1613,6 +1637,8 @@ impl<'a> Epoch<'a> {
             TYPE_THAW => self.has(a, POWER_THAW) && self.has(a, POWER_REMOVE_ADMINS),
             TYPE_CLAIM => self.has(a, POWER_TAKEOVER) && r.issuer == Some(self.cur),
             TYPE_HUBS => self.has(a, POWER_HUB),
+            // Any admin sets how long incoming copies stay live.
+            TYPE_COPIES => true,
             _ => false,
         }
     }
@@ -2081,6 +2107,7 @@ impl<'a> Epoch<'a> {
         }
         s.conflicts.sort_by(|a, b| a.records.first().cmp(&b.records.first()));
         s.hubs = self.hubs(&s.devices);
+        s.incoming_ms = self.best(TYPE_COPIES).and_then(|i| self.r(i).b().incoming_ms);
         if let Some(i) = self.settings() {
             s.key_level = self.r(i).b().key_level.clone();
         }
@@ -2105,13 +2132,7 @@ impl<'a> Epoch<'a> {
     /// seq. Only the devices it names that are among devices with the role
     /// full or phone are kept.
     fn hubs(&self, devices: &[Device]) -> Vec<String> {
-        let mut best: Option<usize> = None;
-        for &i in self.e.by_sig.values().flatten() {
-            if self.r(i).b().kind == TYPE_HUBS && self.counts(i) && best.is_none_or(|b| self.newer_hubs(i, b)) {
-                best = Some(i);
-            }
-        }
-        let Some(best) = best else { return Vec::new() };
+        let Some(best) = self.best(TYPE_HUBS) else { return Vec::new() };
         self.r(best)
             .b()
             .hubs
@@ -2121,7 +2142,21 @@ impl<'a> Epoch<'a> {
             .collect()
     }
 
-    /// Reports whether hubs record a beats b.
+    /// The record of type kind, one a root or an admin signs, that counts
+    /// for the state: as for the hubs table, a root's beats an admin's, then
+    /// the later root on the path and the higher seq; of two admins' the
+    /// later time_ms, then the smaller signer, then the higher seq.
+    fn best(&self, kind: &str) -> Option<usize> {
+        let mut best: Option<usize> = None;
+        for &i in self.e.by_sig.values().flatten() {
+            if self.r(i).b().kind == kind && self.counts(i) && best.is_none_or(|b| self.newer_hubs(i, b)) {
+                best = Some(i);
+            }
+        }
+        best
+    }
+
+    /// Reports whether hubs or copies record a beats b.
     fn newer_hubs(&self, a: usize, b: usize) -> bool {
         let (ra, rb) = (!self.r(a).admin(), !self.r(b).admin());
         if ra != rb {

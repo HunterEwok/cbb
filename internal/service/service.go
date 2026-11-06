@@ -516,6 +516,9 @@ func (s *Service) startGroup(id *group.Identity) error {
 	s.records = s.loadRecords(id)
 	s.creds = s.loadCredentials(id, s.records)
 	s.serverKeys = s.loadServerKeys()
+	if s.records != nil {
+		eng.SetLiveWindow(time.Duration(s.records.State().IncomingMS) * time.Millisecond)
+	}
 	s.recMu.Unlock()
 	tun := s.loadTunnel(id)
 	s.tunMu.Lock()
