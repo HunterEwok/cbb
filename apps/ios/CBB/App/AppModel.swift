@@ -258,8 +258,9 @@ final class AppModel: ObservableObject {
     /// One line about the last action, in plain words.
     @Published var message: String?
     @Published private(set) var busy = false
-    /// While a device being added has not answered yet and is dialed again.
-    @Published private(set) var notAnswering = false
+    /// How many times a device being added that has not answered yet was
+    /// dialed again; 0 before that.
+    @Published private(set) var retries = 0
     /// The QR code this phone shows while it waits to join a group.
     @Published private(set) var joinCode: JoinCode?
     @Published private(set) var isAdmin = true
@@ -422,14 +423,14 @@ final class AppModel: ObservableObject {
             return false
         }
         busy = true
-        notAnswering = false
+        retries = 0
         defer {
             busy = false
-            notAnswering = false
+            retries = 0
         }
         Island.show(.adding, String(localized: "Adding a device…", bundle: .app))
         do {
-            try await group.admit(jc) { [weak self] in self?.notAnswering = true }
+            try await group.admit(jc) { [weak self] in self?.retries += 1 }
             computers = group.computers
             devices = group.devices
             phase = .home

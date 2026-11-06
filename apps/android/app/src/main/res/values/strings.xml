@@ -68,7 +68,7 @@
     <string name="camera_failed">The camera did not start. Paste the text of the QR code of cbb pair instead.</string>
     <string name="qr_text">QR code text</string>
     <string name="connecting">Connecting to the device…</string>
-    <string name="not_ready_yet">The device is not ready yet. Trying again…</string>
+    <string name="not_ready_yet">The device is not ready yet. Trying again (%1$d)…</string>
     <string name="not_a_code">Not a CBB QR code.</string>
     <string name="reason_join">Join the group as an admin</string>
     <string name="reason_add">Add a computer to your group</string>

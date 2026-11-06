@@ -505,7 +505,7 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
         if (model.busy) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)
-                Text(stringResource(if (model.notAnswering) R.string.not_ready_yet else R.string.connecting))
+                Text(if (model.retries > 0) stringResource(R.string.not_ready_yet, model.retries) else stringResource(R.string.connecting))
             }
         } else {
             model.message?.let { NoteText(it) }

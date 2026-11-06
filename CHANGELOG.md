@@ -189,8 +189,9 @@ All notable changes to cbb are documented in this file. The format follows
   updates, and with a newer `CBB` on the site installs it and its files (checked against the
   site's list) and puts it in place of itself, closing the file NextZXOS keeps open for it;
   `.cbb net on` then starts the network with the new one. `.cbb install` adds `.cbb net on`
-  to `C:/NEXTZXOS/AUTOEXEC.BAS` as its last line, so the network starts at power-on, where
-  `.cbb net on` waits for NextPi to start; `.cbb uninstall` takes the line out. `.cbb uninstall` leaves `C:/DOT/CBB` for the user to
+  to `C:/NEXTZXOS/AUTOEXEC.BAS` as its last line, so the network starts at power-on: there
+  `.cbb net on` returns at once and the driver starts the link itself once NextPi's shell is
+  up (its call 9), so BASIC never waits for the Pi; `.cbb uninstall` takes the line out. `.cbb uninstall` leaves `C:/DOT/CBB` for the user to
   erase. The rarer commands (`paste`, `copy`, `text`, `leave`, `uninstall`,
   `paste-receive`) are in `/cbb/CBB.OVL`, read into a page NextZXOS allocates on their
   first call and checked against the stamp `CBB` carries (`apps/zxnext/ovl.sh`), so `CBB`
@@ -1385,7 +1386,7 @@ All notable changes to cbb are documented in this file. The format follows
 ### Fixed
 - The iPhone and Android apps no longer give up on a device that does not take the connection
   yet, as the ZX Next does for a moment after it shows its QR code: they dial it again every
-  two seconds for twenty, saying "The device is not ready yet. Trying again…", without a
+  two seconds for twenty, saying "The device is not ready yet. Trying again (2)…" with the count, without a
   second Face ID or fingerprint, instead of showing an error that only leaving the scanner
   cleared.
 - Away from home, the phone apps showed the devices behind the hub as offline, although

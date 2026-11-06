@@ -65,7 +65,7 @@
     <string name="camera_failed">Камера не запустилась. Вставьте вместо этого текст QR-кода cbb pair.</string>
     <string name="qr_text">Текст QR-кода</string>
     <string name="connecting">Подключение к устройству…</string>
-    <string name="not_ready_yet">Устройство ещё не готово. Пробую снова…</string>
+    <string name="not_ready_yet">Устройство ещё не готово. Пробую снова (%1$d)…</string>
     <string name="not_a_code">Это не QR-код CBB.</string>
     <string name="reason_join">Войти в группу как администратор</string>
     <string name="reason_add">Добавить компьютер в вашу группу</string>
