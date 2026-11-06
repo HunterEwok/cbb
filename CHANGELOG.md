@@ -14,6 +14,9 @@ All notable changes to cbb are documented in this file. The format follows
   take; any admin ends it, the last command counts, and the hello says a device is muted so
   the devices list shows it. Admin records may now name the commands `mute` and `unmute`; an
   admin made earlier signs them once the root signs its record again.
+- The Mac and tray apps' quick switch beside "Fetch": a click keeps the group's copies out of
+  this computer or takes them again, its menu (holding it in the tray app) for a time; on an
+  admin a device's page mutes it for the group or unmutes it, and a muted device says so.
 - The first build of the app for Aurora OS 5 (`apps/silica`, armv7hl and aarch64): it shows
   the Rust core it links and keeps the phone's P-256 key in its own OP-TEE token, initialized
   once through Aurora's QCA keystore and used through PKCS#11 after that. It joins a group

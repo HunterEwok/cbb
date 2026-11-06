@@ -1,6 +1,226 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "This Mac takes no copies from the group now; its own still go out.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот Mac теперь не принимает копии группы; свои копии он по-прежнему отправляет."
+          }
+        }
+      }
+    },
+    "This Mac takes the group's copies again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот Mac снова принимает копии группы."
+          }
+        }
+      }
+    },
+    "Muted: its copies do not reach the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушено: его копии не доходят до группы."
+          }
+        }
+      }
+    },
+    "Unmuted: its copies reach the group again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Звук включён: его копии снова доходят до группы."
+          }
+        }
+      }
+    },
+    "Taking copies": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии принимаются"
+          }
+        }
+      }
+    },
+    "Click to take no copies from the group, or again; open the menu for a time": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите, чтобы не принимать копии группы или снова принимать; в меню можно выбрать время"
+          }
+        }
+      }
+    },
+    "Not taking copies": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии не принимаются"
+          }
+        }
+      }
+    },
+    "Not taking copies until %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии не принимаются до %@"
+          }
+        }
+      }
+    },
+    "For 15 minutes": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На 15 минут"
+          }
+        }
+      }
+    },
+    "For an hour": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На час"
+          }
+        }
+      }
+    },
+    "For 8 hours": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На 8 часов"
+          }
+        }
+      }
+    },
+    "Until I turn it on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока не включу"
+          }
+        }
+      }
+    },
+    "Unmute": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включить"
+          }
+        }
+      }
+    },
+    "An admin of the group ends it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это снимает админ группы."
+          }
+        }
+      }
+    },
+    "An admin muted this Mac until %@: its copies do not reach the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Админ заглушил этот Mac до %@: его копии не доходят до группы."
+          }
+        }
+      }
+    },
+    "An admin muted this Mac: its copies do not reach the group until an admin unmutes it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Админ заглушил этот Mac: его копии не доходят до группы, пока админ не включит его."
+          }
+        }
+      }
+    },
+    "muted": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заглушено"
+          }
+        }
+      }
+    },
+    "Muted until %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушено до %@"
+          }
+        }
+      }
+    },
+    "Muted until an admin unmutes it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушено, пока админ не включит"
+          }
+        }
+      }
+    },
+    "Until an admin unmutes it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока админ не включит"
+          }
+        }
+      }
+    },
+    "Mute": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушить"
+          }
+        }
+      }
+    },
+    "Its copies then reach no device of the group; it still takes theirs.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда его копии не доходят ни до одного устройства группы; копии группы оно по-прежнему получает."
+          }
+        }
+      }
+    },
     "The list of the project's entry points is out of date, and the forwarder does not answer on the ways this Mac knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on.": {
       "localizations": {
         "ru": {

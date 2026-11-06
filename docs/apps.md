@@ -355,6 +355,12 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   second the pasteboard gets its items back, unless the user copied meanwhile. Typing posts
   Unicode key events, which no layout changes. It refuses without the permission, on the lock
   screen, in a session not on the screen, and under Secure Event Input.
+- **Muting** (docs/design.md, "Muting a device"): beside "Fetch" a quick switch keeps the
+  group's copies out of this Mac (`mute` over the control socket, no password): a click turns
+  it off or on again, its menu turns it off for 15 minutes, an hour, 8 hours or until it is
+  turned on. On an admin, a device's page has "Mute" with the same times (`cbb mute -on`,
+  "Until an admin unmutes it" for the last) and "Unmute"; a muted device says so on its tile,
+  its row and its summary, and this Mac's own mute is an alert, with "Unmute" on an admin.
 - **Join a phone's group**: on a Mac in no group, the button runs `cbb pair -app FILE` as the
   administrator, and the sheet shows the QR code that cbb writes into the file (JSON: `qr`,
   `expires`, `port`) while it waits for the phone, with the code as text and the time left.
@@ -397,6 +403,9 @@ service and its clipboard agent keep syncing without it.
   changes nothing and says nothing.
 - **The hub's line**: on every device's page, as in the Mac app (`hubLine` in `app.js`,
   `MakeHub` and `StopHub` in `desk.go`).
+- **Muting**: as in the Mac app; the switch is the third button of the bottom bar, a tap
+  toggles it and holding it (or its context menu) picks the time (`PauseReceiving`, `Mute`
+  and `Unmute` in `desk.go`).
 - **Join a phone's group**: a computer in no group shows the button, which runs `cbb pair
   -app FILE` as the administrator, as the Mac app does: the dialog shows the QR code cbb
   writes into the file the app made, and Cancel removes the file. On Linux the file is
