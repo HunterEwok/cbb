@@ -322,8 +322,10 @@ class AwayFromHome(
     /** Turns it on with new keys; the hubs' offers come at home, on the next connection to them. */
     fun turnOn() {
         val s = AwayState(tunnels.newKey())
-        save(s)
+        // Saved under the lock, as keep and turnOff save, so that the file
+        // always holds the last state set.
         synchronized(lock) {
+            save(s)
             state = s
             changedLocked()
         }
@@ -331,8 +333,8 @@ class AwayFromHome(
 
     /** Turns it off: forgets the keys and the offers and closes the tunnel. */
     fun turnOff() {
-        save(null)
         synchronized(lock) {
+            save(null)
             state = null
             closeTunnelLocked()
             changedLocked()
@@ -353,22 +355,24 @@ class AwayFromHome(
         if (hub == device || !mayHost(hub)) return
         val offer = received.with(received.psk, null)
         val o = order()
-        val next = synchronized(lock) {
+        synchronized(lock) {
             val s = state ?: return
             val forgot = received.moved && from != hub && s.offer(from) != null
             var n = if (forgot) s.without(from) else s
             if (n.offer(hub) != offer) n = n.withOffer(hub, offer)
             if (n === s) return
             state = n
+            // Under the lock: saved after it, an offer that came as the user
+            // turned it off would write the state back, and the next start
+            // would load it on again.
+            runCatching { save(n) }.onFailure { log("cannot keep the hub's offer", it) }
             val u = using
             if (u == null || u == hub || rank(o, hub) < rank(o, u) || forgot && u == from) {
                 // The hub in use changed, or one above it came: try again.
                 closeTunnelLocked()
                 changedLocked()
             }
-            n
         }
-        runCatching { save(next) }.onFailure { log("cannot keep the hub's offer", it) }
     }
 
     /** Starts the loop that reaches a hub through the tunnel while the hubs are away. */

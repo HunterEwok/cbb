@@ -306,6 +306,40 @@ class AwayFromHomeTest {
     }
 
     /**
+     * An offer that comes as the user turns it off never writes the state
+     * back after the off: the next start would load it and be on again.
+     * The user turns it off while the offer is being saved.
+     */
+    @Test
+    fun anOfferAsItTurnsOffStaysOff() {
+        val saved = AtomicReference<AwayState?>(null)
+        var off: Thread? = null
+        lateinit var a: AwayFromHome
+        a = AwayFromHome(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            FakeTunnels(),
+            load = { AwayState(ByteArray(32) { 1 }) },
+            save = { s ->
+                if (s != null && off == null) {
+                    off = Thread { a.turnOff() }.apply { start() }
+                    // Room for the off to finish if it could run now.
+                    off?.join(300)
+                }
+                saved.set(s)
+            },
+            atHome = { true },
+            dial = { _, _ -> NoTransport },
+            serve = { _, _ -> },
+            mayHost = { it == hub },
+            order = { listOf(hub) },
+        )
+        a.keep(hub, offer)
+        off!!.join(5_000)
+        assertNull("the file holds ${saved.get()}", saved.get())
+        assertFalse(a.isOn)
+    }
+
+    /**
      * The first hub in the order that answers is used; on a lower one the
      * connection ends after the up check, and the phone goes back up to
      * the first once it answers.
