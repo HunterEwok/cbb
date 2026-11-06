@@ -45,6 +45,8 @@ a checked box means the setting is in place.
 **Settings → Environments**
 
 - [ ] Environment **release**, which holds every release secret (below, "Release secrets").
+- [ ] Environment **aurora**, which holds the Aurora developer certificate (below, "Signing
+  for Aurora OS"): required reviewer the maintainer, every branch allowed.
 
 **Settings → Rules → Rulesets**
 
@@ -596,6 +598,31 @@ its own build of the tag matches it (below).
 To check the key without a release, run the release workflow by hand from `main` (Actions,
 "release", "Run workflow"): it builds everything, checks the APK's signature and keeps the
 files as the run's artifacts, and publishes nothing.
+
+## Signing for Aurora OS
+
+Aurora OS installs an RPM only when it is signed with a certificate from Open Mobile
+Platform; the maintainer's has the profile `regular` (`CN=hunterewok`, a GOST R 34.10-2012
+key, valid until 2049). A phone updates the app only from a package with the same
+certificate, and removing the app removes its key in OP-TEE, so every build that reaches a
+phone is signed with this one certificate. CI's `Aurora app` jobs build the RPMs unsigned;
+the workflow **aurora**, run by hand on any branch (Actions, "aurora", "Run workflow"),
+builds them and signs them, after the maintainer approves the run in the environment
+**aurora**, which alone holds the key: an environment with a required reviewer, so that a
+pushed branch cannot use the key unseen.
+
+The secrets of the environment **aurora**, from the files kept in `ci-keys.dmg` on the
+maintainer's Mac:
+
+```sh
+base64 -i hunterewok_key.pem | gh secret set CBB_AURORA_KEY_BASE64 -R HunterEwok/cbb --env aurora
+base64 -i hunterewok_cert.pem | gh secret set CBB_AURORA_CERT_BASE64 -R HunterEwok/cbb --env aurora
+gh secret set CBB_AURORA_KEY_PASSWORD -R HunterEwok/cbb --env aurora   # asks for the key's password
+```
+
+`rpmsign-external` of the Platform SDK signs; it reads the key's password from
+`KEY_PASSPHRASE`. The run's artifacts are the signed `tools.cbb.CBB-X.Y.Z-1.armv7hl.rpm` and
+`.aarch64.rpm`.
 
 ## F-Droid
 

@@ -7,7 +7,7 @@
 #                         lite/ffi/bind.sh aurora) and the icons (icons/, from
 #                         apps/design/icon with ImageMagick); needs rustup
 #   build.sh rpm TARGET   builds the RPM in the Platform SDK, where mb2 runs, for
-#                         a target such as AuroraOS-5.1.5.105-base-armv7hl
+#                         a target snapshot such as AuroraOS-5.1.5.105-base-armv7hl.default
 # The RPMs land in build/TARGET/RPMS/, unsigned. Nothing written here belongs in git.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)

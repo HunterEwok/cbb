@@ -33,6 +33,7 @@ jobs:
       desktop: ${{ steps.parts.outputs.desktop }}
       android: ${{ steps.parts.outputs.android }}
       zxnext: ${{ steps.parts.outputs.zxnext }}
+      silica: ${{ steps.parts.outputs.silica }}
       site: ${{ steps.parts.outputs.site }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -2269,6 +2270,39 @@ jobs:
             apps/zxnext/build/CBB.DRV
           retention-days: 14
 
+  silica:
+    name: Aurora app (${{ matrix.arch }})
+    needs: changes
+    if: needs.changes.outputs.silica == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [armv7hl, aarch64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: room for the Platform SDK
+        # The SDK takes about 10 GB; the runner's preinstalled toolchains
+        # that this job does not use make room for it.
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: the Platform SDK's downloads from the cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/psdk/dl
+          key: aurora-psdk-${{ matrix.arch }}-${{ hashFiles('apps/silica/psdk.sh') }}
+      - name: the RPM, unsigned (apps/silica/ci.sh; the workflow aurora signs one)
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q p7zip-full imagemagick
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCH" "$RUNNER_TEMP/rpm"
+
   phonetunnel:
     name: phone tunnel (${{ matrix.target }})
     needs: changes
@@ -2518,7 +2552,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
