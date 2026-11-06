@@ -9,6 +9,7 @@
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QSysInfo>
 #include <QThread>
 
 namespace {
@@ -32,6 +33,16 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current())
     if (!failure.isNull())
         show(Errors::shown(failure));
     Errors::log(QStringLiteral("start: CBB %1, %2, %3").arg(version(), m_core.isEmpty() ? QStringLiteral("no core") : m_core, system()));
+    failure = Failure();
+    m_member = Membership::load(&failure);
+    if (!failure.isNull())
+        show(Errors::shown(failure));
+    else if (!m_member.isNull())
+        Errors::log(QStringLiteral("group: %1 as %2").arg(m_member.groupTag(), m_member.device));
+    connect(&m_join, &Join::joined, this, [this](const Membership &m) {
+        m_member = m;
+        emit groupChanged();
+    });
 }
 
 QString App::version() const
@@ -59,6 +70,7 @@ void App::setUpKey()
         m_busy = false;
         if (key.state == KeyStore::State::Ready) {
             m_keyLevel = QStringLiteral("hardware");
+            m_publicKey = key.publicKey;
             m_keyFingerprint = QString::fromLatin1(QCryptographicHash::hash(key.publicKey, QCryptographicHash::Sha256).left(8).toHex());
             Errors::log(QStringLiteral("key: %1 hardware key %2").arg(key.created ? QStringLiteral("made") : QStringLiteral("found"), m_keyFingerprint));
             show(QString());
@@ -72,6 +84,18 @@ void App::setUpKey()
         emit keyChanged();
     });
     thread->start();
+}
+
+void App::startJoin()
+{
+    if (m_publicKey.isEmpty()) {
+        show(Errors::shown({QStringLiteral("The phone has no key yet."), QStringLiteral("join: no key")}));
+        return;
+    }
+    QString name = QSysInfo::machineHostName();
+    if (name.isEmpty() || name.toUtf8().size() > 64)
+        name = QStringLiteral("Aurora OS phone");
+    m_join.start(name, m_publicKey);
 }
 
 void App::show(const QString &error)

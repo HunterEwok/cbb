@@ -25,11 +25,15 @@ SOURCES += \
     src/app.cpp \
     src/core.cpp \
     src/errors.cpp \
+    src/join.cpp \
+    src/membership.cpp \
     src/platform/osinfo.cpp
 HEADERS += \
     src/app.h \
     src/core.h \
     src/errors.h \
+    src/join.h \
+    src/membership.h \
     src/platform/keystore.h \
     src/platform/osinfo.h \
     src/platform/shell.h
@@ -54,6 +58,7 @@ desktop.files = packaging/$$CBB_TARGET/$${TARGET}.desktop
 DISTFILES += \
     qml/tools.cbb.aurora.qml \
     qml/pages/MainPage.qml \
+    qml/pages/JoinPage.qml \
     qml/cover/CoverPage.qml \
     packaging/$$CBB_TARGET/tools.cbb.aurora.desktop \
     packaging/$$CBB_TARGET/tools.cbb.aurora.spec

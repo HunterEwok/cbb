@@ -11,6 +11,11 @@ Page {
 
         PullDownMenu {
             MenuItem {
+                visible: app.group === "" && app.keyLevel === "hardware"
+                text: qsTr("Join a group")
+                onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
+            }
+            MenuItem {
                 text: qsTr("Check the key again")
                 enabled: !app.busy
                 onClicked: app.setUpKey()
@@ -32,6 +37,15 @@ Page {
                 value: app.busy ? qsTr("Checking…")
                      : app.keyLevel === "hardware" ? qsTr("In the secure element")
                      : qsTr("None yet")
+            }
+            DetailItem {
+                label: qsTr("Group")
+                value: app.group !== "" ? app.group : qsTr("None yet")
+            }
+            DetailItem {
+                visible: app.device !== ""
+                label: qsTr("Device")
+                value: app.device
             }
             DetailItem {
                 visible: app.keyFingerprint !== ""
