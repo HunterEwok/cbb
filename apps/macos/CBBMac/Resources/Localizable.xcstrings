@@ -2120,6 +2120,156 @@
           }
         }
       }
+    },
+    "A hub needs sync away from home, which is off on this Mac, so this turns it on first. Your devices then reach the group through this Mac when they are away from home, through the project's forwarder at cbb.tools.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хабу нужна синхронизация вне дома, а на этом Mac она выключена, поэтому сначала она включится. Вне дома ваши устройства будут связываться с группой через этот Mac, через форвардер проекта на cbb.tools."
+          }
+        }
+      }
+    },
+    "Stop %@ being the hub?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ перестанет быть хабом?"
+          }
+        }
+      }
+    },
+    "Stop being the hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перестать быть хабом"
+          }
+        }
+      }
+    },
+    "Your devices away from home then go through the group's next hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вне дома ваши устройства пойдут через следующий хаб группы."
+          }
+        }
+      }
+    },
+    "The group has no other hub: your devices away from home stop syncing until a device is a hub again. To keep them syncing, make another computer a hub first.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Другого хаба в группе нет: вне дома ваши устройства перестанут синхронизироваться, пока какое-нибудь устройство снова не станет хабом. Чтобы они не теряли связь, сначала сделайте хабом другой компьютер."
+          }
+        }
+      }
+    },
+    "This is the group's hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это хаб группы"
+          }
+        }
+      }
+    },
+    "A phone is a hub only from its own app's Settings, while the app is open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон становится хабом только в настройках своего приложения и только пока приложение открыто."
+          }
+        }
+      }
+    },
+    "A lite member is never a hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лёгкий участник не бывает хабом."
+          }
+        }
+      }
+    },
+    "A watch is never a hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Часы не бывают хабом."
+          }
+        }
+      }
+    },
+    "It runs without administrator rights, so it is never a hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Он работает без прав администратора, поэтому не бывает хабом."
+          }
+        }
+      }
+    },
+    "It is frozen: the root unfreezes it first.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Он заморожен: сначала корень должен его разморозить."
+          }
+        }
+      }
+    },
+    "Only the group's root or an admin is a hub: the root makes this Mac an admin first.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хабом бывает только корень группы или админ: сначала корень должен сделать этот Mac админом."
+          }
+        }
+      }
+    },
+    "Only the group's root or an admin is a hub: make it an admin first.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хабом бывает только корень группы или админ: сначала сделайте его админом."
+          }
+        }
+      }
+    },
+    "Only an admin makes another device a hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать хабом другое устройство может только админ."
+          }
+        }
+      }
+    },
+    "It is no hub any more.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Больше не хаб."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

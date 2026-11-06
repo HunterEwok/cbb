@@ -110,15 +110,23 @@ func TestHubCommand(t *testing.T) {
 	} else if _, err := s.VerifyCommand(c, to, now); err != nil {
 		t.Errorf("%d clients: %v", len(many.Clients), err)
 	}
+	// An order to stop being a hub carries nothing else.
+	if c, err := SignCommand(body(&HubOrder{Stop: true}), pg.root.Key); err != nil {
+		t.Error(err)
+	} else if got, err := s.VerifyCommand(c, to, now); err != nil || got.Hub == nil || !got.Hub.Stop {
+		t.Errorf("the stop order: %+v, %v", got.Hub, err)
+	}
 	one := order().Clients
 	for what, o := range map[string]*HubOrder{
-		"no order":            nil,
-		"nowhere to reach":    {Clients: order().Clients},
-		"short keys":          {Endpoints: []string{"203.0.113.7:8764"}, Clients: []HubClient{{Device: NewDeviceID(), Key: key[:31], PSK: key}}},
-		"a client twice":      {Endpoints: []string{"203.0.113.7:8764"}, Clients: append(one, one...)},
-		"too many clients":    {Endpoints: []string{"203.0.113.7:8764"}, Clients: append(many.Clients, order().Clients...)},
-		"a bad device":        {Endpoints: []string{"203.0.113.7:8764"}, Clients: []HubClient{{Device: "x", Key: key, PSK: key}}},
-		"a forwarder w/o key": {Forwarder: &HubForwarder{Endpoint: "203.0.113.9:8764"}},
+		"a stop with a forwarder": {Stop: true, Forwarder: &HubForwarder{Endpoint: "203.0.113.9:8764", Key: "pin"}},
+		"a stop with clients":     {Stop: true, Clients: order().Clients},
+		"no order":                nil,
+		"nowhere to reach":        {Clients: order().Clients},
+		"short keys":              {Endpoints: []string{"203.0.113.7:8764"}, Clients: []HubClient{{Device: NewDeviceID(), Key: key[:31], PSK: key}}},
+		"a client twice":          {Endpoints: []string{"203.0.113.7:8764"}, Clients: append(one, one...)},
+		"too many clients":        {Endpoints: []string{"203.0.113.7:8764"}, Clients: append(many.Clients, order().Clients...)},
+		"a bad device":            {Endpoints: []string{"203.0.113.7:8764"}, Clients: []HubClient{{Device: "x", Key: key, PSK: key}}},
+		"a forwarder w/o key":     {Forwarder: &HubForwarder{Endpoint: "203.0.113.9:8764"}},
 	} {
 		if _, err := SignCommand(body(o), pg.root.Key); err == nil {
 			t.Errorf("%s: signed", what)

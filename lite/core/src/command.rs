@@ -337,10 +337,13 @@ impl Command {
     /// of the right types, the clients' keys base64 in its standard form, a
     /// forwarder with an address and a key or an address at least, at most
     /// 8 addresses and 256 clients, each client a device ID once with keys
-    /// of 32 bytes.
+    /// of 32 bytes; or an order to stop being a hub, `stop` and nothing else.
     fn hub_valid(&self) -> bool {
         let Some(h) = self.hub.as_ref() else { return true };
         let Ok(o) = serde_json::from_value::<HubOrder>(h.clone()) else { return false };
+        if o.stop {
+            return o.forwarder.is_none() && o.endpoints.is_empty() && o.clients.is_empty();
+        }
         if o.forwarder.as_ref().is_some_and(|f| f.endpoint.is_empty() || f.key.is_empty())
             || (o.forwarder.is_none() && o.endpoints.is_empty())
             || o.endpoints.len() > MAX_HUB_ENDPOINTS
@@ -380,6 +383,8 @@ impl Command {
 #[derive(Deserialize)]
 #[allow(dead_code)]
 struct HubOrder {
+    #[serde(default)]
+    stop: bool,
     #[serde(default)]
     forwarder: Option<HubForwarder>,
     #[serde(default)]

@@ -46,6 +46,8 @@ public enum Commands {
             public var key: String
         }
 
+        /// An order to stop being a hub, with nothing else in it.
+        public var stop: Bool?
         public var forwarder: Forwarder?
         public var endpoints: [String]?
         public var clients: [PhoneHub.Client]?
@@ -53,9 +55,10 @@ public enum Commands {
         /// Whether the order is valid, as Go's HubOrder.check: a forwarder
         /// with an address and a key, or an address at least; at most 8
         /// addresses and maxHubClients clients, each a device ID once with
-        /// keys of 32 bytes.
+        /// keys of 32 bytes; or stop and nothing else.
         var valid: Bool {
             let endpoints = endpoints ?? [], clients = clients ?? []
+            if stop == true { return forwarder == nil && endpoints.isEmpty && clients.isEmpty }
             if let f = forwarder, f.endpoint.isEmpty || f.key.isEmpty { return false }
             guard forwarder != nil || !endpoints.isEmpty, endpoints.count <= 8, clients.count <= Commands.maxHubClients else { return false }
             var seen = Set<String>()

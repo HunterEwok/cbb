@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: abe1226503bd -->
+<!-- source: 6d17a693cb8e -->
 # Fuera de casa
 
 En casa, tus dispositivos se sincronizan solos. Para seguir sincronizando cuando un portátil o un teléfono está en otro sitio, un ordenador de casa se convierte en el **hub** del grupo, y los dispositivos que viajan llegan a él por el túnel cifrado del propio grupo. Las imágenes de cada caso están en [Cómo funciona](how-it-works.md#away-from-home-the-hub).
@@ -22,6 +22,8 @@ En Linux, en una terminal del hub (en Windows, sin `sudo`, en una terminal de ad
 sudo cbb global on                        # read what it says about the keys, type yes
 sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches your home at
 ```
+
+En la app de Mac o en la app de la bandeja, abre la página del propio ordenador y elige **Make it a hub**: pregunta una vez y activa con él la sincronización fuera de casa, a través del reenviador del proyecto.
 
 - **La dirección** es la dirección IP pública de tu casa (IPv4 o IPv6), o un nombre que apunte a ella. La página de estado del router la muestra, o un sitio como `ifconfig.me`.
 - **El router** debe redirigir el puerto UDP 8764 al hub. Busca «reenvío de puertos» o «servidor virtual» en sus ajustes.
@@ -83,9 +85,13 @@ Otras formas de unirse desde lejos, por SSH o con tu propia VPN, están en [Sin 
 
 Un teléfono puede ser el hub mientras su app está abierta (Ajustes, **This phone as the hub**). O los dispositivos se encuentran en un **relé ciego** de tu propio servidor en lugar de un hub: los ordenadores con `cbb global relay`, los teléfonos en **Blind relay** de Ajustes. El relé no puede leer el portapapeles, pero ve qué dispositivos se comunican, cuándo y cuánto. Consulta [cómo ejecutar tus propios servidores](../admin/self-hosting.md#a-blind-relay).
 
+El interruptor **This phone as the hub** está solo en Ajustes, no en la página del teléfono en la lista de dispositivos como en un ordenador: un teléfono hace de hub solo mientras su app está abierta (un Android también en segundo plano, a costa de la batería), así que un ordenador siempre encendido es mejor hub.
+
 Más adelante: un relé ciego en `cbb.tools` que cualquier grupo podrá usar.
 
 ## Desactivarlo
+
+Para que un ordenador deje de ser el hub pero siga sincronizando fuera de casa, ejecuta allí `sudo cbb global hub off`, o elige **Stop being the hub** en su página de la app de Mac o de la app de la bandeja; un administrador también puede hacerlo para otro ordenador (`sudo cbb global hub off -on NOMBRE`). Los dispositivos conectados a él pasan al siguiente hub del grupo. Si no hay otro hub, pregunta antes, porque los dispositivos fuera de casa dejan de sincronizar hasta que un dispositivo vuelva a ser hub.
 
 ```sh
 sudo cbb global off
