@@ -216,7 +216,7 @@ func checkCommands(files map[string][]byte) []string {
 		re          *regexp.Regexp
 	}{
 		{"cmd/cbb/main.go", string(ref), goCommand},
-		{"lite/src/main.rs", lite, rsCommand},
+		{"lite/src/lib.rs", lite, rsCommand},
 	} {
 		src, ok := files[c.source]
 		if !ok {
