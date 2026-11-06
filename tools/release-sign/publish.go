@@ -91,7 +91,8 @@ func (s *signing) flags(fs *flag.FlagSet) {
 	fs.Func("status", "NAME=KEY.pem of a key that signs attest-status.json, added to keys.json (repeatable)", add(release.UseStatus))
 	fs.Func("channel", "NAME=KEY.pem of a key that renews the channel file, added to keys.json (repeatable)", add(release.UseChannel))
 	fs.Func("forwarder", "ADDRESS=KEY.pem of the project's forwarder (cbb.tools:8764), whose pin hubs then accept, added to keys.json (repeatable: the old and the new key while it changes)", add(release.UseForwarder))
-	fs.Func("drop", "the NAME of a key keys.json drops, lost or stolen, or a forwarder key's pin (repeatable)", func(v string) error {
+	fs.Func("relay", "ADDRESS=KEY.pem of the project's relay (cbb.tools:8765), whose pin its members then accept, added to keys.json (repeatable: the old and the new key while it changes)", add(release.UseRelay))
+	fs.Func("drop", "the NAME of a key keys.json drops, lost or stolen, or a forwarder's or relay's key's pin (repeatable)", func(v string) error {
 		s.drop = append(s.drop, v)
 		return nil
 	})

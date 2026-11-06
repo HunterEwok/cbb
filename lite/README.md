@@ -119,8 +119,13 @@ built, unpack the archive (or make one with `sh packaging/archive.sh`) and run
 group and keep the lite member, for example after the group removed it: `sudo cbb leave`,
 then join again.
 
-The service waits until the device joins a group. Join as the service's user, so that it
-can read its keys:
+The service waits until the device joins a group. Since a small device often has no keyboard
+and you install it to pair it, the installer starts pairing by itself when the device is in no
+group and its output is a terminal (over SSH too): it shows the QR code at once. An update, or
+a reinstall that keeps the group, skips it; `--no-pair` (or `CBB_PAIR=no`) skips it for a
+scripted install, which a script needs whenever it runs the installer with a terminal (`ssh -t`
+too), or it waits up to 5 minutes for a phone; Ctrl+C stops the pairing but not the installer. Joining still takes the code
+shown on the device. To pair later, join as the service's user, so that it can read its keys:
 
 ```sh
 sudo -u cbb cbb pair -name pi
@@ -162,7 +167,7 @@ On a Linux computer where you have no `sudo`, install it for your own user inste
 
 ```sh
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --lite --rootless
-cbb pair -name pi              # as yourself, without sudo -u
+cbb pair -name pi              # later, as yourself, without sudo -u (the installer pairs once)
 ```
 
 It runs as your own systemd user service (`systemctl --user status cbb`), with the
@@ -184,7 +189,7 @@ member syncs only at home for now, without sync away from home), as root:
 
 ```sh
 uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --lite
-su -s /bin/sh cbb -c 'cbb pair -name router'
+su -s /bin/sh cbb -c 'cbb pair -name router'   # later; the installer pairs once
 ```
 
 It installs OpenWrt's procd service, the same as a full member's
@@ -319,14 +324,20 @@ to 255), that many bytes and the sum of the type, the length and the bytes modul
 before), `E` bytes from the ESP, `e` bytes for the ESP, `T` the clock (the date and the time in
 MS-DOS's form, as NextZXOS's `M_DATE` gives them, each 16 bits little-endian),
 `A` how many bytes on the wire the driver has taken (16 bits, little-endian; the link
-sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters to type and
-`Q` to stop. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
+sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters to type,
+`Q` to stop, `C` what `.cbb` types for the Pi's shell and `c` the answers for it. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
 frames, with up to five connections (`AT+CIPMUX=1`) and the data in `+IPD` blocks.
 
 The link is also a remote paste target, `next`: once `cbb paste-receive on` is set, an
 admin's paste goes to the driver in `K` frames, 50 characters a second, and the driver types
 them into whatever program runs on the Next. As with the text console, the link has to run
 as root and a line break needs `-enter`.
+
+While the network runs, `.cbb paste`, `copy` and `text` reach the Pi in `C` frames (driver
+0.2): the link takes the line `cbb [-debug] next paste|copy ...`, and nothing else, runs it
+as NextPi's shell would, with the link's state, hands it what follows as its input, and
+sends what it writes back in `c` frames, then `CR LF SUP>`, the shell's prompt. An empty `C`
+frame stops the command; any other line gets `CBBERR` and the prompt.
 
 ## Errors
 

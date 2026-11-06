@@ -175,6 +175,17 @@ final class MemberTests: XCTestCase {
         }
     }
 
+    func testReach() throws {
+        let a = String(repeating: "a", count: 32), b = String(repeating: "b", count: 32)
+        // The invalid IDs are dropped; an absent list or one of another type reaches none.
+        XCTAssertEqual(try Member.decode(body: Data(#"{"t":"reach","reach":["\#(a)","nope","\#(b)"]}"#.utf8)), .reach([a, b]))
+        XCTAssertEqual(try Member.decode(body: Data(#"{"t":"reach"}"#.utf8)), .reach([]))
+        XCTAssertEqual(try Member.decode(body: Data(#"{"t":"reach","reach":7}"#.utf8)), .reach([]))
+        let many = (0..<300).map { String(format: "%032x", $0) }
+        guard case let .reach(ids) = try Member.decode(body: Member.encode(.reach(many)).dropFirst(4)) else { return XCTFail() }
+        XCTAssertEqual(ids, Array(many.prefix(256)))
+    }
+
     func testBadMessages() {
         XCTAssertThrowsError(try Member.decode(body: Data("{".utf8)))
         XCTAssertThrowsError(try Member.decode(body: Data(#"{"t":"hello","role":"toaster","hello":{}}"#.utf8)))

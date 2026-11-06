@@ -28,10 +28,17 @@ import (
 )
 
 // Link is a member's relay: its address, the same for UDP and TCP, and the
-// pin of its key, which the member checks before it sends anything.
+// pin of its key, which the member checks before it sends anything. Also
+// are more pins it accepts, as while the project's relay changes its key.
 type Link struct {
 	Endpoint netip.AddrPort
 	Pin      string
+	Also     []string
+}
+
+// same reports whether l and o name the same address and pins.
+func (l Link) same(o Link) bool {
+	return l.Endpoint == o.Endpoint && l.Pin == o.Pin && slices.Equal(l.Also, o.Also)
 }
 
 // CheckPin tells whether s looks like a relay's key as cbb relay prints it.
@@ -84,6 +91,12 @@ type MemberConfig struct {
 
 	// Report, if set, hears how the link stands.
 	Report func(Report)
+
+	// Retry, if set, is asked after a registration failed with err for
+	// the link to try next, as the project's relay's newest signed address
+	// and keys; false keeps the link. A link with another address or other
+	// pins is tried at once.
+	Retry func(ctx context.Context, err error) (Link, bool)
 
 	Logf    func(format string, args ...any)
 	Verbose bool // also log WireGuard's own messages
@@ -145,6 +158,17 @@ func Join(ctx context.Context, cfg MemberConfig) {
 		cfg.Report(Report{Err: err})
 		if time.Since(start) > maxBackoff {
 			backoff = minBackoff
+		}
+		if cfg.Retry != nil {
+			if l, ok := cfg.Retry(ctx, err); ok && !l.same(cfg.Link) {
+				cfg.Logf("cbb: sync away from home: trying the relay at %v with the keys of its newest signed list", l.Endpoint)
+				cfg.Link = l
+				backoff = minBackoff
+				continue
+			}
+			if ctx.Err() != nil {
+				return
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -376,7 +400,7 @@ func register(ctx context.Context, cfg MemberConfig) (*tls.Conn, welcome, string
 		return nil, welcome{}, "", err
 	}
 	raw.SetDeadline(time.Now().Add(setupTimeout))
-	tc := tls.Client(raw, forward.TLSVerifiedByPin(cert, Protocol, "relay", cfg.Link.Pin))
+	tc := tls.Client(raw, forward.TLSVerifiedByPin(cert, Protocol, "relay", append([]string{cfg.Link.Pin}, cfg.Link.Also...)...))
 	if err := tc.HandshakeContext(ctx); err != nil {
 		return fail(fmt.Errorf("registering with the relay: %w", err))
 	}

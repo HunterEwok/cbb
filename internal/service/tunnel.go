@@ -830,7 +830,13 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 		if err != nil || ep.Port() == 0 {
 			return false, nil, nil, fmt.Errorf("%q is not the relay's address with a port, such as 203.0.113.9:8764", m.Relay)
 		}
-		if err := relay.CheckPin(m.RelayKey); err != nil {
+		// The project's relay: the pins of the newest keys.json, taken
+		// again at each start.
+		project := m.RelayKey == relay.Project
+		pin := m.RelayKey
+		if project {
+			pin = s.projectRelayPins()[0]
+		} else if err := relay.CheckPin(pin); err != nil {
 			return false, nil, nil, err
 		}
 		// The relay learns who talks to whom, when and how much, which a
@@ -849,7 +855,7 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 		}
 		old := *st
 		*st = tunnel.State{Key: st.Key, PSK: st.PSK, Group: st.Group, KeysInFile: st.KeysInFile,
-			Relay: &tunnel.RelayLink{Endpoint: netip.AddrPortFrom(ep.Addr().Unmap(), ep.Port()), Pin: m.RelayKey}}
+			Relay: &tunnel.RelayLink{Endpoint: netip.AddrPortFrom(ep.Addr().Unmap(), ep.Port()), Pin: pin, Project: project}}
 		if err := st.Save(s.cfg.StateDir); err != nil {
 			*st = old
 			return false, nil, nil, fmt.Errorf("saving the tunnel state: %w", err)

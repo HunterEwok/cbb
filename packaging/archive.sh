@@ -106,7 +106,7 @@ if [ "$os" = windows ]; then
 	exit 0
 fi
 cp "$bin" "$work/cbb/cbb"
-cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$work/cbb/packaging/"
+cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$root/packaging/pair.sh" "$work/cbb/packaging/"
 if [ -n "$desktop" ]; then
 	cp "$desktop" "$work/cbb/cbb-desktop"
 	cp "$root/apps/desktop/icon.png" "$work/cbb/packaging/linux/cbb.png"

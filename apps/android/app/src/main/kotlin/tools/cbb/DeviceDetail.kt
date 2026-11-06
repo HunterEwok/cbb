@@ -84,7 +84,13 @@ private fun Header(d: LiveGroup.Device, close: (() -> Unit)?) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OnlineDot(d.online)
                 Text(
-                    stringResource(if (d.online) R.string.online else R.string.offline),
+                    stringResource(
+                        when {
+                            d.throughHub -> R.string.online_through_hub
+                            d.online -> R.string.online
+                            else -> R.string.offline
+                        },
+                    ),
                     color = if (d.online) palette.accent else palette.textDim,
                     modifier = Modifier.padding(start = 6.dp),
                 )
@@ -233,7 +239,7 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
         }
         // An admin computer, or one the root makes an admin first; this phone is the hub under Settings.
         // A computer that is no admin can be a hub that only passes the copies on.
-        if (!d.isSelf && d.online && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
+        if (!d.isSelf && d.online && !d.throughHub && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
             HorizontalDivider(color = palette.line)
             Action("⌁", stringResource(R.string.make_hub)) { hubbing = true }
         }

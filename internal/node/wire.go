@@ -36,7 +36,9 @@ import (
 // A member that keeps the group's server credentials sends them in a
 // credentials message after the hello, and passes new ones on. A member
 // that holds a signed release newer than the one a peer's hello names sends
-// it in a release message, and passes newer ones on.
+// it in a release message, and passes newer ones on. A computer tells each
+// connected phone in a reach message which other members it is connected
+// to, so that the phone shows those behind a hub as online.
 const (
 	typeHello   = "hello"
 	typeEvent   = "event"
@@ -53,6 +55,7 @@ const (
 	typeCreds   = "credentials"
 	typeRelease = "release"
 	typeEntries = "entries"
+	typeReach   = "reach"
 	typeGet     = "get"
 	typeMissing = "missing"
 	typeChunk   = "chunk" // a binary frame, never JSON
@@ -138,6 +141,10 @@ type message struct {
 	// Get, in a get message, asks for a range of a part of a media event;
 	// in a missing message, it is the get the sender cannot answer.
 	Get *Get `json:"get,omitempty"`
+	// Reach, in a reach message, is the device IDs of the other members
+	// the sender is connected to now (docs/protocol.md, section 4,
+	// "Reach"); absent when it reaches none.
+	Reach []group.DeviceID `json:"reach,omitempty"`
 
 	chunk *chunk // a binary chunk frame, which readMessage decoded
 }

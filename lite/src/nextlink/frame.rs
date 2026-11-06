@@ -32,6 +32,13 @@ pub const ACK: u8 = b'A';
 pub const QUIT: u8 = b'Q';
 /// Characters to type, in the Spectrum character set (Pi to driver).
 pub const KEYS: u8 = b'K';
+/// What `.cbb` types for the Pi's shell while the network runs (driver to
+/// Pi): a command line, then the command's input; an empty frame stops the
+/// command (cbb.drv 0.2).
+pub const CBB_OUT: u8 = b'C';
+/// The command's output for `.cbb`, then `\r\nSUP>` as NextPi's shell
+/// writes its prompt (Pi to driver).
+pub const CBB_IN: u8 = b'c';
 
 /// How many bytes on the wire the Pi sends before the driver's ACK: less
 /// than the Next's 512-byte receive buffer, with room for a frame in flight.
