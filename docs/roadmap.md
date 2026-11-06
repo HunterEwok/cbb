@@ -474,6 +474,17 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     the device's user consents once, at install, at pairing or in the app, and the root or an
     admin then turns it on and makes hubs from the app, without a command on each computer
     (see [Consent to sync away from home](#consent-to-sync-away-from-home)).
+- **61.** **Planned for 0.6, before rc.1 (the owner, 2026-11-06).** Make sure the ways out
+    carry only cbb and never lead to the internet: the forwarder, VLESS (REALITY and XHTTP)
+    with the mirror, the relay and the hub's tunnel, on every member and both phones. Today
+    this rests on the code (the forwarder only passes WireGuard packets between a group's hub
+    and its clients, VLESS's one outbound goes to the forwarder, its registrations or the
+    mirror whatever the client asked for, the hub's in-process stack opens only the member
+    port and forwards nothing), with no route, NAT or firewall rule needed on the server. To
+    do: a test for each way that a client asking for any other address, TCP or UDP, reaches
+    nothing; the same for the lite member's and the phones' tunnels; and a read-only check of
+    cbb.tools that what the mirror reaches serves only the releases, written down so the
+    next server change keeps it.
 
 ## Devices that are hard to type into
 
