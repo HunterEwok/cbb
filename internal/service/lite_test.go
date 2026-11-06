@@ -198,11 +198,11 @@ func TestEmbassyJoiner(t *testing.T) {
 	}
 }
 
-// TestFFIPhone runs the Aurora app's core through lite/ffi's C functions
+// TestFFIJoiner runs the Aurora app's core through lite/ffi's C functions
 // with a software key (the example phone-on-linux, CBB_PHONE_ON_LINUX): the
 // phone shows its QR code, the service admits it as cbb pair -qr does, and
 // then the phone's member dials the service and syncs with it both ways.
-func TestFFIPhone(t *testing.T) {
+func TestFFIJoiner(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")

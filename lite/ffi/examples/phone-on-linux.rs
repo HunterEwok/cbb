@@ -3,7 +3,7 @@
 
 //! The Aurora app through the C functions of src/join.rs and
 //! src/member.rs, on Linux with a software key, for internal/service's
-//! TestFFIPhone. It listens on -addr (host:port), prints the QR code's
+//! TestFFIJoiner. It listens on -addr (host:port), prints the QR code's
 //! text after "QR: ", takes connections until one joins, and prints
 //! "Joined <device> <group tag>". With -dir, it then runs the member there,
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for

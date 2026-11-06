@@ -60,7 +60,7 @@ kind and, for a secret, how long it may stay; `log`: a line for the app's log). 
 its TLS handshakes and its copies through the callback, presents itself as a phone (role
 `phone`, key store `hardware`), never listens and dials the members mDNS finds;
 `cbb_member_copy` sends a text the user handed to the app, `cbb_member_peers` lists the members
-connected and `cbb_member_stop` stops it. `TestFFIPhone` runs the join and then sync both ways
+connected and `cbb_member_stop` stops it. `TestFFIJoiner` runs the join and then sync both ways
 against a Go member through the example `phone-on-linux`.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking

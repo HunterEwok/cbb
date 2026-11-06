@@ -87,7 +87,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
 | `CBB_LITE` | Go tests with the lite member | The lite member's binary (`cargo build` in `lite/`). |
 | `CBB_ESP32_ON_LINUX` | `TestEmbassyJoiner` | The `esp32-on-linux` binary of `lite/embassy`, run over a TAP interface. |
-| `CBB_PHONE_ON_LINUX` | `TestFFIPhone` | The example `phone-on-linux` of `lite/ffi` (feature `member`): the Aurora app's joining and syncing with a software key. |
+| `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `lite/ffi` (feature `member`): the Aurora app's joining and syncing with a software key. |
 | `CBB_INTEROP_OUT` | the Swift and Kotlin kits' tests, Go's interop tests | A directory where the kits write fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
