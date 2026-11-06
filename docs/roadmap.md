@@ -469,28 +469,27 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **59.** **Planned for 0.6, before the release (the owner, 2026-11-06).** The stores' signing,
     set up before 0.6 is tagged, since an Android app's key can never change once its APKs
     are installed:
-    - One release key for every Android channel. The keystore on the maintainer's Mac
-      (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`) is not the one the
-      maintainer's notes recorded on 2026-10-30 (`EF:11:AF:72:…:7A:CD:F6:C6`); no release is
-      signed with either, since 0.5.0 carries the lost key. Pick one, check that the
-      environment **release** holds it (a manual run of the release workflow prints the
-      APK's certificate), keep its backups, and write its fingerprint in
-      docs/maintaining.md, "Android signing key".
-    - RuStore, Android: upload the release's signed `cbb-X.Y.Z.apk`, not an AAB, so that
-      RuStore never holds the key and its copy, the GitHub APK and F-Droid's share one
-      certificate. The app already leaves a copy from a store to its store (docs/apps.md,
+    - One release key for every Android channel: the key that replaced 0.5.0's on 2026-11-03
+      (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`), which the environment
+      **release** already holds. Write its fingerprint in docs/maintaining.md, "Android
+      signing key"; 0.5.0's APK is signed by the old key, so 0.5.0 does not update to 0.6.0
+      in place (no compatibility before 1.0.0).
+    - RuStore, Android: upload the release's signed `cbb-fdroid-X.Y.Z.apk` (the flavor
+      without an update of its own and without Wear OS), not an AAB, so that RuStore never
+      holds the key and its copy, the GitHub APK and F-Droid's share one certificate. The
+      app already leaves a copy from a store to its store (docs/apps.md,
       "Updates").
     - RuStore, Aurora OS: the developer certificate with the profile `regular` (issued
       2025-12-05 by Open Mobile Platform's root, valid until 2049) signs the Aurora build's
       RPM; the public test key ("Noname developer") signs only test builds. What a
       `regular` app may do on Aurora 5.1.5 was measured on a device (2026-11-06): it listens
       and is reached over Wi-Fi in the background, mDNS works both ways, the OP-TEE
-      PKCS#11 token "USER" offers P-256, Ed25519 and AES, it writes the clipboard from the
+      PKCS#11 token makes non-extractable P-256 keys that sign, it writes the clipboard from the
       background but reads another app's copy only in the foreground (so the phone sends
-      on a gesture: opening the app, its cover action or Share), and a second executable in
+      on a gesture: opening the app, a notification or Share), and a second executable in
       the package is installed without its execute bit.
     - F-Droid: the steps in docs/maintaining.md, "F-Droid", with `AllowedAPKSigningKeys`
-      set to the chosen key's certificate. The fdroid flavor already has no update of its
+      set to that certificate. The fdroid flavor already has no update of its
       own (`SELF_UPDATE` false, no installer permission), as F-Droid's inclusion policy
       requires: an app it publishes must not download or install code outside F-Droid.
 - **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS: two packages from one
@@ -506,13 +505,15 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       key made with `CKA_TOKEN`, `CKA_SENSITIVE` and not `CKA_EXTRACTABLE` reads back
       `CKA_NEVER_EXTRACTABLE` and `CKA_ALWAYS_SENSITIVE`, refuses its value, signs, and is
       still there after a restart. Nothing about the device leaves the group (D-47).
-    - Level 1, "proven", only when the group's user chooses it, as everywhere: not for
-      Aurora today. Aurora 5.1.5 offers no key attestation (a proof that the key was made in
-      the TEE, not only that the system is unmodified), so an Aurora phone is never
-      "proven" and a group at level 1 does not make it an admin. Later, with no date: look
-      for such an API in the Aurora 5.2 SDK once 5.2 phones exist; the 5.x package is meant
-      to run on 5.2 as it is, without attestation, which the SDK's 5.2 emulator checks
-      first (it has no OP-TEE, so it also runs the path of a key in a file).
+    - Level 1, "proven", only when the group's user chooses it, as everywhere, and only
+      if Aurora offers key attestation (a proof that the key was made in the TEE, not only
+      that the system is unmodified): 5.1.5 has none, and whether the attestation that 5.2's
+      release notes list covers keys is to be checked in its SDK later, with no date, once
+      phones with 5.2 exist. Until then an Aurora phone is never "proven".
+    - The package for Aurora 5 is meant to run on 5.2 too, without level 1; the SDK's 5.2
+      emulator checks it first (the clipboard, which 5.2 reworked, and the network), and,
+      having no OP-TEE, the file key's path: the app says its key is not hardware and is no
+      admin without the user's consent.
     - A phone without OP-TEE keeps its key in a file and is an admin or the hub only at
       level 3, after the user allows it.
     - Still to check on a device: a key that lasts across restarts needs `C_Login` with the
