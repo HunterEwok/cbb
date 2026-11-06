@@ -158,6 +158,8 @@ class MemberNode(
     private val copies: CopyKeys? = null,
     /** The signed entry points; null takes none. */
     private val entries: EntriesKeeper? = null,
+    /** Gets each line of the trace (diagnostics) as it happens, for the app's log. */
+    private val log: (String) -> Unit = {},
 ) {
     val device: Member.DeviceInfo? = device?.cleaned
 
@@ -172,6 +174,36 @@ class MemberNode(
     /** Why the last copy sealed to this phone did not open; it stays unread. */
     val lastUnopened: String? get() = copies?.lastUnopened
     private val lock = Any()
+
+    /** When this node was made, on the monotonic clock, for the trace. */
+    private val bornMS = Conn.now()
+
+    /** The last things that happened to the copies and the connections, oldest first, for the tests' messages; guarded by itself. */
+    private val traced = ArrayDeque<String>()
+
+    /** Notes what happened, with its time since the node was made. */
+    private fun trace(what: String) {
+        val line = "+${Conn.now() - bornMS}ms $what"
+        synchronized(traced) {
+            traced.addLast(line)
+            if (traced.size > TRACE_LINES) traced.removeFirst()
+        }
+        log(line)
+    }
+
+    /**
+     * What this node did lately and its connections now, for a failing
+     * test's message: the copies it sent, took or dropped and the
+     * connections that started and ended, then each connection with its
+     * peer, its age and when it last read and wrote.
+     */
+    val diagnostics: String
+        get() {
+            val lines = synchronized(traced) { traced.toList() }
+            val cs = synchronized(lock) { conns.map { it.describe() } }
+            return "node up ${Conn.now() - bornMS}ms; connections: ${cs.ifEmpty { listOf("none") }.joinToString("; ")}\n" +
+                lines.joinToString("\n") { "  $it" }
+        }
     private val conns = mutableSetOf<Conn>()
     private val waiting = mutableMapOf<String, Waiting>()
 
@@ -361,6 +393,7 @@ class MemberNode(
     fun send(text: String, kind: Member.Kind, via: Member.Via = Member.Via.COPY, media: Media.Manifest? = null): Member.Event = synchronized(lock) {
         val sealedBlob = if (media != null && copies != null) (content ?: throw Content.NoParts()).sealBlob(media) else null
         val e = engine.local(text, kind, via, media, sealedBlob?.first, sealedBlob?.second)
+        trace("sent ${e.brief} to ${conns.filter { it.peerRole != null && !it.recordsOnly }.map { it.peer }}")
         for (c in conns) forward(e, c)
         e
     }
@@ -372,6 +405,7 @@ class MemberNode(
      */
     fun serve(t: FrameTransport, peer: String? = null) {
         val c = Conn(t, peer)
+        trace("connection to $peer started")
         synchronized(lock) {
             conns.add(c)
             // While the records stop the exchange with the peer, the
@@ -419,7 +453,9 @@ class MemberNode(
                         c.mode = m.hello.mode
                         c.peerMedia = m.hello.media
                         c.peerRole = m.role
-                        apply(engine.reconcile(m.hello.copy(current = m.hello.current?.let { take(it, c.peer) })), c)
+                        val r = engine.reconcile(m.hello.copy(current = m.hello.current?.let { take(it, c.peer) }))
+                        trace("hello from ${c.peer} (${m.role}) with ${m.hello.current?.brief}: changed ${r.changed}, current ${engine.currentEvent?.brief}")
+                        apply(r, c)
                         val store = records
                         val mine = store?.digest
                         if (store != null && mine != null && mine != m.hello.records) {
@@ -454,7 +490,15 @@ class MemberNode(
                     is Member.Message.Event -> {
                         val e = m.event
                         val taken = e?.let { take(it, c.peer) }
-                        if (taken != null) synchronized(lock) { apply(engine.received(taken), c) }
+                        if (taken != null) {
+                            synchronized(lock) {
+                                val r = engine.received(taken)
+                                trace("event from ${c.peer}: ${taken.brief}, changed ${r.changed}, current ${engine.currentEvent?.brief}")
+                                apply(r, c)
+                            }
+                        } else {
+                            trace("event from ${c.peer}: ${e?.brief} dropped: $lastDropped")
+                        }
                     }
                     is Member.Message.Cert -> onCert(m.cert)
                     is Member.Message.Evidence -> if (t.peerChain.isNotEmpty()) onEvidence(c.peer, t.peerChain, m.evidence)
@@ -507,7 +551,11 @@ class MemberNode(
                     else -> {} // a ping, an event that did not decode, or a newer type
                 }
             }
+        } catch (e: Exception) {
+            trace("connection to ${c.peer} failed: $e")
+            throw e
         } finally {
+            trace("connection to ${c.peer} ended${if (c.closing) " by this side" else ""}")
             synchronized(lock) {
                 conns.remove(c)
                 c.waiters.forEach { it.completeExceptionally(ProtocolException("the connection closed")) }
@@ -676,10 +724,16 @@ class MemberNode(
     }
 
     /** Says goodbye on every connection and closes it. */
-    fun closeAll() = synchronized(lock) { conns.forEach { it.goodbye() } }
+    fun closeAll() = synchronized(lock) {
+        trace("closing every connection")
+        conns.forEach { it.goodbye() }
+    }
 
     /** Closes the connections to a device, for example one just removed. */
-    fun close(peer: String) = synchronized(lock) { conns.filter { it.peer == peer }.forEach { it.goodbye() } }
+    fun close(peer: String) = synchronized(lock) {
+        trace("closing the connections to $peer")
+        conns.filter { it.peer == peer }.forEach { it.goodbye() }
+    }
 
     /**
      * Says goodbye, after what is queued for them, on the connections to
@@ -701,12 +755,18 @@ class MemberNode(
     /** Closes the connections whose peers the records now refuse, as a device just removed. */
     private fun dropRefusedLocked() {
         val store = records ?: return
-        for (c in conns) if (store.refused(c.transport.peerChain) != null || store.stopped(c.transport.peerChain) != c.recordsOnly) c.goodbye()
+        for (c in conns) if (store.refused(c.transport.peerChain) != null || store.stopped(c.transport.peerChain) != c.recordsOnly) {
+            trace("closing the connection to ${c.peer}: the records refuse or stop it")
+            c.goodbye()
+        }
         // The group's last copy from a device removed since, or from a root
         // an admin took the group over from, no longer counts: it is never
         // written later (docs/protocol.md, section 4).
         val s = engine.currentEvent?.sealed ?: return
-        if (copies?.refused(s) == true) engine.forget(s.id)
+        if (copies?.refused(s) == true) {
+            trace("forgetting the current copy ${s.id.take(8)}: the records refuse its sender")
+            engine.forget(s.id)
+        }
     }
 
     /** Sends server credentials signed on this phone to every connected member. */
@@ -823,6 +883,7 @@ class MemberNode(
         @Volatile private var done = false
         @Volatile private var lastRead = now()
         @Volatile private var lastWrite = now()
+        private val born = now()
         private val threads = mutableListOf<Thread>()
 
         /** Whether the connection ended or is ending. */
@@ -907,6 +968,13 @@ class MemberNode(
             }
         }
 
+        /** The peer, its role, the connection's age and its last read and write, for the diagnostics. */
+        fun describe(): String {
+            val t = now()
+            return "$peer (${peerRole ?: "no hello"}${if (recordsOnly) ", records only" else ""}${if (done) ", ended" else ""}) " +
+                "up ${t - born}ms, read ${t - lastRead}ms ago, wrote ${t - lastWrite}ms ago, ${synchronized(queue) { messages.size }} queued"
+        }
+
         fun readMessage(): Member.Message {
             val (n, binary) = Member.header(transport.read(4))
             val body = transport.read(n)
@@ -921,6 +989,14 @@ class MemberNode(
         }
     }
 }
+
+/** How many lines a node's trace keeps. */
+private const val TRACE_LINES = 60
+
+/** An event in a few words for the trace: its ID's start, origin's start, kind, time and whether it is a mark or unread. */
+private val Member.Event.brief: String
+    get() = "${id.take(8)} from ${origin.take(8)} $kind at $time" +
+        (if (media != null) " files ${media.isFiles}" else "") + (if (isMark) " mark" else "") + (if (unread) " unread" else "")
 
 /** The most commands a member passes on at a time, as Go. */
 private const val MAX_PASSED = 4096
