@@ -24,7 +24,8 @@ sudo cp -a "$here" "$home/silica"
 sudo rm -rf "$home/silica/build"
 sudo chroot "$psdk/root" chown -R builder /home/builder/silica
 sudo "$here/psdk.sh" "$psdk" run "~/silica/build.sh rpm AuroraOS-5.1.5.105-base-$arch.default"
-rpm=$(ls "$home"/silica/build/*/RPMS/tools.cbb.CBB-*."$arch".rpm)
+# builder's home is not the caller's to read.
+rpm=$(sudo sh -c "ls $home/silica/build/*/RPMS/tools.cbb.CBB-*.$arch.rpm")
 
 if [ -n "${SIGN_KEY_FILE:-}" ]; then
 	# The key goes into the SDK only for the one command and is removed after.
@@ -39,5 +40,6 @@ if [ -n "${SIGN_KEY_FILE:-}" ]; then
 		rpmsign-external sign --key $b/sign-key.pem --cert $b/sign-cert.pem "$b/silica/build/$(basename "$(dirname "$(dirname "$rpm")")")/RPMS/$(basename "$rpm")"
 	sudo rm -f "$home/sign-key.pem"
 fi
-cp "$rpm" "$out/"
+sudo cp "$rpm" "$out/"
+sudo chown "$(id -u):$(id -g)" "$out/$(basename "$rpm")"
 ls -la "$out"
