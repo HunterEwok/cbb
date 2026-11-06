@@ -36,6 +36,9 @@ struct StartArgs {
     os_version: String,
     #[serde(default)]
     version: String,
+    /// Where the key lives: `hardware` (the default) or `file`.
+    #[serde(default = "hardware")]
+    key_store: String,
     device: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
@@ -61,6 +64,10 @@ struct StartArgs {
 
 fn yes() -> bool {
     true
+}
+
+fn hardware() -> String {
+    "hardware".into()
 }
 
 #[derive(Deserialize)]
@@ -144,6 +151,7 @@ impl Member {
                 os: a.os,
                 os_version: a.os_version,
                 version: a.version,
+                key_store: a.key_store,
                 state_dir: PathBuf::from(a.dir),
                 peers,
                 mdns: a.mdns,

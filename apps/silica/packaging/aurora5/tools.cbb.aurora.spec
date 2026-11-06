@@ -25,7 +25,7 @@ CBB syncs the clipboard between your phones and computers on the home network.
 %autosetup
 
 %build
-%qmake5 VERSION=%{version}
+%qmake5 VERSION=%{version} CBB_TARGET=aurora5
 %make_build
 
 %install

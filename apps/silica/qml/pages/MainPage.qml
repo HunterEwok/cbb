@@ -25,7 +25,7 @@ Page {
 
         PullDownMenu {
             MenuItem {
-                visible: app.group === "" && app.keyLevel === "hardware"
+                visible: app.group === "" && app.keyLevel !== "none"
                 text: qsTr("Join a group")
                 onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
             }
@@ -60,6 +60,7 @@ Page {
                 label: qsTr("Key")
                 value: app.busy ? qsTr("Checking…")
                      : app.keyLevel === "hardware" ? qsTr("In the secure element")
+                     : app.keyLevel === "file" ? qsTr("In a file on the phone")
                      : qsTr("None yet")
             }
             DetailItem {

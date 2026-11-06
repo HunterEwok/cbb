@@ -8,6 +8,7 @@
 
 #include <cbb_core.h>
 
+#include <QCoreApplication>
 #include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -77,7 +78,7 @@ void Join::start(const QString &name, const QByteArray &publicKey)
         return fail(failure);
     const QJsonArray addrs = qrAddresses();
     if (addrs.isEmpty())
-        return fail({QStringLiteral("Connect the phone to your home Wi-Fi to join a group."), QStringLiteral("join: no private IPv4 address")});
+        return fail({QCoreApplication::translate("Errors", "Connect the phone to your home Wi-Fi to join a group."), QStringLiteral("join: no private IPv4 address")});
     const QJsonObject req{
         {QStringLiteral("name"), name},
         {QStringLiteral("os"), QStringLiteral("aurora")},
@@ -91,10 +92,10 @@ void Join::start(const QString &name, const QByteArray &publicKey)
     m_join = cbb_join_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), Core::signDigest, nullptr, &answer, &len);
     const QJsonObject made = Core::take(answer, len, QStringLiteral("join"), &failure);
     if (!m_join)
-        return fail(failure.isNull() ? Failure{QStringLiteral("This build of CBB is broken."), QStringLiteral("join: no joiner")} : failure);
+        return fail(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("join: no joiner")} : failure);
     m_server = new QTcpServer(this);
     if (!m_server->listen(QHostAddress::Any, port))
-        return fail({QStringLiteral("The phone cannot listen for the other device."),
+        return fail({QCoreApplication::translate("Errors", "The phone cannot listen for the other device."),
                      QStringLiteral("join: listen on %1: %2").arg(port).arg(m_server->errorString())});
     connect(m_server, &QTcpServer::newConnection, this, &Join::accept);
     m_code = made.value(QStringLiteral("code")).toString();
@@ -183,7 +184,7 @@ void Join::feed(const QByteArray &data)
         m_conn->disconnectFromHost();
         m_conn = nullptr;
         if (step.value(QStringLiteral("wrong_code")).toBool() && ++m_wrongCodes >= maxWrongCodes)
-            return fail({QStringLiteral("The other device showed a wrong code three times. Start again."), QStringLiteral("join: too many wrong codes")});
+            return fail({QCoreApplication::translate("Errors", "The other device showed a wrong code three times. Start again."), QStringLiteral("join: too many wrong codes")});
         setState(QStringLiteral("listening"));
         return;
     }

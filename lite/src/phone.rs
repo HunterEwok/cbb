@@ -28,6 +28,9 @@ pub struct Config {
     pub os: String,
     pub os_version: String,
     pub version: String,
+    /// Where the phone's key lives, as its hello says: `hardware` (a TEE)
+    /// or `file`.
+    pub key_store: String,
     /// Where the records, the clock's mark and the entries are kept.
     pub state_dir: PathBuf,
     /// Members to dial at these addresses besides those mDNS finds.
@@ -72,7 +75,7 @@ impl Member {
                 .cleaned();
         let node =
             Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone()).presenting(
-                Presence { role: "phone".into(), name: cfg.name, os: cfg.os, key_store: "hardware".into(), device },
+                Presence { role: "phone".into(), name: cfg.name, os: cfg.os, key_store: cfg.key_store, device },
             );
         let node = Arc::new(node);
         engine.set_seal(node.sealer());

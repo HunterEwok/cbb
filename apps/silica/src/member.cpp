@@ -5,6 +5,7 @@
 
 #include "core.h"
 #include "errors.h"
+#include "platform/keystore.h"
 
 #include <cbb_core.h>
 
@@ -77,6 +78,7 @@ void Member::start(const Membership &membership, const QString &name, const QByt
         {QStringLiteral("name"), name},
         {QStringLiteral("os"), os},
         {QStringLiteral("os_version"), osVersion},
+        {QStringLiteral("key_store"), KeyStore::store()},
         {QStringLiteral("version"), QCoreApplication::applicationVersion()},
         {QStringLiteral("device"), membership.device},
         {QStringLiteral("public"), b64(publicKey)},
@@ -96,7 +98,7 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     Core::take(answer, len, QStringLiteral("member"), &failure);
     if (!m_member) {
         current.store(nullptr);
-        m_error = Errors::shown(failure.isNull() ? Failure{QStringLiteral("This build of CBB is broken."), QStringLiteral("member: no member")} : failure);
+        m_error = Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("member: no member")} : failure);
         emit changed();
         return;
     }

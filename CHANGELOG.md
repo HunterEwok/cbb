@@ -17,6 +17,12 @@ All notable changes to cbb are documented in this file. The format follows
   front or from the pull-down menu, since Aurora lets no app read the clipboard in the
   background. The main page shows the members connected and the last copy; "Leave the group"
   deletes the membership on the phone.
+- The same app as packages for Aurora OS 4 (armv7hl) and Sailfish OS (`harbour-cbb`,
+  armv7hl and aarch64, not yet tested on a phone), which keep the phone's key in a file
+  that only the app reads (level 3) and say so in their hello; CI builds all five packages.
+  The app speaks Chinese, Spanish, Russian, Arabic, Swahili, Hebrew and Hindi besides English.
+- The core makes a P-256 device key and signs a digest with it (`new_device_key`,
+  `sign_digest`, docs/core-api.md), for a phone that keeps its key in a file.
 - `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
   the device records (docs/protocol.md): every member admits them as phones and shows
   "Aurora OS" and "Sailfish OS".
