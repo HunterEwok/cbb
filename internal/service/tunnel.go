@@ -676,6 +676,12 @@ func (s *Service) away(ctx context.Context, m *control.Message) error {
 	if m.Name == "hub" && m.Device != "" {
 		return s.makeHub(ctx, m.Device, m.Forwarder, m.ForwarderKey, m.Addrs)
 	}
+	if m.Name == "hub-off" && m.Device != "" {
+		return s.stopHubOn(ctx, m.Device, m.Force)
+	}
+	if m.Name == "hub-off" {
+		return s.stopHub(ctx, m.Force)
+	}
 	if m.Name == "hub" && !id.IsAdmin() {
 		return errors.New("only the group's root or an admin can be its hub, since the members take the hub's offer from them only; make this device an admin first (cbb admin on the root)")
 	}
@@ -768,8 +774,16 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 		return true, nil, nil, nil
 	case "hub":
 		st := s.tunnel
+		if st == nil && !m.Consent {
+			return false, nil, nil, errors.New("sync away from home is off here; turn it on first: cbb global on, or cbb global hub -away-on")
+		}
 		if st == nil {
-			return false, nil, nil, errors.New("sync away from home is off here; turn it on first: cbb global on")
+			// The user agreed to turn it on with the hub (cbb global hub
+			// -away-on), which the keys' warning comes with.
+			var err error
+			if st, err = s.awayOnLocked(tag); err != nil {
+				return false, nil, nil, err
+			}
 		}
 		if m.Port < 0 || m.Port > 65535 {
 			return false, nil, nil, fmt.Errorf("a bad port %d", m.Port)
@@ -811,7 +825,7 @@ func (s *Service) awayLocked(m *control.Message, tag string) (reconnect bool, ke
 			}
 		}
 		old := *st
-		st.IsHub, st.Endpoints, st.ListenPort, st.Forwarder, st.Relay, st.Obfuscation = true, eps, port, fw, nil, obf
+		st.IsHub, st.Retired, st.Endpoints, st.ListenPort, st.Forwarder, st.Relay, st.Obfuscation = true, false, eps, port, fw, nil, obf
 		if err := st.Save(s.cfg.StateDir); err != nil {
 			*st = old
 			return false, nil, nil, fmt.Errorf("saving the tunnel state: %w", err)

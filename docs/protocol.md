@@ -1145,7 +1145,8 @@ Header fields (all omitted when empty):
 | `listen` | bool | `join`: listen for a member instead of dialing one |
 | `addrs` | array of strings | the first answer of a listening `join`: where it listens |
 | `port` | integer | `away hub`: the UDP port; 0 for 8764 |
-| `consent` | bool | `away on`: the user agreed to the warning about keys in files; `join` with an invitation and `admin` of a device with keys in files: the user agreed to the warning; `remote add`: a Roku over plain HTTP; `answer`: yes |
+| `consent` | bool | `away on`, and `away hub` where sync away from home is off (it turns it on first): the user agreed to the warning about keys in files; `join` with an invitation and `admin` of a device with keys in files: the user agreed to the warning; `remote add`: a Roku over plain HTTP; `answer`: yes |
+| `force` | bool | `away hub-off`: stop the hub even when the group has no other one |
 | `device` | string | `mode`, `paste-on`, `paste-receive`: another device, by name or device ID; `remote`: the TV, by its name |
 | `new_name` | string | `rename`: the device's new name; `remote add`: the TV's name here |
 | `method` | string | `paste-on`, `inject`: `paste` (the clipboard and the paste keys, the default) or `type` |
@@ -2053,7 +2054,7 @@ beyond) and check the same bytes.
 | `op` | Request | Answers |
 |------|---------|---------|
 | `devices` | none | `{devices: [{id, name, role, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only |
-| `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, section 14), in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none. Members connect again afterwards, so their hellos carry the change (section 11) |
+| `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?, consent?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "hub-off", device?, force?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, section 14), in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none; `consent` with `hub` turns sync away from home on first where it is off; `hub-off` makes this device, a hub, stop being one, or with `device`, on an admin, sends that hub a `hub` command with a stop order, and refuses while the group has no other hub unless `force` (section 11, "Stopping a hub"). Members connect again afterwards, so their hellos carry the change (section 11) |
 | `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`) |
 | `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected full member an admin ("Admins") |
 | `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
@@ -2191,6 +2192,7 @@ its hubs come first, in its order, then the others in the derived order (D-65 in
 
 | Field | Type | Meaning |
 |-------|------|---------|
+| `stopped` | bool or absent | `true`, alone, from a device that stopped being a hub ("Stopping a hub" below) |
 | `serving` | bool or absent | `true` while the sender serves its clients as the hub |
 | `offer` | object or absent | the sender's offer, without `psk` |
 | `clients` | array or absent | the sender's clients, each `device`, `key` and `psk`, the sender itself among them, without the receiver; at most 256 |
@@ -2245,6 +2247,34 @@ leaves `forward_only` out (any admin with `admit` may sign it a record without i
 admit a device that reads copies anyway); to make a trusted hub only pass copies on, an admin with
 `remove-admins` revokes its admin key and signs it a record with `forward_only`. From the
 next copy on, the copies are sealed to it, or no longer.
+
+### Stopping a hub
+
+A hub stops being one by its own user's word (`cbb global hub off`, "Stop being the hub" on
+the device's own page in the Mac app and the tray app) or by an admin's: a `hub` command
+whose order is `{"stop":true}` and nothing else (section 15; `cbb global hub off -on DEVICE`,
+"Stop being the hub" on another device's page). Implemented in Go
+(`internal/service/stophub.go`); both kits and the Rust core accept the order; `TestStopHub`
+stops one of two hubs, then the only one.
+
+1. The hub, which must be one, takes the first other hub in the group's order whose offer it
+   keeps, the next hub. Without one it refuses, unless the user agreed that the devices away
+   from home stop syncing until a device is a hub again (`-yes`; the apps ask first); a
+   receiver of the command never refuses for that reason, since its sender asked.
+2. With a next hub, it sends each client connected to it the next hub's offer with that
+   client's own preshared key, `hub`, the next hub's device ID, and `moved`, and waits for
+   the clients through its tunnel to leave, as a hub that moves does ("Moving the hub").
+3. It becomes a client with the offers it keeps, marks itself `retired` in `tunnel.json`,
+   and sends `{"t":"hubs","hubs":{"stopped":true}}` to its connected peers that are
+   computers or may be hubs, and on each later connection to them while it stays retired.
+   A receiver that keeps the sender's offer forgets it by the rules of an offer (only from
+   the root or an admin), and a member that reached the group through it tries the others.
+   Becoming a hub again clears `retired`.
+
+The receiver of the command answers `done` first and then stops, after the result has gone
+back. The sender forgets the stopped hub's offer at once. A phone or a lite member that was
+away and not connected keeps the old hub's offer until a hub passes it a newer one; it tries
+the hubs in order, so the stopped one costs it a try.
 
 ### The hub's key
 
@@ -2960,8 +2990,8 @@ its authority records.
 
 An admin orders one member to do something with a **command**: signed like a record (section
 10) and never stored. `mode` sets the receiver's sync mode (design.md, "Sync modes"); `hub`
-makes the receiver the group's hub, or a hub of the group as well (section 11, "Moving the
-hub", "Several hubs"); `paste` puts a text where
+makes the receiver the group's hub, or a hub of the group as well, or with a stop order makes
+the receiver stop being one (section 11, "Moving the hub", "Several hubs", "Stopping a hub"); `paste` puts a text where
 the receiver's focus is, and `paste-off` turns remote paste off on the receiver (design.md,
 "Remote paste"); `action` runs one of the receiver's quick actions, and `actions-off` turns
 them all off there (design.md, "Quick actions"); `away-off` turns sync away from home off on
@@ -2987,7 +3017,7 @@ signed bodies (Conventions):
 | `kind` | string | in a `paste` command: `text` or `secret` |
 | `text` | string | in a `paste` command: the text, not empty, at most 1 MiB of UTF-8 for `paste` and 4 KiB for `type` |
 | `action` | string | in an `action` command: the action's name, 1 to 32 of `a`-`z`, `0`-`9` and `-`, starting with a letter; in no other command |
-| `hub` | object | in a `hub` command: `forwarder` (`endpoint`, `key`) or absent, `endpoints` (at most 8 with the forwarder's) or absent, at least one of the two, and `clients`, at most 256 of `{device, key, psk}` (base64, 32 bytes each, no device twice) |
+| `hub` | object | in a `hub` command: `forwarder` (`endpoint`, `key`) or absent, `endpoints` (at most 8 with the forwarder's) or absent, at least one of the two, and `clients`, at most 256 of `{device, key, psk}` (base64, 32 bytes each, no device twice); or `{"stop":true}` with none of the others, which makes the receiver stop being a hub |
 | `sealed` | string | in a command of `v` `2` only: the orders, sealed to the receiver (below), base64 |
 
 The exact rule, after the strict form: each field of this table has its JSON type in every

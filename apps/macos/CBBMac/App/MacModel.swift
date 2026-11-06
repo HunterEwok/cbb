@@ -227,9 +227,24 @@ final class MacModel: ObservableObject {
     /// Makes a device a hub of the group for sync away from home, reached
     /// through the project's forwarder: this Mac as cbb global hub does, or
     /// another admin computer, to which cbb sends a signed hub command.
+    /// This Mac turns sync away from home on with it where it is off,
+    /// after the question the app showed, which cbb asks again.
     func makeHub(_ d: Control.Device) async {
-        let args = d.isSelf ? ["global", "hub", "-firewall", "no"] : ["global", "hub", "-on", d.id]
-        await admin(args, done: String(localized: "It is a hub now."))
+        let turnOn = d.isSelf && !awayOn
+        var args = d.isSelf ? ["global", "hub", "-firewall", "no"] : ["global", "hub", "-on", d.id]
+        if turnOn { args.insert("-away-on", at: 2) }
+        await admin(args, answer: turnOn, done: String(localized: "It is a hub now."))
+    }
+    /// Makes a hub stop being one: this Mac, or another device, to which
+    /// cbb sends a signed hub command. Its clients go to the next hub; the
+    /// app warned first when there is none.
+    func stopHub(_ d: Control.Device) async {
+        let args = d.isSelf ? ["global", "hub", "off", "-yes"] : ["global", "hub", "off", "-on", d.id, "-yes"]
+        await admin(args, done: String(localized: "It is no hub any more."))
+    }
+    /// Whether the group has a hub other than d that this Mac knows of.
+    func otherHub(than d: Control.Device) -> Bool {
+        devices.contains { $0.id != d.id && $0.hub }
     }
     /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
     enum HubTunnel: String, CaseIterable, Identifiable {

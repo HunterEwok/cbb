@@ -1071,3 +1071,90 @@ func TestMakeHub(t *testing.T) {
 		}
 	}
 }
+
+// TestStopHub has the pi, the group's root, and the Mac, an admin, both be
+// hubs: the deck, no admin, cannot stop one; the pi makes the Mac stop
+// being a hub, and every device forgets the Mac's offer; the pi, then the
+// only hub, stops only with the user's word, and the deck forgets its offer
+// too.
+func TestStopHub(t *testing.T) {
+	var h hub
+	pi := startService(t, &h, "pi")
+	mac := startService(t, &h, "mac")
+	deck := startService(t, &h, "deck")
+	pairWith(t, pi, mac)
+	pairWith(t, pi, deck)
+	makeAdmin(t, pi, mac)
+	for _, s := range []*testService{pi, deck} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub-off"}, ""); err == nil || !strings.Contains(err.Error(), "no hub") {
+		t.Errorf("a device that is no hub stopped being one: %v", err)
+	}
+	// The Mac turns sync away from home on with its hub, by its user's
+	// word (cbb global hub -away-on), and not without it.
+	hubAt := func(port int) control.Header {
+		return control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}
+	}
+	if _, err := mac.do(t, hubAt(freeUDP(t)), ""); err == nil || !strings.Contains(err.Error(), "-away-on") {
+		t.Errorf("a hub without sync away from home: %v", err)
+	}
+	withAway := hubAt(freeUDP(t))
+	withAway.Consent = true
+	if _, err := mac.do(t, withAway, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pi.do(t, hubAt(freeUDP(t)), ""); err != nil {
+		t.Fatal(err)
+	}
+	piID, macID := pi.status(t).Device, mac.status(t).Device
+	waitUpTo(t, 30*time.Second, "the deck and the pi keep the Mac's offer", func() bool {
+		return tunnelState(t, deck).Hub(macID) != nil && tunnelState(t, pi).Hub(macID) != nil && tunnelState(t, deck).Hub(piID) != nil
+	})
+	if _, err := deck.do(t, control.Header{Op: control.OpAway, Name: "hub-off", Device: "mac"}, ""); err == nil {
+		t.Error("a device that is no admin stopped a hub")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub-off", Device: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "no hub") {
+		t.Errorf("stopped a device that is no hub: %v", err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub-off", Device: "mac"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 30*time.Second, "the Mac is no hub", func() bool {
+		a := mac.status(t).Away
+		return a != nil && !a.Hub && tunnelState(t, mac).Retired
+	})
+	// Until it stopped, the Mac may share its offer again, so the others
+	// forget it for good once it says it stopped.
+	waitUpTo(t, 30*time.Second, "the pi and the deck forget the Mac's offer", func() bool {
+		return tunnelState(t, pi).Hub(macID) == nil && tunnelState(t, deck).Hub(macID) == nil
+	})
+	for _, d := range deck.devices(t) {
+		if want := d.Name == "pi"; d.Hub != want {
+			t.Errorf("on the deck, %s: hub %v", d.Name, d.Hub)
+		}
+	}
+
+	// The pi is the only hub now.
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub-off"}, ""); err == nil || !strings.Contains(err.Error(), "no other hub") {
+		t.Errorf("the only hub stopped without the user's word: %v", err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub-off", Force: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if a := pi.status(t).Away; a == nil || a.Hub {
+		t.Errorf("the pi: %+v", a)
+	}
+	waitUpTo(t, 30*time.Second, "the deck forgets the pi's offer", func() bool {
+		return tunnelState(t, deck).Hub(piID) == nil
+	})
+	// It is a hub again at its user's word.
+	if _, err := pi.do(t, hubAt(freeUDP(t)), ""); err != nil {
+		t.Fatal(err)
+	}
+	if st := tunnelState(t, pi); !st.IsHub || st.Retired {
+		t.Errorf("the pi as a hub again: hub %v, retired %v", st.IsHub, st.Retired)
+	}
+}
