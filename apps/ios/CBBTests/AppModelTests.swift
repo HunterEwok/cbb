@@ -111,7 +111,7 @@ final class AppModelTests: XCTestCase {
         }
         var computers: [AppModel.Computer] = []
         var admitted: [JoinCode] = []
-        func admit(_ code: JoinCode) async throws {
+        func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws {
             admitted.append(code)
             hasGroup = true
             computers = [.init(id: "a", name: "pi", online: true)]

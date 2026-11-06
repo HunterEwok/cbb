@@ -1383,6 +1383,11 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPhone and Android apps no longer give up on a device that does not take the connection
+  yet, as the ZX Next does for a moment after it shows its QR code: they dial it again every
+  two seconds for twenty, saying "The device is not ready yet. Trying again…", without a
+  second Face ID or fingerprint, instead of showing an error that only leaving the scanner
+  cleared.
 - Away from home, the phone apps showed the devices behind the hub as offline, although
   pastes and other commands reached them through it. A computer now tells the phones
   connected to it which members it reaches (`reach`, docs/protocol.md section 4), and the

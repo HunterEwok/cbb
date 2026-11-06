@@ -56,7 +56,9 @@ struct AddDeviceView: View {
                         .buttonStyle(GlassButtonStyle())
                         .disabled(model.busy)
                 }
-                if model.busy {
+                if model.busy && model.notAnswering {
+                    ProgressView { Text("The device is not ready yet. Trying again…") }
+                } else if model.busy {
                     ProgressView { Text("Connecting to the device…") }
                 } else if let message = model.message {
                     Text(message).foregroundStyle(palette.danger)

@@ -83,8 +83,9 @@ protocol GroupController: AnyObject {
     func runAction(_ id: String, name: String) async throws
     /// Turns every quick action off on a device; only an admin phone does.
     func actionsOff(_ id: String) async throws
-    /// Admits the device whose QR code the user scanned.
-    func admit(_ code: JoinCode) async throws
+    /// Admits the device whose QR code the user scanned; retrying is told
+    /// each time the device did not answer yet and is dialed again.
+    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws
     /// Joins another phone's group: listens, hands show the QR code for the
     /// other phone to scan, and returns once this phone is in the group.
     func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
@@ -257,6 +258,8 @@ final class AppModel: ObservableObject {
     /// One line about the last action, in plain words.
     @Published var message: String?
     @Published private(set) var busy = false
+    /// While a device being added has not answered yet and is dialed again.
+    @Published private(set) var notAnswering = false
     /// The QR code this phone shows while it waits to join a group.
     @Published private(set) var joinCode: JoinCode?
     @Published private(set) var isAdmin = true
@@ -419,10 +422,14 @@ final class AppModel: ObservableObject {
             return false
         }
         busy = true
-        defer { busy = false }
+        notAnswering = false
+        defer {
+            busy = false
+            notAnswering = false
+        }
         Island.show(.adding, String(localized: "Adding a device…", bundle: .app))
         do {
-            try await group.admit(jc)
+            try await group.admit(jc) { [weak self] in self?.notAnswering = true }
             computers = group.computers
             devices = group.devices
             phase = .home
@@ -1377,7 +1384,7 @@ final class PendingGroup: GroupController {
     func prepare() throws {}
     func remove(_ id: String) async throws {}
     func makeAdmin(_ id: String) async throws {}
-    func admit(_ code: JoinCode) async throws { throw Failure.notReady }
+    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws { throw Failure.notReady }
     func join(show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
     func sync() async throws -> AppModel.SyncResult { throw Failure.noComputers }
     func refresh() async {}
