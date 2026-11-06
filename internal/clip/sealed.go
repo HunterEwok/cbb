@@ -360,11 +360,7 @@ func DecodeContent(b []byte) (Content, error) {
 	}
 	switch {
 	case c.Kind == Media:
-		if canon, err := strict.Canonicalize(manifest); err != nil || !bytes.Equal(canon, manifest) {
-			return Content{}, errors.New("clip: the copy's manifest is not in the strict form")
-		}
-		c.Media = new(Manifest)
-		if err := json.Unmarshal(manifest, c.Media); err != nil {
+		if c.Media, err = ParseManifest(manifest); err != nil {
 			return Content{}, fmt.Errorf("clip: the copy's manifest: %w", err)
 		}
 	case n != 0:

@@ -40,7 +40,7 @@ pub fn release(data: &[u8]) {
 /// A member protocol frame's payload, a manifest, a sealed copy and the
 /// content inside one: a content it takes encodes to the same bytes.
 pub fn wire(data: &[u8]) {
-    let _ = serde_json::from_slice::<crate::media::Manifest>(data).map(|m| m.validate());
+    let _ = crate::media::Manifest::parse(data);
     let _ = crate::wire::decode(data);
     let _ = serde_json::from_slice::<crate::copy::Sealed>(data).map(|s| s.validate());
     if let Ok(c) = crate::copy::Content::decode(data) {

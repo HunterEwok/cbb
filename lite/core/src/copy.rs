@@ -307,10 +307,6 @@ impl Content {
         let n = len(&mut at)?;
         let manifest = take(&mut at, n)?;
         let media = if kind == Kind::Media {
-            crate::strict::integers_only(manifest)?;
-            if crate::strict::canonicalize(manifest).ok().as_deref() != Some(manifest) {
-                return Err(Error::msg("the copy's manifest is not in the strict form"));
-            }
             Some(Manifest::parse(manifest)?)
         } else if n != 0 {
             return Err(Error::msg("a copy that is not media has a manifest"));

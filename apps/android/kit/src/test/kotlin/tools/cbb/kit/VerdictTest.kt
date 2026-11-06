@@ -58,7 +58,7 @@ class VerdictTest {
                     "admins" to hashes(b.admins), "members" to hashes(b.members),
                 )
             }
-            "manifest" -> if (runCatching { Wire.parse(body)?.let { Media.Manifest.fromJson(it) }?.isValid == true }.getOrDefault(false)) "taken" else "refused"
+            "manifest" -> if (Media.Manifest.parse(body) != null) "taken" else "refused"
             "keys", "release", "channel", "attest-status" -> refused {
                 if (body.size > Releases.MAX_BODY) throw Releases.Refused("too large")
                 when (kind) {
