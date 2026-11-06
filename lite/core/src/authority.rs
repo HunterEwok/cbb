@@ -91,7 +91,7 @@ pub const STOP_SECRETS: &str = "secrets";
 pub const STOP_FULL: &str = "full";
 
 const ROLES: [&str; 4] = ["full", "phone", "lite", "watch"];
-const OSES: [&str; 8] = ["linux", "windows", "macos", "ios", "android", "watchos", "wearos", "none"];
+const OSES: [&str; 10] = ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "watchos", "wearos", "none"];
 
 /// A key hash (SHA-256 of a SubjectPublicKeyInfo) or a record ID (SHA-256
 /// of a body). In JSON it is standard base64, and hashes sort by that

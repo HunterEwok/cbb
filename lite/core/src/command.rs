@@ -418,7 +418,7 @@ const COMMAND_FIELDS: &[&str] = &["v", "type", "group", "by", "to", "id", "time_
 
 /// Whether `os` names an operating system that device records know.
 pub fn valid_os(os: &str) -> bool {
-    matches!(os, "linux" | "windows" | "macos" | "ios" | "android" | "watchos" | "wearos" | "none")
+    matches!(os, "linux" | "windows" | "macos" | "ios" | "android" | "aurora" | "sailfish" | "watchos" | "wearos" | "none")
 }
 
 /// Where a device of role keeps its keys, as its record's store says, as

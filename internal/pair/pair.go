@@ -238,7 +238,7 @@ const RoleLite = "lite"
 // Phone reports whether the joiner is a phone with the app, which joins a
 // computer's group only through its root (docs/protocol.md, section 6, "A
 // phone joins a computer's group").
-func (i Info) Phone() bool { return i.Role == "" && (i.OS == group.OSiOS || i.OS == group.OSAndroid) }
+func (i Info) Phone() bool { return i.Role == "" && group.PhoneOS(i.OS) }
 
 // parseAdminKey reads a phone's admin key, a P-256 SubjectPublicKeyInfo.
 func parseAdminKey(spki []byte) (*ecdsa.PublicKey, error) {
