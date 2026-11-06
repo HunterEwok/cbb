@@ -38,3 +38,34 @@ func TestCheckAndroidVersion(t *testing.T) {
 		t.Errorf("without the file: %q", got)
 	}
 }
+
+func TestCheckSpecVersions(t *testing.T) {
+	const changelog = "# Changelog\n\n## [Unreleased]\n\n## [0.12.3] - 2026-12-01\n"
+	const spec = "apps/silica/packaging/aurora5/tools.cbb.CBB.spec"
+	tests := []struct {
+		name string
+		spec string
+		want string
+	}{
+		{name: "the last release", spec: "Name: x\nVersion:    0.12.3\nRelease: 1\n"},
+		{name: "the next release", spec: "Version: 0.13.0\n", want: `Version is "0.13.0", the last release in CHANGELOG.md is 0.12.3`},
+		{name: "no version", spec: "Name: x\n", want: "no Version line"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := checkSpecVersions(map[string][]byte{spec: []byte(tt.spec), "CHANGELOG.md": []byte(changelog)})
+			if tt.want == "" {
+				if got != nil {
+					t.Fatalf("got %q", got)
+				}
+				return
+			}
+			if len(got) != 1 || !strings.Contains(got[0], tt.want) {
+				t.Fatalf("got %q, want one problem containing %q", got, tt.want)
+			}
+		})
+	}
+	if got := checkSpecVersions(map[string][]byte{"CHANGELOG.md": []byte(changelog)}); got != nil {
+		t.Errorf("without a spec: %q", got)
+	}
+}

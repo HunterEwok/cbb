@@ -2,7 +2,7 @@
 # Copyright (C) 2026 HunterEwok
 Name:       tools.cbb.CBB
 Summary:    One clipboard for your phones and computers
-Version:    0.6.0
+Version:    0.5.0
 Release:    1
 License:    AGPL-3.0-only
 URL:        https://cbb.tools

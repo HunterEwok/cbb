@@ -5,7 +5,9 @@ package main
 
 import (
 	"fmt"
+	"path"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -16,6 +18,49 @@ const androidVersion = "apps/android/version.properties"
 
 // released matches a release's heading in CHANGELOG.md.
 var released = regexp.MustCompile(`(?m)^## \[(\d+)\.(\d+)\.(\d+)\] - `)
+
+// lastRelease returns the last release in CHANGELOG.md, as X.Y.Z, or "".
+func lastRelease(changelog []byte) string {
+	m := released.FindSubmatch(changelog)
+	if m == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s.%s.%s", m[1], m[2], m[3])
+}
+
+// specVersion matches an RPM spec's Version line.
+var specVersion = regexp.MustCompile(`(?m)^Version:\s*(\S+)\s*$`)
+
+// checkSpecVersions checks that the Aurora and Sailfish app's RPM specs
+// (apps/silica/packaging/TARGET/*.spec) carry the last release in
+// CHANGELOG.md, like the Android apps' version: the release pull request
+// moves them on, and every build before it is the last release.
+func checkSpecVersions(files map[string][]byte) []string {
+	var specs []string
+	for name := range files {
+		if ok, _ := path.Match("apps/silica/packaging/*/*.spec", name); ok {
+			specs = append(specs, name)
+		}
+	}
+	if len(specs) == 0 {
+		return nil
+	}
+	sort.Strings(specs)
+	want := lastRelease(files["CHANGELOG.md"])
+	if want == "" {
+		return []string{"CHANGELOG.md: no released version for the RPM specs to follow"}
+	}
+	var problems []string
+	for _, name := range specs {
+		m := specVersion.FindSubmatch(files[name])
+		if m == nil {
+			problems = append(problems, name+": no Version line")
+		} else if string(m[1]) != want {
+			problems = append(problems, fmt.Sprintf("%s: Version is %q, the last release in CHANGELOG.md is %s", name, m[1], want))
+		}
+	}
+	return problems
+}
 
 // checkAndroidVersion checks that the Android apps' version is the last
 // release in CHANGELOG.md and that its versionCode is X*10000 + Y*100 + Z,
