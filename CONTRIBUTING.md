@@ -193,6 +193,22 @@ lite/ffi/bind.sh ios OUT                              # macOS with Xcode
 lite/ffi/bind.sh host OUT                             # the static library, for swift test
 ```
 
+The app for Aurora OS and Sailfish OS (`apps/silica`, Qt 5.6 with Silica QML around the same
+core; docs/roadmap.md, item 60): one code in `src/` and `qml/`, and what differs by system in
+`src/platform/` (where the key is kept, the application shell) and `packaging/<target>` (the
+`.spec` and `.desktop`), chosen by qmake's `CBB_TARGET`. Only `aurora5` builds so far. The
+RPM is built in Aurora's Platform SDK 5.1.5, which `psdk.sh` sets up (as root, about 10 GB);
+CI's `Aurora app` jobs build both architectures unsigned (`ci.sh`), and the workflow
+`aurora` signs them with the developer certificate after the maintainer approves
+([docs/maintaining.md](docs/maintaining.md#signing-for-aurora-os)).
+
+```sh
+sudo apps/silica/psdk.sh /srv/psdk setup armv7hl   # the SDK, its tooling and a target
+apps/silica/build.sh prepare   # the core for armv7hl and aarch64, the icons (rustup, ImageMagick)
+sudo cp -a apps/silica /srv/psdk/root/home/builder/ && sudo chroot /srv/psdk/root chown -R builder /home/builder/silica
+sudo apps/silica/psdk.sh /srv/psdk run '~/silica/build.sh rpm AuroraOS-5.1.5.105-base-armv7hl.default'
+```
+
 The differential run of all four implementations (Go, Rust, JDK 17 and Docker for the Swift
 container; [docs/differential.md](docs/differential.md)):
 

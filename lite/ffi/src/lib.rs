@@ -86,6 +86,124 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(answer, len)) });
 }
 
+#[cfg(feature = "join")]
+pub mod join;
+
+/// Hands an answer to C: its bytes, which the caller gives back with
+/// `cbb_free`, their length written to `answer_len` when not null.
+#[cfg(feature = "join")]
+fn to_c(answer: Vec<u8>, answer_len: *mut usize) -> *mut u8 {
+    if answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    let answer = answer.into_boxed_slice();
+    // SAFETY: the caller gives a writable size_t at answer_len, not null.
+    unsafe { answer_len.write(answer.len()) };
+    Box::into_raw(answer).cast::<u8>()
+}
+
+/// A joiner that listens with the app's key (src/join.rs): `request` is
+/// its JSON, `sign` the key's callback with `ctx`, which must stay valid
+/// until `cbb_join_free`. Writes the answer to `answer` and `answer_len`
+/// and returns the joiner, or null when the answer is an error.
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes, `answer` and `answer_len`
+/// to writable pointers, for the time of the call.
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_join_new(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer: *mut *mut u8,
+    answer_len: *mut usize,
+) -> *mut join::Join {
+    if request.is_null() || answer.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    let (j, ans) = join::Join::new(req, sign, ctx as usize);
+    // SAFETY: the caller gives a writable pointer at answer.
+    unsafe { answer.write(to_c(ans, answer_len)) };
+    j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
+}
+
+/// Starts an attempt for a connection the app accepted.
+///
+/// # Safety
+///
+/// `j` must be a joiner of `cbb_join_new`, not freed, used by one thread
+/// at a time; `answer_len` writable.
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_join_accept(j: *mut join::Join, answer_len: *mut usize) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(j) = (unsafe { j.as_mut() }) else { return core::ptr::null_mut() };
+    to_c(j.accept(), answer_len)
+}
+
+/// Passes the `len` bytes at `data` that arrived on the attempt's
+/// connection; `now_ms` is the wall clock in Unix milliseconds, or 0 for
+/// the system's.
+///
+/// # Safety
+///
+/// As `cbb_join_accept`, and `data` must point to `len` readable bytes (or
+/// be null with `len` 0).
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_join_feed(
+    j: *mut join::Join,
+    data: *const u8,
+    len: usize,
+    now_ms: i64,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(j) = (unsafe { j.as_mut() }) else { return core::ptr::null_mut() };
+    if data.is_null() && len != 0 {
+        return core::ptr::null_mut();
+    }
+    let input: &[u8] = if len == 0 {
+        &[]
+    } else {
+        // SAFETY: the caller gives len readable bytes at data.
+        unsafe { core::slice::from_raw_parts(data, len) }
+    };
+    to_c(j.feed(input, now_ms), answer_len)
+}
+
+/// Ends a joined attempt: `saved` nonzero when the app stored the result.
+///
+/// # Safety
+///
+/// As `cbb_join_accept`.
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_join_finish(j: *mut join::Join, saved: i32, answer_len: *mut usize) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(j) = (unsafe { j.as_mut() }) else { return core::ptr::null_mut() };
+    to_c(j.finish(saved != 0), answer_len)
+}
+
+/// Frees a joiner; null does nothing.
+///
+/// # Safety
+///
+/// `j` must be null or a joiner of `cbb_join_new`, not freed before.
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_join_free(j: *mut join::Join) {
+    if !j.is_null() {
+        // SAFETY: j is a box cbb_join_new let go of.
+        drop(unsafe { Box::from_raw(j) });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

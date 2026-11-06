@@ -405,6 +405,8 @@ func TestRecordRoles(t *testing.T) {
 		{RolePhone, OSiOS},
 		{RoleLite, OSNone},
 		{RolePhone, OSAndroid},
+		{RolePhone, OSAurora},
+		{RolePhone, OSSailfish},
 	} {
 		key := KeyHash{byte(i + 1)}
 		dev := NewDeviceID()

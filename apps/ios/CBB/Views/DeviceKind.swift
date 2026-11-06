@@ -52,7 +52,7 @@ extension AppModel.Computer {
         case ("lite", _): .board
         case ("watch", _): .watch
         case (_, "macos"): .laptop
-        case (_, "ios"), (_, "android"): .phone
+        case (_, "ios"), (_, "android"), (_, "aurora"), (_, "sailfish"): .phone
         default: .desktop
         }
     }
@@ -66,6 +66,8 @@ extension AppModel.Computer {
         case "macos": "macOS"
         case "ios": "iOS"
         case "android": "Android"
+        case "aurora": "Aurora OS"
+        case "sailfish": "Sailfish OS"
         case "watchos": "watchOS"
         case "wearos": "Wear OS"
         default: nil

@@ -369,3 +369,34 @@ impl Signer for EcdsaSigningKey {
         SCHEME
     }
 }
+
+/// A device key the core does not hold (crate::identity::ExternalKey), for
+/// the TLS signature of a joiner whose key is in a phone's hardware.
+#[derive(Clone)]
+pub(super) struct ExternalSigningKey(pub(super) Arc<dyn crate::identity::ExternalKey>);
+
+impl core::fmt::Debug for ExternalSigningKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("ExternalSigningKey")
+    }
+}
+
+impl SigningKey for ExternalSigningKey {
+    fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
+        offered.contains(&SCHEME).then(|| Box::new(self.clone()) as Box<dyn Signer>)
+    }
+
+    fn algorithm(&self) -> SignatureAlgorithm {
+        SignatureAlgorithm::ECDSA
+    }
+}
+
+impl Signer for ExternalSigningKey {
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
+        crate::identity::sign_external(&*self.0, message).map_err(|e| Error::General(alloc::format!("{e}")))
+    }
+
+    fn scheme(&self) -> SignatureScheme {
+        SCHEME
+    }
+}
