@@ -494,7 +494,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       requires: an app it publishes must not download or install code outside F-Droid.
 - **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS: two packages from one
     code, one for Aurora 4 and one for Aurora 5 (5.1 and 5.2), since the two have different
-    SDKs, sandbox permissions and installers; the app reads `VERSION_ID` in
+    SDKs, sandbox permissions and installers. The Aurora 5 package is built with the SDK of
+    the oldest 5.x it supports, 5.1.5 (each release has its own SDK on OMP's site), for both
+    armv7hl (phones with a 64-bit kernel and a 32-bit system, such as the F+ R570E) and
+    aarch64, and tested on a 5.1.5 phone first; the app reads `VERSION_ID` in
     `/etc/os-release` for what differs within a major version. Its key fits
     [Key levels](#key-levels) as the other phones' do:
     - Level 2, "hardware", the default: the app checks that its member key is in OP-TEE,
