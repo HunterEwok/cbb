@@ -213,7 +213,7 @@ func TestMediaValidation(t *testing.T) {
 
 // TestStrictManifests checks the manifests of testdata/interop/strict.json,
 // which every member reads alike: a folder has no hash, not even an empty
-// one.
+// or a null one.
 func TestStrictManifests(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "strict.json"))
 	if err != nil {
@@ -230,11 +230,7 @@ func TestStrictManifests(t *testing.T) {
 		t.Fatalf("no manifests: %v", err)
 	}
 	for _, c := range v.Manifests {
-		var m Manifest
-		err := json.Unmarshal(c.Body, &m)
-		if err == nil {
-			err = m.Validate()
-		}
+		_, err := ParseManifest(c.Body)
 		if (err == nil) != c.Valid {
 			t.Errorf("manifest %q: valid %v, got %v", c.Name, c.Valid, err)
 		}
@@ -273,11 +269,7 @@ func TestStrictGeneratedManifests(t *testing.T) {
 		t.Fatal("no manifests")
 	}
 	for _, c := range v.Manifests {
-		var m Manifest
-		err := json.Unmarshal(c.Body, &m)
-		if err == nil {
-			err = m.Validate()
-		}
+		_, err := ParseManifest(c.Body)
 		if (err == nil) != c.Valid {
 			t.Errorf("manifest %q (%s): valid %v, got %v", c.Name, c.Rule, c.Valid, err)
 		}

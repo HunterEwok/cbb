@@ -73,9 +73,7 @@ final class StrictTests: XCTestCase {
 
     func testManifests() throws {
         for c in try vectors().manifests {
-            // The frames' decoder, Member.decode, runs the same scan first.
-            let m = Strict.integersOnly(c.body) ? try? JSONDecoder().decode(Media.Manifest.self, from: c.body) : nil
-            XCTAssertEqual(m?.isValid ?? false, c.valid, "manifest \(c.name)")
+            XCTAssertEqual(Media.Manifest.parse(c.body) != nil, c.valid, "manifest \(c.name)")
         }
     }
 
@@ -111,9 +109,7 @@ final class StrictTests: XCTestCase {
             // Record bodies are the core's to check.
             ("records", v.records, { (b: Data) in self.takes(b) }),
             ("commands", v.commands, { (b: Data) in (try? Commands.parse(b)) != nil }),
-            ("manifests", v.manifests, { (b: Data) in
-                (Strict.integersOnly(b) ? try? JSONDecoder().decode(Media.Manifest.self, from: b) : nil)?.isValid ?? false
-            }),
+            ("manifests", v.manifests, { (b: Data) in Media.Manifest.parse(b) != nil }),
         ]
         for (kind, cases, take) in kinds {
             XCTAssertFalse(cases.isEmpty, "no \(kind)")

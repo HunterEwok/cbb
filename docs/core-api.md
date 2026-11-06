@@ -189,10 +189,10 @@ allows. It checks the body alone; the signature, the signer and the time are the
 `group_command`'s for a command. Go calls it in a build that links the core, as the release
 builds do, and decodes the fields from the bytes it checked; a build without the core reads the
 bodies with Go's own code, which the strict vectors keep the same. The phone kits call it for
-each command, credential and release file they take. A manifest comes inside a frame, not as
-bytes of its own, and the fields Go and the kits decode from the frame cannot show everything
-the frame held (an empty field and a missing one look alike), so they still check manifests with
-their own code, which the strict vectors keep the same as the core's.
+each command, credential and release file they take. A manifest comes inside a copy's sealed
+Content, in the canonical form, and `open_copy` reads it there for the phones; Go reads it with
+`clip.ParseManifest`, which asks `parse_body` first in a build that links the core, and the kits'
+`Media.Manifest.parse` asks it for a manifest given as bytes.
 
 `seal_command` seals a command's orders to its receiver (protocol.md, section 15, "Sealed
 commands"): it checks the command in the open as `parse_body` does, moves `mode`, `hub`,

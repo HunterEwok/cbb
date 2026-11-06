@@ -71,8 +71,9 @@ kits), so a reader that fails in another way also shows as a difference.
   ABI, with `ok` or a listed error code, and that a request answered twice gets the same
   answer.
 
-Manifests are compared but do not fail the run until they get the strict form
-([roadmap](roadmap.md), item 42): `compare -report-only manifest` prints their differences.
+Manifests are read by the rules of signed bodies in their canonical form ([roadmap](roadmap.md),
+item 42), so they fail the run as the other kinds do; `compare -report-only KIND` still prints
+the differences of a kind without failing on them, for a kind added before its form is settled.
 
 A failed run uploads the cases it found (`failures.jsonl`, or the fuzzer's input).
 

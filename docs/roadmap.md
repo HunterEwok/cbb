@@ -136,7 +136,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **35.** The review of all the documentation against the code for 0.6: in progress.
 - **42.** **A simpler protocol for the group's authority**, so that fewer of its rules can be
     read two ways ([protocol.md](protocol.md), section 10; [records-v2.md](records-v2.md)).
-    Done in 0.6, without a migration from `v:1` (groups made before are set up again):
+    Done in 0.6, so that 0.7 does not change the core, without a migration from `v:1` (groups
+    made before are set up again):
     1. records `v:2`: the signer inside the body, powers written down, each signer's records
        numbered, two records with one number shown as two histories, and signed bodies in one
        canonical form that refuses unknown fields;
@@ -149,20 +150,15 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     5. features instead of versions in the hello;
     6. one form for each thing: one framing, one fingerprint, one encoding of bytes;
     7. a fork of roots, two admins acting against each other or two claims stop the group,
-       shown as a conflict in `status` and in every app, until the root decides.
+       shown as a conflict in `status` and in every app, until the root decides;
+    9. manifests in the strict form: the manifest of a media event (protocol.md section 4) is
+       read by the rules of signed bodies in their canonical form (exact names, each once, none
+       its table does not name, no null, valid UTF-8, integers of int64), in Go, the core and
+       both kits alike, and the differential run ([differential.md](differential.md)) fails on
+       a manifest they read differently.
 
-    Being built for 0.6, before the security audit's pass 6, so that 0.7 does not change the
-    core:
-    9. **Manifests in the strict form**: the manifest of a media event (protocol.md section
-       4) read by the rules of signed bodies (exact names, each once, valid UTF-8, integers
-       of int64), with `null` only where its table allows it. Until then the four
-       implementations' JSON readers decide names in another case, members written twice and
-       invalid UTF-8 each in their own way, and the differential run
-       ([differential.md](differential.md)) prints the manifests they read differently
-       without failing on them.
-
-    Later, point 8: the hubs' order from a table the root signs (D-65) instead of one derived from
-    the roles.
+    Later, point 8: the hubs' order from a table the root signs (D-65) instead of one derived
+    from the roles.
 
 ### Next
 

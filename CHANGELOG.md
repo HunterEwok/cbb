@@ -1082,6 +1082,13 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- A copy's manifest of images or files is read by the rules of signed bodies in their canonical
+  form everywhere: no member its table does not name, no null (a folder's `size` and `sha256`
+  are absent), names in their exact case and each once. Go reads it with
+  `clip.ParseManifest`, which asks the Rust core first in the release builds, the core reads it
+  for the lite member and the phones, and the differential run now fails on a manifest the
+  four implementations read differently instead of only printing it (docs/protocol.md,
+  section 4, "Media"; roadmap item 42).
 - The README and the guides say exactly who can read the copies: the devices of the group
   that read copies, each copy sealed to them end to end (see Added), and what the devices that
   pass a copy on still see; the README has a trust model ("Who can read what"), the

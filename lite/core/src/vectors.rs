@@ -717,9 +717,7 @@ fn strict() {
         assert_eq!(got.is_ok(), valid, "command {name:?}: {:?}", got.err());
     }
     for (name, body, valid) in cases("manifests") {
-        let got = serde_json::from_slice::<crate::media::Manifest>(&body)
-            .map_err(|e| e.to_string())
-            .and_then(|m| m.validate().map_err(|e| e.to_string()));
+        let got = crate::media::Manifest::parse(&body);
         assert_eq!(got.is_ok(), valid, "manifest {name:?}: {:?}", got.err());
     }
 }
@@ -782,9 +780,7 @@ fn strict_wrong(v: &Value) -> Vec<String> {
             let got = match kind {
                 "records" => crate::authority::Body::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
                 "commands" => crate::command::Command::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
-                _ => serde_json::from_slice::<crate::media::Manifest>(&body)
-                    .map_err(|e| e.to_string())
-                    .and_then(|m| m.validate().map_err(|e| e.to_string())),
+                _ => crate::media::Manifest::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
             };
             // The mutants' records are of version 1, whose verdicts were
             // those of its tables: every member refuses them now.

@@ -114,7 +114,7 @@ fn verdict(c: &Value) -> String {
             ]),
         },
         "manifest" => {
-            let ok = serde_json::from_slice::<crate::media::Manifest>(&body).is_ok_and(|m| m.validate().is_ok());
+            let ok = crate::media::Manifest::parse(&body).is_ok();
             if ok { "taken" } else { "refused" }.into()
         }
         "keys" | "release" | "channel" => {
