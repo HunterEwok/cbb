@@ -40,15 +40,16 @@ func TestMute(t *testing.T) {
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "noise"); err == nil || !strings.Contains(err.Error(), "muted") {
 		t.Fatalf("a muted device sent a copy: %v", err)
 	}
-	// Its hello says so once it connected again.
-	waitFor(t, "alpha lists beta as muted", func() bool {
-		for _, d := range a.devices(t) {
+	// Its hello says so once it connected again, to both others.
+	betaMuted := func(s *testService, muted bool) bool {
+		for _, d := range s.devices(t) {
 			if d.Name == "beta" {
-				return d.Muted && d.MutedUntilMS > time.Now().UnixMilli()
+				return d.Muted == muted && (!muted || d.MutedUntilMS > time.Now().UnixMilli())
 			}
 		}
 		return false
-	})
+	}
+	waitFor(t, "alpha and gamma list beta as muted", func() bool { return betaMuted(a, true) && betaMuted(c, true) })
 	// Copies from the others still reach beta.
 	waitFor(t, "connected again", func() bool { return len(b.status(t).Peers) == 2 && len(a.status(t).Peers) == 2 })
 	if _, err := a.do(t, control.Header{Op: control.OpCopy}, "from alpha"); err != nil {
@@ -72,7 +73,9 @@ func TestMute(t *testing.T) {
 	if b.status(t).Muted {
 		t.Fatal("beta is still muted after the admin's unmute")
 	}
-	waitFor(t, "beta connected again", func() bool { return len(b.status(t).Peers) == 2 })
+	// beta connects again after the unmute, so that its hello shows it.
+	waitFor(t, "alpha and gamma list beta as unmuted", func() bool { return betaMuted(a, false) && betaMuted(c, false) })
+	waitFor(t, "beta connected again", func() bool { return len(b.status(t).Peers) == 2 && len(c.status(t).Peers) == 2 })
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "from beta"); err != nil {
 		t.Fatal(err)
 	}
