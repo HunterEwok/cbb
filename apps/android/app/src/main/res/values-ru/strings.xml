@@ -37,6 +37,7 @@
     <string name="nothing_new">Нечего отправить или получить.</string>
     <string name="no_computers">Компьютеры не подключены.</string>
     <string name="online">в сети</string>
+    <string name="online_through_hub">в сети через хаб</string>
     <string name="offline">не в сети</string>
     <string name="this_phone">Этот телефон</string>
     <string name="this_phone_admin">Этот телефон · админ</string>

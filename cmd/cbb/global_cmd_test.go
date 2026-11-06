@@ -164,6 +164,11 @@ func TestGlobalCommand(t *testing.T) {
 			check: sent(control.OpAway, func(m *control.Message) bool { return m.Relay == "198.51.100.9:8765" && m.RelayKey == "K" && m.Consent })},
 		{name: "relay without a key", args: []string{"global", "relay", "198.51.100.9:8765"}, code: 2},
 		{name: "the project's relay takes no key", args: []string{"global", "relay", "default", "-key", "K"}, code: 2, stderr: "takes no -key"},
+		{name: "the project's relay", args: []string{"global", "relay", "default", "-yes"},
+			check: sent(control.OpAway, func(m *control.Message) bool {
+				return m.Relay == "198.51.100.20:8765" && m.RelayKey == "default" && m.Consent
+			})},
+		{name: "default is no key of another relay", args: []string{"global", "relay", "198.51.100.9:8765", "-key", "default"}, code: 2, stderr: "goes with the project's relay"},
 		{name: "allow without a limit", args: []string{"global", "allow"}, answer: inGroup(nil), check: sent(control.OpStatus, nil), stdout: "has no limit outside the program"},
 		{name: "allow with an argument", args: []string{"global", "allow", "x"}, code: 2},
 		{name: "on with an argument", args: []string{"global", "on", "x"}, code: 2},

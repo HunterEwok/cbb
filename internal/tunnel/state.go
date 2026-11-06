@@ -152,10 +152,14 @@ type ForwarderLink struct {
 }
 
 // RelayLink is a device's blind relay: its address, for UDP and TCP, and
-// the pin of its key.
+// the pin of its key. Project marks the project's relay, whose keys and
+// address the device takes from the newest signed lists at each start
+// (docs/protocol.md, section 16), Pin and Endpoint being those it was set
+// with and the last it reached.
 type RelayLink struct {
 	Endpoint netip.AddrPort
 	Pin      string
+	Project  bool
 }
 
 // HubEndpoints returns the addresses the hub gives its clients: its own,
@@ -348,7 +352,7 @@ func LoadState(dir string) (*State, error) {
 		s.Forwarder = &ForwarderLink{Endpoint: f.Forwarder.Endpoint, Pin: f.Forwarder.Pin, VLESSID: f.Forwarder.VLESSID, VLESS: f.Forwarder.VLESS, Project: f.Forwarder.Project}
 	}
 	if f.Relay != nil {
-		s.Relay = &RelayLink{Endpoint: f.Relay.Endpoint, Pin: f.Relay.Pin}
+		s.Relay = &RelayLink{Endpoint: f.Relay.Endpoint, Pin: f.Relay.Pin, Project: f.Relay.Project}
 	}
 	if err := s.check(); err != nil {
 		return nil, fmt.Errorf("%s: %w", StateFile, err)
@@ -409,7 +413,7 @@ func (s *State) Save(dir string) error {
 		f.Forwarder = &forwarderFile{Endpoint: fw.Endpoint, Pin: fw.Pin, VLESSID: fw.VLESSID, VLESS: fw.VLESS, Project: fw.Project}
 	}
 	if r := s.Relay; r != nil {
-		f.Relay = &forwarderFile{Endpoint: r.Endpoint, Pin: r.Pin}
+		f.Relay = &forwarderFile{Endpoint: r.Endpoint, Pin: r.Pin, Project: r.Project}
 	}
 	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {

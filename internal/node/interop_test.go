@@ -126,6 +126,8 @@ func TestMemberInteropVectors(t *testing.T) {
 		event(files),
 		event(image),
 		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500, Current: &image}, OS: group.OSLinux, Features: []string{FeatureMedia}}),
+		// The members a computer reaches (frame 19).
+		msg(t, &message{Type: typeReach, Reach: []group.DeviceID{vecDevice, "fedcba9876543210fedcba9876543210"}}),
 	}}
 
 	for _, s := range []string{"1761024000000.3", "1.0", "0.0", "253402300799999.4294967295", "253402300800000.0",

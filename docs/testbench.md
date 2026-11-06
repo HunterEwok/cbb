@@ -282,7 +282,9 @@ Linux the bench user needs `sudo` without a password, and on the Mac a sudoers r
 skipped, with the reason, instead of failing the run. The install and uninstall cases need
 `sudo` without a password for the installers too, set up by a sudoers file in step 3; on the
 Mac the file also allows `launchctl kill KILL` of the daemon, for F1. The emulator over
-`adb` on the Mac.
+`adb` on the Mac. An install of the lite member in no group starts pairing at the end and
+waits up to 5 minutes for a phone when its output is a terminal, as with `ssh -t`: a script
+that installs it passes `--no-pair` (or `CBB_PAIR=no`), and the bench's own installs do.
 
 **The controller** is the machine that runs the harness. It has to be on the LAN and always
 on: `controller`. It is never a device under test, so reboots and failures of

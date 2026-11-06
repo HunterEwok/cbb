@@ -15,6 +15,12 @@ All notable changes to cbb are documented in this file. The format follows
   a computer without root, one that is no admin), the line dimmed with the reason.
   `cbb global hub off [-on DEVICE] [-yes]` stops a hub: its clients go to the next hub, and
   the devices that keep its offer forget it; without another hub it asks first.
+- The lite member starts pairing as soon as it is installed: when it runs in no group and the
+  installer's output is a terminal, `get.sh --lite` and the Linux and OpenWrt `install.sh` run
+  `cbb pair` at the end and show the QR code, since small devices often have no keyboard.
+  An update or a reinstall that keeps the group skips it, `--no-pair` (or `CBB_PAIR=no`)
+  skips it for a scripted install, and Ctrl+C stops only the pairing. The Nano ESP32 starts
+  pairing by itself, once each boot, when its Wi-Fi is up and it is in no group.
 - Leaving the group (D-83): `sudo cbb leave` on a computer or a lite member deletes the
   device's keys and the group's files, keeps CBB and its settings, turns remote paste and the
   quick actions off, and lets it join this group or another one with `cbb pair`; before, the
@@ -46,7 +52,13 @@ All notable changes to cbb are documented in this file. The format follows
   every group, free, as is without a promise of uptime, shared by the budget, and where to
   report abuse (abuse@cbb.tools).
 - `cbb global relay default` meets the group at the project's open relay on `cbb.tools:8765`,
-  whose address and key cbb knows.
+  whose address and key cbb knows. Its keys come from the signed `keys.json` (`use` `relay`,
+  `release-sign renew -relay`) and its address from `entries.json` (`relays`), the built-in
+  key only when they name none, so the relay changes its key, the old and new one listed
+  side by side, or moves, without a release. A device that fails to register there fetches
+  the newest lists from the mirror on the relay's server and tries again at once, without
+  asking; status shows the reason, the whole error as its detail. The project's forwarder's
+  keys are taken from the newest `keys.json` with the entry points as well.
 - The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
   their certificates, the forwarder's and the relay's ports, and the expiry of the signed files devices fetch
   (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").
@@ -1379,6 +1391,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Away from home, the phone apps showed the devices behind the hub as offline, although
+  pastes and other commands reached them through it. A computer now tells the phones
+  connected to it which members it reaches (`reach`, docs/protocol.md section 4), and the
+  apps show those as online through the hub.
 - A phone as the hub could not register with its forwarder: the registration dialed through
   the service's list of allowed addresses, which only the service on a computer fills, so the
   phone refused the forwarder's public address as "outside the home network". The hub's

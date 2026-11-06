@@ -122,6 +122,19 @@ class MemberTest {
     }
 
     @Test
+    fun reach() {
+        val a = "a".repeat(32)
+        val b = "b".repeat(32)
+        // The invalid IDs are dropped; an absent list or one of another type reaches none.
+        assertEquals(Member.Message.Reach(listOf(a, b)), Member.decode("""{"t":"reach","reach":["$a","nope","$b"]}""".toByteArray()))
+        assertEquals(Member.Message.Reach(emptyList()), Member.decode("""{"t":"reach"}""".toByteArray()))
+        assertEquals(Member.Message.Reach(emptyList()), Member.decode("""{"t":"reach","reach":7}""".toByteArray()))
+        val many = (0 until 300).map { "%032x".format(it) }
+        val frame = Member.encode(Member.Message.Reach(many))
+        assertEquals(Member.Message.Reach(many.take(256)), Member.decode(frame.copyOfRange(4, frame.size)))
+    }
+
+    @Test
     fun badMessages() {
         assertFailsWith<Member.WireException> { Member.decode("{".toByteArray()) }
         assertFailsWith<Member.WireException> { Member.decode("""{"t":"hello","role":"toaster","hello":{}}""".toByteArray()) }

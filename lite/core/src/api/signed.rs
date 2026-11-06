@@ -258,6 +258,17 @@ mod tests {
         let good = br#"{"v":1,"type":"entries","seq":3,"time_ms":1000,"expires_ms":2000,"forwarders":[{"name":"cbb.tools:8764","vless":[{"transport":"xhttp","server_name":"cbb.tools","port":443,"path":"/banMEJvnYJJap8S"}]}]}"#;
         let got = ask("entries", good);
         assert_eq!(got["ok"]["value"]["forwarders"][0]["vless"][0]["port"], 443, "{got}");
+        let relays = br#"{"v":1,"type":"entries","seq":3,"time_ms":1000,"expires_ms":2000,"forwarders":[],"relays":[{"name":"cbb.tools:8765","endpoints":["relay.cbb.tools:8765"]}]}"#;
+        let got = ask("entries", relays);
+        assert_eq!(got["ok"]["value"]["relays"][0]["endpoints"][0], "relay.cbb.tools:8765", "{got}");
+        let r = core::str::from_utf8(relays).unwrap();
+        for bad in [
+            r.replace(r#""name":"cbb.tools:8765""#, r#""name":"cbb.tools""#),
+            r.replace("relay.cbb.tools:8765", "203.0.113.9:8765"),
+            r.replace(r#"}]}"#, r#"},{"name":"cbb.tools:8765"}]}"#),
+        ] {
+            assert_eq!(ask("entries", bad.as_bytes())["error"]["name"], "signed", "{bad}");
+        }
         let s = core::str::from_utf8(good).unwrap();
         for bad in [
             s.replace(r#""seq":3"#, r#""seq":0"#),
