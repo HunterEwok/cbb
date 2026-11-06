@@ -44,6 +44,7 @@ pub mod authority;
 pub mod certs;
 pub mod clip;
 pub mod command;
+pub mod copy;
 pub mod credential;
 pub mod error;
 #[cfg(feature = "fuzzing")]

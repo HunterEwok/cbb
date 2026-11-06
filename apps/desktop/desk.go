@@ -297,21 +297,25 @@ func (d *Desk) Leave() {
 func (d *Desk) Freeze(id string)   { d.admin([]string{"freeze", id}, false, "Frozen.") }
 func (d *Desk) Unfreeze(id string) { d.admin([]string{"unfreeze", id}, false, "Unfrozen.") }
 
-// MakeHub makes a device a hub of the group for sync away from home,
-// reached through the project's forwarder: this computer as cbb global hub
-// does, turning sync away from home on with it when awayOn is set (the
-// user said yes to the app's question), or with id another admin computer,
-// to which cbb sends a signed hub command; there sync away from home must
-// be on already.
-func (d *Desk) MakeHub(id string, awayOn bool) {
-	args := []string{"global", "hub", "-firewall", "no"}
+// MakeHub makes a device a hub of the group for sync away from home:
+// this computer, when id is empty, at the addresses cbb global hub finds as
+// it does, turning sync away from home on with it when awayOn is set (the
+// user said yes to the app's question), or with id another computer, to
+// which cbb sends a signed hub command; there sync away from home must be
+// on already. A hub that reads the copies is an admin; with forwardOnly a
+// computer that is no admin becomes a hub that only passes them on and
+// reads none.
+func (d *Desk) MakeHub(id string, awayOn, forwardOnly bool) {
 	switch {
+	case id != "" && forwardOnly:
+		d.admin([]string{"global", "hub", "-on", id, "-forward-only"}, false, "It is a hub now that only passes the copies on, and reads none of them.")
 	case id != "":
-		args, awayOn = []string{"global", "hub", "-on", id}, false
+		d.admin([]string{"global", "hub", "-on", id}, false, "It is a hub now.")
 	case awayOn:
-		args = append(args, "-away-on")
+		d.admin([]string{"global", "hub", "-firewall", "no", "-away-on"}, true, "It is a hub now.")
+	default:
+		d.admin([]string{"global", "hub", "-firewall", "no"}, false, "It is a hub now.")
 	}
-	d.admin(args, awayOn, "It is a hub now.")
 }
 
 // StopHub makes a hub stop being one: this computer, or with id another

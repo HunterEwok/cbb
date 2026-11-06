@@ -11,7 +11,6 @@ import tools.cbb.kit.Member
 import tools.cbb.kit.MemberNode
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
@@ -53,7 +52,7 @@ object Images {
         if (f.length() == part.size && f.exists()) return f
         val tmp = File(dir, f.name + ".part")
         try {
-            Content.fetch(node, e, part, { FileOutputStream(tmp) }, MAX_COPY)
+            tmp.writeBytes(Content.bytes(node, e, part, MAX_COPY))
             if (!tmp.renameTo(f)) throw IOException("the image could not be saved")
         } finally {
             tmp.delete()

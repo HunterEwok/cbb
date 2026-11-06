@@ -125,7 +125,7 @@ protocol GroupController: AnyObject {
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation
     func moveHub(to id: String) async throws
     /// Makes a connected admin computer a hub of the group as well.
-    func makeHub(_ id: String) async throws
+    func makeHub(_ id: String, forwardOnly: Bool) async throws
     /// The phone at a blind relay; nil without a group.
     func relayStatus() async -> AppModel.BlindRelay?
     /// Meets the group at a blind relay; both empty leave it.
@@ -174,7 +174,7 @@ extension GroupController {
         throw HubOnPhone.Failure.notRunning
     }
     func moveHub(to id: String) async throws { throw HubOnPhone.Failure.notRunning }
-    func makeHub(_ id: String) async throws { throw HubOnPhone.Failure.notRunning }
+    func makeHub(_ id: String, forwardOnly: Bool) async throws { throw HubOnPhone.Failure.notRunning }
     func relayStatus() async -> AppModel.BlindRelay? { nil }
     func setRelay(address: String, pin: String) async throws {}
 }
@@ -225,9 +225,11 @@ final class AppModel: ObservableObject {
         var mode: String?
         /// The quick actions its hello says are on, while it is connected.
         var actions: [String] = []
-        /// The records let it be a hub: the root's own device or an admin
-        /// with the hub power.
+        /// The records let it be a hub: the root's own device, an admin
+        /// with the hub power, or a hub that only passes copies on.
         var mayHub = false
+        /// A hub that only passes the copies on: none is sealed to it.
+        var forwardOnly = false
     }
 
     enum SyncResult: Equatable {
@@ -777,12 +779,15 @@ final class AppModel: ObservableObject {
         await refreshHub()
     }
 
-    /// Makes a connected admin computer a hub of the group as well
-    /// (docs/protocol.md, section 11, "Several hubs").
-    func makeHub(_ id: String) async {
+    /// Makes a connected computer a hub of the group as well
+    /// (docs/protocol.md, section 11, "Several hubs"): one that reads the
+    /// copies, an admin, or one that only passes them on.
+    func makeHub(_ id: String, forwardOnly: Bool = false) async {
         do {
-            try await group.makeHub(id)
-            message = String(localized: "It is a hub now: your devices reach the group through it when they are away from home.", bundle: .app)
+            try await group.makeHub(id, forwardOnly: forwardOnly)
+            message = forwardOnly
+                ? String(localized: "It is a hub now that only passes the copies on: your devices reach the group through it when they are away from home, and it reads none of them.", bundle: .app)
+                : String(localized: "It is a hub now: your devices reach the group through it when they are away from home.", bundle: .app)
         } catch {
             message = Self.describe(error)
         }
@@ -1347,6 +1352,12 @@ final class AppModel: ObservableObject {
         if let f = error as? Content.Failure, case .tooLarge = f {
             return String(localized: "This image is larger than 100 MB, so it stays on the computer.", bundle: .app)
         }
+        if let f = error as? Content.Failure, f == .unread {
+            return String(localized: "This copy was not sealed to this phone, so it cannot be read here. Copy it again on that device.", bundle: .app)
+        }
+        if error is CopyKeys.Failure {
+            return String(localized: "This phone does not have the group's device list yet, so it cannot seal or read copies. Try again once a computer is connected.", bundle: .app)
+        }
         if error is Content.Failure || (error as? MemberNode.Failure) == .missing {
             return String(localized: "Could not get the image from the computers. Copy it there again, then try again.", bundle: .app)
         }
@@ -1364,6 +1375,9 @@ final class AppModel: ObservableObject {
         }
         if let f = error as? PhoneGroup.Failure, f == .belowKeyLevel {
             return String(localized: "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.", bundle: .app)
+        }
+        if let f = error as? PhoneGroup.Failure, f == .readsCopies {
+            return String(localized: "An admin reads the copies, so it is a hub that reads them too, not one that only passes them on.", bundle: .app)
         }
         if let f = error as? PhoneGroup.Failure, f == .fileKey {
             return String(localized: "This computer keeps its keys in a file. Make it an admin first on its page, which warns what that means.", bundle: .app)

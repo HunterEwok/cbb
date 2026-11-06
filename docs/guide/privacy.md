@@ -2,28 +2,54 @@
 # Privacy: who sees what
 
 For anyone who wants to know what leaves their devices. Copy Beyond Borders has no accounts, no
-cloud and no telemetry: what you copy goes only to the devices of your group, and every
-device of the group can read it. On the way it is encrypted between each two devices, so no
-server or network in between can. This page lists everything else that someone outside the
-group can see, and how to turn it off.
+cloud and no telemetry: what you copy is encrypted end to end, sealed on the device that
+copies it for the devices of your group that read copies, and nothing else can open it: no
+server, no network, no device in between. This page says what the devices that pass a copy on
+can still see, and everything that someone outside the group can see, and how to turn it off.
 
 ## What you copy
 
-Texts, images and files pass only between the devices of your group, inside TLS 1.3 with
-the group's own certificates. Away from home they also pass inside WireGuard, through your
-hub, and perhaps through a forwarder or a relay. No server, network or provider can read
-them, the project's servers included. A device that is removed from the group gets nothing
-more.
+Texts, images and files are sealed end to end. The device that copies encrypts each copy
+with a key made for that copy alone, wraps the key for each device of the group that reads
+copies (X-Wing, which joins X25519 and the post-quantum ML-KEM-768) and signs the copy with its
+member key. Only those devices can open it; every device checks the signature, so none can
+change a copy or make one in another's name. The sealed copy then travels inside TLS 1.3 with
+the group's own certificates, and away from home inside WireGuard as well, through your hub
+and perhaps a forwarder or a relay. No server, network or provider can read it, the project's
+servers included. A device that is removed from the group gets nothing more, and a device that
+joins reads copies from its next one on, not the ones made before it.
 
-Two things are exceptions, and both are your choice:
+## What the devices in between see
+
+A copy often reaches a device through another: through the hub away from home, or through a
+computer that passes it on at home. Those devices read nothing of a copy that is not sealed to
+them, but passing it on needs a little, which stays outside the seal:
+
+- **Which device sent it, and when.** The time decides which copy is the newest, which every
+  device needs, a hub that only passes copies on included.
+- **Which devices it is sealed to.** That is the group's list of devices, which they know
+  anyway.
+- **Its size in steps** (1, 4, 16, 64 and 256 KB, 1 MB, then each further megabyte), and
+  whether it has an image or files, with their total to 64 KB. All the files of one copy are
+  one sealed piece, so their number does not show.
+
+What never shows: whether it is a text, a secret, an image or files; the text; the files'
+names; the exact size.
+
+## Exceptions
+
+Both are your choice:
 
 - A **Roku** added with `cbb remote add -roku -consent` gets its text as plain HTTP on your
   home network ([keyboards and TVs](keyboards-and-tvs.md#a-computer-as-the-tvs-remote)).
-- A **hub** is one of your own devices, so it reads the copies like any other member and
-  passes them on. The clipboard is not encrypted end to end from the device that copies to
-  the one that pastes: each device of the group reads it. Only commands, such as a remote
-  paste or a quick action, are sealed to the one device they are for, so a hub that passes
-  them on cannot read them ([remote paste](remote-paste.md)).
+- A **hub that reads the copies** is an admin you chose, so the copies are sealed to it like
+  to your other devices. Make an always-on computer whose keys are only in a file, such as a
+  Raspberry Pi, a **hub that only passes copies on** instead: no copy is sealed to it, so it
+  reads none ([away from home](away-from-home.md)). Commands, such as a remote paste or a
+  quick action, are sealed to the one device they are for in either case
+  ([remote paste](remote-paste.md)).
+- An **Apple Watch** or a **Wear OS** watch gets the copies from its phone over the channel
+  the system encrypts between the two, not sealed by Copy Beyond Borders.
 
 ## Everyone else
 

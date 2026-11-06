@@ -189,10 +189,15 @@ enum OneShot {
         guard let key = try KeychainIdentity.loadKey(label: Shared.memberLabel) else { throw Failure.noKey }
         KeychainIdentity.removeCertificates(label: Shared.memberLabel)
         let id = try KeychainIdentity.identity(certificate: g.memberCert, key: key, label: Shared.memberLabel, storeKey: false)
+        // The copy is sealed to the group's readers and signed, as the app's.
+        let records = g.records
+        let copies = CopyKeys(device: g.device, cert: g.memberCert, issuer: g.memberIssuer, signer: try SecKeySigner(key),
+                              secret: try SealKey.secret(), records: { records })
         let node = MemberNode(engine: SyncEngine(device: g.device, clock: HybridClock()), name: UIDevice.current.name, os: "ios",
                               device: Member.DeviceInfo(form: UIDevice.current.userInterfaceIdiom == .pad ? "tablet" : "phone",
                                                         osVersion: UIDevice.current.systemVersion),
-                              content: { () -> ContentStore? in if case let .media(_, s) = what { return s } else { return nil } }())
+                              content: { () -> ContentStore? in if case let .media(_, s) = what { return s } else { return nil } }(),
+                              copies: copies)
         let ref = DialerRef()
         let browser = BonjourBrowser { found in Task { await ref.dialer?.update(found) } }
         let dialer = MemberDialer(node: node, group: g.tag,
@@ -209,15 +214,16 @@ enum OneShot {
         if !online.isEmpty {
             switch what {
             case let .text(text):
-                _ = await node.send(text: text, kind: .text)
+                _ = try await node.send(text: text, kind: .text)
                 // The event goes out on the connections; give them a moment.
                 try? await Task.sleep(for: .seconds(1))
             case let .media(m, store):
-                _ = await node.send(text: "", kind: .text, media: m)
-                // The computers fetch the parts from this phone.
+                let e = try await node.send(text: "", kind: .text, media: m)
+                // The computers fetch the copy's sealed blob from this phone.
+                let blob = e.sealed?.blob
                 let end = ContinuousClock.now + fetchWait
-                while !store.served(m), ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(200)) }
-                fetched = store.served(m)
+                while !store.served(blob), ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(200)) }
+                fetched = store.served(blob)
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
@@ -240,11 +246,15 @@ final class ServedContent: ContentStore, @unchecked Sendable {
         memory.open(sha256: sha256).map { Source(inner: $0, sum: sha256, store: self) }
     }
 
+    func sealBlob(_ m: Media.Manifest) throws -> (key: Data, blob: Media.Blob)? { try memory.sealBlob(m) }
+
     func note(_ sum: Data, end: Int64) { lock.withLock { ends[sum] = max(ends[sum] ?? 0, end) } }
 
-    /// Whether every part of m with content was read to its end.
-    func served(_ m: Media.Manifest) -> Bool {
-        lock.withLock { m.parts.allSatisfy { p in p.dir || p.size == 0 || p.sha256.map { (ends[$0] ?? 0) >= p.size } == true } }
+    /// Whether the copy's sealed blob was read to its end; a copy of no
+    /// bytes has none.
+    func served(_ blob: Media.Blob?) -> Bool {
+        guard let blob else { return true }
+        return lock.withLock { (ends[blob.sha256] ?? 0) >= blob.size }
     }
 
     struct Source: ContentSource {

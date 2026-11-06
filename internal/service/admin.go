@@ -99,9 +99,13 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 		}
 		s.mu.Unlock()
 	}
+	sealKey := peer.Seal
+	if rec := s.deviceRecord(peer.ID); rec != nil && len(rec.Seal) > 0 {
+		sealKey = rec.Seal
+	}
 	s.awaitRecords(id)
 	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(peer.ID), Name: d.Name, Role: group.RoleFull,
-		OS: d.OS, Key: &peer.Key, Admin: &adminKey, Store: store, Kind: kind, Proof: proof})
+		OS: d.OS, Key: &peer.Key, Admin: &adminKey, Store: store, Kind: kind, Proof: proof, Seal: sealKey})
 	if err != nil {
 		undo()
 		return "", err
@@ -505,7 +509,7 @@ func (s *Service) afterTakeover(oldRoot group.KeyHash) {
 		name = defaultName(group.RoleFull, id.ID)
 	}
 	key := group.KeyHashOf(id.Cert)
-	bodies = append([]group.RecordBody{{Type: group.RecordDevice, Device: string(id.ID), Name: name, Role: group.RoleFull, OS: s.cfg.OS, Key: &key, Store: group.KeyStoreOf(id.Key)}}, bodies...)
+	bodies = append([]group.RecordBody{{Type: group.RecordDevice, Device: string(id.ID), Name: name, Role: group.RoleFull, OS: s.cfg.OS, Key: &key, Store: group.KeyStoreOf(id.Key), Seal: s.sealPublic}}, bodies...)
 	if len(revoke.Keys) > 0 {
 		revoke.Keys = uniqueKeys(revoke.Keys)
 		bodies = append(bodies, revoke)

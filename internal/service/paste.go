@@ -174,6 +174,8 @@ func (s *Service) pasted(body group.CommandBody, c group.Record, from sender) no
 	switch {
 	case err != nil:
 		res.Status, res.Reason = node.ResultFailed, fmt.Sprintf("reading the remote paste settings: %v", err)
+	case s.forwardOnly():
+		res = refuse(errForwardOnly.Error())
 	case !set.On:
 		res = refuse(errPasteOff.Error())
 	case body.Kind == "secret" && s.secretsStopped():

@@ -14,6 +14,7 @@ use serde_json::Value;
 use crate::authority::Record;
 use crate::certs::b64;
 use crate::clip::{Event, Hello};
+use crate::copy::Sealed;
 use crate::error::{Context, Error, Result};
 
 /// The largest frame.
@@ -239,7 +240,15 @@ pub fn hello(
     let device = device.cleaned();
     let body = HelloBody {
         wall: h.wall,
-        current: h.current.as_ref().map(to_value),
+        // The current copy travels sealed, with its age as of now; a member
+        // sends no copy in the open.
+        current: h.current.as_ref().and_then(|e| {
+            e.sealed.as_ref().map(|s| {
+                let mut s = s.clone();
+                s.age = e.age;
+                to_value(&s)
+            })
+        }),
         records,
         name: name.to_string(),
         os: os.to_string(),
@@ -270,9 +279,10 @@ pub fn result(r: CommandResult) -> Message {
     Message { kind: "result".into(), result: Some(r), ..Default::default() }
 }
 
-/// An event message.
-pub fn event(ev: &Event) -> Message {
-    Message { kind: "event".into(), event: Some(to_value(ev)), ..Default::default() }
+/// An event message: the copy as it travels, sealed (docs/protocol.md,
+/// section 4).
+pub fn event(s: &Sealed) -> Message {
+    Message { kind: "event".into(), event: Some(to_value(s)), ..Default::default() }
 }
 
 /// An entries message, which passes the signed entry points on.
@@ -292,13 +302,19 @@ pub fn decode(body: &[u8]) -> Result<Message> {
     serde_json::from_slice(body).context("a frame is not a message")
 }
 
-/// Decodes a hello and returns the rest of it as it came. A current event
-/// that does not decode, for example from a newer version, counts as none.
+/// Decodes a hello and returns the rest of it as it came, its current copy
+/// as the engine's unread event of the sealed copy, which the member checks
+/// and opens. A current copy that does not decode, for example from a newer
+/// version, counts as none.
 pub fn decode_hello(v: Option<&Value>) -> Result<(Hello, HelloBody)> {
     let v = v.filter(|v| v.is_object()).ok_or_else(|| Error::msg("the hello does not decode"))?;
     let b: HelloBody = serde_json::from_value(v.clone()).context("the hello does not decode")?;
-    let current =
-        b.current.as_ref().filter(|c| !c.is_null()).and_then(|c| serde_json::from_value::<Event>(c.clone()).ok());
+    let current = b
+        .current
+        .as_ref()
+        .filter(|c| !c.is_null())
+        .and_then(|c| serde_json::from_value::<Sealed>(c.clone()).ok())
+        .map(Event::of);
     Ok((Hello { wall: b.wall, current }, b))
 }
 

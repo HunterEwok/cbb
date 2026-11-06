@@ -91,6 +91,11 @@ public final class SyncEngine {
     private var seen = Set<String>()
     private var seenOrder: [String] = []
 
+    /// Seals a new event to the group's readers, with the key and the blob
+    /// of its images or files (CopyKeys.seal); nil leaves events unsealed,
+    /// as in tests of the engine alone.
+    public var seal: ((Member.Event, Data?, Media.Blob?) throws -> Member.Sealed)?
+
     public init(device: String, clock: HybridClock, uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         (self.device, self.clock, self.uptime) = (device, clock, uptime)
     }
@@ -114,7 +119,7 @@ public final class SyncEngine {
     /// The current text while it is usable: a text, a secret younger than
     /// the secret lifetime, or the text of images or files, as a text.
     public var usable: (text: String, kind: Member.Kind)? {
-        guard let e = current, !e.isMark else { return nil }
+        guard let e = current, !e.isMark, !e.unread else { return nil }
         if e.kind == .secret && uptime() - copiedAt >= Self.secretTTL { return nil }
         if e.kind == .media { return e.text.isEmpty ? nil : (e.text, .text) }
         return (e.text, e.kind)
@@ -128,10 +133,16 @@ public final class SyncEngine {
 
     /// Makes an event of a text this phone copied or sent, or with media of
     /// images or files and text their plain-text alternative, which becomes
-    /// the current event. It goes to every connection.
-    public func local(text: String, kind: Member.Kind, via: Member.Via = .phone, media: Media.Manifest? = nil) -> Member.Event {
-        let e = Member.Event(id: Self.newID(), origin: device, via: via, time: clock.now(), ageMS: 0, kind: media != nil ? .media : kind,
+    /// the current event, sealed with seal; key sealed the blob of the
+    /// images or files. It goes to every connection.
+    public func local(text: String, kind: Member.Kind, via: Member.Via = .phone, media: Media.Manifest? = nil,
+                      key: Data? = nil, blob: Media.Blob? = nil) throws -> Member.Event {
+        var e = Member.Event(id: Self.newID(), origin: device, via: via, time: clock.now(), ageMS: 0, kind: media != nil ? .media : kind,
                              text: text, media: media)
+        if let seal {
+            e.sealed = try seal(e, key, blob)
+            e.key = key
+        }
         remember(e.id)
         current = e
         copiedAt = uptime()
@@ -145,7 +156,7 @@ public final class SyncEngine {
         guard e.isValid, !clock.ahead(e.time) else { return Result(forward: nil, changed: false) }
         if seen.contains(e.id) {
             // Seen before: only a mark that gets its text matters.
-            if let cur = current, cur.id == e.id, cur.isMark, !e.isMark {
+            if let cur = current, cur.id == e.id, cur.isMark, !e.isMark, cur.samePayload(e) {
                 current = e
                 copiedAt = uptime() - Double(min(e.ageMS, Self.maxAgeMS)) / 1000
                 return Result(forward: e, changed: true)
@@ -167,7 +178,7 @@ public final class SyncEngine {
     /// protocol error and closes the connection.
     public func reconcile(_ h: Member.Hello) throws -> Result {
         guard let cur = h.current else { return Result(forward: nil, changed: false) }
-        if cur.kind == .secret && !cur.text.isEmpty { throw Failure.secretInHello }
+        if cur.sealed == nil && cur.kind == .secret && !cur.text.isEmpty { throw Failure.secretInHello }
         guard cur.isValid else { throw Failure.badHello }
         return received(cur)
     }

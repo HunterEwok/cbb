@@ -87,6 +87,13 @@ class SyncEngine(
     private var copiedAt = 0L
     private val seen = LinkedHashSet<String>()
 
+    /**
+     * Seals a new event to the group's readers, with the key and the blob of
+     * its images or files (CopyKeys.seal); null leaves events unsealed, as in
+     * tests of the engine alone.
+     */
+    var seal: ((Member.Event, ByteArray?, Blob?) -> Sealed)? = null
+
     /** What to do with a received event. */
     data class Result(
         /** The event to send to the other connections, if any. */
@@ -105,7 +112,7 @@ class SyncEngine(
     val usable: Pair<String, Member.Kind>?
         get() {
             val e = current ?: return null
-            if (e.isMark) return null
+            if (e.isMark || e.unread) return null
             if (e.kind == Member.Kind.SECRET && uptimeMS() - copiedAt >= SECRET_TTL_MS) return null
             if (e.kind == Member.Kind.MEDIA) return e.text.takeIf { it.isNotEmpty() }?.let { it to Member.Kind.TEXT }
             return e.text to e.kind
@@ -118,10 +125,19 @@ class SyncEngine(
     /**
      * Makes an event of a text this phone copied or sent, or with media of
      * images or files and text their plain-text alternative, which becomes
-     * the current event. It goes to every connection.
+     * the current event, sealed with seal; key sealed the blob of the images
+     * or files. It goes to every connection.
      */
-    fun local(text: String, kind: Member.Kind, via: Member.Via = Member.Via.COPY, media: Media.Manifest? = null): Member.Event {
-        val e = Member.Event(newID(), device, via, clock.now(), 0, if (media != null) Member.Kind.MEDIA else kind, text, media)
+    fun local(
+        text: String,
+        kind: Member.Kind,
+        via: Member.Via = Member.Via.COPY,
+        media: Media.Manifest? = null,
+        key: ByteArray? = null,
+        blob: Blob? = null,
+    ): Member.Event {
+        var e = Member.Event(newID(), device, via, clock.now(), 0, if (media != null) Member.Kind.MEDIA else kind, text, media)
+        seal?.let { e = e.copy(sealed = it(e, key, blob), key = key) }
         remember(e.id)
         current = e
         copiedAt = uptimeMS()
@@ -138,7 +154,7 @@ class SyncEngine(
         if (e.id in seen) {
             // Seen before: only a mark that gets its text matters.
             val cur = current
-            if (cur != null && cur.id == e.id && cur.isMark && !e.isMark) {
+            if (cur != null && cur.id == e.id && cur.isMark && !e.isMark && cur.samePayload(e)) {
                 current = e
                 copiedAt = uptimeMS() - minOf(e.ageMS, MAX_AGE_MS)
                 return Result(e, true)
@@ -162,7 +178,7 @@ class SyncEngine(
     /** Takes in a peer's hello. A hello that carries a secret's text is a protocol error and closes the connection. */
     fun reconcile(h: Member.Hello): Result {
         val cur = h.current ?: return Result(null, false)
-        if (cur.kind == Member.Kind.SECRET && cur.text.isNotEmpty()) throw HelloException("a secret's text in a hello")
+        if (cur.sealed == null && cur.kind == Member.Kind.SECRET && cur.text.isNotEmpty()) throw HelloException("a secret's text in a hello")
         if (!cur.isValid) throw HelloException("a hello with a bad event")
         return received(cur)
     }

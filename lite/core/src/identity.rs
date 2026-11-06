@@ -61,6 +61,14 @@ pub fn signing_key(pkcs8: &[u8]) -> Result<SigningKey> {
     SigningKey::from_pkcs8_der(pkcs8).map_err(|e| Error::msg(format!("the device key is not a P-256 key ({e})")))
 }
 
+/// Signs data with a PKCS #8 P-256 key: ECDSA with SHA-256, DER, as a
+/// member signs its copies (docs/protocol.md, section 4, "Sealing").
+pub fn sign(pkcs8: &[u8], data: &[u8]) -> Result<Vec<u8>> {
+    use p256::ecdsa::signature::Signer as _;
+    let sig: p256::ecdsa::Signature = signing_key(pkcs8)?.sign(data);
+    Ok(sig.to_der().as_bytes().to_vec())
+}
+
 /// Returns the uncompressed public key of a PKCS #8 P-256 key.
 pub fn public_key(pkcs8: &[u8]) -> Result<Vec<u8>> {
     Ok(signing_key(pkcs8)?.verifying_key().to_sec1_point(false).as_bytes().to_vec())

@@ -16,7 +16,6 @@ import tools.cbb.kit.Member
 import tools.cbb.kit.MemberNode
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 
 /**
@@ -83,12 +82,16 @@ object Files {
         val tmp = File(context.cacheDir, "files").apply { mkdirs() }
         val cr = context.contentResolver
         var saved = 0
+        // The copy's sealed blob holds the bytes of all its files, fetched
+        // and opened before any is saved.
+        val data = ArrayDeque(Content.parts(node, e, Images.MAX_COPY))
         for (p in m.parts) {
-            val path = p.path ?: continue
             if (p.dir) continue
+            val bytes = data.removeFirstOrNull() ?: ByteArray(0)
+            val path = p.path ?: continue
             val f = File(tmp, "part")
             try {
-                if (p.size > 0) Content.fetch(node, e, p, { FileOutputStream(f) }, Images.MAX_COPY) else f.writeBytes(ByteArray(0))
+                f.writeBytes(bytes)
                 val name = path.substringAfterLast('/')
                 val dir = path.substringBeforeLast('/', "")
                 val values = ContentValues().apply {

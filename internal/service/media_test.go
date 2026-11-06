@@ -225,13 +225,13 @@ func TestContentStore(t *testing.T) {
 	}
 	one, two := put([]byte("one")), put([]byte("two"))
 	m1 := &clip.Manifest{Size: 3, Parts: []clip.Part{one}}
-	store.setCurrent(m1, 1<<20)
+	store.setCurrent(&mediaCopy{m: m1}, 1<<20)
 	if r, size, ok := store.Open([sha256.Size]byte(one.SHA256)); !ok || size != 3 {
 		t.Fatal("the current part is not served")
 	} else {
 		r.(interface{ Close() error }).Close()
 	}
-	store.setCurrent(&clip.Manifest{Size: 3, Parts: []clip.Part{two}}, 1<<20)
+	store.setCurrent(&mediaCopy{m: &clip.Manifest{Size: 3, Parts: []clip.Part{two}}}, 1<<20)
 	now = now.Add(contentKeep - time.Second)
 	store.sweep(1 << 20)
 	if !store.has([sha256.Size]byte(one.SHA256)) {
@@ -244,7 +244,7 @@ func TestContentStore(t *testing.T) {
 	}
 	// Past twice the limit, a replaced part goes at once.
 	big := put(make([]byte, 3<<10))
-	store.setCurrent(&clip.Manifest{Size: 3, Parts: []clip.Part{two}}, 1<<10)
+	store.setCurrent(&mediaCopy{m: &clip.Manifest{Size: 3, Parts: []clip.Part{two}}}, 1<<10)
 	if store.has([sha256.Size]byte(big.SHA256)) {
 		t.Error("a part past twice the limit stayed")
 	}

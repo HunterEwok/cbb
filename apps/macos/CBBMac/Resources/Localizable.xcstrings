@@ -231,6 +231,36 @@
         }
       }
     },
+    "A hub that only passes them on" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который только пересылает"
+          }
+        }
+      }
+    },
+    "A hub that reads the copies" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который читает копии"
+          }
+        }
+      }
+    },
+    "A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который читает копии, — это админ. Хаб, который только пересылает, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование."
+          }
+        }
+      }
+    },
     "A phone joins from the start screen of its app.": {
       "localizations": {
         "ru": {
@@ -537,6 +567,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Компьютер"
+          }
+        }
+      }
+    },
+    "Copies" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копии"
           }
         }
       }
@@ -957,6 +997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Орбита"
+          }
+        }
+      }
+    },
+    "Passes them on, reads none" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пересылает, не читает"
           }
         }
       }
@@ -2097,6 +2147,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сделать %@ хабом?"
+          }
+        }
+      }
+    },
+    "It is a hub now that only passes the copies on, and reads none of them." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь это хаб, который только пересылает копии и ни одной не читает."
           }
         }
       }

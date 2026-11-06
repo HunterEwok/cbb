@@ -135,8 +135,12 @@ The few ideas the rest follows from:
 - **One protocol, four implementations**: Go (the service), Rust (the lite member), Swift
   and Kotlin (the phone kits), held together by shared interop vectors in
   `testdata/interop`.
+- **Copies sealed end to end** (D-84). The device that copies seals each copy to the devices
+  of the group that read copies and signs it, so the members that pass it on, a hub among
+  them, carry it without reading or changing it, and the forwarder and the relay see even
+  less.
 - **Keys in hardware where the device has it** (D-44, D-47), and a group level that says
-  which keys may be the root, an admin or a hub.
+  which keys may be the root or an admin; a hub that only passes copies on needs none.
 
 ## 5. Building blocks
 
@@ -469,7 +473,7 @@ sync away from home, the admins, and remote paste.
   never earlier than the CA's start, so a Raspberry Pi that boots with a clock years behind
   real time still accepts them; expired certificates are rejected. The root and the admins
   admit new devices. TLS 1.3 only, with the ALPN protocol
-  `cbb/2`; a client checks that the server's certificate names the device it found in
+  `cbb/3`; a client checks that the server's certificate names the device it found in
   discovery.
 - **End of a CA's life**: certificates end no later than their CA. A member certificate that
   already ends with its CA is not renewed again; replacing a CA after 20 years works like
@@ -734,9 +738,13 @@ application asks for PNG. A copied folder keeps its tree, up to 10 000 entries.
 
 - A `media` event carries a **manifest** instead of the bytes: for each part its type (or
   name and path inside a copied folder), size and SHA-256, the total size and an optional
-  plain-text alternative. It is small, so it travels in events and hellos like a text, and
-  the sync model applies unchanged; duplicates (two Macs reporting one Universal Clipboard
-  image) are recognised by hash.
+  plain-text alternative. It is small and sealed with the copy (docs/protocol.md, section
+  4), so it travels in events and hellos like a text, and the sync model applies unchanged;
+  duplicates (two Macs reporting one Universal Clipboard image) are recognised by hash once
+  opened.
+- The parts' bytes travel as one sealed **blob**, in segments of 64 KiB that each carry
+  their own tag, so a member in between holds, serves and passes on a copy's bytes without
+  reading them, and learns their total only to 64 KiB.
 - A member that wants the content sends `get` (hash, offset, length) to a connected member
   that has it, preferably the origin, and receives binary `chunk` frames of 256 KiB (not
   base64 in JSON, which costs a third more). It asks for at most 4 MiB at a time, more as
@@ -744,7 +752,8 @@ application asks for PNG. A copied folder keeps its tree, up to 10 000 entries.
 - Events, hellos, pings and records go first; chunks go only while the event queue is empty
   and do not count against the 256-message queue limit, so text keeps flowing during a large
   transfer.
-- Content is addressed by its hash, so any member that holds it whole serves it. Away from
+- A sealed blob is addressed by its hash, so any member that holds it whole serves it, a hub
+  that reads no copies too. Away from
   home the hub serves its clients, which never talk to each other: the hub that serves
   fetches each copy of the group within its limit away from home, whatever its own mode,
   and serves it from its cache once it is whole; a client asked too early hears `missing`
@@ -795,12 +804,13 @@ forwarder's 2 MiB a second per group; beyond 1 GiB Copy Beyond Borders is the wr
 
 #### Security
 
-The rules of "Sync away from home" hold unchanged (D-58): at home chunks travel inside the
-member connection's mutual TLS 1.3, away from home only inside the group's WireGuard tunnel
-with member TLS inside it, so the forwarder and the blind relay see neither content nor
-headers nor inner addresses. Only group members hold the plaintext, and every part is
-checked against the SHA-256 of a manifest that came over an authenticated connection, so a
-member serving from its cache cannot change it. What stays visible: the network between a
+A copy's images and files are sealed end to end like its text (D-84): only the devices it
+was sealed to open the blob, and the origin's signature covers the blob's hash, so neither a
+member serving from its cache nor a hub can read or change it. Around that, the rules of
+"Sync away from home" hold unchanged (D-58): at home chunks travel inside the member
+connection's mutual TLS 1.3, away from home only inside the group's WireGuard tunnel with
+member TLS inside it, so the forwarder and the blind relay see neither the blob nor headers
+nor inner addresses. What stays visible: the network between a
 client and the hub sees that roughly so many megabytes went; chunk frames are padded to a
 multiple of 16 KiB, and cover traffic cannot hide a large transfer.
 
@@ -923,8 +933,11 @@ forwarder's own site, or a well-known one with REALITY. Where a network admits o
   below).
 - Why sync over the internet needs a computer of the user's: the hub must be on and
   reachable all the time, it must be at home so that the devices hand it their keys there
-  (below), and it is a full member that reads the texts, so it must be the user's own
-  device. Any other meeting point is someone else's server, which learns at least which
+  (below), and it is a member of the group, so it must be the user's own device. Copies are
+  sealed end to end (D-84), so it need not read them: the user makes it a trusted hub, an
+  admin that reads copies like any reader, or one that only passes copies on, which reads
+  none and needs no keys in hardware (docs/protocol.md, section 11, "Two kinds of hub"); an
+  always-on board such as a Raspberry Pi without a TPM can be the latter. Any other meeting point is someone else's server, which learns at least which
   devices talk and when; the user's own hub lets nothing out but encrypted packets. A group
   without such a computer syncs at home only, unless the user runs a blind relay of their
   own (below).
@@ -1007,7 +1020,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   hub in Settings, with the reason in plain words: sync away from home then works with the
   app closed. The user may keep the phone as the hub; the app then does not ask again, and
   can still move the hub to any computer there. A computer that is no admin yet is made one
-  first, on the root phone. The phone, still the hub, passes the new hub its clients' tunnel
+  first, on the root phone, or marked as a hub that only passes copies on. The phone, still the hub, passes the new hub its clients' tunnel
   keys and preshared keys in a signed `hub` command inside member TLS and tells its
   connected clients the new hub's offer through the tunnel, so devices far away (a parent's
   TV in another city) move without coming home; then it becomes the new hub's client. The
@@ -1021,9 +1034,8 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   with a new remote invitation. That is one more reason for a second phone as an admin,
   which the app already suggests.
 - **What it does not change.** The rules above hold: a star around the hub, the member TLS
-  inside the tunnel, the project's forwarder only passing packets. The hub reads the texts,
-  as every hub does; the root phone is the group's most trusted device, so that adds no
-  exposure.
+  inside the tunnel, the project's forwarder only passing packets. The phone reads the copies
+  as the group's reader it is, and the copies it passes on stay sealed to the others.
 
 ##### Groups without a working hub
 
@@ -2331,8 +2343,9 @@ has lingering). So a rootless device:
 
 - says `rootless` in its hello's `key_store` and gets it as `store` in its device record
   (docs/protocol.md, section 17); a reader that does not know the value takes it as `file`;
-- is never the group's root, an admin or a hub, not even after the warning that lets a
-  device with keys in a file be one (D-66): any program of the user can copy its keys;
+- is never the group's root, an admin or a trusted hub, not even after the warning that lets
+  a device with keys in a file be one (D-66): any program of the user can copy its keys; it
+  may be a hub that only passes copies on, whose keys open no copy;
 - has quick actions and remote paste off, as every device until its own user turns them on
   (D-71);
 - is shown as rootless in `cbb status` and on the phones' device pages.

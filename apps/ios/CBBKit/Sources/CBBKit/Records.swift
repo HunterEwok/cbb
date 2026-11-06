@@ -41,6 +41,8 @@ public enum Records {
         public var holds_root: Bool?
         /// The device's public key for sealed messages (section 15).
         public var seal: Data?
+        /// A hub that only passes copies on: none is sealed to it (section 4).
+        public var forward_only: Bool?
         // revoke, freeze
         public var keys: [Data]?
         // thaw, resolve
@@ -84,6 +86,7 @@ public enum Records {
             try put(proof, .proof)
             if holds_root == true { try c.encode(true, forKey: .holds_root) }
             try put(seal, .seal)
+            if forward_only == true { try c.encode(true, forKey: .forward_only) }
             // Each key and record once, as the core wants them.
             func once(_ a: [Data]?) -> [Data]? { a.map { a in a.enumerated().filter { a.firstIndex(of: $0.element) == $0.offset }.map(\.element) } }
             try put(once(keys), .keys)
@@ -96,7 +99,7 @@ public enum Records {
         }
 
         private enum Key: String, CodingKey {
-            case v, alg, type, signer, time_ms, device, name, role, os, key, admin, powers, commands, store, kind, proof, holds_root, seal
+            case v, alg, type, signer, time_ms, device, name, role, os, key, admin, powers, commands, store, kind, proof, holds_root, seal, forward_only
             case keys, records, root, cert, takeover_delay_ms, key_level, hubs
         }
     }
@@ -230,6 +233,8 @@ public struct RecordSet: Codable, Equatable, Sendable {
         /// Its public key for sealed messages, which commands for it are
         /// sealed to; nil when its record has none.
         public var seal: Data?
+        /// A hub that only passes copies on, which no copy is sealed to.
+        public var forwardOnly = false
         /// An admin now: it has an admin key and is not frozen.
         public var admin = false
         /// The key hash of its admin CA, whether or not it is frozen.
@@ -248,7 +253,7 @@ public struct RecordSet: Codable, Equatable, Sendable {
         public func may(_ p: String) -> Bool { admin && powers.contains(p) }
 
         private enum CodingKeys: String, CodingKey {
-            case id = "device", name, role, os, key, store, kind, proof, seal, admin, adminKey = "admin_key", powers, commands, frozen, freezes, keys
+            case id = "device", name, role, os, key, store, kind, proof, seal, forwardOnly = "forward_only", admin, adminKey = "admin_key", powers, commands, frozen, freezes, keys
         }
 
         public init(from decoder: Decoder) throws {
@@ -262,6 +267,7 @@ public struct RecordSet: Codable, Equatable, Sendable {
             kind = try c.decodeIfPresent(String.self, forKey: .kind)
             proof = try c.decodeIfPresent(String.self, forKey: .proof)
             seal = try c.decodeIfPresent(Data.self, forKey: .seal)
+            forwardOnly = try c.decodeIfPresent(Bool.self, forKey: .forwardOnly) ?? false
             admin = try c.decodeIfPresent(Bool.self, forKey: .admin) ?? false
             adminKey = try c.decodeIfPresent(Data.self, forKey: .adminKey)
             powers = try c.decodeIfPresent([String].self, forKey: .powers) ?? []
@@ -600,5 +606,30 @@ public struct RecordSet: Codable, Equatable, Sendable {
         } catch let r as Core.Refusal {
             throw Commands.Refused(reason: r.details.map { "\(r.message): \($0)" } ?? r.message)
         }
+    }
+
+    /// Seals a copy this member made to the readers the set names
+    /// (group_seal_copy, docs/protocol.md, section 4, "Sealing") and signs
+    /// it with signer, the member key of cert; key sealed the blob of its
+    /// images or files, if it has one.
+    public func sealCopy(_ e: Member.Event, cert: Data, issuer: Data?, key: Data?, blob: Media.Blob?, signer: CertificateSigner) throws -> Member.Sealed {
+        struct Extra: Encodable {
+            var id: String, origin: String, time: Member.Timestamp, cert: Data, issuer: Data?
+            var kind: Member.Kind, via: Member.Via, text: String, media: Media.Manifest?, blob: Media.Blob?, key: Data?
+        }
+        struct Answer: Decodable { var event: Member.Sealed, to_sign: Data }
+        let a = try ask("group_seal_copy", Extra(id: e.id, origin: e.origin, time: e.time, cert: cert, issuer: issuer, kind: e.kind, via: e.via,
+                                                 text: e.text, media: e.media, blob: blob, key: key), as: Answer.self)
+        var s = a.event
+        s.sig = try signer.signature(for: a.to_sign)
+        return s
+    }
+
+    /// Checks a copy's origin and signature against the set, as a member
+    /// does before it keeps or passes the copy on (group_check_copy).
+    public func checkCopy(_ s: Member.Sealed) throws {
+        struct Extra: Encodable { var event: Member.Sealed }
+        struct Answer: Decodable {}
+        _ = try ask("group_check_copy", Extra(event: s), as: Answer.self)
     }
 }

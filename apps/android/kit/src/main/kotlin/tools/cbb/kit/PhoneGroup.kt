@@ -101,6 +101,9 @@ class PhoneGroup internal constructor(
     /** The computer is a rootless install, which is never an admin (D-79). */
     class Rootless : Exception("it is installed without root")
 
+    /** An admin, or the root's own device, reads the copies: it is no hub that only passes them on. */
+    class ReadsCopies : Exception("it reads the copies")
+
     /** The group's key level does not let the device's keys be an admin or the root; the root sets another level first. */
     class BelowKeyLevel : Exception("the group's key level does not let these keys in")
 
@@ -172,6 +175,7 @@ class PhoneGroup internal constructor(
         powers: List<String>? = null,
         commands: List<String>? = null,
         seal: ByteArray? = null,
+        forwardOnly: Boolean = false,
     ): Member.Record {
         if (!isAdmin) throw Failure("this phone is no admin")
         val b = Records.Body.of("device", caSigner, now)
@@ -185,6 +189,7 @@ class PhoneGroup internal constructor(
         b.kind = kind
         b.proof = proof
         b.seal = seal
+        b.forwardOnly = forwardOnly
         if (admin != null) {
             val (p, c) = Records.grants(role)
             b.powers = powers ?: p
@@ -201,6 +206,7 @@ class PhoneGroup internal constructor(
             d.powers.takeIf { admin != null && admin.contentEqualsOrNull(d.adminKey) && it.isNotEmpty() },
             d.commands.takeIf { admin != null && admin.contentEqualsOrNull(d.adminKey) && it.isNotEmpty() },
             d.seal,
+            d.forwardOnly,
         )
 
     /**
@@ -334,7 +340,7 @@ class PhoneGroup internal constructor(
             if (d.id == lost) {
                 revoke += d.keys
             } else if (admin != null && !d.frozen) {
-                out += record(d.id, d.name, d.role, d.key, rootSigner, now, admin, d.os, d.store, d.kind, d.proof, d.powers, d.commands, d.seal)
+                out += record(d.id, d.name, d.role, d.key, rootSigner, now, admin, d.os, d.store, d.kind, d.proof, d.powers, d.commands, d.seal, d.forwardOnly)
             }
         }
         if (revoke.isNotEmpty()) {
@@ -484,6 +490,23 @@ class PhoneGroup internal constructor(
         val n = name.trim()
         if (n.isEmpty() || validName(n) != n) throw Failure(INVALID_NAME)
         return recordAgain(d, caSigner, now, name = n)
+    }
+
+    /**
+     * Signs the device record that makes a computer that is no admin a hub
+     * that only passes the copies on (docs/protocol.md, section 11, "Two
+     * kinds of hub"): `forward_only`, which no key level limits; from then
+     * on no copy is sealed to it. null when its record says so already.
+     */
+    fun markForwardOnly(device: String, caSigner: CertificateSigner, now: Instant): Member.Record? {
+        if (!isAdmin) throw Failure("this phone is no admin")
+        val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
+        if (d.forwardOnly) return null
+        if (d.role != "full") throw Failure("not a computer")
+        if (d.frozen) throw Failure("frozen: unfreeze it or remove it")
+        if (d.store == Records.ROOTLESS) throw Rootless()
+        if (d.adminKey != null || device == records.rootDevice) throw ReadsCopies()
+        return record(d.id, d.name, d.role, d.key, caSigner, now, null, d.os, d.store, d.kind, d.proof, seal = d.seal, forwardOnly = true)
     }
 
     /** The key for sealed messages that the device record of to names, which an admin's commands for it are sealed to (section 15, "Sealed commands"); null when it has none. */

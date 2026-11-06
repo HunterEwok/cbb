@@ -52,7 +52,7 @@ func wanSide(ctx context.Context, r *Report, f *Fleet) {
 	// handshake tries member TLS from d to addr and tells whether the
 	// member answered with TLS 1.3.
 	handshake := func(d *Device, ip string) (bool, string) {
-		out, _ := runOut(ctx, d, "openssl s_client -tls1_3 -connect "+ip+":8764 -servername cb-"+id+".local -alpn cbb/2 </dev/null 2>&1", time.Minute)
+		out, _ := runOut(ctx, d, "openssl s_client -tls1_3 -connect "+ip+":8764 -servername cb-"+id+".local -alpn cbb/3 </dev/null 2>&1", time.Minute)
 		return strings.Contains(out, "New, TLSv1.3,"), out
 	}
 	r.Do(p+"home-answers", func() error {

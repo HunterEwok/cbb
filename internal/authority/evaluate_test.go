@@ -667,6 +667,68 @@ func TestDeviceSeal(t *testing.T) {
 	}
 }
 
+// TestForwardOnly: a computer that only passes copies on comes in a device
+// record with forward_only, which only the root or an admin with both admit
+// and hub may sign, and the state keeps the flag of the record that counts
+// (a root's beats an admin's);
+// another role, an admin or the root's own device cannot have it.
+func TestForwardOnly(t *testing.T) {
+	w := newWorld(t)
+	w.makeAdmin("A", "full", computerPowers)
+	w.makeAdmin("D", "full", []string{authority.PowerAdmit})
+	flagOf := func(s *authority.State, name string) bool {
+		for _, d := range s.Devices {
+			if d.Device == w.ids[name] {
+				return d.ForwardOnly
+			}
+		}
+		t.Fatalf("no device %s: %s", name, mustEncode(t, s))
+		return false
+	}
+	body := func(name, role string, forwardOnly bool) authority.Body {
+		if _, ok := w.members[name]; !ok {
+			w.members[name], w.ids[name] = hashOf(t, &newKey(t).PublicKey), string(group.NewDeviceID())
+		}
+		k := w.members[name]
+		return authority.Body{Type: authority.TypeDevice, Device: w.ids[name], Name: name, Role: role, Key: &k, ForwardOnly: forwardOnly}
+	}
+	first := body("pi", "full", true)
+	first.TimeMS = 10
+	w.sign("pi passes copies on, by A", "A", first, nil)
+	if !flagOf(w.evalAll(nil), "pi") {
+		t.Fatal("the state does not keep forward_only")
+	}
+	byD := w.sign("vps passes copies on, by D", "D", body("vps", "full", true), nil)
+	s := w.evalAll(nil)
+	if why := ignoredWhy(s, byD.ID()); why != authority.WhyPower {
+		t.Fatalf("an admin without hub marked a device forward_only, ignored for %q", why)
+	}
+	plain := body("pi", "full", false)
+	plain.TimeMS = 20
+	again := w.sign("pi reads copies again, by root", "root", plain, nil)
+	if s := w.evalAll(nil); flagOf(s, "pi") {
+		t.Fatalf("the newest record's flag does not count (%q)", ignoredWhy(s, again.ID()))
+	}
+	last := body("pi", "full", true)
+	last.TimeMS = 30
+	w.sign("pi passes copies on again, by root", "root", last, nil)
+	if !flagOf(w.evalAll(nil), "pi") {
+		t.Fatal("the root's record does not count")
+	}
+	for _, b := range []authority.Body{body("lite", "lite", true), body("phone", "phone", true)} {
+		b.Group, b.Signer, b.Seq = tag, w.adminKey("A"), 1
+		if _, err := b.Encode(); err == nil {
+			t.Errorf("forward_only with role %s checks", b.Role)
+		}
+	}
+	admin := body("A", "full", true)
+	a := w.adminKey("A")
+	admin.Admin, admin.Powers = &a, computerPowers
+	if _, err := admin.Encode(); err == nil {
+		t.Error("an admin's record with forward_only checks")
+	}
+}
+
 // TestTimesAtTheEnds is a claim first seen at the lowest time a caller
 // can give: the time since is held at its end, not wrapped, and the claim
 // takes effect.

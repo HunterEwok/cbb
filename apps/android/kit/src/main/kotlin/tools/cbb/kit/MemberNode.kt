@@ -150,10 +150,27 @@ class MemberNode(
     private val content: ContentStore? = null,
     /** The group's server credentials; null keeps none and passes none on. */
     private val credentials: CredentialKeeper? = null,
+    /**
+     * What this phone seals its copies with and checks and opens the others'
+     * with (docs/protocol.md, section 4); null takes copies as they come,
+     * unchecked, as in tests of the protocol alone.
+     */
+    private val copies: CopyKeys? = null,
     /** The signed entry points; null takes none. */
     private val entries: EntriesKeeper? = null,
 ) {
     val device: Member.DeviceInfo? = device?.cleaned
+
+    init {
+        if (copies != null) engine.seal = { e, key, blob -> copies.seal(e, key, blob) }
+    }
+
+    /** Why the last copy a peer sent was dropped, for the app's log. */
+    @Volatile var lastDropped: String? = null
+        private set
+
+    /** Why the last copy sealed to this phone did not open; it stays unread. */
+    val lastUnopened: String? get() = copies?.lastUnopened
     private val lock = Any()
     private val conns = mutableSetOf<Conn>()
     private val waiting = mutableMapOf<String, Waiting>()
@@ -337,10 +354,13 @@ class MemberNode(
     /**
      * Sends a text this phone copied to every connected member, or with
      * media images or files whose content this phone's ContentStore holds,
-     * text their plain-text alternative.
+     * text their plain-text alternative, sealed to the group's readers; the
+     * store seals the parts into the copy's blob. It throws when the copy
+     * cannot be sealed.
      */
     fun send(text: String, kind: Member.Kind, via: Member.Via = Member.Via.COPY, media: Media.Manifest? = null): Member.Event = synchronized(lock) {
-        val e = engine.local(text, kind, via, media)
+        val sealedBlob = if (media != null && copies != null) (content ?: throw Content.NoParts()).sealBlob(media) else null
+        val e = engine.local(text, kind, via, media, sealedBlob?.first, sealedBlob?.second)
         for (c in conns) forward(e, c)
         e
     }
@@ -361,7 +381,8 @@ class MemberNode(
             val keys = tunnelKey()
             // A phone's keys are in the Secure Enclave or the Keystore.
             val base = engine.hello(name)
-            val hello = (if (c.recordsOnly) base.copy(current = null) else base).copy(
+            // Once this phone has its keys, a copy goes out only sealed.
+            val hello = (if (c.recordsOnly || copies != null && base.current?.sealed == null) base.copy(current = null) else base).copy(
                 records = records?.digest, tunnelKey = keys?.first, tunnelPSK = keys?.second, os = os, device = device, mode = mode(),
                 keyStore = Records.HARDWARE, media = content != null,
                 entriesKeysSeq = entries?.order?.first ?: 0, entriesSeq = entries?.order?.second ?: 0,
@@ -398,7 +419,7 @@ class MemberNode(
                         c.mode = m.hello.mode
                         c.peerMedia = m.hello.media
                         c.peerRole = m.role
-                        apply(engine.reconcile(m.hello), c)
+                        apply(engine.reconcile(m.hello.copy(current = m.hello.current?.let { take(it, c.peer) })), c)
                         val store = records
                         val mine = store?.digest
                         if (store != null && mine != null && mine != m.hello.records) {
@@ -432,7 +453,8 @@ class MemberNode(
                 when (m) {
                     is Member.Message.Event -> {
                         val e = m.event
-                        if (e != null) synchronized(lock) { apply(engine.received(e), c) }
+                        val taken = e?.let { take(it, c.peer) }
+                        if (taken != null) synchronized(lock) { apply(engine.received(taken), c) }
                     }
                     is Member.Message.Cert -> onCert(m.cert)
                     is Member.Message.Evidence -> if (t.peerChain.isNotEmpty()) onEvidence(c.peer, t.peerChain, m.evidence)
@@ -712,13 +734,35 @@ class MemberNode(
      */
     private fun forward(e: Member.Event, c: Conn) {
         if (c.recordsOnly) return
+        // A copy goes out only sealed, once this phone has its keys.
+        if (copies != null && e.sealed == null) return
         var out = e
         val store = records
-        if (e.kind == Member.Kind.SECRET && store != null) {
+        if (e.kind == Member.Kind.SECRET && !e.unread && store != null) {
             val leaf = c.transport.peerChain.firstOrNull()?.let { runCatching { CertificateInfo(it).commonName }.getOrNull() }
-            if (store.noSecrets(c.peer ?: leaf)) out = e.copy(text = "")
+            if (store.noSecrets(c.peer ?: leaf)) out = e.mark
         }
         c.enqueue(Member.Message.Event(out))
+    }
+
+    /**
+     * Checks a copy a peer sent against the records and opens it when it is
+     * sealed to this phone (CopyKeys.take); null drops it: a copy in the
+     * open, or one the records refuse.
+     */
+    private fun take(e: Member.Event, peer: String?): Member.Event? {
+        val keys = copies ?: return e
+        val s = e.sealed
+        if (s == null) {
+            lastDropped = "a copy from ${peer ?: "a member"} was not sealed"
+            return null
+        }
+        return try {
+            keys.take(s)
+        } catch (x: Exception) {
+            lastDropped = "a copy from ${peer ?: "a member"} was refused: ${x.message}"
+            null
+        }
     }
 
     internal class Conn(val transport: FrameTransport, val peer: String?) {

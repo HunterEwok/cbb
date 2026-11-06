@@ -15,6 +15,7 @@ import tools.cbb.kit.GroupAlert
 import tools.cbb.kit.Arrangement
 import tools.cbb.kit.Core
 import tools.cbb.kit.Content
+import tools.cbb.kit.CopyKeys
 import tools.cbb.kit.InvitationWindow
 import tools.cbb.kit.JoinCode
 import tools.cbb.kit.MemberNode
@@ -993,14 +994,15 @@ class AppModel(private val app: Context) {
     }
 
     /**
-     * Makes a connected admin computer a hub of the group as well
-     * (docs/protocol.md, section 11, "Several hubs"); the reason it
+     * Makes a connected computer a hub of the group as well
+     * (docs/protocol.md, section 11, "Several hubs"): one that reads the
+     * copies, an admin, or one that only passes them on; the reason it
      * refused, if it does, shows under the message.
      */
-    suspend fun makeHub(id: String) {
+    suspend fun makeHub(id: String, forwardOnly: Boolean = false) {
         message = try {
-            group.makeHub(id)
-            Note(R.string.made_hub)
+            group.makeHub(id, forwardOnly)
+            Note(if (forwardOnly) R.string.made_hub_forward_only else R.string.made_hub)
         } catch (e: CancellationException) {
             throw e
         } catch (e: LiveGroup.CommandRefused) {
@@ -1167,13 +1169,16 @@ class AppModel(private val app: Context) {
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large
             is Arrangement.Refused -> R.string.error_arrangement
-            is MemberNode.MissingException, is MemberNode.ProtocolException -> R.string.error_image_unavailable
+            is Content.Unread -> R.string.error_copy_unread
+            is CopyKeys.NoRecords -> R.string.error_copy_no_records
+            is MemberNode.MissingException, is MemberNode.ProtocolException, is Content.Mismatch -> R.string.error_image_unavailable
             is PairingMember.Failure ->
                 if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_wrong_code else R.string.error_refused
             is PhoneGroup.Failure -> R.string.error_generic
             is PhoneGroup.FileKey -> R.string.error_file_key
             is PhoneGroup.BelowKeyLevel -> R.string.error_below_key_level
             is PhoneGroup.Rootless -> R.string.error_rootless
+            is PhoneGroup.ReadsCopies -> R.string.error_reads_copies
             is PairingJoiner.Failure -> R.string.error_join
             is Keys.NoScreenLock -> R.string.error_no_screen_lock
             is Keys.NoBiometric -> R.string.error_no_biometric
