@@ -175,6 +175,13 @@ class SyncEngine(
 
     class HelloException(message: String) : Exception(message)
 
+    /** Drops the current event when it is the event id: its origin was removed from the group, so its copy no longer counts. What the phone's clipboard holds stays. */
+    fun forget(id: String) {
+        if (current?.id != id) return
+        current = null
+        copiedAt = 0
+    }
+
     /** Takes in a peer's hello. A hello that carries a secret's text is a protocol error and closes the connection. */
     fun reconcile(h: Member.Hello): Result {
         val cur = h.current ?: return Result(null, false)

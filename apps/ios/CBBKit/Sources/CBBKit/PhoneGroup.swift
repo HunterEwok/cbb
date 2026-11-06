@@ -172,6 +172,8 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         case notHandedOver
         /// The delay before a claim takes effect is outside 0 to 7 days.
         case invalidDelay
+        /// How long an incoming copy stays live is outside 5 s to 1 h.
+        case invalidIncoming
         /// A watch's request names a device ID or system that is not a new watch's,
         /// or a device that is not a watch of the group.
         case notAWatch
@@ -405,6 +407,22 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
 
     /// The group's key level: which keys may be its root, an admin or a hub.
     public var keyLevel: String { records.keyLevel }
+
+    /// How long a copy from another device stays live after it arrives, in
+    /// milliseconds: written to the clipboard until then, never after.
+    public var incomingMS: Int64 { records.incomingMS }
+
+    /// Sets how long a copy from another device stays live after it
+    /// arrives (5 s to 1 h), as the root or an admin: a copies record
+    /// (docs/protocol.md, section 10, "The copies setting"). It returns the
+    /// record to send.
+    public mutating func setIncoming(ms: Int64, caSigner: CertificateSigner, now: Date) throws -> Member.Record {
+        guard isAdmin else { throw Failure.notAdmin }
+        guard Records.incomingBounds.contains(ms) else { throw Failure.invalidIncoming }
+        var b = Records.Body(type: "copies", signer: Self.signer(caSigner), timeMS: Records.ms(now))
+        b.incoming_ms = ms
+        return try sign(b, caSigner: caSigner)
+    }
 
     /// Sets the group's key level (Records.keyLevels), as the current root,
     /// keeping the takeover delay; never a level this phone's own key does

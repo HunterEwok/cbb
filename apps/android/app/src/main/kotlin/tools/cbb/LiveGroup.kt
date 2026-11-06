@@ -1587,6 +1587,23 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** The group's key level (KitRecords.KEY_LEVELS) on the root phone; null elsewhere. */
     val keyLevel: String? get() = synchronized(lock) { state?.takeIf { it.isRoot }?.keyLevel }
 
+    /** How long a copy from another device stays live after it arrives, in milliseconds, as the group's records set it. */
+    val incomingMS: Long get() = synchronized(lock) { state?.incomingMS } ?: KitRecords.DEFAULT_INCOMING_MS
+
+    /**
+     * Sets how long a copy from another device stays live after it arrives:
+     * a copies record, signed by the root or an admin after the fingerprint,
+     * the face or the screen lock and sent to every member (docs/protocol.md,
+     * section 10, "The copies setting").
+     */
+    suspend fun setIncoming(ms: Long) {
+        val ca = caSigner(R.string.reason_incoming)
+        val g = copyOfState()?.takeIf { it.isAdmin } ?: throw Failure(Failure.Kind.NOT_ADMIN)
+        val r = withContext(Dispatchers.IO) { g.setIncoming(ms, ca, Instant.now()) }
+        withContext(Dispatchers.IO) { adopt(g) }
+        published(listOf(r))
+    }
+
     /**
      * Sets the group's key level (docs/guide/keys.md, "The three levels"): a
      * settings record, signed with the root key after the fingerprint, the
@@ -1916,18 +1933,19 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             ) { synchronized(lock) { state?.records } },
             entries = entries,
             adminCA = { key -> synchronized(lock) { state?.computerAdminCA(key) } },
-            // A copy of a moment ago from another device; an older one, as a
-            // hello brings it on connecting, would overwrite what the phone
-            // copied since.
-            // Only in a sync mode that takes the group's copies.
+            // A live copy from another device (docs/design.md, "The one
+            // button"); an older one, as a hello brings it on connecting,
+            // would overwrite what the phone copied since. Only in a sync
+            // mode that takes the group's copies.
             onChange = { e ->
-                if (!e.isMark && e.origin != g.device && e.ageMS < SyncRule.RECENT_COPY_MS && Member.receives(syncMode)) {
+                if (!e.isMark && !e.unread && e.origin != g.device && e.ageMS < incomingMS && Member.receives(syncMode) && e.media?.isFiles != true) {
                     val image = Images.part(e.media)
                     if (image != null) {
                         // Fetched off the node's thread, which reads the chunks.
-                        onImage?.let { f -> Thread({ fetchImage(e, image)?.let { f(it, e.text) } }, "image").start() }
+                        onImage?.let { f -> Thread({ fetchImage(e, image)?.let { f(it, e.text); taken = e.id } }, "image").start() }
                     } else if (e.text.isNotEmpty()) {
                         onCopy?.invoke(e.text, e.kind)
+                        taken = e.id
                     }
                 }
             },
@@ -2191,39 +2209,44 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * The one button, by SyncRule: given what the phone's clipboard holds
-     * now, sends it or returns the text to put there.
+     * The one button, by SyncRule: a copy from another device that waits
+     * for the phone comes in (the text or image to put in the clipboard is
+     * returned); otherwise what the phone's clipboard holds goes out. board
+     * reads the clipboard, and only when no copy waits.
      */
-    fun sync(board: Clipboard.Board?): Pair<SyncResult, Got?> {
+    fun sync(board: () -> Clipboard.Board?): Pair<SyncResult, Got?> {
         val (n, device) = synchronized(lock) { (node ?: throw Failure(Failure.Kind.NO_COMPUTERS)) to (state?.device ?: "") }
         val current = n.current
         val image = Images.part(current?.media)
         val files = current?.media?.takeIf { it.isFiles }
-        // An image compares by its hash, a text by itself; files count
-        // until the button saved them once.
+        // An image compares by its hash, a text by itself; files by the copy.
         val usable = when {
             image != null -> Images.key(image.sha256!!) to Member.Kind.MEDIA
-            files != null -> if (current.id == savedFiles) null else "\u0000files:" + current.id to Member.Kind.MEDIA
+            files != null -> "\u0000files:" + current.id to Member.Kind.MEDIA
             else -> n.usable
         }
-        return when (SyncRule.decide(board?.key, current, usable, device)) {
+        // The button works in every mode; only what the phone takes by itself follows it.
+        val waits = SyncRule.waiting(current, usable, device, incomingMS, receives = true, taken = taken)
+        var read: Clipboard.Board? = null
+        return when (SyncRule.decide(waits, { board().also { read = it }?.key }, usable)) {
             SyncRule.Action.FETCH -> {
                 if (files != null) {
                     if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
                     val saved = Files.save(context, n, current, files)
-                    savedFiles = current.id
+                    taken = current.id
                     return SyncResult.FETCHED to Got.Files(saved)
                 }
-                if (image == null) return SyncResult.FETCHED to usable?.let { Got.Text(it.first, it.second) }
+                if (image == null) return SyncResult.FETCHED to usable?.let { taken = current?.id; Got.Text(it.first, it.second) }
                 if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
                 val f = fetchImage(current!!, image, quiet = false) ?: throw Failure(Failure.Kind.NO_COMPUTERS)
+                taken = current.id
                 SyncResult.FETCHED to Got.Image(f, current.text)
             }
             SyncRule.Action.SEND -> {
                 if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
-                when (board!!) {
-                    is Clipboard.Board.Text -> n.send(board.text, Member.Kind.TEXT)
-                    is Clipboard.Board.Image -> sendImage(n, board.image)
+                when (val b = read!!) {
+                    is Clipboard.Board.Text -> n.send(b.text, Member.Kind.TEXT)
+                    is Clipboard.Board.Image -> sendImage(n, b.image)
                 }
                 SyncResult.SENT to null
             }
@@ -2262,14 +2285,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * The group's latest copy while the button would fetch it first
-     * (SyncRule.decide): another device's, younger than RECENT_COPY_MS;
-     * null otherwise. The tests wait it out before they send.
+     * (SyncRule.waiting): another device's, younger than the live window
+     * and not taken yet; null otherwise. The tests wait it out before they
+     * send.
      */
     internal val recentCopy: Member.Event?
         get() {
             val (n, device) = synchronized(lock) { node to state?.device }
             val e = n?.current ?: return null
-            return e.takeIf { it.origin != device && it.via == Member.Via.COPY && it.ageMS < SyncRule.RECENT_COPY_MS }
+            return e.takeIf { SyncRule.waiting(it, n.usable ?: ("" to Member.Kind.MEDIA), device ?: "", incomingMS, receives = true, taken = taken) }
         }
 
     /** What the button fetched for the phone's clipboard: a text, or an image in the app's cache with its text. */
@@ -2282,8 +2306,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         data class Files(val count: Int) : Got()
     }
 
-    /** The files event the button saved last, so it does not save them again. */
-    @Volatile private var savedFiles: String? = null
+    /** The ID of the last copy from another device this phone put in its clipboard, or saved in Downloads, so it is taken once. */
+    @Volatile private var taken: String? = null
 
     /** Sends what the user shared with the app: an image, or files, which the computers fetch from this phone. */
     fun sendShared(shared: Files.Shared): SyncResult {

@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The group sets how long a copy from another device stays live: one minute by default, from
+  5 seconds to an hour, in a signed `copies` record that the root or any admin signs
+  (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies
+  setting"); `cbb incoming` without a value shows it.
 - The first build of the app for Aurora OS 5 (`apps/silica`, armv7hl and aarch64): it shows
   the Rust core it links and keeps the phone's P-256 key in its own OP-TEE token, initialized
   once through Aurora's QCA keystore and used through PKCS#11 after that. It joins a group
@@ -1088,6 +1092,16 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- Every device follows one clipboard rule (D-85): a copy from another device goes into the
+  clipboard while it is live, counted from when it was copied in durations, never by the
+  sender's clock; after that it is gone and the device keeps what it copied itself. A
+  computer that wakes or starts no longer takes an old copy of the group (the 30-second
+  rejoin window is gone). A phone's button takes a copy that waits for it and otherwise
+  sends what the phone copied, however old, unless it is the group's text already; it reads
+  the phone's clipboard only to send. On the iPhone it is the system's Paste button, so iOS
+  does not ask, and the "CBB: sync" shortcut takes its text from Shortcuts' "Get Clipboard".
+- A copy from a device the group removed, or one a taken-over root admitted, is dropped,
+  also when it was not written yet.
 - A copy's manifest of images or files is read by the rules of signed bodies in their canonical
   form everywhere: no member its table does not name, no null (a folder's `size` and `sha256`
   are absent), names in their exact case and each once. Go reads it with

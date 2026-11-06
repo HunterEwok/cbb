@@ -160,6 +160,7 @@ impl Node {
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Node {
         let entries = Arc::new(Entries::open(&state_dir, crate::update::release_roots(), uptime::wall_ms(), &*log));
+        engine.set_live_window(live_window(&records));
         Node {
             ident: RwLock::new(Arc::new(ident)),
             presence: Arc::new(Presence {
@@ -755,6 +756,29 @@ impl Node {
         Ok(())
     }
 
+    /// Gives the engine what the records say about the group's copies: how
+    /// long an incoming copy stays live (docs/protocol.md, section 10, "The
+    /// copies setting"), and whether the current event's origin is still a
+    /// member. A copy from a device removed since, or from a root an admin
+    /// took the group over from, is dropped then and never written later.
+    fn apply_copy_rules(&self) {
+        let current = self.engine.current_copy();
+        let (window, refused) = {
+            let st = self.records.lock().unwrap();
+            let refused = match &current {
+                Some((_, Some(s))) => s.check(&st, uptime::wall_ms().div_euclid(1000)).err(),
+                _ => None,
+            };
+            (live_window(&st), refused)
+        };
+        self.engine.set_live_window(window);
+        if let (Some((id, _)), Some(e)) = (current, refused)
+            && self.engine.forget(&id)
+        {
+            self.logf(&format!("cbb: the group's last copy no longer counts and is dropped: {}", e.for_log()));
+        }
+    }
+
     fn add_records(&self, rs: &[Record], from: &DeviceId) {
         let fresh = {
             let mut st = self.records.lock().unwrap();
@@ -785,6 +809,7 @@ impl Node {
             }
             fresh
         };
+        self.apply_copy_rules();
         // Pass them on, and drop the connections that are refused now.
         let st = self.records.lock().unwrap();
         for c in self.conns.lock().unwrap().values() {
@@ -1019,6 +1044,12 @@ fn remember_found(home: &mut HashMap<DeviceId, Duration>, id: &DeviceId, here: b
     } else if home.len() < MAX_HOME || home.contains_key(id) {
         home.entry(id.clone()).or_insert_with(now);
     }
+}
+
+/// How long a copy from another device stays live, as the records set it;
+/// zero when they set nothing (the engine's default, a minute).
+fn live_window(records: &Records) -> Duration {
+    Duration::from_millis(records.state().incoming_ms.unwrap_or(0).max(0) as u64)
 }
 
 #[cfg(test)]

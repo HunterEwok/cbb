@@ -237,6 +237,12 @@ class CopyKeys(
     @Volatile var lastUnopened: String? = null
         private set
 
+    /** Whether the records refuse the origin of s now, as a device removed since: its copy no longer counts. */
+    fun refused(s: Sealed): Boolean {
+        val set = records() ?: return false
+        return runCatching { set.checkCopy(s) }.isFailure
+    }
+
     /** Seals and signs a copy this phone made (section 4, "Sealing"), with the blob of its images or files sealed under key. */
     fun seal(e: Member.Event, key: ByteArray?, blob: Blob?): Sealed =
         (records() ?: throw NoRecords()).sealCopy(e, cert, issuer, key, blob, signer)

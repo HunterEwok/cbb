@@ -404,6 +404,12 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			return
 		}
 		reply(c, control.Header{Done: true}, nil)
+	case control.OpIncoming:
+		if err := s.setIncoming(m.Value); err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Done: true}, nil)
 	case control.OpKeyLevel:
 		below, err := s.setKeyLevel(m.Value)
 		if err != nil {
@@ -569,6 +575,10 @@ func (s *Service) groupStatus(st *control.Status) {
 	}
 	gs := s.records.State()
 	st.KeyLevel = gs.KeyLevel
+	st.IncomingMS = gs.IncomingMS
+	if st.IncomingMS == 0 {
+		st.IncomingMS = authority.DefaultIncoming
+	}
 	if st.KeyLevel == "" {
 		st.KeyLevel = LevelHardware
 	}

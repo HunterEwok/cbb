@@ -798,6 +798,9 @@ func (ep *epoch) permitted(r *rec) bool {
 		return ep.has(a, PowerTakeover) && r.issuer == ep.cur
 	case TypeHubs:
 		return ep.has(a, PowerHub)
+	case TypeCopies:
+		// Any admin sets how long incoming copies stay live.
+		return true
 	}
 	return false
 }
@@ -1279,6 +1282,11 @@ type State struct {
 	// KeyLevel is the key level of the current root's newest settings
 	// record that counts; "" when it sets none, which means "hardware".
 	KeyLevel string `json:"key_level,omitempty"`
+	// IncomingMS is how long a copy from another device stays live after
+	// it arrives, from the copies record that counts; 0 when none counts,
+	// which means DefaultIncoming (docs/protocol.md, section 10, "The
+	// copies setting").
+	IncomingMS int64 `json:"incoming_ms,omitempty"`
 	// Recovery is the admin key of the group's recovery key, from the
 	// newest recovery record of a root on the path, while it is neither
 	// revoked nor frozen (docs/records-v2.md, "The recovery key").
@@ -1396,6 +1404,9 @@ func (ep *epoch) state() *State {
 		return s.Conflicts[i].Records[0].String() < s.Conflicts[j].Records[0].String()
 	})
 	s.Hubs = ep.hubs(s.Devices)
+	if r := ep.best(TypeCopies); r != nil {
+		s.IncomingMS = *r.Body.IncomingMS
+	}
 	if r := ep.settings(); r != nil {
 		s.KeyLevel = r.Body.KeyLevel
 	}
@@ -1418,14 +1429,7 @@ func (ep *epoch) state() *State {
 // higher seq. Only the devices it names that are among devices with the
 // role full or phone are kept.
 func (ep *epoch) hubs(devices []Device) []string {
-	var best *rec
-	for _, rs := range ep.e.bySig {
-		for _, r := range rs {
-			if r.Body.Type == TypeHubs && ep.counts(r) && (best == nil || ep.newerHubs(r, best)) {
-				best = r
-			}
-		}
-	}
+	best := ep.best(TypeHubs)
 	if best == nil {
 		return nil
 	}
@@ -1442,7 +1446,23 @@ func (ep *epoch) hubs(devices []Device) []string {
 	return out
 }
 
-// newerHubs reports whether hubs record a beats b.
+// best returns the record of type t, one a root or an admin signs, that
+// counts for the state: as for the hubs table, a root's beats an admin's,
+// then the later root on the path and the higher seq; of two admins' the
+// later time_ms, then the smaller signer, then the higher seq.
+func (ep *epoch) best(t string) *rec {
+	var best *rec
+	for _, rs := range ep.e.bySig {
+		for _, r := range rs {
+			if r.Body.Type == t && ep.counts(r) && (best == nil || ep.newerHubs(r, best)) {
+				best = r
+			}
+		}
+	}
+	return best
+}
+
+// newerHubs reports whether hubs or copies record a beats b.
 func (ep *epoch) newerHubs(a, b *rec) bool {
 	ra, rb := a.AdminCA == nil, b.AdminCA == nil
 	switch {

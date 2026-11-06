@@ -320,6 +320,34 @@ func (s *Service) setTakeoverDelay(value string) error {
 	return nil
 }
 
+// setIncoming signs, on the group's root or an admin, how long a copy from
+// another device stays live after it arrives: a duration from 5s to 1h
+// (docs/protocol.md, section 10, "The copies setting").
+func (s *Service) setIncoming(value string) error {
+	d, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil || d.Milliseconds() < authority.MinIncoming || d.Milliseconds() > authority.MaxIncoming {
+		return errors.New("how long an incoming copy stays live is a duration from 5s to 1h, as 1m")
+	}
+	s.mu.Lock()
+	id, nd := s.id, s.nd
+	s.mu.Unlock()
+	if id == nil {
+		return s.errNoGroup()
+	}
+	if !id.IsRoot() && id.AdminCA == nil {
+		return errors.New("only the group's root or an admin sets how long an incoming copy stays live")
+	}
+	ms := d.Milliseconds()
+	s.awaitRecords(id)
+	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordCopies, IncomingMS: &ms})
+	if err != nil {
+		return err
+	}
+	s.publish(nd, r)
+	s.logf("cbb: a copy from another device now stays live for %v after it arrives", d)
+	return nil
+}
+
 // setHubs signs, on the group's root or an admin with the power hub, the
 // table of the group's main hubs: the devices targets name, in the order
 // they serve, before the hubs the records give (docs/protocol.md, section 10, "The

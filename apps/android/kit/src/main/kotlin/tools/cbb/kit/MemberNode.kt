@@ -702,6 +702,11 @@ class MemberNode(
     private fun dropRefusedLocked() {
         val store = records ?: return
         for (c in conns) if (store.refused(c.transport.peerChain) != null || store.stopped(c.transport.peerChain) != c.recordsOnly) c.goodbye()
+        // The group's last copy from a device removed since, or from a root
+        // an admin took the group over from, no longer counts: it is never
+        // written later (docs/protocol.md, section 4).
+        val s = engine.currentEvent?.sealed ?: return
+        if (copies?.refused(s) == true) engine.forget(s.id)
     }
 
     /** Sends server credentials signed on this phone to every connected member. */

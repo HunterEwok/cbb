@@ -812,7 +812,7 @@ or the `current` of a hello), after validation:
 
 1. If its ID was seen before: if it is the current event, the current event is a mark and the
    received one has the `payload` whose SHA-256 the mark carries, the payload is taken (and
-   forwarded); otherwise nothing happens (except the rejoin case below).
+   forwarded); otherwise nothing happens.
 2. Otherwise: check it (section 4, "Opening") and drop it when that fails; observe its timestamp, record the ID, and forward it to every other connection
    (also when it is older than the current event, and also a mark). A member MUST forward
    every new event so, whatever its sync mode: the mode decides only what it does with its
@@ -840,22 +840,27 @@ frames like any other event.
 ### Writing the member's own clipboard (local policy)
 
 When an event becomes current (or a mark gets its text) it is written to the local clipboard
-when all of these hold: this member opened the current event (section 4, "Opening") and it is live (it has a text, and a secret is younger
-than the secret TTL); the local clipboard does not already hold the text; and either it was
-copied at most 60 s ago (live window), or the member is within 30 s of its last Rejoin
-(rejoin window) and made no copy of its own before it was back in sync. A write increments
-the write sequence number (section 8).
+when all of these hold: the member's sync mode takes the group's copies (`shared` or
+`receive`); this member opened the current event (section 4, "Opening") and it is live (it has
+a text, and a secret is younger than the secret TTL); the local clipboard does not already
+hold the text; and it was copied less than the group's live window ago. The live window is
+the `incoming_ms` of the group's copies setting (section 10, "The copies setting"), 60 s
+when the records set none. A write increments the write sequence number (section 8).
 
+- The age is the event's `age_ms` plus the time since it arrived, measured on the clocks that
+  count durations, never by comparing the sender's clock with this one; so a member that
+  wakes from sleep, starts, or reconnects after the window has passed keeps what it copied
+  itself and never takes an old copy of the group.
+- Once the window has passed the copy is gone for this member: its own clipboard stays as it
+  is, and what it copies next, however old, goes to the group (a phone's button sends it,
+  unless it is the group's text already).
+- When the records stop accepting the current event's origin (its device is removed, or a
+  takeover took effect and the root that admitted it is no longer on the path), the member
+  drops the event, written or not, and does not write it.
 - Rejoin: on service start, and when the machine slept (the clock that counts sleep moved
   more than 3 s further than the one that does not, checked every 2 s), the member closes all
-  connections, waits up to 2 s for them to end, and then records the Rejoin; connections that
-  start meanwhile wait. "Back in sync" means a hello was reconciled while at least one
-  connection is up. A copy made while not in sync, or with no peers, is an offline copy; it
-  blocks rejoin-window writes until the member is in sync and the window has closed.
-- A current event that a hello brought before the member noticed it had slept is written
-  when the same event arrives again inside the rejoin window while not yet in sync.
-- Losing all peers without a sleep or restart does not open the rejoin window: such a member
-  takes the group's text again only if it is live.
+  connections, waits up to 2 s for them to end, and connects again; connections that start
+  meanwhile wait.
 
 ### Secrets (wire and local)
 
@@ -1205,7 +1210,7 @@ A connection carries one request: the service reads the first message and dispat
 | `copied-media` | as `copy-media` | as `copy-media`, but a watcher's report that its clipboard changed: the copy goes to the group as an event when the engine decides so (section 5) and is not written back to the member's own clipboard |
 | `paste-media` | none | once every part of the member's own images or files (in mode `own` the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
 | `config` | `{name?, value?}`: `max-copy` or `max-copy-away` and a size such as `200MiB` | `{status, done}`, with the setting saved first when `name` is given; `status.media` = `{max_copy, max_copy_away, fetching?, fetched?, from?, failed?}`, in bytes, also in `status` |
-| `status` | none | `{status, done}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
+| `status` | none | `{status, done}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, incoming_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `incoming_ms` is the group's live window (section 5, "Writing the member's own clipboard"); `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
 | `leave` | none | `{done}`: the device leaves its group (D-83): the service deletes the keys and the group's files, turns remote paste and the quick actions off, and restarts in no group. Refused on the group's root while the group has other devices; taken while the group file is damaged |
 | `new` | none | `{status, done}`: the device creates a group and is its root (section 10). Only on a device in no group |
 | `pair` | none | first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
@@ -1499,6 +1504,7 @@ and `a`-`f`.
 | `claim` | `root`, `seen` | an admin's claim to take the group over with a new root |
 | `resolve` | `records` | the current root voids the records it names: a cancelled claim, one side of a conflict, one of two records with one number |
 | `settings` | `takeover_delay_ms`, `key_level` | the root's settings for the group |
+| `copies` | `incoming_ms` | how long a copy from another device stays live ("The copies setting") |
 | `checkpoint` | `heads`, `keep` | a root's checkpoint: the records it covers and does not keep may be dropped |
 | `hubs` | `hubs` | the user's main hubs for sync away from home, in the order they serve |
 | `recovery` | `admin`, `cert` | names the group's recovery key, an offline admin key that may only claim the group ("The recovery key") |
@@ -1527,6 +1533,7 @@ and `a`-`f`.
 | `cert` | string | `recovery` | the recovery key's admin CA certificate, DER, base64, whose key hash is `admin` |
 | `takeover_delay_ms` | integer | none | from 0 to 604 800 000 (7 days); absent means 259 200 000 (72 hours) |
 | `key_level` | string | none | `proven`, `hardware` or `files`: which devices may be the group's root, an admin or a trusted hub, which is an admin ([roadmap](roadmap.md), "Key levels"); absent means `hardware`. The state carries it; the rules do not check it yet, the apps and `cbb` do when they make an admin or a hub |
+| `incoming_ms` | integer | `copies` | from 5 000 to 3 600 000 (1 hour): how long a copy from another device stays live on each member (section 5, "Writing the member's own clipboard"); without a `copies` record that counts, 60 000 |
 | `heads` | array of objects | `checkpoint`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": 1 or more, "id": the ID of that signer's record with that seq}` |
 | `keep` | array of strings | none | sorted record IDs: the records below the heads that still count |
 | `hubs` | array of strings | `hubs`, one at least | 1 to 16 device IDs, each once, in the user's order (not sorted) |
@@ -1564,6 +1571,7 @@ those of the newest such record (the highest `seq` of that root) that names it.
 | `resolve`, `settings`, `handover` | the current root's own key |
 | `checkpoint` | a root's own key |
 | `hubs` | a root's own key, or an admin with `hub` |
+| `copies` | a root's own key, or any admin, whatever its powers |
 | `recovery` | a root's own key |
 
 A record whose signer may not sign it counts for nothing; so does a `revoke` or `freeze` that
@@ -1641,7 +1649,7 @@ A group's records only grow, and a member keeps at most 1 MiB of them (1024 reco
 own key signs a `checkpoint` so that members may drop what no longer matters: `heads` names,
 for each signer, its newest record the checkpoint covers, and `keep` the records below the
 heads that still count: the newest `device` record of each device, the `revoke`, `freeze` and
-`thaw` records that count, the newest `settings`, the `hubs` record that counts, the `recovery` record that counts, every claim not yet decided and the records
+`thaw` records that count, the newest `settings`, the `hubs` and `copies` records that count, the `recovery` record that counts, every claim not yet decided and the records
 its `seen` and its disputes need, and the `resolve` records that end them. The apps sign one
 by themselves when the records pass three quarters of either limit.
 
@@ -1713,6 +1721,16 @@ hubs by the records (the root's own device, an admin with `hub`, or a device wit
 `forward_only`), so a table naming a removed device or one that lost `hub` does not stop the
 others. A device the table does not
 name still serves after the main hubs.
+
+#### The copies setting
+
+A `copies` record sets the group's live window, `incoming_ms`: how long a copy from another
+device goes into a member's clipboard after it was copied (section 5, "Writing the member's
+own clipboard"). The root and every admin may sign one, since it changes only how the
+members treat the group's own copies. Of the `copies` records that count, one counts for the
+setting by the rule of the hubs table: a root's beats an admin's, of two roots' the later
+root on the path, then the higher `seq`; of two admins' the later `time_ms`, then the smaller
+signer, then the higher `seq`. The state carries its `incoming_ms`.
 
 #### Removals and freezes keep what the author saw
 
@@ -1987,6 +2005,7 @@ and returns the state as one canonical JSON object:
 | `hubs` | array of strings | the main hubs of the `hubs` record that counts ("The hubs table"): its devices that are in `devices` with the role `full` or `phone`, in its order |
 | `recovery` | string | the key hash of the recovery key ("The recovery key"), while it is neither removed nor frozen |
 | `key_level` | string | the `key_level` of the current root's newest counting `settings` record; absent when it has none (then `hardware`), so a claim's new root starts without one and signs the old root's settings again |
+| `incoming_ms` | integer | the `incoming_ms` of the `copies` record that counts ("The copies setting"); absent when none counts (then 60 000) |
 
 The reasons in `ignored`, in the order they are decided:
 
@@ -2070,6 +2089,7 @@ beyond) and check the same bytes.
 | `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
 | `takeover-delay` | `{value}`: a duration from `0s` to `168h` | `{done}` or an error. Only on the group's root: signs a `settings` record with `takeover_delay_ms`, how long a claim waits on each member, and the `key_level` its newest one had |
 | `key-level` | `{value}`: `proven`, `hardware` or `files` | `{below, done}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the `takeover_delay_ms` its newest one had; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root's keys are in a file, as a computer's CA keys are (section 17) |
+| `incoming` | `{value}`: a duration from `5s` to `1h` | `{done}` or an error. On the group's root or any admin: signs a `copies` record with `incoming_ms`, how long a copy from another device stays live on each member ("The copies setting") |
 | `hubs` | `{hubs}`: 1 to 16 names or device IDs of computers and phones, in the order they serve | `{done}` or an error. On the group's root or an admin with `hub`: signs a `hubs` record, the group's main hubs |
 | `freeze` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on an admin that is not frozen: freezes another admin without `remove-admins`, never the root or an admin phone ("Removals and freezes keep what the author saw") |
 | `thaw` | `{name}` | `{name, done}` or an error. Only on the root computer (a computer's admin has no `thaw`): ends every freeze of that admin ("Removals and freezes keep what the author saw") |

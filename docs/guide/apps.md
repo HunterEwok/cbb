@@ -32,8 +32,9 @@ Android, paste the text of the QR code, which `cbb pair` prints too.
 ### Every day
 
 - **Home** shows every device of the group, as tiles or a list, with a dot that says
-  whether it is online. The big button sends what the phone holds, or fetches the
-  computers' latest copy if one was made a moment ago.
+  whether it is online. The big button takes a copy from another device that is still live
+  (one minute by default; an admin changes it in Settings), and otherwise sends what the
+  phone holds.
 - **iPhone**: iOS lets an app use the clipboard only while it is in front, so the iPhone
   syncs with one gesture: the "Sync clipboard" action on Back Tap or the Action button, the
   Control Center control, or the home-screen widget. Share, Copy Beyond Borders sends a text

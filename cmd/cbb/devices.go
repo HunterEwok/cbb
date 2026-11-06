@@ -164,6 +164,59 @@ func cmdTakeoverDelay(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// cmdIncoming shows how long a copy from another device stays live after it
+// arrives, or sets it on the group's root or an admin.
+func cmdIncoming(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 1 || len(args) == 1 && helpFlag(args[0]) {
+		fmt.Fprintln(stderr, "cbb: usage: cbb incoming [duration], from 5s to 1h, as 1m")
+		return 2
+	}
+	if len(args) == 0 {
+		c, err := control.DialFor(control.OpStatus)
+		if err != nil {
+			return fail(stderr, err)
+		}
+		defer c.Close()
+		m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpStatus}})
+		if err != nil {
+			return fail(stderr, err)
+		}
+		if m.Status == nil || m.Status.Group == "" {
+			fmt.Fprintln(stderr, "cbb: this device is in no group")
+			return 1
+		}
+		fmt.Fprintln(stdout, incomingLine(time.Duration(m.Status.IncomingMS)*time.Millisecond))
+		return 0
+	}
+	d, err := time.ParseDuration(args[0])
+	if err != nil {
+		fmt.Fprintln(stderr, "cbb: usage: cbb incoming [duration], from 5s to 1h, as 1m")
+		return 2
+	}
+	c, err := control.DialFor(control.OpIncoming)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	defer c.Close()
+	if _, err := c.Do(&control.Message{Header: control.Header{Op: control.OpIncoming, Value: args[0]}}); err != nil {
+		return fail(stderr, err)
+	}
+	fmt.Fprintln(stdout, incomingLine(d))
+	return 0
+}
+
+// incomingLine tells what happens to a copy from another device.
+func incomingLine(d time.Duration) string {
+	s := d.String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+	return fmt.Sprintf("A copy from another device goes into the clipboard for %s after it arrives; after that this device keeps its own clipboard, however old.", s)
+}
+
 // cmdKeys shows the group's key level or sets it on the group's root:
 // which keys may be its root, an admin or a hub.
 func cmdKeys(args []string, stdout, stderr io.Writer) int {

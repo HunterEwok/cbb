@@ -125,6 +125,7 @@ var scenarios = []struct {
 	{"path limit", TestPathLimit},
 	{"record limit", TestRecordLimit},
 	{"hubs table", TestHubsTable},
+	{"copies setting", TestCopiesSetting},
 	{"recovery key", TestRecoveryKey},
 	{"recovery delay", TestRecoveryDelay},
 	{"recovery key removed", TestRecoveryRemoved},

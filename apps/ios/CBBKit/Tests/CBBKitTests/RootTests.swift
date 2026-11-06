@@ -206,6 +206,22 @@ final class RootTests: XCTestCase {
         XCTAssertEqual(g.b.records.rootDevice, g.root.device)
     }
 
+    /// The root and an admin set how long a copy from another device stays
+    /// live; the root's record beats an admin's.
+    func testIncoming() throws {
+        var g = try Group(now: t0)
+        XCTAssertEqual(g.b.incomingMS, Records.defaultIncomingMS)
+        XCTAssertThrowsError(try g.root.setIncoming(ms: 4_000, caSigner: g.rootKey, now: Date())) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .invalidIncoming)
+        }
+        let byAdmin = try g.b.setIncoming(ms: 90_000, caSigner: g.adminKey, now: Date())
+        g.root.add([byAdmin])
+        XCTAssertEqual(g.root.incomingMS, 90_000)
+        let byRoot = try g.root.setIncoming(ms: 30_000, caSigner: g.rootKey, now: Date())
+        g.b.add([byRoot])
+        XCTAssertEqual(g.b.incomingMS, 30_000)
+    }
+
     /// The root sets how long a claim waits.
     func testTakeoverDelay() throws {
         var g = try Group(now: t0)
