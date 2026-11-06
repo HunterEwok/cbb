@@ -26,6 +26,8 @@ All notable changes to cbb are documented in this file. The format follows
   once through Aurora's QCA keystore and used through PKCS#11 after that. It joins a group
   by its QR code: the phone listens, a phone or a computer of the group scans the code and
   dials in, and the phone keeps its certificate and the group's records. It does not sync yet.
+- The Aurora app's launcher icon in the style of Aurora's own system icons: a dark teal tile
+  with the clipboard and the key with circuit traces (`apps/design/icon/aurora.svg`).
 - `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
   the device records (docs/protocol.md): every member admits them as phones and shows
   "Aurora OS" and "Sailfish OS".
