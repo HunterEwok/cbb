@@ -60,7 +60,11 @@ func writeDevices(w io.Writer, devs, peers []control.Device, newest string, now 
 			ver += " (old)"
 			old = true
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, group.OSName(d.OS), ver, d.Role, admin, keys(d), d.Mode, seen(d, now), clock, d.ID)
+		mode := d.Mode
+		if d.Muted {
+			mode = strings.TrimSpace(mode + " muted")
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, group.OSName(d.OS), ver, d.Role, admin, keys(d), mode, seen(d, now), clock, d.ID)
 	}
 	tw.Flush()
 	if unlisted {

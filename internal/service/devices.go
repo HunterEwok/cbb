@@ -649,9 +649,13 @@ func (s *Service) devices() ([]control.Device, error) {
 		info := s.cfg.Device.Clean()
 		if d.Self {
 			d.Mode = eng.Mode().String()
+			if muted, until := eng.Muted(); muted {
+				d.Muted, d.MutedUntilMS = true, unixMS(until)
+			}
 		}
 		if p, ok := peers[dev]; ok {
 			info, d.Mode = p.Device, p.Mode
+			d.Muted, d.MutedUntilMS = p.Muted, unixMS(p.MutedUntil)
 		} else if !d.Self {
 			info = group.DeviceInfo{}
 		}

@@ -36,14 +36,16 @@ const MAX_HUB_CLIENTS: usize = 256;
 pub const COMMAND_LIFETIME_MS: i64 = 30_000;
 /// How far ahead of the receiver's clock a command's time may be.
 pub const COMMAND_AHEAD_MS: i64 = 60_000;
+/// The longest mute a command gives, 30 days, as Go's MaxMute.
+pub const MAX_MUTE_MS: i64 = 30 * 24 * 3600 * 1000;
 
 /// A command (docs/protocol.md, section 15), as its receiver checked it.
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Command {
     #[serde(default)]
     v: i64,
-    /// `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off` or
-    /// `away-off`.
+    /// `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`,
+    /// `away-off`, `mute` or `unmute`.
     #[serde(rename = "type", default)]
     pub kind: String,
     #[serde(default)]
@@ -79,6 +81,10 @@ pub struct Command {
     /// defines.
     #[serde(default)]
     pub action: String,
+    /// In a mute command: how long, up to [`MAX_MUTE_MS`]; 0 for until an
+    /// unmute command or the device's user lifts it.
+    #[serde(default)]
+    pub for_ms: i64,
     /// In a command of version 2, the orders above sealed to the
     /// receiver's key; [`Command::open`] opens them.
     #[serde(with = "b64", default)]
@@ -103,6 +109,8 @@ struct Orders {
     text: String,
     #[serde(default)]
     action: String,
+    #[serde(default)]
+    for_ms: i64,
 }
 
 /// The longest name of a quick action.
@@ -183,6 +191,7 @@ impl Command {
         c.paste_kind = o.kind;
         c.text = o.text;
         c.action = o.action;
+        c.for_ms = o.for_ms;
         c.check()?;
         c.v = SEALED_VERSION;
         c.opened = true;
@@ -218,7 +227,7 @@ impl Command {
             return Err(Error::msg("a command does not decode"));
         };
         let mut orders = serde_json::Map::new();
-        for k in ["mode", "hub", "enter", "kind", "text", "action"] {
+        for k in ["mode", "hub", "enter", "kind", "text", "action", "for_ms"] {
             if let Some(v) = header.remove(k) {
                 orders.insert(String::from(k), v);
             }
@@ -254,6 +263,7 @@ impl Command {
             || !self.paste_kind.is_empty()
             || !self.text.is_empty()
             || !self.action.is_empty()
+            || self.for_ms != 0
     }
 
     fn check(&self) -> Result<()> {
@@ -277,7 +287,7 @@ impl Command {
             }
             if !matches!(
                 self.kind.as_str(),
-                "mode" | "hub" | "paste" | "paste-off" | "action" | "actions-off" | "away-off"
+                "mode" | "hub" | "paste" | "paste-off" | "action" | "actions-off" | "away-off" | "mute" | "unmute"
             ) {
                 return Err(Error::msg(format!("unknown command type {:?}", self.kind)));
             }
@@ -291,12 +301,19 @@ impl Command {
         if self.kind != "action" && !self.action.is_empty() {
             return Err(Error::msg(format!("a {} command names an action", self.kind)));
         }
+        if self.kind != "mute" && self.for_ms != 0 {
+            return Err(Error::msg(format!("a {} command gives a time", self.kind)));
+        }
         match self.kind.as_str() {
             "mode" if self.mode.is_empty() || hub => return Err(Error::msg("a mode command names no mode")),
             "hub" if !hub || !self.mode.is_empty() => return Err(Error::msg("a hub command has no order")),
             "hub" if !self.hub_valid() => return Err(Error::msg("a hub command's order is not valid")),
-            "paste-off" | "actions-off" | "away-off" if hub || !self.mode.is_empty() => {
+            "paste-off" | "actions-off" | "away-off" | "unmute" if hub || !self.mode.is_empty() => {
                 return Err(Error::msg(format!("a {} command carries an order", self.kind)));
+            }
+            "mute" if hub || !self.mode.is_empty() => return Err(Error::msg("a mute command carries an order")),
+            "mute" if !(0..=MAX_MUTE_MS).contains(&self.for_ms) => {
+                return Err(Error::msg(format!("a mute command's time is not from 0 to {MAX_MUTE_MS} ms")));
             }
             "action" if hub || !self.mode.is_empty() => {
                 return Err(Error::msg("an action command carries an order"));
@@ -308,7 +325,7 @@ impl Command {
                 )));
             }
             "paste" => self.check_paste(hub)?,
-            "mode" | "hub" | "paste-off" | "action" | "actions-off" | "away-off" => {}
+            "mode" | "hub" | "paste-off" | "action" | "actions-off" | "away-off" | "mute" | "unmute" => {}
             k => return Err(Error::msg(format!("unknown command type {k:?}"))),
         }
         self.check_header()

@@ -97,7 +97,7 @@ var Powers = []string{PowerAdmit, PowerFreeze, PowerHub, PowerRemove, PowerRemov
 
 // Commands lists every command type an admin may be given, sorted
 // (docs/protocol.md, section 15).
-var Commands = []string{"action", "actions-off", "away-off", "hub", "mode", "paste", "paste-off"}
+var Commands = []string{"action", "actions-off", "away-off", "hub", "mode", "mute", "paste", "paste-off", "unmute"}
 
 // Roles and systems a device record may name.
 var (

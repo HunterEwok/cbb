@@ -278,6 +278,10 @@ type Peer struct {
 	Chain []*x509.Certificate
 	// Mode is the sync mode its hello reports; "" when it reports none.
 	Mode string
+	// Muted tells that its hello says it is muted, until MutedUntil on
+	// this member's clock, the zero time for until the mute is lifted.
+	Muted      bool
+	MutedUntil time.Time
 	// KeyStore is where its hello says its keys live: group.StoreFile or
 	// group.StoreHardware or group.StoreRootless; "" when it says none of
 	// them.
@@ -775,10 +779,11 @@ func (n *Node) Peers() []Peer {
 		if role := c.role(); role != "" {
 			c.mu.Lock()
 			adminKey, device, mode, store, acts, media, sealKey := c.peerAdminKey, c.peerDevice, c.peerMode, c.peerKeyStore, c.peerActions, c.peerMedia, c.peerSeal
+			muted, mutedUntil := c.peerMuted, c.peerMutedUntil
 			c.mu.Unlock()
 			local, _ := netip.ParseAddrPort(c.tc.LocalAddr().String())
 			out = append(out, Peer{ID: c.id, Role: role, Name: c.name(), OS: c.os(), Device: device, Key: group.KeyHashOf(c.peerCert), Chain: c.peerChain, AdminKey: adminKey,
-				Mode: mode, KeyStore: store, Actions: acts, Media: media, Seal: sealKey, Since: c.since, Local: local.Addr().Unmap()})
+				Mode: mode, Muted: muted, MutedUntil: mutedUntil, KeyStore: store, Actions: acts, Media: media, Seal: sealKey, Since: c.since, Local: local.Addr().Unmap()})
 		}
 	}
 	slices.SortFunc(out, func(a, b Peer) int { return strings.Compare(string(a.ID), string(b.ID)) })
@@ -1381,11 +1386,14 @@ type conn struct {
 	peerDevice group.DeviceInfo
 	// peerAdminKey is the admin key that the peer's hello names.
 	peerAdminKey []byte
-	peerMode     string   // the sync mode its hello reports; "" when none or unknown
-	peerKeyStore string   // where its hello says its keys live; "" when it says neither
-	peerActions  []string // the quick actions its hello says are on
-	peerMedia    bool     // its hello says it serves content
-	peerSeal     []byte   // the key for sealed messages its hello offers
+	peerMode     string // the sync mode its hello reports; "" when none or unknown
+	// peerMuted and peerMutedUntil are the mute its hello reports.
+	peerMuted      bool
+	peerMutedUntil time.Time
+	peerKeyStore   string   // where its hello says its keys live; "" when it says neither
+	peerActions    []string // the quick actions its hello says are on
+	peerMedia      bool     // its hello says it serves content
+	peerSeal       []byte   // the key for sealed messages its hello offers
 	// reachSent is the reach message last queued for the peer; nil
 	// before the first.
 	reachSent *[]group.DeviceID
@@ -1542,6 +1550,9 @@ func (c *conn) message(o outgoing) (*message, error) {
 		}
 		h.Current = nil
 		out := helloOut{Hello: h, Current: current, Name: c.n.cfg.Name, OS: c.n.cfg.OS, Mode: c.n.cfg.Engine.Mode().String(), KeyStore: c.n.cfg.KeyStore}
+		if muted, left := c.n.cfg.Engine.MuteLeft(); muted {
+			out.Muted, out.MutedFor = true, left.Milliseconds()
+		}
 		if out.KeyStore == "" {
 			out.KeyStore = group.StoreFile
 		}
@@ -1781,6 +1792,10 @@ func (c *conn) reader() error {
 			if _, err := clip.ParseMode(extra.Mode); err == nil {
 				c.peerMode = extra.Mode
 			}
+			c.peerMuted, c.peerMutedUntil = extra.Muted, time.Time{}
+			if extra.Muted && extra.MutedFor > 0 {
+				c.peerMutedUntil = time.Now().Add(time.Duration(min(extra.MutedFor, maxMutedFor)) * time.Millisecond)
+			}
 			c.mu.Unlock()
 			c.n.peersChanged()
 			res, err := e.Reconcile(string(c.id), h)
@@ -1947,3 +1962,7 @@ func (c *conn) take(s *clip.Sealed) (clip.Event, bool) {
 // maxPeerActions bounds the quick actions a peer's hello may list: the
 // presets and its user's own.
 const maxPeerActions = 64
+
+// maxMutedFor bounds the mute a peer's hello reports, as a mute command
+// does (group.MaxMute).
+const maxMutedFor = int64(group.MaxMute / time.Millisecond)

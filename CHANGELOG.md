@@ -7,6 +7,13 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
+  group's copies out of this device for a while, its own still going out, and an admin's
+  `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
+  commands `mute` and `unmute` (docs/protocol.md, section 15) that computers and lite members
+  take; any admin ends it, the last command counts, and the hello says a device is muted so
+  the devices list shows it. Admin records may now name the commands `mute` and `unmute`; an
+  admin made earlier signs them once the root signs its record again.
 - End-to-end encryption of every copy (D-84): the device that copies seals each copy, its
   text, images and files, with a key of its own, wraps that key for every device of the group
   that reads copies (X-Wing: X25519 with ML-KEM-768) and signs the copy with its member key.

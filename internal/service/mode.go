@@ -206,6 +206,8 @@ func (s *Service) command(peer group.DeviceID, c group.Record) node.Result {
 		return s.actionsOff(body)
 	case group.CommandAwayOff:
 		return s.awayOff(body)
+	case group.CommandMute, group.CommandUnmute:
+		return s.muteCommand(body)
 	}
 	if _, err := clip.ParseMode(body.Mode); err != nil {
 		res.Status, res.Reason = node.ResultRefused, err.Error()

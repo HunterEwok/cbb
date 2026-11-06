@@ -272,6 +272,9 @@ func writeStatus(w io.Writer, st *control.Status, devs []control.Device, now tim
 	if st.Mode != "" {
 		fmt.Fprintln(w, modeLine(st.Mode))
 	}
+	for _, l := range muteLines(st) {
+		fmt.Fprintln(w, l)
+	}
 	if q := quietLine(st); q != "" {
 		fmt.Fprintln(w, q)
 	}

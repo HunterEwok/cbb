@@ -457,6 +457,7 @@ fn hello_actions() {
             &wire::DeviceInfo::default(),
             None,
             "own",
+            None,
             on,
             "file",
             None,

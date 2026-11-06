@@ -86,6 +86,8 @@ const (
 	OpReleaseWant = "release-want"   // client → service: on a hub, the names of the held release's archives the group's members update from and it does not hold, in JSON, for cbb update to download
 	OpKeyboard    = "keyboard"       // client → service: Name "on" (Keyboard the settings), "off", "pair", "type" (the payload) or "" (status): this computer as a Bluetooth keyboard
 	OpKeys        = "keys"           // uinput helper (root) → service: may it press Name ("paste" or "enter") for the user Value, under the grant Keys of an inject
+	OpMute        = "mute"           // client → service: for ForMS, 0 for until unmute: take no copies from the group here, or as an admin mute Device, whose copies then stay its own
+	OpUnmute      = "unmute"         // client → service: take the group's copies here again, or as an admin end the mute of Device
 	OpRemote      = "remote"         // client → service: Name "add" (Address, Value the kind, NewName, Consent), "code" (Code), "cancel", "remove", "pastes" (Value on or off), "type" (the payload), for the TV Device, or "" (status): this device as a TV's remote
 )
 
@@ -189,11 +191,13 @@ type Header struct {
 	// Value, in config, the setting's new value. Images, Files and HTML,
 	// in a watch request, say the watcher's clipboard takes and gives
 	// images, files, and formatted text.
-	Part   *Part  `json:"part,omitempty"`
-	Value  string `json:"value,omitempty"`
-	Images bool   `json:"images,omitempty"`
-	Files  bool   `json:"files,omitempty"`
-	HTML   bool   `json:"html,omitempty"`
+	Part  *Part  `json:"part,omitempty"`
+	Value string `json:"value,omitempty"`
+	// ForMS, in mute, is how long, 0 for until unmute.
+	ForMS  int64 `json:"for_ms,omitempty"`
+	Images bool  `json:"images,omitempty"`
+	Files  bool  `json:"files,omitempty"`
+	HTML   bool  `json:"html,omitempty"`
 }
 
 // Part is a part of a copy of images or files, as copy-media and
@@ -286,8 +290,17 @@ type Status struct {
 	Role       string `json:"role"`
 	OS         string `json:"os,omitempty"` // this device's operating system
 	// Mode is the sync mode: own, shared, receive or send; "" when in no group.
-	Mode  string   `json:"mode,omitempty"`
-	Peers []Device `json:"peers,omitempty"`
+	Mode string `json:"mode,omitempty"`
+	// Muted says that an admin muted this device, its copies its own,
+	// until MutedUntilMS in Unix milliseconds, 0 for until an admin
+	// unmutes it. Paused says that its user paused receiving: the group's
+	// copies stay out of its clipboard until PausedUntilMS, 0 for until
+	// cbb unmute.
+	Muted         bool     `json:"muted,omitempty"`
+	MutedUntilMS  int64    `json:"muted_until_ms,omitempty"`
+	Paused        bool     `json:"paused,omitempty"`
+	PausedUntilMS int64    `json:"paused_until_ms,omitempty"`
+	Peers         []Device `json:"peers,omitempty"`
 	// Unreached lists the members at home that could not connect to this
 	// device's member port and sync with it only because it dials them:
 	// a firewall here likely drops the port.
@@ -451,6 +464,11 @@ type Device struct {
 	// Mode is its sync mode, as its hello says; "" when it says none or is
 	// not connected.
 	Mode string `json:"mode,omitempty"`
+	// Muted says that an admin muted it, as its hello says (this device:
+	// as it is), until MutedUntilMS in Unix milliseconds, 0 for until an
+	// admin unmutes it.
+	Muted        bool  `json:"muted,omitempty"`
+	MutedUntilMS int64 `json:"muted_until_ms,omitempty"`
 
 	Admin      bool  `json:"admin,omitempty"`        // it can admit and remove devices
 	Root       bool  `json:"root,omitempty"`         // it holds the group's root

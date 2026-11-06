@@ -184,7 +184,7 @@ func recordKinds() []genKind {
 	}
 	commands := []genValue{
 		ok("of one", `["paste"]`),
-		ok("of all seven", `["action","actions-off","away-off","hub","mode","paste","paste-off"]`),
+		ok("of all nine", `["action","actions-off","away-off","hub","mode","mute","paste","paste-off","unmute"]`),
 		bad("empty", `[]`),
 		bad("not sorted", `["paste","mode"]`),
 		bad("with a command twice", `["paste","paste"]`),

@@ -102,6 +102,13 @@ pub struct HelloBody {
     /// trusted.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub mode: String,
+    /// Whether the sender is muted, and for how many milliseconds more, 0
+    /// for until the mute is lifted (design.md, "Muting a device"); shown,
+    /// never trusted.
+    #[serde(default, skip_serializing_if = "core::ops::Not::not")]
+    pub muted: bool,
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub muted_for_ms: i64,
     /// Where the sender says its keys live: `file` or `hardware`
     /// (section 17); shown, never trusted.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -123,6 +130,10 @@ pub struct HelloBody {
 }
 
 fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
+fn is_zero_i64(n: &i64) -> bool {
     *n == 0
 }
 
@@ -232,6 +243,7 @@ pub fn hello(
     device: &DeviceInfo,
     tunnel_key: Option<(&[u8], &[u8])>,
     mode: &str,
+    mute: Option<i64>,
     actions: &[String],
     key_store: &str,
     seal: Option<&[u8]>,
@@ -256,6 +268,8 @@ pub fn hello(
         tunnel_key: tunnel_key.map(|(k, _)| k.to_vec()),
         tunnel_psk: tunnel_key.map(|(_, p)| p.to_vec()),
         mode: mode.to_string(),
+        muted: mute.is_some(),
+        muted_for_ms: mute.unwrap_or(0),
         // The lite member keeps its keys in a file, or in the ESP32's
         // flash: "file", or "rootless" for a rootless install (D-79).
         key_store: key_store.into(),

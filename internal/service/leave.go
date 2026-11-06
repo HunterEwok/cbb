@@ -29,12 +29,12 @@ var ErrLeft = errors.New("restarting after leaving the group")
 // credentials and the keys for the servers, the tunnel's keys, the entry
 // points, the known networks where it met the group, the cache of the
 // group's images and files, the logs that name the group's devices, the
-// proof of its keys and a group left before 0.6. The records go last, as in
+// proof of its keys, its mute and a group left before 0.6. The records go last, as in
 // leaveVersion1Group, so that a leave cut short is seen as a group still.
 var groupFiles = []string{
 	group.FileName, group.CredentialsFileName, group.ServerKeysFileName, group.SealKeyFileName,
 	signedFile, tunnel.StateFile, entriesFile, networksFile, statusFile, contentDir,
-	remotepaste.LogFile, actions.LogFile, oldGroupDir, group.RecordsFileName,
+	remotepaste.LogFile, actions.LogFile, muteFile, oldGroupDir, group.RecordsFileName,
 }
 
 // errNothingToLeave is the answer to a leave in no group.

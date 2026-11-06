@@ -114,7 +114,7 @@ pub struct Node {
 }
 
 enum Out {
-    Hello(Hello, Duration, crate::clip::Mode, Vec<String>),
+    Hello(Hello, Duration, crate::clip::Mode, Option<i64>, Vec<String>),
     Event(Event, Duration),
     Records(Vec<Record>),
     Result(wire::CommandResult),
@@ -176,6 +176,13 @@ impl Node {
             if c.peer.lock().unwrap().as_ref().is_some_and(|(role, _, _)| role == "full") {
                 c.close(true);
             }
+        }
+    }
+
+    /// Connects to every member again, so that the hellos say what changed.
+    pub fn reconnect(&self) {
+        for c in self.conns.lock().unwrap().values() {
+            c.close(true);
         }
     }
 
@@ -526,13 +533,25 @@ impl Node {
             if records_only {
                 // Its hello offers nothing but the records' digest.
                 let hello = Hello { wall: uptime::wall_ms(), current: None };
-                let _ = c.tx.try_send(Out::Hello(hello, uptime::now(), self.engine.mode(), Vec::new()));
+                let _ = c.tx.try_send(Out::Hello(
+                    hello,
+                    uptime::now(),
+                    self.engine.mode(),
+                    self.engine.mute_left(),
+                    Vec::new(),
+                ));
             } else {
                 // The connection is in the forwarding set before the engine
                 // makes the hello, so no event falls between the two.
                 let hello = self.engine.connected(id.as_str());
                 let actions = self.actions.read().unwrap().clone();
-                let _ = c.tx.try_send(Out::Hello(hello, uptime::now(), self.engine.mode(), actions));
+                let _ = c.tx.try_send(Out::Hello(
+                    hello,
+                    uptime::now(),
+                    self.engine.mode(),
+                    self.engine.mute_left(),
+                    actions,
+                ));
             }
         }
         if records_only {
@@ -862,7 +881,7 @@ fn writer(
 ) {
     let message = |o: Out| -> Option<Message> {
         match o {
-            Out::Hello(mut h, queued, mode, actions) => {
+            Out::Hello(mut h, queued, mode, mute, actions) => {
                 if let Some(ev) = h.current.as_mut() {
                     ev.age = add_age(ev.age, uptime::now().saturating_sub(queued));
                 }
@@ -874,6 +893,7 @@ fn writer(
                     crate::device::own(),
                     key.read().unwrap().as_ref().filter(|_| !c.records_only).map(|(k, p)| (k.as_slice(), p.as_slice())),
                     mode.name(),
+                    mute,
                     &actions,
                     if crate::rootless::is() { "rootless" } else { "file" },
                     crate::sealkey::public(),

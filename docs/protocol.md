@@ -483,6 +483,8 @@ depends on a version number.
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
 | `mode` | string or absent | the sender's sync mode: `own`, `shared`, `receive` or `send` (design.md, "Sync modes"); shown, never trusted; a receiver ignores an unknown one. It changes only what the sender itself does with its clipboard, so a receiver handles the sender's events the same in every mode |
+| `muted` | bool or absent | `true` from a sender an admin muted, whose copies stay its own (design.md, "Muting a device"); shown, never trusted. A receiver handles the sender's events the same either way |
+| `muted_for_ms` | integer or absent | with `muted`: how many milliseconds the mute still lasts, at most 2 592 000 000 (30 days); absent or 0 for until it is lifted. A receiver keeps the end on its own clock, so the clocks need not agree; a larger value counts as 30 days |
 | `device` | object or absent | what the sender says about its device: Device (below); shown, never trusted |
 | `key_store` | string or absent | where the sender's keys live: `file`, `hardware` or `rootless` (section 17); shown, never trusted, except by the root that makes the sender an admin; a receiver ignores another value |
 | `actions` | array or absent | the names of the sender's quick actions that are on (section 15), at most 64, for the admins' buttons; a receiver drops a name that is not valid; absent from one with none on. A change shows at the next connection |
@@ -1210,6 +1212,8 @@ A connection carries one request: the service reads the first message and dispat
 | `join` | `{code, address?}`, `{code, listen, expires}` or `{invite, consent}` | `{done}` or an error. Without `address` it browses for `p=1`. With `listen` it first answers `{addrs, fingerprint}` for the QR code, then `{done}` or an error when a member admitted it, or after `expires` seconds. With `invite`, the text of a remote invitation (section 12), it needs `consent` (sync away from home is turned on, and the device keeps its keys in files), first answers `{fingerprint}` (of this device's key, for the admin to compare), then `{done}` or an error. Hanging up cancels |
 | `invite` | `{expires?}`: seconds, 3600 if absent, at most 86 400 | Only on the group's hub, when it can admit devices. First `{invite, expires}`: the invitation's text. Then, for each device that used it and proved it knows the secret, `{joining: {id, name, os, fingerprint}}`, which the client answers with `{"op": "answer", consent}` (`true` admits it); last `{name, done}` or an error. Hanging up cancels the invitation |
 | `mode` | `{name, device?}`: `name` the sync mode, `own`, `shared`, `receive` or `send`; `device`, a name or device ID, for another device (on an admin) | without `device`: `{status, done}`, the mode saved and in effect; with it: `{done}` once that device answered `done` to the command (section 15), or an error with its reason. Only on the admin socket |
+| `mute` | `{device?, for_ms?}`: `device` a name or device ID; `for_ms` from 1 to 2 592 000 000 (30 days), absent for until `unmute` | `{status, done}` or an error. Without `device`, this device's user pauses receiving: the group's copies stay out of its clipboard, as in a mode that does not receive, and its own copies still go out (design.md, "Muting a device"). With `device`, on an admin that is not frozen, mutes that device: sends it a `mute` command (section 15), or mutes this device at once when it names this one. The mute and the pause last across restarts, in `mute.json`. Only on the admin socket |
+| `unmute` | `{device?}` | `{status, done}` or an error: without `device`, ends the pause; with it, on an admin that is not frozen, sends that device an `unmute` command, or ends this device's own mute at once. So a muted device that is no admin waits for an admin, and a muted admin or root ends its own mute. Only on the admin socket |
 | `paste-on` | `{device, method?, enter?, kind?}` + payload = the text | `{done}` once that device answered `done` to the `paste` command this admin signed (section 15), or an error with its reason. The text is cleaned first (design.md, "Remote paste"). Only on the admin socket |
 | `paste-receive` | `{name, enter?, console?, device?, all?}`: `name` `on` or `off` | `{status, done}`: `on` saves the switches of remote paste here, only for this device; `off` turns it off here, or with `device` or `all` on another or every device through `paste-off` commands. Only on the admin socket |
 | `keyboard` | `{name?, keyboard?}` + payload for `type`: `name` `on`, `off`, `pair`, `type` or none | `{status, done}`: `on` saves the Bluetooth keyboard's settings and registers it with BlueZ (Linux only), `off` takes it off, `pair` makes it discoverable for two minutes, `type` types the payload on the connected device and answers once it is typed, none only answers the status. Only on the admin socket |
@@ -1513,7 +1517,7 @@ and `a`-`f`.
 | `key` | string | `device` | a key hash: the member key (for a watch, its admin key) |
 | `admin` | string | `recovery`, `handover` | a key hash: the admin key its admin CA certifies; only in a record a root's own key signed |
 | `powers` | array of strings | none | sorted; from `admit`, `renew`, `remove`, `remove-admins`, `freeze`, `thaw`, `takeover`, `hub`; only with `admin` |
-| `commands` | array of strings | none | sorted; the command types (section 15) the admin may sign; only with `admin` |
+| `commands` | array of strings | none | sorted; the command types (section 15) the admin may sign: `action`, `actions-off`, `away-off`, `hub`, `mode`, `mute`, `paste`, `paste-off`, `unmute`; only with `admin`. A record signed before `mute` and `unmute` came lets its admin sign neither until the root signs it again |
 | `store`, `kind`, `proof` | string | none | as in section 17 |
 | `holds_root` | bool | none | `true`: this device holds the signer's root key; only in a record a root's own key signed |
 | `seal` | string | none | the device's public key for sealed messages, base64: 1216 bytes, an X-Wing key (HPKE KEM `0x647a`). The rules check only its size; a member checks the whole key before it seals a message to it |
@@ -2061,7 +2065,7 @@ beyond) and check the same bytes.
 
 | `op` | Request | Answers |
 |------|---------|---------|
-| `devices` | none | `{devices: [{id, name, role, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only |
+| `devices` | none | `{devices: [{id, name, role, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed, muted, muted_until_ms, ignored, ignored_until_ms}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only, and so are `muted` and `muted_until_ms` (Unix milliseconds, 0 for until it is lifted) |
 | `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?, consent?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "hub-off", device?, force?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, section 14), in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none; `consent` with `hub` turns sync away from home on first where it is off; `hub-off` makes this device, a hub, stop being one, or with `device`, on an admin, sends that hub a `hub` command with a stop order, and refuses while the group has no other hub unless `force` (section 11, "Stopping a hub"). Members connect again afterwards, so their hellos carry the change (section 11) |
 | `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`) |
 | `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected full member an admin ("Admins") |
@@ -3003,7 +3007,9 @@ the receiver stop being one (section 11, "Moving the hub", "Several hubs", "Stop
 the receiver's focus is, and `paste-off` turns remote paste off on the receiver (design.md,
 "Remote paste"); `action` runs one of the receiver's quick actions, and `actions-off` turns
 them all off there (design.md, "Quick actions"); `away-off` turns sync away from home off on
-the receiver (section 11), which only its own user turns on again (D-45).
+the receiver (section 11), which only its own user turns on again (D-45); `mute` keeps the
+receiver's copies from the group for a while or until `unmute` ends it (design.md, "Muting a
+device").
 
 ### The command
 
@@ -3013,7 +3019,7 @@ signed bodies (Conventions):
 | Field | Type | Meaning |
 |-------|------|---------|
 | `v` | integer | `1`, or `2` for a sealed command (below) |
-| `type` | string | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off` or `away-off` |
+| `type` | string | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off`, `mute` or `unmute` |
 | `group` | string | the group tag |
 | `by` | string | the signer's device ID (32 of `0`-`9` and `a`-`f`): a receiver refuses a command whose `by` is no device ID, or, when its records show which device holds the signing key (the root's own device for the root's key, the device whose record names the admin CA), names another device, or, when they show none, names a device they show |
 | `to` | string | the receiver's device ID (32 of `0`-`9` and `a`-`f`) |
@@ -3026,13 +3032,14 @@ signed bodies (Conventions):
 | `text` | string | in a `paste` command: the text, not empty, at most 1 MiB of UTF-8 for `paste` and 4 KiB for `type` |
 | `action` | string | in an `action` command: the action's name, 1 to 32 of `a`-`z`, `0`-`9` and `-`, starting with a letter; in no other command |
 | `hub` | object | in a `hub` command: `forwarder` (`endpoint`, `key`) or absent, `endpoints` (at most 8 with the forwarder's) or absent, at least one of the two, and `clients`, at most 256 of `{device, key, psk}` (base64, 32 bytes each, no device twice); or `{"stop":true}` with none of the others, which makes the receiver stop being a hub |
+| `for_ms` | integer | in a `mute` command: how long the mute lasts, from 1 to 2 592 000 000 (30 days) on the receiver's clock from when it takes the command; absent or 0 for until an `unmute` command or the receiver's user ends it |
 | `sealed` | string | in a command of `v` `2` only: the orders, sealed to the receiver (below), base64 |
 
 The exact rule, after the strict form: each field of this table has its JSON type in every
 command. A command is refused without `mode` in `mode` and `paste`, `hub` in `hub`, `kind`
 and `text` in `paste`, and `action` in `action`. In a command of another type these fields
-are absent or empty: `mode`, `kind`, `text` and `action` `""`, `enter` `false`, and `hub`
-absent, since even `{}` is an order. `mode` in a `mode` command is any string that is not
+are absent or empty: `mode`, `kind`, `text` and `action` `""`, `enter` `false`, `for_ms` `0`,
+and `hub` absent, since even `{}` is an order. `mode` in a `mode` command is any string that is not
 empty here; the receiver answers a mode it does not know with an error. `paste`'s `mode`
 and `kind` are exactly the values above. The 1 MiB and 4 KiB of `text` count the bytes of
 UTF-8 once its escapes are read. In `hub`, `forwarder` has `endpoint` and `key`, strings
@@ -3072,7 +3079,7 @@ once, and the phones keep it when they sign the record again. A command for it i
 (below, "Sealed commands").
 
 A sender that has no connection to the receiver sends a `mode`, `paste`, `paste-off`,
-`action`, `actions-off` or `away-off` command to the group's hubs it is connected to (the
+`action`, `actions-off`, `away-off`, `mute` or `unmute` command to the group's hubs it is connected to (the
 root and the admins, "Several hubs" in section 11), and to no other member: a command's body,
 a paste's text among it, is signed but encrypted only when sealed (below), and the hubs are
 the devices the user gave admin powers. A `hub` command only goes directly. A member
@@ -3153,12 +3160,25 @@ connect again once the result is sent. It answers `done` also when sync away fro
 off already. Of the presets, the lite member knows only `reboot`, `cancel-shutdown` and
 `restart`.
 
+A `mute` command mutes the receiver until `for_ms` from when it takes the command, or until
+an admin lifts it; the commands of several admins simply follow each other, the last one
+taken counts. It makes no events, not even
+from a deliberate copy (which it refuses), and takes the group's copies as before; its sync
+mode stays as its user set it. It saves the mute, so that it lasts across restarts, answers
+`done`, and once the result has gone back connects to the members again, so that their hellos
+show it (section 4, `muted`). An `unmute` command ends it the same way; the device's own
+user ends it only where the device is itself an admin or the root (section 8, `unmute`), and
+a mute that ends by its time ends without a message. Every member takes both: computers,
+lite members and the phones. A device that does not take the command (an older one, or one
+that is broken) is removed instead; each device's user may also pause receiving there
+(section 8, `mute`).
+
 ### Sealed commands
 
 A sender seals a command's orders to its receiver when the receiver's device record has a
 `seal` key, so that the members in between see only the header:
 
-- The **orders** are the fields `mode`, `hub`, `enter`, `kind`, `text` and `action`, as a JSON
+- The **orders** are the fields `mode`, `hub`, `enter`, `kind`, `text`, `action` and `for_ms`, as a JSON
   object in the strict form of signed bodies, with only those of them the command has.
 - The **associated data** is the header: the context `cbb command v2`, then
   `type`, `group`, `by`, `to` and `id`, each of these six strings as its length in 4 bytes and

@@ -21,6 +21,7 @@ mod files;
 mod identity;
 mod interfaces;
 mod leave;
+mod mute;
 mod next;
 mod nextlink;
 mod node;
@@ -80,6 +81,9 @@ Commands:
                        Show or change the sync mode: what moves between this
                        device's clipboard and the group (a new device keeps
                        its own; cbb copy and cbb paste work in every mode).
+  mute [-for DURATION] Take no copies from the group for a while, or until
+                       cbb unmute; this device's own copies still go out.
+  unmute               Take the group's copies again.
   global [on|off]      Show sync away from home, or turn it on or off here:
                        through the group's own WireGuard tunnel to its hub.
   watch [-0]           Print every text the group sends here, one per line
@@ -187,6 +191,7 @@ fn main() {
                 "global" => cmd_global(&g, rest),
                 "watch" => cmd_watch(&g, rest),
                 "mode" => cmd_mode(&g, rest),
+                "mute" | "unmute" => cmd_mute(&g, rest, cmd == "unmute"),
                 "paste-receive" => cmd_paste_receive(&g, rest),
                 "action" => cmd_action(&g, rest),
                 "paste-helper" => pastehelper::run(&g.socket, rest),
@@ -725,6 +730,63 @@ fn cmd_mode(g: &Global, args: &[String]) -> Result<()> {
     let mode = m.header.status.map(|s| s.mode).unwrap_or_default();
     println!("{}", mode_line(&mode));
     Ok(())
+}
+
+/// Takes no copies from the group for a while, as cbb mute on a full
+/// member; unmute takes them again.
+fn cmd_mute(g: &Global, args: &[String], unmute: bool) -> Result<()> {
+    let usage = || Error::msg(if unmute { "usage: cbb unmute" } else { "usage: cbb mute [-for DURATION]" });
+    let mut h = control::Header { op: if unmute { "unmute" } else { "mute" }.into(), ..Default::default() };
+    let mut until = "until cbb unmute".to_string();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match flag(a) {
+            Some("for") if !unmute => {
+                let d = it.next().ok_or_else(usage)?;
+                h.for_ms = parse_duration_ms(d).ok_or_else(|| Error::msg(format!("-for: {d:?} is no duration")))?;
+                if h.for_ms == 0 {
+                    return Err(Error::msg("-for is from 1ms to 720h"));
+                }
+                until = format!("for {d}");
+            }
+            _ => return Err(usage()),
+        }
+    }
+    request(g, &control::Message::new(h, Vec::new()))?;
+    if unmute {
+        println!("This device takes the group's copies again.");
+    } else {
+        println!("This device takes no copies from the group {until}; its own copies still go out.");
+    }
+    Ok(())
+}
+
+/// Reads a duration as Go writes one, such as 90s, 15m, 1h or 1h30m, in
+/// milliseconds.
+fn parse_duration_ms(s: &str) -> Option<i64> {
+    let mut total: i64 = 0;
+    let mut num = String::new();
+    let mut rest = s;
+    if rest.is_empty() {
+        return None;
+    }
+    while !rest.is_empty() {
+        let digits = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+        num.clear();
+        num.push_str(&rest[..digits]);
+        rest = &rest[digits..];
+        let unit_len = rest.find(|c: char| c.is_ascii_digit()).unwrap_or(rest.len());
+        let unit = match &rest[..unit_len] {
+            "ms" => 1,
+            "s" => 1000,
+            "m" => 60_000,
+            "h" => 3_600_000,
+            _ => return None,
+        };
+        rest = &rest[unit_len..];
+        total = total.checked_add(num.parse::<i64>().ok()?.checked_mul(unit)?)?;
+    }
+    (total <= mute::MAX_MS).then_some(total)
 }
 
 /// What the sync mode mode does, as cbb mode on a full member says it.

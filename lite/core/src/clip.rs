@@ -301,6 +301,12 @@ struct Inner {
     rejoined: bool,
     rejoin_at: Duration,
     mode: Mode,
+    /// An admin's mute, which keeps this member's copies from the group,
+    /// and its user's pause, which keeps the group's copies out of its
+    /// clipboard (design.md, "Muting a device"): each until a wall time in
+    /// milliseconds, 0 for until it is lifted.
+    mute: Option<i64>,
+    pause: Option<i64>,
 }
 
 /// The state of one member. It is safe for concurrent use.
@@ -348,6 +354,8 @@ impl Engine {
                 rejoined: false,
                 rejoin_at: Duration::ZERO,
                 mode: Mode::Shared,
+                mute: None,
+                pause: None,
             }),
         }
     }
@@ -367,6 +375,67 @@ impl Engine {
     /// after.
     pub fn set_mode(&self, m: Mode) {
         self.inner.lock().mode = m;
+    }
+
+    /// Mutes this member until `until_ms` on the wall clock, 0 for until
+    /// [`Engine::unmute`]: its copies, deliberate ones too, stay its own.
+    pub fn set_mute(&self, until_ms: i64) {
+        self.inner.lock().mute = Some(until_ms);
+    }
+
+    /// Ends the mute.
+    pub fn unmute(&self) {
+        self.inner.lock().mute = None;
+    }
+
+    /// Whether this member is muted, and for how many milliseconds more: 0
+    /// for until [`Engine::unmute`], at least 1 otherwise.
+    pub fn mute_left(&self) -> Option<i64> {
+        let mut st = self.inner.lock();
+        let now = (self.wall)();
+        match self.muted(&mut st) {
+            false => None,
+            true => Some(st.mute.filter(|u| *u != 0).map_or(0, |u| u.saturating_sub(now).max(1))),
+        }
+    }
+
+    /// Whether the mute holds now; one that ended is forgotten.
+    fn muted(&self, st: &mut Inner) -> bool {
+        if st.mute.is_some_and(|u| u != 0 && (self.wall)() >= u) {
+            st.mute = None;
+        }
+        st.mute.is_some()
+    }
+
+    /// Keeps the group's copies out of this member's clipboard until
+    /// `until_ms` on the wall clock, 0 for until [`Engine::resume`], as a
+    /// mode that does not receive does; its own copies still go out.
+    pub fn pause(&self, until_ms: i64) {
+        self.inner.lock().pause = Some(until_ms);
+    }
+
+    /// Ends the pause.
+    pub fn resume(&self) {
+        self.inner.lock().pause = None;
+    }
+
+    /// Whether receiving is paused, and for how many milliseconds more: 0
+    /// for until [`Engine::resume`], at least 1 otherwise.
+    pub fn pause_left(&self) -> Option<i64> {
+        let mut st = self.inner.lock();
+        let now = (self.wall)();
+        match self.paused(&mut st) {
+            false => None,
+            true => Some(st.pause.filter(|u| *u != 0).map_or(0, |u| u.saturating_sub(now).max(1))),
+        }
+    }
+
+    /// Whether the pause holds now; one that ended is forgotten.
+    fn paused(&self, st: &mut Inner) -> bool {
+        if st.pause.is_some_and(|u| u != 0 && (self.wall)() >= u) {
+            st.pause = None;
+        }
+        st.pause.is_some()
     }
 
     #[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
@@ -431,7 +500,7 @@ impl Engine {
             st.local = Local::default();
             return Ok(None);
         }
-        if !st.mode.sends() {
+        if !st.mode.sends() || self.muted(&mut st) {
             st.local = Local { text: text.to_string(), kind, at: now };
             if kind == Kind::Secret {
                 add_secret(&mut st, sum, now);
@@ -449,6 +518,9 @@ impl Engine {
             return Err(Error::msg("a lite member makes no media events"));
         }
         let mut st = self.inner.lock();
+        if self.muted(&mut st) {
+            return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
+        }
         let now = (self.uptime)();
         settle(&mut st, now);
         let sum = self.sum(text);
@@ -617,6 +689,7 @@ impl Engine {
     fn decide_write(&self, st: &mut Inner, mut out: Outcome, now: Duration) -> Outcome {
         settle(st, now);
         if !st.mode.receives()
+            || self.paused(st)
             || !self.live(st, now)
             || st.current.text.is_empty()
             || local_has(st, &st.current.text, now)

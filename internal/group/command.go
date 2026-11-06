@@ -33,7 +33,9 @@ import (
 // by its name, and CommandActionsOff turns them all off there (design.md,
 // "Quick actions"); CommandAwayOff turns sync away from home off on the
 // receiver, which only its own user turns on again (design.md, "Sync away
-// from home"). A watch signs only the commands that turn things off and
+// from home"). CommandMute keeps the receiver's copies from the group for
+// ForMS, or until CommandUnmute ends it (design.md, "Muting a device").
+// A watch signs only the commands that turn things off and
 // action (WatchCommand).
 const (
 	CommandMode       = "mode"
@@ -43,7 +45,13 @@ const (
 	CommandAction     = "action"
 	CommandActionsOff = "actions-off"
 	CommandAwayOff    = "away-off"
+	CommandMute       = "mute"
+	CommandUnmute     = "unmute"
 )
+
+// MaxMute bounds the time of a mute command; a mute without one lasts until
+// it is lifted.
+const MaxMute = 30 * 24 * time.Hour
 
 // WatchCommand reports whether a watch's admin key may sign a command of
 // type t (docs/protocol.md, section 10, "Watches"): one that turns remote
@@ -132,6 +140,7 @@ type CommandBody struct {
 	Kind      string    `json:"kind,omitempty"`   // paste: text or secret
 	Text      string    `json:"text,omitempty"`   // paste: what to put in
 	Action    string    `json:"action,omitempty"` // action: the name of the action
+	ForMS     int64     `json:"for_ms,omitempty"` // mute: how long, up to MaxMute; 0 for until unmute
 	// Sealed holds the orders above, sealed to the receiver's key, in a
 	// command of version 2 (SealCommand); Open opens them.
 	Sealed []byte `json:"sealed,omitempty"`
@@ -148,14 +157,15 @@ type commandOrders struct {
 	Kind   string    `json:"kind,omitempty"`
 	Text   string    `json:"text,omitempty"`
 	Action string    `json:"action,omitempty"`
+	ForMS  int64     `json:"for_ms,omitempty"`
 }
 
 func (b *CommandBody) orders() commandOrders {
-	return commandOrders{Mode: b.Mode, Hub: b.Hub, Enter: b.Enter, Kind: b.Kind, Text: b.Text, Action: b.Action}
+	return commandOrders{Mode: b.Mode, Hub: b.Hub, Enter: b.Enter, Kind: b.Kind, Text: b.Text, Action: b.Action, ForMS: b.ForMS}
 }
 
 func (b *CommandBody) setOrders(o commandOrders) {
-	b.Mode, b.Hub, b.Enter, b.Kind, b.Text, b.Action = o.Mode, o.Hub, o.Enter, o.Kind, o.Text, o.Action
+	b.Mode, b.Hub, b.Enter, b.Kind, b.Text, b.Action, b.ForMS = o.Mode, o.Hub, o.Enter, o.Kind, o.Text, o.Action, o.ForMS
 }
 
 // commandAAD is a sealed command's associated data: its open header, each
@@ -341,6 +351,9 @@ func (b *CommandBody) check() error {
 	if b.Type != CommandAction && b.Action != "" {
 		return fmt.Errorf("group: a %s command names an action", b.Type)
 	}
+	if b.Type != CommandMute && b.ForMS != 0 {
+		return fmt.Errorf("group: a %s command gives a time", b.Type)
+	}
 	switch b.Type {
 	case CommandMode:
 		if b.Mode == "" || b.Hub != nil {
@@ -357,9 +370,16 @@ func (b *CommandBody) check() error {
 		if err := b.checkPaste(); err != nil {
 			return err
 		}
-	case CommandPasteOff, CommandActionsOff, CommandAwayOff:
+	case CommandPasteOff, CommandActionsOff, CommandAwayOff, CommandUnmute:
 		if b.Mode != "" || b.Hub != nil {
 			return fmt.Errorf("group: a %s command carries an order", b.Type)
+		}
+	case CommandMute:
+		if b.Mode != "" || b.Hub != nil {
+			return errors.New("group: a mute command carries an order")
+		}
+		if b.ForMS < 0 || b.ForMS > MaxMute.Milliseconds() {
+			return fmt.Errorf("group: a mute command's time is not from 0 to %d ms", MaxMute.Milliseconds())
 		}
 	case CommandAction:
 		if b.Mode != "" || b.Hub != nil {
@@ -377,7 +397,7 @@ func (b *CommandBody) check() error {
 // knownCommand reports whether t is a type of command.
 func knownCommand(t string) bool {
 	switch t {
-	case CommandMode, CommandHub, CommandPaste, CommandPasteOff, CommandAction, CommandActionsOff, CommandAwayOff:
+	case CommandMode, CommandHub, CommandPaste, CommandPasteOff, CommandAction, CommandActionsOff, CommandAwayOff, CommandMute, CommandUnmute:
 		return true
 	}
 	return false

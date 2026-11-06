@@ -325,6 +325,12 @@ type Engine struct {
 	seq      uint64       // counts writes, so the caller can apply them in order
 	mode     Mode
 	skews    map[string]time.Duration // per connected peer, from its hello
+	// mute, an admin's, stops this member's own copies from reaching the
+	// group; pause, its user's, keeps the group's copies out of its
+	// clipboard (design.md, "Muting a device"). Each lasts until a time on
+	// the wall clock, the zero time for until it is lifted.
+	mute  *time.Time
+	pause *time.Time
 
 	peers       map[string]int // open connections per peer
 	synced      bool           // a hello was reconciled since the last Rejoin, and a connection is up
@@ -396,6 +402,94 @@ func (e *Engine) SetMode(m Mode) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.mode = m
+}
+
+// ErrMuted refuses a deliberate copy on a muted member.
+var ErrMuted = errors.New("clip: this device is muted: its copies do not reach the group until the mute ends (cbb unmute)")
+
+// SetMute mutes this member until until on the wall clock, the zero time
+// for until Unmute: its copies, deliberate ones too, stay its own.
+func (e *Engine) SetMute(until time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.mute = &until
+}
+
+// Unmute ends the mute.
+func (e *Engine) Unmute() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.mute = nil
+}
+
+// Muted reports whether this member is muted, and until when: the zero
+// time for until Unmute.
+func (e *Engine) Muted() (bool, time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.muted() {
+		return false, time.Time{}
+	}
+	return true, *e.mute
+}
+
+// MuteLeft reports whether this member is muted, and for how long more: 0
+// for until Unmute, and at least a millisecond otherwise.
+func (e *Engine) MuteLeft() (bool, time.Duration) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.muted() {
+		return false, 0
+	}
+	if e.mute.IsZero() {
+		return true, 0
+	}
+	return true, max(e.mute.Sub(e.cfg.Wall()), time.Millisecond)
+}
+
+// muted reports whether the mute holds now, and forgets one that ended;
+// e.mu is held.
+func (e *Engine) muted() bool {
+	if e.mute != nil && !e.mute.IsZero() && !e.cfg.Wall().Before(*e.mute) {
+		e.mute = nil
+	}
+	return e.mute != nil
+}
+
+// PauseReceiving keeps the group's copies out of this member's clipboard
+// until until on the wall clock, the zero time for until ResumeReceiving,
+// as a mode that does not receive does; its own copies still go out.
+func (e *Engine) PauseReceiving(until time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.pause = &until
+}
+
+// ResumeReceiving ends the pause.
+func (e *Engine) ResumeReceiving() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.pause = nil
+}
+
+// ReceivingPaused reports whether receiving is paused, and until when:
+// the zero time for until ResumeReceiving.
+func (e *Engine) ReceivingPaused() (bool, time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.paused() {
+		return false, time.Time{}
+	}
+	return true, *e.pause
+}
+
+// paused reports whether the pause holds now, and forgets one that ended;
+// e.mu is held.
+func (e *Engine) paused() bool {
+	if e.pause != nil && !e.pause.IsZero() && !e.cfg.Wall().Before(*e.pause) {
+		e.pause = nil
+	}
+	return e.pause != nil
 }
 
 // Current returns the group's current event, with its age as of now. It
@@ -500,7 +594,7 @@ func (e *Engine) Copied(text string, kind Kind, via Via) (Event, bool, error) {
 		// A clipboard manager restores an earlier secret without its mark.
 		e.local = localText{}
 		return Event{}, false, nil
-	case !e.mode.Sends():
+	case !e.mode.Sends() || e.muted():
 		e.local = localText{text: text, kind: kind, at: now}
 		if kind == Secret {
 			e.secrets.add(sum, now)
@@ -525,6 +619,9 @@ func (e *Engine) Send(text string, kind Kind, via Via) (Event, Result, error) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.muted() {
+		return Event{}, Result{}, ErrMuted
+	}
 	now := e.cfg.Uptime()
 	e.settle(now)
 	sum := e.sum(text)
@@ -556,6 +653,9 @@ func (e *Engine) SendMedia(m *Manifest, text string, via Via) (Event, Result, er
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.muted() {
+		return Event{}, Result{}, ErrMuted
+	}
 	now := e.cfg.Uptime()
 	e.settle(now)
 	held := e.localHolds(ev, now)
@@ -591,7 +691,7 @@ func (e *Engine) CopiedMedia(m *Manifest, text string, via Via) (Event, bool, er
 	case via == Universal && e.live() && e.current.Kind == Media && e.current.key() == ev.key():
 		e.local = localText{text: e.current.Text, kind: Media, media: e.current.Media, at: e.copiedAt}
 		return Event{}, false, nil
-	case !e.mode.Sends():
+	case !e.mode.Sends() || e.muted():
 		e.local = localText{text: text, kind: Media, media: m, at: now}
 		return Event{}, false, nil
 	}
@@ -849,7 +949,7 @@ func (e *Engine) receive(ev Event) Result {
 // back in sync.
 func (e *Engine) decideWrite(res Result, now time.Duration) Result {
 	e.settle(now)
-	if !e.mode.Receives() || !e.live() || e.localHolds(e.current, now) {
+	if !e.mode.Receives() || e.paused() || !e.live() || e.localHolds(e.current, now) {
 		return res
 	}
 	if now-e.copiedAt > e.cfg.LiveWindow && (!e.inRejoinWindow(now) || e.offlineCopy) {

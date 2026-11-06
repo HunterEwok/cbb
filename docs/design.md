@@ -705,6 +705,31 @@ a **sync mode** instead, and a new device starts in its own:
   the iPhone, which has no copy watching, writes a group copy from the last 45 seconds to the
   pasteboard while the app is open in a mode that receives. The buttons work in every mode.
 
+### Muting a device
+
+A device that misbehaves with its clipboard (a program that rewrites it over and over, a
+script in a loop) sends a copy to every other device each time and gets in everyone's way.
+Two switches stop that for a while, both apart from the sync mode, which stays as the user
+set it:
+
+- **Not listening, on the device itself.** One tap on the first screen of every app (and
+  `cbb mute`, `cbb unmute`) keeps the group's copies out of this device's clipboard, as a
+  mode that does not receive does, until tapped again; holding the button picks a time
+  (15 minutes, an hour, 8 hours). The device's own copies still go out. No rights are
+  needed: it changes only this device.
+- **Muted by an admin, for the whole group.** An admin mutes any device of the group, the
+  root too, for a time up to 30 days or until unmuted (`cbb mute -on DEVICE -for 1h`, the
+  apps' device page): a signed `mute` command (docs/protocol.md, section 15) tells the device
+  to send nothing, not even a deliberate copy, until then. Any admin ends it with `unmute`,
+  and the last command counts. The device's own user ends it only where the device is itself
+  an admin or the root. The device says in its hello that it is muted and until when, so
+  every devices list shows it.
+
+Both last across restarts (`mute.json` in the state directory) and end by themselves when
+their time has passed. A device that does not take the command, an older or a broken one,
+is removed instead. The member protocol is unchanged: a muted device's copies are not made,
+so nothing needs to be dropped on the way.
+
 ### Images and files
 
 Images, files and folders travel wherever the platform lets a program read and write them,

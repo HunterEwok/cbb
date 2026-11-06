@@ -320,6 +320,12 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			return
 		}
 		reply(c, control.Header{Done: true}, nil)
+	case control.OpMute, control.OpUnmute:
+		if err := s.muteOp(ctx, m); err != nil {
+			fail(c, err)
+			return
+		}
+		reply(c, control.Header{Status: s.status(), Done: true}, nil)
 	case control.OpActionOff:
 		if err := s.actionsOffOn(ctx, m); err != nil {
 			fail(c, err)
@@ -513,6 +519,12 @@ func (s *Service) status() *control.Status {
 		st.KeyProblem = group.WhyNotHardware()
 	}
 	st.Mode = s.eng.Mode().String()
+	if muted, until := s.eng.Muted(); muted {
+		st.Muted, st.MutedUntilMS = true, unixMS(until)
+	}
+	if paused, until := s.eng.ReceivingPaused(); paused {
+		st.Paused, st.PausedUntilMS = true, unixMS(until)
+	}
 	skews := s.eng.Skews()
 	for _, p := range s.nd.Peers() {
 		st.Peers = append(st.Peers, control.Device{ID: string(p.ID), Role: string(p.Role), OS: p.OS, SkewMS: skews[string(p.ID)].Milliseconds()})

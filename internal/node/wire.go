@@ -282,6 +282,11 @@ type helloBody struct {
 	// Mode is the sender's sync mode, for showing; "" from a member that
 	// has none, such as a phone.
 	Mode string `json:"mode,omitempty"`
+	// Muted says that the sender is muted, its copies its own, for MutedFor
+	// more, or until it is lifted when MutedFor is 0 (design.md, "Muting a
+	// device").
+	Muted    bool  `json:"muted,omitempty"`
+	MutedFor int64 `json:"muted_for_ms,omitempty"`
 	// AdminKey is the admin key the sender offers, for the root.
 	AdminKey []byte `json:"admin_key,omitempty"`
 	// KeyStore is where the sender says its keys live (group.StoreFile or
@@ -329,6 +334,10 @@ type helloOut struct {
 	TunnelPSK []byte `json:"tunnel_psk,omitempty"`
 	// Mode is this member's sync mode (clip.Mode), for the others to show.
 	Mode string `json:"mode,omitempty"`
+	// Muted and MutedFor say that this member is muted, and for how many
+	// milliseconds more; 0 for until the mute is lifted.
+	Muted    bool  `json:"muted,omitempty"`
+	MutedFor int64 `json:"muted_for_ms,omitempty"`
 	// KeyStore is where this member's keys live, for the root that makes
 	// it an admin.
 	KeyStore string `json:"key_store,omitempty"`

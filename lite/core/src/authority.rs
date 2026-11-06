@@ -76,7 +76,8 @@ pub const POWERS: [&str; 8] =
     [POWER_ADMIT, POWER_FREEZE, POWER_HUB, POWER_REMOVE, POWER_REMOVE_ADMINS, POWER_RENEW, POWER_TAKEOVER, POWER_THAW];
 
 /// Every command type an admin may be given, sorted.
-pub const COMMANDS: [&str; 7] = ["action", "actions-off", "away-off", "hub", "mode", "paste", "paste-off"];
+pub const COMMANDS: [&str; 9] =
+    ["action", "actions-off", "away-off", "hub", "mode", "mute", "paste", "paste-off", "unmute"];
 
 /// The key levels a settings record may set (docs/roadmap.md, "Key
 /// levels"): only proven hardware keys, hardware keys (the default), or

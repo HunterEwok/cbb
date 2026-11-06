@@ -14,7 +14,7 @@ pub const NOTHING_TO_LEAVE: &str = "this device is in no group, so there is noth
 
 /// What a device keeps of its group in the state directory: its keys, the
 /// tunnel's (only in builds with it), the logs that name the group's
-/// devices, a group left before 0.6, and the records last, so that a leave
+/// devices, the mute, a group left before 0.6, and the records last, so that a leave
 /// cut short is seen as a group still.
 pub const GROUP_FILES: &[&str] = &[
     identity::FILE_NAME,
@@ -22,6 +22,7 @@ pub const GROUP_FILES: &[&str] = &[
     "tunnel.json",
     remotepaste::LOG_FILE,
     actions::LOG_FILE,
+    crate::mute::FILE_NAME,
     records::OLD_GROUP_DIR,
     records::FILE_NAME,
 ];

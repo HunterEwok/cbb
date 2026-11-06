@@ -80,6 +80,12 @@ Commands:
                           Show or set what moves between this clipboard and the group;
                           a new device keeps its own.
   mode -on DEVICE MODE    On an admin: set the sync mode of another device of the group.
+  mute [-for DURATION]    Take no copies from the group here for a while, or until
+                          cbb unmute; this device's own copies still go out.
+  mute -on DEVICE [-for DURATION]
+                          On an admin: keep a device's copies from the group for a
+                          while, or until another admin's cbb unmute -on.
+  unmute [-on DEVICE]     Take the group's copies here again, or end a device's mute.
   config [max-copy|max-copy-away SIZE]
                           Show or set the largest copy of images and files this device
                           sends or fetches, at home (100MiB) and away from home (25MiB).
@@ -180,6 +186,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdInvite(rest, stdin, stdout, stderr)
 	case "mode":
 		return cmdMode(rest, stdout, stderr)
+	case "mute", "unmute":
+		return cmdMute(rest, cmd == "unmute", stdout, stderr)
 	case "config":
 		return cmdConfig(rest, stdout, stderr)
 	case "network":
