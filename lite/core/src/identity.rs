@@ -69,6 +69,30 @@ pub fn sign(pkcs8: &[u8], data: &[u8]) -> Result<Vec<u8>> {
     Ok(sig.to_der().as_bytes().to_vec())
 }
 
+/// A device key the core does not hold, such as a phone's key in its secure
+/// hardware: its public key and a way to sign with it. A joiner with one
+/// signs its pairing certificate and its TLS handshake through it.
+pub trait ExternalKey: Send + Sync {
+    /// The public key, SEC1 uncompressed (65 bytes).
+    fn public(&self) -> Vec<u8>;
+    /// ECDSA P-256 over a SHA-256 digest, DER.
+    fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>>;
+}
+
+/// Signs data with an external key: SHA-256, then the key, and checks the
+/// signature it gave, so that a broken key fails here and not in the peer.
+pub fn sign_external(key: &dyn ExternalKey, data: &[u8]) -> Result<Vec<u8>> {
+    use p256::ecdsa::signature::hazmat::PrehashVerifier as _;
+    let digest = certs::sha256(data);
+    let sig = key.sign_digest(&digest)?;
+    let public = p256::ecdsa::VerifyingKey::from_sec1_bytes(&key.public())
+        .map_err(|_| Error::msg("the device key is not a P-256 key"))?;
+    let parsed =
+        p256::ecdsa::Signature::from_der(&sig).map_err(|_| Error::msg("the device key's signature is not DER"))?;
+    public.verify_prehash(&digest, &parsed).map_err(|_| Error::msg("the device key's signature does not verify"))?;
+    Ok(sig)
+}
+
 /// Returns the uncompressed public key of a PKCS #8 P-256 key.
 pub fn public_key(pkcs8: &[u8]) -> Result<Vec<u8>> {
     Ok(signing_key(pkcs8)?.verifying_key().to_sec1_point(false).as_bytes().to_vec())
@@ -106,8 +130,14 @@ impl Identity {
     /// device and its key and comes from a root of the group, or from an
     /// admin CA under one. It does not check expiry.
     pub fn check(&self) -> Result<()> {
+        self.check_key(&public_key(&self.key)?)
+    }
+
+    /// Checks the parts as check does, for the public key key (SEC1,
+    /// uncompressed): for a device whose key is kept outside the core
+    /// ([`ExternalKey`]), whose identity has no key of its own.
+    pub fn check_key(&self, key: &[u8]) -> Result<()> {
         DeviceId::parse(self.id.as_str())?;
-        let key = public_key(&self.key)?;
         certs::check_ca(&self.group_ca, "group CA", 1)?;
         if !self.roots.is_empty() && self.group_ca.path_len != Some(1) {
             return Err(Error::msg("only a group whose root is a phone has later roots"));

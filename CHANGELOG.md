@@ -14,6 +14,9 @@ All notable changes to cbb are documented in this file. The format follows
 - `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
   the device records (docs/protocol.md): every member admits them as phones and shows
   "Aurora OS" and "Sailfish OS".
+- The Rust core joins a phone by its QR code with a key it does not hold, such as the Aurora
+  app's key in OP-TEE: lite/ffi's `cbb_join_*` functions run the pairing inside the core's TLS
+  and ask the app to sign; a test joins them to a computer's group.
 - End-to-end encryption of every copy (D-84): the device that copies seals each copy, its
   text, images and files, with a key of its own, wraps that key for every device of the group
   that reads copies (X-Wing: X25519 with ML-KEM-768) and signs the copy with its member key.

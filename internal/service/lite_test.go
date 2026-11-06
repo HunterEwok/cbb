@@ -198,6 +198,57 @@ func TestEmbassyJoiner(t *testing.T) {
 	}
 }
 
+// TestFFIJoiner: the Aurora app's joining through lite/ffi's C functions
+// (cbb_join_*), run by the example join-on-linux with a software key in
+// place of the phone's OP-TEE key, joins a computer's group as a phone.
+// CBB_JOIN_ON_LINUX names the binary.
+func TestFFIJoiner(t *testing.T) {
+	bin := os.Getenv("CBB_JOIN_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_JOIN_ON_LINUX is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+	join := exec.Command(bin, "-addr", addr, "-name", "aurora phone")
+	join.Stderr = testWriter{t, "join-on-linux: ", nil}
+	out, err := join.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := join.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer join.Process.Kill()
+	var qr string
+	sc := bufio.NewScanner(out)
+	for qr == "" && sc.Scan() {
+		if line, ok := strings.CutPrefix(sc.Text(), "QR: "); ok {
+			qr = line
+		}
+	}
+	res := dialJoiner(t, pi.dir, qr)
+	if res.Info.Name != "aurora phone" || res.Info.OS != group.OSAurora || !res.Info.Phone() || !res.Confirmed {
+		t.Fatalf("the phone joined as %+v", res)
+	}
+	var rest strings.Builder
+	for sc.Scan() {
+		rest.WriteString(sc.Text() + "\n")
+	}
+	if err := join.Wait(); err != nil || !strings.Contains(rest.String(), "Joined ") ||
+		!strings.Contains(rest.String(), " "+pi.status(t).Group) {
+		t.Fatalf("join-on-linux: %v; %s", err, rest.String())
+	}
+}
+
 // dialJoiner plays the phone that scanned a listening joiner's QR code: it
 // opens a window with the identity in dir, dials the addresses in the QR
 // code and admits the device with the certificate it names, as the phone

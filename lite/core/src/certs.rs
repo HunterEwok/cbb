@@ -303,9 +303,19 @@ fn tlv(b: &[u8]) -> Option<(usize, &[u8])> {
 /// the pairing exchange binds it.
 pub fn self_signed(id: &DeviceId, key: &SigningKey) -> Result<Vec<u8>> {
     let point = VerifyingKey::from(key).to_sec1_point(false);
+    self_signed_by(id, point.as_bytes(), &mut |tbs| {
+        let sig: Signature = key.sign(tbs);
+        Ok(sig.to_der().as_bytes().to_vec())
+    })
+}
+
+/// The self-signed certificate of self_signed for the public key point
+/// (SEC1, uncompressed), signed by sign: ECDSA P-256 with SHA-256 over the
+/// bytes it gets, DER. A key kept outside the core signs it this way.
+pub fn self_signed_by(id: &DeviceId, point: &[u8], sign: &mut dyn FnMut(&[u8]) -> Result<Vec<u8>>) -> Result<Vec<u8>> {
     let alg = seq(&[&oid(&OID_ECDSA_SHA256)]);
     let name = seq(&[&set(&[&seq(&[&oid(&OID_COMMON_NAME), &tagged(0x0c, id.as_str().as_bytes())])])]);
-    let spki = seq(&[&seq(&[&oid(&OID_EC_PUBLIC_KEY), &oid(&OID_P256)]), &bit_string(point.as_bytes())]);
+    let spki = seq(&[&seq(&[&oid(&OID_EC_PUBLIC_KEY), &oid(&OID_P256)]), &bit_string(point)]);
     let mut serial = random_bytes::<16>();
     serial[0] = (serial[0] & 0x7f) | 0x01; // positive, and 16 bytes long
     let key_usage = seq(&[
@@ -324,8 +334,8 @@ pub fn self_signed(id: &DeviceId, key: &SigningKey) -> Result<Vec<u8>> {
         &spki,
         &tagged(0xa3, &seq(&[&key_usage, &basic])),
     ]);
-    let sig: Signature = key.sign(&tbs);
-    Ok(seq(&[&tbs, &alg, &bit_string(sig.to_der().as_bytes())]))
+    let sig = sign(&tbs)?;
+    Ok(seq(&[&tbs, &alg, &bit_string(&sig)]))
 }
 
 /// A DER element with the given tag.

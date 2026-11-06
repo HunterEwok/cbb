@@ -39,6 +39,18 @@ with `cbb_free`; `cbb_abi` gives the ABI. `lite/ffi/bind.sh` builds the library 
 phones. The Swift kit links it as the module `CCbbCore` (`Core.swift`), the Kotlin kit loads
 `libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call, as Go does.
 
+Built with the feature `join` (only the Aurora app's library, `bind.sh aurora`), the library
+also lets a phone join by its QR code with a key the core does not hold, the Aurora app's key
+in OP-TEE: `cbb_join_new` takes the phone's name, its system, its public key, the addresses
+for the QR code and a callback that signs a SHA-256 digest with the key, and answers the QR
+code's text and modules and the code; for each connection a member dials, `cbb_join_accept`
+starts an attempt and `cbb_join_feed` takes the bytes that arrive and answers those to send
+and whether the member admitted the phone (with its certificate, the group CA, the roots and
+the records file); `cbb_join_finish` tells the member whether the app stored it, and
+`cbb_join_free` ends the joiner. The pairing runs inside the core's TLS
+(`cbb_core::pair_session`); the app only moves the bytes. `TestFFIJoiner` runs these functions
+against a Go member through the example `join-on-linux`.
+
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its
 memory functions), run by wazero under the tag `cbbwasm`. Every release build of `cbb`, on

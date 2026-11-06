@@ -63,11 +63,12 @@ host)
 aurora)
 	# The Aurora and Sailfish apps' static libraries, by qmake's QT_ARCH. Only
 	# the static library: building the shared one needs the SDK's linker.
+	# With join: the app joins by its QR code with its key in OP-TEE.
 	for pair in arm:armv7-unknown-linux-gnueabihf arm64:aarch64-unknown-linux-gnu; do
 		arch=${pair%%:*}
 		t=${pair#*:}
 		rustup target add "$t" >/dev/null
-		cargo rustc --locked -p cbb-ffi --lib --release --target "$t" --crate-type staticlib
+		cargo rustc --locked -p cbb-ffi --features join --lib --release --target "$t" --crate-type staticlib
 		mkdir -p "$out/$arch"
 		cp "target/$t/release/libcbb_ffi.a" "$out/$arch/"
 	done
