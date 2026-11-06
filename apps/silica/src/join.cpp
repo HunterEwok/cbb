@@ -138,6 +138,10 @@ void Join::start(const QString &name, const QByteArray &publicKey)
         m_modules.append(row.toString());
     Errors::log(QStringLiteral("join: listening as %1 on %2").arg(made.value(QStringLiteral("device")).toString(),
                                                                    QString::fromLatin1(QJsonDocument(addrs).toJson(QJsonDocument::Compact))));
+    // With the details on, the QR code's text goes to the log too, so that a
+    // test can admit the phone without a camera; it holds the one-time code.
+    if (Errors::showDetails())
+        Errors::log(QStringLiteral("join: QR: %1").arg(m_qr));
     setState(QStringLiteral("listening"));
 }
 
