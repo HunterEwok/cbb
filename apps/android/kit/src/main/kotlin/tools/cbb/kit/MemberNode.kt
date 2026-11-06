@@ -152,6 +152,9 @@ class MemberNode(
     /** Why the last copy a peer sent was dropped, for the app's log. */
     @Volatile var lastDropped: String? = null
         private set
+
+    /** Why the last copy sealed to this phone did not open; it stays unread. */
+    val lastUnopened: String? get() = copies?.lastUnopened
     private val lock = Any()
     private val conns = mutableSetOf<Conn>()
     private val waiting = mutableMapOf<String, Waiting>()

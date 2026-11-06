@@ -233,6 +233,10 @@ class CopyKeys(
 ) {
     class NoRecords : Exception("this phone has no records of its group yet, so it neither seals nor checks copies")
 
+    /** Why the last copy sealed to this phone did not open, for the app's log and the tests. */
+    @Volatile var lastUnopened: String? = null
+        private set
+
     /** Seals and signs a copy this phone made (section 4, "Sealing"), with the blob of its images or files sealed under key. */
     fun seal(e: Member.Event, key: ByteArray?, blob: Blob?): Sealed =
         (records() ?: throw NoRecords()).sealCopy(e, cert, issuer, key, blob, signer)
@@ -250,11 +254,18 @@ class CopyKeys(
         if (s.isMark || s.wraps.none { it.to == device }) return e
         // A copy sealed to this phone that does not open stays unread, as
         // the others may read theirs.
-        val o = runCatching { open(s) }.getOrNull() ?: return e
-        val kind = Member.Kind.of(o.optString("kind") ?: return e) ?: return e
-        val via = o.optString("via")?.let { Member.Via.of(it) ?: return e } ?: Member.Via.COPY
-        val media = o.optObject("media")?.let { Media.Manifest.fromJson(it) }
-        return e.copy(kind = kind, via = via, text = o.optString("text") ?: "", media = media, key = o.optBytes("key"), unread = false)
+        return try {
+            val o = open(s)
+            val k = o.optString("kind")
+            val kind = k?.let { Member.Kind.of(it) } ?: throw Core.Mismatch("its kind ${k ?: "is missing"} is not one this phone knows")
+            val v = o.optString("via")
+            val via = if (v == null) Member.Via.COPY else Member.Via.of(v) ?: throw Core.Mismatch("its via $v is not one this phone knows")
+            val media = o.optObject("media")?.let { Media.Manifest.fromJson(it) }
+            e.copy(kind = kind, via = via, text = o.optString("text") ?: "", media = media, key = o.optBytes("key"), unread = false)
+        } catch (x: Exception) {
+            lastUnopened = "the copy ${s.id} from ${s.origin} did not open: ${x.message ?: x.javaClass.simpleName}"
+            e
+        }
     }
 
     private fun open(s: Sealed): JsonObject =

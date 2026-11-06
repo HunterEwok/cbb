@@ -2217,6 +2217,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         return true
     }
 
+    /** The current copy as this phone holds it and why the last copies were dropped or stayed unread, for the tests' messages. */
+    internal val copyState: String
+        get() {
+            val n = currentNode ?: return "no node"
+            val e = n.current
+            val what = e?.let { "${it.id} from ${it.origin}, ${it.kind}, unread ${it.unread}, media ${it.media?.let { m -> "${m.parts.size} parts, files ${m.isFiles}" }}" }
+            return "current copy: $what; last dropped: ${n.lastDropped}; last unopened: ${n.lastUnopened}"
+        }
+
     /** Whether a computer is connected now. */
     val online: Boolean get() = currentNode?.connected?.isNotEmpty() == true
 
