@@ -175,6 +175,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private val lock = Any()
     private var state: PhoneGroup? = runCatching { PhoneGroup.load(file) }.getOrNull()
     private var node: MemberNode? = null
+
+    /** How many nodes this process made, and what made the current one, for the tests' messages; guarded by lock. */
+    private var nodeCount = 0
+    private var nodeMadeBy = ""
+
+    /** The last nodes that were stopped, with their diagnostics as they stopped, for the tests' messages; guarded by lock. */
+    private val retiredNodes = ArrayDeque<String>()
     private var browser: NsdBrowser? = null
     private var dialer: MemberDialer? = null
     private var found: Set<FoundMember> = emptySet()
@@ -1894,6 +1901,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val share = { peer: String, chain: List<ByteArray> ->
             if (synchronized(lock) { state?.records?.mayHost(peer, chain) } == true) h.share() else null
         }
+        val number = nodeCount + 1
         val n = MemberNode(
             SyncEngine(g.device, HybridClock()),
             deviceName,
@@ -1915,6 +1923,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 g.device, g.memberCert, g.memberIssuer, member, sealSecret() ?: ByteArray(0),
             ) { synchronized(lock) { state?.records } },
             entries = entries,
+            log = { line -> Log.i(TAG, "node #$number: $line") },
             adminCA = { key -> synchronized(lock) { state?.computerAdminCA(key) } },
             // A copy of a moment ago from another device; an older one, as a
             // hello brings it on connecting, would overwrite what the phone
@@ -1961,6 +1970,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val known = { d: String -> synchronized(lock) { state?.addresses?.get(d).orEmpty() } }
         dialer = MemberDialer(n, g.tag, dial = b.dialer(member, g.memberChain, g.trusted, known))
         node = n
+        nodeCount = number
+        // Where the call came from, a few frames up, for a node made when the tests did not expect it.
+        nodeMadeBy = Throwable().stackTrace.drop(1).take(6).joinToString(" < ") { "${it.methodName}:${it.lineNumber}" }
+        Log.i(TAG, "node #$nodeCount started by $nodeMadeBy")
         browser = b
         away = a
         hub = h
@@ -1970,6 +1983,28 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** The group's hubs, highest first (RecordSet.hubOrder). */
     private fun hubOrder(): List<String> = synchronized(lock) { state?.records?.hubOrder }.orEmpty()
+
+    /** Keeps a stopped node's diagnostics, for the tests' messages. */
+    private fun retire(n: MemberNode) {
+        val d = n.diagnostics
+        synchronized(lock) {
+            retiredNodes.addLast("node #$nodeCount, stopped: $d")
+            if (retiredNodes.size > 2) retiredNodes.removeFirst()
+        }
+    }
+
+    /** The number of the current node, so that a test can tell a node made while it ran. */
+    internal val nodeNumber: Int get() = synchronized(lock) { nodeCount }
+
+    /**
+     * The current node's diagnostics and the last stopped nodes', for a
+     * failing test's message (MemberNode.diagnostics).
+     */
+    internal val nodeDiagnostics: String
+        get() {
+            val (n, made, retired) = synchronized(lock) { Triple(node, "node #$nodeCount, made by $nodeMadeBy", retiredNodes.toList()) }
+            return (n?.let { "$made: ${it.diagnostics}" } ?: "no node; the last was $made") + retired.joinToString("") { "\nearlier $it" }
+        }
 
     /** Connects again, as after the user allowed the local network. */
     fun reconnect() = restartSync()
@@ -1998,6 +2033,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         d?.stop()
         b?.stop()
         n?.closeAll()
+        if (n != null) retire(n)
         startSync()
     }
 
