@@ -756,6 +756,20 @@ func findBrowser(t *testing.T) string {
 	return ""
 }
 
+// browserPolicies returns the browsers' policies on Windows, for a browser
+// that does not listen: a policy can turn its remote debugging off.
+func browserPolicies() string {
+	if runtime.GOOS != "windows" {
+		return ""
+	}
+	var b strings.Builder
+	for _, key := range []string{`HKLM\SOFTWARE\Policies\Google\Chrome`, `HKCU\SOFTWARE\Policies\Google\Chrome`, `HKLM\SOFTWARE\Policies\Microsoft\Edge`} {
+		out, err := exec.Command("reg", "query", key, "/s").CombinedOutput()
+		fmt.Fprintf(&b, "\n%s: %v\n%s", key, err, out)
+	}
+	return b.String()
+}
+
 // cdpPage is one page of the browser, driven over the DevTools protocol.
 type cdpPage struct {
 	mu sync.Mutex
@@ -778,6 +792,9 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 	cmd := exec.CommandContext(ctx, exe, "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run",
 		"--no-default-browser-check", "--disable-background-networking", "--disable-component-update",
 		"--disable-sync", "--disable-default-apps", "--disable-breakpad", "--password-store=basic",
+		// Chrome on Windows logs nothing to stderr unless asked: its log
+		// says why it would not listen.
+		"--enable-logging=stderr",
 		"--remote-debugging-port=0", "--user-data-dir="+profile, "about:blank")
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -799,7 +816,7 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 			line := sc.Text()
 			errMu.Lock()
 			errTail = append(errTail, line)
-			if len(errTail) > 30 {
+			if len(errTail) > 60 {
 				errTail = errTail[1:]
 			}
 			errMu.Unlock()
@@ -860,7 +877,7 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 				errMu.Lock()
 				tail := strings.Join(errTail, "\n")
 				errMu.Unlock()
-				t.Fatalf("%s gave no DevTools address in 30 s; it %s; what it wrote last:\n%s", exe, state, tail)
+				t.Fatalf("%s gave no DevTools address in 30 s; it %s; what it wrote last:\n%s%s", exe, state, tail, browserPolicies())
 			}
 		}
 	}
