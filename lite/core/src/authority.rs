@@ -448,7 +448,9 @@ impl Body {
             TYPE_HUBS => check_hubs(&self.hubs),
             TYPE_COPIES => match self.incoming_ms {
                 Some(d) if (MIN_INCOMING..=MAX_INCOMING).contains(&d) => Ok(()),
-                _ => Err(Error::msg(format!("a copies record needs incoming_ms from {MIN_INCOMING} to {MAX_INCOMING}"))),
+                _ => {
+                    Err(Error::msg(format!("a copies record needs incoming_ms from {MIN_INCOMING} to {MAX_INCOMING}")))
+                }
             },
             TYPE_RECOVERY => {
                 let (Some(admin), false) = (self.admin, self.cert.is_empty()) else {

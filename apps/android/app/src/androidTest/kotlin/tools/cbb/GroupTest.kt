@@ -315,7 +315,7 @@ class GroupTest {
             runBlocking { model.sync() }
             // A computer's copy of a moment ago, from an earlier test, is what the button
             // fetches first instead of sending.
-            until((SyncRule.RECENT_COPY_MS / 1000).toInt() + 15, "no copy of a moment ago from another device: ${model.group.recentCopy}") {
+            until((model.group.incomingMS / 1000).toInt() + 15, "no copy of a moment ago from another device: ${model.group.recentCopy}") {
                 model.group.recentCopy == null
             }
             setClip(text)

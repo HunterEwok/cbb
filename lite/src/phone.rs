@@ -79,7 +79,6 @@ impl Member {
             );
         let node = Arc::new(node);
         engine.set_seal(node.sealer());
-        engine.rejoin();
         discovery::start(node.clone(), tag.clone(), cfg.peers, false, None, log.clone());
         if cfg.mdns {
             discovery::start_as_phone(node.clone(), tag, log);

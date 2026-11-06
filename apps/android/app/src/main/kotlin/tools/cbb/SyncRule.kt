@@ -6,30 +6,33 @@ package tools.cbb
 import tools.cbb.kit.Member
 
 /**
- * The one button's rule, as on the iPhone (LiveGroup.sync): a computer's
- * copy of a moment ago comes to the phone; otherwise a new text on the phone
- * goes to the computers; otherwise the computers' latest text comes.
+ * The one rule of every device (docs/design.md, "The one button"), as on
+ * the iPhone (LiveGroup.sync): a copy from another device that waits for
+ * the phone comes in; otherwise what the phone copied goes out, however
+ * old, unless it is the group's text already.
  */
 object SyncRule {
-    /** How recent a computer's copy must be for the button to fetch it first. */
-    const val RECENT_COPY_MS = 45_000L
-
     enum class Action { FETCH, SEND, NOTHING }
 
     /**
-     * What to do, given what the phone's clipboard holds now (board), the
-     * group's current event and its text while usable, and this phone's
-     * device ID.
+     * Whether current is a copy from another device that waits for this
+     * phone: younger than the group's live window windowMS, with a text, an
+     * image or files (usable), in a sync mode that takes the group's copies
+     * (receives), and not the copy the phone took last (taken).
      */
-    fun decide(board: String?, current: Member.Event?, usable: Pair<String, Member.Kind>?, device: String): Action {
-        if (current != null && usable != null && current.origin != device && current.via == Member.Via.COPY &&
-            current.ageMS < RECENT_COPY_MS && usable.first != board
-        ) {
-            return Action.FETCH
-        }
-        if (!board.isNullOrEmpty() && board != usable?.first) return Action.SEND
-        if (usable != null && usable.first != board) return Action.FETCH
-        return Action.NOTHING
+    fun waiting(current: Member.Event?, usable: Pair<String, Member.Kind>?, device: String, windowMS: Long, receives: Boolean, taken: String?): Boolean =
+        receives && current != null && usable != null && !current.isMark && !current.unread && current.origin != device &&
+            current.ageMS < windowMS && current.id != taken
+
+    /**
+     * What the button does: fetch a copy that waits (waiting), else send
+     * what the phone's clipboard holds (board, read only then) when it is
+     * not the group's text already.
+     */
+    fun decide(waits: Boolean, board: () -> String?, usable: Pair<String, Member.Kind>?): Action {
+        if (waits) return Action.FETCH
+        val b = board()
+        return if (!b.isNullOrEmpty() && b != usable?.first) Action.SEND else Action.NOTHING
     }
 
     /** The addresses to try, IPv4 first: a home network reaches those most surely, and each that fails costs its timeout. */

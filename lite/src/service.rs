@@ -246,7 +246,6 @@ pub fn run(cfg: Config) -> Result<()> {
     // The copies this member makes are sealed to the group's readers and
     // signed (docs/protocol.md, section 4).
     engine.set_seal(node.sealer());
-    engine.rejoin();
     engine.set_mode(load_mode(&cfg.state_dir)?);
     log(&format!("cbb: the sync mode is {}", engine.mode().name()));
     {

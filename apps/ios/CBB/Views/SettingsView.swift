@@ -75,6 +75,9 @@ struct SettingsView: View {
             if let level = model.keyLevel {
                 keyLevelSection(level)
             }
+            if model.isAdmin, model.phase == .home {
+                incomingSection
+            }
             NotificationSettings()
             if model.phase == .home {
                 Section {
@@ -147,6 +150,31 @@ struct SettingsView: View {
             Text("Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.")
         }
         .listRowBackground(palette.surface)
+    }
+
+    /// How long a copy from another device stays live after it arrives, on
+    /// the root and the admin phones (docs/design.md, "The one button").
+    private var incomingSection: some View {
+        Section {
+            Picker(selection: Binding(get: { model.incomingMS }, set: { new in Task { await model.setIncoming(ms: new) } })) {
+                ForEach(Self.incomingChoices(model.incomingMS), id: \.self) { ms in
+                    Text(Duration.milliseconds(ms).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))).tag(ms)
+                }
+            } label: {
+                Text("A copy from another device")
+            }
+        } header: {
+            Text("Incoming copies")
+        } footer: {
+            Text("How long a copy from another device goes into the clipboard after it arrives. After that each device keeps what it copied itself, however old.")
+        }
+        .listRowBackground(palette.surface)
+    }
+
+    /// The choices of the picker, with the group's own when it is none of them.
+    static func incomingChoices(_ current: Int64) -> [Int64] {
+        let choices: [Int64] = [15_000, 30_000, 60_000, 120_000, 300_000, 600_000]
+        return choices.contains(current) ? choices : (choices + [current]).sorted()
     }
 
     /// Moving the hub to a computer (docs/design.md, "Moving the hub to a

@@ -419,16 +419,21 @@ starting the Android app's listener for the Wear OS switch, and the delay of not
 ### The one button
 
 A phone app sends and fetches with one button (a tap, the Action button or Back Tap on the
-iPhone), and picks the direction by itself, with the group's events and the phone's
-clipboard (`LiveGroup.sync` on the iPhone, `SyncRule` on Android):
+iPhone, a double tap where the phone offers one), and follows the rule of every device
+(`LiveGroup.sync` on the iPhone, `SyncRule` on Android):
 
-1. A computer in the group copied something less than 45 seconds ago → that text comes to
-   the phone. The user most likely pressed Ctrl+C or ⌘C a moment ago and picked up the
-   phone. Text that came from the phone itself does not count as a computer's copy.
-2. Otherwise, if the phone's text is new, that is, not the group's current text → it
-   becomes a group event.
-3. Otherwise the group's latest text, when it differs from the phone's, comes to the phone.
-4. Otherwise there is nothing to transfer.
+1. A copy from another device waits for the phone (it is live, the phone's sync mode takes
+   the group's copies, and the phone has not taken it yet) → it comes to the phone. Android
+   and Aurora take such a copy by themselves at once; the iPhone takes it when the app
+   comes to the front, on the Back Tap shortcut, or with the button.
+2. Otherwise what the phone copied goes to the group, however old, unless it is the group's
+   text already. A copy whose live window passed is gone, and there is no separate button
+   to fetch it.
+
+The button reads the phone's clipboard only in the second case. On the iPhone the button
+is the system's Paste button, which iOS lets read the clipboard without asking, and the
+"CBB: sync" shortcut takes its text from Shortcuts' "Get Clipboard", so neither asks for
+permission to paste.
 
 ### Build
 
@@ -650,21 +655,21 @@ sync away from home, the admins, and remote paste.
 - **Group state and each member's own clipboard are separate.** The group's current text is
   always the latest event, so all members converge whatever happens to the connections. What
   goes into a member's own clipboard is a local decision:
-  - a live event (copied at most 60 seconds ago) that becomes the group's current event is
-    written;
-  - for 30 seconds after the member itself was away (the service started or the machine woke
-    up), an event that becomes the group's current event is written
-    even when it is old, unless the member copied something before it was back in sync with
-    the group (a connection up and a hello exchanged). The connections from before the
-    absence are closed first. A hello that arrived before the member noticed it had slept is
-    written too, when the member is back in sync. A network that drops without a sleep does
-    not open the window: such a member gets the group's text only while it is live;
-  - nothing else is written: a group text the member already knew is not written again, and
-    a member that only lost its peers, because they went away, keeps its clipboard.
+  - a live event that becomes the group's current event is written, in a sync mode that
+    takes the group's copies. An event is live for the group's live window after it was
+    copied: one minute unless the root or an admin sets another, from 5 seconds to an hour
+    (`cbb incoming`, the phones' Settings; a signed `copies` record, docs/protocol.md
+    section 10). The age is counted in durations (the event's age plus the time since it
+    arrived), never by comparing clocks;
+  - nothing else is written: a group text the member already knew is not written again, a
+    copy whose window passed is gone for this member, and a member that wakes up, starts or
+    lost its peers keeps its clipboard. Every device follows this one rule, computers and
+    phones alike;
+  - a copy from a device the group removed, or one a taken-over root admitted, is dropped,
+    also when it has not been written yet.
 
   So a member that returns with an old copy does not overwrite the clipboards of the others,
-  a member that wakes up gets the latest text, and a copy made while away is replaced only by
-  a live copy made after it. Writes carry a sequence number, so they are applied in order. On a member
+  and a copy made while away is replaced only by a live copy made after it. Writes carry a sequence number, so they are applied in order. On a member
   without a desktop, the service keeps this own clipboard text itself, and `cbb paste`,
   tmux and the console helper use it.
 - **No echo.** A member does not report a text it wrote into its clipboard as a new copy,
@@ -702,8 +707,8 @@ a **sync mode** instead, and a new device starts in its own:
   directly to a connected member. On a phone the mode decides what its own automatic paths
   do: Android's foreground service writes the group's copies to the clipboard only in a mode
   that receives, and its accessibility service sends copies by itself only in one that sends;
-  the iPhone, which has no copy watching, writes a group copy from the last 45 seconds to the
-  pasteboard while the app is open in a mode that receives. The buttons work in every mode.
+  the iPhone, which has no copy watching, writes a live group copy to the pasteboard while
+  the app is open in a mode that receives. The buttons work in every mode.
 
 ### Images and files
 

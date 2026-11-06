@@ -26,8 +26,10 @@ use crate::sync::Mutex;
 /// The largest text, in bytes, that the group carries.
 pub const MAX_TEXT: usize = 1 << 20;
 const SECRET_TTL: Duration = Duration::from_secs(60);
-const LIVE_WINDOW: Duration = Duration::from_secs(60);
-const REJOIN_WINDOW: Duration = Duration::from_secs(30);
+/// How long after the copy an event from another member is still written
+/// to the local clipboard, unless the group's records set another
+/// (`Engine::set_live_window`).
+pub const LIVE_WINDOW: Duration = Duration::from_secs(60);
 const SECRET_MEMORY: Duration = Duration::from_secs(12 * 3600);
 const ECHO_WINDOW: Duration = Duration::from_secs(10);
 const MAX_AGE_MS: i64 = 365 * 24 * 3600 * 1000;
@@ -296,10 +298,7 @@ struct Inner {
     seq: u64,
     skews: BTreeMap<String, i64>,
     peers: BTreeMap<String, usize>,
-    synced: bool,
-    offline_copy: bool,
-    rejoined: bool,
-    rejoin_at: Duration,
+    window: Duration,
     mode: Mode,
 }
 
@@ -343,10 +342,7 @@ impl Engine {
                 seq: 0,
                 skews: BTreeMap::new(),
                 peers: BTreeMap::new(),
-                synced: false,
-                offline_copy: false,
-                rejoined: false,
-                rejoin_at: Duration::ZERO,
+                window: LIVE_WINDOW,
                 mode: Mode::Shared,
             }),
         }
@@ -367,6 +363,41 @@ impl Engine {
     /// after.
     pub fn set_mode(&self, m: Mode) {
         self.inner.lock().mode = m;
+    }
+
+    /// Changes how long after the copy an event from another member is
+    /// still written to the local clipboard, as the group's records set it
+    /// (docs/protocol.md, section 10, "The copies setting"); zero sets
+    /// LIVE_WINDOW. It applies to the events that become current after it.
+    pub fn set_live_window(&self, d: Duration) {
+        self.inner.lock().window = if d.is_zero() { LIVE_WINDOW } else { d };
+    }
+
+    /// The live window set_live_window set.
+    pub fn live_window(&self) -> Duration {
+        self.inner.lock().window
+    }
+
+    /// The ID and the sealed copy of the group's current event, live or
+    /// not, so that the caller can check its origin against the records
+    /// again; None when it has none.
+    pub fn current_copy(&self) -> Option<(String, Option<Sealed>)> {
+        let st = self.inner.lock();
+        (!st.current.id.is_empty()).then(|| (st.current.id.clone(), st.current.sealed.clone()))
+    }
+
+    /// Drops the group's current event when it is the event id: its origin
+    /// was removed from the group, so its copy no longer counts and is never
+    /// written. What the local clipboard holds stays. Reports whether it
+    /// dropped one.
+    pub fn forget(&self, id: &str) -> bool {
+        let mut st = self.inner.lock();
+        if id.is_empty() || st.current.id != id {
+            return false;
+        }
+        st.current = Event::default();
+        st.copied_at = Duration::ZERO;
+        true
     }
 
     #[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
@@ -416,7 +447,6 @@ impl Engine {
         }
         let mut st = self.inner.lock();
         let now = (self.uptime)();
-        settle(&mut st, now);
         let sum = self.sum(text);
         if local_has(&st, text, now)
             || st.written.iter().any(|(s, at)| *s == sum && now.saturating_sub(*at) <= ECHO_WINDOW)
@@ -450,7 +480,6 @@ impl Engine {
         }
         let mut st = self.inner.lock();
         let now = (self.uptime)();
-        settle(&mut st, now);
         let sum = self.sum(text);
         if has_secret(&st, &sum, now) {
             kind = Kind::Secret;
@@ -487,7 +516,6 @@ impl Engine {
         if kind == Kind::Secret {
             add_secret(st, sum, now);
         }
-        st.offline_copy = !st.synced || st.peers.is_empty();
         Ok(ev)
     }
 
@@ -528,20 +556,6 @@ impl Engine {
         }
         st.peers.remove(peer);
         st.skews.remove(peer);
-        if st.peers.is_empty() {
-            settle(&mut st, (self.uptime)());
-            st.synced = false;
-        }
-    }
-
-    /// Records that this member itself was away: the service just started.
-    pub fn rejoin(&self) {
-        let mut st = self.inner.lock();
-        let now = (self.uptime)();
-        settle(&mut st, now);
-        st.rejoined = true;
-        st.rejoin_at = now;
-        st.synced = false;
     }
 
     /// Applies the hello a peer sent when the connection started.
@@ -568,7 +582,6 @@ impl Engine {
         if let Some(c) = h.current {
             out = self.receive(&mut st, c);
         }
-        st.synced = !st.peers.is_empty();
         Ok(out)
     }
 
@@ -595,9 +608,6 @@ impl Engine {
                 st.current = ev.clone();
                 return self.decide_write(st, Outcome { forward: Some(ev), ..Default::default() }, now);
             }
-            if st.rejoined && !st.synced && in_rejoin_window(st, now) {
-                return self.decide_write(st, Outcome::default(), now);
-            }
             return Outcome::default();
         }
         self.clock.observe(ev.time);
@@ -614,18 +624,19 @@ impl Engine {
         self.decide_write(st, out, now)
     }
 
+    /// Decides whether the new current event goes to the local clipboard:
+    /// when the mode lets the group's copies in and the event is younger
+    /// than the live window. An older one never does: the member's own text,
+    /// however old, stays.
     fn decide_write(&self, st: &mut Inner, mut out: Outcome, now: Duration) -> Outcome {
-        settle(st, now);
         if !st.mode.receives()
             || !self.live(st, now)
             || st.current.text.is_empty()
             || local_has(st, &st.current.text, now)
+            || now.saturating_sub(st.copied_at) >= st.window
         {
             // Images or files without a text leave this member's clipboard
             // as it is: it never fetches their content.
-            return out;
-        }
-        if now.saturating_sub(st.copied_at) > LIVE_WINDOW && (!in_rejoin_window(st, now) || st.offline_copy) {
             return out;
         }
         st.seq = st.seq.saturating_add(1);
@@ -635,7 +646,6 @@ impl Engine {
         st.local = Local { text: st.current.text.clone(), kind, at: st.copied_at };
         let sum = self.sum(&st.current.text);
         add_written(st, sum, now);
-        st.offline_copy = false;
         out
     }
 
@@ -651,16 +661,6 @@ impl Engine {
         ev.age = (now.saturating_sub(st.copied_at).as_millis() as i64).min(MAX_AGE_MS);
         ev
     }
-}
-
-fn settle(st: &mut Inner, now: Duration) {
-    if st.offline_copy && st.synced && !in_rejoin_window(st, now) {
-        st.offline_copy = false;
-    }
-}
-
-fn in_rejoin_window(st: &Inner, now: Duration) -> bool {
-    st.rejoined && now.saturating_sub(st.rejoin_at) < REJOIN_WINDOW
 }
 
 fn local_live(st: &Inner, now: Duration) -> bool {
@@ -804,8 +804,6 @@ mod tests {
     fn two_members_converge() {
         let t = Arc::new(AtomicU64::new(100_000));
         let (a, b) = (engine(A, t.clone()), engine(B, t.clone()));
-        a.rejoin();
-        b.rejoin();
         let ha = a.connected(B);
         let hb = b.connected(A);
         a.reconcile(B, hb).unwrap();
@@ -822,6 +820,39 @@ mod tests {
         assert!(!again.write && again.forward.is_none());
         // The echo of the write is no new copy.
         assert!(b.copied("hello", Kind::Text, Via::Copy).unwrap().is_none());
+    }
+
+    /// A copy from another member is written while it is younger than the
+    /// live window, which the group sets, and never after; a forgotten one
+    /// never.
+    #[test]
+    fn live_window() {
+        let t = Arc::new(AtomicU64::new(100_000));
+        let (a, b) = (engine(A, t.clone()), engine(B, t.clone()));
+        b.copied("mine", Kind::Text, Via::Copy).unwrap();
+        let old = |text: &str, age: i64| {
+            let mut ev = a.copied(text, Kind::Text, Via::Copy).unwrap().unwrap();
+            ev.age = age;
+            t.fetch_add(1, Ordering::SeqCst);
+            ev
+        };
+        assert!(!b.received(old("a minute old", 60_000)).unwrap().write);
+        assert_eq!(b.local().unwrap().0, "mine");
+        assert!(b.received(old("40 s old", 40_000)).unwrap().write);
+        b.set_live_window(Duration::from_secs(180));
+        assert!(b.received(old("two minutes old", 120_000)).unwrap().write);
+        b.set_live_window(Duration::from_secs(10));
+        assert!(!b.received(old("15 s old", 15_000)).unwrap().write);
+        b.set_live_window(Duration::ZERO);
+        assert_eq!(b.live_window(), LIVE_WINDOW);
+
+        b.set_mode(Mode::Own);
+        let ev = old("from a device removed since", 0);
+        b.received(ev.clone()).unwrap();
+        assert_eq!(b.current_copy().unwrap().0, ev.id);
+        assert!(b.forget(&ev.id) && b.current().is_none() && !b.forget(&ev.id));
+        b.set_mode(Mode::Shared);
+        assert!(!b.reconcile(A, Hello { wall: 0, current: Some(ev) }).unwrap().write);
     }
 
     #[test]
