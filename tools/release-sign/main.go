@@ -4,14 +4,14 @@
 // Command release-sign makes and signs the files that describe a release
 // (docs/protocol.md, section 16), on the maintainer's Mac:
 //
-//	release-sign publish -version 0.6.0 [-min-from 0.5.0] [-docker none] [-channel NAME=KEY.pem] [-forwarder ADDRESS=KEY.pem] [-no-publish]
+//	release-sign publish -version 0.6.0 [-min-from 0.5.0] [-docker none] [-channel NAME=KEY.pem] [-forwarder ADDRESS=KEY.pem] [-relay ADDRESS=KEY.pem] [-no-publish]
 //	release-sign renew [-new-keys]
 //	release-sign extend -key file:channel-key.pem -out DIR      (on cbb.tools)
 //	release-sign mirror -out DIR [-from SRC,...] [-zxnext DIR] [-version X.Y.Z]... (on cbb.tools)
 //	release-sign take [-new URL] BRANCH-DIR                     (the channel workflow)
 //	release-sign due BRANCH-DIR                                 (the channel workflow)
 //	release-sign manifest -version 0.6.0 -channel stable [-min-from 0.5.0] [-docker IMAGE@sha256:...] DIR >release.body
-//	release-sign keys -seq 2 [-days 90] [-status NAME=status-key.pem] [-forwarder ADDRESS=key.pem] NAME=release-key.pem... >keys.body
+//	release-sign keys -seq 2 [-days 90] [-status NAME=status-key.pem] [-forwarder ADDRESS=key.pem] [-relay ADDRESS=key.pem] NAME=release-key.pem... >keys.body
 //	release-sign channel -seq 7 [-days 30] release.json >stable.body
 //	release-sign sign -key SIGNER BODY >FILE.json
 //	release-sign public -key SIGNER >key.pem
@@ -251,6 +251,11 @@ func keys(args []string) error {
 		forwarders = append(forwarders, v)
 		return nil
 	})
+	var relays []string
+	fs.Func("relay", "ADDRESS=KEY.pem of the project's relay, whose pin its members accept (repeatable)", func(v string) error {
+		relays = append(relays, v)
+		return nil
+	})
 	fs.Parse(args)
 	k := release.Keys{V: 1, Type: release.TypeKeys, Seq: *seq, TimeMS: now().UnixMilli()}
 	k.ExpiresMS = k.TimeMS + int64(*days)*24*time.Hour.Milliseconds()
@@ -278,6 +283,11 @@ func keys(args []string) error {
 	}
 	for _, arg := range forwarders {
 		if err := add(arg, release.UseForwarder); err != nil {
+			return err
+		}
+	}
+	for _, arg := range relays {
+		if err := add(arg, release.UseRelay); err != nil {
 			return err
 		}
 	}

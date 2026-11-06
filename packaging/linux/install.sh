@@ -4,7 +4,7 @@
 
 # Installs cbb on a Linux machine with systemd:
 #
-#   sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] path/to/cbb
+#   sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] [--no-pair] path/to/cbb
 #
 # The full member's archive and the lite member's
 # (cbb-lite-linux-*) both carry this script, each with its own systemd unit beside it; cbb version
@@ -32,6 +32,9 @@
 # The full member only. --auto-update on|off (or CBB_AUTO_UPDATE) answers
 # whether the full member updates itself once a day to a signed release,
 # which it asks otherwise and keeps (packaging/update.sh, cbb update -auto).
+# The lite member, once running and in no group, starts pairing and shows
+# its QR code at once (packaging/pair.sh); --no-pair (CBB_PAIR=no), for a
+# scripted install, leaves that for later.
 # uninstall.sh removes it all again. --rootless installs the full member for
 # the user who runs it, without sudo (install-rootless.sh, D-79).
 #
@@ -68,8 +71,8 @@ for a in "$@"; do
 done
 
 usage() {
-	echo "usage: sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] path/to/cbb" >&2
-	echo "   or: sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] path/to/cbb" >&2
+	echo "usage: sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] [--no-pair] path/to/cbb" >&2
+	echo "   or: sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-pair] path/to/cbb" >&2
 	exit 2
 }
 console=no
@@ -84,6 +87,7 @@ while [ $# -gt 1 ]; do
 	--uinput) uinput=yes ;;
 	--express) firewall=express ;;
 	--no-firewall) firewall=no ;;
+	--no-pair) CBB_PAIR=no ;;
 	--port)
 		port=$2
 		shift
@@ -484,7 +488,11 @@ if [ "$steamos" = yes ]; then
 	run=$cbb
 fi
 if [ "$kind" = lite ]; then
-	echo "Next: see lite/README.md; in short, sudo -u cbb $run pair here, and scan its QR code with the phone app."
+	# shellcheck source=packaging/pair.sh
+	. "$here/../pair.sh"
+	if ! pair_now "$cbb" cbb; then
+		echo "Next: see lite/README.md; in short, sudo -u cbb $run pair here, and scan its QR code with the phone app."
+	fi
 else
 	echo "Next: run sudo $run pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."
 fi

@@ -1267,8 +1267,54 @@ func (n *Node) Recheck() {
 }
 
 func (n *Node) peersChanged() {
+	n.sendReach()
 	if n.cfg.OnPeers != nil {
 		n.cfg.OnPeers()
+	}
+}
+
+// maxReach bounds the device IDs of a reach message.
+const maxReach = 256
+
+// sendReach tells each connected phone, when this member is a computer,
+// the other members it is connected to now, whenever that changes for the
+// phone (docs/protocol.md, section 4, "Reach"): away from home a phone
+// connects only to a hub, which passes its commands on to the members
+// behind it, so that the phone shows them as online.
+func (n *Node) sendReach() {
+	if n.cfg.Role != Full {
+		return
+	}
+	n.mu.Lock()
+	all := make([]group.DeviceID, 0, len(n.conns))
+	var phones []*conn
+	for id, c := range n.conns {
+		switch c.role() {
+		case "":
+			continue
+		case Phone:
+			phones = append(phones, c)
+		}
+		all = append(all, id)
+	}
+	n.mu.Unlock()
+	slices.Sort(all)
+	for _, c := range phones {
+		reach := make([]group.DeviceID, 0, len(all))
+		for _, id := range all {
+			if id != c.id && len(reach) < maxReach {
+				reach = append(reach, id)
+			}
+		}
+		c.mu.Lock()
+		same := c.reachSent != nil && slices.Equal(*c.reachSent, reach)
+		if !same {
+			c.reachSent = &reach
+		}
+		c.mu.Unlock()
+		if !same {
+			c.enqueue(outgoing{reach: &reach})
+		}
 	}
 }
 
@@ -1336,11 +1382,14 @@ type conn struct {
 	peerActions  []string // the quick actions its hello says are on
 	peerMedia    bool     // its hello says it serves content
 	peerSeal     []byte   // the key for sealed messages its hello offers
-	certSent     bool     // a renewed certificate was queued for the peer
-	sayBye       bool
-	done         chan struct{} // closed to end the connection
-	closed       bool
-	finished     chan struct{} // closed when Serve has cleaned up
+	// reachSent is the reach message last queued for the peer; nil
+	// before the first.
+	reachSent *[]group.DeviceID
+	certSent  bool // a renewed certificate was queued for the peer
+	sayBye    bool
+	done      chan struct{} // closed to end the connection
+	closed    bool
+	finished  chan struct{} // closed when Serve has cleaned up
 }
 
 // outgoing is a queued message: a hello, an event, a renewed certificate,
@@ -1362,6 +1411,7 @@ type outgoing struct {
 	evid    *Evidence         // an attestation of this member's key
 	get     *Get              // asks the peer for content
 	missing *Get              // tells the peer this member lacks what it asked for
+	reach   *[]group.DeviceID // the other members this member is connected to
 	queued  time.Duration
 }
 
@@ -1558,6 +1608,8 @@ func (c *conn) message(o outgoing) (*message, error) {
 		return &message{Type: typeGet, Get: o.get}, nil
 	case o.missing != nil:
 		return &message{Type: typeMissing, Get: o.missing}, nil
+	case o.reach != nil:
+		return &message{Type: typeReach, Reach: *o.reach}, nil
 	default:
 		ev := *o.event
 		if ev.Sealed == nil {

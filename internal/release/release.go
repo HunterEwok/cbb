@@ -51,6 +51,9 @@ const (
 	// UseForwarder is the key of a forwarder the project runs, named by
 	// its address: no signer, but the pin hubs accept from it.
 	UseForwarder = "forwarder"
+	// UseRelay is the key of a blind relay the project runs, named by its
+	// address: no signer, but the pin its members accept from it.
+	UseRelay = "relay"
 )
 
 const (
@@ -159,9 +162,10 @@ type Status struct {
 }
 
 // Entries is the body of entries.json, signed by a release or channel key:
-// where the project's forwarders are entered, so that a blocked entry is
-// replaced without a release (docs/protocol.md, section 16, "Entry
-// points"). The keys of the forwarders stay in keys.json.
+// where the project's forwarders and relays are entered, so that a blocked
+// or moved entry is replaced without a release (docs/protocol.md, section
+// 16, "Entry points"). The keys of the forwarders and relays stay in
+// keys.json.
 type Entries struct {
 	V          int              `json:"v"`
 	Type       string           `json:"type"`
@@ -169,6 +173,17 @@ type Entries struct {
 	TimeMS     int64            `json:"time_ms"`
 	ExpiresMS  int64            `json:"expires_ms"`
 	Forwarders []EntryForwarder `json:"forwarders"`
+	Relays     []EntryRelay     `json:"relays,omitempty"`
+}
+
+// EntryRelay is one of the project's blind relays.
+type EntryRelay struct {
+	// Name is its address as keys.json names its key and as devices were
+	// set to it, host:port, such as cbb.tools:8765.
+	Name string `json:"name"`
+	// Endpoints are where it is reached now, host:port, the one to try
+	// first first; none for Name itself.
+	Endpoints []string `json:"endpoints,omitempty"`
 }
 
 // EntryForwarder is one of the project's forwarders.
@@ -197,6 +212,16 @@ func (e Entries) Forwarder(name string) (EntryForwarder, bool) {
 		}
 	}
 	return EntryForwarder{}, false
+}
+
+// Relay returns the entry of the relay named name.
+func (e Entries) Relay(name string) (EntryRelay, bool) {
+	for _, r := range e.Relays {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return EntryRelay{}, false
 }
 
 // Revoked returns the serial numbers as a set.
@@ -578,6 +603,8 @@ func decodeStatus(data []byte) (Status, error) {
 const (
 	maxEntryForwarders = 16
 	maxEntryVLESS      = 8
+	maxEntryRelays     = 16
+	maxEntryEndpoints  = 8
 )
 
 var (
@@ -612,6 +639,24 @@ func decodeEntries(data []byte) (Entries, error) {
 		for _, v := range f.VLESS {
 			if v.Transport != "xhttp" || !entrySiteRE.MatchString(v.ServerName) || v.Port == 0 || !entryPathRE.MatchString(v.Path) {
 				return e, fmt.Errorf("release: a way in to %s is not usable", f.Name)
+			}
+		}
+	}
+	if len(e.Relays) > maxEntryRelays {
+		return e, errors.New("release: entries.json has too long a list of relays")
+	}
+	names = map[string]bool{}
+	for _, r := range e.Relays {
+		if !entryNameRE.MatchString(r.Name) || names[r.Name] {
+			return e, fmt.Errorf("release: %q is not a relay's name, or twice", r.Name)
+		}
+		names[r.Name] = true
+		if len(r.Endpoints) > maxEntryEndpoints {
+			return e, fmt.Errorf("release: %s has too many addresses", r.Name)
+		}
+		for _, ep := range r.Endpoints {
+			if !entryNameRE.MatchString(ep) {
+				return e, fmt.Errorf("release: %q is not an address of %s", ep, r.Name)
 			}
 		}
 	}
@@ -700,10 +745,15 @@ func (k Keys) spkis(use string) [][]byte {
 }
 
 // Forwarders returns the keys certified as the forwarder at name.
-func (k Keys) Forwarders(name string) [][]byte {
+func (k Keys) Forwarders(name string) [][]byte { return k.named(UseForwarder, name) }
+
+// Relays returns the keys certified as the relay at name.
+func (k Keys) Relays(name string) [][]byte { return k.named(UseRelay, name) }
+
+func (k Keys) named(use, name string) [][]byte {
 	var out [][]byte
 	for _, key := range k.Keys {
-		if key.Use == UseForwarder && key.Name == name {
+		if key.Use == use && key.Name == name {
 			out = append(out, key.Key)
 		}
 	}

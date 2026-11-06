@@ -429,13 +429,14 @@ func TestEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := write(t, filepath.Join(t.TempDir(), "in.json"), []byte(`{"forwarders":[{"name":"cbb.tools:8764",
-		"vless":[{"transport":"xhttp","server_name":"cbb.tools","port":443,"path":"/banMEJvnYJJap8S"}]}]}`))
+		"vless":[{"transport":"xhttp","server_name":"cbb.tools","port":443,"path":"/banMEJvnYJJap8S"}]}],
+		"relays":[{"name":"cbb.tools:8765","endpoints":["relay.cbb.tools:8765"]}]}`))
 	if out := string(call(t, entries, "-key", "file:"+k.channel, "-in", in, g.channel())); !strings.Contains(out, "entries.json 1") {
 		t.Errorf("entries printed %q", out)
 	}
 	var e release.Entries
 	g.file(g.channel(), entriesName, &e)
-	if e.Seq != 1 || len(e.Forwarders) != 1 || e.Forwarders[0].VLESS[0].Port != 443 {
+	if e.Seq != 1 || len(e.Forwarders) != 1 || e.Forwarders[0].VLESS[0].Port != 443 || len(e.Relays) != 1 || e.Relays[0].Endpoints[0] != "relay.cbb.tools:8765" {
 		t.Fatalf("signed %+v", e)
 	}
 	bad := write(t, filepath.Join(t.TempDir(), "bad.json"), []byte(`{"forwarders":[{"name":"cbb.tools"}]}`))
@@ -467,6 +468,12 @@ func TestEntries(t *testing.T) {
 	write(t, filepath.Join(other, entriesName), must(json.Marshal(must(signWith(must(signer("file:"+k.channel)), e)))))
 	if takeEntries(g.channel(), filepath.Join(other, entriesName)) == nil {
 		t.Error("took a renewal that names other forwarders")
+	}
+	e.Forwarders[0].VLESS[0].Path = "/banMEJvnYJJap8S"
+	e.Relays[0].Endpoints = []string{"elsewhere.example.org:8765"}
+	write(t, filepath.Join(other, entriesName), must(json.Marshal(must(signWith(must(signer("file:"+k.channel)), e)))))
+	if takeEntries(g.channel(), filepath.Join(other, entriesName)) == nil {
+		t.Error("took a renewal that moves the relay")
 	}
 
 	m := t.TempDir()

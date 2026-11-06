@@ -257,13 +257,18 @@ func cmdGlobal(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		} else if fs.NArg() != 0 {
 			addr = ""
 		}
+		if addr != relay.Project && *key == relay.Project {
+			fmt.Fprintln(stderr, "cbb: -key default goes with the project's relay, cbb global relay default")
+			return 2
+		}
 		if addr == relay.Project {
-			// The project's relay: cbb knows its key.
+			// The project's relay: the service takes its keys from the
+			// newest signed keys.json, which may change them.
 			if *key != "" {
 				fmt.Fprintln(stderr, "cbb: the project's relay (cbb global relay default) takes no -key: cbb knows it")
 				return 2
 			}
-			addr, *key = relay.ProjectHost, relay.ProjectPin
+			addr, *key = relay.ProjectHost, relay.Project
 		}
 		if addr == "" || *key == "" {
 			fmt.Fprintln(stderr, usage)

@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The lite member starts pairing as soon as it is installed: when it runs in no group and the
+  installer's output is a terminal, `get.sh --lite` and the Linux and OpenWrt `install.sh` run
+  `cbb pair` at the end and show the QR code, since small devices often have no keyboard.
+  An update or a reinstall that keeps the group skips it, `--no-pair` (or `CBB_PAIR=no`)
+  skips it for a scripted install, and Ctrl+C stops only the pairing. The Nano ESP32 starts
+  pairing by itself, once each boot, when its Wi-Fi is up and it is in no group.
 - Leaving the group (D-83): `sudo cbb leave` on a computer or a lite member deletes the
   device's keys and the group's files, keeps CBB and its settings, turns remote paste and the
   quick actions off, and lets it join this group or another one with `cbb pair`; before, the
@@ -38,7 +44,13 @@ All notable changes to cbb are documented in this file. The format follows
   every group, free, as is without a promise of uptime, shared by the budget, and where to
   report abuse (abuse@cbb.tools).
 - `cbb global relay default` meets the group at the project's open relay on `cbb.tools:8765`,
-  whose address and key cbb knows.
+  whose address and key cbb knows. Its keys come from the signed `keys.json` (`use` `relay`,
+  `release-sign renew -relay`) and its address from `entries.json` (`relays`), the built-in
+  key only when they name none, so the relay changes its key, the old and new one listed
+  side by side, or moves, without a release. A device that fails to register there fetches
+  the newest lists from the mirror on the relay's server and tries again at once, without
+  asking; status shows the reason, the whole error as its detail. The project's forwarder's
+  keys are taken from the newest `keys.json` with the entry points as well.
 - The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
   their certificates, the forwarder's and the relay's ports, and the expiry of the signed files devices fetch
   (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").
@@ -156,7 +168,7 @@ All notable changes to cbb are documented in this file. The format follows
   phone reaches (a network started after the install had it there, and the phone got the
   service's certificate), and `cbb next link` starts the service again whenever it stopped.
   `.cbb pair` shows only the QR code and SCAN, THEN PRESS ANY KEY until a key, then clears
-  the screen for the rest. `.cbb leave` makes the Pi forget its group, so that `.cbb pair` joins again, the same group
+  the screen for the rest. `.cbb leave` runs `cbb leave -yes` on the Pi, which forgets its group, so that `.cbb pair` joins again, the same group
   or another one. `.cbb pair` says first when the Pi is in a group already, which `cbb next pair` refuses
   out of sight, and `.cbb uninstall` tells how to erase `/cbb/CBB`, which NextZXOS keeps
   while it runs.
@@ -168,6 +180,22 @@ All notable changes to cbb are documented in this file. The format follows
   cbb.tools, NextPi's shell): a clean install and the run after it, no Wi-Fi, a 404, a
   silent Pi, a Pi without the fast speed, finding a computer, uninstalling, a closed connection, SPACE, the usage and a paste, each failed on what would
   go wrong on a real Next (README.md, "Testing on a played Next").
+  `.cbb paste`, `copy` and `text` no longer stop a running network: `CBB.DRV` 0.2 carries
+  them to the Pi in frames of their own (calls 7 and 8, a 1 KB ring for the answers), and
+  `cbb next link` runs their `cbb next paste` or `copy`, and nothing else, as NextPi's shell
+  would; with an older driver they stop it as before. `CBB` lives in `C:/DOT`, so `.cbb`
+  runs from any folder (`CD "C:/DOT"`, `.http -h cbb.tools -u /zxnext -f CBB`,
+  `.cbb install`); everything else stays in `/cbb`. `.cbb update` says when there are no
+  updates, and with a newer `CBB` on the site installs it and its files (checked against the
+  site's list) and puts it in place of itself, closing the file NextZXOS keeps open for it;
+  `.cbb net on` then starts the network with the new one. `.cbb install` adds `.cbb net on`
+  to `C:/NEXTZXOS/AUTOEXEC.BAS` as its last line, so the network starts at power-on, where
+  `.cbb net on` waits for NextPi to start; `.cbb uninstall` takes the line out. `.cbb uninstall` leaves `C:/DOT/CBB` for the user to
+  erase. The rarer commands (`paste`, `copy`, `text`, `leave`, `uninstall`,
+  `paste-receive`) are in `/cbb/CBB.OVL`, read into a page NextZXOS allocates on their
+  first call and checked against the stamp `CBB` carries (`apps/zxnext/ovl.sh`), so `CBB`
+  stays under 64K with room to grow; `.cbb install` fetches it with the other files.
+  After the first install, a Pi in no group goes on to pair at once with its QR code.
 - A computer is the remote of an Apple TV too: `sudo cbb remote add -appletv ADDRESS` pairs
   with the four-digit PIN the TV shows, and `cbb remote type` and the remote pastes sent there
   set the text of the field open on it at once, through the Companion protocol of Apple's own
@@ -1355,6 +1383,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Away from home, the phone apps showed the devices behind the hub as offline, although
+  pastes and other commands reached them through it. A computer now tells the phones
+  connected to it which members it reaches (`reach`, docs/protocol.md section 4), and the
+  apps show those as online through the hub.
 - A phone as the hub could not register with its forwarder: the registration dialed through
   the service's list of allowed addresses, which only the service on a computer fills, so the
   phone refused the forwarder's public address as "outside the home network". The hub's
