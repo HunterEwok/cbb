@@ -2207,14 +2207,9 @@ final class LiveGroup: GroupController {
     func sync() async throws -> AppModel.SyncResult {
         guard let node, let g = state else { throw PendingGroup.Failure.noComputers }
         online = await node.connected
-        let pb = UIPasteboard.general
         // A text first, as most copies with an image carry its text too;
         // an image compares by its hash.
-        let text = pb.hasStrings ? pb.string : nil
-        let image = text == nil ? Images.read(pb) : nil
-        if text == nil, image == nil, pb.numberOfItems > 0 {
-            throw ClipboardUnreadable(items: pb.numberOfItems, hasStrings: pb.hasStrings, types: pb.types, changeCount: pb.changeCount)
-        }
+        let (text, image) = try await Self.readBoard()
         let board = image?.key ?? text
         let cur = await node.current
         let curImage = Images.part(of: cur?.media)
@@ -2257,6 +2252,21 @@ final class LiveGroup: GroupController {
         }
         if !(await connected(node)) { throw PendingGroup.Failure.noComputers }
         return .nothingNew
+    }
+
+    /// What the clipboard holds, a text or an image, which iOS may ask the
+    /// user to allow. Read off the main thread: the read waits while iOS
+    /// asks, and on the main thread the app froze until the user answered.
+    nonisolated private static func readBoard() async throws -> (text: String?, image: Images.Copied?) {
+        try await Task.detached(priority: .userInitiated) {
+            let pb = UIPasteboard.general
+            let text = pb.hasStrings ? pb.string : nil
+            let image = text == nil ? Images.read(pb) : nil
+            if text == nil, image == nil, pb.numberOfItems > 0 {
+                throw ClipboardUnreadable(items: pb.numberOfItems, hasStrings: pb.hasStrings, types: pb.types, changeCount: pb.changeCount)
+            }
+            return (text, image)
+        }.value
     }
 
     /// The start of a text the button fetched, on one line, for the line
