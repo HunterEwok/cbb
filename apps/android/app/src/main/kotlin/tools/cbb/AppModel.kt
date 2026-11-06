@@ -845,6 +845,44 @@ class AppModel(private val app: Context) {
     }
 
     /** Sets a device's sync mode, this phone's own without a command; the reason a device refused, if it does, shows under the message. */
+    /** This phone's pause of the group's copies; null while it takes them. */
+    val pause: LiveGroup.Hold? get() = devices.firstOrNull { it.isSelf }?.paused
+
+    /**
+     * Keeps the group's copies out of this phone for forMS milliseconds, 0
+     * for until the user takes them again; null takes them again now. Its
+     * own copies still go out.
+     */
+    suspend fun pauseReceiving(forMS: Long?) {
+        message = try {
+            withContext(Dispatchers.IO) { group.pauseReceiving(forMS) }
+            Note(if (forMS == null) R.string.pause_off else R.string.pause_on)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
+    /** Mutes a device for the whole group for forMS milliseconds, 0 for until it is unmuted, or unmutes it. */
+    suspend fun setMuted(id: String, on: Boolean, forMS: Long = 0) {
+        message = try {
+            group.setMuted(id, on, forMS)
+            Note(if (on) R.string.mute_done else R.string.unmute_done)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LiveGroup.CommandRefused) {
+            Log.e(TAG, app.getString(R.string.error_command_refused), e)
+            Note(R.string.error_command_refused, e.reason, error = true)
+        } catch (e: MemberNode.ProtocolException) {
+            describe(e, R.string.error_no_answer)
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
     suspend fun setMode(id: String, mode: String) {
         message = try {
             if (devices.firstOrNull { it.id == id }?.isSelf == true) withContext(Dispatchers.IO) { group.setOwnMode(mode) } else group.setMode(id, mode)
@@ -1171,6 +1209,7 @@ class AppModel(private val app: Context) {
             is Arrangement.Refused -> R.string.error_arrangement
             is Content.Unread -> R.string.error_copy_unread
             is CopyKeys.NoRecords -> R.string.error_copy_no_records
+            is MemberNode.Muted -> R.string.error_muted
             is MemberNode.MissingException, is MemberNode.ProtocolException, is Content.Mismatch -> R.string.error_image_unavailable
             is PairingMember.Failure ->
                 if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_wrong_code else R.string.error_refused

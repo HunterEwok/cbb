@@ -68,6 +68,16 @@ they look, so both apps are built to the same plan.
    under Face ID or the fingerprint: remove the device of a claim or one of the two admins,
    or void both histories; on any other device it says that the root decides.
 
+   **Muting** (docs/design.md, "Muting a device"): under the button a quick switch says
+   whether the phone takes the group's copies. A tap keeps them out of the clipboard, or takes
+   them again; a long press keeps them out for 15 minutes, an hour, 8 hours or until it is
+   turned on. The phone's own copies still go out, and the pause lasts across restarts in
+   `mute.json` beside the group's file, as on the computers. On an admin phone a device's page
+   has "Mute" with the same times ("Until an admin unmutes it" for the last), a `mute` command
+   signed after Face ID or the fingerprint, and "Unmute"; a muted device says so on its tile,
+   its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
+   says so until an admin unmutes it, an admin phone itself on its own page.
+
    **Images and files** (docs/design.md, "Images and files"): the button sends an image on
    the clipboard as PNG or JPEG (HEIC and other formats are converted) and fetches a
    computer's image whole before it writes it, an image by its hash: the same image twice is

@@ -77,6 +77,14 @@ protocol GroupController: AnyObject {
     func rename(_ id: String, to name: String) async throws
     /// Sets the sync mode of a connected computer; only an admin phone does.
     func setMode(_ id: String, to mode: String) async throws
+    /// Keeps the group's copies out of this phone for forMS milliseconds, 0
+    /// for until resumeReceiving; its own copies still go out.
+    func pauseReceiving(forMS: Int64) throws
+    /// Takes the group's copies again.
+    func resumeReceiving() throws
+    /// Mutes a device for the group for forMS milliseconds, 0 for until it
+    /// is unmuted, or unmutes it; only an admin phone does.
+    func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws
     /// Puts text where a computer's focus is; only an admin phone does.
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws
     /// Runs a quick action on a device; only an admin phone does.
@@ -158,6 +166,9 @@ extension GroupController {
     func restoreWithCard(pin: String) async throws { throw PendingGroup.Failure.notReady }
     func rename(_ id: String, to name: String) async throws {}
     func setMode(_ id: String, to mode: String) async throws {}
+    func pauseReceiving(forMS: Int64) throws {}
+    func resumeReceiving() throws {}
+    func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws {}
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
     func runAction(_ id: String, name: String) async throws {}
     func actionsOff(_ id: String) async throws {}
@@ -230,7 +241,33 @@ final class AppModel: ObservableObject {
         var mayHub = false
         /// A hub that only passes the copies on: none is sealed to it.
         var forwardOnly = false
+        /// An admin muted it: its copies stay its own (design.md, "Muting a
+        /// device"). This phone's own, or what a connected device's hello says.
+        var muted: Hold?
+        /// This phone takes no copies from the group for now; only on its
+        /// own entry.
+        var paused: Hold?
     }
+
+    /// A mute or a pause that holds: until when, nil for until it is lifted.
+    struct Hold: Equatable {
+        var until: Date?
+
+        /// From Unix milliseconds, 0 for until it is lifted; nil for none or
+        /// one that ended.
+        init?(ms: Int64?, now: Date = Date()) {
+            guard let ms else { return nil }
+            if ms == 0 { until = nil; return }
+            let end = Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
+            guard end > now else { return nil }
+            until = end
+        }
+
+        init(until: Date?) { self.until = until }
+    }
+
+    /// This phone's pause of the group's copies; nil while it takes them.
+    var pause: Hold? { devices.first(where: \.isSelf)?.paused }
 
     enum SyncResult: Equatable {
         /// Sent to the computers connected, by name (none known: empty).
@@ -1021,6 +1058,33 @@ final class AppModel: ObservableObject {
         devices = group.devices
     }
 
+    /// Keeps the group's copies out of this phone for forMS milliseconds,
+    /// 0 for until the user takes them again; nil takes them again now.
+    func pauseReceiving(forMS: Int64?) {
+        do {
+            if let forMS { try group.pauseReceiving(forMS: forMS) } else { try group.resumeReceiving() }
+            message = forMS == nil
+                ? String(localized: "This phone takes copies from the group again.", bundle: .app)
+                : String(localized: "This phone takes no copies from the group for now.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        devices = group.devices
+    }
+
+    /// Mutes a device for the whole group, or unmutes it.
+    func setMuted(_ id: String, _ on: Bool, forMS: Int64 = 0) async {
+        do {
+            try await group.setMuted(id, on, forMS: forMS)
+            message = on ? String(localized: "The device is muted: its copies stay its own.", bundle: .app)
+                : String(localized: "The device is unmuted.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        await group.refresh()
+        devices = group.devices
+    }
+
     /// Puts text where a computer's focus is; true when it did.
     @discardableResult
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async -> Bool {
@@ -1346,6 +1410,7 @@ final class AppModel: ObservableObject {
             switch f {
             case .notConnected: return String(localized: "The computer is not connected to this phone. Try again when it shows online.", bundle: .app)
             case .timedOut, .closed: return String(localized: "The computer did not answer. It may run an older version of CBB.", bundle: .app)
+            case .muted: return String(localized: "An admin muted this phone, so its copies stay on it.", bundle: .app)
             default: break
             }
         }

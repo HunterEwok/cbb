@@ -197,6 +197,9 @@ class MemberNode(
     /** What fetch throws when the peer does not hold the part whole. */
     class MissingException : Exception("the device does not have this content")
 
+    /** An admin muted this phone: its copies do not reach the group. */
+    class Muted : Exception("an admin muted this phone: its copies do not reach the group")
+
     /** The current event with its age as of now. */
     val current: Member.Event? get() = synchronized(lock) { engine.currentEvent }
 
@@ -373,6 +376,9 @@ class MemberNode(
      * cannot be sealed.
      */
     fun send(text: String, kind: Member.Kind, via: Member.Via = Member.Via.COPY, media: Media.Manifest? = null): Member.Event = synchronized(lock) {
+        // An admin's mute keeps every copy of this phone from the group.
+        val until = mutedUntil()
+        if (until != null && (until == 0L || until > System.currentTimeMillis())) throw Muted()
         val sealedBlob = if (media != null && copies != null) (content ?: throw Content.NoParts()).sealBlob(media) else null
         val e = engine.local(text, kind, via, media, sealedBlob?.first, sealedBlob?.second)
         for (c in conns) forward(e, c)

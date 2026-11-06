@@ -30,4 +30,14 @@ class DeviceKindTest {
         assertEquals("Windows", device(os = "windows").systemWithVersion)
         assertNull(device().systemWithVersion)
     }
+
+    /** A mute or pause from its end in Unix milliseconds: 0 holds until it is lifted, one that ended holds no more. */
+    @Test
+    fun hold() {
+        assertEquals(LiveGroup.Hold(null), LiveGroup.Hold.of(0, now = 1_000))
+        assertEquals(LiveGroup.Hold(2_000), LiveGroup.Hold.of(2_000, now = 1_000))
+        assertNull(LiveGroup.Hold.of(1_000, now = 1_000))
+        assertNull(LiveGroup.Hold.of(null))
+        assertEquals(listOf(900_000L, 3_600_000L, 28_800_000L, 0L), PauseTime.entries.map { it.ms })
+    }
 }

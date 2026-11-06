@@ -180,6 +180,7 @@ public actor MemberNode {
                 onTunnel: @escaping @Sendable (String?, Member.TunnelOffer) -> Void = { _, _ in },
                 onHubs: @escaping @Sendable (String, [Data], Member.HubShare) -> Void = { _, _, _ in },
                 mode: String? = nil,
+                mutedUntilMS: Int64? = nil,
                 onCommand: (@Sendable (String?, Member.Record) -> Member.CommandResult)? = nil,
                 onEvidence: @escaping @Sendable (String?, [Data], Member.Evidence) -> Void = { _, _, _ in },
                 content: ContentStore? = nil,
@@ -191,6 +192,7 @@ public actor MemberNode {
         (self.tunnelKey, self.tunnelPSK, self.onTunnel, self.hub, self.os, self.device) = (tunnelKey, tunnelPSK, onTunnel, hub, os, device?.cleaned)
         (self.hubShare, self.onHubs, self.mode, self.onCommand, self.onEvidence) = (hubShare, onHubs, mode, onCommand, onEvidence)
         (self.content, self.credentials, self.copies, self.entries) = (content, credentials, copies, entries)
+        self.mutedUntilMS = mutedUntilMS
         if let copies { engine.seal = { try copies.seal($0, key: $1, blob: $2) } }
     }
 
@@ -353,6 +355,8 @@ public actor MemberNode {
     /// readers; the store seals the parts into the copy's blob.
     @discardableResult
     public func send(text: String, kind: Member.Kind, via: Member.Via = .phone, media: Media.Manifest? = nil) throws -> Member.Event {
+        // An admin's mute keeps every copy of this phone from the group.
+        if let until = mutedUntilMS, until == 0 || until > Records.ms(Date()) { throw Failure.muted }
         var sealedBlob: (key: Data, blob: Media.Blob)?
         if let media, copies != nil {
             guard let content else { throw Content.Failure.noParts }
@@ -812,6 +816,8 @@ public actor MemberNode {
 
     public enum Failure: Error, Equatable {
         case noHello, timedOut, refused(String), notConnected, closed
+        /// An admin muted this phone: its copies do not reach the group.
+        case muted
         /// The peer does not hold the part whole.
         case missing
     }
