@@ -192,6 +192,12 @@ pub struct Seen {
     pub channel_keys_seq: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub status_keys_seq: u64,
+    /// The highest entries.json seq taken and the keys.json seq it was
+    /// taken under, which check_entries alone sets, as Go's Seen.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub entries_seq: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub entries_keys_seq: u64,
 }
 
 /// The most a channel seq may rise past the one held under the same
@@ -604,8 +610,48 @@ pub fn check(
             status_seq: seen.status_seq,
             channel_keys_seq: k.seq,
             status_keys_seq,
+            entries_seq: seen.entries_seq,
+            entries_keys_seq: seen.entries_keys_seq,
         },
     ))
+}
+
+/// Checks entries.json as Go's release.CheckEntries does: keys.json under
+/// the pinned roots, the list under a release or channel key of it, its
+/// expiry, and that neither is older than seen. Returns the list and the
+/// Seen to keep.
+pub fn check_entries(
+    keys: &File,
+    entries: &File,
+    roots: &[&[u8]],
+    now_ms: i64,
+    seen: &Seen,
+) -> Result<(Entries, Seen)> {
+    let k = verify_keys(keys, roots, now_ms, seen).map_err(|e| e.context("keys.json is not valid"))?;
+    let spkis: Vec<&[u8]> = k
+        .keys
+        .iter()
+        .filter(|key| key.usage.is_empty() || key.usage == "release" || key.usage == "channel")
+        .map(|key| key.key.as_slice())
+        .collect();
+    let bad = |e: Error| e.context("entries.json is not valid");
+    entries.verify(&spkis).map_err(bad)?;
+    let e = decode_entries(&entries.body).map_err(bad)?;
+    if now_ms >= e.expires_ms {
+        return Err(Error::msg("entries.json has expired"));
+    }
+    if signed_ahead(e.time_ms, now_ms) {
+        return Err(Error::msg("entries.json was signed ahead of this device's clock"));
+    }
+    let at = floor(seen.entries_seq, seen.entries_keys_seq, seen.keys_seq, k.seq);
+    if e.seq < at {
+        return Err(Error::msg("entries.json is older than one already seen").answer());
+    }
+    if e.seq.saturating_sub(at) > MAX_SEQ_STEP {
+        return Err(Error::msg("entries.json is too far ahead of the one already seen"));
+    }
+    let next = Seen { keys_seq: k.seq, entries_seq: e.seq, entries_keys_seq: k.seq, ..seen.clone() };
+    Ok((e, next))
 }
 
 impl Release {

@@ -28,6 +28,8 @@ final class HubOnPhoneTests: XCTestCase {
             self.vlessID = vlessID
         }
         func setRecords(_ records: String) throws { shown = records }
+        var ways: String?
+        func setProjectWays(_ ways: String) throws { self.ways = ways }
         func status() -> String { report }
         var invited: [String]?
         func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16) throws -> HubGuest {
@@ -141,6 +143,7 @@ final class HubOnPhoneTests: XCTestCase {
         XCTAssertTrue(t.held.contains(pc))
         XCTAssertEqual(t.registered?.first, "203.0.113.9:8764")
         XCTAssertTrue(t.shown.contains("\"body\""))
+        XCTAssertNil(t.ways, "a forwarder of the user's own got the project's ways in")
         h.start(group()) // running already
         XCTAssertEqual(tunnels.started.count, 1)
         XCTAssertEqual(h.status(paused: false).0, .registering)
@@ -175,6 +178,24 @@ final class HubOnPhoneTests: XCTestCase {
         XCTAssertTrue(tunnels.started.last?.closed == true)
         XCTAssertEqual(h.status(paused: false).0, .off)
         XCTAssertEqual(HubOnPhone(device: phone, tunnels: FakeTunnels(), state: saved.state, save: { _ in }).clients, [tv])
+    }
+
+    /// The project's forwarder: the hub gets the entry points' ways in
+    /// over VLESS, or none for the built-in one.
+    func testProjectWays() throws {
+        let tunnels = FakeTunnels()
+        let h = HubOnPhone(device: phone, tunnels: tunnels, state: nil, save: { _ in })
+        try h.turnOn(home: "192.168.0.1 192.168.0.0/24")
+        try h.setForwarder(.init(endpoint: "203.0.113.9:8764", pin: HubState.Forwarder.projectPin))
+        h.start(group())
+        XCTAssertEqual(try XCTUnwrap(tunnels.started.last).ways, "")
+        try h.turnOff()
+        try h.turnOn(home: "192.168.0.1 192.168.0.0/24")
+        var g = group()
+        g.ways = [Releases.EntryVLESS(transport: "xhttp", server_name: "cbb.tools", port: 443, path: "/aNewWayInHere")]
+        h.start(g)
+        let ways = try XCTUnwrap(tunnels.started.last?.ways)
+        XCTAssertTrue(ways.contains("aNewWayInHere"), ways)
     }
 
     /// The tunnel hides as the user chose: the AmneziaWG settings go to the

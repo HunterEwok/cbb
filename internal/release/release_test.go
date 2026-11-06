@@ -604,3 +604,88 @@ func TestCheckEntries(t *testing.T) {
 		}
 	}
 }
+
+// entriesVector is one case of testdata/interop/go-entries.json.
+type entriesVector struct {
+	Name    string `json:"name"`
+	Keys    File   `json:"keys"`
+	Entries File   `json:"entries"`
+	Seen    Seen   `json:"seen"`
+	OK      bool   `json:"ok"`
+	Seq     uint64 `json:"seq,omitempty"`
+}
+
+type entriesVectors struct {
+	Roots   [][]byte        `json:"roots"`
+	NowMS   int64           `json:"now_ms"`
+	Vectors []entriesVector `json:"vectors"`
+}
+
+func makeEntriesVectors(t *testing.T) entriesVectors {
+	root, other := newSigner(t), newSigner(t)
+	rel, ch, sk := newSigner(t), newSigner(t), newSigner(t)
+	day := 24 * time.Hour
+	kb := keysBody(3, nowMS-1000, 90*day, rel)
+	kb.Keys = append(kb.Keys, Key{Key: ch.spki, Name: "channel key", Use: UseChannel}, Key{Key: sk.spki, Name: "status key", Use: UseStatus})
+	keys := sign(t, kb, root)
+	v := entriesVectors{Roots: [][]byte{root.spki}, NowMS: nowMS}
+	add := func(name string, k, e File, seen Seen, seq uint64) {
+		v.Vectors = append(v.Vectors, entriesVector{Name: name, Keys: k, Entries: e, Seen: seen, OK: seq != 0, Seq: seq})
+	}
+	good := sign(t, entriesBody(5, nowMS-1000, 30*day), ch)
+	add("valid", keys, good, Seen{}, 5)
+	add("signed by the release key", keys, sign(t, entriesBody(5, nowMS-1000, 30*day), rel), Seen{}, 5)
+	add("the same again", keys, good, Seen{KeysSeq: 3, EntriesSeq: 5, EntriesKeys: 3}, 5)
+	add("an older list", keys, good, Seen{KeysSeq: 3, EntriesSeq: 6, EntriesKeys: 3}, 0)
+	add("an older list under an older keys.json", keys, good, Seen{KeysSeq: 2, EntriesSeq: 1 << 40, EntriesKeys: 2}, 5)
+	add("a list far past the one seen", keys, sign(t, entriesBody(6+MaxSeqStep, nowMS-1000, 30*day), ch), Seen{KeysSeq: 3, EntriesSeq: 5, EntriesKeys: 3}, 0)
+	add("an older keys.json", keys, good, Seen{KeysSeq: 4}, 0)
+	add("signed by the status key", keys, sign(t, entriesBody(5, nowMS-1000, 30*day), sk), Seen{}, 0)
+	add("signed by a root", keys, sign(t, entriesBody(5, nowMS-1000, 30*day), root), Seen{}, 0)
+	add("signed by another key", keys, sign(t, entriesBody(5, nowMS-1000, 30*day), other), Seen{}, 0)
+	add("expired", keys, sign(t, entriesBody(5, nowMS-31*day.Milliseconds(), 30*day), ch), Seen{}, 0)
+	add("lives too long", keys, sign(t, entriesBody(5, nowMS-1000, 101*day), ch), Seen{}, 0)
+	add("signed two days ahead", keys, sign(t, entriesBody(5, nowMS+2*day.Milliseconds(), 30*day), ch), Seen{}, 0)
+	bad := entriesBody(5, nowMS-1000, 30*day)
+	bad.Forwarders[0].VLESS[0].Path = "/short"
+	add("a path too short", keys, sign(t, bad, ch), Seen{}, 0)
+	return v
+}
+
+// TestEntriesVectors writes (with -update) and checks
+// testdata/interop/go-entries.json: entries.json with its keys.json in
+// valid and invalid combinations (docs/protocol.md, section 16, "Entry
+// points"), for the phone kits to agree with.
+func TestEntriesVectors(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "interop", "go-entries.json")
+	if *update {
+		data, err := json.MarshalIndent(makeEntriesVectors(t), "", "\t")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v entriesVectors
+	if err := json.Unmarshal(data, &v); err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Vectors) != 14 {
+		t.Fatalf("the file has %d vectors", len(v.Vectors))
+	}
+	for _, c := range v.Vectors {
+		e, seen, err := CheckEntries(c.Keys, c.Entries, v.Roots, time.UnixMilli(v.NowMS), c.Seen)
+		if (err == nil) != c.OK {
+			t.Errorf("%s: CheckEntries = %v, the file says ok %v", c.Name, err, c.OK)
+			continue
+		}
+		if err == nil && (e.Seq != c.Seq || seen.EntriesSeq != c.Seq || seen.EntriesKeys != 3 || seen.KeysSeq != 3) {
+			t.Errorf("%s: seq %d, seen %+v", c.Name, e.Seq, seen)
+		}
+	}
+}

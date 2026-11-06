@@ -934,6 +934,9 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
             Text(stringResource(status), color = if (hub.status == HubOnPhone.Status.REGISTERED) palette.accent else palette.textDim)
             // The registration's error underneath, when details are on.
             hub.error?.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = palette.textDim) }
+            if (hub.entriesStale) {
+                Text("⚠ " + stringResource(R.string.hub_entries_stale), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+            }
             if (hub.on) {
                 Text(
                     stringResource(if (hub.home) R.string.hub_on_home else R.string.hub_not_home),

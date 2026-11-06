@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/group/grouptest"
 	"github.com/HunterEwok/cbb/internal/invite"
 	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless"
 )
 
 // keySigner is a member key as the kits hand it over: it signs digests.
@@ -361,4 +363,45 @@ func mustKey(t *testing.T, b []byte) tunnel.Key {
 		t.Fatal(err)
 	}
 	return k
+}
+
+// TestPhoneHubWays checks the ways in over VLESS a phone's hub tries to
+// the project's forwarder: none for a forwarder of the user's own, the
+// built-in one without entry points, those of the entry points in their
+// place, and first the settings the forwarder's last answer gave.
+func TestPhoneHubWays(t *testing.T) {
+	hubPriv, _ := NewKey()
+	hub, err := StartHub(hubPriv, newRootPhone(t).device, echo(t), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Close()
+	at := netip.MustParseAddr("192.0.2.10")
+	if w := hub.vless(at); len(w) != 0 {
+		t.Errorf("a forwarder of the user's own got ways %v", w)
+	}
+	if err := hub.SetProjectWays(""); err != nil {
+		t.Fatal(err)
+	}
+	if w := hub.vless(at); len(w) != 1 || !w[0].Equal(forward.ProjectVLESS(at)) {
+		t.Errorf("without entry points: %v", w)
+	}
+	if err := hub.SetProjectWays(`[{"transport":"xhttp","server_name":"cbb.tools","port":8443,"path":"/aNewWayInHere"}]`); err != nil {
+		t.Fatal(err)
+	}
+	w := hub.vless(at)
+	if len(w) != 1 || w[0].Endpoint != netip.AddrPortFrom(at, 8443) || w[0].Path != "/aNewWayInHere" || w[0].ID != vless.RegistrationID {
+		t.Errorf("with entry points: %v", w)
+	}
+	if err := hub.SetProjectWays("{"); err == nil {
+		t.Error("SetProjectWays took bad JSON")
+	}
+	learned := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: netip.AddrPortFrom(at, 443), ServerName: "cbb.tools",
+		Path: "/banMEJvnYJJap8S/aGroupPathOfItsOwn", ID: vless.RegistrationID}
+	hub.mu.Lock()
+	hub.learned = &learned
+	hub.mu.Unlock()
+	if w := hub.vless(at); len(w) != 2 || !w[0].Equal(&learned) {
+		t.Errorf("after an answer: %v", w)
+	}
 }

@@ -106,6 +106,14 @@ enum Control {
     struct Forwarder: Codable, Equatable {
         var endpoint: String
         var registered: Bool?
+        /// The project's forwarder does not answer and this Mac holds no
+        /// signed entry points that have not expired.
+        var entriesStale: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case endpoint, registered
+            case entriesStale = "entries_stale"
+        }
     }
 
     /// A device of the group, as cbb status lists them.
