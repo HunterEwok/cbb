@@ -235,9 +235,23 @@ func TestFFIJoiner(t *testing.T) {
 			qr = line
 		}
 	}
-	res := dialJoiner(t, pi.dir, qr)
-	if res.Info.Name != "aurora phone" || res.Info.OS != group.OSAurora || !res.Info.Phone() || !res.Confirmed {
-		t.Fatalf("the phone joined as %+v", res)
+	// The service admits it as cbb pair -qr does.
+	jc, ok := phone.ParseJoinQR(qr)
+	if !ok {
+		t.Fatalf("not a join QR code: %q", qr)
+	}
+	m, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, "")
+	if err != nil || m.Name != "aurora phone" {
+		t.Fatalf("admitting the phone: %v, %+v", err, m)
+	}
+	var phoneDev *control.Device
+	for _, d := range pi.devices(t) {
+		if d.Name == "aurora phone" {
+			phoneDev = &d
+		}
+	}
+	if phoneDev == nil || phoneDev.OS != group.OSAurora || phoneDev.Role != group.RolePhone {
+		t.Fatalf("the phone is listed as %+v", phoneDev)
 	}
 	var rest strings.Builder
 	for sc.Scan() {

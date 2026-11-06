@@ -15,6 +15,9 @@ All notable changes to cbb are documented in this file. The format follows
 - `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
   the device records (docs/protocol.md): every member admits them as phones and shows
   "Aurora OS" and "Sailfish OS".
+- `cbb pair -qr` on the group's root or an admin, on Linux, Windows and macOS alike, admits a
+  device that shows a QR code and waits, such as the Aurora phone: it reads the code's text
+  and dials the device.
 - The Rust core joins a phone by its QR code with a key it does not hold, such as the Aurora
   app's key in OP-TEE: lite/ffi's `cbb_join_*` functions run the pairing inside the core's TLS
   and ask the app to sign; a test joins them to a computer's group.
