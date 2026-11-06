@@ -178,6 +178,12 @@ void Join::accept()
             s->deleteLater();
             return fail(failure);
         }
+        // The server owns the sockets it hands out and deletes them with
+        // itself, which would drop the joiner's last frame still waiting to
+        // be written when stop() lets the server go after a join. The join
+        // owns the socket instead, and the socket deletes itself once it is
+        // closed.
+        s->setParent(this);
         m_conn = s;
         connect(s, &QTcpSocket::readyRead, this, [this, s]() {
             if (s == m_conn)
