@@ -50,6 +50,17 @@ public protocol CredentialKeeper: AnyObject, Sendable {
     func add(_ credentials: [ServerCredentials.Credential]) -> [ServerCredentials.Credential]
 }
 
+/// Keeps the newest signed entry points for a node (docs/protocol.md,
+/// section 16, "Entry points"): peers send them after the hello, and the
+/// phone's hub registers through the ways in they name. The phone takes
+/// them and passes none on.
+public protocol EntriesKeeper: AnyObject, Sendable {
+    /// The seq of the list held and of its keys.json, nil for none.
+    var order: (keys: UInt64, seq: UInt64)? { get }
+    /// Takes a list a peer sent when it checks out and is newer.
+    func add(_ set: Releases.EntriesSet)
+}
+
 public extension RecordStore {
     func refused(chain: [Data]) -> String? { nil }
     func mayHost(_ device: String, chain: [Data]) -> Bool { true }
@@ -97,6 +108,14 @@ public actor MemberNode {
     private let content: ContentStore?
     /// The group's server credentials; nil keeps none and passes none on.
     private let credentials: CredentialKeeper?
+    /// What this phone seals its copies with and checks and opens the
+    /// others' with (docs/protocol.md, section 4); nil takes copies as they
+    /// come, unchecked, as in tests of the protocol alone.
+    private let copies: CopyKeys?
+    /// Why the last copy a peer sent was dropped, for the app's log.
+    public private(set) var lastDropped: String?
+    /// The signed entry points; nil takes none.
+    private let entries: EntriesKeeper?
     /// This phone's sync mode, which the hellos state; nil for a phone
     /// without one, which shares.
     public private(set) var mode: String?
@@ -160,12 +179,15 @@ public actor MemberNode {
                 onCommand: (@Sendable (String?, Member.Record) -> Member.CommandResult)? = nil,
                 onEvidence: @escaping @Sendable (String?, [Data], Member.Evidence) -> Void = { _, _, _ in },
                 content: ContentStore? = nil,
-                credentials: CredentialKeeper? = nil) {
+                credentials: CredentialKeeper? = nil,
+                copies: CopyKeys? = nil,
+                entries: EntriesKeeper? = nil) {
         (self.engine, self.name, self.role, self.records, self.renew, self.adminCA, self.onChange, self.onCert) =
             (engine, name, role, records, renew, adminCA, onChange, onCert)
         (self.tunnelKey, self.tunnelPSK, self.onTunnel, self.hub, self.os, self.device) = (tunnelKey, tunnelPSK, onTunnel, hub, os, device?.cleaned)
         (self.hubShare, self.onHubs, self.mode, self.onCommand, self.onEvidence) = (hubShare, onHubs, mode, onCommand, onEvidence)
-        (self.content, self.credentials) = (content, credentials)
+        (self.content, self.credentials, self.copies, self.entries) = (content, credentials, copies, entries)
+        if let copies { engine.seal = { try copies.seal($0, key: $1, blob: $2) } }
     }
 
     /// Replaces the sync mode that the next connections' hellos state.
@@ -311,10 +333,16 @@ public actor MemberNode {
 
     /// Sends a text this phone copied to every connected member, or with
     /// media images or files whose content this phone's ContentStore
-    /// holds, text their plain-text alternative.
+    /// holds, text their plain-text alternative, sealed to the group's
+    /// readers; the store seals the parts into the copy's blob.
     @discardableResult
-    public func send(text: String, kind: Member.Kind, via: Member.Via = .phone, media: Media.Manifest? = nil) -> Member.Event {
-        let e = engine.local(text: text, kind: kind, via: via, media: media)
+    public func send(text: String, kind: Member.Kind, via: Member.Via = .phone, media: Media.Manifest? = nil) throws -> Member.Event {
+        var sealedBlob: (key: Data, blob: Media.Blob)?
+        if let media, copies != nil {
+            guard let content else { throw Content.Failure.noParts }
+            sealedBlob = try content.sealBlob(media)
+        }
+        let e = try engine.local(text: text, kind: kind, via: via, media: media, key: sealedBlob?.key, blob: sealedBlob?.blob)
         for c in conns.values { forward(e, to: c) }
         return e
     }
@@ -331,7 +359,7 @@ public actor MemberNode {
         // reaches it (docs/protocol.md, section 10, "Stopping the exchange").
         c.recordsOnly = records?.stopped(chain: t.peerChain) ?? false
         var hello = engine.hello(name: name)
-        if c.recordsOnly { hello.current = nil }
+        if c.recordsOnly || copies != nil && hello.current?.sealed == nil { hello.current = nil }
         hello.os = os
         hello.device = device
         hello.records = records?.digest
@@ -341,6 +369,7 @@ public actor MemberNode {
         // A phone's keys are in the Secure Enclave or the Keystore.
         hello.keyStore = Records.hardware
         hello.media = content != nil
+        if let o = entries?.order { (hello.entriesKeysSeq, hello.entriesSeq) = (o.keys, o.seq) }
         c.enqueue(.hello(role, hello))
         let writer = Task { await c.runWriter() }
         let watchdog = Task { await c.runWatchdog() }
@@ -378,7 +407,9 @@ public actor MemberNode {
                 c.mode = h.mode
                 c.peerMedia = h.media
                 c.peerRole = peerRole
-                apply(try engine.reconcile(h), from: id)
+                var taken = h
+                taken.current = h.current.flatMap { take($0, from: c.peer) }
+                apply(try engine.reconcile(taken), from: id)
                 if let store = records, let mine = store.digest, mine != h.records {
                     for rs in Member.Record.chunks(store.all) { c.enqueue(.records(rs)) }
                 }
@@ -408,7 +439,7 @@ public actor MemberNode {
             }
             switch m {
             case let .event(e?):
-                apply(engine.received(e), from: id)
+                if let e = take(e, from: c.peer) { apply(engine.received(e), from: id) }
             case let .cert(der, _):
                 onCert(der)
             case let .evidence(e) where !t.peerChain.isEmpty:
@@ -419,6 +450,8 @@ public actor MemberNode {
                 if let p = c.peer, records?.mayHost(p, chain: t.peerChain) != false { onTunnel(p, o) }
             case let .hubs(share):
                 if let p = c.peer, records?.mayHost(p, chain: t.peerChain) != false { onHubs(p, t.peerChain, share) }
+            case let .entries(set):
+                entries?.add(set)
             case let .credentials(cs) where !cs.isEmpty && cs.count <= ServerCredentials.maxCredentials:
                 if let fresh = credentials?.add(cs), !fresh.isEmpty { sendCredentials(fresh, except: id) }
             case let .records(rs):
@@ -722,12 +755,31 @@ public actor MemberNode {
     /// secrets to (docs/protocol.md, section 10, "Stopping the exchange").
     private func forward(_ e: Member.Event, to c: Conn) {
         guard !c.recordsOnly else { return }
+        // A copy goes out only sealed, once this phone has its keys.
+        guard copies == nil || e.sealed != nil else { return }
         var e = e
-        if e.kind == .secret, let store = records {
+        if e.kind == .secret, !e.unread, let store = records {
             let leaf = c.transport.peerChain.first.flatMap { try? CertificateInfo(der: $0).commonName }
-            if store.noSecrets(to: c.peer ?? leaf) { e.text = "" }
+            if store.noSecrets(to: c.peer ?? leaf) { e = e.mark }
         }
         c.enqueue(.event(e))
+    }
+
+    /// Checks a copy a peer sent against the records and opens it when it
+    /// is sealed to this phone (CopyKeys.take); nil drops it: a copy in
+    /// the open, or one the records refuse.
+    private func take(_ e: Member.Event, from peer: String?) -> Member.Event? {
+        guard let copies else { return e }
+        guard let s = e.sealed else {
+            lastDropped = "a copy from \(peer ?? "a member") was not sealed"
+            return nil
+        }
+        do {
+            return try copies.take(s)
+        } catch {
+            lastDropped = "a copy from \(peer ?? "a member") was refused: \(error)"
+            return nil
+        }
     }
 
     private func apply(_ r: SyncEngine.Result, from: ObjectIdentifier) {

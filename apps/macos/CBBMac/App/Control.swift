@@ -106,6 +106,14 @@ enum Control {
     struct Forwarder: Codable, Equatable {
         var endpoint: String
         var registered: Bool?
+        /// The project's forwarder does not answer and this Mac holds no
+        /// signed entry points that have not expired.
+        var entriesStale: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case endpoint, registered
+            case entriesStale = "entries_stale"
+        }
     }
 
     /// A device of the group, as cbb status lists them.
@@ -129,9 +137,11 @@ enum Control {
         var online = false
         var lastSeenMS: Int64 = 0
         var isSelf = false
-        /// The records let it be a hub: the root's own device or an admin
-        /// with the hub power.
+        /// The records let it be a hub: the root's own device, an admin
+        /// with the hub power, or a hub that only passes copies on.
         var mayHub = false
+        /// A hub that only passes the copies on: none is sealed to it.
+        var forwardOnly = false
         /// One of the group's hubs, as the service knows: this Mac while it
         /// is a hub, or a hub whose offer it keeps.
         var hub = false
@@ -141,6 +151,7 @@ enum Control {
 
         enum CodingKeys: String, CodingKey {
             case id, name, role, os, form, version, mac, store, admin, root, frozen, online, mode, hub
+            case forwardOnly = "forward_only"
             case osVersion = "os_version"
             case lastSeenMS = "last_seen_ms"
             case isSelf = "self"
@@ -172,6 +183,7 @@ enum Control {
             lastSeenMS = try c.decodeIfPresent(Int64.self, forKey: .lastSeenMS) ?? 0
             isSelf = try c.decodeIfPresent(Bool.self, forKey: .isSelf) ?? false
             mayHub = try c.decodeIfPresent(Bool.self, forKey: .mayHub) ?? false
+            forwardOnly = try c.decodeIfPresent(Bool.self, forKey: .forwardOnly) ?? false
             hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
             mode = try c.decodeIfPresent(String.self, forKey: .mode)
         }

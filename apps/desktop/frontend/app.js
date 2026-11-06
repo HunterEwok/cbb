@@ -176,7 +176,9 @@ function noHub(d, me) {
   if (never) return t(never);
   if (d.store === "rootless") return t("It runs without administrator rights, so it is never a hub.");
   if (d.frozen) return t("It is frozen: the root unfreezes it first.");
-  if (!d.may_hub) return d.self ? t("Only the group's root or an admin is a hub: the root makes this computer an admin first.") : t("Only the group's root or an admin is a hub: make it an admin first.");
+  // A hub that reads the copies is the root or an admin; an admin makes any
+  // other computer a hub that only passes them on.
+  if (d.self && (!d.may_hub || d.forward_only)) return t("Only the group's root or an admin is a hub that reads the copies; an admin makes this computer a hub that only passes them on.");
   if (!d.self && !me?.admin) return t("Only an admin makes another device a hub.");
   return "";
 }
@@ -191,7 +193,8 @@ function hubLine(d, me) {
   }
   const why = noHub(d, me);
   if (why) return `<div class="card actions"><button disabled>${esc(t("Make it a hub"))}</button><p class="dim small">${esc(why)}</p></div>`;
-  return `<div class="card actions"><button data-action="hub" ${busy}>${esc(t("Make it a hub"))}</button></div>`;
+  if (d.may_hub && !d.forward_only) return `<div class="card actions"><button data-action="hub" ${busy}>${esc(t("Make it a hub that reads the copies"))}</button></div>`;
+  return `<div class="card actions"><button data-action="hub-forward" ${busy}>${esc(t("Make it a hub that only passes them on"))}</button></div>`;
 }
 
 // The hub's own settings, on this computer's page while it is a hub.
@@ -203,6 +206,9 @@ function hubCard(d) {
   return `<div class="card"><div class="dim small">${esc(t("How the hub's tunnel hides"))}</div><div class="segmented">` +
     tunnels.map((m) => `<button type="button" data-tunnel="${m}" aria-checked="${m === cur}" ${state.busy ? "disabled" : ""}>${esc(tunnelName(m))}</button>`).join("") +
     `</div><div class="line"><span class="dim">${esc(t("Forwarder"))}</span><span class="value mono">${esc(fwd)}</span></div>` +
+    // The project's forwarder does not answer and the list of its entry
+    // points has expired (docs/protocol.md, section 16).
+    (a.forwarder?.entries_stale ? `<p class="small">⚠ ${esc(t("The list of the project's entry points is out of date, and the forwarder does not answer on the ways this device knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on."))}</p>` : "") +
     `<div class="actions"><button data-action="forwarder" ${state.busy ? "disabled" : ""}>${esc(t("Change the forwarder…"))}</button>` +
     `<button data-action="terms">${esc(t("Terms of the project's servers"))}</button></div></div>`;
 }
@@ -639,6 +645,7 @@ function renderDetail() {
   const standing = d.self ? (d.admin ? t("This computer · admin") : t("This computer"))
     : d.frozen ? t("frozen") : d.root ? t("root") : d.admin ? t("admin") : "";
   if (standing) lines.push([t("In the group"), standing]);
+  if (d.forward_only) lines.push([t("Copies"), t("Passes them on, reads none")]);
   if (d.hub) lines.push([t("Away from home"), state.status?.away?.hub_device === d.id ? t("The group's hub, in use now") : t("The group's hub")]);
   if (d.mode) lines.push([t("Sync mode"), modeName(d.mode)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
@@ -734,9 +741,13 @@ async function deviceAction(action) {
         : d.self
           ? t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
           : t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.");
-      if (await ask(t("Make %s a hub?", d.name), text, t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id, awayOn);
+      if (await ask(t("Make %s a hub?", d.name), text, t("Make it a hub"))) await act("MakeHub", d.self ? "" : d.id, awayOn, false);
       break;
     }
+    case "hub-forward":
+      if (await ask(t("Make %s a hub?", d.name), t("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.") +
+        " " + t("A hub that only passes the copies on cannot read them: they are sealed to your other devices only, so its keys need no hardware."), t("Make it a hub"))) await act("MakeHub", d.id, false, true);
+      break;
     case "unhub": {
       const other = state.devices.some((x) => x.id !== d.id && x.hub);
       const text = other

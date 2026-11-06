@@ -4,16 +4,13 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
-	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/HunterEwok/cbb/internal/atomicfile"
 	"github.com/HunterEwok/cbb/internal/forward"
@@ -22,7 +19,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/release"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/update"
-	"github.com/HunterEwok/cbb/internal/vless"
 )
 
 // The signed list of the project's entry points (docs/protocol.md, section
@@ -160,33 +156,13 @@ func (s *Service) putEntries(set node.EntriesSet) error {
 
 // projectVLESS returns the ways in over VLESS to the project's forwarder,
 // at addr, for a hub's registration: those the held entry points name,
-// each site resolved, else the built-in one.
+// else the built-in one.
 func (s *Service) projectVLESS(addr netip.Addr) []tunnel.VLESS {
-	var out []tunnel.VLESS
+	var ways []release.EntryVLESS
 	if h := s.heldEntries(); h != nil {
 		if f, ok := h.entries.Forwarder(forward.ProjectHost); ok {
-			host, _, _ := net.SplitHostPort(f.Name)
-			for _, w := range f.VLESS {
-				at := addr
-				if w.ServerName != host {
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", w.ServerName)
-					cancel()
-					if err != nil || len(ips) == 0 {
-						continue
-					}
-					at = ips[0].Unmap()
-				}
-				v := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: netip.AddrPortFrom(at, w.Port),
-					ServerName: w.ServerName, Path: w.Path, ID: vless.RegistrationID}
-				if v.Check() == nil {
-					out = append(out, v)
-				}
-			}
+			ways = f.VLESS
 		}
 	}
-	if len(out) == 0 {
-		out = append(out, *forward.ProjectVLESS(addr))
-	}
-	return out
+	return forward.ProjectWays(addr, ways)
 }

@@ -1072,6 +1072,66 @@ func TestMakeHub(t *testing.T) {
 	}
 }
 
+// TestForwardOnlyHub has the pi, the group's root, make the deck, which is
+// no admin, a hub that only passes copies on: the pi signs the deck a record
+// with forward_only, the deck becomes a hub, and from then on the copies are
+// no longer sealed to it, so it passes them on without reading them, and
+// it takes no paste. An admin is never made such a hub.
+func TestForwardOnlyHub(t *testing.T) {
+	var h hub
+	pi := startService(t, &h, "pi")
+	mac := startService(t, &h, "mac")
+	deck := startService(t, &h, "deck")
+	pairWith(t, pi, mac)
+	pairWith(t, pi, deck)
+	makeAdmin(t, pi, mac)
+	port := freeUDP(t)
+	addr := []string{fmt.Sprintf("127.0.0.1:%d", port)}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr, ForwardOnly: true}, ""); err == nil || !strings.Contains(err.Error(), "is an admin") {
+		t.Errorf("an admin was made a hub that only passes copies on: %v", err)
+	}
+	for _, s := range []*testService{pi, deck} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deck.stop()
+	dst := tunnelState(t, deck)
+	dst.ListenPort = port
+	if err := dst.Save(deck.dir); err != nil {
+		t.Fatal(err)
+	}
+	deck = restartService(t, &h, deck)
+	waitUpTo(t, 30*time.Second, "the pi meets the Mac and the deck again", func() bool {
+		return len(pi.status(t).Peers) == 2
+	})
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "deck", Addrs: addr, ForwardOnly: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if a := deck.status(t).Away; a == nil || !a.Hub {
+		t.Errorf("the deck: %+v", a)
+	}
+	waitFor(t, "the Mac takes the deck's record", func() bool {
+		for _, d := range mac.devices(t) {
+			if d.Name == "deck" {
+				return d.MayHub && d.ForwardOnly
+			}
+		}
+		return false
+	})
+	if _, err := mac.do(t, control.Header{Op: control.OpCopy}, "sealed past the deck"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the pi has the Mac's copy", func() bool { return pi.paste(t) == "sealed past the deck" })
+	time.Sleep(500 * time.Millisecond)
+	if got := deck.paste(t); got == "sealed past the deck" {
+		t.Error("the deck reads a copy that is not sealed to it")
+	}
+	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "from the deck"); err == nil {
+		t.Error("the deck made a copy")
+	}
+}
+
 // TestStopHub has the pi, the group's root, and the Mac, an admin, both be
 // hubs: the deck, no admin, cannot stop one; the pi makes the Mac stop
 // being a hub, and every device forgets the Mac's offer; the pi, then the

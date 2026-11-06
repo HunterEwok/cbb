@@ -211,6 +211,11 @@ pub struct Body {
     /// The device's public key for sealed messages (`crate::seal`).
     #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     pub seal: Vec<u8>,
+    /// The device passes the group's copies on as a hub but reads none, so
+    /// no copy is sealed to it (docs/protocol.md, section 11, "Two kinds of
+    /// hub").
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub forward_only: bool,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keys: Vec<Hash>,
@@ -260,6 +265,7 @@ fn allowed(kind: &str) -> Option<&'static [&'static str]> {
             "proof",
             "holds_root",
             "seal",
+            "forward_only",
         ],
         TYPE_REVOKE | TYPE_FREEZE => &["keys", "seen"],
         TYPE_THAW | TYPE_RESOLVE => &["records"],
@@ -295,6 +301,7 @@ impl Body {
         add(!self.proof.is_empty(), "proof");
         add(self.holds_root, "holds_root");
         add(!self.seal.is_empty(), "seal");
+        add(self.forward_only, "forward_only");
         add(!self.keys.is_empty(), "keys");
         add(!self.seen.is_empty(), "seen");
         add(!self.records.is_empty(), "records");
@@ -465,6 +472,9 @@ impl Body {
         }
         if self.admin.is_none() && (!self.powers.is_empty() || !self.commands.is_empty()) {
             return Err(Error::msg("powers and commands come only with admin"));
+        }
+        if self.forward_only && (self.role != "full" || self.admin.is_some() || self.holds_root) {
+            return Err(Error::msg("only a computer that is no admin passes copies on without reading them"));
         }
         if !self.seal.is_empty() && self.seal.len() != seal::PUBLIC_KEY_SIZE {
             return Err(Error::msg(format!(
@@ -806,6 +816,8 @@ pub struct Device {
     pub proof: String,
     #[serde(with = "b64", skip_serializing_if = "Vec::is_empty")]
     pub seal: Vec<u8>,
+    #[serde(skip_serializing_if = "is_false")]
+    pub forward_only: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub admin: Option<Hash>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -1576,7 +1588,12 @@ impl<'a> Epoch<'a> {
         let b = r.b();
         match b.kind.as_str() {
             TYPE_DEVICE => {
-                self.has(a, POWER_ADMIT) && b.admin.is_none() && !b.holds_root && b.role != "phone" && b.role != "watch"
+                self.has(a, POWER_ADMIT)
+                    && b.admin.is_none()
+                    && !b.holds_root
+                    && b.role != "phone"
+                    && b.role != "watch"
+                    && (!b.forward_only || self.has(a, POWER_HUB))
             }
             TYPE_REVOKE => b.keys.iter().all(|k| {
                 if self.is_root(k) {
@@ -2163,6 +2180,7 @@ impl<'a> Epoch<'a> {
             hardware: n.hardware.clone(),
             proof: n.proof.clone(),
             seal: n.seal.clone(),
+            forward_only: n.forward_only,
             ..Device::default()
         };
         d.keys.sort();

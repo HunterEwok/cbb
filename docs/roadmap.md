@@ -187,7 +187,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     on the text console (design.md, "3. Console helper"), and Shift+Insert after a copy from
     a phone through the uinput helper (design.md, "Auto-paste"). The helpers themselves are
     done, as remote paste targets.
-- **31.** **Key levels**: the user picks who may be the group's root, an admin or a hub: only
+- **31.** **Key levels**: the user picks who may be the group's root or an admin (a trusted hub is one): only
     devices whose hardware key is proven by attestation, devices with a key in hardware (the
     default), or, after a warning, devices with a key in a file too. The evidence and the
     marks are built, and so is the setting's format: `key_level` in the root's `settings`
@@ -376,10 +376,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - Done in 0.6: Android's automatic sending skips a copy that carries
       `android.content.extra.IS_SENSITIVE`, as the computers skip the password managers'
       marks.
-    - Done in 0.6: no "end to end" for the clipboard in the guides (privacy, how it works,
-      networks that block VPNs) and the README, which say that every device of the group,
-      the hub included, reads what is copied, and that only commands are sealed to their
-      receiver; the forwarder's addresses, timing and sizes on the site and in the guides;
+    - Done in 0.6: the guides (privacy, how it works, keys, away from home) and the README
+      say "end to end" for the clipboard only once it was true (D-84): who reads the copies,
+      the two kinds of hub, and what the devices that pass a copy on still see; the forwarder's addresses, timing and sizes on the site and in the guides;
       the status notes and the README's status link in the guides of keys and away from
       home; "each signature" of the root's and the admins' keys only; "only over TLS" linking what is not encrypted; winget named only where
       it says "once the package is in winget's repository"; docs/security-audit.md says it
@@ -425,7 +424,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
     Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
     with this item, on the same server.
-- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phone kits and the lite member do not read the list yet, a phone hub does not register over VLESS yet, and no app says yet that the list is stale.** A hub that reaches its forwarder
+- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones and the lite member take, keep and (the lite member) pass on the list, a phone hub registers over VLESS through its ways, and a hub whose forwarder does not answer says in every app when its list is stale (2026-11-04).** A hub that reaches its forwarder
     only over VLESS, for a phone hub on a trip in a network that lets nothing else through.
     The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
     into `cbb` and the kits beside its key, as they are no secret the design relies on; a
@@ -728,14 +727,15 @@ watches, the Mac and the tray app.
 ## Key levels
 
 Partly built in 0.6 (D-66): each device's evidence, checked by the root, and where its key
-lives in `cbb status` (the KEYS column) and the apps; the group's setting below is next. The owner's rule: the root, the admins and the hub hold keys in
-hardware. A key in hardware cannot be copied, even from a device that is broken into; it
+lives in `cbb status` (the KEYS column) and the apps; the group's setting below is next. The owner's rule: the root and the admins hold keys in
+hardware. A trusted hub is an admin and follows it; a hub that only passes copies on reads
+no copy and needs no key in hardware (D-84). A key in hardware cannot be copied, even from a device that is broken into; it
 can only be misused on that device while the attacker holds it. A key in a file can be
 copied once and used anywhere, for as long as nobody removes the device.
 
 The user picks one of three levels for the group, at its root:
 
-1. **Proven hardware only.** A device may be the root, an admin or a hub only when
+1. **Proven hardware only.** A device may be the root or an admin only when
    attestation proves its key is in hardware: Android's Key Attestation, a TPM with its
    maker's certificate, the iPhone through App Attest. This asks outside servers, and the
    guide says which: Apple's for each iPhone that makes a key, Google's public list of
@@ -746,7 +746,7 @@ The user picks one of three levels for the group, at its root:
 2. **Hardware (the default).** The device's own word that its key is in hardware: the
    phones, a Mac's Secure Enclave, a TPM without its maker's certificate. Nothing about the
    device leaves the group, which is why it is the default (D-47).
-3. **Files allowed.** A device whose key is in a file may also be an admin or the hub, each
+3. **Files allowed.** A device whose key is in a file may also be an admin, each
    time after the user allows it, with a warning that the key can be copied and must be
    watched. A group of computers only, while they have no TPM or Secure Enclave support
    (D-44), works only at this level.

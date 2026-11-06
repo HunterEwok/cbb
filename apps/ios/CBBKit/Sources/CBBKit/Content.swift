@@ -5,11 +5,23 @@ import Crypto
 import Foundation
 
 /// The images and files a member holds whole, which it serves to its peers
-/// (docs/protocol.md, section 4, "Content"), as Go's node.Content.
+/// (docs/protocol.md, section 4, "Content"), as Go's node.Content: only the
+/// sealed blobs of copies, never the parts in the open.
 public protocol ContentStore: Sendable {
-    /// The part whose SHA-256 is sha256, or nil when this phone does not
+    /// The blob whose SHA-256 is sha256, or nil when this phone does not
     /// hold all of it. The node closes it.
     func open(sha256: Data) -> ContentSource?
+    /// Seals the parts of m, which the store holds, into the blob of a new
+    /// copy under a new key, and keeps the blob to serve it; nil when m
+    /// holds no bytes (docs/protocol.md, section 4, "The blob").
+    func sealBlob(_ m: Media.Manifest) throws -> (key: Data, blob: Media.Blob)?
+}
+
+public extension ContentStore {
+    func sealBlob(_ m: Media.Manifest) throws -> (key: Data, blob: Media.Blob)? {
+        guard m.size == 0 else { throw Content.Failure.noParts }
+        return nil
+    }
 }
 
 /// One part a ContentStore opened.
@@ -25,32 +37,48 @@ public extension ContentSource {
 }
 
 /// A ContentStore in memory, for the phone's own copies: it keeps the
-/// parts it was given last, at most maxBytes together.
+/// parts and the blobs it was given last, at most maxBytes together, twice
+/// for the blob of each copy, and serves only the blobs.
 public final class MemoryContent: ContentStore, @unchecked Sendable {
     private let lock = NSLock()
-    private var parts: [(sum: Data, bytes: Data)] = []
+    private var parts: [(sum: Data, bytes: Data, blob: Bool)] = []
     private let maxBytes: Int64
 
     public init(maxBytes: Int64 = Media.maxMedia) { self.maxBytes = maxBytes }
 
-    /// Keeps the bytes of a part, dropping the oldest beyond maxBytes; it
-    /// returns its SHA-256.
+    /// Keeps the bytes of a part, or of a sealed blob, dropping the oldest
+    /// beyond twice maxBytes; it returns its SHA-256.
     @discardableResult
-    public func put(_ bytes: Data) -> Data {
+    public func put(_ bytes: Data, blob: Bool = false) -> Data {
         let sum = Data(SHA256.hash(data: bytes))
         lock.withLock {
             parts.removeAll { $0.sum == sum }
-            parts.append((sum, bytes))
+            parts.append((sum, bytes, blob))
             var total = parts.reduce(Int64(0)) { $0 + Int64($1.bytes.count) }
-            while total > maxBytes, parts.count > 1 {
+            while total > 2 * maxBytes, parts.count > 1 {
                 total -= Int64(parts.removeFirst().bytes.count)
             }
         }
         return sum
     }
 
+    /// The bytes of a part or a blob it keeps.
+    public func bytes(sha256: Data) -> Data? { lock.withLock { parts.first { $0.sum == sha256 }?.bytes } }
+
     public func open(sha256: Data) -> ContentSource? {
-        lock.withLock { parts.first { $0.sum == sha256 }.map { Bytes(data: $0.bytes) } }
+        lock.withLock { parts.first { $0.sum == sha256 && $0.blob }.map { Bytes(data: $0.bytes) } }
+    }
+
+    public func sealBlob(_ m: Media.Manifest) throws -> (key: Data, blob: Media.Blob)? {
+        guard m.size > 0 else { return nil }
+        let data = try m.parts.filter { !$0.dir && $0.size > 0 }.map { p in
+            guard let sum = p.sha256, let b = bytes(sha256: sum), Int64(b.count) == p.size else { throw Content.Failure.noParts }
+            return b
+        }
+        let key = Data(SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) })
+        let (blob, sealed) = try Media.sealBlob(key: key, parts: data)
+        put(sealed, blob: true)
+        return (key, blob)
     }
 
     struct Bytes: ContentSource {
@@ -94,32 +122,38 @@ public enum Content {
     }
 
     public enum Failure: Error, Equatable {
-        /// The part is over the receiver's limit.
+        /// The copy is over the receiver's limit.
         case tooLarge(size: Int64, limit: Int64)
         case noPeer, mismatch, folder
+        /// The copy is not sealed to this phone, or names no blob.
+        case unread
+        /// The store does not hold the parts of a copy to seal.
+        case noParts
     }
 
-    /// Fetches part of event from the connected members that serve
-    /// content, its origin first, passing the pieces to sink after start,
-    /// which begins each attempt, and checks its hash. It throws when no
-    /// member has it whole, the part is over limit or does not match.
-    public static func fetch(from node: MemberNode, event: Member.Event, part: Media.Part, limit: Int64 = Media.maxMedia,
-                             start: () throws -> Void = {}, sink: (Data) throws -> Void) async throws {
-        guard let sum = part.sha256 else { throw Failure.folder }
-        guard part.size <= limit else { throw Failure.tooLarge(size: part.size, limit: limit) }
+    /// Fetches the sealed blob of event from the connected members that
+    /// serve content, its origin first, checks it against its hash, opens
+    /// it with the copy's key, and returns the bytes of the manifest's
+    /// parts that hold bytes, in order, each checked against its own hash
+    /// (docs/protocol.md, section 4, "The blob" and "Content"). It throws
+    /// when no member has it whole, it is over limit or does not match.
+    public static func parts(from node: MemberNode, event: Member.Event, limit: Int64 = Media.maxMedia) async throws -> [Data] {
+        guard let m = event.media else { throw Failure.folder }
+        if m.size == 0 { return m.parts.filter { !$0.dir }.map { _ in Data() } }
+        guard let blob = event.sealed?.blob, let key = event.key else { throw Failure.unread }
+        guard blob.size <= Media.blobSize(limit) else { throw Failure.tooLarge(size: m.size, limit: limit) }
         let peers = await node.mediaPeers.sorted { $0 == event.origin && $1 != event.origin }
         guard !peers.isEmpty else { throw Failure.noPeer }
         var last: Error = Failure.noPeer
         for p in peers {
-            var h = SHA256()
+            var d = Data()
             do {
-                try start()
-                try await node.fetch(from: p, sha256: sum, size: part.size) { _, data in
-                    h.update(data: data)
-                    try sink(data)
+                try await node.fetch(from: p, sha256: blob.sha256, size: blob.size) { _, data in d.append(data) }
+                guard Data(SHA256.hash(data: d)) == blob.sha256 else {
+                    last = Failure.mismatch
+                    continue
                 }
-                if Data(h.finalize()) == sum { return }
-                last = Failure.mismatch
+                return try Media.openBlob(key: key, blob: blob, data: d, manifest: m)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -129,10 +163,9 @@ public enum Content {
         throw last
     }
 
-    /// The bytes of part of event, as fetch gets them.
+    /// The bytes of part of event, as parts gets them.
     public static func data(from node: MemberNode, event: Member.Event, part: Media.Part, limit: Int64 = Media.maxMedia) async throws -> Data {
-        var d = Data()
-        try await fetch(from: node, event: event, part: part, limit: limit, start: { d = Data() }, sink: { d.append($0) })
-        return d
+        guard !part.dir, let i = event.media?.parts.filter({ !$0.dir }).firstIndex(of: part) else { throw Failure.folder }
+        return try await parts(from: node, event: event, limit: limit)[i]
     }
 }

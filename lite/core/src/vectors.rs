@@ -57,14 +57,18 @@ fn member_frames() {
                 if let Some(d) = want.get("device") {
                     assert_eq!(serde_json::to_value(&device).unwrap(), *d);
                 }
+                // The current copy is sealed: its header, unread here.
                 if let Some(c) = h.current {
-                    assert_eq!(serde_json::to_value(&c).unwrap(), want["current"]);
+                    assert!(c.unread);
+                    let s = c.sealed.unwrap();
+                    s.validate().unwrap();
+                    assert_eq!(serde_json::to_value(&s).unwrap(), want["current"]);
                 }
             }
             "event" => {
-                let ev: Event = serde_json::from_value(m.event.clone().unwrap()).unwrap();
-                ev.validate().unwrap();
-                assert_eq!(serde_json::to_value(&ev).unwrap(), f["event"]);
+                let s: crate::copy::Sealed = serde_json::from_value(m.event.clone().unwrap()).unwrap();
+                s.validate().unwrap();
+                assert_eq!(serde_json::to_value(&s).unwrap(), f["event"]);
             }
             "records" => assert!(!m.records.is_empty()),
             _ => {}
@@ -444,12 +448,28 @@ fn go_sealed_commands() {
 #[test]
 fn hello_actions() {
     let h = crate::clip::Hello { wall: 1, current: None };
+    let hello = |on: &[String], entries| {
+        wire::hello(
+            &h,
+            String::new(),
+            "pi",
+            "linux",
+            &wire::DeviceInfo::default(),
+            None,
+            "own",
+            on,
+            "file",
+            None,
+            entries,
+        )
+    };
     let on = ["reboot".to_string(), "restart".to_string()];
-    let m = wire::hello(&h, String::new(), "pi", "linux", &wire::DeviceInfo::default(), None, "own", &on, "file", None);
-    let (_, body) = wire::decode_hello(m.hello.as_ref()).unwrap();
+    let (_, body) = wire::decode_hello(hello(&on, (0, 0)).hello.as_ref()).unwrap();
     assert_eq!(body.actions, on);
-    let m = wire::hello(&h, String::new(), "pi", "linux", &wire::DeviceInfo::default(), None, "own", &[], "file", None);
-    assert!(m.hello.unwrap().get("actions").is_none());
+    let v = hello(&[], (0, 0)).hello.unwrap();
+    assert!(v.get("actions").is_none() && v.get("entries_seq").is_none() && v.get("entries_keys_seq").is_none());
+    let (_, body) = wire::decode_hello(hello(&[], (3, 5)).hello.as_ref()).unwrap();
+    assert_eq!((body.entries_keys_seq, body.entries_seq), (3, 5));
 }
 
 /// Quick action commands (docs/protocol.md, section 15), as Go's
@@ -525,6 +545,30 @@ fn go_release() {
     }
     for bad in ["0.6", "0.6.0-rc.0", "0.6.0-rc.01", "0.6.0-beta.1", "0.6.0.1", "1234567.0.0"] {
         assert!(release::parse_version(bad).is_none(), "{bad}");
+    }
+}
+
+/// The signed entry points (docs/protocol.md, section 16, "Entry points"),
+/// as Go's TestEntriesVectors writes them: which lists a device takes.
+#[test]
+fn go_entries() {
+    use crate::release::{self, File, Seen};
+    let v = vectors("go-entries.json");
+    let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(bytes).collect();
+    let roots: Vec<&[u8]> = roots.iter().map(|r| r.as_slice()).collect();
+    let now = v["now_ms"].as_i64().unwrap();
+    let cases = v["vectors"].as_array().unwrap();
+    assert_eq!(cases.len(), 14);
+    for c in cases {
+        let file = |k: &str| -> File { serde_json::from_value(c[k].clone()).unwrap() };
+        let seen: Seen = serde_json::from_value(c["seen"].clone()).unwrap();
+        let got = release::check_entries(&file("keys"), &file("entries"), &roots, now, &seen);
+        let label = c["name"].as_str().unwrap();
+        assert_eq!(got.is_ok(), c["ok"].as_bool().unwrap(), "{label}: {:?}", got.as_ref().err().map(|e| e.message()));
+        if let Ok((e, next)) = got {
+            let want = c["seq"].as_u64().unwrap();
+            assert_eq!((e.seq, next.entries_seq, next.entries_keys_seq, next.keys_seq), (want, want, 3, 3), "{label}");
+        }
     }
 }
 

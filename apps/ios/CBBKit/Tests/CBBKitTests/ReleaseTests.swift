@@ -76,6 +76,41 @@ final class ReleaseTests: XCTestCase {
         }
     }
 
+    /// testdata/interop/go-entries.json, from Go's TestEntriesVectors:
+    /// which entries.json a phone takes.
+    func testGoEntries() throws {
+        var url = URL(fileURLWithPath: #filePath)
+        for _ in 0..<6 { url.deleteLastPathComponent() }
+        struct C: Decodable {
+            var name: String
+            var keys: Releases.File
+            var entries: Releases.File
+            var seen: Releases.Seen
+            var ok: Bool
+            var seq: UInt64?
+        }
+        struct V: Decodable {
+            var roots: [Data]
+            var now_ms: Int64
+            var vectors: [C]
+        }
+        let v = try JSONDecoder().decode(V.self, from: Data(contentsOf: url.appendingPathComponent("testdata/interop/go-entries.json")))
+        XCTAssertEqual(v.vectors.count, 14)
+        for c in v.vectors {
+            let got = Result { try Releases.checkEntries(.init(keys: c.keys, entries: c.entries), roots: v.roots, nowMS: v.now_ms, seen: c.seen) }
+            switch got {
+            case let .success((e, next)):
+                XCTAssertTrue(c.ok, c.name)
+                XCTAssertEqual(e.seq, c.seq, c.name)
+                XCTAssertEqual(next.entries_seq, c.seq, c.name)
+                XCTAssertEqual(next.entries_keys_seq, 3, c.name)
+                XCTAssertEqual(next.keys_seq, 3, c.name)
+            case let .failure(err):
+                XCTAssertFalse(c.ok, "\(c.name): \(err)")
+            }
+        }
+    }
+
     func testCompare() {
         XCTAssertEqual(Releases.compare("0.10.0", "0.9.0"), 1)
         XCTAssertEqual(Releases.compare("0.6.0", "0.6.0"), 0)

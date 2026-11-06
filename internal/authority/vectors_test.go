@@ -119,6 +119,7 @@ var scenarios = []struct {
 	{"stranger's claim", TestStrangersClaim},
 	{"times at the ends", TestTimesAtTheEnds},
 	{"device seal", TestDeviceSeal},
+	{"forward only", TestForwardOnly},
 	{"device limit", TestDeviceLimit},
 	{"admin limit", TestAdminLimit},
 	{"path limit", TestPathLimit},

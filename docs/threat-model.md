@@ -28,7 +28,8 @@ the [protocol](protocol.md), and how to report a vulnerability in
 | **A network on the way** (a café's Wi-Fi, an ISP, a censor) | see, drop and change every packet away from home, block protocols | the same |
 | **A server operator** (a forwarder or relay someone else runs, its hosting provider) | see the traffic it passes, keep logs, change or drop packets | read inside the WireGuard tunnel and the member TLS |
 | **A thief with a device** | everything on its disk; on a phone, what its lock allows | unlock a phone's hardware keys without the user's face, fingerprint or passcode |
-| **A compromised member** | everything that device may do in the group | more than its role allows (a member is not an admin) |
+| **A compromised member** | everything that device may do in the group; read the copies sealed to it | more than its role allows (a member is not an admin); read or change a copy it only passes on, or make one in another device's name |
+| **A hub that only passes copies on**, compromised | hold copies back; learn what a member in between learns: which device sent a copy, when, to which devices, its size within a step | read, change or forge a copy (none is sealed to it), or act as an admin |
 | **A compromised admin** | sign records and commands until it is frozen or removed | act after another admin freezes it; remove the root |
 | **A local user** on a shared computer | run programs as themselves | read the service's files, use the admin socket |
 | **A supply-chain attacker** | change a dependency, try to change a release | sign a release with the project's keys |
@@ -44,10 +45,13 @@ clipboards, which any program of the signed-in user may read.
 2. **The home network.** Every connection between members is mutual TLS 1.3 under the
    group's certificates, on the member port, which takes only private, unique-local and
    link-local addresses (and on routers only the home zones' interfaces).
-3. **The internet.** Away from home, members reach the group only through its WireGuard
+3. **The members in between.** A copy is sealed end to end by the device that makes it to
+   the devices that read copies, and signed by it (D-84): the members that pass it on, a hub
+   among them, cannot read or change it, nor make one in another device's name.
+4. **The internet.** Away from home, members reach the group only through its WireGuard
    tunnel to a hub; the member TLS runs inside it. A forwarder or a blind relay sits on this
    boundary and holds no keys of the group.
-4. **The release.** Programs come from this repository's CI, with checksums and build
+5. **The release.** Programs come from this repository's CI, with checksums and build
    provenance, and are signed with the project's own keys outside CI.
 
 ## Threats and defences
@@ -84,11 +88,15 @@ of service, **E**levation of privilege.
 | 25 | device | E | a received file is opened as a program | received files are never executable, carry the quarantine mark on a Mac and the Mark of the Web on Windows, and names are made safe | `internal/mediafile` |
 | 26 | release | T | a changed program reaches users | release builds only in CI, pinned actions, `SHA256SUMS`, build provenance attestations; release files signed outside CI with the project's keys: roots on two YubiKeys, the release key in a Mac's Secure Enclave, a channel key on cbb.tools that only renews `stable.json` (D-69); every installer and updater checks them against the pinned roots | `.github/workflows/release.yml`, `internal/release`, `packaging/get.sh`, `tools/release-sign` |
 | 27 | release | T | a vulnerable dependency | few dependencies, `govulncheck` for Go and OSV-Scanner for the Rust crates, the Android libraries and the tray app in CI | `.github/workflows/ci.yml` |
+| 28 | members in between | I, T, S | a hub or another member that passes a copy on reads it, changes it, or makes a copy in another device's name | each copy sealed to its readers (X-Wing for each reader's key, ChaCha20-Poly1305 for the copy and its blob in segments) and signed by the origin's member key; every member checks the certificate and the signature before it passes a copy on, and no member takes a copy in the open; a hub may only pass copies on and read none (D-84) | `internal/clip`, `lite/core/src/copy.rs` |
+| 29 | members in between | I | a member in between learns what the copies are | the kind, the text, file names and their number travel inside the seal; sizes show only in steps, an attachment only to 64 KiB; **accepted**: which device sent a copy, when and to which devices | `internal/clip` |
 
 ## Residual risks
 
-- A member reads the group's clipboard by design: anyone who controls a device of the group
-  reads every copy that reaches it. Keep the group to devices you control.
+- A reader reads the group's clipboard by design: anyone who controls a device that copies
+  are sealed to reads every copy from then on, and whoever holds the root's or an admin's key
+  can add such a device. Keep the group to devices you control, and the root's and admins'
+  keys in hardware; a hub that only passes copies on reads none.
 - Keys in a file (Macs, Windows PCs and Linux computers without a TPM, the lite member) can be
   copied by whoever reads the disk; encrypt the disk and remove a lost device at once.
 - A blind relay and the project's forwarder see addresses and times of activity (threat 10).

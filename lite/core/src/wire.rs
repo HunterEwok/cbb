@@ -14,6 +14,7 @@ use serde_json::Value;
 use crate::authority::Record;
 use crate::certs::b64;
 use crate::clip::{Event, Hello};
+use crate::copy::Sealed;
 use crate::error::{Context, Error, Result};
 
 /// The largest frame.
@@ -50,6 +51,10 @@ pub struct Message {
     /// In a result message, the answer to a command.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<CommandResult>,
+    /// In an entries message, the signed entry points `{keys, entries}`
+    /// (section 16, "Entry points"), decoded on their own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Value>,
     /// In a reach message, the members a computer is connected to (section
     /// 4, "Reach"), kept as it came: the lite member shows no devices.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -109,6 +114,16 @@ pub struct HelloBody {
     /// commands"), which a root records in its device record.
     #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
     pub seal: Option<Vec<u8>>,
+    /// The seq of the signed entry points the sender holds and of the
+    /// keys.json they came with (section 16, "Entry points"); 0 for none.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub entries_seq: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub entries_keys_seq: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 /// What a hello says about the sender's device (section 4, "Device"): its
@@ -206,7 +221,8 @@ pub fn known_role(r: &str) -> bool {
 /// tunnel key and its own preshared key while sync away from home is on,
 /// the quick actions that are on there, and where its keys live:
 /// `"file"`, or `"rootless"` for a rootless install (docs/protocol.md,
-/// section 17).
+/// section 17), and the keys.json and entries.json seqs of the entry points
+/// it holds, (0, 0) for none.
 #[allow(clippy::too_many_arguments)]
 pub fn hello(
     h: &Hello,
@@ -219,11 +235,20 @@ pub fn hello(
     actions: &[String],
     key_store: &str,
     seal: Option<&[u8]>,
+    entries: (u64, u64),
 ) -> Message {
     let device = device.cleaned();
     let body = HelloBody {
         wall: h.wall,
-        current: h.current.as_ref().map(to_value),
+        // The current copy travels sealed, with its age as of now; a member
+        // sends no copy in the open.
+        current: h.current.as_ref().and_then(|e| {
+            e.sealed.as_ref().map(|s| {
+                let mut s = s.clone();
+                s.age = e.age;
+                to_value(&s)
+            })
+        }),
         records,
         name: name.to_string(),
         os: os.to_string(),
@@ -236,6 +261,8 @@ pub fn hello(
         key_store: key_store.into(),
         actions: actions.to_vec(),
         seal: seal.map(<[u8]>::to_vec),
+        entries_seq: entries.1,
+        entries_keys_seq: if entries.1 == 0 { 0 } else { entries.0 },
     };
     Message { kind: "hello".into(), role: "lite".into(), hello: Some(to_value(&body)), ..Default::default() }
 }
@@ -252,9 +279,15 @@ pub fn result(r: CommandResult) -> Message {
     Message { kind: "result".into(), result: Some(r), ..Default::default() }
 }
 
-/// An event message.
-pub fn event(ev: &Event) -> Message {
-    Message { kind: "event".into(), event: Some(to_value(ev)), ..Default::default() }
+/// An event message: the copy as it travels, sealed (docs/protocol.md,
+/// section 4).
+pub fn event(s: &Sealed) -> Message {
+    Message { kind: "event".into(), event: Some(to_value(s)), ..Default::default() }
+}
+
+/// An entries message, which passes the signed entry points on.
+pub fn entries(set: &Value) -> Message {
+    Message { kind: "entries".into(), entries: Some(set.clone()), ..Default::default() }
 }
 
 /// A message with only its type, such as a ping or a goodbye.
@@ -269,13 +302,19 @@ pub fn decode(body: &[u8]) -> Result<Message> {
     serde_json::from_slice(body).context("a frame is not a message")
 }
 
-/// Decodes a hello and returns the rest of it as it came. A current event
-/// that does not decode, for example from a newer version, counts as none.
+/// Decodes a hello and returns the rest of it as it came, its current copy
+/// as the engine's unread event of the sealed copy, which the member checks
+/// and opens. A current copy that does not decode, for example from a newer
+/// version, counts as none.
 pub fn decode_hello(v: Option<&Value>) -> Result<(Hello, HelloBody)> {
     let v = v.filter(|v| v.is_object()).ok_or_else(|| Error::msg("the hello does not decode"))?;
     let b: HelloBody = serde_json::from_value(v.clone()).context("the hello does not decode")?;
-    let current =
-        b.current.as_ref().filter(|c| !c.is_null()).and_then(|c| serde_json::from_value::<Event>(c.clone()).ok());
+    let current = b
+        .current
+        .as_ref()
+        .filter(|c| !c.is_null())
+        .and_then(|c| serde_json::from_value::<Sealed>(c.clone()).ok())
+        .map(Event::of);
     Ok((Hello { wall: b.wall, current }, b))
 }
 

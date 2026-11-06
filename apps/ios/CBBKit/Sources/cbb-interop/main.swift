@@ -117,7 +117,9 @@ final class SocketTransport: FrameTransport {
 func memberTLS(host: String, port: UInt16, peer: String) async throws {
     let label = "cbb-interop-member-\(SyncEngine.newID())"
     let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
+    let secret = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
     print("key \(signer.publicKeyDER.base64EncodedString())")
+    print("seal \(try Core.sealPublic(secret).base64EncodedString())")
     fflush(stdout)
     func field(_ name: String) throws -> Data {
         guard let line = readLine(), line.hasPrefix(name + " "), let d = Data(base64Encoded: String(line.dropFirst(name.count + 1))) else {
@@ -126,6 +128,8 @@ func memberTLS(host: String, port: UInt16, peer: String) async throws {
         return d
     }
     let cert = try field("cert"), ca = try field("ca")
+    var set = RecordSet()
+    _ = set.addAll(try JSONDecoder().decode([Member.Record].self, from: try field("records")), groupCA: ca)
     guard let me = try CertificateInfo(der: cert).commonName else { throw TLSTransport.Failure.notReady("no device ID") }
     let identity = try KeychainIdentity.identity(certificate: cert, key: signer.key, label: label, storeKey: false)
     let tls = TLSTransport(host: host, port: port, alpn: Member.alpn, identity: identity) { leaf in
@@ -134,7 +138,10 @@ func memberTLS(host: String, port: UInt16, peer: String) async throws {
     try await tls.start()
     let (changes, cont) = AsyncStream<Member.Event>.makeStream()
     let store = MemoryContent()
-    let node = MemberNode(engine: SyncEngine(device: me, clock: HybridClock()), name: "iPhone", onChange: { cont.yield($0) }, content: store)
+    let records = set
+    let copies = CopyKeys(device: me, cert: cert, issuer: nil, signer: signer, secret: secret, records: { records })
+    let node = MemberNode(engine: SyncEngine(device: me, clock: HybridClock()), name: "iPhone", onChange: { cont.yield($0) }, content: store,
+                          copies: copies)
     let serving = Task { try await node.serve(tls, peer: peer) }
     let timeout = Task {
         try await Task.sleep(nanoseconds: 15_000_000_000)
@@ -143,7 +150,7 @@ func memberTLS(host: String, port: UInt16, peer: String) async throws {
     while await node.peers == 0 {
         try await Task.sleep(nanoseconds: 50_000_000)
     }
-    await node.send(text: "from swift", kind: .text)
+    try await node.send(text: "from swift", kind: .text)
     var events = changes.makeAsyncIterator()
     func waitFor(_ text: String) async throws -> Member.Event {
         while let e = await events.next() {
@@ -158,7 +165,7 @@ func memberTLS(host: String, port: UInt16, peer: String) async throws {
         throw TLSTransport.Failure.notReady("Go's picture has no part")
     }
     let png = try await Content.data(from: node, event: picture, part: part)
-    await node.send(text: "phone picture", kind: .text, media: Content.manifest(store: store, data: [("image/png", Data(png.reversed()))]))
+    try await node.send(text: "phone picture", kind: .text, media: Content.manifest(store: store, data: [("image/png", Data(png.reversed()))]))
     _ = try await waitFor("done")
     timeout.cancel()
     print("ok")

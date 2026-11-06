@@ -107,6 +107,10 @@ public enum Releases {
         public var status_seq: UInt64? = nil
         public var channel_keys_seq: UInt64? = nil
         public var status_keys_seq: UInt64? = nil
+        /// The highest entries.json seq taken and the keys.json seq it
+        /// was taken under, kept apart from the release's.
+        public var entries_seq: UInt64? = nil
+        public var entries_keys_seq: UInt64? = nil
 
         public init(keys_seq: UInt64 = 0, channel_seq: UInt64 = 0, version: String? = nil, status_seq: UInt64? = nil,
                     channel_keys_seq: UInt64? = nil, status_keys_seq: UInt64? = nil) {
@@ -155,6 +159,67 @@ public enum Releases {
         public var expires_ms: Int64
         public var source_ms: Int64?
         public var android_revoked: [String]
+    }
+
+    /// A way in over VLESS to a forwarder that entries.json lists.
+    public struct EntryVLESS: Codable, Equatable, Sendable {
+        public var transport: String
+        public var server_name: String
+        public var port: UInt16
+        public var path: String
+
+        public init(transport: String, server_name: String, port: UInt16, path: String) {
+            (self.transport, self.server_name, self.port, self.path) = (transport, server_name, port, path)
+        }
+    }
+
+    /// A forwarder of the project in entries.json: host:port and its ways in.
+    public struct EntryForwarder: Codable, Equatable, Sendable {
+        public var name: String
+        public var vless: [EntryVLESS]
+    }
+
+    /// The body of entries.json, the signed list of the project's entry
+    /// points (docs/protocol.md, section 16, "Entry points").
+    public struct Entries: Decodable, Equatable, Sendable {
+        public var seq: UInt64
+        public var time_ms: Int64
+        public var expires_ms: Int64
+        public var forwarders: [EntryForwarder]
+
+        /// The entry of the forwarder named name.
+        public func forwarder(_ name: String) -> EntryForwarder? { forwarders.first { $0.name == name } }
+    }
+
+    /// The signed entry points as members pass them: entries.json and the
+    /// keys.json whose key signed it.
+    public struct EntriesSet: Codable, Equatable, Sendable {
+        public var keys: File
+        public var entries: File
+
+        public init(keys: File, entries: File) { (self.keys, self.entries) = (keys, entries) }
+    }
+
+    /// Checks entries.json: keys.json under the pinned roots, the list
+    /// under a release or channel key of it, its expiry, and that neither
+    /// is older than seen. Returns the list and the Seen to keep.
+    public static func checkEntries(_ set: EntriesSet, roots: [Data], nowMS: Int64, seen: Seen) throws -> (Entries, Seen) {
+        let k = try verifyKeys(set.keys, roots: roots, nowMS: nowMS, seen: seen)
+        let e = try within("entries.json") {
+            try set.entries.verify(k.spkis(useRelease) + k.spkis(useChannel))
+            let e = try decode(set.entries.body, "entries", as: Entries.self)
+            guard e.seq > 0 else { throw Refused("entries.json has no sequence number") }
+            try lifetime(e.time_ms, e.expires_ms)
+            guard nowMS < e.expires_ms else { throw Refused("the file has expired") }
+            guard !signedAhead(e.time_ms, nowMS: nowMS) else { throw Refused("the file was signed ahead of this device's clock") }
+            try checkSeq(e.seq, floor: seqFloor(seen.entries_seq ?? 0, at: seen.entries_keys_seq, seenKeys: seen.keys_seq, keysSeq: k.seq))
+            return e
+        }
+        var next = seen
+        next.keys_seq = k.seq
+        next.entries_seq = e.seq
+        next.entries_keys_seq = k.seq
+        return (e, next)
     }
 
     struct Head: Decodable {

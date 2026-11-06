@@ -16,14 +16,25 @@ the tunnel's keys.
 
 ## 1. Choose the hub
 
-The hub is a computer that is an admin of the group: Linux, Windows, a Mac, FreeBSD or a
-router with OpenWrt or OPNsense. The best one is always on: a home server, a NAS, a Raspberry Pi. A NAS in Docker
-can be the hub only with its keys in a file, which it refuses unless you allow it
-([the image's README](../../packaging/docker/README.md#keys)). A computer you switch on only when you need it works too; while the hub is
-off, nothing syncs away from home, and everything at home still syncs.
+The hub is a computer: Linux, Windows, a Mac, FreeBSD or a router with OpenWrt or OPNsense.
+The best one is always on: a home server, a NAS, a Raspberry Pi. A computer you switch on only
+when you need it works too; while the hub is off, nothing syncs away from home, and everything
+at home still syncs.
 
-In a group made on a phone, make that computer an admin first: on the phone, tap the
-computer and **Make it an admin**.
+A hub is one of two kinds, and you choose which when you make it one:
+
+- **A hub that reads the copies** is an admin of the group, so the copies are sealed to it
+  like to your other devices, and the group's [key level](keys.md#the-three-levels) applies
+  to its keys. In a group made on a phone, the phone makes the computer an admin first.
+- **A hub that only passes copies on** is any other computer of the group. The copies are
+  sealed end to end to your other devices and never to it, so it reads none, and its keys
+  need no security chip: a Raspberry Pi or a NAS in Docker with its keys in a file is a good
+  one. It makes, reads and pastes no copies of its own.
+
+On the phone, tap the computer, then **Make it a hub** and the kind; the Mac app and the tray
+app ask the same. From an admin computer, `sudo cbb global hub -on DEVICE -forward-only`
+makes another computer a hub that only passes copies on. Sync away from home must be on there
+first (step 2 below, with `sudo cbb global on`).
 
 ## 2. Turn it on, on the hub
 

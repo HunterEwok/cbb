@@ -51,7 +51,7 @@ object Member {
     }
 
     /** The ALPN protocol of member connections. */
-    const val ALPN = "cbb/2"
+    const val ALPN = "cbb/3"
 
     /** The feature of the hello (section 4, "Hello") that says the sender serves the content of media events. */
     const val FEATURE_MEDIA = "media"
@@ -155,7 +155,7 @@ object Member {
         }
     }
 
-    /** One copy, as it travels between members. */
+    /** One copy as the engine holds it: its header, and its content once this member opened it. It travels sealed ([Sealed]). */
     data class Event(
         val id: String,
         val origin: String,
@@ -168,12 +168,36 @@ object Member {
         val text: String,
         /** The content of a media event, which only it has. */
         val media: Media.Manifest? = null,
+        /** The copy as it travels, sealed end to end (section 4); null for an event of an engine without keys, as in tests of the engine alone. */
+        val sealed: Sealed? = null,
+        /**
+         * Whether this member does not know the event's content: a mark, or a
+         * copy not sealed to this member. kind, via, text and media are then
+         * empty, and the event is current only for ordering.
+         */
+        val unread: Boolean = false,
+        /** The copy's key, which opens its blob, when this member opened it. */
+        val key: ByteArray? = null,
     ) {
-        /** Whether it is the mark of a secret: the event without its text. */
-        val isMark: Boolean get() = kind == Kind.SECRET && text.isEmpty()
+        /** Whether it is the mark of a secret: the event without its payload, or, unsealed, without its text. */
+        val isMark: Boolean get() = sealed?.isMark ?: (kind == Kind.SECRET && text.isEmpty())
 
-        /** The mark of this event: a secret without its text, as a hello carries it. */
-        val mark: Event get() = if (kind == Kind.SECRET) copy(text = "") else this
+        /** The mark of this event: a secret without its payload and text, as a hello carries it. */
+        val mark: Event get() = if (kind == Kind.SECRET && !unread) copy(text = "", key = null, sealed = sealed?.mark) else this
+
+        /** Whether f carries the payload whose hash this mark has. */
+        internal fun samePayload(f: Event): Boolean {
+            val s = sealed ?: return true
+            val t = f.sealed ?: return true
+            return t.payload != null && s.payloadHash.contentEqualsOrNull(t.payloadHash)
+        }
+
+        override fun equals(other: Any?): Boolean =
+            other is Event && id == other.id && origin == other.origin && via == other.via && time == other.time && ageMS == other.ageMS &&
+                kind == other.kind && text == other.text && media == other.media && sealed == other.sealed && unread == other.unread &&
+                key.contentEqualsOrNull(other.key)
+
+        override fun hashCode(): Int = id.hashCode()
 
         /** Checks an event received from another member, as Go's Event.Validate does. */
         val isValid: Boolean
@@ -183,6 +207,9 @@ object Member {
                 ) {
                     return false
                 }
+                val s = sealed
+                if (s != null && (!s.isValid || s.id != id || s.origin != origin || s.time != time)) return false
+                if (unread) return s != null
                 if ((kind == Kind.MEDIA) != (media != null)) return false
                 if (isMark) return true
                 if (media != null) {
@@ -194,7 +221,8 @@ object Member {
         /** Whether it sorts after f: by time, then by ID, so every member orders any two events the same way. */
         fun isLater(than: Event): Boolean = if (time != than.time) time > than.time else id > than.id
 
-        fun toJson(): JsonObject = Wire.obj(
+        /** The event as it travels: the sealed copy with its age as of now, or, unsealed, in the open. */
+        fun toJson(): JsonObject = sealed?.with(ageMS = ageMS)?.toJson() ?: Wire.obj(
             "id" to Wire.str(id),
             "origin" to Wire.str(origin),
             "via" to Wire.str(via.wire.takeIf { via != Via.COPY }), // absent means copy
@@ -206,9 +234,12 @@ object Member {
         )
 
         companion object {
-            /** The event in o, or null when it does not decode. */
+            /** The engine's event of a copy that arrived sealed, before it is opened: its header, unread. */
+            fun of(s: Sealed): Event = Event(s.id, s.origin, Via.COPY, s.time, s.ageMS, Kind.TEXT, "", sealed = s, unread = true)
+
+            /** The event in o, or null when it does not decode; on the wire a copy is sealed. */
             fun fromJson(o: JsonObject): Event? =
-                try {
+                if (o.opt("wraps") != null) Sealed.fromJson(o)?.let { of(it) } else try {
                     Event(
                         id = o.optString("id") ?: return null,
                         origin = o.optString("origin") ?: return null,
@@ -269,6 +300,9 @@ object Member {
          * "The recovery key").
          */
         val groupCA: ByteArray? = null,
+        /** The seq of the newest entries.json the sender holds and of the keys.json it came with (section 16, "Entry points"); 0 for none. */
+        val entriesSeq: Long = 0,
+        val entriesKeysSeq: Long = 0,
     ) {
         override fun equals(other: Any?): Boolean =
             other is Hello && wallMS == other.wallMS && current == other.current && records == other.records && keyStore == other.keyStore &&
@@ -276,7 +310,7 @@ object Member {
                 name == other.name && os == other.os && adminKey.contentEqualsOrNull(other.adminKey) &&
                 tunnelKey.contentEqualsOrNull(other.tunnelKey) &&
                 tunnelPSK.contentEqualsOrNull(other.tunnelPSK) && device == other.device && mode == other.mode &&
-                groupCA.contentEqualsOrNull(other.groupCA)
+                groupCA.contentEqualsOrNull(other.groupCA) && entriesSeq == other.entriesSeq && entriesKeysSeq == other.entriesKeysSeq
 
         override fun hashCode(): Int = wallMS.hashCode()
     }
@@ -594,6 +628,9 @@ object Member {
         /** The group's server credentials the sender keeps, or new ones it passes on (section 18). */
         data class Credentials(val credentials: List<ServerCredentials.Credential>) : Message()
 
+        /** The newest signed entry points the sender holds (section 16, "Entry points"). */
+        class Entries(val set: Releases.EntriesSet) : Message()
+
         /** From the root: the receiver's admin CA, DER, for the admin key its hello offered. */
         class Admin(val adminCA: ByteArray) : Message() {
             override fun equals(other: Any?): Boolean = other is Admin && adminCA.contentEquals(other.adminCA)
@@ -665,6 +702,8 @@ object Member {
                 "key_store" to Wire.str(m.hello.keyStore),
                 "features" to if (m.hello.media) JsonArray(listOf(JsonPrimitive(FEATURE_MEDIA))) else null,
                 "group_ca" to Wire.bytes(m.hello.groupCA),
+                "entries_seq" to if (m.hello.entriesSeq > 0) Wire.num(m.hello.entriesSeq) else null,
+                "entries_keys_seq" to if (m.hello.entriesSeq > 0) Wire.num(m.hello.entriesKeysSeq) else null,
             ),
         )
         is Message.Event -> Wire.obj("t" to Wire.str("event"), "event" to m.event?.toJson())
@@ -673,6 +712,7 @@ object Member {
         is Message.Cert -> Wire.obj("t" to Wire.str("cert"), "cert" to Wire.bytes(m.cert), "issuer" to Wire.bytes(m.issuer))
         is Message.Records -> Wire.obj("t" to Wire.str("records"), "records" to JsonArray(m.records.map { it.toJson() }))
         is Message.Credentials -> Wire.obj("t" to Wire.str("credentials"), "credentials" to JsonArray(m.credentials.map { it.toJson() }))
+        is Message.Entries -> Wire.obj("t" to Wire.str("entries"), "entries" to m.set.toJson())
         is Message.Admin -> Wire.obj("t" to Wire.str("admin"), "admin_ca" to Wire.bytes(m.adminCA))
         is Message.Tunnel -> Wire.obj("t" to Wire.str("tunnel"), "tunnel" to m.offer?.toJson())
         is Message.Hubs -> Wire.obj("t" to Wire.str("hubs"), "hubs" to m.share.toJson())
@@ -785,6 +825,8 @@ object Member {
                             media = (h.opt("features") as? JsonArray).orEmpty().take(MAX_FEATURES)
                                 .any { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content == FEATURE_MEDIA },
                             groupCA = h.optBytes("group_ca"),
+                            entriesSeq = h.optLong("entries_seq") ?: 0,
+                            entriesKeysSeq = h.optLong("entries_keys_seq") ?: 0,
                         ),
                     )
                 }
@@ -800,6 +842,7 @@ object Member {
                         ServerCredentials.Credential.fromJson(it as? JsonObject ?: throw WireTypeException("credentials"))
                     } ?: emptyList(),
                 )
+                "entries" -> o.optObject("entries")?.let(Releases.EntriesSet::fromJson)?.let { Message.Entries(it) } ?: Message.Unknown(t)
                 "admin" -> Message.Admin(o.optBytes("admin_ca") ?: ByteArray(0))
                 "tunnel" -> Message.Tunnel(o.optObject("tunnel")?.let { TunnelOffer.fromJson(it) })
                 "hubs" -> o.optObject("hubs")?.let { Message.Hubs(HubShare.fromJson(it)) } ?: Message.Unknown(t)

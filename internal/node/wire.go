@@ -267,9 +267,11 @@ type TunnelOffer struct {
 type helloBody struct {
 	Wall    int64           `json:"wall_ms"`
 	Current json.RawMessage `json:"current,omitempty"`
-	Records string          `json:"records,omitempty"` // the digest of the sender's records
-	Name    string          `json:"name,omitempty"`    // the sender's device name
-	OS      string          `json:"os,omitempty"`      // the sender's operating system
+	// current is Current as a sealed copy, when it decodes.
+	current *clip.Sealed
+	Records string `json:"records,omitempty"` // the digest of the sender's records
+	Name    string `json:"name,omitempty"`    // the sender's device name
+	OS      string `json:"os,omitempty"`      // the sender's operating system
 	// Device is what the sender says about its device, for showing.
 	Device *group.DeviceInfo `json:"device,omitempty"`
 	// TunnelKey is the sender's WireGuard public key, for the hub.
@@ -308,9 +310,12 @@ type helloBody struct {
 // of its records, its name, the admin key it offers and its tunnel key.
 type helloOut struct {
 	clip.Hello
-	Records string `json:"records,omitempty"`
-	Name    string `json:"name,omitempty"`
-	OS      string `json:"os,omitempty"`
+	// Current is the engine's current copy as it travels, sealed; it
+	// stands in for the engine's Hello.Current.
+	Current *clip.Sealed `json:"current,omitempty"`
+	Records string       `json:"records,omitempty"`
+	Name    string       `json:"name,omitempty"`
+	OS      string       `json:"os,omitempty"`
 	// Device is this member's form, versions and MAC address, for the
 	// others to show.
 	Device *group.DeviceInfo `json:"device,omitempty"`

@@ -73,11 +73,23 @@ struct DeviceDetailView: View {
             }
         }
         .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing, titleVisibility: .visible) {
-            Button {
-                Task { await model.makeHub(id) }
-            } label: { Text("Make it a hub") }
+            // A hub that reads the copies is an admin, whose keys the
+            // group's key level checks; one that only passes them on is no
+            // admin and needs no such keys.
+            if let d = device, d.admin || d.canMakeAdmin {
+                Button {
+                    Task { await model.makeHub(id) }
+                } label: { Text("A hub that reads the copies") }
+            }
+            if let d = device, !d.admin, !d.isRoot {
+                Button {
+                    Task { await model.makeHub(id, forwardOnly: true) }
+                } label: { Text("A hub that only passes them on") }
+            }
         } message: {
             Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.")
+                + Text(verbatim: " ")
+                + Text("A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware.")
         }
         .alert(Text("Rename \(device?.name ?? "")"), isPresented: $renaming) {
             TextField(text: $newName) { Text("Name") }
@@ -162,6 +174,10 @@ struct DeviceDetailView: View {
             }
             Divider().overlay(palette.line)
             row(Text("Role"), roleText(d))
+            if d.forwardOnly {
+                Divider().overlay(palette.line)
+                row(Text("Copies"), Text("Passes them on, reads none"))
+            }
             if let standing = d.standing {
                 Divider().overlay(palette.line)
                 row(Text("In the group"), Text(standing))
@@ -220,7 +236,9 @@ struct DeviceDetailView: View {
                 }
                 // An admin computer, or one the root makes an admin first;
                 // this phone is the hub under Settings.
-                if !d.isSelf, d.online, !d.throughHub, d.role == "full", !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin {
+                // A computer that is no admin can be a hub that only passes
+                // the copies on.
+                if !d.isSelf, d.online, !d.throughHub, d.role == "full", !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin || !d.admin {
                     Divider().overlay(palette.line)
                     action(Text("Make it a hub"), "antenna.radiowaves.left.and.right") { hubbing = true }
                 }

@@ -674,7 +674,10 @@ func (s *Service) away(ctx context.Context, m *control.Message) error {
 		return s.awayOffOn(ctx, m.Device)
 	}
 	if m.Name == "hub" && m.Device != "" {
-		return s.makeHub(ctx, m.Device, m.Forwarder, m.ForwarderKey, m.Addrs)
+		return s.makeHub(ctx, m.Device, m.Forwarder, m.ForwarderKey, m.Addrs, m.ForwardOnly)
+	}
+	if m.Name == "hub" && m.ForwardOnly {
+		return errors.New("-forward-only goes with -on DEVICE: an admin makes another computer such a hub")
 	}
 	if m.Name == "hub-off" && m.Device != "" {
 		return s.stopHubOn(ctx, m.Device, m.Force)

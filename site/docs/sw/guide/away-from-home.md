@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 6d17a693cb8e -->
+<!-- source: 0ee54fa655f3 -->
 # Mbali na nyumbani
 
 Nyumbani vifaa vyako husawazisha vyenyewe. Ili kuendelea kusawazisha laptopu au simu inapokuwa mahali pengine, kompyuta moja nyumbani huwa **kitovu** cha kikundi, na vifaa vinavyosafiri hukifikia kupitia handaki lililosimbwa la kikundi chenyewe. Picha za kila hali ziko katika [Jinsi inavyofanya kazi](how-it-works.md#away-from-home-the-hub).
@@ -10,9 +10,14 @@ Usawazishaji ukiwa mbali na nyumbani umezimwa hadi uuwashe, kwenye kitovu na kwe
 
 ## 1. Chagua kitovu
 
-Kitovu ni kompyuta ambayo ni msimamizi wa kikundi: Linux, Windows, Mac, FreeBSD au kipanga njia chenye OpenWrt au OPNsense. Bora zaidi ni ile inayowaka kila wakati: seva ya nyumbani, NAS, Raspberry Pi. NAS kwenye Docker inaweza kuwa kitovu tu ikiwa funguo zake ziko kwenye faili, jambo ambalo hukataa isipokuwa uruhusu ([README ya taswira](../../packaging/docker/README.md#keys)). Kompyuta unayoiwasha tu unapoihitaji pia inafaa; kitovu kikiwa kimezimwa, hakuna kinachosawazishwa ukiwa mbali na nyumbani, na kila kitu nyumbani bado kinasawazisha.
+Kitovu ni kompyuta: Linux, Windows, Mac, FreeBSD au kipanga njia chenye OpenWrt au OPNsense. Kilicho bora huwaka kila wakati: seva ya nyumbani, NAS, Raspberry Pi. Kompyuta unayowasha tu unapoihitaji inafaa pia; wakati kitovu kimezimwa, hakuna kinachosawazishwa ukiwa mbali na nyumbani, na kila kitu nyumbani bado husawazishwa.
 
-Kwenye kikundi kilichoundwa kwenye simu, fanya kwanza kompyuta hiyo msimamizi: kwenye simu, gusa kompyuta na **Make it an admin**.
+Kitovu ni cha mojawapo ya aina mbili, na unachagua aina unapokifanya kitovu:
+
+- **Kitovu kinachosoma nakala** ni msimamizi wa kikundi, kwa hiyo nakala hufungwa kwa ajili yake kama kwa vifaa vyako vingine, na [kiwango cha funguo](keys.md#the-three-levels) cha kikundi kinatumika kwa funguo zake. Katika kikundi kilichoundwa kwenye simu, simu huifanya kompyuta kuwa msimamizi kwanza.
+- **Kitovu kinachopitisha nakala tu** ni kompyuta nyingine yoyote ya kikundi. Nakala hufungwa mwisho hadi mwisho kwa ajili ya vifaa vyako vingine na kamwe si kwa ajili yake, kwa hiyo haisomi yoyote, na funguo zake hazihitaji chipu ya usalama: Raspberry Pi au NAS kwenye Docker yenye funguo zake kwenye faili ni chaguo zuri. Haitengenezi, haisomi wala haibandiki nakala zake yenyewe.
+
+Kwenye simu, gusa kompyuta, kisha **Make it a hub** na aina; programu ya Mac na programu ya trei huuliza vivyo hivyo. Kutoka kwenye kompyuta ya msimamizi, `sudo cbb global hub -on DEVICE -forward-only` huifanya kompyuta nyingine kuwa kitovu kinachopitisha nakala tu. Usawazishaji ukiwa mbali na nyumbani lazima uwe umewashwa huko kwanza (hatua ya 2 hapa chini, kwa `sudo cbb global on`).
 
 ## 2. Kiwashe kwenye kitovu
 

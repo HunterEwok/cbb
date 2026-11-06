@@ -174,13 +174,14 @@ type Header struct {
 	ForwarderKey string   `json:"forwarder_key,omitempty"`
 	Relay        string   `json:"relay,omitempty"` // away relay: the relay's address, with its key in RelayKey
 	RelayKey     string   `json:"relay_key,omitempty"`
-	Obfuscate    bool     `json:"obfuscate,omitempty"` // away hub: speak AmneziaWG instead of plain WireGuard
-	VLESS        bool     `json:"vless,omitempty"`     // away hub: the clients come only over VLESS to the forwarder
-	Keep         bool     `json:"keep,omitempty"`      // away hub: keep the hub's addresses, port and forwarder where the message gives none
-	Consent      bool     `json:"consent,omitempty"`   // away on, join with an invitation, admin of a device with file keys: the user agreed to what the warning says; answer: yes
-	Force        bool     `json:"force,omitempty"`     // away hub-off: stop the hub even though the group has no other one
-	Invite       string   `json:"invite,omitempty"`    // the text of a remote invitation: made by invite, used by join
-	Joining      *Joining `json:"joining,omitempty"`   // invite: a device to confirm, before it is admitted
+	Obfuscate    bool     `json:"obfuscate,omitempty"`    // away hub: speak AmneziaWG instead of plain WireGuard
+	VLESS        bool     `json:"vless,omitempty"`        // away hub: the clients come only over VLESS to the forwarder
+	Keep         bool     `json:"keep,omitempty"`         // away hub: keep the hub's addresses, port and forwarder where the message gives none
+	ForwardOnly  bool     `json:"forward_only,omitempty"` // away hub with a device: make it a hub that only passes copies on, reading none
+	Consent      bool     `json:"consent,omitempty"`      // away on, join with an invitation, admin of a device with file keys: the user agreed to what the warning says; answer: yes
+	Force        bool     `json:"force,omitempty"`        // away hub-off: stop the hub even though the group has no other one
+	Invite       string   `json:"invite,omitempty"`       // the text of a remote invitation: made by invite, used by join
+	Joining      *Joining `json:"joining,omitempty"`      // invite: a device to confirm, before it is admitted
 	Status       *Status  `json:"status,omitempty"`
 	Devices      []Device `json:"devices,omitempty"`
 
@@ -406,8 +407,12 @@ type Forwarder struct {
 	Registered bool   `json:"registered,omitempty"`
 	Seen       string `json:"seen,omitempty"`       // where the forwarder reaches the hub's port
 	OverVLESS  bool   `json:"over_vless,omitempty"` // the hub reaches the forwarder only over VLESS
-	Error      string `json:"error,omitempty"`      // why the hub is not registered
-	Detail     string `json:"detail,omitempty"`     // the underlying error, for debugging
+	// EntriesStale: the project's forwarder does not answer and this
+	// device holds no signed entry points that have not expired, so a new
+	// list may be what it needs (docs/protocol.md, section 16).
+	EntriesStale bool   `json:"entries_stale,omitempty"`
+	Error        string `json:"error,omitempty"`  // why the hub is not registered
+	Detail       string `json:"detail,omitempty"` // the underlying error, for debugging
 }
 
 // Relay describes a device's link to its blind relay.
@@ -454,8 +459,11 @@ type Device struct {
 	LastSeenMS int64 `json:"last_seen_ms,omitempty"` // when this member last saw it connected, Unix milliseconds; 0 if never
 	Self       bool  `json:"self,omitempty"`         // this device
 	Listed     bool  `json:"listed,omitempty"`       // it has a device record; a member that joined before the list existed may have none yet
-	MayHub     bool  `json:"may_hub,omitempty"`      // the records let it be a hub: the root's own device or an admin with the hub power
-	Hub        bool  `json:"hub,omitempty"`          // one of the group's hubs, as this device knows: itself while it is a hub, or a hub whose offer it keeps; Away.HubDevice says which one it uses
+	MayHub     bool  `json:"may_hub,omitempty"`      // the records let it be a hub: the root's own device, an admin with the hub power, or a hub that only passes copies on
+	// ForwardOnly says that its record makes it a hub that only passes
+	// the copies on: none is sealed to it (docs/protocol.md, section 11).
+	ForwardOnly bool `json:"forward_only,omitempty"`
+	Hub         bool `json:"hub,omitempty"` // one of the group's hubs, as this device knows: itself while it is a hub, or a hub whose offer it keeps; Away.HubDevice says which one it uses
 }
 
 // Message is a header and its payload.

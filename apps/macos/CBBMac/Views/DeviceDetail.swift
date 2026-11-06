@@ -54,7 +54,15 @@ struct DeviceDetail: View {
             Text("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.")
         }
         .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing) {
-            Button { if let d = device { Task { await model.makeHub(d) } } } label: { Text("Make it a hub") }
+            // A hub that reads the copies is an admin, whose keys the
+            // group's key level checks; one that only passes them on is no
+            // admin and needs no such keys.
+            if let d = device, d.mayHub, !d.forwardOnly {
+                Button { Task { await model.makeHub(d) } } label: { Text("A hub that reads the copies") }
+            }
+            if let d = device, mayPassOn(d) {
+                Button { Task { await model.makeHub(d, forwardOnly: true) } } label: { Text("A hub that only passes them on") }
+            }
         } message: {
             if device?.isSelf == true, !model.awayOn {
                 Text("A hub needs sync away from home, which is off on this Mac, so this turns it on first. Your devices then reach the group through this Mac when they are away from home, through the project's forwarder at cbb.tools.")
@@ -62,6 +70,8 @@ struct DeviceDetail: View {
                 Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools.")
             } else {
                 Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.")
+                    + Text(verbatim: " ")
+                    + Text("A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware.")
             }
         }
         .confirmationDialog(Text("Stop \(device?.name ?? "") being the hub?"), isPresented: $unhubbing) {
@@ -133,6 +143,10 @@ struct DeviceDetail: View {
             }
             line
             row(Text("Role"), Text(d.roleTitle))
+            if d.forwardOnly {
+                line
+                row(Text("Copies"), Text("Passes them on, reads none"))
+            }
             if let standing = d.standing {
                 line
                 row(Text("In the group"), Text(standing))
@@ -171,6 +185,12 @@ struct DeviceDetail: View {
                     .labelsHidden()
                 line
                 row(Text("Forwarder"), away.forwarder.map { Text(verbatim: $0.endpoint).monospaced() } ?? Text("none"))
+                if away.forwarder?.entriesStale == true {
+                    Label {
+                        Text("The list of the project's entry points is out of date, and the forwarder does not answer on the ways this Mac knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on.")
+                    } icon: { Image(systemName: "exclamationmark.triangle") }
+                        .font(.footnote)
+                }
                 Link(destination: URL(string: "https://cbb.tools/?p=terms.html")!) { Text("Terms of the project's servers") }
                     .font(.footnote)
                 action("arrow.triangle.swap", "Change the forwarder…") {
@@ -207,6 +227,12 @@ struct DeviceDetail: View {
                 Text("Your own forwarder's address and key, as cbb forward prints them, or the project's forwarder at cbb.tools.")
             }
         }
+    }
+
+    /// Whether this Mac, an admin, can make d a hub that only passes the
+    /// copies on: another computer that is no admin and not rootless.
+    private func mayPassOn(_ d: Control.Device) -> Bool {
+        !d.isSelf && !d.admin && !d.root && !d.frozen && d.role == "full" && d.store != "rootless"
     }
 
     private func row(_ label: Text, _ value: Text) -> some View {
@@ -325,10 +351,11 @@ struct DeviceDetail: View {
         }
         if d.store == "rootless" { return "It runs without administrator rights, so it is never a hub." }
         if d.frozen { return "It is frozen: the root unfreezes it first." }
-        if !d.mayHub {
-            return d.isSelf ? "Only the group's root or an admin is a hub: the root makes this Mac an admin first." : "Only the group's root or an admin is a hub: make it an admin first."
-        }
+        // A hub that reads the copies is the root or an admin; an admin
+        // makes any other computer a hub that only passes them on.
+        if d.isSelf, !d.mayHub || d.forwardOnly { return "Only the group's root or an admin is a hub: the root makes this Mac an admin first." }
         if !d.isSelf, !model.isAdmin { return "Only an admin makes another device a hub." }
+        if !d.isSelf, !d.mayHub || d.forwardOnly, !mayPassOn(d) { return "Only the group's root or an admin is a hub: make it an admin first." }
         return nil
     }
 

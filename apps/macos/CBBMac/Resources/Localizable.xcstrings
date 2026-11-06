@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "The list of the project's entry points is out of date, and the forwarder does not answer on the ways this Mac knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Список точек входа проекта устарел, а форвардер не отвечает ни одним путём, известным этому Mac. Обновите CBB на компьютере группы или импортируйте там новый список командой cbb global entries import: группа передаст его дальше."
+          }
+        }
+      }
+    },
     "Its members refuse it. Leave the group here to join this group again or another one.": {
       "localizations": {
         "ru": {
@@ -217,6 +227,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "В сети: %1$lld из %2$lld"
+          }
+        }
+      }
+    },
+    "A hub that only passes them on" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который только пересылает"
+          }
+        }
+      }
+    },
+    "A hub that reads the copies" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который читает копии"
+          }
+        }
+      }
+    },
+    "A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хаб, который читает копии, — это админ. Хаб, который только пересылает, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование."
           }
         }
       }
@@ -527,6 +567,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Компьютер"
+          }
+        }
+      }
+    },
+    "Copies" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копии"
           }
         }
       }
@@ -947,6 +997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Орбита"
+          }
+        }
+      }
+    },
+    "Passes them on, reads none" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пересылает, не читает"
           }
         }
       }
@@ -2087,6 +2147,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сделать %@ хабом?"
+          }
+        }
+      }
+    },
+    "It is a hub now that only passes the copies on, and reads none of them." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь это хаб, который только пересылает копии и ни одной не читает."
           }
         }
       }
