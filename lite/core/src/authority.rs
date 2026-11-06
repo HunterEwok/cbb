@@ -1589,10 +1589,11 @@ impl<'a> Epoch<'a> {
         let b = r.b();
         match b.kind.as_str() {
             TYPE_DEVICE => {
+                // A phone without an admin key is a member like a computer;
+                // only a root names an admin key or records a watch.
                 self.has(a, POWER_ADMIT)
                     && b.admin.is_none()
                     && !b.holds_root
-                    && b.role != "phone"
                     && b.role != "watch"
                     && (!b.forward_only || self.has(a, POWER_HUB))
             }

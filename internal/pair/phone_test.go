@@ -90,8 +90,8 @@ func TestPhoneAdminNeedsTheWindow(t *testing.T) {
 	}
 }
 
-// TestPhoneNeedsTheRoot checks that an admin computer refuses a phone:
-// only the root makes it an admin.
+// TestPhoneNeedsTheRoot checks that an admin computer refuses a phone that
+// offers an admin key: only the root makes it an admin.
 func TestPhoneNeedsTheRoot(t *testing.T) {
 	admin, _ := computerAdmin(t)
 	clk := &clock{up: time.Hour}
@@ -109,6 +109,36 @@ func TestPhoneNeedsTheRoot(t *testing.T) {
 	}
 	if err := <-served; !errors.Is(err, ErrPhoneNeedsRoot) {
 		t.Errorf("Serve: %v", err)
+	}
+}
+
+// TestPhoneMemberThroughAdmin checks that an admin computer admits a phone
+// that offers no admin key, such as the Aurora OS app, as a member.
+func TestPhoneMemberThroughAdmin(t *testing.T) {
+	admin, _ := computerAdmin(t)
+	clk := &clock{up: time.Hour}
+	code := NewCode()
+	w, err := Open(admin, code, Options{Now: func() time.Time { return t0 }, Uptime: clk.uptime, AfterFunc: clk.afterFunc})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(w.Close)
+	f := &fixture{admin: admin, window: w, code: code, clock: clk}
+	r, served := startRaw(t, f, Info{Name: "aurora phone", OS: group.OSAurora}, code)
+	last := r.confirm()
+	if last.Welcome == nil || last.Error != "" {
+		t.Fatalf("an admin computer's answer to a phone without an admin key: %+v", last)
+	}
+	if last.Welcome.AdminCA != nil {
+		t.Errorf("the phone got an admin CA from an admin computer")
+	}
+	writeFrame(r.tc, &frame{OK: true})
+	if err := <-served; err != nil {
+		t.Fatalf("Serve: %v", err)
+	}
+	res, err := w.Result()
+	if err != nil || res.Info.OS != group.OSAurora || !res.Info.Phone() || res.AdminCA != nil {
+		t.Fatalf("the window admitted %+v, %v", res, err)
 	}
 }
 

@@ -15,6 +15,8 @@ All notable changes to cbb are documented in this file. The format follows
 - `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
   the device records (docs/protocol.md): every member admits them as phones and shows
   "Aurora OS" and "Sailfish OS".
+- An admin with `admit`, a computer included, admits a phone that offers no admin key as a member
+  (docs/protocol.md, section 10, "Who signs what"); only the root makes a phone an admin.
 - `cbb pair -qr` on the group's root or an admin, on Linux, Windows and macOS alike, admits a
   device that shows a QR code and waits, such as the Aurora phone: it reads the code's text
   and dials the device.

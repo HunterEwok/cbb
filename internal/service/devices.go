@@ -759,14 +759,14 @@ func (s *Service) rename(target, name string) (string, error) {
 	if rec.Name == name {
 		return rec.Name, nil
 	}
-	// A device record that names an admin key, or of a phone or a watch,
-	// counts only from a root's own key (docs/protocol.md, section 10, "Who signs
-	// what"), and so does the root's own device's.
+	// A device record that names an admin key, or of a watch, counts only
+	// from a root's own key (docs/protocol.md, section 10, "Who signs what"),
+	// and so does the root's own device's.
 	s.recMu.Lock()
 	rootDevice := s.records.RootDevice()
 	s.recMu.Unlock()
-	if !id.IsRoot() && (rec.AdminKey != nil || rec.Role == group.RolePhone || rec.Role == group.RoleWatch || rec.ID == rootDevice) {
-		return "", fmt.Errorf("only the group's root renames %s: it is an admin, a phone or a watch, or the root's own device", rec.Name)
+	if !id.IsRoot() && (rec.AdminKey != nil || rec.Role == group.RoleWatch || rec.ID == rootDevice) {
+		return "", fmt.Errorf("only the group's root renames %s: it is an admin or a watch, or the root's own device", rec.Name)
 	}
 	s.awaitRecords(id)
 	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(rec.ID), Name: name, Role: rec.Role,

@@ -515,10 +515,11 @@ func (w *Window) serve(ctx context.Context, conn *tls.Conn, memberFirst bool) (r
 			return nil, true, ErrDeclined
 		}
 	}
-	// A phone joins a computer's group only through its root, which makes
-	// it an admin at once with the admin key it offered (docs/protocol.md,
-	// section 6, "A phone joins a computer's group").
-	if info.Phone() && !w.admin.IsRoot() {
+	// A phone that offers an admin key joins only through the root, which
+	// makes it an admin at once with that key (docs/protocol.md, section 6,
+	// "A phone joins a computer's group"); one without an admin key joins
+	// any admin's window as a member.
+	if info.Phone() && info.AdminKey != nil && !w.admin.IsRoot() {
 		writeFrame(conn, &frame{Error: "refused"})
 		return nil, true, ErrPhoneNeedsRoot
 	}
