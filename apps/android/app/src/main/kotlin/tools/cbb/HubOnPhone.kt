@@ -5,6 +5,7 @@ package tools.cbb
 
 import tools.cbb.kit.Member
 import tools.cbb.kit.PhoneHub
+import tools.cbb.kit.Releases
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -119,6 +120,8 @@ interface HubTunnel {
     /** Registers with the forwarder; vlessID is the group's VLESS user ID, "" without VLESS. */
     fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String)
     fun setRecords(records: String)
+    /** Tells the hub that its forwarder is the project's, with the ways in over VLESS of the signed entry points as JSON, "" for none (cbbtun's Hub.SetProjectWays). */
+    fun setProjectWays(ways: String)
     /** cbbtun's Status JSON. */
     fun status(): String
     /** Opens a remote invitation's guest tunnel (cbbtun's Hub.Invite). */
@@ -163,6 +166,7 @@ object GoHubTunnels : HubTunnels {
             override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String) =
                 h.register(endpoint, pin, chain, cbbtun.Signer { sign(it) }, records, vlessID)
             override fun setRecords(records: String) = h.setRecords(records)
+            override fun setProjectWays(ways: String) = h.setProjectWays(ways)
             override fun status(): String = h.status()
             override fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int): HubGuest {
                 val g = h.invite(group, endpoints, lifetimeS.toLong(), guestPort.toLong())
@@ -206,7 +210,14 @@ class HubOnPhone(
     enum class Disguise { PLAIN, OBFUSCATE, VLESS }
 
     /** What a running hub needs from the group: the member listener's port, the member chain, the member key's signer, the authority records. */
-    class Group(val memberPort: Int, val chain: List<ByteArray>, val sign: (ByteArray) -> ByteArray, val records: List<Member.Record>)
+    class Group(
+        val memberPort: Int,
+        val chain: List<ByteArray>,
+        val sign: (ByteArray) -> ByteArray,
+        val records: List<Member.Record>,
+        /** The ways in over VLESS to the project's forwarder that the signed entry points name (EntriesFile.ways). */
+        val ways: List<Releases.EntryVLESS> = emptyList(),
+    )
 
     private val lock = Any()
     private var state: HubState? = runCatching { load() }.onFailure { log("cannot read the hub's state", it) }.getOrNull()
@@ -401,6 +412,8 @@ class HubOnPhone(
         val fw = s.forwarder ?: return
         val t = try {
             tunnels.start(s.key, device, g.memberPort, s.obfuscation ?: "", h.clientsJson).also {
+                // Away from home the hub may reach the project's forwarder only over VLESS (section 13).
+                if (fw.isProject) it.setProjectWays(if (g.ways.isEmpty()) "" else JsonArray(g.ways.map { w -> w.toJson() }).toString())
                 it.register(fw.endpoint, fw.pin, JsonArray(g.chain.map { bytes(it) }).toString(), g.sign, recordsJson(g.records), s.vlessID ?: "")
             }
         } catch (e: Exception) {

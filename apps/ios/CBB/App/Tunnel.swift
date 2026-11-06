@@ -86,6 +86,8 @@ final class GoHub: HubTunnel, @unchecked Sendable {
 
     func setRecords(_ records: String) throws { try hub.setRecords(records) }
 
+    func setProjectWays(_ ways: String) throws { try hub.setProjectWays(ways) }
+
     func status() -> String { hub.status() }
 
     func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16) throws -> HubGuest {

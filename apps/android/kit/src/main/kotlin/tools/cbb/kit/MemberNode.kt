@@ -45,6 +45,20 @@ interface RecordStore {
  * Keeps the group's server credentials for a node (docs/protocol.md,
  * section 18), which it sends each peer after the hello and passes on.
  */
+/**
+ * Keeps the newest signed entry points for a node (docs/protocol.md,
+ * section 16, "Entry points"): peers send them after the hello, and the
+ * phone's hub registers through the ways in they name. The phone takes them
+ * and passes none on.
+ */
+interface EntriesKeeper {
+    /** The seq of the list held's keys.json and its own, null for none. */
+    val order: Pair<Long, Long>?
+
+    /** Takes a list a peer sent when it checks out and is newer. */
+    fun add(set: Releases.EntriesSet)
+}
+
 interface CredentialKeeper {
     /** Every credential kept. */
     val all: List<ServerCredentials.Credential>
@@ -136,6 +150,8 @@ class MemberNode(
     private val content: ContentStore? = null,
     /** The group's server credentials; null keeps none and passes none on. */
     private val credentials: CredentialKeeper? = null,
+    /** The signed entry points; null takes none. */
+    private val entries: EntriesKeeper? = null,
 ) {
     val device: Member.DeviceInfo? = device?.cleaned
     private val lock = Any()
@@ -348,6 +364,7 @@ class MemberNode(
             val hello = (if (c.recordsOnly) base.copy(current = null) else base).copy(
                 records = records?.digest, tunnelKey = keys?.first, tunnelPSK = keys?.second, os = os, device = device, mode = mode(),
                 keyStore = Records.HARDWARE, media = content != null,
+                entriesKeysSeq = entries?.order?.first ?: 0, entriesSeq = entries?.order?.second ?: 0,
             )
             c.enqueue(Member.Message.Hello(role, hello))
         }
@@ -433,6 +450,7 @@ class MemberNode(
                             }
                         }
                     }
+                    is Member.Message.Entries -> entries?.add(m.set)
                     is Member.Message.Credentials -> if (m.credentials.isNotEmpty() && m.credentials.size <= ServerCredentials.MAX_CREDENTIALS) {
                         val fresh = credentials?.add(m.credentials).orEmpty()
                         if (fresh.isNotEmpty()) synchronized(lock) { sendCredentials(fresh, c) }

@@ -4,10 +4,14 @@
 package forward
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"net"
 	"net/netip"
+	"time"
 
+	"github.com/HunterEwok/cbb/internal/release"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless"
 )
@@ -37,6 +41,36 @@ const (
 func ProjectVLESS(addr netip.Addr) *tunnel.VLESS {
 	return &tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: netip.AddrPortFrom(addr, 443),
 		ServerName: projectSite, Path: projectXHTTPPath, ID: vless.RegistrationID}
+}
+
+// ProjectWays returns the ways a hub reaches the project's forwarder, at
+// addr, over VLESS, for its registration: those of its signed entry points
+// (docs/protocol.md, section 16, "Entry points"), each site looked up when
+// it is not the forwarder's own host, else the built-in one.
+func ProjectWays(addr netip.Addr, ways []release.EntryVLESS) []tunnel.VLESS {
+	host, _, _ := net.SplitHostPort(ProjectHost)
+	var out []tunnel.VLESS
+	for _, w := range ways {
+		at := addr
+		if w.ServerName != host {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", w.ServerName)
+			cancel()
+			if err != nil || len(ips) == 0 {
+				continue
+			}
+			at = ips[0].Unmap()
+		}
+		v := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: netip.AddrPortFrom(at, w.Port),
+			ServerName: w.ServerName, Path: w.Path, ID: vless.RegistrationID}
+		if v.Check() == nil {
+			out = append(out, v)
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, *ProjectVLESS(addr))
+	}
+	return out
 }
 
 // projectPins are the pins of its key that this release knows. keys.json

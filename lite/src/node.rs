@@ -23,6 +23,7 @@ use std::time::Duration;
 
 use crate::certs::{Cert, DeviceId, Usage};
 use crate::clip::{Engine, Event, Hello, Kind, Outcome, Via};
+use crate::entries::{self, Entries};
 use crate::error::{Context, Error, Result};
 use crate::identity::Identity;
 use crate::identity::Stored as _;
@@ -106,6 +107,8 @@ pub struct Node {
     /// The devices discovery finds on the home network, by the uptime they
     /// were first found.
     home: Mutex<HashMap<DeviceId, Duration>>,
+    /// The signed entry points this member holds and passes on.
+    entries: Arc<Entries>,
 }
 
 enum Out {
@@ -113,6 +116,7 @@ enum Out {
     Event(Event, Duration),
     Records(Vec<Record>),
     Result(wire::CommandResult),
+    Entries(serde_json::Value),
     Wake, // makes the writer look at the closed flag
 }
 
@@ -141,6 +145,7 @@ impl Node {
         on_write: Box<dyn Fn(WriteReq) + Send + Sync>,
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Node {
+        let entries = Arc::new(Entries::open(&state_dir, crate::update::release_roots(), uptime::wall_ms(), &*log));
         Node {
             ident: RwLock::new(Arc::new(ident)),
             name: name.to_string(),
@@ -156,6 +161,7 @@ impl Node {
             on_command: RwLock::new(None),
             actions: RwLock::new(Vec::new()),
             home: Mutex::new(HashMap::new()),
+            entries,
         }
     }
 
@@ -476,7 +482,8 @@ impl Node {
             let name = self.name.clone();
             let key = self.tunnel_key.clone();
             let log = self.log.clone();
-            std::thread::spawn(move || writer(&c, rx, &records, &name, &key, &*log))
+            let entries = self.entries.clone();
+            std::thread::spawn(move || writer(&c, rx, &records, &name, &key, &entries, &*log))
         };
         let res = self.reader(&c);
         c.close(false);
@@ -532,6 +539,16 @@ impl Node {
                         self.enqueue(c, Out::Records(chunk));
                     }
                 }
+                drop(st);
+                // A peer that holds older entry points, or none, gets ours
+                // (docs/protocol.md, section 16, "Entry points").
+                let now = uptime::wall_ms();
+                if !c.records_only
+                    && entries::newer(self.entries.order(now), (body.entries_keys_seq, body.entries_seq))
+                    && let Some(set) = self.entries.current(now)
+                {
+                    self.enqueue(c, Out::Entries(set));
+                }
                 continue;
             }
             if c.records_only {
@@ -561,6 +578,7 @@ impl Node {
                     }
                 }
                 "records" if !m.records.is_empty() => self.add_records(&m.records, &c.id),
+                "entries" if m.entries.is_some() => self.add_entries(m.entries.as_ref().unwrap(), &c.id),
                 // Only the group's root or an admin can be its hub, by the
                 // records and the key it proved, not by the role its hello
                 // claims (docs/protocol.md, section 11).
@@ -602,6 +620,22 @@ impl Node {
                 "bye" => return Ok(()),
                 _ => {} // a ping, or a message from a newer version
             }
+        }
+    }
+
+    /// Takes the entry points a peer sent when they check out and are newer
+    /// than those held, and passes them on to the other peers.
+    fn add_entries(&self, set: &serde_json::Value, from: &DeviceId) {
+        match self.entries.take(set, uptime::wall_ms()) {
+            Ok(true) => {
+                self.logf(&format!("cbb: took newer entry points from {from}"));
+                let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+                for c in conns.iter().filter(|c| &c.id != from && !c.records_only) {
+                    self.enqueue(c, Out::Entries(set.clone()));
+                }
+            }
+            Ok(false) => {}
+            Err(e) => self.logf(&format!("cbb: dropped the entry points {from} sent: {}", e.for_log())),
         }
     }
 
@@ -756,6 +790,7 @@ fn writer(
     records: &Mutex<Records>,
     name: &str,
     key: &RwLock<TunnelKeys>,
+    entries: &Entries,
     log: &(dyn Fn(&str) + Send + Sync),
 ) {
     let message = |o: Out| -> Option<Message> {
@@ -775,6 +810,7 @@ fn writer(
                     &actions,
                     if crate::rootless::is() { "rootless" } else { "file" },
                     crate::sealkey::public(),
+                    if c.records_only { (0, 0) } else { entries.order(uptime::wall_ms()) },
                 ))
             }
             Out::Event(mut ev, queued) => {
@@ -783,6 +819,7 @@ fn writer(
             }
             Out::Records(rs) => Some(Message { kind: "records".into(), records: rs, ..Default::default() }),
             Out::Result(r) => Some(wire::result(r)),
+            Out::Entries(set) => Some(wire::entries(&set)),
             Out::Wake => None,
         }
     };

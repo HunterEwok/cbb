@@ -462,6 +462,10 @@ func cmdGlobalAllow(stdout, stderr io.Writer) int {
 }
 
 // hubNote tells the user what depends on the hub being on.
+// entriesStale says what to do when the project's forwarder does not
+// answer and the device holds no current signed entry points.
+const entriesStale = "The list of the project's entry points is out of date, and the forwarder does not answer on the ways this device knows. Update CBB on a computer of the group (sudo cbb update), or import a new list there (cbb global entries import); the group passes it on."
+
 const hubNote = `
 The hub does not have to stay on. While it is off, nothing syncs away from home;
 at home the devices sync with each other without it. Keep it on all the time, turn
@@ -544,6 +548,9 @@ func writeAway(w io.Writer, a *control.Away) {
 				if f.Detail != "" && debugErrors() {
 					fmt.Fprintf(w, "  Detail: %s\n", f.Detail)
 				}
+			}
+			if f.EntriesStale {
+				fmt.Fprintln(w, "  "+entriesStale)
 			}
 		}
 	case a.Relay != nil:

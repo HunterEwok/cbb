@@ -243,6 +243,13 @@ struct SettingsView: View {
             if let error = hub.error, AppModel.showsErrorDetails {
                 Text(verbatim: error).font(.caption).foregroundStyle(palette.textDim)
             }
+            if hub.entriesStale {
+                Label {
+                    Text("The list of the project's entry points is out of date, and the forwarder does not answer on the ways this phone knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on when this phone meets it.")
+                } icon: { Image(systemName: "exclamationmark.triangle") }
+                    .font(.footnote)
+                    .foregroundStyle(palette.textDim)
+            }
             if hub.on {
                 Text(hub.home ? "On a home network: devices here connect to this phone."
                      : "This network is not one of the hub's home networks: devices here do not see this phone.")
