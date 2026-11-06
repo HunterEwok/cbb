@@ -247,7 +247,7 @@ async fn read_console(
 #[cfg(feature = "board")]
 #[esp_hal::main]
 async fn main(spawner: embassy_executor::Spawner) -> ! {
-    use embassy_futures::select::{Either3, select3};
+    use embassy_futures::select::{Either4, select4};
     use esp_hal::timer::timg::TimerGroup;
     use esp_hal::usb::usb_serial_jtag::UsbSerialJtag;
 
@@ -287,10 +287,24 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let mut console = Console::new();
     console.start();
     let mut buf = [0u8; 64];
+    // Whether the board offered pairing once its address came this boot.
+    let mut offered = false;
     loop {
-        let n = match select3(read_console(&mut jtag, &mut buf), pair::JOINED.wait(), ble::BONDED.wait()).await {
-            Either3::First(n) => n,
-            Either3::Second(id) => {
+        let want = !offered;
+        let up = async move {
+            match stack {
+                Some(s) if want => s.wait_config_up().await,
+                _ => core::future::pending().await,
+            }
+        };
+        let n = match select4(read_console(&mut jtag, &mut buf), pair::JOINED.wait(), ble::BONDED.wait(), up).await {
+            Either4::First(n) => n,
+            Either4::Fourth(()) => {
+                offered = true;
+                console.offer_pair(&store, &mut board);
+                0
+            }
+            Either4::Second(id) => {
                 let saved = console::save_identity(&mut store, &id);
                 if let Err(e) = &saved {
                     println!("cbb-esp32: {}", e.for_user());
@@ -298,7 +312,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
                 pair::SAVED.signal(saved.is_ok());
                 0
             }
-            Either3::Third(bonds) => {
+            Either4::Third(bonds) => {
                 if let Err(e) = console::save_bonds(&mut store, &bonds) {
                     println!("cbb-esp32: {}; the host must pair again after a restart", e.for_user());
                 }

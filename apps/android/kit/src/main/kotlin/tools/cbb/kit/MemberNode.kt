@@ -172,6 +172,17 @@ class MemberNode(
     val connected: Set<String> get() = synchronized(lock) { conns.filter { it.peerRole != null }.mapNotNull { it.peer }.toSet() }
 
     /**
+     * The device IDs of the members that the connected computers say they are
+     * connected to (section 4, "Reach"), without those connected here: away
+     * from home the hub passes commands on to them.
+     */
+    val reached: Set<String>
+        get() = synchronized(lock) {
+            val helloed = conns.filter { it.peerRole != null }
+            helloed.flatMap { it.reach }.toSet() - helloed.mapNotNull { it.peer }.toSet() - engine.device
+        }
+
+    /**
      * The admin keys that the connected computers offer in their hello, by
      * device ID, where the caller of serve named them: the computers the
      * root can make admins (section 10, "A computer as admin").
@@ -451,6 +462,7 @@ class MemberNode(
                     is Member.Message.Get -> get(c, m.get)
                     is Member.Message.Missing -> c.fetching(m.get.sha256)?.let { it.missing = true; it.chunks.offer(MISSING) }
                     is Member.Message.Chunk -> received(c, m)
+                    is Member.Message.Reach -> c.reach = m.ids
                     Member.Message.Bye -> return
                     else -> {} // a ping, an event that did not decode, or a newer type
                 }
@@ -732,6 +744,9 @@ class MemberNode(
         @Volatile var actions: List<String> = emptyList()
         @Volatile var device: Member.DeviceInfo? = null
         @Volatile var mode: String? = null
+
+        /** The other members the peer says it is connected to, from its last reach message. */
+        @Volatile var reach: List<String> = emptyList()
 
         /** The commands sent on it that wait for their result. */
         val waiters = mutableListOf<CompletableFuture<Member.CommandResult>>()

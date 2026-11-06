@@ -3104,6 +3104,16 @@
         }
       }
     },
+    "online through the hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "в сети через хаб"
+          }
+        }
+      }
+    },
     "root": {
       "localizations": {
         "ru": {

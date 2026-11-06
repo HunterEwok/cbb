@@ -59,6 +59,9 @@ object Member {
     /** How many names of the hello's features a receiver reads. */
     const val MAX_FEATURES = 32
 
+    /** The most device IDs of a reach message (section 4, "Reach"). */
+    const val MAX_REACH = 256
+
     /** Frames larger than this close the connection. */
     const val MAX_FRAME = 7 shl 20
 
@@ -631,6 +634,12 @@ object Member {
             override fun hashCode(): Int = sha256.contentHashCode()
         }
 
+        /**
+         * From a computer: the device IDs of the other members it is connected
+         * to now (section 4, "Reach"), its valid ones, at most MAX_REACH.
+         */
+        data class Reach(val ids: List<String>) : Message()
+
         /** A type from a newer version, ignored. */
         data class Unknown(val type: String) : Message()
     }
@@ -672,6 +681,7 @@ object Member {
         is Message.Evidence -> Wire.obj("t" to Wire.str("evidence"), "evidence" to m.evidence.toJson())
         is Message.Get -> Wire.obj("t" to Wire.str("get"), "get" to m.get.toJson())
         is Message.Missing -> Wire.obj("t" to Wire.str("missing"), "get" to m.get.toJson())
+        is Message.Reach -> Wire.obj("t" to Wire.str("reach"), "reach" to m.ids.takeIf { it.isNotEmpty() }?.let { ids -> JsonArray(ids.map { JsonPrimitive(it) }) })
         is Message.Chunk -> throw WireException("a chunk is a binary frame")
         is Message.Unknown -> Wire.obj("t" to Wire.str(m.type))
     }
@@ -798,6 +808,12 @@ object Member {
                 "evidence" -> o.optObject("evidence")?.let { Message.Evidence(Evidence.fromJson(it)) } ?: Message.Unknown(t)
                 "get" -> o.optObject("get")?.let { Message.Get(Get.fromJson(it)) } ?: Message.Unknown(t)
                 "missing" -> o.optObject("get")?.let { Message.Missing(Get.fromJson(it)) } ?: Message.Unknown(t)
+                "reach" -> Message.Reach(
+                    (o.opt("reach") as? JsonArray).orEmpty()
+                        .mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+                        .filter { GroupCertificates.isDeviceID(it) }
+                        .take(MAX_REACH),
+                )
                 else -> Message.Unknown(t)
             }
         } catch (e: WireTypeException) {
