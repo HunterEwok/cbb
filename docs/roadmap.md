@@ -484,14 +484,34 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       RPM; the public test key ("Noname developer") signs only test builds. What a
       `regular` app may do on Aurora 5.1.5 was measured on a device (2026-11-06): it listens
       and is reached over Wi-Fi in the background, mDNS works both ways, the OP-TEE
-      PKCS#11 token "USER" offers P-256, Ed25519 and AES, it writes the clipboard from the
+      PKCS#11 token makes non-extractable P-256 keys that sign, it writes the clipboard from the
       background but reads another app's copy only in the foreground (so the phone sends
-      on a gesture: opening the app, its cover action or Share), and a second executable in
+      on a gesture: opening the app, a notification or Share), and a second executable in
       the package is installed without its execute bit.
     - F-Droid: the steps in docs/maintaining.md, "F-Droid", with `AllowedAPKSigningKeys`
       set to that certificate. The fdroid flavor already has no update of its
       own (`SELF_UPDATE` false, no installer permission), as F-Droid's inclusion policy
       requires: an app it publishes must not download or install code outside F-Droid.
+- **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS: two packages from one
+    code, one for Aurora 4 and one for Aurora 5 (5.1 and 5.2), since the two have different
+    SDKs, sandbox permissions and installers; the app reads `VERSION_ID` in
+    `/etc/os-release` for what differs within a major version. Its key fits
+    [Key levels](#key-levels) as the other phones' do:
+    - Level 2, "hardware", the default: the app checks that its member key is in OP-TEE,
+      not in a software token that sets the same flags: `/dev/tee0` and `libckteec` are
+      there, the token is the initialized "Aurora TA" one in a hardware slot, and a P-256
+      key made with `CKA_TOKEN`, `CKA_SENSITIVE` and not `CKA_EXTRACTABLE` reads back
+      `CKA_NEVER_EXTRACTABLE` and `CKA_ALWAYS_SENSITIVE`, refuses its value, signs, and is
+      still there after a restart. Nothing about the device leaves the group (D-47).
+    - Level 1, "proven", only when the group's user chooses it, as everywhere: once a key
+      attestation API on Aurora 5.2 is confirmed (a proof that the key was made in the TEE,
+      not only that the system is unmodified). Until then an Aurora phone is never "proven".
+    - A phone without OP-TEE keeps its key in a file and is an admin or the hub only at
+      level 3, after the user allows it.
+    - Still to check on a device: a key that lasts across restarts needs `C_Login` with the
+      token's user PIN, and how a sandboxed app gets it; whether another app sees our keys
+      in the same slot (`/dev/tee0` is open to every process); Ed25519 generation, which
+      the token lists but refused with `CKR_TEMPLATE_INCONSISTENT`.
 
 ## Devices that are hard to type into
 
