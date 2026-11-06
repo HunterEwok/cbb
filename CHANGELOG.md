@@ -1466,6 +1466,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
+  clipboard off the main thread, for the remote paste sheet's empty field and for a sync
+  that reads the clipboard itself, so iOS stops reporting a hang of the app.
 - Away from home, the iPhone app no longer misses a hub's new offer, or sync away from home
   turned on or off, that comes while it connects or serves a connection instead of waiting:
   it tries again at once, as the Android app does since 0.6, instead of after its next wait,
