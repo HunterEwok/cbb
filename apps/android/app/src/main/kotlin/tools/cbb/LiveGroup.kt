@@ -646,8 +646,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     // Admitting
 
-    /** Admits the device whose QR code the user scanned. */
-    suspend fun admit(code: JoinCode) {
+    /**
+     * Admits the device whose QR code the user scanned. A device that takes
+     * no connection yet is dialed again for DIAL_RETRY_MS, retrying told
+     * each time: one scanned the moment it shows its code may not listen
+     * yet (the ZX Next's network starts a moment later).
+     */
+    suspend fun admit(code: JoinCode, retrying: () -> Unit = {}) {
         val existing = withContext(Dispatchers.IO) { copyOfState() }
         // A new group gets a new root key; one left from before goes. Making
         // the group signs three times, admitting the computer twice.
@@ -662,49 +667,64 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val name = deviceName
         val g = existing ?: withContext(Dispatchers.IO) { PhoneGroup.create(ca, member.publicKeyDER, Instant.now(), PhoneGroup.validName(name), sealKey()) }
         var failure: Exception? = null
-        for (addr in SyncRule.ordered(code.addrs)) {
-            currentCoroutineContext().ensureActive()
-            val (host, port) = SyncRule.split(addr) ?: continue
-            try {
-                val admitted = withTimeoutOrNull(PAIRING_DEADLINE_MS) {
-                    val t = withContext(Dispatchers.IO) {
+        val until = System.nanoTime() + DIAL_RETRY_MS * 1_000_000
+        while (true) {
+            var answered = false
+            for (addr in SyncRule.ordered(code.addrs)) {
+                currentCoroutineContext().ensureActive()
+                val (host, port) = SyncRule.split(addr) ?: continue
+                val t = try {
+                    withContext(Dispatchers.IO) {
                         TLSTransport.dial(host, port, Pairing.ALPN, member.privateKey, g.memberChain) { chain ->
                             chain.firstOrNull()?.let { Pairing.fingerprint(it) } == code.fingerprint
                         }
                     }
-                    // Closing the connection ends a pairing that takes too
-                    // long or that the user cancelled: the pending read fails.
-                    closingOnCancel({ t.close() }) {
-                        try {
-                            val leaf = t.peerCertificate ?: throw Failure(Failure.Kind.UNREACHABLE)
-                            val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
-                            // The address that answered goes first, for dialing when mDNS does not find the computer.
-                            g.admit(t, code.code, leaf, sid, ca, Instant.now(), addrs = listOf(addr) + code.addrs.filter { it != addr })
-                        } finally {
-                            t.close()
-                        }
-                    }
-                } ?: throw Failure(Failure.Kind.UNREACHABLE)
-                withContext(Dispatchers.IO) {
-                    adopt(g)
-                    // A group made on this phone has it as its hub from the start (D-64).
-                    if (existing == null) setPhoneHub(true)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    failure = telling(failure, e)
+                    continue
                 }
-                published(g.records.records)
-                if (!admitted.confirmed) throw Failure(Failure.Kind.NOT_CONFIRMED)
-                return
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: PairingMember.Failure) {
-                throw e // the computer answered: a wrong code is not worth another address
-            } catch (e: Failure) {
-                if (e.kind == Failure.Kind.NOT_CONFIRMED) throw e
-                failure = telling(failure, e)
-            } catch (e: Exception) {
-                failure = telling(failure, e)
+                answered = true
+                try {
+                    val admitted = withTimeoutOrNull(PAIRING_DEADLINE_MS) {
+                        // Closing the connection ends a pairing that takes too
+                        // long or that the user cancelled: the pending read fails.
+                        closingOnCancel({ t.close() }) {
+                            try {
+                                val leaf = t.peerCertificate ?: throw Failure(Failure.Kind.UNREACHABLE)
+                                val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
+                                // The address that answered goes first, for dialing when mDNS does not find the computer.
+                                g.admit(t, code.code, leaf, sid, ca, Instant.now(), addrs = listOf(addr) + code.addrs.filter { it != addr })
+                            } finally {
+                                t.close()
+                            }
+                        }
+                    } ?: throw Failure(Failure.Kind.UNREACHABLE)
+                    withContext(Dispatchers.IO) {
+                        adopt(g)
+                        // A group made on this phone has it as its hub from the start (D-64).
+                        if (existing == null) setPhoneHub(true)
+                    }
+                    published(g.records.records)
+                    if (!admitted.confirmed) throw Failure(Failure.Kind.NOT_CONFIRMED)
+                    return
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: PairingMember.Failure) {
+                    throw e // the computer answered: a wrong code is not worth another address
+                } catch (e: Failure) {
+                    if (e.kind == Failure.Kind.NOT_CONFIRMED) throw e
+                    failure = telling(failure, e)
+                } catch (e: Exception) {
+                    failure = telling(failure, e)
+                }
             }
+            // No address took the connection: the device may not listen yet.
+            if (answered || System.nanoTime() >= until) throw failure ?: Failure(Failure.Kind.UNREACHABLE)
+            retrying()
+            delay(DIAL_PAUSE_MS)
         }
-        throw failure ?: Failure(Failure.Kind.UNREACHABLE)
     }
 
     // Inviting from afar
@@ -2392,6 +2412,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
         /** How long admitting a device may take once it is dialed: a computer that stops answering mid-pairing fails then. */
         const val PAIRING_DEADLINE_MS = 30_000L
+
+        /** How long, and how often, admit dials a device that does not take the connection yet. */
+        const val DIAL_RETRY_MS = 20_000L
+        const val DIAL_PAUSE_MS = 2_000L
 
         /** How long the join QR code is good for, and how many wrong codes it takes, as for cbb pair (docs/protocol.md, section 6). */
         const val JOIN_WINDOW_MS = 300_000L

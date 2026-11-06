@@ -103,7 +103,7 @@ func (s *Service) addRecords(from group.DeviceID, rs []group.Record) []group.Rec
 // refused close. It runs after the records were queued for the peers, so
 // that a revoked device gets the record that revokes it.
 func (s *Service) settleRecords(fresh []group.Record) {
-	revoked, rooted := false, false
+	revoked, rooted, thawed := false, false, false
 	for _, r := range fresh {
 		b, err := authority.ParseBody(r.Body)
 		if err != nil {
@@ -113,8 +113,10 @@ func (s *Service) settleRecords(fresh []group.Record) {
 		// checkpoint may undo either, and a claim, a resolve, a settings or
 		// a recovery record may change the root.
 		switch b.Type {
-		case group.RecordRevoke, group.RecordFreeze, group.RecordThaw:
+		case group.RecordRevoke, group.RecordFreeze:
 			revoked = true
+		case group.RecordThaw:
+			revoked, thawed = true, true
 		case group.RecordClaim, group.RecordResolve, group.RecordSettings, group.RecordCheckpoint, group.RecordRecovery:
 			revoked, rooted = true, true
 		}
@@ -142,6 +144,10 @@ func (s *Service) settleRecords(fresh []group.Record) {
 	}
 	if revoked || rooted {
 		s.afterRevocation()
+	}
+	if thawed || rooted {
+		// Devices refused until now may be let in.
+		s.redial()
 	}
 	if rooted {
 		// A resolve may have voided both histories of this device's key.

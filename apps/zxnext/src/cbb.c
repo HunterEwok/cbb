@@ -969,19 +969,67 @@ failed:
 }
 
 
-static const char pi_wait[] = "Waiting for the Pi to start\n";
+// The start in the background (the driver's call 9): just after power-on
+// (AUTOEXEC.BAS), NextPi takes up to a minute to start, which BASIC should
+// not wait for. The driver gets the line that starts the link and types it
+// once NextPi's shell shows its prompt, then turns itself on when the link
+// says CBBLINK (drv/bank.asm).
+#define DRV_BOOT 9
+#define BOOT_LINE 0x0000
+#define BOOT_ADD 0x0100
+#define BOOT_GO 0x0200
+#define BOOT_STATE 0x0300
+#define BOOT_LINK 4    // waits for the link: the states up to it are pending
+#define BOOT_NO_PROMPT 5
+#define BOOT_NO_LINK 6
+static uint8_t esp_address(char *ip, uint8_t max);
+
+static uint8_t boot_state(void)
+{
+    return driver(DRV_BOOT, BOOT_STATE) ? 0 : (uint8_t)drv.de;
+}
+
+static uint8_t booting;
+
+// The line goes to the shell now, or to the driver for later.
+static void start_send(const char *s)
+{
+    if (!booting) link_send_str(s);
+    else while (*s) driver(DRV_BOOT, BOOT_ADD | (uint8_t)*s++);
+}
+
+static const char boot_wait[] = "The network starts in the\nbackground once the Pi is up\n(.cbb net says when).\n";
+static const char boot_busy[] = "The network starts once the Pi\nis up; try again then, or stop\nthat: .cbb net off\n";
+static const char boot_off[] = "off";
+static const char boot_none[] = "The network will not start.\n";
+static const char boot_later[] = "The network starts once the Pi\nis up.\n";
+static const char boot_cannot[] = "the driver cannot start the network";
+static const char boot_call[] = "call 9";
+static const char boot_said[][44] = {"The Pi did not start in 3 minutes.\n", "cbb next link did not start on the Pi.\n"};
+
+// Not static: far_boot_busy() (far.asm) calls it before each command,
+// after opening the Pi's UART (link_open()). Only
+// .cbb net and .cbb net off may run while a start in the background waits:
+// the driver reads the Pi's line then.
+int boot_busy_check(void)
+{
+    uint8_t b;
+    link_open();
+    b = boot_state();
+    if (b == 0 || b > BOOT_LINK) return 0;
+    // Of the commands only net starts with n.
+    if (far_argv[0][0] == 'n' && (far_argc == 1 || strcmp(far_argv[1], boot_off) == 0)) return 0;
+    printf(boot_busy);
+    return 1;
+}
 
 static int net_start(int argc, char **argv)
 {
     int i;
     uint16_t n = 0;
-    // Just after power-on (AUTOEXEC.BAS), NextPi takes half a minute to
-    // start: its shell is waited for, up to a minute and a half.
-    if (*(uint8_t *)23674 == 0 && FRAMES_LO < 50 * 120 && link_shell()) {
-        if (!quiet) printf(pi_wait);
-        for (i = 0; i < 10 && link_shell(); i++) {
-        }
-    }
+    // Just after power-on: the frame counter's top byte 0, under two
+    // minutes. The line goes to the driver then, for later.
+    booting = *(uint8_t *)23674 == 0 && FRAMES_LO < 50 * 120;
     // After a reset the driver is gone: install it from the card.
     if (driver(DRV_STATE, 0) && (drv_install() || driver(DRV_STATE, 0))) {
         return fail("cannot install the driver: .install /cbb/CBB.DRV", DRV_FILE);
@@ -1015,30 +1063,46 @@ static int net_start(int argc, char **argv)
         if (net_save()) return 1;
     }
     // Without -to, a computer is found each time: its address may change.
+    // Just after power-on the ESP may not be on the Wi-Fi network yet.
     net_to[0] = 0;
+    if (booting) {
+        for (i = 0; i < 20 && !esp_address(line, sizeof line); i++) {
+            n = FRAMES_LO;
+            while ((uint16_t)(FRAMES_LO - n) < 50) {
+            }
+        }
+        n = 0;
+    }
     if (!strstr(net_args, "-to ") && net_find()) return 1;
     if (!esp_speed(ESP_NET_SPEED)) {
         link_use(LINK_PI);
         return fail("the ESP does not answer AT", line);
     }
     link_use(LINK_PI);
-    if (link_shell()) {
+    if (booting) {
+        driver(DRV_BOOT, BOOT_LINE);
+    } else if (link_shell()) {
         esp_speed(ESP_SPEED);
         link_use(LINK_PI);
         return pi_silent();
     }
-    link_send_str(CBB_LITE " next link ");
-    link_send_str(net_to);
-    link_send_str(net_args);
+    start_send(CBB_LITE " next link ");
+    start_send(net_to);
+    start_send(net_args);
     if (pair_code) {
-        link_send_str(" -join ");
-        link_send_str(pair_code);
+        start_send(" -join ");
+        start_send(pair_code);
     }
     if (paste_load()) {
-        link_send_str(" -paste ");
-        link_send_str(paste_set);
+        start_send(" -paste ");
+        start_send(paste_set);
     }
-    link_send_str(" -log /ram/link.log\n");
+    start_send(" -log /ram/link.log\n");
+    if (booting) {
+        if (driver(DRV_BOOT, BOOT_GO)) return fail(boot_cannot, boot_call);
+        if (!quiet) printf(boot_wait);
+        return 0;
+    }
     // The driver may only start once the link has made the UART raw: the
     // shell would echo its frames, and a byte of them taken as XOFF stops
     // the Pi's output. The link says CBBLINK then; anything else is the
@@ -1203,6 +1267,12 @@ int net_pair(void)
 
 static int net_stop(void)
 {
+    uint8_t b = boot_state();
+    if (b && b <= BOOT_LINK) {
+        driver(DRV_SWITCH, 0);
+        printf(boot_none);
+        return 0;
+    }
     if (!net_on()) return fail("the network does not run", 0);
     driver(DRV_SWITCH, 0);
     link_quit();
@@ -1256,11 +1326,16 @@ int net_restart(void)
 
 static int net_show(void)
 {
+    uint8_t i, b;
     if (driver(DRV_STATE, 0)) {
         printf("The driver is not installed:\n.install /cbb/CBB.DRV\n");
         return 0;
     }
-    printf(drv.de ? "The network runs.\n" : "The network does not run.\n");
+    i = drv.de;
+    b = boot_state();
+    if (!i && b && b <= BOOT_LINK) printf(boot_later);
+    else printf(i ? "The network runs.\n" : "The network does not run.\n");
+    if (!i && b > BOOT_LINK && b <= BOOT_NO_LINK) printf(boot_said[b - BOOT_NO_PROMPT]);
     if (!net_load()) printf("Settings: %s\n", net_args);
     if (driver(DRV_COUNTERS, 0) == 0) {
         printf("Taken from the Pi: %u bytes\n", drv.hl);
@@ -2568,6 +2643,7 @@ void screen_close(void)
 extern int far_install(void);
 extern int far_net(void);
 extern int far_net_pair(void);
+extern int far_boot_busy(void);
 extern int far_cmd(void);
 extern void far_screen_open(void);
 extern void far_screen_close(void);
@@ -2629,7 +2705,6 @@ static int run(int argc, char **argv)
         usage();
         return 0;
     }
-    link_open();
     // copy -s and text -s send a secret.
     if ((strcmp(argv[i], "copy") == 0 || strcmp(argv[i], "text") == 0) && i + 1 < argc && strcmp(argv[i + 1], "-s") == 0) {
         secret = 1;
@@ -2638,6 +2713,7 @@ static int run(int argc, char **argv)
     }
     far_argc = argc - i;
     far_argv = argv + i;
+    if (far_boot_busy()) return 1;
     if ((strcmp(argv[i], "paste") == 0 && argc - i <= 2) || (strcmp(argv[i], "copy") == 0 && argc - i == 2) ||
         (strcmp(argv[i], "text") == 0 && argc - i >= 2)) {
         return far_cmd();

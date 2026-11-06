@@ -1116,3 +1116,59 @@ fn says_when_there_are_no_updates() {
     assert!(o.has("NO UPDATES"), "{}", o.screen);
     let _ = std::fs::remove_dir_all(&card);
 }
+
+/// Just after power-on .cbb net on hands the line that starts the link to
+/// the driver and returns at once, typing nothing to the Pi; until the
+/// driver started it, the other commands wait, .cbb net says so and .cbb
+/// net off ends it.
+#[test]
+fn leaves_the_start_to_the_driver_after_power_on() {
+    let Some(kit) = kit("boot") else { return };
+    let card = card("boot");
+    std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
+    std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
+    let mut esp = Esp::new(kit.site.clone());
+    esp.members = vec![("192.168.0.175".into(), 8764, String::new())];
+    let mut run = run_after(&kit, &card, "net on", esp, Pi::new(), Vec::new(), |run| {
+        run.hw.os_write16(23672, 500); // ten seconds after power-on
+    });
+    let s = run.hw.screen_text().to_uppercase();
+    assert!(s.contains("BACKGROUND"), "{s}");
+    let line = String::from_utf8(run.hw.boot_line.clone()).unwrap();
+    assert!(
+        line.contains("next link -to 192.168.0.175:8764 -serve 8764:8764 -log /ram/link.log\n"),
+        "{line:?}"
+    );
+    assert_eq!(run.hw.boot_state, 1);
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(
+        !pi.log.iter().any(|l| l.contains("next link")),
+        "{:?}",
+        pi.log
+    );
+    let waiting = |run: &mut Run| {
+        run.hw.boot_state = 1;
+        run.hw.drivers.push((124, Vec::new()));
+    };
+    for (args, says) in [
+        ("text hello", "TRY AGAIN THEN"),
+        ("net", "STARTS ONCE THE PI"),
+        ("net off", "WILL NOT START"),
+    ] {
+        let run = run_after(
+            &kit,
+            &card,
+            args,
+            Esp::new(kit.site.clone()),
+            Pi::new(),
+            Vec::new(),
+            waiting,
+        );
+        let s = run.hw.screen_text().to_uppercase().replace('\n', " ");
+        assert!(s.contains(says), "{args}: {s}");
+        if args == "net off" {
+            assert_eq!(run.hw.boot_state, 0, "net off ends it");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&card);
+}

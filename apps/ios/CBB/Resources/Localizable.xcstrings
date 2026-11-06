@@ -2914,6 +2914,16 @@
         }
       }
     },
+    "The device is not ready yet. Trying again (%lld)…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство ещё не готово. Пробую снова (%lld)…"
+          }
+        }
+      }
+    },
     "The device was not added.": {
       "localizations": {
         "ru": {

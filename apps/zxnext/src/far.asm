@@ -27,6 +27,7 @@ PUBLIC _rom_char
 PUBLIC _far_install
 PUBLIC _far_net
 PUBLIC _far_net_pair
+PUBLIC _far_boot_busy
 PUBLIC _far_paste_receive
 PUBLIC _far_pair_check
 PUBLIC _far_cmd
@@ -45,6 +46,7 @@ EXTERN __z_page_table
 EXTERN _install_run
 EXTERN _net_cmd
 EXTERN _net_pair
+EXTERN _boot_busy_check
 EXTERN _cmd_run
 EXTERN _screen_open
 EXTERN _screen_close
@@ -174,6 +176,13 @@ _far_net_restart:
 _far_net:
    ld a,FAR_NET
    ld hl,_net_cmd
+   jr far_call
+
+; int far_boot_busy(void): whether a start of the network in the
+; background holds the Pi's line, which it says.
+_far_boot_busy:
+   ld a,FAR_NET
+   ld hl,_boot_busy_check
    jr far_call
 
 _far_net_pair:
