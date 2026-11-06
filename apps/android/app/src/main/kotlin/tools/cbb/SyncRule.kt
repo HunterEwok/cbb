@@ -18,7 +18,8 @@ object SyncRule {
      * Whether current is a copy from another device that waits for this
      * phone: younger than the group's live window windowMS, with a text, an
      * image or files (usable), in a sync mode that takes the group's copies
-     * (receives), and not the copy the phone took last (taken).
+     * or for the button, which works in every mode (receives), and not the
+     * copy the phone took last (taken).
      */
     fun waiting(current: Member.Event?, usable: Pair<String, Member.Kind>?, device: String, windowMS: Long, receives: Boolean, taken: String?): Boolean =
         receives && current != null && usable != null && !current.isMark && !current.unread && current.origin != device &&

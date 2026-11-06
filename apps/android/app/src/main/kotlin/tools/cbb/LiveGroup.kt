@@ -2225,7 +2225,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             files != null -> "\u0000files:" + current.id to Member.Kind.MEDIA
             else -> n.usable
         }
-        val waits = SyncRule.waiting(current, usable, device, incomingMS, Member.receives(syncMode), taken)
+        // The button works in every mode; only what the phone takes by itself follows it.
+        val waits = SyncRule.waiting(current, usable, device, incomingMS, receives = true, taken = taken)
         var read: Clipboard.Board? = null
         return when (SyncRule.decide(waits, { board().also { read = it }?.key }, usable)) {
             SyncRule.Action.FETCH -> {
@@ -2292,7 +2293,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         get() {
             val (n, device) = synchronized(lock) { node to state?.device }
             val e = n?.current ?: return null
-            return e.takeIf { SyncRule.waiting(it, n.usable ?: ("" to Member.Kind.MEDIA), device ?: "", incomingMS, Member.receives(syncMode), taken) }
+            return e.takeIf { SyncRule.waiting(it, n.usable ?: ("" to Member.Kind.MEDIA), device ?: "", incomingMS, receives = true, taken = taken) }
         }
 
     /** What the button fetched for the phone's clipboard: a text, or an image in the app's cache with its text. */

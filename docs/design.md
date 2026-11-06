@@ -422,10 +422,10 @@ A phone app sends and fetches with one button (a tap, the Action button or Back 
 iPhone, a double tap where the phone offers one), and follows the rule of every device
 (`LiveGroup.sync` on the iPhone, `SyncRule` on Android):
 
-1. A copy from another device waits for the phone (it is live, the phone's sync mode takes
-   the group's copies, and the phone has not taken it yet) → it comes to the phone. Android
-   and Aurora take such a copy by themselves at once; the iPhone takes it when the app
-   comes to the front, on the Back Tap shortcut, or with the button.
+1. A copy from another device waits for the phone (it is live and the phone has not taken
+   it yet) → it comes to the phone. The button does this in every sync mode; by
+   themselves, in a mode that takes the group's copies, Android and Aurora take such a copy
+   at once and the iPhone when the app comes to the front.
 2. Otherwise what the phone copied goes to the group, however old, unless it is the group's
    text already. A copy whose live window passed is gone, and there is no separate button
    to fetch it.

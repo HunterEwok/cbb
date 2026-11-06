@@ -2131,10 +2131,11 @@ final class LiveGroup: GroupController {
     private var takenID: String?
 
     /// The copy from another device that waits for this phone: younger
-    /// than the group's live window, in a sync mode that takes the group's
-    /// copies, and not yet taken.
-    private func pending(_ node: MemberNode, device: String) async -> Member.Event? {
-        guard Member.receives(modeBox.mode), let cur = await node.current, !cur.isMark, !cur.unread, cur.origin != device,
+    /// than the group's live window and not yet taken; for what the app
+    /// takes by itself (byItself), also in a sync mode that takes the
+    /// group's copies, while the button works in every mode.
+    private func pending(_ node: MemberNode, device: String, byItself: Bool) async -> Member.Event? {
+        guard !byItself || Member.receives(modeBox.mode), let cur = await node.current, !cur.isMark, !cur.unread, cur.origin != device,
               cur.id != takenID, cur.ageMS < (recordBox?.incomingMS ?? Records.defaultIncomingMS) else { return nil }
         if cur.media?.isFiles == true || Images.part(of: cur.media) != nil { return cur }
         return await node.usable == nil ? nil : cur
@@ -2168,7 +2169,7 @@ final class LiveGroup: GroupController {
     func takePending() async -> AppModel.SyncResult? {
         guard let node, let g = state else { return nil }
         _ = await connected(node)
-        guard let e = await pending(node, device: g.device) else { return nil }
+        guard let e = await pending(node, device: g.device, byItself: true) else { return nil }
         do {
             try await take(e)
         } catch {
@@ -2187,7 +2188,7 @@ final class LiveGroup: GroupController {
     func sync(board given: AppModel.Board?) async throws -> AppModel.SyncResult {
         guard let node, let g = state else { throw PendingGroup.Failure.noComputers }
         online = await node.connected
-        if let e = await pending(node, device: g.device) {
+        if let e = await pending(node, device: g.device, byItself: false) {
             try await take(e)
             return fetched(e)
         }
