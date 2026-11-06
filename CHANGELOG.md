@@ -1414,6 +1414,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Away from home, the iPhone app no longer misses a hub's new offer, or sync away from home
+  turned on or off, that comes while it connects or serves a connection instead of waiting:
+  it tries again at once, as the Android app does since 0.6, instead of after its next wait,
+  up to 30 seconds.
 - An unfrozen admin computer connects again at once: the members that refused
   it dial it as soon as the unfreeze, or a record that changes the group's root, reaches
   them. Until now it waited for its next try, up to 30 seconds after many refusals.

@@ -270,6 +270,29 @@ final class AwayFromHomeTests: XCTestCase {
         try await eventually("stopped") { await a.status == .off }
     }
 
+    /// A new offer that comes while the loop serves a connection, not while
+    /// it waits, starts the tunnel again at once: the loop does not miss it
+    /// and wait out its backoff, here a minute.
+    func testANewOfferDuringAConnectionIsNotMissed() async throws {
+        let tunnels = FakeTunnels()
+        let release = Box(0)
+        let a = AwayFromHome(
+            device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", tunnels: tunnels,
+            state: AwayState(key: Data(repeating: 1, count: 32)).with(hub, offer: offer), save: { _ in },
+            atHome: { _ in false }, dial: { _, _ in Pipe() },
+            serve: { _, _ in while release.current == 0 { try await Task.sleep(for: .milliseconds(2)) } },
+            mayHost: { _ in true }, order: { [self.hub] },
+            firstWait: .seconds(60), maxWait: .seconds(60), homeCheck: .seconds(60))
+        await a.start()
+        try await eventually("connected") { await a.status == .connected }
+        await a.keep(from: hub, offer: Member.TunnelOffer(hubKey: offer.hubKey, psk: offer.psk, endpoints: ["198.51.100.9:8764"]))
+        release.set(1)
+        try await eventually("a new tunnel at once") { tunnels.started.count == 2 }
+        XCTAssertEqual(tunnels.started.last?.first, "198.51.100.9:8764")
+        await a.stop()
+        try await eventually("stopped") { await a.status == .off }
+    }
+
     /// A hub that offers its next key is tried with each key at each of
     /// its endpoints in turn: the key it serves with now may answer only at
     /// the second endpoint, as a hub at home does from away through its
