@@ -134,56 +134,25 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     the iPhone and the iPad, on Android, in the Mac app and in the tray app; both watches show
     their phone's collections as sections. See "Collections" below.
 - **35.** The review of all the documentation against the code for 0.6: in progress.
+- **42.** **A simpler protocol for the group's authority**, so that fewer of its rules can be
+    read two ways ([protocol.md](protocol.md), section 10; [records-v2.md](records-v2.md)).
+    Done in 0.6, without a migration from `v:1` (groups made before are set up again):
+    1. records `v:2`: the signer inside the body, powers written down, each signer's records
+       numbered, two records with one number shown as two histories, and signed bodies in one
+       canonical form that refuses unknown fields;
+    2. the servers check only server credentials (section 18) and read no records; both stay
+       open to every group;
+    3. one rules core, `cbb_core`, for the phones (through Swift and Kotlin bindings), the lite
+       member and the Go service (natively on Linux, as WebAssembly elsewhere), which keeps
+       its own rules only as a test oracle;
+    4. no CA keys between devices, and a Welcome without one;
+    5. features instead of versions in the hello;
+    6. one form for each thing: one framing, one fingerprint, one encoding of bytes;
+    7. a fork of roots, two admins acting against each other or two claims stop the group,
+       shown as a conflict in `status` and in every app, until the root decides.
 
-### Next
-
-- **42.** **Points 1 to 6, 8 and 9 are being built for 0.6**
-    ([protocol.md](protocol.md), section 10; [records-v2.md](records-v2.md)), without a migration from `v:1`: groups made before
-    are set up again; of point 4, the Welcome's format without a CA key is in 0.6, and since
-    item 17 no CA key passes between devices. Everything that changes the rules core or a format it
-    reads or signs is done in 0.6, so 0.7 does not change the core: the Go service calls
-    `cbb_core` too (natively on Linux, as WebAssembly elsewhere), for the records, every
-    signed body and the certificate checks, and keeps its own code only as a test oracle. A simpler protocol for the group's authority, so that
-    fewer of its rules can be read two ways. Today a signer's powers are derived from the
-    records (whether a root is a computer, whether an admin CA is a phone's, a computer's or
-    a watch's), removing an admin undoes what it signed so the remover lists in `keep` what
-    stays, a freeze lists the records that stay in another way, the signer stands outside
-    the signed body, signed bodies ignore unknown fields, four implementations evaluate the
-    same rules, and the forwarder and the relay evaluate a group's records too. Every
-    function stays, the open relay and forwarder among them. In order:
-    1. **Records `v:2`**, one change of format: the record names its signer's key inside
-       the body, and a body has one signer; the `device` record that names an admin CA says
-       its powers from a closed list (admit, renew, remove members, remove admins, freeze,
-       thaw, take over, be a hub, the commands it may sign), with defaults per role that
-       give today's table; each signer numbers its records (`seq`, and `prev`, the ID of its
-       previous one), so removing or freezing an admin, or handing the group over, says up
-       to which number its records stay instead of lists of keys and record IDs, and two
-       records of one signer with the same number freeze that signer and show it to the
-       user; signed bodies (records, commands, server credentials, release files) refuse
-       unknown fields and must be in one canonical form, which the receiver checks by
-       encoding again. The root signs once a baseline record with the group's state in
-       `v:2`; from then on only `v:2` records count, and once every member reads them the
-       `v:1` rules go.
-    2. **Servers check only server credentials** (protocol.md section 18): the forwarder
-       and the relay stop taking a group's records, and a group has a period from the day it
-       is made or upgraded. Both stay open to every group.
-    3. **One rules core**: the phones use the lite member's Rust core (`cbb_core`) through
-       bindings for Swift and Kotlin in place of their own evaluation of the records, with
-       the result defined as one state (devices, powers, revoked, frozen, the path of roots)
-       that the vectors and the differential fuzzing compare whole.
-    4. **No CA keys between devices**: legacy groups must upgrade, and the Welcome carries
-       no CA key.
-    5. **Features instead of versions**: the hello lists what the sender supports, each
-       release names the oldest peer it takes, and the rules for members before that
-       version go.
-    6. **One form for each thing**, with the next ALPN version of each channel: one framing
-       (a length and JSON), one fingerprint (SHA-256 of the SubjectPublicKeyInfo, one text
-       form), one encoding of bytes.
-    7. To decide: a fork of roots, two admins that freeze each other or two admin phones
-       that remove each other show as a conflict in `status` and the apps, and while roots
-       fork nobody new is admitted.
-    8. Later: the hubs' order from a table the root signs (D-65) instead of one derived from
-       the roles.
+    Being built for 0.6, before the security audit's pass 6, so that 0.7 does not change the
+    core:
     9. **Manifests in the strict form**: the manifest of a media event (protocol.md section
        4) read by the rules of signed bodies (exact names, each once, valid UTF-8, integers
        of int64), with `null` only where its table allows it. Until then the four
@@ -191,6 +160,11 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
        invalid UTF-8 each in their own way, and the differential run
        ([differential.md](differential.md)) prints the manifests they read differently
        without failing on them.
+
+    Later, point 8: the hubs' order from a table the root signs (D-65) instead of one derived from
+    the roles.
+
+### Next
 
 - **10.** **Console helper and auto-paste**: the double press that injects the member's own text
     on the text console (design.md, "3. Console helper"), and Shift+Insert after a copy from
