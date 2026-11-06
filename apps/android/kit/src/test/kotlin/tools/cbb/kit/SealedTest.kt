@@ -35,6 +35,11 @@ class SealedTest {
         assertTrue(mark.isMark)
         assertNull(mark.sealed!!.payload)
         assertTrue(keys.b.take(mark.sealed!!).unread)
+        // A copy sealed to a member whose secret does not open it stays unread, and says why.
+        assertNull(keys.bLost.lastUnopened)
+        assertTrue(keys.bLost.take(s).unread)
+        assertTrue(keys.bLost.lastUnopened!!.startsWith("the copy ${s.id} from ${keys.idA} did not open"), keys.bLost.lastUnopened)
+        assertNull(keys.b.lastUnopened)
         // A changed copy is refused.
         val changed = Sealed(s.id, s.origin, s.time, 0, s.cert, s.issuer, s.wraps, s.payload!!.copyOf().also { it[0] = (it[0] + 1).toByte() }, null, null, s.sig)
         assertFailsWith<Core.Refusal> { keys.b.take(changed) }

@@ -13,6 +13,9 @@ import java.time.Instant
 class TestCopies(roleB: String = "full") {
     val a: CopyKeys
     val b: CopyKeys
+
+    /** The computer with a secret its record does not name: copies sealed to it do not open. */
+    val bLost: CopyKeys
     val idA: String get() = a.device
     val idB: String get() = b.device
 
@@ -31,5 +34,6 @@ class TestCopies(roleB: String = "full") {
         val set = g.records
         a = CopyKeys(g.device, g.memberCert, null, ka, sa) { set }
         b = CopyKeys(idB, certB, null, kb, sb) { set }
+        bLost = CopyKeys(idB, certB, null, kb, secret()) { set }
     }
 }
