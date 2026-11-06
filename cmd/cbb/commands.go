@@ -399,7 +399,7 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if f, ok := stdin.(*os.File); ok && isTerminal(f) {
 			fmt.Fprint(stdout, "The QR code's text (cbb://join?...): ")
 		}
-		line, err := readLine(stdin)
+		line, err := readLineUpTo(stdin, maxQRText)
 		if err != nil {
 			return fail(stderr, err)
 		}
@@ -471,6 +471,10 @@ func admit(admins bool, stdout, stderr io.Writer) int {
 	adminHint(stdout)
 	return 0
 }
+
+// maxQRText bounds the QR code's text that cbb pair -qr reads: a code,
+// four addresses and a fingerprint, with room to spare.
+const maxQRText = 1024
 
 // admitByQR admits the device that shows the QR code text and listens, such
 // as a phone with the app on Aurora OS: the service dials it.
@@ -613,9 +617,15 @@ func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 func readLine(r io.Reader) (string, error) {
+	return readLineUpTo(r, 64)
+}
+
+// readLineUpTo is readLine for a line of up to max bytes, such as a QR
+// code's text, which is longer than a code.
+func readLineUpTo(r io.Reader, max int) (string, error) {
 	var b strings.Builder
 	buf := make([]byte, 1)
-	for b.Len() < 64 {
+	for b.Len() < max {
 		n, err := r.Read(buf)
 		if n > 0 {
 			if buf[0] == '\n' {
