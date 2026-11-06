@@ -8,7 +8,9 @@ rules are in the [design](../design.md); you do not need them to use it.
 ## The group
 
 Your devices form a **group**. Only devices you let in belong to it, and they talk only to
-each other, always encrypted (TLS). Each device has a role:
+each other, always encrypted (TLS). On top of that every copy is encrypted end to end: the
+device that copies seals it for the devices of the group that read copies and signs it, so a
+device that only passes it on cannot read it, change it or forge one. Each device has a role:
 
 | Role | Who | What it does |
 |---|---|---|
@@ -17,7 +19,7 @@ each other, always encrypted (TLS). Each device has a role:
 | **Member** | every computer and phone | syncs the clipboard |
 | **Lite member** | a small Linux device: a router, a Raspberry Pi Zero | syncs, never adds anyone ([lite member](../../lite/README.md)) |
 | **Rootless member** | a Linux computer installed without `sudo` | syncs like a member, never the root, an admin or a hub ([below](#rootless-members)) |
-| **Hub** | an admin computer at home, or a phone while its app is open, if you want one | lets your devices sync when they are away from home |
+| **Hub** | a computer at home, or a phone while its app is open, if you want one | lets your devices sync when they are away from home; one that only passes copies on reads none |
 
 The phone's keys are made in its security chip (the Secure Enclave, Android's Keystore) and
 never leave it; each signature with the group's root key or an admin key asks for your face,
@@ -75,9 +77,11 @@ encrypted tunnel (WireGuard), and it passes the clipboard on to everyone at home
 
 ![Away from home, the laptop and the phone reach the hub at home through the group's WireGuard tunnel](../images/hub.svg)
 
-- The hub is your own computer, and it must be an admin: Linux, Windows, a Mac, FreeBSD or
-  a router. The hub is a full member of the group: it reads the clipboard
-  like any of your devices, which is why it must be yours.
+- The hub is your own computer: Linux, Windows, a Mac, FreeBSD or a router. It is one of two
+  kinds. **A hub that reads the copies** is an admin, so the copies are sealed to it like to
+  your other devices. **A hub that only passes copies on** can be any computer of the group,
+  a Raspberry Pi with its keys in a file say: the copies are sealed end to end past it, so it
+  reads none, and its keys need no security chip.
 - Your router forwards one UDP port (8764) to the hub, so the internet can reach it.
 - The hub does not have to stay on. While it is off, nothing syncs away from home, and the
   devices at home still sync without it.
@@ -135,7 +139,8 @@ syncing away from home:
 
 ![A blind relay joins the laptop away and the Mac at home; the encryption runs end to end through it](../images/relay.svg)
 
-A group may have several hubs: the root and every admin with a hub set up. Devices away from
+A group may have several hubs: the root, every admin with a hub set up, and the hubs that only
+pass copies on. Devices away from
 home use the first one that answers, phones first, so a group of phones and a computer keeps
 working while the phone's app is closed.
 
@@ -147,7 +152,8 @@ yourself.
 
 | Server | Reads the clipboard | Knows which of your devices talk, and when | Whose it is |
 |---|---|---|---|
-| Hub | yes, it is your device | yes | yours |
+| Hub that reads the copies | yes, it is your device and an admin | yes | yours |
+| Hub that only passes copies on | no: the copies are sealed past it | yes | yours |
 | Forwarder | no | no: it sees the addresses encrypted packets come from and go to your hub, when, and their sizes | yours, or the project's at `cbb.tools` |
 | Blind relay | no | yes | yours (one at `cbb.tools` is planned) |
 

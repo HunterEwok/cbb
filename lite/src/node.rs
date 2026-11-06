@@ -22,7 +22,9 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use crate::certs::{Cert, DeviceId, Usage};
-use crate::clip::{Engine, Event, Hello, Kind, Outcome, Via};
+use cbb_core::copy::{self, Content, Sealed};
+
+use crate::clip::{Engine, Event, Hello, Kind, Outcome, SealFn, Via};
 use crate::entries::{self, Entries};
 use crate::error::{Context, Error, Result};
 use crate::identity::Identity;
@@ -310,18 +312,81 @@ impl Node {
         }
     }
 
+    /// What the engine seals this member's copies with: the readers the
+    /// records name, the member certificate and key, which signs
+    /// (docs/protocol.md, section 4, "Sealing").
+    pub fn sealer(self: &Arc<Self>) -> SealFn {
+        let node = Arc::downgrade(self);
+        Box::new(move |ev: &Event| {
+            let n = node.upgrade().ok_or_else(|| cbb_core::error::Error::msg("the member stopped"))?;
+            let ident = n.identity();
+            let readers = copy::readers(&n.records.lock().unwrap(), ev.kind == Kind::Secret);
+            let content = Content { kind: ev.kind, via: ev.via, text: ev.text.clone(), media: None };
+            let issuer = ident.issuer.as_ref().map(|c| c.der.clone()).unwrap_or_default();
+            let mut d = copy::seal(
+                &ev.id,
+                &ev.origin,
+                ev.time,
+                &ident.cert.der,
+                &issuer,
+                &readers,
+                &content,
+                None,
+                &copy::new_key(),
+            )?;
+            d.sealed.sig = cbb_core::identity::sign(&ident.key, &d.to_sign)?;
+            Ok(d.sealed)
+        })
+    }
+
+    /// Checks a copy a peer sent against the records and opens it when it
+    /// is sealed to this member (docs/protocol.md, section 4, "Opening"); a
+    /// copy that is not is kept unread, to order and pass on. None drops a
+    /// copy the records refuse, which is logged.
+    fn take(&self, s: Sealed, from: &DeviceId) -> Option<Event> {
+        let checked = s.check(&self.records.lock().unwrap(), uptime::wall_ms().div_euclid(1000));
+        if let Err(e) = checked {
+            self.logf(&format!("cbb: dropped a copy from {from}: {}", e.for_log()));
+            return None;
+        }
+        let me = self.identity().id.to_string();
+        let mut ev = Event::of(s);
+        let Some(s) = ev.sealed.as_ref() else { return Some(ev) };
+        if s.is_mark() || !s.wraps.iter().any(|w| w.to == me) {
+            return Some(ev);
+        }
+        // A copy sealed to this member that does not open stays unread, as
+        // the others may read theirs.
+        match crate::sealkey::secret().map(|secret| s.open(&me, secret)) {
+            Some(Ok((c, key))) => {
+                (ev.kind, ev.via, ev.text, ev.media, ev.key, ev.unread) =
+                    (c.kind, c.via, c.text, c.media, Some(key), false);
+            }
+            Some(Err(e)) => self.logf(&format!("cbb: a copy from {from} does not open: {}", e.for_log())),
+            None => {
+                self.logf(&format!("cbb: a copy from {from} is not read: this member has no key for sealed messages"))
+            }
+        }
+        Some(ev)
+    }
+
     fn forward(&self, ev: &Event, from: Option<&DeviceId>) {
+        if ev.sealed.is_none() {
+            self.logf("cbb: a copy that is not sealed is not sent");
+            return;
+        }
         let now = uptime::now();
         let records = self.records.lock().unwrap();
         for c in self.conns.lock().unwrap().values() {
             if Some(&c.id) != from && !c.records_only {
-                let mut ev = ev.clone();
                 // A peer the records stop secrets to gets the mark of a
-                // secret, never its text (docs/protocol.md, section 10,
+                // secret, never its payload (docs/protocol.md, section 10,
                 // "Stopping the exchange").
-                if ev.kind == Kind::Secret && records.no_secrets_to(c.id.as_str()) {
-                    ev.text.clear();
-                }
+                let ev = if ev.kind == Kind::Secret && !ev.unread && records.no_secrets_to(c.id.as_str()) {
+                    ev.mark()
+                } else {
+                    ev.clone()
+                };
                 self.enqueue(c, Out::Event(ev, now));
             }
         }
@@ -521,7 +586,8 @@ impl Node {
                 if m.kind != "hello" || !wire::known_role(&m.role) {
                     return Err(Error::msg(format!("{} did not start with a hello", c.id)));
                 }
-                let (h, body) = wire::decode_hello(m.hello.as_ref())?;
+                let (mut h, body) = wire::decode_hello(m.hello.as_ref())?;
+                h.current = h.current.and_then(|e| e.sealed).and_then(|s| self.take(s, &c.id));
                 let name = if crate::records::valid_name(&body.name) { body.name.clone() } else { String::new() };
                 let os = if crate::records::valid_os(&body.os) { body.os.clone() } else { String::new() };
                 *c.peer.lock().unwrap() = Some((m.role.clone(), name, os));
@@ -561,10 +627,11 @@ impl Node {
             }
             match m.kind.as_str() {
                 "event" => {
-                    let Some(ev) = m.event.and_then(|v| serde_json::from_value::<Event>(v).ok()) else {
+                    let Some(s) = m.event.and_then(|v| serde_json::from_value::<Sealed>(v).ok()) else {
                         self.logf(&format!("cbb: dropped an event from {} that does not decode", c.id));
                         continue;
                     };
+                    let Some(ev) = self.take(s, &c.id) else { continue };
                     match self.engine.received(ev) {
                         Ok(out) => self.apply(out, &c.id),
                         Err(e) => self.logf(&format!("cbb: dropped a bad event from {}: {}", c.id, e.for_log())),
@@ -813,9 +880,10 @@ fn writer(
                     if c.records_only { (0, 0) } else { entries.order(uptime::wall_ms()) },
                 ))
             }
-            Out::Event(mut ev, queued) => {
-                ev.age = add_age(ev.age, uptime::now().saturating_sub(queued));
-                Some(wire::event(&ev))
+            Out::Event(ev, queued) => {
+                let mut s = ev.sealed?;
+                s.age = add_age(ev.age, uptime::now().saturating_sub(queued));
+                Some(wire::event(&s))
             }
             Out::Records(rs) => Some(Message { kind: "records".into(), records: rs, ..Default::default() }),
             Out::Result(r) => Some(wire::result(r)),

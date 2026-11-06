@@ -71,10 +71,12 @@ final class ContentTests: XCTestCase {
     func testNodesFetch() async throws {
         let store = MemoryContent()
         let events = Events()
-        let idA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", idB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-        let a = MemberNode(engine: SyncEngine(device: idA, clock: HybridClock()), name: "iPhone", content: store)
+        // The copies are sealed: b fetches a's blob and opens it.
+        let keys = try TestCopies()
+        let idA = keys.idA, idB = keys.idB
+        let a = MemberNode(engine: SyncEngine(device: idA, clock: HybridClock()), name: "iPhone", content: store, copies: keys.a)
         let b = MemberNode(engine: SyncEngine(device: idB, clock: HybridClock()), name: "pi", role: .full,
-                           onChange: { events.add($0) })
+                           onChange: { events.add($0) }, copies: keys.b)
         let (pa, pb) = Pipe.pair()
         let ta = Task { try await a.serve(pa, peer: idB) }
         let tb = Task { try await b.serve(pb, peer: idA) }
@@ -89,18 +91,25 @@ final class ContentTests: XCTestCase {
         // A picture of 5 MiB and a bit, more than the fetch asks for ahead.
         var rng = SystemRandomNumberGenerator()
         let png = Data((0..<(5 << 20 + 1234)).map { _ in UInt8.random(in: 0...255, using: &rng) })
-        let e = await a.send(text: "", kind: .text, media: Content.manifest(store: store, data: [("image/png", png)]))
+        let e = try await a.send(text: "", kind: .text, media: Content.manifest(store: store, data: [("image/png", png)]))
         XCTAssertEqual(e.kind, .media)
         try await waitUntil { events.all.contains { $0.id == e.id } }
         let got = events.all.first { $0.id == e.id }!
         let part = got.media!.parts[0]
+        let blob = got.sealed!.blob!
+        XCTAssertEqual(blob.size, Media.blobSize(part.size))
         // Events keep flowing while the content does.
         let fetch = Task { try await Content.data(from: b, event: got, part: part) }
-        await b.send(text: "meanwhile", kind: .text)
+        try await b.send(text: "meanwhile", kind: .text)
         try await waitUntil { await a.usable?.text == "meanwhile" }
         let fetched = try await fetch.value
         XCTAssertEqual(fetched, png)
 
+        // The phone serves the sealed blob only, never the part in the open.
+        do {
+            try await b.fetch(from: idA, sha256: part.sha256!, size: part.size) { _, _ in }
+            XCTFail("fetched a part in the open")
+        } catch MemberNode.Failure.missing {}
         // A part the phone does not hold is missing; one over the limit is not fetched.
         do {
             try await b.fetch(from: idA, sha256: Data(repeating: 1, count: 32), size: 10) { _, _ in }
@@ -112,12 +121,12 @@ final class ContentTests: XCTestCase {
         } catch Content.Failure.tooLarge {}
         // b serves nothing.
         do {
-            try await a.fetch(from: idB, sha256: part.sha256!, size: part.size) { _, _ in }
+            try await a.fetch(from: idB, sha256: blob.sha256, size: blob.size) { _, _ in }
             XCTFail("fetched from a member that serves nothing")
         } catch MemberNode.Failure.refused {}
 
         // A cancelled fetch cancels with the peer, and the next one gets it all.
-        let slow = Task { try await b.fetch(from: idA, sha256: part.sha256!, size: part.size) { _, _ in Thread.sleep(forTimeInterval: 0.05) } }
+        let slow = Task { try await b.fetch(from: idA, sha256: blob.sha256, size: blob.size) { _, _ in Thread.sleep(forTimeInterval: 0.05) } }
         try await Task.sleep(nanoseconds: 100_000_000)
         slow.cancel()
         _ = await slow.result
@@ -127,7 +136,7 @@ final class ContentTests: XCTestCase {
         // A sink that fails ends the fetch with its error.
         struct Full: Error {}
         do {
-            try await b.fetch(from: idA, sha256: part.sha256!, size: part.size) { _, _ in throw Full() }
+            try await b.fetch(from: idA, sha256: blob.sha256, size: blob.size) { _, _ in throw Full() }
             XCTFail("a failing sink did not end the fetch")
         } catch is Full {}
         let last = try await Content.data(from: b, event: got, part: part)
@@ -200,15 +209,20 @@ final class ContentTests: XCTestCase {
     }
 
     func testMemoryContentKeepsTheNewest() {
+        // Twice maxBytes, for a copy's parts and its sealed blob.
         let store = MemoryContent(maxBytes: 10)
         let one = store.put(Data(repeating: 1, count: 6))
-        let two = store.put(Data(repeating: 2, count: 6))
-        XCTAssertNil(store.open(sha256: one))
+        let two = store.put(Data(repeating: 2, count: 6), blob: true)
+        let three = store.put(Data(repeating: 3, count: 10))
+        XCTAssertNil(store.bytes(sha256: one))
+        XCTAssertEqual(store.bytes(sha256: three)?.count, 10)
+        // Only blobs are served, never the parts in the open.
+        XCTAssertNil(store.open(sha256: three))
         XCTAssertEqual(store.open(sha256: two)?.size, 6)
         // One part over the limit is still kept, alone.
-        let big = store.put(Data(count: 20))
+        let big = store.put(Data(count: 40), blob: true)
         XCTAssertNil(store.open(sha256: two))
-        XCTAssertEqual(store.open(sha256: big)?.size, 20)
+        XCTAssertEqual(store.open(sha256: big)?.size, 40)
     }
 
     func waitUntil(_ cond: @escaping () async -> Bool) async throws {

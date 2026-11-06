@@ -53,15 +53,18 @@ hardware can prove it:
 ## The three levels
 
 Your group has a level, which decides how sure the group must be before a device may act as
-the root, an admin or the hub.
+the root or an admin. A hub that reads the copies is an admin, so the level applies to it
+too. A hub that only passes copies on needs no level: the copies are sealed end to end to the
+other devices and never to it, so whoever copies its keys can delay copies and see what any
+device in between sees ([privacy](privacy.md#what-the-devices-in-between-see)), and read none.
 
-1. **Strict.** Only proven hardware may be the root, an admin or the hub. To prove more
+1. **Strict.** Only proven hardware may be the root or an admin. To prove more
    devices, this level also asks services outside your home: Apple for App Attest, and
    Intel or AMD for some TPM certificates. Those services learn that a device of that kind
    asked, from your address. Android chains count only when they came through Google's Remote
    Key Provisioning.
-2. **Hardware (the default, recommended).** Keys in hardware may be the root, an admin or the
-   hub, proven or not. Proofs that need no outside service (Android, TPMs with their
+2. **Hardware (the default, recommended).** Keys in hardware may be the root or an admin,
+   proven or not. Proofs that need no outside service (Android, TPMs with their
    certificate on the chip) are still checked and shown. Nothing about your devices leaves
    your home, apart from fetching the revocation copy from `cbb.tools`, which is the same
    file for everyone.
@@ -75,7 +78,8 @@ Level 2 is the default because it keeps keys out of files wherever the hardware 
 without telling any outside service which devices you have.
 
 A computer installed without `sudo` ([rootless](install.md#without-sudo-rootless)) is never
-the root, an admin or the hub, at any level: every program of its user can read its keys.
+the root, an admin or a hub of either kind, at any level: every program of its user can read
+its keys.
 
 ## If a device is lost
 

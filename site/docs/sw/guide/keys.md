@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e105316b2bdb -->
+<!-- source: bb4c4f917772 -->
 # Funguo na uthibitisho
 
 Kila kifaa katika kikundi kina funguo: kimoja huthibitisha kwa vingine kifaa ni nani, na funguo za mzizi na wasimamizi huongeza na kuondoa vifaa. Mahali kifaa kinapoweka funguo zake huamua mwizi anapata nini pamoja na kifaa. Ukurasa huu unasema kila aina ya kifaa huziweka wapi, kikundi kinawezaje kukagua, na kiwango gani cha ukali cha kuchagua. Kanuni kamili ziko katika [itifaki](../protocol.md), sehemu ya 17.
@@ -27,15 +27,15 @@ Kifaa kinaweza kusema ufunguo wake uko kwenye maunzi, lakini programu iliyorekeb
 
 ## Viwango vitatu
 
-Kikundi chako kina kiwango, kinachoamua kikundi lazima kiwe na uhakika kiasi gani kabla kifaa hakijaruhusiwa kutenda kama mzizi, msimamizi au kitovu.
+Kikundi chako kina kiwango, kinachoamua kikundi kinapaswa kuwa na uhakika kiasi gani kabla kifaa hakijaweza kutenda kama mzizi au msimamizi. Kitovu kinachosoma nakala ni msimamizi, kwa hiyo kiwango kinakihusu pia. Kitovu kinachopitisha nakala tu hakihitaji kiwango: nakala hufungwa mwisho hadi mwisho kwa ajili ya vifaa vingine na kamwe si kwa ajili yake, kwa hiyo anayenakili funguo zake anaweza kuchelewesha nakala na kuona kile ambacho kifaa chochote kilicho katikati kinaona ([faragha](privacy.md#what-the-devices-in-between-see)), na hasomi yoyote.
 
-1. **Kali.** Maunzi yaliyothibitishwa tu ndiyo yanaweza kuwa mzizi, msimamizi au kitovu. Ili kuthibitisha vifaa zaidi, kiwango hiki pia huuliza huduma za nje ya nyumbani kwako: Apple kwa App Attest, na Intel au AMD kwa baadhi ya vyeti vya TPM. Huduma hizo hujua kwamba kifaa cha aina hiyo kiliuliza, kutoka kwenye anwani yako. Misururu ya Android huhesabiwa tu inapopitia Remote Key Provisioning ya Google.
-2. **Maunzi (chaguo-msingi, linalopendekezwa).** Funguo za maunzi zinaweza kuwa mzizi, msimamizi au kitovu, zimethibitishwa au la. Uthibitisho usiohitaji huduma ya nje (Android, TPM zenye cheti chake kwenye chipu) bado hukaguliwa na kuonyeshwa. Hakuna kuhusu vifaa vyako kinachotoka nyumbani kwako, isipokuwa kupakua nakala ya ufutaji kutoka `cbb.tools`, ambayo ni faili ile ile kwa kila mtu.
+1. **Kali.** Ni maunzi yaliyothibitishwa tu yanayoweza kuwa mzizi au msimamizi. Ili kuthibitisha vifaa zaidi, kiwango hiki pia huuliza huduma zilizo nje ya nyumba yako: Apple kwa App Attest, na Intel au AMD kwa baadhi ya vyeti vya TPM. Huduma hizo hujua kwamba kifaa cha aina hiyo kiliuliza, kutoka kwa anwani yako. Minyororo ya Android huhesabiwa tu ikiwa ilikuja kupitia Remote Key Provisioning ya Google.
+2. **Maunzi (chaguo-msingi, linalopendekezwa).** Funguo zilizo kwenye maunzi zinaweza kuwa mzizi au msimamizi, zimethibitishwa au la. Uthibitisho usiohitaji huduma ya nje (Android, TPM zenye cheti chake kwenye chipu) bado hukaguliwa na kuonyeshwa. Hakuna kitu kuhusu vifaa vyako kinachotoka nyumbani kwako, isipokuwa kuleta nakala ya ubatilishaji kutoka `cbb.tools`, ambayo ni faili ileile kwa kila mtu.
 3. **Faili zinaruhusiwa (si salama zaidi).** Kifaa chenye funguo kwenye faili pia kinaweza kuwa msimamizi, baada ya onyo: yeyote anayenakili faili hutenda kama msimamizi hadi msimamizi mwingine aondoe kifaa. Kompyuta ambayo funguo zake haziko kwenye TPM au Secure Enclave huwa msimamizi kwa njia hii tu (`cbb admin -allow-file-key`, au onyo kwenye kisanduku cha "Make it an admin" cha simu).
 
 Kiwango cha 2 ndicho chaguo-msingi kwa sababu huweka funguo nje ya faili popote maunzi yanaporuhusu, bila kuiambia huduma yoyote ya nje una vifaa gani.
 
-Kompyuta iliyosakinishwa bila `sudo` ([bila root](install.md#without-sudo-rootless)) kamwe si mzizi, msimamizi wala kitovu, kwa kiwango chochote: kila programu ya mtumiaji wake inaweza kusoma funguo zake.
+Kompyuta iliyosakinishwa bila `sudo` ([bila root](install.md#without-sudo-rootless)) kamwe si mzizi, msimamizi wala kitovu cha aina yoyote, katika kiwango chochote: kila programu ya mtumiaji wake inaweza kusoma funguo zake.
 
 ## Kifaa kikipotea
 

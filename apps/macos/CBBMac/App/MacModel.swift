@@ -226,10 +226,17 @@ final class MacModel: ObservableObject {
     func freeze(_ id: String) async { await admin(["freeze", id], done: String(localized: "Frozen.")) }
     /// Makes a device a hub of the group for sync away from home, reached
     /// through the project's forwarder: this Mac as cbb global hub does, or
-    /// another admin computer, to which cbb sends a signed hub command.
-    /// This Mac turns sync away from home on with it where it is off,
-    /// after the question the app showed, which cbb asks again.
-    func makeHub(_ d: Control.Device) async {
+    /// another computer, to which cbb sends a signed hub command. This Mac
+    /// turns sync away from home on with it where it is off, after the
+    /// question the app showed, which cbb asks again. A hub that reads the
+    /// copies is an admin; with forwardOnly a computer that is no admin
+    /// becomes a hub that only passes them on and reads none.
+    func makeHub(_ d: Control.Device, forwardOnly: Bool = false) async {
+        if !d.isSelf, forwardOnly {
+            await admin(["global", "hub", "-on", d.id, "-forward-only"],
+                        done: String(localized: "It is a hub now that only passes the copies on, and reads none of them."))
+            return
+        }
         let turnOn = d.isSelf && !awayOn
         var args = d.isSelf ? ["global", "hub", "-firewall", "no"] : ["global", "hub", "-on", d.id]
         if turnOn { args.insert("-away-on", at: 2) }

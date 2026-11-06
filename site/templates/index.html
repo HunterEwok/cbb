@@ -35,7 +35,7 @@
 <section class="hero">
   <div class="wrap">
     <h1>{{t "Copy on one device,"}} <span>{{t "paste on another."}}</span></h1>
-    <p class="lead">{{t "Copy on a phone or a computer, paste on any other: iPhone, Android, Mac, Windows or Linux. Devices talk directly over your home network, TLS-encrypted, with no cloud and no accounts. Away from home it works through your own WireGuard tunnel."}}</p>
+    <p class="lead">{{t "Copy on a phone or a computer, paste on any other: iPhone, Android, Mac, Windows or Linux. Every copy is encrypted end to end, and the devices talk directly over your home network, with no cloud and no accounts. Away from home it works through your own WireGuard tunnel."}}</p>
     <!-- A school board in a walnut frame, the picture drawn on it in chalk:
          the computer and the phone joined through the key. -->
     <div class="frame hero-board">{{template "rails"}}<div class="surface">
@@ -157,6 +157,7 @@
 <section class="wrap reveal">
   <h2>{{t "Principles"}}</h2>
   <div class="cards three">
+    <div class="card"><h3>{{t "Encrypted end to end"}}</h3><p>{{t "Each copy is sealed on the device that makes it, for your own devices alone, and signed. A hub, a forwarder or a relay passes it on and can neither read it, change it nor forge one."}}</p></div>
     <div class="card"><h3>{{t "Your network only"}}</h3><p>{{t "At home the devices talk to each other directly. Away from home they reach your group through its own encrypted tunnel. Nothing goes through a cloud."}}</p></div>
     <div class="card"><h3>{{t "Paired, then encrypted"}}</h3><p>{{t "A device joins your group once, by a QR code or a six-digit code. The devices talk only to the devices of the group, and only over TLS."}}</p></div>
     <div class="card"><h3>{{t "Keys in the chip"}}</h3><p>{{t "In a group made on a phone, the phone holds the group's key in its security chip, and each signature with it asks for your face, fingerprint or passcode."}}</p></div>

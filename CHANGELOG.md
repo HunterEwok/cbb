@@ -7,6 +7,23 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- End-to-end encryption of every copy (D-84): the device that copies seals each copy, its
+  text, images and files, with a key of its own, wraps that key for every device of the group
+  that reads copies (X-Wing: X25519 with ML-KEM-768) and signs the copy with its member key.
+  Every device checks the signature, so no device in between can read, change or forge a copy:
+  not a hub that only passes copies on, a forwarder or a blind relay. Images and files travel
+  as one sealed blob in 64 KiB segments, and the members serve only sealed blobs. What passing
+  a copy on needs stays outside the seal (the sender, the time, the readers, the size in
+  steps), and docs/guide/privacy.md says so. The member protocol is `cbb/3`; a device on an
+  older 0.6 build no longer syncs with one on this build. The Go service, both phone apps (the
+  Swift and the Kotlin kits through the Rust core), the share extension and the lite member all
+  seal and open copies; a device that joins reads copies from the next one on.
+- Two kinds of hub, chosen when a device is made one: a hub that reads the copies, which is an
+  admin under the group's key level, or a hub that only passes them on (`forward_only` in its
+  device record), which can be any computer of the group but a rootless install, needs no
+  hardware keys and has no copy sealed to it. `cbb global hub -on DEVICE -forward-only`, the
+  phone apps, the Mac app and the tray app offer both; `cbb status` and the apps' device pages
+  show it. The key levels now concern the root and the admins only.
 - Every device's page in the Mac app and the tray app has a line for the hub: "Make it a
   hub" on this computer even with sync away from home off, which it then turns on in the
   same step after its question (`cbb global hub -away-on`); "This is the group's hub" with
@@ -1039,9 +1056,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
-- The README and the guides say exactly who can read the copies: every device of the group,
-  a hub included, over TLS between each two devices, with only commands sealed to their
-  receiver, and not "end to end"; the README has a trust model ("Who can read what"), the
+- The README and the guides say exactly who can read the copies: the devices of the group
+  that read copies, each copy sealed to them end to end (see Added), and what the devices that
+  pass a copy on still see; the README has a trust model ("Who can read what"), the
   step `sudo cbb mode shared`, a comparison with similar tools and their weak points, and a
   way to check the installer against `SHA256SUMS` before running it. The website's first
   screen says "Copy on one device, paste on another", and its translations are corrected.

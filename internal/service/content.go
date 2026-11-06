@@ -22,9 +22,10 @@ import (
 )
 
 // The content of images and files (design.md, "Images and files",
-// "Storage"): the service keeps the parts it holds whole as files named by
-// their SHA-256 in a cache in its state directory, readable only by itself,
-// and serves them to its peers. The cache keeps the current copy, deletes
+// "Storage"): the service keeps the sealed blobs of copies, and the parts
+// of those it reads, whole as files named by their SHA-256 in a cache in
+// its state directory, readable only by itself, and serves only the blobs
+// to its peers (docs/protocol.md, section 4, "Content"). The cache keeps the current copy, deletes
 // the parts of older ones 10 minutes after they are replaced and
 // everything on restart, within twice the device's limit.
 
@@ -50,6 +51,7 @@ type contentStore struct {
 	current map[[sha256.Size]byte]bool      // the parts of the current copy, kept
 	old     map[[sha256.Size]byte]time.Time // the parts of replaced copies: when they were replaced
 	copies  map[[sha256.Size]byte]int64     // the size of the last copy each part was in
+	blobs   map[[sha256.Size]byte]bool      // the files held whole that are sealed blobs
 	// partials are the ".part" files that fetches left for a later one to
 	// continue, and fetching the fetches writing one now.
 	partials map[[sha256.Size]byte]leftPart
@@ -71,7 +73,7 @@ func openContent(dir string, now func() time.Time) (*contentStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	return &contentStore{dir: dir, now: now, whole: map[[sha256.Size]byte]int64{}, current: map[[sha256.Size]byte]bool{}, old: map[[sha256.Size]byte]time.Time{}, copies: map[[sha256.Size]byte]int64{},
+	return &contentStore{dir: dir, now: now, whole: map[[sha256.Size]byte]int64{}, current: map[[sha256.Size]byte]bool{}, old: map[[sha256.Size]byte]time.Time{}, copies: map[[sha256.Size]byte]int64{}, blobs: map[[sha256.Size]byte]bool{},
 		partials: map[[sha256.Size]byte]leftPart{}, fetching: map[[sha256.Size]byte]int{}}, nil
 }
 
@@ -112,19 +114,26 @@ func (c *contentStore) complete(m *clip.Manifest) bool {
 	return true
 }
 
-// setCurrent makes m's parts the ones kept, and the parts of the copy
-// before them old; limit is the device's limit, which the cache stays
-// within twice of. m is nil when the current copy is a text.
-func (c *contentStore) setCurrent(m *clip.Manifest, limit int64) {
+// setCurrent makes the blob of m and its parts the ones kept, and those of
+// the copy before them old; limit is the device's limit, which the cache
+// stays within twice of. m is nil when the current copy is a text.
+func (c *contentStore) setCurrent(m *mediaCopy, limit int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := c.now()
 	next := map[[sha256.Size]byte]bool{}
 	if m != nil {
-		for _, p := range m.Parts {
-			if !p.Dir {
-				next[[sha256.Size]byte(p.SHA256)] = true
-				c.copies[[sha256.Size]byte(p.SHA256)] = m.Size
+		if m.blob != nil {
+			sum := [sha256.Size]byte(m.blob.SHA256)
+			next[sum] = true
+			c.copies[sum] = m.blob.Size
+		}
+		if m.m != nil {
+			for _, p := range m.m.Parts {
+				if !p.Dir {
+					next[[sha256.Size]byte(p.SHA256)] = true
+					c.copies[[sha256.Size]byte(p.SHA256)] = m.m.Size
+				}
 			}
 		}
 	}
@@ -212,6 +221,7 @@ func (c *contentStore) removeLocked(sum [sha256.Size]byte) {
 	delete(c.old, sum)
 	delete(c.whole, sum)
 	delete(c.copies, sum)
+	delete(c.blobs, sum)
 	delete(c.partials, sum)
 	os.Remove(c.path(sum))
 	os.Remove(c.path(sum) + ".part")
@@ -290,6 +300,30 @@ func (c *contentStore) commit(f *os.File, sum [sha256.Size]byte, size int64) err
 	}
 	c.whole[sum] = size
 	return nil
+}
+
+// markBlob says that the file sum held whole is a sealed blob, which the
+// member serves.
+func (c *contentStore) markBlob(sum [sha256.Size]byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.whole[sum]; ok {
+		c.blobs[sum] = true
+	}
+}
+
+// blobStore is the cache as the node serves it: only the sealed blobs, so
+// that the parts a reader opened stay on it (node.Content).
+type blobStore struct{ c *contentStore }
+
+func (b blobStore) Open(sum [sha256.Size]byte) (io.ReaderAt, int64, bool) {
+	b.c.mu.Lock()
+	blob := b.c.blobs[sum]
+	b.c.mu.Unlock()
+	if !blob {
+		return nil, 0, false
+	}
+	return b.c.Open(sum)
 }
 
 // discard removes a part that did not match its hash.

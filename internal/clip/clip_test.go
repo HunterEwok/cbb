@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -743,7 +744,7 @@ func TestJSON(t *testing.T) {
 		}
 	}
 	var back Hello
-	if err := json.Unmarshal(b, &back); err != nil || back.Current == nil || *back.Current != ev || back.Wall != 7 {
+	if err := json.Unmarshal(b, &back); err != nil || back.Current == nil || !reflect.DeepEqual(*back.Current, ev) || back.Wall != 7 {
 		t.Errorf("round trip = %+v, %v; want %+v", back, err, ev)
 	}
 	plain, _ := json.Marshal(Event{Via: Copy, Kind: Text})

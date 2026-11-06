@@ -70,6 +70,10 @@ through tmux and `cbb copy` and `cbb paste`.
 - **Your network only.** At home the devices talk to each other directly. Away from home
   they reach a computer of yours at home through the group's own encrypted tunnel
   ([how it works](docs/guide/how-it-works.md)). No cloud, no accounts, no telemetry.
+- **Encrypted end to end.** Every copy, its text, images and files, is sealed on the device
+  that makes it, for the devices of your group that read copies, and signed by it. Whatever
+  carries it on the way, a hub, a forwarder or a relay, can neither read it, change it nor
+  forge one ([who can read what](#who-can-read-what)).
 - **Encrypted and paired.** The devices talk to each other only over TLS 1.3 with the
   group's own certificates; what is not encrypted (mDNS on the home network, a Roku's text) is
   in [privacy](docs/guide/privacy.md). A device joins your group once, by a QR code or a
@@ -87,13 +91,20 @@ through tmux and `cbb copy` and `cbb paste`.
 |---|---|---|---|
 | The **root** (the phone or computer that made the group) | the group's root key, in its security chip where it has one | yes | yes, and makes admins |
 | An **admin** (a phone or computer the root chose) | an admin key under the root | yes | yes |
-| Every other device of the group, the **hub** included | its own member key and certificate | yes | no |
+| Every other device of the group, a **hub that reads the copies** included | its own member key and certificate | yes | no |
+| A **hub that only passes copies on** (any computer of yours, a Raspberry Pi say) | its own member key and certificate | no: no copy is sealed to it | no |
 | A **forwarder** (yours, or the project's at `cbb.tools`) | no group key | no: it sees the addresses, timing and sizes of encrypted packets | no |
 | A **blind relay** | no group key | no: it sees which devices of a group are online and talk, when and how much | no |
 
-The clipboard is encrypted between each two devices, not end to end from the one that copies
-to the one that pastes: every device of the group reads it, and a hub passes it on. Commands
-(a remote paste, a quick action) are sealed to the one device they are for. The six-digit
+The clipboard is encrypted end to end. The device that copies seals each copy with a key of
+its own, wraps that key for every device of the group that reads copies (X-Wing, a
+post-quantum hybrid) and signs the whole with its member key. Everything in between passes the
+sealed copy on as it is: a hub that only passes copies on, a forwarder and a blind relay never
+hold a key that opens it, and no device can alter a copy or make one in another's name.
+What passing a copy on needs stays visible to the devices it crosses: which device sent it,
+when, to which devices, and its size in steps; never its kind, its text, its files' names or
+their number ([privacy](docs/guide/privacy.md#what-the-devices-in-between-see)). Commands (a
+remote paste, a quick action) are sealed to the one device they are for. The six-digit
 pairing code, or the QR code that carries it, is the only secret a person handles: show it
 only to the device that should join, as anyone who has it during the pairing can join. The
 details: [privacy](docs/guide/privacy.md), [keys and attestation](docs/guide/keys.md) and
@@ -113,9 +124,9 @@ the [threat model](docs/threat-model.md).
 - Apple's Universal Clipboard works between Apple devices on one Apple Account only.
 
 Where Copy Beyond Borders is weaker: the iPhone needs one gesture for each copy, since iOS
-lets no app read the clipboard in the background; every device of the group, a hub
-included, reads the copies (no end to end encryption from device to device); it is early
-software, with Android and Windows not yet tried on real devices.
+lets no app read the clipboard in the background; a device that joins the group reads
+copies from the next one on, not the copies made before it; it is early software, with
+Android and Windows not yet tried on real devices.
 
 ## Platforms
 

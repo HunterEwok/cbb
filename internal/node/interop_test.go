@@ -5,9 +5,13 @@ package node
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"flag"
+	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
@@ -60,6 +64,44 @@ const (
 	vecEvent  = "fedcba9876543210fedcba9876543210"
 )
 
+// vecCert is a certificate of vecDevice made the same on every run: an
+// ECDSA key from a fixed scalar and its deterministic signature.
+func vecCert(t *testing.T) []byte {
+	t.Helper()
+	key, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), bytes.Repeat([]byte{7}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2025, 10, 21, 0, 0, 0, 0, time.UTC)
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: vecDevice},
+		NotBefore: at, NotAfter: at.AddDate(1, 0, 0), KeyUsage: x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth}}
+	der, err := x509.CreateCertificate(nil, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return der
+}
+
+// vecSealed is a copy of ev as it travels, sealed, with fixed bytes in
+// place of its wraps, payload and signature: the frames show the wire's
+// shape, and testdata/interop/copies-go.json the sealing itself.
+func vecSealed(t *testing.T, ev clip.Event, mark bool, blob *clip.Blob) *clip.Sealed {
+	t.Helper()
+	s := &clip.Sealed{ID: ev.ID, Origin: ev.Origin, Time: ev.Time, Age: ev.Age, Cert: vecCert(t),
+		Wraps: []clip.Wrap{{To: vecDevice, Key: bytes.Repeat([]byte{0x11}, clip.WrapSize)}},
+		Blob:  blob, Sig: bytes.Repeat([]byte{0x33}, 70)}
+	if mark {
+		s.PayloadSHA256 = bytes.Repeat([]byte{0x22}, 32)
+	} else {
+		s.Payload = bytes.Repeat([]byte{0x22}, 1024+16)
+	}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
 func vecTime(t *testing.T, s string) hlc.Timestamp {
 	t.Helper()
 	var ts hlc.Timestamp
@@ -88,16 +130,24 @@ func TestMemberInteropVectors(t *testing.T) {
 		}
 		return msg(t, &message{Type: typeHello, Role: role, Hello: data})
 	}
+	blob := &clip.Blob{SHA256: sum(5)}
+	sealed := func(e clip.Event) *clip.Sealed {
+		var b *clip.Blob
+		if e.Media != nil && e.Media.Size > 0 {
+			b = &clip.Blob{Size: clip.BlobSize(e.Media.Size), SHA256: blob.SHA256}
+		}
+		return vecSealed(t, e, e.IsMark(), b)
+	}
 	event := func(e clip.Event) json.RawMessage {
-		data, err := encode(e)
+		data, err := encode(sealed(e))
 		if err != nil {
 			t.Fatal(err)
 		}
 		return msg(t, &message{Type: typeEvent, Event: data})
 	}
 	v := memberVectors{Frames: []json.RawMessage{
-		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500, Current: &text}, Records: "q83vEjRWeJA=", Name: "pi", OS: group.OSLinux}),
-		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500, Current: &mark}, OS: group.OSMacOS}),
+		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(text), Records: "q83vEjRWeJA=", Name: "pi", OS: group.OSLinux}),
+		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(mark), OS: group.OSMacOS}),
 		hello(Phone, helloOut{Hello: clip.Hello{Wall: 0}, OS: group.OSiOS}),
 		event(text),
 		event(secret),
@@ -125,7 +175,7 @@ func TestMemberInteropVectors(t *testing.T) {
 		// Images and files (frames 16 to 18).
 		event(files),
 		event(image),
-		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500, Current: &image}, OS: group.OSLinux, Features: []string{FeatureMedia}}),
+		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(image), OS: group.OSLinux, Features: []string{FeatureMedia}}),
 		// The members a computer reaches (frame 19).
 		msg(t, &message{Type: typeReach, Reach: []group.DeviceID{vecDevice, "fedcba9876543210fedcba9876543210"}}),
 	}}
@@ -388,17 +438,18 @@ func TestSwiftMemberFrames(t *testing.T) {
 			if m.Type != typeHello || m.Role != Phone {
 				t.Fatalf("frame 0 is %s from %q, want the phone's hello", m.Type, m.Role)
 			}
-			h, extra, err := decodeHello(m.Hello)
-			if err != nil || h.Current == nil || h.Current.Validate() != nil || extra.Name != "iPhone" {
-				t.Errorf("the hello: %+v %+v, %v", h, extra, err)
+			_, extra, err := decodeHello(m.Hello)
+			if err != nil || extra.current == nil || extra.current.Validate() != nil || extra.Name != "iPhone" {
+				t.Errorf("the hello: %+v, %v", extra, err)
 			}
-			if h.Current != nil && h.Current.Kind == clip.Secret && h.Current.Text != "" {
-				t.Error("the hello carries a secret's text")
+			// The phone's current copy is a secret, which a hello carries only as its mark.
+			if extra.current != nil && !extra.current.IsMark() {
+				t.Error("the hello carries a secret's payload")
 			}
 		case m.Type == typeEvent:
-			var e clip.Event
-			if err := json.Unmarshal(m.Event, &e); err != nil || e.Validate() != nil {
-				t.Errorf("frame %d: an event that Go refuses: %s, %v", i, m.Event, err)
+			var s clip.Sealed
+			if err := json.Unmarshal(m.Event, &s); err != nil || s.Validate() != nil || s.IsMark() {
+				t.Errorf("frame %d: a copy that Go refuses: %s, %v", i, m.Event, err)
 			}
 		case m.Type != typePing && m.Type != typeBye:
 			t.Errorf("frame %d: unexpected type %q", i, m.Type)
