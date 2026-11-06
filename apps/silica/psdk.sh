@@ -106,7 +106,15 @@ archs=${*:-$all}
 mkdir -p "$dir/dl"
 fetch() { # name url sha256
 	if ! echo "$3  $dir/dl/$1" | sha256sum -c --status - 2>/dev/null; then
-		curl -fsSL --retry 5 --retry-all-errors -o "$dir/dl/$1" "$2"
+		# Jolla's server cuts long transfers off: each try goes on from
+		# where the last one stopped.
+		rm -f "$dir/dl/$1"
+		n=0
+		until curl -fsSL -C - -o "$dir/dl/$1" "$2"; do
+			n=$((n + 1))
+			[ $n -lt 30 ] || { echo "psdk.sh: cannot download $2" >&2; exit 1; }
+			sleep 2
+		done
 		echo "$3  $dir/dl/$1" | sha256sum -c -
 	fi
 }
