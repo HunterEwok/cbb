@@ -31,7 +31,5 @@ docker run --rm -v "$root:/src" -v "$out:/out" -w /src/apps/ios/CBBKit \
 	-e CBB_VERDICTS=/out/corpus.jsonl -e CBB_VERDICTS_OUT=/out/swift.txt swift:6.2-noble \
 	swift test -Xlinker -L/out/core --filter VerdictTests
 
-# Manifests are read differently until 0.7 makes their form strict
-# (docs/roadmap.md): their differences are printed, not counted.
-go run ./tools/difffuzz compare -corpus "$out/corpus.jsonl" -failures "$out/failures.jsonl" -report-only manifest \
+go run ./tools/difffuzz compare -corpus "$out/corpus.jsonl" -failures "$out/failures.jsonl" \
 	go="$out/go-group.txt,$out/go-release.txt" rust="$out/rust.txt" kotlin="$out/kotlin.txt" swift="$out/swift.txt"

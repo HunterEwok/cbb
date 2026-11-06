@@ -31,6 +31,17 @@ public enum Media {
             parts = try c.decodeIfPresent([Part].self, forKey: .parts) ?? []
         }
 
+        /// Reads a manifest received from another member (docs/protocol.md,
+        /// section 4, "Media"): the Rust core decides whether it is taken,
+        /// in the strict form of signed bodies and in its canonical form,
+        /// with no member its table does not name; nil when it is not.
+        public static func parse(_ data: Data) -> Manifest? {
+            guard Core.bodyRefusal("manifest", data) == nil, let m = try? JSONDecoder().decode(Manifest.self, from: data), m.isValid else {
+                return nil
+            }
+            return m
+        }
+
         /// Whether it is a copy of files, not clipboard data.
         public var isFiles: Bool { parts.first?.path != nil }
 

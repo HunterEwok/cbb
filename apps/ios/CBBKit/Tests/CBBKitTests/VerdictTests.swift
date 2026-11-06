@@ -64,9 +64,7 @@ final class VerdictTests: XCTestCase {
                 ])
             }
         case "manifest":
-            // The frames' decoder, Member.decode, runs the same scan first.
-            let m = Strict.integersOnly(body) ? try? JSONDecoder().decode(Media.Manifest.self, from: body) : nil
-            return m?.isValid ?? false ? "taken" : "refused"
+            return Media.Manifest.parse(body) != nil ? "taken" : "refused"
         case "keys", "release", "channel", "attest-status":
             return refused {
                 guard body.count <= Releases.maxBody else { return "refused" }
