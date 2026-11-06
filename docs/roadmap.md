@@ -491,7 +491,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       set to that certificate. The fdroid flavor already has no update of its
       own (`SELF_UPDATE` false, no installer permission), as F-Droid's inclusion policy
       requires: an app it publishes must not download or install code outside F-Droid.
-- **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS: two packages from one
+- **60.** **Planned (the owner, 2026-11-06).** The app for Aurora OS, in Qt 5.6 with Silica
+    QML around the Rust core through `cbb_call` (docs/core-api.md), one binary with its
+    libraries, since the installer leaves a second executable in a package without its execute
+    bit: two packages from one
     code, one for Aurora 4 and one for Aurora 5 (5.1 and 5.2), since the two have different
     SDKs, sandbox permissions and installers. The Aurora 5 package is built with the SDK of
     the oldest 5.x it supports, 5.1.5 (each release has its own SDK on OMP's site), for both
