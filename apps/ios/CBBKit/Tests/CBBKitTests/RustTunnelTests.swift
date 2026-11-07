@@ -42,7 +42,7 @@ final class RustTunnelTests: XCTestCase {
 
         let guest = try hub.invite(group: "0123456789abcdef", endpoints: "[\"192.0.2.1:3276\"]", lifetime: 600, guestPort: member.port)
         XCTAssertTrue(guest.text.hasPrefix("cbb://invite#"), guest.text)
-        XCTAssertEqual(guest.secret.count, 32)
+        XCTAssertEqual(guest.secret.count, 16)
         XCTAssertGreaterThan(guest.expires, Date())
         guest.admitted()
         guest.close()

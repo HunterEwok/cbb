@@ -59,7 +59,7 @@ class RustTunnelTest {
                 }
                 val g = hub.invite("0123456789abcdef", "[\"192.0.2.1:3276\"]", 600, member.localPort)
                 assertTrue(g.text.startsWith("cbb://invite#"), g.text)
-                assertEquals(32, g.secret.size)
+                assertEquals(16, g.secret.size)
                 assertTrue(g.expires > Instant.now().epochSecond)
                 g.admitted()
                 g.close()
