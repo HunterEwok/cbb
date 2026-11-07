@@ -36,6 +36,12 @@ struct Membership
     static Membership load(Failure *failure);
     // Saves it: the records first, then member.json, each written whole.
     bool save(Failure *failure) const;
+    // Leaves the group on this phone: deletes member.json and the records.
+    // The key for sealed messages stays, as the member keeps it for the run.
+    static bool remove(Failure *failure);
+
+    // The app's data directory, where the member keeps its files too.
+    static QString directory();
 };
 
 // The phone's secret for sealed messages (32 random bytes, seal.key in the

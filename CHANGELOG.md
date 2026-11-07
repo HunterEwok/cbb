@@ -7,11 +7,26 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The group sets how long a copy from another device stays live: one minute by default, from
+  5 seconds to an hour, in a signed `copies` record that the root or any admin signs
+  (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies
+  setting"); `cbb incoming` without a value shows it.
 - The first build of the app for Aurora OS 5 (`apps/silica`, armv7hl and aarch64): it shows
   the Rust core it links and keeps the phone's P-256 key in its own OP-TEE token, initialized
   once through Aurora's QCA keystore and used through PKCS#11 after that. It joins a group
   by its QR code: the phone listens, a phone or a computer of the group scans the code and
-  dials in, and the phone keeps its certificate and the group's records. It does not sync yet.
+  dials in, and the phone keeps its certificate and the group's records. Then it syncs as a
+  member: it dials the members it finds, puts what they send into the clipboard (a secret
+  leaves it when its time is up) and sends what the user copied when the app comes to the
+  front or from the pull-down menu, since Aurora lets no app read the clipboard in the
+  background. The main page shows the members connected and the last copy; "Leave the group"
+  deletes the membership on the phone.
+- The same app as packages for Aurora OS 4 (armv7hl) and Sailfish OS (`harbour-cbb`,
+  armv7hl and aarch64, not yet tested on a phone), which keep the phone's key in a file
+  that only the app reads (level 3) and say so in their hello; CI builds all five packages.
+  The app speaks Chinese, Spanish, Russian, Arabic, Swahili, Hebrew and Hindi besides English.
+- The core makes a P-256 device key and signs a digest with it (`new_device_key`,
+  `sign_digest`, docs/core-api.md), for a phone that keeps its key in a file.
 - `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
   the device records (docs/protocol.md): every member admits them as phones and shows
   "Aurora OS" and "Sailfish OS".
@@ -23,6 +38,10 @@ All notable changes to cbb are documented in this file. The format follows
 - The Rust core joins a phone by its QR code with a key it does not hold, such as the Aurora
   app's key in OP-TEE: lite/ffi's `cbb_join_*` functions run the pairing inside the core's TLS
   and ask the app to sign; a test joins them to a computer's group.
+- lite/ffi's `cbb_member_*` functions run the lite member's node inside a phone's app with the
+  app's key, as a phone: it dials the members it finds and syncs with them; a test joins it to
+  a computer's group and syncs both ways. The lite member's program is now a library with a
+  main.
 - End-to-end encryption of every copy (D-84): the device that copies seals each copy, its
   text, images and files, with a key of its own, wraps that key for every device of the group
   that reads copies (X-Wing: X25519 with ML-KEM-768) and signs the copy with its member key.
@@ -1073,6 +1092,16 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- Every device follows one clipboard rule (D-85): a copy from another device goes into the
+  clipboard while it is live, counted from when it was copied in durations, never by the
+  sender's clock; after that it is gone and the device keeps what it copied itself. A
+  computer that wakes or starts no longer takes an old copy of the group (the 30-second
+  rejoin window is gone). A phone's button takes a copy that waits for it and otherwise
+  sends what the phone copied, however old, unless it is the group's text already; it reads
+  the phone's clipboard only to send. On the iPhone it is the system's Paste button, so iOS
+  does not ask, and the "CBB: sync" shortcut takes its text from Shortcuts' "Get Clipboard".
+- A copy from a device the group removed, or one a taken-over root admitted, is dropped,
+  also when it was not written yet.
 - A copy's manifest of images or files is read by the rules of signed bodies in their canonical
   form everywhere: no member its table does not name, no null (a folder's `size` and `sha256`
   are absent), names in their exact case and each once. Go reads it with

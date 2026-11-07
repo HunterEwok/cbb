@@ -12,6 +12,7 @@
 
 use alloc::format;
 use alloc::string::{String, ToString};
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -29,8 +30,12 @@ const FILE_VERSION: u32 = 1;
 #[derive(Clone)]
 pub struct Identity {
     pub id: DeviceId,
-    /// The device key, PKCS #8.
+    /// The device key, PKCS #8; empty when external holds it.
     pub key: Vec<u8>,
+    /// The device key when the core does not hold it, such as the Aurora
+    /// app's key in OP-TEE: the member's TLS and its copies' signatures go
+    /// through it.
+    pub external: Option<Arc<dyn ExternalKey>>,
     /// The member certificate, from a root or from issuer.
     pub cert: Cert,
     /// The admin CA that issued cert, when an admin did rather than a root.
@@ -130,7 +135,19 @@ impl Identity {
     /// device and its key and comes from a root of the group, or from an
     /// admin CA under one. It does not check expiry.
     pub fn check(&self) -> Result<()> {
-        self.check_key(&public_key(&self.key)?)
+        match &self.external {
+            Some(k) => self.check_key(&k.public()),
+            None => self.check_key(&public_key(&self.key)?),
+        }
+    }
+
+    /// Signs data with the device key, wherever it is: ECDSA with SHA-256,
+    /// DER, as a member signs its copies.
+    pub fn sign(&self, data: &[u8]) -> Result<Vec<u8>> {
+        match &self.external {
+            Some(k) => sign_external(&**k, data),
+            None => sign(&self.key, data),
+        }
     }
 
     /// Checks the parts as check does, for the public key key (SEC1,
@@ -198,6 +215,9 @@ impl Identity {
 
     /// The identity file's contents, in the format of Go's identity.json.
     pub fn to_file(&self) -> Result<Vec<u8>> {
+        if self.external.is_some() {
+            return Err(Error::msg("an identity whose key is kept outside the core has no identity file"));
+        }
         self.check()?;
         let f = File {
             v: FILE_VERSION,
@@ -227,6 +247,7 @@ fn parse(data: &[u8]) -> Result<Identity> {
     let id = Identity {
         id: DeviceId::parse(&f.device)?,
         key: f.key,
+        external: None,
         cert: Cert::parse(&f.cert)?,
         issuer: f.issuer.as_deref().map(Cert::parse).transpose()?,
         group_ca: Cert::parse(&f.group_ca)?,

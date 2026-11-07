@@ -5,6 +5,7 @@
 #pragma once
 
 #include "join.h"
+#include "member.h"
 #include "membership.h"
 #include "platform/osinfo.h"
 
@@ -24,6 +25,7 @@ class App : public QObject
     Q_PROPERTY(QString group READ group NOTIFY groupChanged)
     Q_PROPERTY(QString device READ device NOTIFY groupChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
+    Q_PROPERTY(Member *member READ member CONSTANT)
 
 public:
     explicit App(QObject *parent = nullptr);
@@ -43,11 +45,15 @@ public:
     QString group() const { return m_member.groupTag(); }
     QString device() const { return m_member.device; }
     Join *join() { return &m_join; }
+    Member *member() { return &m_node; }
 
     // Finds or makes the phone's key, off the GUI thread.
     Q_INVOKABLE void setUpKey();
     // Listens for the device that scans this phone's QR code.
     Q_INVOKABLE void startJoin();
+    // Leaves the group on this phone: stops the member and deletes the
+    // membership. The group still lists the phone until an admin removes it.
+    Q_INVOKABLE void leave();
 
 signals:
     void keyChanged();
@@ -56,6 +62,9 @@ signals:
 
 private:
     void show(const QString &error);
+    // Starts the member once the phone has both its key and a group.
+    void startMember();
+    QString phoneName() const;
 
     OsInfo m_os;
     QString m_core;
@@ -64,6 +73,7 @@ private:
     QByteArray m_publicKey;
     Membership m_member;
     Join m_join;
+    Member m_node;
     bool m_busy = false;
     QString m_error;
 };

@@ -488,7 +488,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     and the key store differ, so the platform layer keeps them apart from the start and CI
     builds all the packages. Sailfish ships together with Aurora (the owner, 2026-11-06),
     tested only in the Sailfish SDK's emulator and marked as not yet tested on a phone,
-    for the community to try, as the Android app first was.
+    for the community to try, as the Android app first was. All three packages build
+    (2026-11-06; CI's `Aurora app` jobs): Sailfish's passes Jolla's store check
+    (`rpmvalidation`), and Aurora 4's keeps its key in a file too, as no Aurora 4 phone has
+    been measured for a key in its TEE.
     Sailfish has no TEE key through PKCS#11, so its key is a file (level 3). Its key fits
     [Key levels](#key-levels) as the other phones' do:
     - Level 2, "hardware", the default. How the key is kept, measured on the R570E with

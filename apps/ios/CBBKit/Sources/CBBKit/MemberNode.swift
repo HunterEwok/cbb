@@ -733,6 +733,12 @@ public actor MemberNode {
         for c in conns.values where store.refused(chain: c.transport.peerChain) != nil || store.stopped(chain: c.transport.peerChain) != c.recordsOnly {
             c.goodbye()
         }
+        // The group's last copy from a device removed since, or from a root
+        // an admin took the group over from, no longer counts: it is never
+        // written later (docs/protocol.md, section 4).
+        if let s = engine.currentEvent?.sealed, let set = copies?.records(), (try? set.checkCopy(s)) == nil {
+            engine.forget(s.id)
+        }
     }
 
     /// Sends server credentials signed on this phone to every connected

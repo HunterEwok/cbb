@@ -42,6 +42,7 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current())
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
         emit groupChanged();
+        startMember();
     });
 }
 
@@ -69,14 +70,15 @@ void App::setUpKey()
         thread->deleteLater();
         m_busy = false;
         if (key.state == KeyStore::State::Ready) {
-            m_keyLevel = QStringLiteral("hardware");
+            m_keyLevel = KeyStore::store();
             m_publicKey = key.publicKey;
             m_keyFingerprint = QString::fromLatin1(QCryptographicHash::hash(key.publicKey, QCryptographicHash::Sha256).left(8).toHex());
-            Errors::log(QStringLiteral("key: %1 hardware key %2").arg(key.created ? QStringLiteral("made") : QStringLiteral("found"), m_keyFingerprint));
+            Errors::log(QStringLiteral("key: %1 %2 key %3").arg(key.created ? QStringLiteral("made") : QStringLiteral("found"), m_keyLevel, m_keyFingerprint));
             show(QString());
+            startMember();
         } else {
-            // Without OP-TEE the phone keeps its key in a file, level 3,
-            // which comes with the group's features.
+            // Aurora 5 without OP-TEE (the emulator) has no key: its file
+            // key at level 3 needs the user's consent, which comes later.
             m_keyLevel = QStringLiteral("none");
             m_keyFingerprint.clear();
             show(Errors::shown(key.failure));
@@ -89,13 +91,40 @@ void App::setUpKey()
 void App::startJoin()
 {
     if (m_publicKey.isEmpty()) {
-        show(Errors::shown({QStringLiteral("The phone has no key yet."), QStringLiteral("join: no key")}));
+        show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("join: no key")}));
         return;
     }
+    m_join.start(phoneName(), m_publicKey);
+}
+
+void App::leave()
+{
+    m_node.stop();
+    Failure failure;
+    if (!Membership::remove(&failure)) {
+        show(Errors::shown(failure));
+        return;
+    }
+    Errors::log(QStringLiteral("group: left %1").arg(m_member.groupTag()));
+    m_member = Membership();
+    show(QString());
+    emit groupChanged();
+}
+
+void App::startMember()
+{
+    if (m_member.isNull() || m_publicKey.isEmpty() || m_node.running())
+        return;
+    m_node.start(m_member, phoneName(), m_publicKey, m_os.isAurora() ? QStringLiteral("aurora") : QStringLiteral("sailfish"),
+                 system());
+}
+
+QString App::phoneName() const
+{
     QString name = QSysInfo::machineHostName();
     if (name.isEmpty() || name.toUtf8().size() > 64)
-        name = QStringLiteral("Aurora OS phone");
-    m_join.start(name, m_publicKey);
+        name = m_os.isAurora() ? QStringLiteral("Aurora OS phone") : QStringLiteral("Sailfish OS phone");
+    return name;
 }
 
 void App::show(const QString &error)

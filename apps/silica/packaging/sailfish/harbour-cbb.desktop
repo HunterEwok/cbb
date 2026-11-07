@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-cbb
+Exec=harbour-cbb
+Name=CBB
+
+[X-Sailjail]
+Permissions=Internet
+OrganizationName=tools.cbb
+ApplicationName=cbb

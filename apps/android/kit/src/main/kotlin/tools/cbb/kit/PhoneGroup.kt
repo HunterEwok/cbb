@@ -392,6 +392,23 @@ class PhoneGroup internal constructor(
     /** The group's key level: which keys may be its root, an admin or a hub. */
     val keyLevel: String get() = records.keyLevel
 
+    /** How long a copy from another device stays live after it arrives, in milliseconds: written to the clipboard until then, never after. */
+    val incomingMS: Long get() = records.incomingMS
+
+    /**
+     * Sets how long a copy from another device stays live after it arrives
+     * (5 s to 1 h), as the root or an admin: a copies record
+     * (docs/protocol.md, section 10, "The copies setting"). It returns the
+     * record to send.
+     */
+    fun setIncoming(ms: Long, caSigner: CertificateSigner, now: Instant): Member.Record {
+        if (!isAdmin) throw Failure("this phone is no admin")
+        if (ms !in Records.INCOMING_BOUNDS) throw Failure(INVALID_INCOMING)
+        val b = Records.Body.of("copies", caSigner, now)
+        b.incomingMS = ms
+        return sign(b, caSigner)
+    }
+
     /**
      * Sets the group's key level (Records.KEY_LEVELS), as the current root,
      * keeping the takeover delay; never a level this phone's own key does
@@ -947,6 +964,7 @@ class PhoneGroup internal constructor(
         const val NO_TAKEOVER = "the root did not give this admin the power to take the group over"
         const val CLAIM_WAITING = "this admin's claim to take the group over waits already"
         const val INVALID_DELAY = "the delay before a claim takes effect is 0 to 7 days"
+        const val INVALID_INCOMING = "how long an incoming copy stays live is 5 s to 1 h"
         const val INVALID_KEY_LEVEL = "the key level is proven, hardware or files"
 
         /** The record or command a watch signed: body, its signature (ECDSA with SHA-256, DER) and the watch's admin CA. */

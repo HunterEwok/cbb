@@ -88,6 +88,8 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
 
 #[cfg(feature = "join")]
 pub mod join;
+#[cfg(feature = "member")]
+pub mod member;
 
 /// Hands an answer to C: its bytes, which the caller gives back with
 /// `cbb_free`, their length written to `answer_len` when not null.
@@ -201,6 +203,94 @@ pub unsafe extern "C" fn cbb_join_free(j: *mut join::Join) {
     if !j.is_null() {
         // SAFETY: j is a box cbb_join_new let go of.
         drop(unsafe { Box::from_raw(j) });
+    }
+}
+
+/// Starts the member inside the app (src/member.rs): `request` is its
+/// JSON, `sign` the key's callback and `event` the callback for its events,
+/// both with `ctx`, which must stay valid, and callable from any thread,
+/// for the rest of the process: a thread of the member may still be in a
+/// call when `cbb_member_stop` returns. Writes the answer to `answer` and
+/// `answer_len` and returns the member, or null when the answer is an
+/// error.
+///
+/// # Safety
+///
+/// As `cbb_join_new`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_start(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    event: member::EventFn,
+    ctx: *mut core::ffi::c_void,
+    answer: *mut *mut u8,
+    answer_len: *mut usize,
+) -> *mut member::Member {
+    if request.is_null() || answer.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    let (m, ans) = member::Member::start(req, sign, event, ctx as usize);
+    // SAFETY: the caller gives a writable pointer at answer.
+    unsafe { answer.write(to_c(ans, answer_len)) };
+    m.map_or(core::ptr::null_mut(), |m| Box::into_raw(Box::new(m)))
+}
+
+/// Sends a text the user handed to the app: `request` is
+/// `{"text", "secret"}`.
+///
+/// # Safety
+///
+/// `m` must be a member of `cbb_member_start`, not stopped; `request` must
+/// point to `len` readable bytes and `answer_len` be writable.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_copy(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(m.copy(req), answer_len)
+}
+
+/// The members connected now: `{"peers": [{device, name, role, os}]}`.
+///
+/// # Safety
+///
+/// As `cbb_member_copy`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_peers(m: *const member::Member, answer_len: *mut usize) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    to_c(m.peers(), answer_len)
+}
+
+/// Stops the member and frees it; null does nothing. Its callbacks may still
+/// run for a moment on threads that were in the middle of a call. The
+/// secret for sealed messages stays the first member's for the process.
+///
+/// # Safety
+///
+/// `m` must be null or a member of `cbb_member_start`, not stopped before.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_stop(m: *mut member::Member) {
+    if !m.is_null() {
+        // SAFETY: m is a box cbb_member_start let go of.
+        let m = unsafe { Box::from_raw(m) };
+        m.stop();
     }
 }
 

@@ -5,6 +5,7 @@
 
 #include <QtCrypto>
 
+#include <QCoreApplication>
 #include <QSemaphore>
 #include <QThread>
 
@@ -80,7 +81,7 @@ Failure initUserAppKeystore()
         ksm.waitForBusyFinished();
         ksm.sync();
         if (!ksm.keyStores().contains(QStringLiteral("USERAPP"))) {
-            failure = {QStringLiteral("This phone keeps no keys for apps."),
+            failure = {QCoreApplication::translate("Errors", "This phone keeps no keys for apps."),
                        QStringLiteral("qca: no keystore USERAPP; keystores: %1").arg(ksm.keyStores().join(QLatin1Char(' ')))};
         } else {
             const QString got = ksm.initKeyStore(QStringLiteral("USERAPP"));

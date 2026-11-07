@@ -73,6 +73,9 @@ object Records {
         // hubs
         var hubs: List<String>? = null
 
+        /** In a copies record: how long a copy from another device stays live after it arrives. */
+        var incomingMS: Long? = null
+
         /** The body as the core reads it, the empty fields left out, each key and record once. */
         fun toJson(): JsonObject {
             fun s(v: String?) = v?.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) }
@@ -106,6 +109,7 @@ object Records {
                 "takeover_delay_ms" to takeoverDelayMS?.let { Wire.num(it) },
                 "key_level" to s(keyLevel),
                 "hubs" to strs(hubs),
+                "incoming_ms" to incomingMS?.let { Wire.num(it) },
             )
         }
 
@@ -153,6 +157,10 @@ object Records {
 
     const val FILE = "file"
     const val HARDWARE = "hardware"
+
+    /** How long a copy from another device stays live after it arrives without a copies record, and the bounds of one, in milliseconds. */
+    const val DEFAULT_INCOMING_MS = 60_000L
+    val INCOMING_BOUNDS = 5_000L..3_600_000L
 
     /** A key in hardware whose attestation a signer checked. */
     const val PROVEN = "proven"
@@ -350,12 +358,14 @@ class RecordSet {
         val recovery: ByteArray? = null,
         /** The key level of the current root's newest settings; null means hardware. */
         val keyLevel: String? = null,
+        /** How long a copy from another device stays live after it arrives, from the copies record that counts; null means a minute. */
+        val incomingMS: Long? = null,
     ) {
         override fun equals(other: Any?): Boolean =
             other is State && rootDevice == other.rootDevice && roots.sameAs(other.roots) && stop == other.stop && claims == other.claims &&
                 revoked.sameAs(other.revoked) && noSecretsTo == other.noSecretsTo && nothingTo == other.nothingTo &&
                 conflicts == other.conflicts && newer == other.newer && recovery.contentEquals(other.recovery) &&
-                keyLevel == other.keyLevel
+                keyLevel == other.keyLevel && incomingMS == other.incomingMS
 
         override fun hashCode(): Int = stop.hashCode()
 
@@ -389,6 +399,7 @@ class RecordSet {
                 newer = o.optArray("newer")?.size ?: 0,
                 recovery = o.optBytes("recovery"),
                 keyLevel = o.optString("key_level")?.takeIf { it.isNotEmpty() },
+                incomingMS = o.optLong("incoming_ms")?.takeIf { it > 0 },
             )
         }
     }
@@ -572,6 +583,9 @@ class RecordSet {
 
     /** The group's key level (Records.KEY_LEVELS): hardware when the root set none. */
     val keyLevel: String get() = view.state.keyLevel ?: Records.HARDWARE
+
+    /** How long a copy from another device stays live after it arrives, in milliseconds (docs/protocol.md, section 10, "The copies setting"). */
+    val incomingMS: Long get() = view.state.incomingMS ?: Records.DEFAULT_INCOMING_MS
 
     /** Whether a key hash is revoked. */
     fun isRevoked(keyHash: ByteArray): Boolean = keyHash.toHex() in revoked

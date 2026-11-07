@@ -190,10 +190,50 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "open_copy" => open_copy(serde_json::from_value(args).map_err(bad_args)?),
         "seal_segment" => segment(serde_json::from_value(args).map_err(bad_args)?, true),
         "open_segment" => segment(serde_json::from_value(args).map_err(bad_args)?, false),
+        "new_device_key" => new_device_key(),
+        "sign_digest" => sign_digest(serde_json::from_value(args).map_err(bad_args)?),
         _ => group::dispatch(op, &args)
             .or_else(|| signed::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
     }
+}
+
+/// `new_device_key`: a new P-256 device key for a phone that keeps it in a
+/// file (Sailfish OS, a phone without a TEE: level 3), as `{"pkcs8",
+/// "public"}`.
+fn new_device_key() -> Result<Vec<u8>, Refusal> {
+    let pkcs8 = crate::identity::new_key().map_err(|e| refuse(Code::Request, e))?;
+    let key = crate::identity::signing_key(&pkcs8).map_err(|e| refuse(Code::Request, e))?;
+    let public = key.verifying_key().to_sec1_point(false);
+    let mut m = serde_json::Map::new();
+    m.insert("pkcs8".into(), b64_value(&pkcs8));
+    m.insert("public".into(), b64_value(public.as_bytes()));
+    Ok(json(Value::Object(m)))
+}
+
+/// The arguments of `sign_digest`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SignDigestArgs {
+    #[serde(with = "b64")]
+    pkcs8: Vec<u8>,
+    #[serde(with = "b64")]
+    digest: Vec<u8>,
+}
+
+/// `sign_digest`: ECDSA P-256 over a SHA-256 digest with a PKCS #8 key, DER,
+/// as `{"sig"}`: what a phone's sign callback gives for a key in a file.
+fn sign_digest(a: SignDigestArgs) -> Result<Vec<u8>, Refusal> {
+    use p256::ecdsa::signature::hazmat::PrehashSigner as _;
+    let key = crate::identity::signing_key(&a.pkcs8).map_err(|e| refuse(Code::Request, e))?;
+    if a.digest.len() != 32 {
+        return Err(refuse(Code::Request, Error::msg("The digest is not 32 bytes.")));
+    }
+    let sig: p256::ecdsa::Signature =
+        key.sign_prehash(&a.digest).map_err(|_| refuse(Code::Request, Error::msg("The key cannot sign.")))?;
+    let mut m = serde_json::Map::new();
+    m.insert("sig".into(), b64_value(sig.to_der().as_bytes()));
+    Ok(json(Value::Object(m)))
 }
 
 #[derive(Deserialize)]
@@ -612,6 +652,27 @@ mod tests {
         let e = &answer["error"];
         assert!(!e["message"].as_str().unwrap().is_empty(), "{answer}");
         e["code"].as_u64().unwrap()
+    }
+
+    /// A key from new_device_key signs a digest that its public key
+    /// verifies, and a digest of the wrong size or a key that is not one
+    /// is refused.
+    #[test]
+    fn device_key_signs_digests() {
+        use p256::ecdsa::signature::hazmat::PrehashVerifier as _;
+        let b64 = |v: &Value| base64::engine::general_purpose::STANDARD.decode(v.as_str().unwrap()).unwrap();
+        let enc = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
+        let key = ask("new_device_key", Value::Null);
+        let (pkcs8, public) = (b64(&key["ok"]["pkcs8"]), b64(&key["ok"]["public"]));
+        assert_eq!(public.len(), 65);
+        let digest = Sha256::digest(b"a copy");
+        let sig = ask("sign_digest", serde_json::json!({"pkcs8": enc(&pkcs8), "digest": enc(&digest)}));
+        let sig = p256::ecdsa::Signature::from_der(&b64(&sig["ok"]["sig"])).unwrap();
+        p256::ecdsa::VerifyingKey::from_sec1_bytes(&public).unwrap().verify_prehash(&digest, &sig).unwrap();
+        let short = ask("sign_digest", serde_json::json!({"pkcs8": enc(&pkcs8), "digest": enc(&digest[..31])}));
+        assert_eq!(code(&short), Code::Request as u64);
+        let bad = ask("sign_digest", serde_json::json!({"pkcs8": enc(b"key"), "digest": enc(&digest)}));
+        assert_eq!(code(&bad), Code::Request as u64);
     }
 
     /// evaluate gives each case's state from the case's own JSON.

@@ -6,6 +6,7 @@
 #include "pkcs11.h"
 #include "qcainit.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QFile>
 #include <QVector>
@@ -52,12 +53,12 @@ public:
     State open(Failure *failure)
     {
         if (!QFile::exists(QStringLiteral("/dev/tee0"))) {
-            *failure = {QStringLiteral("This phone has no secure element for keys."), QStringLiteral("tee: no /dev/tee0")};
+            *failure = {QCoreApplication::translate("Errors", "This phone has no secure element for keys."), QStringLiteral("tee: no /dev/tee0")};
             return State::NoTee;
         }
         m_lib = dlopen("libckteec.so.0", RTLD_NOW);
         if (!m_lib) {
-            *failure = {QStringLiteral("This phone has no secure element for keys."),
+            *failure = {QCoreApplication::translate("Errors", "This phone has no secure element for keys."),
                         QStringLiteral("tee: %1").arg(QString::fromLocal8Bit(dlerror()))};
             return State::NoTee;
         }
@@ -190,7 +191,7 @@ public:
 private:
     State fail(Failure *failure, const QString &why)
     {
-        *failure = {QStringLiteral("The phone's secure element did not answer."), QStringLiteral("tee: ") + why};
+        *failure = {QCoreApplication::translate("Errors", "The phone's secure element did not answer."), QStringLiteral("tee: ") + why};
         return State::Failed;
     }
 
@@ -223,6 +224,11 @@ private:
 
 } // namespace
 
+QString store()
+{
+    return QStringLiteral("hardware");
+}
+
 Key ensure()
 {
     Key key;
@@ -240,27 +246,27 @@ Key ensure()
         const CK_RV rv = token.generate(&pub, &priv);
         if (rv != CKR_OK) {
             key.state = State::Failed;
-            key.failure = {QStringLiteral("The phone's secure element did not make a key."), QStringLiteral("tee: C_GenerateKeyPair: %1").arg(hex(rv))};
+            key.failure = {QCoreApplication::translate("Errors", "The phone's secure element did not make a key."), QStringLiteral("tee: C_GenerateKeyPair: %1").arg(hex(rv))};
             return key;
         }
         key.created = true;
     } else {
         key.state = State::Failed;
-        key.failure = {QStringLiteral("The phone's secure element holds a broken key."),
+        key.failure = {QCoreApplication::translate("Errors", "The phone's secure element holds a broken key."),
                        QStringLiteral("tee: %1 private and %2 public halves labelled %3").arg(privs.size()).arg(pubs.size()).arg(QLatin1String(keyLabel))};
         return key;
     }
 
     if (!token.flag(priv, CKA_TOKEN) || !token.flag(priv, CKA_NEVER_EXTRACTABLE) || !token.flag(priv, CKA_ALWAYS_SENSITIVE)) {
         key.state = State::Failed;
-        key.failure = {QStringLiteral("The phone's key is not kept in its secure element."),
+        key.failure = {QCoreApplication::translate("Errors", "The phone's key is not kept in its secure element."),
                        QStringLiteral("tee: the private key is not a token key that is never extractable and always sensitive")};
         return key;
     }
     key.publicKey = token.point(pub);
     if (key.publicKey.isEmpty()) {
         key.state = State::Failed;
-        key.failure = {QStringLiteral("The phone's secure element did not answer."), QStringLiteral("tee: the public key's point does not read")};
+        key.failure = {QCoreApplication::translate("Errors", "The phone's secure element did not answer."), QStringLiteral("tee: the public key's point does not read")};
     }
     return key;
 }
@@ -272,13 +278,13 @@ QByteArray sign(const QByteArray &digest, Failure *failure)
         return QByteArray();
     const QVector<CK_OBJECT_HANDLE> privs = token.find(CKO_PRIVATE_KEY);
     if (privs.size() != 1) {
-        *failure = {QStringLiteral("The phone's key is missing."), QStringLiteral("tee: %1 private keys labelled %2").arg(privs.size()).arg(QLatin1String(keyLabel))};
+        *failure = {QCoreApplication::translate("Errors", "The phone's key is missing."), QStringLiteral("tee: %1 private keys labelled %2").arg(privs.size()).arg(QLatin1String(keyLabel))};
         return QByteArray();
     }
     CK_RV rv = 0;
     const QByteArray raw = token.sign(privs.first(), digest, &rv);
     if (raw.size() != 64) {
-        *failure = {QStringLiteral("The phone's secure element did not sign."), QStringLiteral("tee: C_Sign: %1, %2 bytes").arg(hex(rv)).arg(raw.size())};
+        *failure = {QCoreApplication::translate("Errors", "The phone's secure element did not sign."), QStringLiteral("tee: C_Sign: %1, %2 bytes").arg(hex(rv)).arg(raw.size())};
         return QByteArray();
     }
     return derSignature(raw);

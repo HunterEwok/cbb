@@ -3,6 +3,7 @@
 
 #include "membership.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -39,7 +40,7 @@ bool writeFile(const QString &name, const QByteArray &data, Failure *failure)
     QSaveFile f(dataDir() + QLatin1Char('/') + name);
     if (!f.open(QIODevice::WriteOnly) || f.write(data) != data.size() || !f.setPermissions(QFile::ReadOwner | QFile::WriteOwner) ||
         !f.commit()) {
-        *failure = {QStringLiteral("The phone could not save the group."),
+        *failure = {QCoreApplication::translate("Errors", "The phone could not save the group."),
                     QStringLiteral("membership: %1: %2").arg(name, f.errorString())};
         return false;
     }
@@ -74,13 +75,13 @@ Membership Membership::load(Failure *failure)
     if (!f.exists())
         return Membership();
     if (!f.open(QIODevice::ReadOnly)) {
-        *failure = {QStringLiteral("The phone could not read its group."), QStringLiteral("membership: member.json: %1").arg(f.errorString())};
+        *failure = {QCoreApplication::translate("Errors", "The phone could not read its group."), QStringLiteral("membership: member.json: %1").arg(f.errorString())};
         return Membership();
     }
     QJsonParseError parse;
     const QJsonObject o = QJsonDocument::fromJson(f.readAll(), &parse).object();
     if (o.value(QStringLiteral("v")).toInt() != fileVersion) {
-        *failure = {QStringLiteral("The phone could not read its group."),
+        *failure = {QCoreApplication::translate("Errors", "The phone could not read its group."),
                     QStringLiteral("membership: member.json is not of version %1 (%2)").arg(fileVersion).arg(parse.errorString())};
         return Membership();
     }
@@ -110,6 +111,23 @@ bool Membership::save(Failure *failure) const
     return writeFile(QStringLiteral("member.json"), QJsonDocument(o).toJson(), failure);
 }
 
+bool Membership::remove(Failure *failure)
+{
+    for (const QString &name : {QStringLiteral("member.json"), QStringLiteral("records.json")}) {
+        QFile f(dataDir() + QLatin1Char('/') + name);
+        if (f.exists() && !f.remove()) {
+            *failure = {QCoreApplication::translate("Errors", "The phone could not leave the group."), QStringLiteral("membership: %1: %2").arg(name, f.errorString())};
+            return false;
+        }
+    }
+    return true;
+}
+
+QString Membership::directory()
+{
+    return dataDir();
+}
+
 QByteArray sealSecret(Failure *failure)
 {
     const QString path = dataDir() + QStringLiteral("/seal.key");
@@ -124,7 +142,7 @@ QByteArray sealSecret(Failure *failure)
     if (random.open(QIODevice::ReadOnly))
         s = random.read(32);
     if (s.size() != 32) {
-        *failure = {QStringLiteral("The phone could not make its keys."), QStringLiteral("membership: /dev/urandom: %1").arg(random.errorString())};
+        *failure = {QCoreApplication::translate("Errors", "The phone could not make its keys."), QStringLiteral("membership: /dev/urandom: %1").arg(random.errorString())};
         return QByteArray();
     }
     if (!writeFile(QStringLiteral("seal.key"), s, failure))

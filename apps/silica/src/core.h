@@ -11,6 +11,9 @@
 #include <QJsonObject>
 #include <QJsonValue>
 
+#include <cstddef>
+#include <cstdint>
+
 namespace Core {
 
 // The version of the request and answer shapes the app speaks; call refuses
@@ -24,5 +27,12 @@ QJsonValue call(const QString &op, const QJsonValue &args, Failure *failure);
 
 // The linked core as `cbb version` names it: "core X, abi N, source S".
 QString versionLine(Failure *failure);
+
+// An answer of lite/ffi's join and member functions, which it frees: its ok,
+// or its error in failure, the details under what.
+QJsonObject take(uint8_t *answer, size_t len, const QString &what, Failure *failure);
+
+// The core's signing callback (cbb_sign_fn): the key store signs the digest.
+int32_t signDigest(void *ctx, const uint8_t *digest, uint8_t *sig, size_t *sigLen);
 
 } // namespace Core

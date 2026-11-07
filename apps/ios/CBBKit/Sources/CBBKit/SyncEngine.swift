@@ -174,6 +174,15 @@ public final class SyncEngine {
         return Result(forward: e, changed: changed)
     }
 
+    /// Drops the current event when it is the event id: its origin was
+    /// removed from the group, so its copy no longer counts. What the
+    /// phone's clipboard holds stays.
+    public func forget(_ id: String) {
+        guard current?.id == id else { return }
+        current = nil
+        copiedAt = 0
+    }
+
     /// Takes in a peer's hello. A hello that carries a secret's text is a
     /// protocol error and closes the connection.
     public func reconcile(_ h: Member.Hello) throws -> Result {

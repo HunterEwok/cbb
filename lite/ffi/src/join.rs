@@ -31,10 +31,10 @@ pub type SignFn =
 /// The largest DER signature of P-256.
 const MAX_SIG: usize = 72;
 
-struct AppKey {
-    public: Vec<u8>,
-    sign: SignFn,
-    ctx: usize,
+pub(crate) struct AppKey {
+    pub(crate) public: Vec<u8>,
+    pub(crate) sign: SignFn,
+    pub(crate) ctx: usize,
 }
 
 impl ExternalKey for AppKey {
@@ -64,7 +64,7 @@ impl TimeProvider for SystemClock {
     }
 }
 
-fn wall_ms() -> i64 {
+pub(crate) fn wall_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| i64::try_from(d.as_millis()).unwrap_or(0)).unwrap_or(0)
 }
 
@@ -145,7 +145,7 @@ impl ErrorAnswer {
     }
 }
 
-fn answer<T: Serialize>(ok: Result<T>) -> Vec<u8> {
+pub(crate) fn answer<T: Serialize>(ok: Result<T>) -> Vec<u8> {
     let v = match ok {
         Ok(v) => serde_json::json!({ "ok": v }),
         Err(e) => serde_json::json!({ "error": ErrorAnswer::of(&e) }),

@@ -14,6 +14,10 @@ publish = false
 members = ["core", "embassy", "ffi", "ring-shim", "wasm"]
 exclude = ["esp32", "core/fuzz"]
 
+[lib]
+name = "cbb_lite"
+path = "src/lib.rs"
+
 [[bin]]
 name = "cbb"
 path = "src/main.rs"

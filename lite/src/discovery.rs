@@ -132,8 +132,19 @@ pub fn start(
         return;
     }
     std::thread::spawn(move || {
-        if let Err(e) = browse(node, &tag, port, &*log) {
+        if let Err(e) = browse(node, &tag, port, false, &*log) {
             log(&format!("cbb: finding the members failed: {e}; give them with -peer"));
+        }
+    });
+}
+
+/// Starts dialing as a phone does: it publishes nothing and listens on no
+/// port, so it dials every member that browsing finds, lite members too,
+/// whatever their device IDs.
+pub fn start_as_phone(node: Arc<Node>, tag: String, log: Arc<dyn Fn(&str) + Send + Sync>) {
+    std::thread::spawn(move || {
+        if let Err(e) = browse(node, &tag, None, true, &*log) {
+            log(&format!("cbb: finding the members failed: {e}"));
         }
     });
 }
@@ -142,6 +153,7 @@ fn browse(
     node: Arc<Node>,
     tag: &str,
     port: Option<u16>,
+    as_phone: bool,
     log: &(dyn Fn(&str) + Send + Sync),
 ) -> Result<(), mdns_sd::Error> {
     let daemon = mdns_sd::ServiceDaemon::new()?;
@@ -172,15 +184,18 @@ fn browse(
             mdns_sd::ServiceEvent::ServiceResolved(info) => {
                 let Some(id) = instance_id(&info.fullname) else { continue };
                 // Members of another group, or of a replaced CA, are ignored;
-                // of two lite members the one with the lower ID dials.
+                // of two lite members the one with the lower ID dials; a
+                // phone dials them all.
                 let r = info.get_property_val_str("r");
-                if id == me || info.get_property_val_str("g") != Some(tag) || (lite(r) && id < me) {
+                if id == me || info.get_property_val_str("g") != Some(tag) || (lite(r) && id < me && !as_phone) {
                     continue;
                 }
                 // A phone that is the hub publishes itself while its app is
                 // open; it dials this member, as every phone does.
                 if phone(r) {
-                    node.found(&id, true);
+                    if !as_phone {
+                        node.found(&id, true);
+                    }
                     continue;
                 }
                 let addrs = order(info.get_addresses().iter().map(|ip| match ip {
