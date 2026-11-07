@@ -289,14 +289,14 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       relative's group): every call into the core and every saved state names its group.
     - A temporary guest: a device record with an end date, after which the device leaves the
       group without being removed by hand.
-- **46.** **XHTTP in 0.6 for `cbb` and the phones; the lite member in 0.7.** Sync away from home through networks that block VPNs, on
+- **46.** **XHTTP in 0.6 for `cbb`, the phones and the lite member.** Sync away from home through networks that block VPNs, on
     every member, the lite member included. There are two ways, equal options that the user
     or the server's operator picks, and more may join them: VLESS and AmneziaWG. VLESS comes
     in two kinds: with the site's real certificate, behind the server's own web server
     (XHTTP, which the site's nginx passes to the forwarder; the project's forwarder at
     cbb.tools runs it), or with REALITY, for forwarders without a web server. Every client
-    speaks each of them; on the lite member, in 0.7, AmneziaWG comes first (Linux, then the
-    ESP32), then VLESS over XHTTP on Linux only, then the blind relay
+    speaks each of them; the lite member on Linux speaks AmneziaWG and VLESS over XHTTP in
+    0.6 (the owner, 2026-11-07), not REALITY; the ESP32 and the blind relay come later
     ([below](#vless-behind-a-web-server)).
 - **47.** **After TestFlight.** Back Tap on the iPhone in two taps: iOS lets no app make a
     shortcut or set Back Tap, so the app carries a signed shortcut file (`shortcuts sign
@@ -848,8 +848,8 @@ hub's offer, and the clients in `cbb` and the phones' tunnel, the default on cbb
 ([design](design.md#blocked-networks)). Also in 0.6 (the owner, 2026-11-03): a hub that sets
 VLESS speaks AmneziaWG too, and its clients try AmneziaWG over UDP first and VLESS after it,
 never plain WireGuard; the client's XHTTP reuses its connections and spaces its uploads at
-random, with Xray's usual numbers. Left for 0.7: the lite member (AmneziaWG first, then its
-VLESS client on Linux), VLESS's own encryption, the interop vectors. Before it, VLESS ran only inside REALITY: the forwarder
+random, with Xray's usual numbers. Brought into 0.6 (the owner, 2026-11-07): the lite member's
+AmneziaWG and its VLESS client over XHTTP on Linux. Left for 0.7: VLESS's own encryption. Before it, VLESS ran only inside REALITY: the forwarder
 listens on TCP 443 itself and borrows another site's TLS. A server that already serves a site on 443, as cbb.tools does with
 nginx, cannot do that, and the lite member cannot speak REALITY at all: REALITY needs a
 browser's ClientHello and its own check inside the session ID, which rustls does not
@@ -903,7 +903,7 @@ a site.
 - **cbb.tools.** `site/deploy/nginx.conf` gains the XHTTP location, which reads the path
   from a file made on the server (as `cbb-preview.conf`), so the path stays out of the
   repository; `site/README.md` gains the step, and the forwarder runs with XHTTP.
-- **First, on the lite member (0.7):** AmneziaWG (its changes to WireGuard's packets: junk
+- **First, on the lite member (built in 0.6):** AmneziaWG (its changes to WireGuard's packets: junk
   packets, shifted sizes and headers, padding) as a layer around GotaTun's UDP socket,
   ported from amneziawg-go (MIT, already in `internal/third_party/amneziawg-go`) to a
   sans-I/O layer in `cbb_core` under `src/third_party`, checked against it with interop
@@ -912,14 +912,16 @@ a site.
   refuses one). WireGuard's Noise and keys stay GotaTun's; the layer recomputes `mac1` for
   the changed message types. Padding inside the encrypted packets and random rekey times
   live inside GotaTun and need a small patch of it (`[patch]` in `lite/Cargo.toml`, as for
-  the ring stand-in). The same layer serves the ESP32 later. Then its VLESS client above,
-  and then the blind relay (item 28), which the lite member does not reach yet.
+  the ring stand-in). The same layer serves the ESP32 later. As built, the layer is
+  `lite/src/awg.rs` (checked end to end against the Go hub), and the VLESS client
+  `lite/src/vless.rs` over HTTP/1.1 with `cbb_core::vless`, checked against the Go forwarder
+  behind a web server (`TestLiteMemberAwayXHTTP`); the blind relay (item 28) comes later.
 
 Steps: the protocol and the Go forwarder and hub first, with Xray's XHTTP transport; then
 the phones' tunnel; then the lite member's client and its vectors; then cbb.tools' nginx
 and forwarder; then the guide for blocked networks (with its translations), the reference
 and the bench's cases for a network that blocks WireGuard (P20, S9, F7), run from a real
-network that blocks VPNs; in 0.7, AmneziaWG, then VLESS, then the relay on the lite member.
+network that blocks VPNs; AmneziaWG and VLESS on the lite member came in 0.6, the relay later.
 
 ## The Next's network in the background
 

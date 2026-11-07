@@ -86,6 +86,32 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 void cbb_member_stop(cbb_member *m);
 
+/*
+ * The phones' tunnel to the hub (src/tunnel.rs), only in a library built with
+ * the feature tunnel (the iPhone and Android apps): request is JSON with its
+ * "op" (new_key, public_key, start, status, stop, and hub_... for the phone
+ * as the group's hub); the answer, given back with cbb_free, is
+ * {"ok": ...} or {"error": {...}}. A started tunnel's loopback port leads
+ * to the hub's member port.
+ */
+uint8_t *cbb_tunnel(const uint8_t *request, size_t len, size_t *answer_len);
+
+/*
+ * Registers a hub of cbb_tunnel with the group's forwarder, its TLS signed
+ * with the member key through sign and ctx, which stay valid until the hub
+ * stops or registers again; the answer is as cbb_tunnel's.
+ */
+uint8_t *cbb_tunnel_register(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
+
+/*
+ * Links the phone to the group's blind relay, its TLS signed with the member
+ * key through sign, its events (dial, calling, changed, log) given to event,
+ * both with ctx, which stay valid until relay_stop returns; the answer is
+ * as cbb_tunnel's, with the link's "id".
+ */
+uint8_t *cbb_tunnel_relay(const uint8_t *request, size_t len, cbb_sign_fn sign, cbb_event_fn event, void *ctx,
+                          size_t *answer_len);
+
 #ifdef __cplusplus
 }
 #endif

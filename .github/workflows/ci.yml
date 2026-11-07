@@ -151,6 +151,49 @@ jobs:
           path: cover-go-${{ matrix.os }}.out
           retention-days: 7
 
+  # Every release build of cbb runs the group's rules, the signed bodies and
+  # the sealed copies through the Rust core (-tags cbbwasm), while a plain go
+  # test runs Go's own (internal/authority, internal/clip), which the
+  # differential run keeps the same. This job runs the whole Go suite as the
+  # release builds are made, so that what ships is what is tested.
+  gowithcore:
+    name: go test with the Rust core
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the Rust toolchain for WebAssembly, and swtpm
+        run: |
+          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+          rustup default stable
+          sudo apt-get update -q
+          sudo apt-get install -y -q swtpm
+          echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
+      - name: the core as WebAssembly, as the release builds embed it
+        run: sh lite/wasm/build.sh
+      - name: go test, every package, with the core
+        run: go test -race -timeout 25m -overlay lite/target/cbb-core-overlay.json -tags cbbwasm -coverprofile=cover-go-withcore.out ./...
+      # The code that calls the core runs only here; the coverage job adds
+      # this profile to the others.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-go-withcore
+          path: cover-go-withcore.out
+          retention-days: 7
+      - name: the build says it runs the core
+        run: |
+          go build -overlay lite/target/cbb-core-overlay.json -tags cbbwasm -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+          "$RUNNER_TEMP/cbb" version | tee "$RUNNER_TEMP/version.txt"
+          grep -q '^rules: the Rust core' "$RUNNER_TEMP/version.txt"
+
   # Go's test coverage across packages (a test of internal/service counts for
   # internal/group too), with the TPM, the desktop clipboards and the e2e's
   # programs built with -cover; the coverage job sums it up.
@@ -233,7 +276,7 @@ jobs:
   # and fails when one falls below its floor in tools/coverage/floor.json.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, kit, android, lite]
+    needs: [changes, test, gocover, gowithcore, kit, android, lite]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -1993,6 +2036,7 @@ jobs:
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-ffi --features tunnel --all-targets -- -D warnings
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
       - name: cargo test (the interop vectors in testdata/interop too), with coverage
@@ -2168,6 +2212,11 @@ jobs:
         run: |
           (cd lite && cargo build --locked --release -p cbb-ffi --features member --example phone-on-linux)
           CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember' -v
+      - name: the phones' Rust tunnel and hub through lite/ffi work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
+        working-directory: .
+        run: |
+          (cd lite && cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux)
+          CBB_TUNNEL_ON_LINUX="$PWD/lite/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64
@@ -2612,7 +2661,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gowithcore, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

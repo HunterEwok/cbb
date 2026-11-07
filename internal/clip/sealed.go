@@ -21,6 +21,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/HunterEwok/cbb/internal/core"
 	"github.com/HunterEwok/cbb/internal/hlc"
 	"github.com/HunterEwok/cbb/internal/seal"
 	"github.com/HunterEwok/cbb/internal/strict"
@@ -526,6 +527,34 @@ func (s *Sealed) Open(me string, secret []byte) (Content, []byte, error) {
 	if i < 0 {
 		return Content{}, nil, ErrNotReader
 	}
+	c, k, err := s.open(i, me, secret)
+	if err != nil {
+		return Content{}, nil, err
+	}
+	var size int64
+	if c.Media != nil {
+		size = c.Media.Size
+	}
+	switch b := s.Blob; {
+	case b != nil && size > 0 && b.Size == BlobSize(size):
+	case b == nil && size == 0:
+	default:
+		return Content{}, nil, errors.New("clip: the copy's blob does not fit its manifest")
+	}
+	return c, k, nil
+}
+
+// open opens the copy with the wrap i, which is for me: through the core
+// in a build that links it (sealedcore.go), with Go's code otherwise.
+func (s *Sealed) open(i int, me string, secret []byte) (Content, []byte, error) {
+	if core.Linked() {
+		return openInCore(s, me, secret)
+	}
+	return s.openInGo(i, secret)
+}
+
+// openInGo is Go's open of the copy with the wrap i.
+func (s *Sealed) openInGo(i int, secret []byte) (Content, []byte, error) {
 	h := s.HeaderHash()
 	k, err := seal.Open(secret, h, s.Wraps[i].Key)
 	if err != nil || len(k) != KeySize {
@@ -542,16 +571,6 @@ func (s *Sealed) Open(me string, secret []byte) (Content, []byte, error) {
 	c, err := DecodeContent(plain)
 	if err != nil {
 		return Content{}, nil, err
-	}
-	var size int64
-	if c.Media != nil {
-		size = c.Media.Size
-	}
-	switch b := s.Blob; {
-	case b != nil && size > 0 && b.Size == BlobSize(size):
-	case b == nil && size == 0:
-	default:
-		return Content{}, nil, errors.New("clip: the copy's blob does not fit its manifest")
 	}
 	return c, k, nil
 }
@@ -574,6 +593,40 @@ func SealCopy(id, origin string, t hlc.Timestamp, cert, issuer []byte, readers [
 	if len(key) != KeySize {
 		return nil, errors.New("clip: a copy's key is not 32 bytes")
 	}
+	s, toSign, err := sealDraft(id, origin, t, cert, issuer, readers, c, blob, key)
+	if err != nil {
+		return nil, err
+	}
+	d := sha256.Sum256(toSign)
+	if s.Sig, err = signer.Sign(rand.Reader, d[:], crypto.SHA256); err != nil {
+		return nil, fmt.Errorf("clip: sign the copy: %w", err)
+	}
+	if err := s.Validate(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// sealDraft seals a copy without signing it, and gives what its origin
+// signs: through the core in a build that links it, with Go's code
+// otherwise. The core's copy must give the same bytes to sign as Go reads
+// from it, or it is not sent.
+func sealDraft(id, origin string, t hlc.Timestamp, cert, issuer []byte, readers []Reader, c Content, blob *Blob, key []byte) (*Sealed, []byte, error) {
+	if core.Linked() {
+		s, toSign, err := sealInCore(id, origin, t, cert, issuer, readers, c, blob, key)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !bytes.Equal(toSign, s.ToSign()) {
+			return nil, nil, errors.New("clip: the core's sealed copy does not read back as it was signed")
+		}
+		return s, toSign, nil
+	}
+	return sealInGo(id, origin, t, cert, issuer, readers, c, blob, key)
+}
+
+// sealInGo is Go's seal of a copy, without its signature.
+func sealInGo(id, origin string, t hlc.Timestamp, cert, issuer []byte, readers []Reader, c Content, blob *Blob, key []byte) (*Sealed, []byte, error) {
 	rs := slices.Clone(readers)
 	slices.SortFunc(rs, func(a, b Reader) int { return strings.Compare(a.ID, b.ID) })
 	rs = slices.CompactFunc(rs, func(a, b Reader) bool { return a.ID == b.ID })
@@ -584,28 +637,21 @@ func SealCopy(id, origin string, t hlc.Timestamp, cert, issuer []byte, readers [
 	h := headerHash(id, origin, t, ids, blob)
 	plain, err := c.Encode()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	a, err := aeadOf(key, payloadInfo)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s := &Sealed{ID: id, Origin: origin, Time: t, Cert: cert, Issuer: issuer, Payload: a.Seal(nil, make([]byte, 12), plain, h), Blob: blob}
 	for _, r := range rs {
 		w, err := seal.Seal(r.Seal, h, key)
 		if err != nil {
-			return nil, fmt.Errorf("clip: a reader's key for sealed messages: %w", err)
+			return nil, nil, fmt.Errorf("clip: a reader's key for sealed messages: %w", err)
 		}
 		s.Wraps = append(s.Wraps, Wrap{To: r.ID, Key: w})
 	}
-	d := sha256.Sum256(s.ToSign())
-	if s.Sig, err = signer.Sign(rand.Reader, d[:], crypto.SHA256); err != nil {
-		return nil, fmt.Errorf("clip: sign the copy: %w", err)
-	}
-	if err := s.Validate(); err != nil {
-		return nil, err
-	}
-	return s, nil
+	return s, s.ToSign(), nil
 }
 
 // EventOf is the engine's event of a sealed copy that this member, me,

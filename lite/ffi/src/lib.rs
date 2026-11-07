@@ -90,6 +90,8 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
 pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
+#[cfg(feature = "tunnel")]
+pub mod tunnel;
 
 /// Hands an answer to C: its bytes, which the caller gives back with
 /// `cbb_free`, their length written to `answer_len` when not null.
@@ -315,6 +317,79 @@ pub unsafe extern "C" fn cbb_member_stop(m: *mut member::Member) {
         let m = unsafe { Box::from_raw(m) };
         m.stop();
     }
+}
+
+/// The phones' tunnel to the hub (src/tunnel.rs lists the requests): answers
+/// the `len` bytes at `request` with bytes the caller gives back with
+/// `cbb_free`, their length written to `answer_len`. Null only when
+/// `answer_len` or `request` is null.
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes and `answer_len` to a
+/// writable `size_t`, for the time of the call.
+#[cfg(feature = "tunnel")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_tunnel(request: *const u8, len: usize, answer_len: *mut usize) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request, not null.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(tunnel::call(req), answer_len)
+}
+
+/// Registers a hub of `cbb_tunnel` with the group's forwarder (src/tunnel.rs
+/// tells the request), signing its TLS with the app's member key through
+/// `sign` and `ctx`, as `cbb_member_start` does; the answer is as
+/// `cbb_tunnel`'s.
+///
+/// # Safety
+///
+/// As `cbb_tunnel`; `sign` must stay callable with `ctx`, from any thread,
+/// until the hub stops or registers again.
+#[cfg(feature = "tunnel")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_tunnel_register(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request, not null.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(tunnel::register(req, sign, ctx as usize), answer_len)
+}
+
+/// Links the phone to the group's blind relay (src/tunnel.rs tells the
+/// request and the events), signing its TLS with the member key through
+/// `sign` and telling the app through `event`, both with `ctx`; the answer
+/// is as `cbb_tunnel`'s, `{"id"}` for the `relay_...` requests.
+///
+/// # Safety
+///
+/// As `cbb_tunnel`; `sign` and `event` must stay callable with `ctx`, from
+/// any thread, until `relay_stop` returns.
+#[cfg(feature = "tunnel")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_tunnel_relay(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    event: join::EventFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request, not null.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(tunnel::relay_start(req, sign, event, ctx as usize), answer_len)
 }
 
 #[cfg(test)]
