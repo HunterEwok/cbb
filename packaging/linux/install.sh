@@ -491,7 +491,7 @@ if [ "$kind" = lite ]; then
 	# shellcheck source=packaging/pair.sh
 	. "$here/../pair.sh"
 	if ! pair_now "$cbb" cbb; then
-		echo "Next: see lite/README.md; in short, sudo -u cbb $run pair here, and scan its QR code with the phone app."
+		echo "Next: see member/README.md; in short, sudo -u cbb $run pair here, and scan its QR code with the phone app."
 	fi
 else
 	echo "Next: run sudo $run pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."

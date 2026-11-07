@@ -17,7 +17,7 @@ tiene un rol:
 | **Raíz** | el teléfono que creó el grupo (o el ordenador, [sin la app](without-app.md)) | guarda la clave del grupo, añade y quita dispositivos, nombra administradores |
 | **Administrador** | un segundo teléfono, o un ordenador que elige la raíz | añade y quita dispositivos, como la raíz |
 | **Miembro** | cada ordenador y cada teléfono | sincroniza el portapapeles |
-| **Miembro ligero** | un dispositivo Linux pequeño: un router, una Raspberry Pi Zero | sincroniza, nunca añade a nadie ([miembro ligero](../../lite/README.md)) |
+| **Miembro ligero** | un dispositivo Linux pequeño: un router, una Raspberry Pi Zero | sincroniza, nunca añade a nadie ([miembro ligero](../../member/README.md)) |
 | **Miembro sin root** | un ordenador Linux instalado sin `sudo` | sincroniza como un miembro, pero nunca es la raíz, un administrador ni un hub ([más abajo](#rootless-members)) |
 | **Hub** | un ordenador en casa, o un teléfono mientras su app está abierta, si quieres uno | permite que tus dispositivos sincronicen cuando están fuera de casa; uno que solo pasa las copias no lee ninguna |
 
@@ -46,7 +46,7 @@ En una misma red doméstica, los dispositivos se encuentran solos (mDNS) y se co
 
 ![En casa, cada dispositivo habla directamente con todos los demás, sin servidor](../images/at-home.svg)
 
-**Dos redes en casa**, por ejemplo una red aparte para dispositivos inteligentes: mDNS no cruza el router, así que los dispositivos de redes distintas no se encuentran solos. Las apps de teléfono recuerdan las direcciones de cada ordenador a partir de su código QR y aun así llegan a él; a un miembro ligero se le puede indicar la dirección de un ordenador ([`-peer`](../../lite/README.md#install)); y para todo lo demás, un hub (más abajo) une ambos lados.
+**Dos redes en casa**, por ejemplo una red aparte para dispositivos inteligentes: mDNS no cruza el router, así que los dispositivos de redes distintas no se encuentran solos. Las apps de teléfono recuerdan las direcciones de cada ordenador a partir de su código QR y aun así llegan a él; a un miembro ligero se le puede indicar la dirección de un ordenador ([`-peer`](../../member/README.md#install)); y para todo lo demás, un hub (más abajo) une ambos lados.
 
 ## Fuera de casa: el hub
 

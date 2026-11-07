@@ -178,9 +178,9 @@ jobs:
           sudo apt-get install -y -q swtpm
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: the core as WebAssembly, as the release builds embed it
-        run: sh lite/wasm/build.sh
+        run: sh wasm/build.sh
       - name: go test, every package, with the core
-        run: go test -race -timeout 25m -overlay lite/target/cbb-core-overlay.json -tags cbbwasm -coverprofile=cover-go-withcore.out ./...
+        run: go test -race -timeout 25m -overlay target/cbb-core-overlay.json -tags cbbwasm -coverprofile=cover-go-withcore.out ./...
       # The code that calls the core runs only here; the coverage job adds
       # this profile to the others.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -190,7 +190,7 @@ jobs:
           retention-days: 7
       - name: the build says it runs the core
         run: |
-          go build -overlay lite/target/cbb-core-overlay.json -tags cbbwasm -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+          go build -overlay target/cbb-core-overlay.json -tags cbbwasm -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           "$RUNNER_TEMP/cbb" version | tee "$RUNNER_TEMP/version.txt"
           grep -q '^rules: the Rust core' "$RUNNER_TEMP/version.txt"
 
@@ -351,11 +351,11 @@ jobs:
         run: go vet ./...
       - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
         run: |
-          sh lite/wasm/build.sh
-          sh lite/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
+          sh wasm/build.sh
+          sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
       - name: go build, with the core as at a release
         run: |
-          overlay=$GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json
+          overlay=$GITHUB_WORKSPACE/target/cbb-core-overlay.json
           if [ "$GOOS" = windows ]; then
             # cbbw.exe is the same program without a console window, for the agent.
             go build -overlay "$overlay" -tags cbbwasm -trimpath -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
@@ -560,8 +560,8 @@ jobs:
           rel="$RUNNER_TEMP/release"
           sh packaging/archive.sh "$RUNNER_TEMP/cbb" linux amd64 "$rel"
           rustup toolchain install stable --profile minimal --target x86_64-unknown-linux-musl
-          (cd lite && cargo +stable build --locked --release --target x86_64-unknown-linux-musl)
-          sh lite/packaging/archive.sh lite/target/x86_64-unknown-linux-musl/release/cbb x86_64-unknown-linux-musl amd64 "$rel"
+          cargo +stable build --locked --release --target x86_64-unknown-linux-musl
+          sh member/packaging/archive.sh target/x86_64-unknown-linux-musl/release/cbb x86_64-unknown-linux-musl amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           cp packaging/get.sh "$rel/"
       - name: get.sh installs both in OpenWrt's root file system, and uninstall.sh removes them
@@ -717,7 +717,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh lite/packaging/archive.sh lite/packaging/notices.sh lite/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh lite/ffi/bind.sh lite/wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
@@ -726,9 +726,9 @@ jobs:
           out=$RUNNER_TEMP/sbom
           mkdir -p "$out"
           go run ./tools/sbom go -o "$out/sbom-go.cdx.json" -version v0.0.0 "$RUNNER_TEMP/sbom-cbb"
-          go run ./tools/sbom cargo -o "$out/sbom-lite.cdx.json" -version v0.0.0 -manifest lite/Cargo.toml \
+          go run ./tools/sbom cargo -o "$out/sbom-lite.cdx.json" -version v0.0.0 -manifest Cargo.toml \
             -package cbb-lite -target x86_64-unknown-linux-musl,mips-unknown-linux-musl
-          go run ./tools/sbom cargo -o "$out/sbom-phone-core.cdx.json" -version v0.0.0 -manifest lite/Cargo.toml \
+          go run ./tools/sbom cargo -o "$out/sbom-phone-core.cdx.json" -version v0.0.0 -manifest Cargo.toml \
             -package cbb-ffi -target aarch64-apple-ios,aarch64-linux-android
           go run ./tools/sbom swift -o "$out/sbom-ios-kit.cdx.json" -version v0.0.0 apps/ios/CBBKit/Package.resolved
           for f in "$out"/*.cdx.json; do
@@ -744,7 +744,7 @@ jobs:
           sudo systemd-sysusers "$PWD/packaging/linux/cbb.sysusers"
           systemd-analyze verify packaging/linux/cbb.service
           systemd-analyze security --offline=true packaging/linux/cbb.service --threshold=30 # 3.0 on the scale it prints
-          systemd-analyze verify lite/packaging/cbb.service
+          systemd-analyze verify member/packaging/cbb.service
           for u in cbb-forward cbb-relay; do
             systemd-analyze verify "packaging/linux/$u.service"
             systemd-analyze security --offline=true "packaging/linux/$u.service" --threshold=20
@@ -1451,7 +1451,7 @@ jobs:
           persist-credentials: false
       - name: the Rust core, which the kit links
         # Built on the runner: the Swift container has no Rust.
-        run: sh lite/ffi/bind.sh host "$RUNNER_TEMP/core"
+        run: sh ffi/bind.sh host "$RUNNER_TEMP/core"
       - name: swift test (in the Swift container on Linux)
         if: runner.os == 'Linux'
         run: |
@@ -1526,7 +1526,7 @@ jobs:
       - name: bind the phones' tunnel, which the app links
         run: mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework
       - name: build the Rust core, which the kit links
-        run: sh lite/ffi/bind.sh ios apps/ios/CbbCore
+        run: sh ffi/bind.sh ios apps/ios/CbbCore
       - name: generate the Xcode project
         working-directory: apps/ios
         run: |
@@ -1997,21 +1997,28 @@ jobs:
           sudo apt-get install -y -q qemu-user qemu-user-binfmt
       - name: build for mips and mipsel
         run: |
-          sh lite/packaging/mips.sh mips
-          sh lite/packaging/mips.sh mipsel
+          sh member/packaging/mips.sh mips
+          sh member/packaging/mips.sh mipsel
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
       - name: the MIPS builds under qemu with Go members, all but sync away from home
+        # The hubs' tests need the tunnel, which the MIPS build leaves out.
+        # qemu-user translates netlink for a big-endian guest badly, so
+        # musl's getifaddrs, which a pairing window's addresses call, hangs
+        # or crashes under qemu-mips (and works under qemu-mipsel):
+        # TestLiteRootWindow runs on mipsel only.
         run: |
           for a in mips mipsel; do
+            skip='TestLiteMemberAway|TestLiteHub|TestLiteForwardOnly'
+            if [ "$a" = mips ]; then skip="$skip|TestLiteRootWindow"; fi
             # Ubuntu 26.04's qemu-user is static and has no -static names.
             q=$(command -v "qemu-$a-static" || command -v "qemu-$a")
-            printf '#!/bin/sh\nexec %s %s "$@"\n' "$q" "$PWD/lite/target/$a-unknown-linux-musl/release/cbb" >"$RUNNER_TEMP/cbb-$a"
+            printf '#!/bin/sh\nexec %s %s "$@"\n' "$q" "$PWD/target/$a-unknown-linux-musl/release/cbb" >"$RUNNER_TEMP/cbb-$a"
             chmod +x "$RUNNER_TEMP/cbb-$a"
             "$RUNNER_TEMP/cbb-$a" version | grep -q 'linux/mips'
-            CBB_LITE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestLite' -skip 'TestLiteMemberAway' -v
+            CBB_LITE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestLite' -skip "$skip" -v
           done
 
   lite:
@@ -2020,19 +2027,17 @@ jobs:
     if: needs.changes.outputs.lite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    defaults:
-      run:
-        working-directory: lite
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: the Rust toolchain, and a cross compiler for the Raspberry Pi
+      - name: the Rust toolchain, a cross compiler for the Raspberry Pi, and swtpm for the key in a TPM
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf
           rustup default stable
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm
+          echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy
@@ -2059,39 +2064,34 @@ jobs:
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --locked --release --target aarch64-unknown-linux-gnu
-      - name: cargo build for the Raspberry Pi Zero (ARMv6, static; see lite/.cargo/config.toml)
+      - name: cargo build for the Raspberry Pi Zero (ARMv6, static; see .cargo/config.toml)
         run: cargo build --locked --release --target arm-unknown-linux-musleabihf
       - name: the crates' licenses, as the release archives carry them
-        run: sh packaging/notices.sh arm-unknown-linux-musleabihf | grep -q '^rustls '
+        run: sh member/packaging/notices.sh arm-unknown-linux-musleabihf | grep -q '^rustls '
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
       - name: Go calls the Rust core through cgo and gets each vector's state
-        working-directory: .
         run: |
-          (cd lite && cargo build --locked --release -p cbb-ffi)
+          cargo build --locked --release -p cbb-ffi
           go test -race -tags cbbcore ./internal/core -v
       - name: Go reads commands, server credentials and release files through the Rust core, and takes the same bodies
-        working-directory: .
         run: go test -race -tags cbbcore ./internal/release ./internal/group -run 'Strict|Command|Credential|Watch|Release'
       - name: Go runs the Rust core as WebAssembly under wazero, as on Windows, macOS and FreeBSD, and gets each vector's state
-        working-directory: .
         run: |
           rustup target add wasm32-unknown-unknown
-          # From lite/, so cargo reads lite/.cargo/config.toml, which picks
+          # cargo reads .cargo/config.toml, which picks
           # getrandom's custom backend for this target.
-          (cd lite && cargo clippy --locked -p cbb-wasm --target wasm32-unknown-unknown -- -D warnings)
-          sh lite/wasm/build.sh
-          go test -race -overlay lite/target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
-      - name: the lite member joins by the phone, syncs with Go members and takes their remote pastes
-        working-directory: .
-        run: CBB_LITE="$PWD/lite/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless' -v
+          cargo clippy --locked -p cbb-wasm --target wasm32-unknown-unknown -- -D warnings
+          sh wasm/build.sh
+          go test -race -overlay target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
+      - name: the lite member joins by the phone, syncs with Go members, takes their remote pastes and serves the Go command line and agent
+        run: CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless|TestLiteHelper|TestLiteClients|TestLiteTPM|TestLiteRoot|TestLiteTakeover|TestLiteRecovery|TestLiteHub|TestLiteHubs|TestLiteHubCommands|TestLiteHubForwarder|TestLiteForwardOnly' -v
       - name: get.sh --lite installs the lite member, and uninstall.sh removes it
-        working-directory: .
         run: |
           rel="$RUNNER_TEMP/release"
-          sh lite/packaging/archive.sh lite/target/release/cbb x86_64-unknown-linux-gnu amd64 "$rel"
+          sh member/packaging/archive.sh target/release/cbb x86_64-unknown-linux-gnu amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --lite --no-firewall | tee "$RUNNER_TEMP/get.out"
           systemctl is-active cbb.service
@@ -2125,7 +2125,6 @@ jobs:
             fi
           done
       - name: install.sh --rootless runs the lite member as the user, without the console or the reboot, and uninstall.sh removes it
-        working-directory: .
         run: |
           rel="$RUNNER_TEMP/release"
           rm -rf "$RUNNER_TEMP/lite-rootless"
@@ -2155,17 +2154,16 @@ jobs:
             fi
           done
       - name: the lite member's cbb update installs a newer signed release, puts the old one back, and sets the timer
-        working-directory: .
         run: |
           for v in 0.6.0 0.6.1; do
-            (cd lite && CBB_VERSION=$v cargo build --locked)
+            CBB_VERSION=$v cargo build --locked
             mkdir -p "$RUNNER_TEMP/lite-$v"
-            cp lite/target/debug/cbb "$RUNNER_TEMP/lite-$v/cbb"
+            cp target/debug/cbb "$RUNNER_TEMP/lite-$v/cbb"
           done
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh --auto-update off "$RUNNER_TEMP/lite-0.6.0/cbb"
           test "$(sudo cbb update -auto)" = off
           rel="$RUNNER_TEMP/lite-update"
-          sh lite/packaging/archive.sh "$RUNNER_TEMP/lite-0.6.1/cbb" x86_64-unknown-linux-gnu amd64 "$rel"
+          sh member/packaging/archive.sh "$RUNNER_TEMP/lite-0.6.1/cbb" x86_64-unknown-linux-gnu amd64 "$rel"
           go run ./tools/release-sign drill -version 0.6.1 "$rel" "$RUNNER_TEMP/lite-update.pem"
           # The pinned roots refuse the throwaway ones.
           if CBB_RELEASE_DIR="$rel" cbb update -check 2>"$RUNNER_TEMP/err"; then echo "cbb update took a release the pinned roots did not sign" >&2; exit 1; fi
@@ -2186,7 +2184,7 @@ jobs:
           esac
           EOF
           chmod 0755 "$RUNNER_TEMP/lite-0.6.2/cbb"
-          sh lite/packaging/archive.sh "$RUNNER_TEMP/lite-0.6.2/cbb" x86_64-unknown-linux-gnu amd64 "$rel2"
+          sh member/packaging/archive.sh "$RUNNER_TEMP/lite-0.6.2/cbb" x86_64-unknown-linux-gnu amd64 "$rel2"
           go run ./tools/release-sign drill -version 0.6.2 "$rel2" "$RUNNER_TEMP/lite-update2.pem"
           if sudo CBB_RELEASE_DIR="$rel2" CBB_RELEASE_ROOTS="$RUNNER_TEMP/lite-update2.pem" cbb update 2>"$RUNNER_TEMP/err"; then
             echo "cbb update kept a release whose service does not start" >&2
@@ -2206,31 +2204,28 @@ jobs:
           test ! -e /etc/systemd/system/cbb-update.timer
           test ! -e /var/lib/cbb-update
       - name: the ESP32's network code joins by the phone on Linux, over a TAP interface
-        working-directory: .
         run: |
           sudo ip tuntap add name tap0 mode tap user "$USER"
           sudo ip addr add 192.168.69.1/24 dev tap0
           sudo ip link set tap0 up
-          CBB_ESP32_ON_LINUX="$PWD/lite/target/release/esp32-on-linux" go test -race ./internal/service -run TestEmbassyJoiner -v
-      - name: the phones' member through lite/ffi joins a computer's group, syncs texts and images with it, and syncs away from home through its tunnel
-        working-directory: .
+          CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" go test -race ./internal/service -run TestEmbassyJoiner -v
+      - name: the phones' member through ffi/ joins a computer's group, syncs texts and images with it, and syncs away from home through its tunnel
         run: |
-          (cd lite && cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux)
-          CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember|TestFFIPhoneRoot|TestFFIPhoneAway' -v
-      - name: the phones' Rust tunnel and hub through lite/ffi work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
-        working-directory: .
+          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
+          CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember|TestFFIPhoneRoot|TestFFIPhoneAway' -v
+      - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
         run: |
-          (cd lite && cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux)
-          CBB_TUNNEL_ON_LINUX="$PWD/lite/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone -v
+          cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
+          CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64
-          path: lite/target/aarch64-unknown-linux-gnu/release/cbb
+          path: target/aarch64-unknown-linux-gnu/release/cbb
           retention-days: 14
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-armv6
-          path: lite/target/arm-unknown-linux-musleabihf/release/cbb
+          path: target/arm-unknown-linux-musleabihf/release/cbb
           retention-days: 14
 
   esp32:
@@ -2239,9 +2234,6 @@ jobs:
     if: needs.changes.outputs.lite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    defaults:
-      run:
-        working-directory: lite
     env:
       # The Rust toolchain for Xtensa (the ESP32-S3) from esp-rs/rust-build,
       # what espup installs, fetched directly and checked against these hashes.
@@ -2283,7 +2275,7 @@ jobs:
       - name: the core with TLS without an operating system, Xtensa (the ESP32-S3)
         run: cargo +esp build --locked -Zbuild-std=core,alloc -p cbb-core --features tls --release --target xtensa-esp32s3-none-elf
       - name: the firmware for the Arduino Nano ESP32
-        working-directory: lite/esp32
+        working-directory: esp32/
         run: |
           cargo +esp fmt --check
           cargo +esp clippy --locked --release -- -D warnings
@@ -2302,7 +2294,7 @@ jobs:
           echo "$ESPFLASH_SHA256  espflash.zip" | sha256sum -c -
           unzip -q espflash.zip
       - name: the firmware in QEMU (the console, settings kept across restarts, the TLS 1.3 self-test)
-        working-directory: lite/esp32
+        working-directory: esp32/
         run: QEMU="$RUNNER_TEMP/qemu/bin/qemu-system-xtensa" ESPFLASH="$RUNNER_TEMP/espflash" ./qemu-test.sh
 
   zxnext:
@@ -2483,7 +2475,7 @@ jobs:
             export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-}"
             cargo install --locked cargo-ndk@4.1.2
           fi
-          sh lite/ffi/bind.sh "$TARGET" "$RUNNER_TEMP/phonecore"
+          sh ffi/bind.sh "$TARGET" "$RUNNER_TEMP/phonecore"
           find "$RUNNER_TEMP/phonecore" -maxdepth 3 | sort
 
   advisories:
@@ -2526,17 +2518,17 @@ jobs:
         run: |
           go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.6.0 scan source \
             --config .github/osv-scanner.toml \
-            -L lite/Cargo.lock -L lite/esp32/Cargo.lock -L apps/desktop/go.mod \
+            -L Cargo.lock -L esp32/Cargo.lock -L apps/desktop/go.mod \
             -L apps/android/app/gradle.lockfile -L apps/android/shared/gradle.lockfile \
             -L apps/android/wear/gradle.lockfile -L apps/android/kit/gradle.lockfile
       - name: cargo-deny, the crates' licenses and sources
         # Every crate of the lite member and of the ESP32 firmware under a license
-        # lite/deny.toml allows (all fit the AGPL-3.0), from crates.io or the pinned
+        # deny.toml allows (all fit the AGPL-3.0), from crates.io or the pinned
         # esp-hal commit only.
         run: |
           cargo install --locked cargo-deny@0.20.2
-          (cd lite && cargo deny --locked check licenses bans sources)
-          (cd lite/esp32 && cargo deny --locked --config ../deny.toml check licenses bans sources)
+          cargo deny --locked check licenses bans sources
+          (cd esp32/ && cargo deny --locked --config ../deny.toml check licenses bans sources)
 
   docker:
     name: docker image

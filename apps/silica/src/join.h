@@ -4,7 +4,7 @@
 // Joining a group by the phone's QR code (docs/protocol.md, section 6, "The
 // joiner listens"): the phone listens on the member port and shows the QR
 // code, the group's phone or computer scans it and dials in, and the core
-// (lite/ffi's cbb_join_*) runs the pairing inside its own TLS, signing with
+// (ffi's cbb_join_*) runs the pairing inside its own TLS, signing with
 // the key in the key store. This class only moves the bytes.
 #pragma once
 

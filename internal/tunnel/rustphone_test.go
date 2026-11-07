@@ -39,7 +39,7 @@ const (
 	rustPhoneID = "ffeeddccbbaa99887766554433221100"
 )
 
-// TestRustPhoneTunnel runs the phones' tunnel in Rust (lite/ffi, the
+// TestRustPhoneTunnel runs the phones' tunnel in Rust (ffi/, the
 // example tunnel-on-linux) against the Go hub: plain WireGuard,
 // AmneziaWG, and VLESS with XHTTP behind a web server, each through the
 // loopback port to the hub's member port and back. The key is made by
@@ -231,7 +231,7 @@ func rustXHTTP(t *testing.T, port uint16) (tunnel.VLESS, []byte) {
 	return tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path + "/" + group, ID: id}, ca
 }
 
-// TestRustPhoneHub runs the phone's hub in Rust (lite/ffi) with two Go
+// TestRustPhoneHub runs the phone's hub in Rust (ffi/) with two Go
 // clients, plain and with AmneziaWG: each client's connection through its
 // tunnel to the hub's member port reaches the app's member listener on the
 // loopback address; a client taken off the list is cut off.

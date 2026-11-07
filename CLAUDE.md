@@ -44,6 +44,9 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   member TLS, signed device and revocation records; `keys.go` puts new member and admin keys
   in the TPM (`internal/tpmkey`, go-tpm, tested against swtpm) on Linux.
 - `internal/pair`: pairing (CPace inside TLS, the Welcome), both directions.
+- `cmd/cbb-helper`, `internal/helper`: the Go helper the Rust `cbb` starts as its child and
+  talks to over its inherited pipes (`member/src/helper.rs`, docs/design.md "The service and its
+  helper"); it takes over what needs Go as the Rust service replaces the Go one.
 - `internal/node`: the member protocol and sync, commands passed on to members; `internal/service`: the daemon and CLI.
 - Remote paste targets, each a `connector.Target`: `internal/desktop/x11paste.go` (XTEST),
   `waylandpaste.go` (the virtual keyboard), `portal.go` (the RemoteDesktop portal on GNOME and KDE,
@@ -79,7 +82,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - `mobile/cbbtun`: the phones' tunnel to the hub, the same WireGuard in the app's process, bound
   by gomobile into an AAR and an xcframework (CI's `phone tunnel` jobs); a loopback port leads
   to the hub's member port, and the kits dial it with their own member TLS. Its Rust
-  replacement is `lite/ffi/src/tunnel.rs` (`cbb_tunnel`, `cbb_tunnel_register`,
+  replacement is `ffi/src/tunnel.rs` (`cbb_tunnel`, `cbb_tunnel_register`,
   `cbb_tunnel_relay`, `cbb_tunnel_relay_credentials`, feature `tunnel`; `TestRustPhone*` run it through the example
   `tunnel-on-linux`); the apps move to it, and cbbtun goes, once their node runs in Rust.
 - Windows: `cmd/cbb/platform_windows.go` (the Windows service, logs),
@@ -87,39 +90,40 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `internal/pasteboard/pasteboard_windows.go` (the Win32 clipboard), `internal/winpaste` (remote paste:
   Ctrl+V or SendInput's Unicode keys, the secure desktop and integrity checks), `packaging/windows`
   (`install.ps1`, `uninstall.ps1`, `get.ps1`); CI's `windows installer` job runs them.
-- `apps/ios/CBBKit`: the phone's kit: `CoreMember` (the member in the Rust core, lite/ffi's
+- `apps/ios/CBBKit`: the phone's kit: `CoreMember` (the member in the Rust core, ffi's
   `cbb_member_*`, which syncs; the app hands it addresses and answers its events), `Pairing*`,
   `Member` (the wire format, for pairing and restoring), `Records`, `Certificates`,
   `PhoneGroup`, `Discovery`/`BonjourBrowser` (finding the members and their addresses),
   `TLSTransport` (pairing), `KeychainIdentity`, `SecKeySigner`, `AwayFromHome` (sync away from
   home through `Cbbtun.xcframework`); `cbb-interop` plays the phone in Go tests.
-- `lite/`: the lite member in Rust (its command is `cbb` too): no CA keys, joins by the phone's QR code,
-  dials the Linux members and listens for phones and Macs (mDNS TXT `r=lite`). Its protocol core is the crate `lite/core` (`cbb_core`: `certs`,
+- The Rust workspace (`Cargo.toml` at the top, its crates beside `cmd/` and `internal/`): `member/` is
+  the lite member in Rust (its command is `cbb` too): no CA keys, joins by the phone's QR code,
+  dials the Linux members and listens for phones and Macs (mDNS TXT `r=lite`). Its protocol core is the crate `core/` (`cbb_core`: `certs`,
   `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for the lite member's tunnel), CPace under `src/third_party`, the
   interop vectors, and with the `tls` feature `tls`: rustls unbuffered with a RustCrypto
   provider, the peer checks, a sans-I/O `Session`, the pairing exporter from the key log;
   with `web` also `tls::web`, RSA and P-384 for a public site's certificate):
   no_std with alloc, RustCrypto, no I/O, for the ESP32; CI's `esp32` job builds it for the
-  C6 (RISC-V) and the S3 (Xtensa); `lite/src` adds the files, the sockets around the
+  C6 (RISC-V) and the S3 (Xtensa); `member/src/` adds the files, the sockets around the
   core's TLS, mDNS, the control socket, remote paste (`remotepaste.rs`, the tmux and console
   helpers in `pastehelper.rs`) and the tunnel to the hub (`tunnel.rs`, `away.rs`:
   GotaTun's WireGuard and smoltcp's TCP behind a loopback port; GotaTun's AEAD comes from
-  `lite/ring-shim`, a stand-in for ring on RustCrypto, patched in by `lite/Cargo.toml`;
+  `ring-shim/`, a stand-in for ring on RustCrypto, patched in by `Cargo.toml`;
   `awg.rs` AmneziaWG around GotaTun's messages, `vless.rs` the way over VLESS with XHTTP;
   for the phones: `hub.rs` a hub for several clients and guests, `forward.rs` its registration
   with the forwarder, `relay.rs` the link to the blind relay).
-- `lite/ffi`: the core's one entry point (`cbb_core::api`, docs/core-api.md) as C functions (`include/cbb_core.h`)
+- `ffi/`: the core's one entry point (`cbb_core::api`, docs/core-api.md) as C functions (`include/cbb_core.h`)
   for Go and the phone kits (`Core.swift` through the module `CCbbCore`, `Core.kt` through JNA), and with the feature
   `member` the phones' member (`CoreMember.swift`, `CoreMember.kt`); `bind.sh` builds the iPhone's and Android's
   libraries and the host's for `swift test`, each with the member.
-- `lite/esp32`: the firmware for the Arduino Nano ESP32 (ESP32-S3), its own workspace, built
+- `esp32/`: the firmware for the Arduino Nano ESP32 (ESP32-S3), its own workspace, built
   with the Xtensa toolchain (`cargo +esp`) and rust-lld; esp-hal is pinned to a git commit
   until a release carries its fix for Rust 1.99; `console.rs` (the USB console), `store.rs`
-  (settings in the flash partition `cbb` of `partitions.csv`), `net.rs` (Wi-Fi, embassy-net), `pair.rs` (the pairing task around `lite/embassy`), `usb.rs` (the USB port as a keyboard and the console's serial port, on OTG), `ble.rs` (the board as a Bluetooth LE keyboard, trouble-host on esp-radio), `out.rs` (where the console's lines go);
+  (settings in the flash partition `cbb` of `partitions.csv`), `net.rs` (Wi-Fi, embassy-net), `pair.rs` (the pairing task around `embassy/`), `usb.rs` (the USB port as a keyboard and the console's serial port, on OTG), `ble.rs` (the board as a Bluetooth LE keyboard, trouble-host on esp-radio), `out.rs` (where the console's lines go);
   `qemu-test.sh` types on the console and runs the self-test in Espressif's QEMU (the
   `qemu` feature: console on UART0, no Wi-Fi, without esp-hal's init and with a fixed
   pseudo-random generator, never for a real chip).
-- `lite/embassy`: the firmware's network code on embassy-net without the chip (`pair.rs`,
+- `embassy/`: the firmware's network code on embassy-net without the chip (`pair.rs`,
   joining by the phone over TCP), no_std; with the feature `host` the program `esp32-on-linux`
   runs it on Linux over a TAP interface, for `TestEmbassyJoiner` (CI's `lite` job).
 - `apps/zxnext`: `.cbb`, the dot command for the ZX Spectrum Next in C for z88dk (`frame.c`
@@ -160,7 +164,7 @@ an admin phone removes a lost root phone by taking the group over with `root` re
 kits' `RecordSet` asks the Rust core);
 a computer of a phone group can be an admin: the root phone's "Make it an admin" certifies
 the admin key its hello offers (`PhoneGroup.makeAdmin`, the `admin` message; Go's
-`Identity.AdminKey`/`AdminCA`); the lite member for Linux (`lite/`), with
+`Identity.AdminKey`/`AdminCA`); the lite member for Linux (`member/`), with
 the interop vectors and an e2e test among Go members, not yet run on a real Pi; the
 Android app (`apps/android`) does what the iPhone app does, receives copies by itself in a
 foreground service and sends them with the accessibility service or one tap, and each

@@ -76,7 +76,7 @@ At home, with the hub on:
   hub, and the switch shows once it is no longer: under **Move the hub to a computer** make
   the computer the hub (with the forwarder saved on the phone first), or turn **This phone
   as the hub** off.
-- **Lite member**: `sudo cbb global on` on the device ([lite member](../../lite/README.md#sync-away-from-home)).
+- **Lite member**: `sudo cbb global on` on the device ([lite member](../../member/README.md#sync-away-from-home)).
 
 ## 4. Check it
 

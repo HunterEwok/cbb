@@ -2,8 +2,8 @@
 # The core's entry point
 
 For engineers and anyone binding the Rust core into another program: the one call through
-which every program uses the core's rules (`cbb_core::api`, `lite/core/src/api.rs`). Every
-program reaches it through the same C functions of `lite/ffi`: the phone kits link them, Go
+which every program uses the core's rules (`cbb_core::api`, `core/src/api.rs`). Every
+program reaches it through the same C functions of `ffi/`: the phone kits link them, Go
 through cgo or wasm. The rules themselves are in
 [records-v2.md](records-v2.md).
 
@@ -33,9 +33,9 @@ and always logs them ([errors](reference/errors.md)). The call never panics and 
 bytes, also bytes that are not a request. A change an older caller would misread raises
 `abi`.
 
-`lite/ffi` exports `call` as C functions, declared in `lite/ffi/include/cbb_core.h`:
+`ffi/` exports `call` as C functions, declared in `ffi/include/cbb_core.h`:
 `cbb_call` takes the request's bytes and returns the answer's, which the caller gives back
-with `cbb_free`; `cbb_abi` gives the ABI. `lite/ffi/bind.sh` builds the library for the
+with `cbb_free`; `cbb_abi` gives the ABI. `ffi/bind.sh` builds the library for the
 phones. The Swift kit links it as the module `CCbbCore` (`Core.swift`), the Kotlin kit loads
 `libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call, as Go does.
 
@@ -58,7 +58,7 @@ moves the bytes.
 
 Built with the feature `member` too (every library `bind.sh` builds: the iPhone, Android and
 Aurora apps run it), the library runs the lite member's own node in the app's process once the phone
-is in a group (`lite/ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
+is in a group (`ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
 app's data directory, the phone's name, system and versions, its identity (device,
 certificate, issuer, group CA, roots), its public key, its secret for sealed messages and the
 same signing callback, and a callback that gets each event as JSON from the node's threads:
@@ -128,7 +128,7 @@ let be a hub, by the chain it proved. It keeps the sealed blobsof the copies wit
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
 both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
-lite member's (`lite/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
+lite member's (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
 `TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
 listens, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
@@ -161,7 +161,7 @@ phone's own, as the phone kits do when a peer connects. `TestFFIPhoneRoot` renam
 computer through it.
 
 Built with the feature `tunnel` (the iPhone and Android libraries), the library is also the
-phones' tunnel (`lite/ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tunnel` takes
+phones' tunnel (`ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tunnel` takes
 a JSON request by its `op` for the tunnel to the hub (a loopback port that leads to the hub's
 member port, with AmneziaWG and VLESS with XHTTP), for the phone as the group's hub (its
 clients, its remote invitations with a guest tunnel to the pairing window), and their status;
@@ -175,13 +175,13 @@ through another callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPh
 against Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
-`libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its
+`libcbb_ffi`, or through the same core built as WebAssembly (`wasm/`, `cbb_call` and its
 memory functions), run by wazero under the tag `cbbwasm`. Every release build of `cbb`, on
 every system and architecture, takes `cbbwasm`, so it stays one static binary without cgo
 (the release workflow checks the tag with `go version -m`), and `cbb version` names the
 rules it runs; a build without either tag, as `go build` and `go test` are, evaluates with
 Go's own `internal/authority`, which only the tests use as a reference.
-`lite/wasm/build.sh` builds the module and writes the `go build -overlay` file that lays it
+`wasm/build.sh` builds the module and writes the `go build -overlay` file that lays it
 over `internal/core/cbb_core.wasm`, so no build output lands in the source tree.
 
 ## Operations

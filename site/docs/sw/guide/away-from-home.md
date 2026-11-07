@@ -44,7 +44,7 @@ Nyumbani, kitovu kikiwa kimewashwa:
 
 - **Kompyuta**: `sudo cbb global on` (kwenye Windows, kwenye terminal ya msimamizi).
 - **Simu**: kwenye programu, Mipangilio, **Sync away from home**. Kisha acha programu wazi kwa muda nyumbani, ili ikutane na kitovu. iPhone husawazisha ukiwa mbali na nyumbani programu ikiwa wazi; Android pia chinichini. Katika kikundi kilichoundwa kwenye simu, simu hiyo huanza ikiwa kitovu, na swichi huonekana inapoacha kuwa kitovu: chini ya **Move the hub to a computer** ifanye kompyuta kuwa kitovu (ukihifadhi kisambazaji kwenye simu kwanza), au zima **This phone as the hub**.
-- **Mwanachama mwepesi**: `sudo cbb global on` kwenye kifaa ([mwanachama mwepesi](../../lite/README.md#sync-away-from-home)).
+- **Mwanachama mwepesi**: `sudo cbb global on` kwenye kifaa ([mwanachama mwepesi](../../member/README.md#sync-away-from-home)).
 
 ## 4. Kikague
 

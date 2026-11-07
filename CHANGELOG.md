@@ -7,17 +7,67 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
-- The lite member speaks AmneziaWG to a hub that hides its tunnel (lite/src/awg.rs, around
+- `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
+  helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
+  its hello and starts it again when it stops. It does nothing else yet; the steps that make
+  the Rust `cbb` every computer's service hand it what needs Go.
+- The Rust `cbb` keeps its device key in the TPM, or a Mac's Secure Enclave, through
+  `cbb-helper`, as the Go member does: `cbb pair` makes it there, `identity.json` keeps the
+  hardware's blob, and every signature goes through the helper (`TestLiteTPM`, on swtpm).
+  The helper also signs with a key on a YubiKey after its PIN (`card-sign`), and seals
+  secrets (`seal`, `unseal`): the Rust `cbb` keeps `seal.json` and `tunnel.json` sealed by
+  the hardware, and reads and writes a Go hub's `tunnel.json` as Go does
+  (`testdata/interop/tunnel-state.json`).
+- The Rust `cbb` service makes a group and is its root (`cbb new`), as the Go service does:
+  it admits a computer by the QR code that computer shows (`cbb pair -qr`), and removes,
+  renames, freezes and unfreezes devices, makes a computer an admin, sets the key level and
+  voids two histories (`cbb remove`, `rename`, `freeze`, `unfreeze`, `admin`, `keys`,
+  `resolve`), each through the unchanged Go command line (`TestLiteRoot`). It presents itself
+  as a full member when its device record says so. A member the records remove or freeze
+  now gets those records before its connection closes. `cbb pair` on it opens a pairing
+  window with a code, which a computer joins as it joins a Go root (`TestLiteRootWindow`). It
+  also sets the takeover delay and how long an incoming copy stays live, hands the group to
+  an admin, and mutes and unmutes a device (`cbb takeover -delay`, `incoming`, `handover`,
+  `mute -on`, `unmute -on`). Started with `-full`, and joined with `cbb pair -full`, it is a
+  computer's service in a Go computer's group: it offers an admin key, becomes an admin when
+  the root makes it one, and takes the group over from a lost root with `cbb takeover`,
+  becoming the root once the claim takes effect and giving the other admins admin CAs from
+  the new root (`TestLiteTakeover`). Any of its members
+  claims the group with the recovery key (`cbb recovery`, the sheet's text or QR code, or
+  `-yubikey` with the key on a YubiKey through cbb-helper) when the root is lost
+  (`TestLiteRecovery`). An admin Rust service is the group's hub (`cbb global hub`, with
+  the addresses away from home and `-port`): it admits each member's tunnel key from its
+  hello, offers itself to them, serves the WireGuard tunnel (AmneziaWG when obfuscated) on
+  its UDP port, and takes the members' connections through it as Go's hub does; `cbb global
+  hub off` moves its clients to the next hub and retires it (`TestLiteHub`). With other
+  hubs it shares its clients and offer, takes theirs, waits as the client of a hub above it
+  that serves, serves when that hub is gone and gives way when it is back
+  (`TestLiteHubs`, beside a Go hub). It moves the hub to another computer, makes one a hub
+  and stops one with signed hub commands (`cbb global move`, `hub -on`, `hub off -on`), and
+  carries out the same commands from a Go admin or a phone (`TestLiteHubCommands`). A Rust
+  hub registers with its forwarder (`-forwarder`, `-forwarder-key`, or `default` for the
+  project's) and its clients reach it through it (`TestLiteHubForwarder`). It also signs the
+  table of main hubs (`cbb global hubs`) and turns sync away from home off on another device
+  (`cbb global off -on`), and makes a computer a hub that only passes copies on
+  (`hub -on DEVICE -forward-only`), which a Rust member can be too (`TestLiteForwardOnly`).
+  The hub's key
+  periods, VLESS, the relay and invitations come next.
+- The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
+  desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
+  `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and
+  serves the content of media copies, and gives a watcher that takes them the copy whole; the
+  Go command line and agent work against it unchanged (`TestLiteClients`).
+- The lite member speaks AmneziaWG to a hub that hides its tunnel (member/src/awg.rs, around
   GotaTun's WireGuard): it keeps the group's settings from the hub's offer and syncs away from
   home through the obfuscated hub instead of staying at home (`TestLiteMemberAwayObfuscated`
   against the Go hub's amneziawg-go).
-- The lite member reaches a hub over VLESS with XHTTP (lite/src/vless.rs, cbb_core::vless):
+- The lite member reaches a hub over VLESS with XHTTP (member/src/vless.rs, cbb_core::vless):
   HTTPS to the forwarder's site, its certificate checked against the system's CA certificates
   or `SSL_CERT_FILE` (RSA and P-384 added to the core's TLS provider for that), HTTP/1.1
   packet-up requests, its UDP addresses tried first only with AmneziaWG
   (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server). REALITY stays
   with the full member.
-- The phones' tunnel in Rust (lite/ffi, `cbb_tunnel`, feature `tunnel`): the lite member's
+- The phones' tunnel in Rust (ffi/, `cbb_tunnel`, feature `tunnel`): the lite member's
   WireGuard with AmneziaWG and VLESS with XHTTP behind a loopback port, for the iPhone and
   Android apps in place of the Go tunnel (`TestRustPhoneTunnel` against the Go hub); the phone
   as the group's hub (`hub_start`, `TestRustPhoneHub` with Go clients), its remote invitations
@@ -32,7 +82,7 @@ All notable changes to cbb are documented in this file. The format follows
   made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
 - The phones' member in the Rust core, for the iPhone and Android apps to move onto from
   their own Swift and Kotlin nodes, as the Aurora app runs it (docs/core-api.md, "The
-  member"): `cbb_member_call` in `lite/ffi` takes addresses the app finds itself (Bonjour,
+  member"): `cbb_member_call` in `ffi/` takes addresses the app finds itself (Bonjour,
   NSD, the tunnel's loopback port), listens as the group's hub while the app is in the front,
   pauses in the background, sends images and files and fetches and opens them, sends the
   commands, records, certificates, admin CAs, tunnel offers, hub shares and credentials an
@@ -92,7 +142,7 @@ All notable changes to cbb are documented in this file. The format follows
   page mutes it for the group or unmutes it. The phones take `mute` and `unmute` commands, and
   the phone kits sign them and read the hello's mute.
 - The same switch at the top of the Aurora app's main page, with a long press for a time; the
-  app takes an admin's `mute` and `unmute` (lite/ffi's `pause_receiving` and `muted` operations
+  app takes an admin's `mute` and `unmute` (ffi's `pause_receiving` and `muted` operations
   and the `mute` event) and says when an admin muted the phone.
 - The Aurora app's chosen language now also sets numbers and dates, Arabic and Hebrew lay its
   pages out from the right, and two messages missing from its translations are translated.
@@ -100,14 +150,14 @@ All notable changes to cbb are documented in this file. The format follows
   them), each with a live dot, its system and its mark (this phone, root, admin, frozen), and a
   tap opens the device's page. Its new Settings page picks the language for the next start,
   holds what the main page showed about the app, the key and the group, and seven taps on the
-  version show the switch for error details. lite/ffi's `cbb_member_devices` lists the devices.
+  version show the switch for error details. ffi's `cbb_member_devices` lists the devices.
 - The Rust core admits devices as the phone kits and Go do: `cbb_core::issue` makes member
   certificates, admin CAs and a group's root with a key it never holds, `cbb_core::admit` is
   the admitting side of pairing (dialing a joiner that shows its QR code, confirming the code
-  first, the Welcome and the device record), and lite/ffi's `cbb_admit_*` hand it to the Aurora
+  first, the Welcome and the device record), and ffi's `cbb_admit_*` hand it to the Aurora
   app; `TestFFIJoinerAdmin` has an admin phone admit a Go computer.
 - An admin Aurora phone adds a device to the group: "Add a device" in the pull-down menu opens
-  the camera, which reads the code the device shows when it joins (lite/ffi's `cbb_qr_read`),
+  the camera, which reads the code the device shows when it joins (ffi's `cbb_qr_read`),
   or takes the code's pasted text, and the phone dials the device and admits it.
 - The Aurora app's cover shows whether the phone takes copies, the devices it reaches and the
   last copy, and sends the clipboard or pauses from its actions; the app notifies of the
@@ -174,9 +224,9 @@ All notable changes to cbb are documented in this file. The format follows
   whether the phone is an admin. The app keeps a certificate an admin renewed, and a new root,
   in its own file.
 - The Rust core joins a phone by its QR code with a key it does not hold, such as the Aurora
-  app's key in OP-TEE: lite/ffi's `cbb_join_*` functions run the pairing inside the core's TLS
+  app's key in OP-TEE: ffi's `cbb_join_*` functions run the pairing inside the core's TLS
   and ask the app to sign; a test joins them to a computer's group.
-- lite/ffi's `cbb_member_*` functions run the lite member's node inside a phone's app with the
+- ffi's `cbb_member_*` functions run the lite member's node inside a phone's app with the
   app's key, as a phone: it dials the members it finds and syncs with them; a test joins it to
   a computer's group and syncs both ways. The lite member's program is now a library with a
   main.
@@ -633,15 +683,15 @@ All notable changes to cbb are documented in this file. The format follows
 - A model of the rules for handing the group over in records v:2, in Quint
   (`docs/model/claims.qnt`): CI's `model` job checks its scenarios and the promises of
   docs/records-v2.md over random runs.
-- The Rust core (`cbb_core`) and the phones' bindings (`lite/ffi`) may not panic outside
+- The Rust core (`cbb_core`) and the phones' bindings (`ffi/`) may not panic outside
   their tests: clippy refuses unwrap, expect, indexing that can fail and arithmetic that can
   overflow there, and the core forbids unsafe code; the few places that cannot fail say why.
-  Property tests (`lite/core/tests/props.rs`, proptest) feed the parsers random bytes and
+  Property tests (`core/tests/props.rs`, proptest) feed the parsers random bytes and
   check that the state of a record set does not depend on the records' order or on
   duplicates.
 - CI checks the workflows with zizmor (template injection, tokens left to later steps, wide
   permissions, cache poisoning) and the lite member's and the ESP32 firmware's crates with
-  cargo-deny: each under a license that fits the AGPL-3.0 (`lite/deny.toml`), from crates.io
+  cargo-deny: each under a license that fits the AGPL-3.0 (`deny.toml`), from crates.io
   or the pinned esp-hal commit only.
 - CI measures the tests' coverage of the Go service (across packages, with the desktop
   clipboards and the e2e), the lite member, the Swift kit and the Kotlin kit, prints it in
@@ -881,7 +931,7 @@ All notable changes to cbb are documented in this file. The format follows
   administrator. The archives pass through the group too: a member keeps the archive it
   installed and serves it, and `cbb update` takes it from the group before downloading.
 - The lite member's `cbb update` on Linux and OpenWrt, as the full member's: the signed
-  files checked with `lite/core`, the download through the system's curl, wget or
+  files checked with `core/`, the download through the system's curl, wget or
   uclient-fetch, the archive's installer, the rollback, `-check`, `-auto on|off` and
   `-mirror`; its installer now asks about automatic updates too.
 - The Android app updates itself when it was installed from a release's APK (docs/apps.md,
@@ -1105,7 +1155,7 @@ All notable changes to cbb are documented in this file. The format follows
   kits sign and check `action` and `actions-off` commands, with cross test vectors from Go.
 - Quick actions on the lite member: `reboot` (a minute later, through `shutdown -r +1` and a
   polkit rule), `cancel-shutdown` and `restart`, each off until `sudo cbb action enable
-  NAME` there; its hello names the ones that are on, and `lite/core` checks action commands
+  NAME` there; its hello names the ones that are on, and `core/` checks action commands
   and their signers against Go's vectors.
 - Images and files, the first step (design.md, "Images and files"; docs/protocol.md,
   section 4): a `media` event carries a manifest of the copy's parts with their sizes and
@@ -1118,7 +1168,7 @@ All notable changes to cbb are documented in this file. The format follows
   copy -type png FILE` an image, and `cbb paste -o DIR` saves them, never over a file and
   never executable; `cbb status` shows a fetch in progress. Until the desktop connectors
   take images and files, they, the lite member and the phones get only the copy's text, and
-  the Swift and Kotlin kits and `lite/core` check manifests against Go's vectors.
+  the Swift and Kotlin kits and `core/` check manifests against Go's vectors.
 - Images in the desktop connectors (design.md, "Images and files", step 2): a PNG or JPEG
   copied on Wayland, X11, a Mac or Windows goes to the group, and a received image is
   written there as the image with its text next to it. Wayland and X11 offer and read
@@ -1230,6 +1280,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Rust code is one workspace at the top of the repository: the core in `core/`, the
+  member's program `cbb` in `member/`, and `ffi/`, `embassy/`, `esp32/`, `ring-shim/` and
+  `wasm/` beside them, instead of all under `lite/`. Nothing changes for an installed member.
 - The iPhone and Android apps sync through the phones' member in the Rust core (D-86), as
   the Aurora app does, in place of their own Swift and Kotlin nodes: one implementation of
   the member protocol, the clipboard rule and the button for every phone. The apps still
@@ -1239,7 +1292,7 @@ All notable changes to cbb are documented in this file. The format follows
   for the tunnel, the relay and the home network. The member pauses while the app is in the
   background, and the iPhone's background refresh resumes it for its pass; the iPhone's
   share sends through a member of its own and waits until a computer fetched what it
-  shared. `lite/ffi/bind.sh` builds every library with the member. The cross tests against
+  shared. `ffi/bind.sh` builds every library with the member. The cross tests against
   Go play the phone through the kits' `CoreMember` (`cbb-interop`, `InteropMain`).
 - The Go service seals and opens copies through the Rust core in the release builds
   (`seal_copy_to` and `open_copy`, docs/core-api.md), as the phones and the lite member do,
@@ -1363,7 +1416,7 @@ All notable changes to cbb are documented in this file. The format follows
   bodies"), in place of version 1's rules; docs/records-v2.md keeps why the records changed
   and how the implementations are tested.
 - Both phone apps link the Rust core, the group's rules every member shares: the Swift and
-  Kotlin kits call its C functions (`lite/ffi/include/cbb_core.h`) instead of generated
+  Kotlin kits call its C functions (`ffi/include/cbb_core.h`) instead of generated
   bindings, and building the Android app, F-Droid's build included, needs the Rust of
   `cbb.rust` in `apps/android/gradle.properties` with cargo-ndk.
 - One form for each thing on the wire (docs/protocol.md, Conventions), with the next ALPN
@@ -2515,7 +2568,7 @@ All notable changes to cbb are documented in this file. The format follows
   tunnel in the app's own process, with the same member TLS as at home, trying the hub's
   addresses in turn; without the tunnel there is no connection. Off by default; turning it
   off forgets the key. Building the app now needs Go for the tunnel.
-- The first firmware for the Arduino Nano ESP32 (`lite/esp32`, Rust on the ESP32-S3): a
+- The first firmware for the Arduino Nano ESP32 (`esp32/`, Rust on the ESP32-S3): a
   console on its USB port sets the Wi-Fi network up, the board joins it and takes an
   address by DHCP, joins a group by the phone (`join` prints the link to paste into the
   app, and the phone pairs with the board over TLS 1.3 as with the lite member's `cbb join`), and keeps
@@ -2524,7 +2577,7 @@ All notable changes to cbb are documented in this file. The format follows
   certificates with the chip's true random number generator and runs a TLS 1.3 handshake
   of the protocol core on the chip. CI types on the console and runs the self-test in
   Espressif's QEMU. Syncing comes next; not yet run on a real board.
-- The Nano ESP32's network code on Linux: the pairing moved to the crate `lite/embassy`,
+- The Nano ESP32's network code on Linux: the pairing moved to the crate `embassy/`,
   which the firmware and the program `esp32-on-linux` share; `esp32-on-linux` runs it on
   embassy-net over a TAP interface instead of the chip's Wi-Fi, and CI's
   `TestEmbassyJoiner` has a Go member admit it by the phone, as the board joins.
@@ -2572,7 +2625,7 @@ All notable changes to cbb are documented in this file. The format follows
 - The lite member and the ESP32 firmware use x25519-dalek 3 (on curve25519-dalek 5) and
   base64 0.23. Dependabot updates the firmware's lock file in the same pull request as the
   lite member's, so the firmware's locked build keeps passing.
-- The lite member's stand-in for ring (`lite/ring-shim`) uses chacha20poly1305 0.11, the
+- The lite member's stand-in for ring (`ring-shim/`) uses chacha20poly1305 0.11, the
   version its TLS uses. smoltcp stays at 0.13, the version embassy-net 0.9 builds on: two
   copies of smoltcp share the `managed` crate's features and do not build together, so
   Dependabot leaves its minor versions alone until embassy-net moves.
@@ -2890,7 +2943,7 @@ All notable changes to cbb are documented in this file. The format follows
 - `cbb-lite next paste|copy|join` for the ZX Spectrum Next: on the Next's own Raspberry Pi,
   `cbb-lite` answers the Next's `.cbb` dot command over the internal UART in frames its
   Z80 reads (CR lines, the Spectrum character set, length and CRC-32, a QR code as hex
-  rows for the phone to scan); see lite/README.md.
+  rows for the phone to scan); see member/README.md.
 - Releases carry the lite member: `cbb-lite-linux-amd64.tar.gz`, `-arm64` and `-armv6`,
   static builds, each with the systemd unit and the licenses of the crates it is built from
   (`THIRD_PARTY_NOTICES`).
@@ -2943,7 +2996,7 @@ All notable changes to cbb are documented in this file. The format follows
   directly, with no computer on; Linux members leave it to dial them. `copy`, `paste`,
   `status`, `devices` and `watch` work as in `cbb`. Its errors
   show their details with `-debug` or `CBB_DEBUG=1`, and in a debug build. CI builds it for 64-bit
-  Raspberry Pis and, statically, for the ARMv6 Pi Zero W. Its protocol core, `lite/core`,
+  Raspberry Pis and, statically, for the ARMv6 Pi Zero W. Its protocol core, `core/`,
   needs no operating system (no_std, RustCrypto), for a lite member on the ESP32 later.
 - A joiner can say it is a lite member (`"role":"lite"` in its pairing Info): Go members
   send it no CA keys and list it with role `lite`.

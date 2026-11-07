@@ -17,7 +17,7 @@
 # Windows opens without other tools. The release workflow and CI both use
 # it, so a wrong path fails on every pull request, not only at a release.
 # With CORE_NOTICES naming a file, the notices of the Rust core's crates
-# (lite/packaging/notices.sh wasm32-unknown-unknown cbb-wasm)
+# (member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm)
 # follow those of the Go modules, for a binary built with the core.
 set -eu
 

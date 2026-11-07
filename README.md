@@ -140,7 +140,7 @@ Android and Windows not yet tried on real devices.
 | Android | the app (an APK in every release) |
 | iOS and iPadOS | the app |
 | Apple Watch, Wear OS | a watch app, through the phone |
-| Small Linux devices (routers, boards) | the lite member, also `cbb` ([lite/README.md](lite/README.md)) |
+| Small Linux devices (routers, boards) | the lite member, also `cbb` ([member/README.md](member/README.md)) |
 
 ## Status
 
@@ -184,7 +184,7 @@ The order of what comes next is the [roadmap](docs/roadmap.md).
   [without the app](docs/guide/without-app.md), [a lost device](docs/guide/lost-device.md) and
   [troubleshooting](docs/guide/troubleshooting.md).
 - **Running servers**: [your own forwarder or relay](docs/admin/self-hosting.md), the
-  [Docker image](packaging/docker/README.md), the [lite member](lite/README.md).
+  [Docker image](packaging/docker/README.md), the [lite member](member/README.md).
 - **Reference**: [commands](docs/reference/cli.md), [settings and environment variables](docs/reference/config.md),
   [devices, ports and files](docs/reference/devices.md), the [glossary](docs/reference/glossary.md).
 - **For developers**: the [design](docs/design.md), the [protocol](docs/protocol.md) and the
@@ -196,7 +196,7 @@ Copy Beyond Borders is free software, licensed under the
 [GNU Affero General Public License v3.0 only](LICENSE).
 
 One author holds all the rights, so a commercial license without the AGPL's obligations is
-also available, for example to build the lite member (`lite/`) into routers and other
+also available, for example to build the lite member (`member/`) into routers and other
 devices. To ask for one, open an issue with the **Commercial license** form on
 [GitHub](https://github.com/HunterEwok/cbb/issues/new/choose).
 

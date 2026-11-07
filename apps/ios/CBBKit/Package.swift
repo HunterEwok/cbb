@@ -5,7 +5,7 @@
 // frames, the welcome), the join QR code and the member protocol. It has no
 // UI and runs on Linux too, so its tests run against the Go implementation's
 // test vectors anywhere. The group's rules come from the Rust core
-// (CCbbCore), whose static library lite/ffi/bind.sh builds: the kit's tests
+// (CCbbCore), whose static library ffi/bind.sh builds: the kit's tests
 // run as swift test -Xlinker -L<its folder>.
 import PackageDescription
 
@@ -18,7 +18,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"5.0.0"),
     ],
     targets: [
-        // The Rust core's C functions (lite/ffi/include/cbb_core.h).
+        // The Rust core's C functions (ffi/include/cbb_core.h).
         .systemLibrary(name: "CCbbCore"),
         .target(name: "CBBKit", dependencies: [
             "CCbbCore",

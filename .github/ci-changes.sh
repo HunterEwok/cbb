@@ -42,8 +42,8 @@ for f in $files; do
 	tools/sbom/*) core=true; tools=true ;; # the packaging job and the Android job run it
 	tools/*) tools=true ;;
 	# The Rust core's rules, which the phone kits and the Aurora app link.
-	lite/core/* | lite/ffi/* | lite/Cargo.toml | lite/Cargo.lock) lite=true; ios=true; android=true; silica=true ;;
-	lite/*) lite=true ;;
+	core/* | ffi/* | Cargo.toml | Cargo.lock) lite=true; ios=true; android=true; silica=true ;;
+	member/* | embassy/* | esp32/* | ring-shim/* | wasm/* | .cargo/* | deny.toml | rustfmt.toml) lite=true ;;
 	apps/ios/*) ios=true; macos=true ;;
 	apps/macos/*) macos=true ;;
 	apps/desktop/*) desktop=true ;;

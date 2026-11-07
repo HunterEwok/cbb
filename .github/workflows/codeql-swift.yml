@@ -54,10 +54,10 @@ jobs:
       - name: generate the iPhone app's project and fetch its packages
         # Before CodeQL watches: Homebrew refuses to run under its tracer. The app
         # links the phones' tunnel (mobile/cbbtun), bound by gomobile, and the
-        # Rust core (lite/ffi), which Rust builds.
+        # Rust core (ffi/), which Rust builds.
         run: |
           mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework
-          sh lite/ffi/bind.sh ios apps/ios/CbbCore
+          sh ffi/bind.sh ios apps/ios/CbbCore
           brew install xcodegen
           (cd apps/ios && xcodegen generate)
           xcodebuild -resolvePackageDependencies -project apps/ios/CBB.xcodeproj -scheme CBB

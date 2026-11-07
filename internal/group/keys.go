@@ -35,6 +35,11 @@ func theTPM() (*tpmkey.TPM, error) {
 	return tpm, tpmErr
 }
 
+// CloseTPM closes the TPM, flushing what this process loaded into it: a TPM
+// without the kernel's resource manager, as a simulator, keeps a process's
+// objects after it ends. It opens again when next used.
+func CloseTPM() { ReopenTPM() }
+
 // ReopenTPM closes the TPM, which opens again when next used: for the tests
 // that start a simulator (tpmtest.Start) after another test used the TPM.
 func ReopenTPM() {
@@ -49,23 +54,59 @@ func ReopenTPM() {
 // one (docs/protocol.md, section 17), and in memory, to be saved in the
 // identity file, otherwise.
 func NewDeviceKey() (crypto.Signer, error) {
-	if os.Getenv(TPMEnv) != "off" {
-		if t, err := theTPM(); err == nil {
-			k, err := t.NewKey()
-			if err == nil {
-				return k, nil
-			}
-			// A TPM that opens but cannot make keys (full, or refusing
-			// the template) leaves the key in a file.
-			keyErr = err
-		}
-		if sekey.Available() {
-			if k, err := sekey.New(); err == nil {
-				return k, nil
-			}
-		}
+	if k := NewHardwareKey(); k != nil {
+		return k, nil
 	}
 	return NewKey()
+}
+
+// NewHardwareKey makes a member or admin key in the TPM or the Secure
+// Enclave, as NewDeviceKey does, and returns nil where it would put the key
+// in a file.
+func NewHardwareKey() crypto.Signer {
+	if os.Getenv(TPMEnv) == "off" {
+		return nil
+	}
+	if t, err := theTPM(); err == nil {
+		k, err := t.NewKey()
+		if err == nil {
+			return k
+		}
+		// A TPM that opens but cannot make keys (full, or refusing the
+		// template) leaves the key in a file.
+		keyErr = err
+	}
+	if sekey.Available() {
+		if k, err := sekey.New(); err == nil {
+			return k
+		}
+	}
+	return nil
+}
+
+// HeldKey is how an identity file keeps a device key that hardware holds:
+// the TPM's blob or the Secure Enclave's, as its key_tpm and key_se.
+type HeldKey struct {
+	TPM *tpmkey.Blob `json:"key_tpm,omitempty"`
+	SE  []byte       `json:"key_se,omitempty"`
+}
+
+// HeldOf returns what keeps k, a key in the TPM or the Secure Enclave, and
+// false for a key in a file.
+func HeldOf(k crypto.Signer) (HeldKey, bool) {
+	s, err := storeKey(k)
+	if err != nil || s.der != nil {
+		return HeldKey{}, false
+	}
+	return HeldKey{TPM: s.tpm, SE: s.se}, true
+}
+
+// Load loads the key that h keeps.
+func (h HeldKey) Load() (crypto.Signer, error) {
+	if h.TPM == nil && h.SE == nil {
+		return nil, errors.New("group: a key held by hardware without its blob")
+	}
+	return storedKey{tpm: h.TPM, se: h.SE}.load()
 }
 
 // HardwareKeys tells whether NewDeviceKey would put a new key in the TPM

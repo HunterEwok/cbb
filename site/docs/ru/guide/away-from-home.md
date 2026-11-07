@@ -78,7 +78,7 @@ sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches you
   **Перенести хаб на компьютер** сделайте хабом компьютер (сначала сохранив на телефоне
   форвардер) или выключите **Этот телефон как хаб**.
 - **Лёгкий участник**: `sudo cbb global on` на устройстве
-  ([лёгкий участник](../../lite/README.md#sync-away-from-home)).
+  ([лёгкий участник](../../member/README.md#sync-away-from-home)).
 
 ## 4. Проверьте
 

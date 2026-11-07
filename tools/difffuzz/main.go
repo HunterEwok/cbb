@@ -17,7 +17,7 @@
 // CBB_VERDICTS_OUT) and fails on any case they read differently, printing
 // the case, so that it can become a vector of strict-generated-*.json. seeds
 // writes the same bodies as the seed corpora of the cargo fuzz targets in
-// lite/core/fuzz.
+// core/fuzz.
 //
 // A case is a JSON object. A body case is {"kind": K, "body": base64},
 // with K one of record, command, manifest, credential, keys, release,

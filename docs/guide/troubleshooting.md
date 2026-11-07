@@ -30,7 +30,7 @@ in again (on Windows, open a new terminal); until then, `sudo cbb ...` works.
 - **Another subnet or VLAN.** mDNS does not cross routers, so devices on, say,
   192.168.0.x and 192.168.20.x do not find each other. Turn on [sync away from home](away-from-home.md)
   with a hub on one side, or, for a lite member, name a computer with `-peer` in its
-  service ([lite member](../../lite/README.md#install)).
+  service ([lite member](../../member/README.md#install)).
 - **Guest Wi-Fi or client isolation** on the router keeps devices from talking to each
   other at all; put them on the main network.
 - **A different group.** `cbb status` shows the group; devices of two groups never

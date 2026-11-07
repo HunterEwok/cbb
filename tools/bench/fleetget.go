@@ -141,7 +141,7 @@ func getScript(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[st
 // getLite (I1): get.sh --lite on a computer with nothing installed takes
 // the lite member's archive from a release that holds both, checks its
 // signature and leaves the lite member running under systemd. It packs
-// the archive from -cbb-lite with lite/packaging/archive.sh, which needs
+// the archive from -cbb-lite with member/packaging/archive.sh, which needs
 // cargo and jq for the crates' notices.
 func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[string]string) {
 	const p = "fleet/I1-get-lite/"
@@ -160,8 +160,8 @@ func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[stri
 			return fmt.Errorf("%v: %s", err, out)
 		}
 		target := map[string]string{"amd64": "x86_64-unknown-linux-gnu", "arm64": "aarch64-unknown-linux-gnu"}[goarchOf()]
-		if out, err := exec.CommandContext(ctx, "sh", "lite/packaging/archive.sh", fleetLite, target, goarchOf(), built).CombinedOutput(); err != nil {
-			return fmt.Errorf("lite/packaging/archive.sh: %v: %s", err, out)
+		if out, err := exec.CommandContext(ctx, "sh", "member/packaging/archive.sh", fleetLite, target, goarchOf(), built).CombinedOutput(); err != nil {
+			return fmt.Errorf("member/packaging/archive.sh: %v: %s", err, out)
 		}
 		var err error
 		if d, err = f.AddSystemd(ctx, f.net); err != nil {

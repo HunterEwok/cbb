@@ -1,0 +1,87 @@
+{
+  "v": 1,
+  "key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+  "psk": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+  "group": "0f1e2d3c4b5a6978",
+  "hubs": [
+    {
+      "device": "0123456789abcdef0123456789abcdef",
+      "key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+      "psk": "CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg=",
+      "endpoints": [
+        "203.0.113.5:8764"
+      ],
+      "obfuscation": {
+        "jc": 5,
+        "jmin": 50,
+        "jmax": 300,
+        "s1": 20,
+        "s2": 33,
+        "s3": 17,
+        "s4": 25,
+        "h1": "1000016-1065551",
+        "h2": "1073741840-1073807375",
+        "h3": "2147483664-2147549199",
+        "h4": "3221225488-3221291023",
+        "header_protection_key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="
+      },
+      "next": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="
+    }
+  ],
+  "is_hub": true,
+  "endpoints": [
+    "[2001:db8::1]:8764",
+    "192.0.2.1:8764"
+  ],
+  "listen_port": 51820,
+  "members": [
+    {
+      "device": "00112233445566778899aabbccddeeff",
+      "key": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
+      "psk": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=",
+      "chain": [
+        "bGVhZg==",
+        "Y2E="
+      ]
+    },
+    {
+      "device": "ffeeddccbbaa99887766554433221100",
+      "key": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU=",
+      "psk": "BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY=",
+      "chain": null
+    }
+  ],
+  "keys_in_file": true,
+  "forwarder": {
+    "endpoint": "198.51.100.9:8764",
+    "key": "cGlu",
+    "vless_id": "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d",
+    "vless": {
+      "transport": "xhttp",
+      "endpoint": "198.51.100.9:443",
+      "server_name": "cbb.example.org",
+      "path": "/AbC-12_xyz0123456/a-group-of-its-own",
+      "id": "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d"
+    },
+    "project": true
+  },
+  "obfuscation": {
+    "jc": 5,
+    "jmin": 50,
+    "jmax": 300,
+    "s1": 20,
+    "s2": 33,
+    "s3": 17,
+    "s4": 25,
+    "h1": "1000016-1065551",
+    "h2": "1073741840-1073807375",
+    "h3": "2147483664-2147549199",
+    "h4": "3221225488-3221291023",
+    "header_protection_key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="
+  },
+  "serving": "CgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgo=",
+  "serving_for": "2026-11",
+  "next": "CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=",
+  "next_for": "2026-12",
+  "next_at_ms": 1796083200000
+}
