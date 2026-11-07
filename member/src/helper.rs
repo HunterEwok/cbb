@@ -214,7 +214,10 @@ impl Helper {
             if matches!(child.try_wait(), Ok(None)) {
                 let _ = child.kill();
             }
-            let _ = child.wait();
+            // Logged here too: a helper that died as cbb wrote to it ends
+            // here, not in ensure.
+            let status = child.wait().map(|s| s.to_string()).unwrap_or_else(|e| e.to_string());
+            (self.log)(&format!("cbb: {PROGRAM} stopped ({status})"));
         }
     }
 }
@@ -290,26 +293,44 @@ mod tests {
 
     /// A Helper that runs this test program as fake_helper.
     fn fake(log: Arc<Mutex<Vec<String>>>) -> Helper {
-        let dir = std::env::temp_dir().join(format!("cbb-helper-test-{}-{}", std::process::id(), next()));
-        std::fs::create_dir_all(&dir).unwrap();
-        // A script, so that the Helper starts it with no arguments, as cbb
-        // starts cbb-helper.
-        let script = dir.join(PROGRAM);
-        let exe = std::env::current_exe().unwrap();
-        std::fs::write(
-            &script,
-            format!(
-                "#!/bin/sh\nCBB_FAKE_HELPER=1 exec '{}' --exact helper::tests::fake_helper --nocapture --quiet --test-threads=1 3>&1 >/dev/null\n",
-                exe.display()
-            ),
-        )
-        .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        Helper::new(&script, Arc::new(move |s: &str| log.lock().unwrap().push(s.to_string())))
+        Helper::new(script(), Arc::new(move |s: &str| log.lock().unwrap().push(s.to_string())))
+    }
+
+    /// The script that starts fake_helper, written once for every test: a
+    /// script, so that the Helper starts it with no arguments, as cbb starts
+    /// cbb-helper. A process another test forks while the script is open
+    /// for writing keeps it busy (ETXTBSY) until it execs, so the script is
+    /// run once until it starts.
+    fn script() -> &'static std::path::Path {
+        static SCRIPT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+        SCRIPT.get_or_init(|| {
+            let dir = std::env::temp_dir().join(format!("cbb-helper-test-{}-{}", std::process::id(), next()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let script = dir.join(PROGRAM);
+            let exe = std::env::current_exe().unwrap();
+            std::fs::write(
+                &script,
+                format!(
+                    "#!/bin/sh\n[ -n \"$CBB_PROBE\" ] && exit 0\nCBB_FAKE_HELPER=1 exec '{}' --exact helper::tests::fake_helper --nocapture --quiet --test-threads=1 3>&1 >/dev/null\n",
+                    exe.display()
+                ),
+            )
+            .unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            for _ in 0..100 {
+                match Command::new(&script).env("CBB_PROBE", "1").status() {
+                    Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) => {
+                        std::thread::sleep(Duration::from_millis(20))
+                    }
+                    _ => break,
+                }
+            }
+            script
+        })
     }
 
     fn next() -> usize {
