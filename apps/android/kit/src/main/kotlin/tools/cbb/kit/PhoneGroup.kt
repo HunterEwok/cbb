@@ -919,6 +919,18 @@ class PhoneGroup internal constructor(
         return admitted
     }
 
+    /**
+     * Notes a computer the core admitted for this phone (CorePairing):
+     * its name, system and those of addrs that are on a home network, the
+     * one that answered first, for dialing it where mDNS does not find it.
+     * One admitted again replaces its entry. Its record reaches the group
+     * from the member.
+     */
+    fun noteComputer(device: String, name: String, os: String, addrs: List<String>, now: Instant) {
+        computers.removeAll { it.device == device }
+        computers.add(Computer(device, name, os, ByteArray(0), now, addrs.filter(JoinCode::isHome)))
+    }
+
     /** The group as JSON, to save it. */
     fun toJson(): ByteArray = Wire.encode(
         Wire.obj(
@@ -1020,6 +1032,23 @@ class PhoneGroup internal constructor(
             return g
         }
 
+        /**
+         * The group the core made with this phone's root key
+         * (CorePairing.newGroup), or the group a phone joined through the
+         * core (CorePairing.Joining): a member of it, and an admin when the
+         * admitting phone sent its admin CA.
+         */
+        fun of(c: CorePairing.Group, root: Boolean): PhoneGroup {
+            val g = PhoneGroup(c.device, c.groupCA, c.cert)
+            g.memberIssuer = c.issuer
+            g.isRoot = root
+            g.adminCA = if (root) null else c.adminCA
+            g.records = RecordSet.fromFile(c.groupCA, c.records)
+            // The records that lead to the roots stay with the group, so the roots are those its records name.
+            g.roots = g.records.roots.ifEmpty { c.roots }
+            return g
+        }
+
         /** A group saved with toJson. */
         fun fromJson(data: ByteArray): PhoneGroup {
             val o = Wire.parse(data) ?: throw Failure("not a saved group")
@@ -1040,7 +1069,7 @@ class PhoneGroup internal constructor(
                             co.optString("device") ?: continue,
                             co.optString("name") ?: "",
                             co.optString("os") ?: "linux",
-                            co.optBytes("cert") ?: continue,
+                            co.optBytes("cert") ?: ByteArray(0),
                             Instant.ofEpochMilli(co.optLong("admitted_ms") ?: 0),
                             co.optArray("addrs").orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }.filter(JoinCode::isHome),
                         ),

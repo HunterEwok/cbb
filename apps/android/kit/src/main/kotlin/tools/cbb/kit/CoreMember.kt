@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * them off its main thread. The other calls answer at once. Every call
  * throws [Core.Refusal] when the node refuses it.
  */
-class CoreMember private constructor(private val handle: Pointer, private val callbacks: Callbacks) : Closeable {
+class CoreMember private constructor(internal val handle: Pointer, private val callbacks: Callbacks) : Closeable {
     /** What the member starts from: the app's data directory and the phone's identity in the group. */
     class Start(
         /** The node's own files (its records, the clock's mark, the entry points, the cached copies). */
@@ -445,7 +445,7 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
 
     companion object {
         /** The longest DER signature of P-256, the room the node gives. */
-        private const val MAX_SIG = 72
+        internal const val MAX_SIG = 72
 
         private val lib: Lib by lazy { Native.load("cbb_ffi", Lib::class.java) }
 
@@ -458,17 +458,7 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
          * app's thread of choice (the main thread in the app), in order.
          */
         fun start(start: Start, sign: (ByteArray) -> ByteArray, post: (Runnable) -> Unit = { it.run() }, events: (Event) -> Unit): CoreMember {
-            val signFn = SignFn { _, digest, sig, sigLen ->
-                try {
-                    val s = sign(digest.getByteArray(0, 32))
-                    if (s.isEmpty() || s.size > MAX_SIG) return@SignFn 1
-                    sig.write(0, s, 0, s.size)
-                    if (Native.SIZE_T_SIZE == 8) sigLen.setLong(0, s.size.toLong()) else sigLen.setInt(0, s.size)
-                    0
-                } catch (e: Exception) {
-                    1
-                }
-            }
+            val signFn = signFn(sign)
             val eventFn = EventFn { _, event, len ->
                 val e = runCatching { decode(event.getByteArray(0, len.toInt())) }.getOrNull()
                 if (e != null) post { events(e) }
@@ -484,11 +474,24 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
             return CoreMember(m ?: throw Core.Mismatch("the member did not start"), cbs)
         }
 
+        /** A cbb_sign_fn over sign, which signs a SHA-256 digest (ECDSA P-256, DER); a failure answers 1. */
+        internal fun signFn(sign: (ByteArray) -> ByteArray): SignFn = SignFn { _, digest, sig, sigLen ->
+            try {
+                val s = sign(digest.getByteArray(0, 32))
+                if (s.isEmpty() || s.size > MAX_SIG) return@SignFn 1
+                sig.write(0, s, 0, s.size)
+                if (Native.SIZE_T_SIZE == 8) sigLen.setLong(0, s.size.toLong()) else sigLen.setInt(0, s.size)
+                0
+            } catch (e: Exception) {
+                1
+            }
+        }
+
         /** The uncompressed point of a P-256 public key given as a SubjectPublicKeyInfo or as the point itself. */
         internal fun point(key: ByteArray): ByteArray =
             if (key.size == 65 && key[0] == 4.toByte()) key else key.copyOfRange(maxOf(0, key.size - 65), key.size)
 
-        private fun take(answer: Pointer, count: Memory): ByteArray {
+        internal fun take(answer: Pointer, count: Memory): ByteArray {
             val n = if (Native.SIZE_T_SIZE == 8) count.getLong(0) else count.getInt(0).toLong() and 0xffffffffL
             try {
                 if (n > Int.MAX_VALUE) throw Core.Mismatch("the member's answer is $n bytes long")
@@ -498,7 +501,7 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
             }
         }
 
-        private fun okOf(op: String, bytes: ByteArray): JsonObject {
+        internal fun okOf(op: String, bytes: ByteArray): JsonObject {
             val a = runCatching { Json.parseToJsonElement(bytes.decodeToString()) as JsonObject }.getOrNull()
                 ?: throw Core.Mismatch("the member's answer to $op does not read")
             (a["error"] as? JsonObject)?.let { e ->

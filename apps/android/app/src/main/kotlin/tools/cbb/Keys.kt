@@ -270,11 +270,17 @@ class KeystoreSigner(
         }
     }
 
-    /** An ECDSA signature, ASN.1 DER, of a SHA-256 digest: the member key signs the hub's TLS to its forwarder so (cbbtun's Signer). */
-    fun signDigest(digest: ByteArray): ByteArray =
-        Signature.getInstance("NONEwithECDSA").run {
-            initSign(privateKey)
+    /**
+     * An ECDSA signature, ASN.1 DER, of a SHA-256 digest: what the Rust
+     * core's signing callback asks for, as the member key signs the node's
+     * TLS and the root or admin key the certificates and records the core
+     * issues. With authorize, the user allows each signature first.
+     */
+    fun signDigest(digest: ByteArray): ByteArray {
+        val s = Signature.getInstance("NONEwithECDSA").apply { initSign(privateKey) }
+        return (authorize?.invoke(s) ?: s).run {
             update(digest)
             sign()
         }
+    }
 }

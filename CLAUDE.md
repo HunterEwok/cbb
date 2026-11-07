@@ -135,7 +135,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   UAC, `frontend/` plain HTML/JS with `tokens.js` from `tools/tokens` and `l10n/ru.json`);
   CI's `tray app` jobs.
 - `apps/android/kit`: the phone's kit in Kotlin, the Android twin of the Swift kit: `CoreMember` (the member in
-  the Rust core through JNA, which syncs), pairing, records, certificates, restoring, credentials; the Kotlin
+  the Rust core through JNA, which syncs), `CorePairing` (making the group, admitting and joining through the
+  core's admission), pairing, records, certificates, restoring, credentials; the Kotlin
   node, its sync engine's network part and its member listener and dialer are gone (D-86), as are the Swift
   kit's (`MemberNode`, `SyncEngine`, `MemberListener`, `MemberDialer`); `TLSTransport` stays for pairing;
   `apps/android/app`: the Compose app (`WatchLink` tells the Wear OS watch, `BluetoothKeyboard` types

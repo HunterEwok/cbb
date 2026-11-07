@@ -249,6 +249,27 @@ fn refusals() {
 }
 
 #[test]
+fn a_wrong_code_tells_the_admin() {
+    // The joiner checks the code with the tag the admin sends first, and its
+    // refusal says the code was wrong: the admin's side says so too.
+    let (admitter, rs) = root_group();
+    let joiner = Joiner::new("router").unwrap();
+    let mut joining = Attempt::listening(&joiner, "111111", &clock()).unwrap();
+    let mut adm = Admission::dial(admitter, GroupView::of(&rs), "222222", &joiner.fingerprint(), &clock()).unwrap();
+    let mut to_joiner = adm.feed(&[], now_ms()).send;
+    for _ in 0..32 {
+        let to_member = joining.feed(&to_joiner, now_ms()).send;
+        let step = adm.feed(&to_member, now_ms());
+        to_joiner = step.send;
+        if let Outcome::Failed { error, wrong_code } = step.outcome {
+            assert!(wrong_code, "{error:?}");
+            return;
+        }
+    }
+    panic!("the admission did not end");
+}
+
+#[test]
 fn a_phone_makes_its_group_and_admits() {
     let root_key = soft();
     let member_key = soft();

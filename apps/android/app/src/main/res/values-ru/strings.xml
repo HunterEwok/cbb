@@ -20,6 +20,9 @@
     <string name="theme_material">Material You</string>
     <string name="theme_light">Светлая</string>
     <string name="join_title">Войти в группу</string>
+    <string name="join_admin">Войти как админ</string>
+    <string name="join_admin_title">Войти как админ</string>
+    <string name="join_admin_hint">На корневом телефоне группы нажмите + и отсканируйте этот код: добавить телефон админом может только корень. Не закрывайте этот экран.</string>
     <string name="join_hint">На другом телефоне нажмите + и отсканируйте этот код. Не закрывайте этот экран.</string>
     <string name="join_qr_label">QR-код для входа в группу</string>
     <string name="join_tv">Войти в группу телефона</string>

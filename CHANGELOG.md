@@ -1230,6 +1230,13 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Android app makes its group, admits a phone or a computer and joins another phone's
+  group through the Rust core's admission (lite/ffi's `cbb_group_new`, `cbb_admit_*` and
+  `cbb_join_*`, the kit's `CorePairing`), as the Aurora app does, in place of the kit's own
+  pairing code for these. Its Start screen has two buttons, as protocol.md section 6 says:
+  "Join", which any admin of the group can answer, and "Join as an admin", which offers an
+  admin key and only the root phone can answer. Joining a computer's group by dialing it and
+  the hub's remote invitations stay on the kit's pairing for now.
 - The iPhone and Android apps sync through the phones' member in the Rust core (D-86), as
   the Aurora app does, in place of their own Swift and Kotlin nodes: one implementation of
   the member protocol, the clipboard rule and the button for every phone. The apps still
@@ -1624,6 +1631,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- When a joining phone refused the code an admin typed, the admin's side of the core's
+  admission said only that pairing failed; it now says the code was wrong, as the other
+  failures of a wrong code do.
 - A peer that sent a certificate the member refuses, as a device of another group dialing a
   lite member or a phone's member, brought its process down: after the handshake failed, the
   core's TLS session asked rustls for its alert with an empty buffer while rustls still

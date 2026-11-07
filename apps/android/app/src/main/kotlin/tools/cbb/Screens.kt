@@ -200,6 +200,7 @@ private fun StartScreen(model: AppModel) {
             )
         }
         QuietButton(stringResource(R.string.join_other), onClick = { model.startJoining() })
+        QuietButton(stringResource(R.string.join_admin), onClick = { model.startJoining(admin = true) })
         QuietButton(stringResource(R.string.join_computer), onClick = { model.startJoiningComputer() })
         QuietButton(stringResource(R.string.restore), onClick = {
             model.dismissWelcome()
@@ -263,7 +264,7 @@ private fun JoinScreen(model: AppModel) {
     ) {
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
         Text(
-            stringResource(R.string.join_title),
+            stringResource(if (model.joinAsAdmin) R.string.join_admin_title else R.string.join_title),
             style = MaterialTheme.typography.headlineMedium,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -278,7 +279,12 @@ private fun JoinScreen(model: AppModel) {
                     .clip(RoundedCornerShape(Tokens.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
                     .semantics { contentDescription = label },
             )
-            Text(stringResource(if (model.isTv) R.string.join_hint_tv else R.string.join_hint), textAlign = TextAlign.Center, color = palette.textDim)
+            val hint = when {
+                model.isTv -> R.string.join_hint_tv
+                model.joinAsAdmin -> R.string.join_admin_hint
+                else -> R.string.join_hint
+            }
+            Text(stringResource(hint), textAlign = TextAlign.Center, color = palette.textDim)
         } else if (model.message == null) {
             CircularProgressIndicator(color = palette.accent)
         }

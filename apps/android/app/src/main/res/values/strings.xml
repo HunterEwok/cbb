@@ -23,6 +23,9 @@
     <string name="theme_material">Material You</string>
     <string name="theme_light">Light</string>
     <string name="join_title">Join a group</string>
+    <string name="join_admin">Join as an admin</string>
+    <string name="join_admin_title">Join as an admin</string>
+    <string name="join_admin_hint">On the group\'s root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.</string>
     <string name="join_hint">On your other phone, tap + and scan this code. Keep this screen open.</string>
     <string name="join_qr_label">QR code to join the group</string>
     <string name="join_tv">Join a phone\'s group</string>
