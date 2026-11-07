@@ -24,7 +24,7 @@ final class KeychainTLSTests: XCTestCase {
         labels.append(label)
         let key = try KeychainIdentity.makeKey(label: label)
         let signer = try SecKeySigner(key)
-        let cert = try GroupCertificates.selfSigned(device: SyncEngine.newID(), signer: signer)
+        let cert = try GroupCertificates.selfSigned(device: Member.newID(), signer: signer)
         return (try KeychainIdentity.identity(certificate: cert, key: key, label: label, storeKey: false), cert)
     }
 
@@ -44,7 +44,7 @@ final class KeychainTLSTests: XCTestCase {
         let attrs: [CFString: Any] = [kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeySizeInBits: 256,
                                       kSecAttrIsPermanent: true, kSecAttrLabel: label]
         let key = try XCTUnwrap(SecKeyCreateRandomKey(attrs as CFDictionary, &error))
-        let cert = try GroupCertificates.selfSigned(device: SyncEngine.newID(), signer: SecKeySigner(key))
+        let cert = try GroupCertificates.selfSigned(device: Member.newID(), signer: SecKeySigner(key))
         let client = try KeychainIdentity.identity(certificate: cert, key: key, label: label, storeKey: false)
         try await handshake(server: server, client: client)
     }

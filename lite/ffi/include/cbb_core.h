@@ -69,8 +69,11 @@ void cbb_join_free(cbb_join *j);
  * own, with the app's key through sign. event gets each event as JSON on any
  * thread: {"type":"write","text","kind","ttl_ms"}, {"type":"log","line"},
  * {"type":"identity","cert","issuer","roots"}, {"type":"copy","copy"},
- * {"type":"message","from","message"} or {"type":"mute","muted","for_ms","by"};
- * ctx must stay valid for the rest of the process.
+ * {"type":"message","from","message"}, {"type":"peer","peer"},
+ * {"type":"tunnel","from","offer"}, {"type":"command","token","from",
+ * "command"}, which the app answers with the op "answer", or
+ * {"type":"mute","muted","for_ms","by"}; ctx must stay valid for the rest
+ * of the process.
  */
 typedef void (*cbb_event_fn)(void *ctx, const uint8_t *event, size_t len);
 
@@ -84,6 +87,11 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
  * command and wait block on the network: call them off the main thread.
  */
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
+/*
+ * Stops the member. It stays valid for the rest of the process: another
+ * thread may still call it, and a call after the stop answers that the
+ * member stopped; stopping it again does nothing.
+ */
 void cbb_member_stop(cbb_member *m);
 /*
  * An admin's change to a device of the group or command for it, signed with

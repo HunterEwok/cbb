@@ -15,7 +15,7 @@ final class ComputerAdminTests: XCTestCase {
     func group() throws -> (g: PhoneGroup, root: SoftwareSigner, pi: String, piKey: Data) {
         let root = SoftwareSigner()
         var g = try PhoneGroup.create(caSigner: root, memberKey: SoftwareSigner().publicKeyDER, now: t0)
-        let pi = SyncEngine.newID()
+        let pi = Member.newID()
         let cert = try GroupCertificates.member(device: pi, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: root, now: t0)
         let key = try Records.keyHash(cert: cert)
         _ = try g.record(device: pi, name: "pi", role: "full", key: key, caSigner: root, now: t0)
@@ -30,7 +30,7 @@ final class ComputerAdminTests: XCTestCase {
         let root = SoftwareSigner()
         var g = try PhoneGroup.create(caSigner: root, memberKey: SoftwareSigner().publicKeyDER, now: t0)
         XCTAssertEqual(g.keyLevel, Records.hardware)
-        let pi = SyncEngine.newID()
+        let pi = Member.newID()
         let cert = try GroupCertificates.member(device: pi, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: root, now: t0)
         _ = try g.record(device: pi, name: "pi", role: "full", key: try Records.keyHash(cert: cert), caSigner: root, now: t0)
         let adminKey = SoftwareSigner().publicKeyDER
@@ -95,7 +95,7 @@ final class ComputerAdminTests: XCTestCase {
         XCTAssertThrowsError(try g.rename(device: t.pi, to: String(repeating: "x", count: 65), caSigner: t.root, now: t1)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .invalidName)
         }
-        XCTAssertThrowsError(try g.rename(device: SyncEngine.newID(), to: "x", caSigner: t.root, now: t1)) {
+        XCTAssertThrowsError(try g.rename(device: Member.newID(), to: "x", caSigner: t.root, now: t1)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .unknownDevice)
         }
     }
@@ -138,7 +138,7 @@ final class ComputerAdminTests: XCTestCase {
         XCTAssertThrowsError(try g.makeAdmin(device: g.device, adminKey: adminKey.publicKeyDER, rootSigner: root, now: t0, allowFileKey: true)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .notAComputer)
         }
-        XCTAssertThrowsError(try g.makeAdmin(device: SyncEngine.newID(), adminKey: adminKey.publicKeyDER, rootSigner: root, now: t0, allowFileKey: true)) {
+        XCTAssertThrowsError(try g.makeAdmin(device: Member.newID(), adminKey: adminKey.publicKeyDER, rootSigner: root, now: t0, allowFileKey: true)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .unknownDevice)
         }
         var notRoot = g
@@ -148,7 +148,7 @@ final class ComputerAdminTests: XCTestCase {
         }
 
         // The admin computer admits the deck; removing the computer keeps it.
-        let deck = SyncEngine.newID()
+        let deck = Member.newID()
         let deckCert = try GroupCertificates.member(device: deck, publicKey: SoftwareSigner().publicKeyDER, ca: ca, caSigner: adminKey, now: t0)
         g.add([try g.records.sign(.device(deck, name: "deck", role: "full", key: Records.keyHash(cert: deckCert), signer: adminKey, now: t0),
                                   with: adminKey, adminCA: ca)])
@@ -165,7 +165,7 @@ final class ComputerAdminTests: XCTestCase {
     func testAddWatch() throws {
         let t = try group()
         var g = t.g
-        let watchKey = SoftwareSigner(), watch = SyncEngine.newID()
+        let watchKey = SoftwareSigner(), watch = Member.newID()
         for (id, os) in [("ABC", "watchos"), (watch.uppercased(), "watchos"), (watch, "ios"), (g.device, "watchos")] {
             XCTAssertThrowsError(try g.addWatch(device: id, name: "Watch", os: os, adminKey: watchKey.publicKeyDER, rootSigner: t.root, now: t1)) {
                 XCTAssertEqual($0 as? PhoneGroup.Failure, .notAWatch, "\(id) \(os)")
@@ -191,7 +191,7 @@ final class ComputerAdminTests: XCTestCase {
         XCTAssertFalse(g.records.mayHost(watch))
 
         // A device record the watch signs admits nobody.
-        let deck = SyncEngine.newID()
+        let deck = Member.newID()
         let deckCert = try GroupCertificates.member(device: deck, publicKey: SoftwareSigner().publicKeyDER, ca: ca, caSigner: watchKey, now: t0)
         g.add([try g.records.sign(.device(deck, name: "deck", role: "full", key: Records.keyHash(cert: deckCert), signer: watchKey, now: t1),
                                   with: watchKey, adminCA: ca)])
@@ -210,10 +210,10 @@ final class ComputerAdminTests: XCTestCase {
         let t = try group()
         var g = t.g
         _ = try g.makeAdmin(device: t.pi, adminKey: SoftwareSigner().publicKeyDER, rootSigner: t.root, now: t1, allowFileKey: true)
-        let deck = SyncEngine.newID()
+        let deck = Member.newID()
         let deckCert = try GroupCertificates.member(device: deck, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: t.root, now: t0)
         _ = try g.record(device: deck, name: "deck", role: "full", key: Records.keyHash(cert: deckCert), caSigner: t.root, now: t0)
-        let watchKey = SoftwareSigner(), watch = SyncEngine.newID()
+        let watchKey = SoftwareSigner(), watch = Member.newID()
         let (ca, _) = try g.addWatch(device: watch, name: "Watch", os: "watchos", adminKey: watchKey.publicKeyDER, rootSigner: t.root, now: t1)
 
         XCTAssertEqual(g.watchActions(for: t.pi), [.freeze, .pasteOff, .actionsOff, .awayOff, .action])
@@ -258,23 +258,20 @@ final class ComputerAdminTests: XCTestCase {
         return nil
     }
 
+    /// The root sends a device the admin CA it issued, and the device's app
+    /// gets it.
     func testNodeSendsTheAdminCA() async throws {
-        let key = SoftwareSigner().publicKeyDER, ca = Data([7, 7])
-        let phone = MemberNode(engine: SyncEngine(device: SyncEngine.newID(), clock: HybridClock()), name: "iPhone",
-                               adminCA: { $0 == key ? ca : nil })
-        let pi = SyncEngine.newID()
-        let (a, b) = Pipe.pair()
-        let task = Task { try await phone.serve(a, peer: pi) }
-        try await b.write(Member.encode(.hello(.full, Member.Hello(wallMS: 0, adminKey: key))))
-        let first = try await next(from: b) { if case .admin = $0 { true } else { false } }
-        XCTAssertEqual(first, .admin(ca), "the root sends the admin CA it issued for the offered key")
-        let offered = await phone.offeredAdminKeys
-        XCTAssertEqual(offered, [pi: key])
-        await phone.send(adminCA: Data([8]), to: pi)
-        let second = try await next(from: b) { if case .admin = $0 { true } else { false } }
-        XCTAssertEqual(second, .admin(Data([8])))
-        await phone.closeAll()
-        try await task.value
+        let t = try CoreGroup(test: self)
+        let (phone, other) = (t.phones[0], t.phones[1])
+        try await t.connect(1, to: 0)
+        XCTAssertTrue(try phone.member.sendAdminCA(to: other.device, ca: Data([7, 7])))
+        let (from, ca) = try await other.next("the admin CA") { e -> (String, Data)? in
+            if case let .message(f, .admin(ca)) = e { return (f, ca) }
+            return nil
+        }
+        XCTAssertEqual(from, phone.device)
+        XCTAssertEqual(ca, Data([7, 7]))
+        XCTAssertFalse(try phone.member.sendAdminCA(to: Member.newID(), ca: Data([8])), "a device not connected gets nothing")
     }
 
     /// Writes the root's admin CA for a computer's admin key and the records

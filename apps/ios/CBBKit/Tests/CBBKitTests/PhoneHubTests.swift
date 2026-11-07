@@ -11,7 +11,7 @@ final class PhoneHubTests: XCTestCase {
 
     func testAdmitsAsAComputersHub() throws {
         let hub = PhoneHub(publicKey: key(1))
-        let (a, b) = (SyncEngine.newID(), SyncEngine.newID())
+        let (a, b) = (Member.newID(), Member.newID())
         let first = try hub.admit(device: a, key: key(2))
         XCTAssertTrue(first.changed)
         XCTAssertEqual(first.client.psk.count, 32)
@@ -46,15 +46,15 @@ final class PhoneHubTests: XCTestCase {
         for i in 0..<PhoneHub.maxClients {
             var k = key(7)
             (k[0], k[1]) = (UInt8(i & 0xff), UInt8(i >> 8))
-            _ = try hub.admit(device: SyncEngine.newID(), key: k)
+            _ = try hub.admit(device: Member.newID(), key: k)
         }
-        XCTAssertThrowsError(try hub.admit(device: SyncEngine.newID(), key: key(9))) { XCTAssertEqual($0 as? PhoneHub.Refused, .tooManyClients) }
+        XCTAssertThrowsError(try hub.admit(device: Member.newID(), key: key(9))) { XCTAssertEqual($0 as? PhoneHub.Refused, .tooManyClients) }
     }
 
     func testOffersWaitForVLESS() throws {
         let hub = PhoneHub(publicKey: key(1))
         hub.endpoints = ["203.0.113.1:8764"]
-        let c = try hub.admit(device: SyncEngine.newID(), key: key(2)).client
+        let c = try hub.admit(device: Member.newID(), key: key(2)).client
         let o = try XCTUnwrap(hub.offer(for: c))
         XCTAssertTrue(o.isValid)
         XCTAssertEqual(o.endpoints, ["203.0.113.1:8764"])
@@ -69,7 +69,7 @@ final class PhoneHubTests: XCTestCase {
     func testSharesWithTheOtherHubs() throws {
         let hub = PhoneHub(publicKey: key(1))
         hub.endpoints = ["203.0.113.1:8764"]
-        let a = SyncEngine.newID(), b = SyncEngine.newID(), other = SyncEngine.newID()
+        let a = Member.newID(), b = Member.newID(), other = Member.newID()
 
         // A client's own preshared key; an older one's stays when it offers none.
         XCTAssertEqual(try hub.admit(device: a, key: key(2), psk: key(3)).client.psk, key(3))
@@ -110,45 +110,23 @@ final class PhoneHubTests: XCTestCase {
         XCTAssertEqual(got.clients.map(\.psk), [key(3)])
     }
 
-    /// A computer's hello with a tunnel key gets the hub's offer; the hub
-    /// ignores an offer it gets.
+    /// The phone as the hub answers a client's tunnel key, as its hello
+    /// offers it, with its own offer under the client's preshared key.
     func testNodeAnswersTheTunnelKey() async throws {
+        let t = try CoreGroup(test: self)
+        let (phone, client) = (t.phones[0], t.phones[1])
         let hub = PhoneHub(publicKey: key(1))
         hub.endpoints = ["203.0.113.1:8764"]
-        let phone = MemberNode(engine: SyncEngine(device: SyncEngine.newID(), clock: HybridClock()), name: "iPhone",
-                               tunnelKey: key(5), tunnelPSK: key(6), hub: { d, k, psk, _ in hub.offers(device: d, key: k, psk: psk) },
-                               hubShare: { _, _ in hub.share() },
-                               onTunnel: { _, _ in XCTFail("the hub took an offer") })
-        let pc = SyncEngine.newID()
-        let (a, b) = Pipe.pair()
-        a.peerCertificate = Data([1])
-        let task = Task { try await phone.serve(a, peer: pc) }
-        let n = try Member.length(header: try await b.read(exactly: 4))
-        guard case .hello = try Member.decode(body: try await b.read(exactly: n)) else { return XCTFail("no hello") }
-        var hello = Member.Hello(wallMS: 0)
-        hello.tunnelKey = key(2)
-        hello.tunnelPSK = key(7)
-        try await b.write(Member.encode(.hello(.full, hello)))
-        try await b.write(Member.encode(.tunnel(Member.TunnelOffer(hubKey: key(8), psk: key(9)))))
-        var offer: Member.TunnelOffer?
-        var share: Member.HubShare?
-        while offer == nil || share == nil {
-            let m = try Member.length(header: try await b.read(exactly: 4))
-            switch try Member.decode(body: try await b.read(exactly: m)) {
-            case let .tunnel(o): offer = o
-            case let .hubs(h): share = h
-            default: break
-            }
-        }
-        XCTAssertEqual(offer?.psk, key(7), "the client's own preshared key")
-        XCTAssertEqual(share?.serving, true)
-        XCTAssertEqual(share?.clients.map(\.device), [pc])
-        XCTAssertEqual(share?.offer?.psk, Data())
-        XCTAssertEqual(offer?.hubKey, key(1))
-        XCTAssertEqual(offer?.psk, hub.clients.first?.psk)
-        XCTAssertEqual(offer?.endpoints, ["203.0.113.1:8764"])
-        XCTAssertEqual(hub.clients.map(\.device), [pc])
-        await phone.closeAll()
-        try await task.value
+        try client.member.setTunnelKey(key(2), psk: key(7))
+        try await t.connect(1, to: 0)
+        let p = try await phone.peer(client.device)
+        guard let k = p.tunnelKey else { return XCTFail("the hello offers no key") }
+        for o in hub.offers(device: p.device, key: k, psk: p.tunnelPSK) { try phone.member.sendTunnel(to: p.device, offer: o) }
+        let offer = try await client.next("the hub's offer") { if case let .tunnel(_, o) = $0 { return o }; return nil }
+        XCTAssertEqual(offer.psk, key(7), "the client's own preshared key")
+        XCTAssertEqual(offer.hubKey, key(1))
+        XCTAssertEqual(offer.endpoints, ["203.0.113.1:8764"])
+        XCTAssertEqual(hub.clients.map(\.device), [client.device])
+        XCTAssertEqual(hub.share()?.clients.map(\.device), [client.device])
     }
 }

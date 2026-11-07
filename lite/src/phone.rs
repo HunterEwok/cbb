@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use cbb_core::admit::{self, Admitted, Admitter, GroupView};
@@ -29,7 +29,7 @@ use crate::button::{self, Own};
 use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
 use crate::error::{Error, Result};
-use crate::node::{KeepIdentity, Node, OnMessage, Peer, Presence, WriteReq};
+use crate::node::{KeepIdentity, Node, OnCommand, OnMessage, OnPeer, OnTunnel, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
 use crate::{discovery, mute, service, uptime};
 use cbb_core::media::Part;
@@ -99,11 +99,29 @@ pub struct DeviceView {
 pub struct Member {
     node: Arc<Node>,
     dialers: Dialers,
-    listener: Mutex<Option<Listener>>,
+    /// The member ports open now, by what they are for.
+    listeners: Mutex<HashMap<Listen, Listener>>,
     own: Own,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     state_dir: PathBuf,
+    /// What carries out the commands for the phone other than a mute.
+    others: Arc<RwLock<Option<OnCommand>>>,
+    /// What gets the tunnel offers besides sync away from home, which
+    /// always gets them.
+    tunnels: Arc<RwLock<Option<OnTunnel>>>,
     away: Arc<Away>,
+}
+
+/// What a member port a phone opens is for.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Listen {
+    /// The home network, while the phone is the hub: every address.
+    Home,
+    /// The hub's tunnel, whose connections come to the loopback address.
+    Tunnel,
+    /// A blind relay's calls, on the loopback address, each only from the
+    /// device the relay announced (the admit check).
+    Relay,
 }
 
 /// The group's copy as the app shows it and the button fetches it.
@@ -152,22 +170,28 @@ impl Member {
             .with_content();
         let node = Arc::new(node);
         engine.set_seal(node.sealer());
+        let others: Arc<RwLock<Option<OnCommand>>> = Arc::new(RwLock::new(None));
         let commands = Commands {
             node: Arc::downgrade(&node),
             state_dir: state_dir.clone(),
             started_ms: uptime::wall_ms(),
             seen: Mutex::new(HashMap::new()),
             on_mute: cfg.on_mute,
+            others: others.clone(),
             log: log.clone(),
         };
         node.on_command(Arc::new(move |peer, c| commands.command(peer, c)));
         node.set_tunnel_key(away.key());
+        let tunnels: Arc<RwLock<Option<OnTunnel>>> = Arc::new(RwLock::new(None));
         {
-            let away = away.clone();
+            let (away, app) = (away.clone(), tunnels.clone());
             let n = Arc::downgrade(&node);
             node.on_tunnel(Box::new(move |from, v, may_host| {
                 if let (Some(hub), Some(node)) = (away.offered(from, v, may_host), n.upgrade()) {
                     away.retry(&node, &hub);
+                }
+                if let Some(f) = app.read().unwrap().as_ref() {
+                    f(from, v, may_host);
                 }
             }));
         }
@@ -182,10 +206,12 @@ impl Member {
         Ok(Member {
             node,
             dialers: Dialers::default(),
-            listener: Mutex::new(None),
+            listeners: Mutex::new(HashMap::new()),
             own: Own::default(),
             log,
             state_dir,
+            others,
+            tunnels,
             away,
         })
     }
@@ -280,6 +306,13 @@ impl Member {
         self.node.open_media(&ev, out)
     }
 
+    /// How far the peers read the images or files of the group's copy id,
+    /// and their sealed size, as a share waits for a computer to fetch
+    /// them; None when id is not the group's copy or holds no bytes.
+    pub fn served(&self, id: &str) -> Option<(u64, u64)> {
+        self.node.served(id)
+    }
+
     /// The members connected now.
     pub fn peers(&self) -> Vec<Peer> {
         self.node.peers()
@@ -342,24 +375,34 @@ impl Member {
         self.dialers.lost(&self.node, key);
     }
 
-    /// Listens on port (0: a free one) for the members that dial this phone
-    /// as the group's hub; returns the port, which the app publishes with
-    /// `r=phone`. A port already open stays.
-    pub fn listen(&self, port: u16) -> Result<u16> {
-        let mut l = self.listener.lock().unwrap();
-        if let Some(l) = l.as_ref() {
+    /// Opens a member port for what: on the home network (every address)
+    /// for the members that dial this phone as the group's hub, which the
+    /// app publishes with `r=phone`, or on the loopback address for the
+    /// hub's tunnel or a blind relay's calls; port 0 takes a free one.
+    /// admit checks each connection before it is served. A port already
+    /// open for what stays; returns the port.
+    pub fn listen(&self, what: Listen, port: u16, admit: Option<crate::node::Admit>) -> Result<u16> {
+        let mut ls = self.listeners.lock().unwrap();
+        if let Some(l) = ls.get(&what) {
             return Ok(l.port);
         }
-        let opened = Listener::open(self.node.clone(), port, self.log.clone())
+        let loopback = what != Listen::Home;
+        let opened = Listener::open_with(self.node.clone(), port, loopback, admit, self.log.clone())
             .ok_or_else(|| crate::error::Error::msg(format!("cannot listen on port {port}")))?;
         let p = opened.port;
-        *l = Some(opened);
+        ls.insert(what, opened);
         Ok(p)
     }
 
-    /// Closes the port listen opened.
-    pub fn unlisten(&self) {
-        if let Some(l) = self.listener.lock().unwrap().take() {
+    /// Closes the port listen opened for what, or every port with None.
+    pub fn unlisten(&self, what: Option<Listen>) {
+        let mut ls = self.listeners.lock().unwrap();
+        let gone: Vec<Listener> = match what {
+            Some(w) => ls.remove(&w).into_iter().collect(),
+            None => ls.drain().map(|(_, l)| l).collect(),
+        };
+        drop(ls);
+        for l in gone {
             l.stop();
         }
     }
@@ -367,7 +410,7 @@ impl Member {
     /// Closes every connection with a goodbye and the port, and makes no
     /// new connection until resume: the app went to the background.
     pub fn pause(&self) {
-        self.unlisten();
+        self.unlisten(None);
         self.node.pause();
     }
 
@@ -425,14 +468,30 @@ impl Member {
     }
 
     /// Sends what this hub shares to the group's other hubs connected, the
-    /// full members among the root and the admins; returns those it went to.
-    pub fn send_hubs(&self, share: &serde_json::Value) -> Vec<DeviceId> {
-        self.node.send_to_hubs(&wire::hubs(share))
+    /// full members among the root and the admins, or to the member to
+    /// only; returns those it went to.
+    pub fn send_hubs(&self, share: &serde_json::Value, to: Option<&DeviceId>) -> Vec<DeviceId> {
+        let m = wire::hubs(share);
+        match to {
+            Some(d) => self.node.send_to(d, m).then(|| d.clone()).into_iter().collect(),
+            None => self.node.send_to_hubs(&m),
+        }
     }
 
-    /// Sends the group's server credentials the app keeps to every member.
-    pub fn send_credentials(&self, list: &serde_json::Value) -> Vec<DeviceId> {
-        self.node.broadcast(&wire::credentials(list), |_| true)
+    /// Sends the group's server credentials the app keeps: to the member to
+    /// only (a peer that just connected), or to every member but except
+    /// (the one that sent them).
+    pub fn send_credentials(
+        &self,
+        list: &serde_json::Value,
+        to: Option<&DeviceId>,
+        except: Option<&DeviceId>,
+    ) -> Vec<DeviceId> {
+        let m = wire::credentials(list);
+        match to {
+            Some(d) => self.node.send_to(d, m).then(|| d.clone()).into_iter().collect(),
+            None => self.node.broadcast(&m, |p| Some(&p.id) != except),
+        }
     }
 
     /// Sets what gets each copy that becomes the group's current one from
@@ -442,9 +501,51 @@ impl Member {
         self.node.on_change(f);
     }
 
-    /// Sets what gets the admin, hubs and credentials messages peers send.
+    /// Sets what gets the admin, hubs, credentials and evidence messages
+    /// peers send.
     pub fn on_message(&self, f: OnMessage) {
         self.node.on_message(f);
+    }
+
+    /// Sets what gets each peer once its hello is taken: an admin's app
+    /// renews its certificate, the root's sends it its admin CA, the hub's
+    /// answers its tunnel key.
+    pub fn on_peer(&self, f: OnPeer) {
+        self.node.on_peer(f);
+    }
+
+    /// Sets what gets the tunnel offers of the group's root and admins, for
+    /// the app's tunnel to the hub (docs/protocol.md, section 11). Sync away
+    /// from home in the core gets them too, before it.
+    pub fn on_tunnel(&self, f: OnTunnel) {
+        *self.tunnels.write().unwrap() = Some(f);
+    }
+
+    /// Sets what carries out the commands for this phone itself other than
+    /// a mute, which the member carries out (a sync mode, sync away from home
+    /// off); without it the phone refuses them. Commands for other devices it
+    /// passes on.
+    pub fn on_command(&self, f: OnCommand) {
+        *self.others.write().unwrap() = Some(f);
+    }
+
+    /// Sets the tunnel key and preshared key the hellos offer the group's
+    /// hubs, None while sync away from home is off, and connects to the
+    /// full members again so that they get them.
+    pub fn set_tunnel_key(&self, key: Option<(Vec<u8>, Vec<u8>)>) {
+        self.node.set_tunnel_key(key);
+    }
+
+    /// Sets the attestations of the phone's keys every peer gets after its
+    /// hello (docs/protocol.md, section 17, "Evidence").
+    pub fn set_evidence(&self, list: Vec<serde_json::Value>) {
+        self.node.set_evidence(list);
+    }
+
+    /// Ends the connection to the member id with a goodbye, as for a device
+    /// the app removed or whose hub moved; it is dialed again later.
+    pub fn disconnect(&self, id: &DeviceId) {
+        self.node.disconnect(id);
     }
 
     /// Every device of the group as the app shows it: the group's device
@@ -597,7 +698,7 @@ impl Member {
 
     /// Stops the member and closes its connections.
     pub fn stop(&self) {
-        self.unlisten();
+        self.unlisten(None);
         self.node.close();
     }
 }
@@ -617,6 +718,8 @@ struct Commands {
     started_ms: i64,
     seen: Mutex<HashMap<String, i64>>,
     on_mute: OnMute,
+    /// What carries out the other commands for the phone: its app's.
+    others: Arc<RwLock<Option<OnCommand>>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -624,17 +727,23 @@ impl Commands {
     fn command(&self, peer: &crate::certs::DeviceId, c: &crate::records::Record) -> wire::CommandResult {
         let refused = |id: &str, why: String| {
             (self.log)(&format!("cbb: refused a command from {peer}: {why}"));
-            wire::CommandResult { id: id.to_string(), by: String::new(), status: "refused".into(), reason: why }
+            wire::CommandResult {
+                id: id.to_string(),
+                by: String::new(),
+                status: "refused".into(),
+                reason: why,
+                tunnel: None,
+            }
         };
         let Some(node) = self.node.upgrade() else {
-            return refused("", "the member stopped".into());
+            return refused(&crate::node::command_id(c), "the member stopped".into());
         };
         let now = uptime::wall_ms();
         let me = node.identity().id.to_string();
         let verified = node.records().lock().unwrap().verify_command(c, &me, now);
         let mut body = match verified {
             Ok(b) => b,
-            Err(e) => return refused("", e.message().to_string()),
+            Err(e) => return refused(&crate::node::command_id(c), e.message().to_string()),
         };
         if body.sealed() {
             let Some(secret) = crate::sealkey::secret() else {
@@ -648,7 +757,14 @@ impl Commands {
             }
         }
         if body.kind != "mute" && body.kind != "unmute" {
-            return refused(&body.id, format!("this phone takes no {} commands", body.kind));
+            // The app carries out the others it takes (a sync mode, sync
+            // away from home off), with its own checks; without it they are
+            // refused.
+            let app = self.others.read().unwrap().clone();
+            return match app {
+                Some(f) => f(peer, c),
+                None => refused(&body.id, format!("this phone takes no {} commands", body.kind)),
+            };
         }
         if body.time_ms < self.started_ms {
             return refused(
@@ -670,9 +786,13 @@ impl Commands {
         }
         let until = if body.for_ms == 0 { 0 } else { now + body.for_ms };
         match self.set_muted(&node, body.kind == "mute", until, &body.by) {
-            Ok(()) => {
-                wire::CommandResult { id: body.id, by: String::new(), status: "done".into(), reason: String::new() }
-            }
+            Ok(()) => wire::CommandResult {
+                id: body.id,
+                by: String::new(),
+                status: "done".into(),
+                reason: String::new(),
+                tunnel: None,
+            },
             Err(e) => {
                 (self.log)(&format!("cbb: a mute from {peer}: {}", e.for_log()));
                 wire::CommandResult {
@@ -680,6 +800,7 @@ impl Commands {
                     by: String::new(),
                     status: "failed".into(),
                     reason: e.message().to_string(),
+                    tunnel: None,
                 }
             }
         }

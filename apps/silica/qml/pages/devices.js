@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Words and icons for a device of cbb_member_devices (docs/core-api.md),
+// Words and icons for a device of the member's devices op (docs/core-api.md),
 // shared by the main page's tiles and list and the device's page.
 
 // The name of its system, "device" for firmware without one.

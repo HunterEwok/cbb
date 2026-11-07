@@ -196,3 +196,79 @@ fn both_cipher_suites() {
         assert_eq!(read_all(&mut s), b"ping", "{:?}", suite.suite());
     }
 }
+
+/// A server that refuses every client certificate, as a member refuses a
+/// device of another group.
+#[derive(Debug)]
+struct NoPeer;
+
+impl rustls::server::danger::ClientCertVerifier for NoPeer {
+    fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
+        &[]
+    }
+
+    fn verify_client_cert(
+        &self,
+        _: &rustls::pki_types::CertificateDer<'_>,
+        _: &[rustls::pki_types::CertificateDer<'_>],
+        _: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::server::danger::ClientCertVerified, rustls::Error> {
+        Err(rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer))
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _: &[u8],
+        _: &rustls::pki_types::CertificateDer<'_>,
+        _: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Err(rustls::Error::General("no TLS 1.2".into()))
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _: &[u8],
+        _: &rustls::pki_types::CertificateDer<'_>,
+        _: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        vec![super::provider::SCHEME]
+    }
+}
+
+/// A client certificate the server refuses ends the handshake with an
+/// error and an alert, never a panic: the alert's flush handed rustls an
+/// empty buffer while it still pointed into the client's flight, and a
+/// device of another group that dialed a member brought its process down.
+#[test]
+fn a_refused_client_certificate_fails_without_a_panic() {
+    let ((jc, jk), (mc, mk)) = (device(), device());
+    let (chain, key) = super::pair_identity(&jc, &jk);
+    let mut scfg = super::server_builder(&clock())
+        .unwrap()
+        .with_client_cert_verifier(Arc::new(NoPeer))
+        .with_single_cert(chain, key)
+        .unwrap();
+    scfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    let (ccfg, _) = pair_client(&mc, &mk, &clock()).unwrap();
+    let mut c = Session::client(Arc::new(ccfg), server_name(None)).unwrap();
+    let mut s = Session::server(Arc::new(scfg)).unwrap();
+    s.feed(&c.take_outgoing()).unwrap();
+    c.feed(&s.take_outgoing()).unwrap();
+    // The client's flight in pieces, as TCP may bring it: the server keeps
+    // part of it when it refuses the certificate.
+    let flight = c.take_outgoing();
+    let mut refused = false;
+    for piece in flight.chunks(40) {
+        if s.feed(piece).is_err() {
+            refused = true;
+            break;
+        }
+    }
+    assert!(refused, "the server took a certificate it refuses");
+    assert!(!s.take_outgoing().is_empty(), "the server tells the client why");
+    assert!(s.feed(b"more").is_err(), "a failed session stays failed");
+}

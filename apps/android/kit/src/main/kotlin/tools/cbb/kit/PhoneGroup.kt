@@ -460,16 +460,19 @@ class PhoneGroup internal constructor(
         return true
     }
 
+    /** A renewed member certificate for a peer, DER, and the admin CA that issued it; null when a root did. */
+    class Renewal(val cert: ByteArray, val issuer: ByteArray? = null)
+
     /**
      * A renewed certificate for a peer's chain (leaf first) when it is due
      * and this phone is an admin: the root issues it from its root, an admin
      * from its admin CA, which the cert message carries, whoever issued the
      * old one (as a removed admin did).
      */
-    fun renewal(chain: List<ByteArray>, caSigner: CertificateSigner, now: Instant): MemberNode.Renewal? {
+    fun renewal(chain: List<ByteArray>, caSigner: CertificateSigner, now: Instant): Renewal? {
         if (!isAdmin) return null
         val cert = runCatching { GroupCertificates.renewal(chain, trusted, caSigner, now, adminCA) }.getOrNull() ?: return null
-        return MemberNode.Renewal(cert, adminCA)
+        return Renewal(cert, adminCA)
     }
 
     /**

@@ -63,3 +63,17 @@ class EntriesFile(
         file.delete()
     }
 }
+
+/**
+ * Keeps the newest signed entry points for a node (docs/protocol.md,
+ * section 16, "Entry points"): peers send them after the hello, and the
+ * phone's hub registers through the ways in they name. The phone takes them
+ * and passes none on.
+ */
+interface EntriesKeeper {
+    /** The seq of the list held's keys.json and its own, null for none. */
+    val order: Pair<Long, Long>?
+
+    /** Takes a list a peer sent when it checks out and is newer. */
+    fun add(set: Releases.EntriesSet)
+}

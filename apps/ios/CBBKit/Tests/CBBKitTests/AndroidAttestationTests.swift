@@ -73,10 +73,10 @@ final class AndroidAttestationTests: XCTestCase {
         let ca = SoftwareSigner()
         var g = try PhoneGroup.create(caSigner: ca, memberKey: SoftwareSigner().publicKeyDER, now: now)
         // The leaf certifies the phone's member key; it stands in for the member certificate here.
-        let phone = SyncEngine.newID()
+        let phone = Member.newID()
         _ = try g.record(device: phone, name: "Pixel", role: "phone", os: "android", key: try Records.keyHash(cert: e.chain[0]),
                          store: Records.hardware, caSigner: ca, now: now)
-        XCTAssertNil(try g.evidence(device: SyncEngine.newID(), chain: [e.chain[0]], evidence, rootSigner: ca, now: now, roots: [e.root]))
+        XCTAssertNil(try g.evidence(device: Member.newID(), chain: [e.chain[0]], evidence, rootSigner: ca, now: now, roots: [e.root]))
         XCTAssertNotNil(try g.evidence(device: phone, chain: [e.chain[0]], evidence, rootSigner: ca, now: now.addingTimeInterval(1), roots: [e.root]))
         let d = try XCTUnwrap(g.devices.first { $0.id == phone })
         XCTAssertEqual(d.store, Records.proven)

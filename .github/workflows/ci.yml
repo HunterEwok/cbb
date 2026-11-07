@@ -1510,7 +1510,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-latest
-    timeout-minutes: 45
+    # The libraries and the build take about 15 minutes, and a slow runner
+    # can spend 5 minutes booting a simulator for each of the retries
+    # below: 45 minutes cut off a run whose tests had passed on the iPhone
+    # while the iPad's first try was being retried.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

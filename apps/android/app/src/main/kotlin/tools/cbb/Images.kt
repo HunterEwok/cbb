@@ -8,7 +8,7 @@ import android.graphics.BitmapFactory
 import tools.cbb.kit.Content
 import tools.cbb.kit.Media
 import tools.cbb.kit.Member
-import tools.cbb.kit.MemberNode
+import tools.cbb.kit.CoreMember
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -46,16 +46,19 @@ object Images {
      * file; it keeps the last few and removes the older ones. It throws
      * when no computer has it, it is too large or does not match.
      */
-    fun fetch(context: Context, node: MemberNode, e: Member.Event, part: Media.Part): File {
+    fun fetch(context: Context, node: CoreMember, e: CoreMember.Copy, part: Media.Part): File {
         val dir = File(context.cacheDir, DIR).apply { mkdirs() }
         val f = File(dir, "copy-${e.id}.${if (part.type == "image/png") "png" else "jpg"}")
         if (f.length() == part.size && f.exists()) return f
         val tmp = File(dir, f.name + ".part")
         try {
-            tmp.writeBytes(Content.bytes(node, e, part, MAX_COPY))
+            val got = Files.fetch(context, node, e).firstOrNull { !it.dir && it.type == part.type && it.size == part.size }
+                ?: throw LiveGroup.Unavailable("the copy came without its image")
+            if (!got.file.renameTo(tmp) && !runCatching { got.file.copyTo(tmp, overwrite = true) }.isSuccess) throw IOException("the image could not be saved")
             if (!tmp.renameTo(f)) throw IOException("the image could not be saved")
         } finally {
             tmp.delete()
+            File(context.cacheDir, Files.FETCHED).deleteRecursively()
         }
         dir.listFiles()?.filter { it != f && !it.name.endsWith(".part") }?.sortedByDescending { it.lastModified() }?.drop(KEEP - 1)?.forEach { it.delete() }
         return f

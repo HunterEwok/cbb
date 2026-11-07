@@ -322,7 +322,7 @@ class HubOnPhone(
 
     /**
      * The offers for a member whose hello offered key and psk, for
-     * MemberNode's hub: this hub's own, then the group's other hubs' it
+     * phone as the hub: this hub's own, then the group's other hubs' it
      * passes on, in order (docs/protocol.md, section 11, "Several hubs");
      * none while the hub is off or has no forwarder, or when the key is
      * refused. admitted runs once a new client is kept: the other hubs take
