@@ -23,6 +23,7 @@ use cbb_core::error::{Error, Result};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{Change, Order, Signer};
 use cbb_core::media::Part;
+use cbb_core::takeover::How;
 use cbb_core::wire::CommandResult;
 use cbb_lite::content::Source;
 use cbb_lite::node::{Peer, WriteReq};
@@ -75,10 +76,6 @@ struct StartArgs {
 
 fn yes() -> bool {
     true
-}
-
-fn hardware() -> String {
-    "hardware".into()
 }
 
 /// A request of cbb_member_call.
@@ -197,6 +194,23 @@ struct ManageArgs {
     /// How long a command waits for its result.
     #[serde(default = "ten_seconds")]
     timeout_ms: u64,
+    /// With take_over, take_handed_over, recover and finish_takeover: the
+    /// new root CA (DER) that root_ca made, which the app keeps first.
+    #[serde(with = "certs::b64::opt", default)]
+    root_ca: Option<Vec<u8>>,
+    /// With finish_takeover, for a phone the records do not list yet (one
+    /// that claimed with the recovery key): its system, where its keys
+    /// live, and its key for sealed messages.
+    #[serde(default)]
+    os: String,
+    #[serde(default = "hardware")]
+    store: String,
+    #[serde(with = "certs::b64::opt", default)]
+    seal: Option<Vec<u8>>,
+}
+
+fn hardware() -> String {
+    "hardware".into()
 }
 
 fn ten_seconds() -> u64 {
@@ -819,6 +833,45 @@ impl Member {
             let a: ManageArgs = serde_json::from_slice(request)
                 .map_err(|e| Error::msg(format!("the manage request does not decode: {e}")))?;
             let identity = self.node.identity();
+            let me = identity.id.to_string();
+            let key = AppKey { public: a.public.clone(), sign, ctx };
+            let new_root = || a.root_ca.as_deref().ok_or_else(|| Error::msg("the action needs root_ca"));
+            match a.action.as_str() {
+                // A root CA for the new key public, before a claim.
+                "root_ca" => {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(0));
+                    let der = cbb_core::issue::root_ca(&a.public, now, &mut |tbs| {
+                        cbb_core::identity::sign_external(&key, tbs)
+                    })?;
+                    return Ok(json!({ "root_ca": b64(&der) }));
+                }
+                // The new root signs once the claim took effect; until then
+                // it signs nothing, and the answer is where the claim stands.
+                "finish_takeover" => {
+                    let der = new_root()?;
+                    let state = self.node.claim_state(der);
+                    if state.as_ref().is_none_or(|c| c.state != "effective") {
+                        return Ok(json!({
+                            "state": state.as_ref().map_or("none", |c| c.state.as_str()),
+                            "left_ms": state.map_or(0, |c| c.left_ms),
+                        }));
+                    }
+                    let root = Cert::parse(der)?;
+                    if root.public_key() != a.public.as_slice() {
+                        return Err(Error::msg("the key does not belong to the new root"));
+                    }
+                    let seal = a.seal.clone().unwrap_or_default();
+                    let os = if a.os.is_empty() { "ios" } else { a.os.as_str() };
+                    let name = if a.name.trim().is_empty() { "Phone" } else { a.name.trim() };
+                    let own = cbb_core::takeover::Own { name, role: "phone", os, store: &a.store, seal: &seal };
+                    let s = Signer { ca: &root, key: &key, me: &me };
+                    let cert = self.node.finish_takeover(&s, &own)?;
+                    return Ok(json!({ "state": "effective", "cert": b64(&cert) }));
+                }
+                _ => {}
+            }
             let ca = match &a.admin_ca {
                 Some(der) => Cert::parse(der)?,
                 None => identity.root().clone(),
@@ -826,8 +879,6 @@ impl Member {
             if ca.public_key() != a.public.as_slice() {
                 return Err(Error::msg("the key does not belong to the CA this phone signs with"));
             }
-            let key = AppKey { public: a.public.clone(), sign, ctx };
-            let me = identity.id.to_string();
             let s = Signer { ca: &ca, key: &key, me: &me };
             let order = |o: Order| -> Result<Value> {
                 let res = self.node.order(&s, &a.device, &o, Duration::from_millis(a.timeout_ms.min(60_000)))?;
@@ -840,6 +891,9 @@ impl Member {
                 "resolve" => self.node.change(&s, "", &Change::Resolve(a.records.clone()))?,
                 "make_admin" => self.node.make_admin(&s, &a.device, a.allow_file_key)?,
                 "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
+                "take_over" => self.node.claim(&s, How::From(&a.device), new_root()?)?,
+                "take_handed_over" => self.node.claim(&s, How::HandedOver, new_root()?)?,
+                "recover" => self.node.claim(&s, How::Recovery, new_root()?)?,
                 "mute" => return order(Order::Mute(a.for_ms)),
                 "unmute" => return order(Order::Unmute),
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),

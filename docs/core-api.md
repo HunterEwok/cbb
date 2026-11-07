@@ -157,8 +157,19 @@ to the device's key when its record names one, which the member sends and whose 
 answers. As the root it makes a connected computer an admin (`make_admin`: an admin CA for the
 admin key its hello offers, its device record again, and the admin message), and as any admin it
 renews (`renew`) every member certificate that is due, each connected member's, sent to it, and the
-phone's own, as the phone kits do when a peer connects. `TestFFIPhoneRoot` renames and removes a
-computer through it.
+phone's own, as the phone kits do when a peer connects; as the current root, also each connected
+admin's CA from an earlier root, as after a takeover. It takes the group over as the computers'
+service does (`cbb_core::takeover`): `root_ca` makes a root CA for a new key of the phone (on
+Aurora its admin key), which the app keeps before the claim; `take_over` (from the lost root
+`device`), `take_handed_over` (the root handed the group to this admin) or `recover` (signed with
+the recovery key under its admin CA) signs the claim to it, which the member adds and sends; and
+`finish_takeover`, called again while the claim waits, answers `{"state","left_ms"}` (`none`,
+`pending`, `cancelled`, `void`, `competing` or `disputed`) and signs nothing until the claim took
+effect, then signs with the new root the phone's member certificate from it and the records a new
+root starts with (its own device holding the root, the admins it keeps, a removal of a lost root's
+device, the old root's settings), answers `{"state":"effective","cert"}`, and the identity event
+gives the app the new certificate. `TestFFIPhoneRoot` renames and removes a computer through it,
+and `TestFFIPhoneTakeover` takes a computer's group over.
 
 Built with the feature `tunnel` (the iPhone and Android libraries), the library is also the
 phones' tunnel (`ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tunnel` takes
