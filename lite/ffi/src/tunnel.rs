@@ -46,6 +46,31 @@
 //! "vless", "error"}`, with `seen` where the forwarder reaches the hub and
 //! `vless` the VLESS settings for the hub's offers.
 //!
+//! `cbb_tunnel_relay` links the phone to the group's blind relay
+//! (docs/protocol.md, section 14), signing its TLS with the member key
+//! through a callback and telling the app its events through another:
+//! `{"key", "device", "endpoint", "pins", "chain", "public", "records",
+//! "member_port"}` gives `{"id"}`; the events are `dial` (`peer`, `port`:
+//! the app dials the port and runs the member protocol as the client),
+//! `calling` (`peer`, `port`: the connection from that port to the member
+//! listener is peer's), `changed` (`connected`, `online`, `through`,
+//! `error`) and `log` (`line`). `relay_set_connected` with `id` and
+//! `devices` names the devices connected another way, which the link does
+//! not dial; `relay_set_records` with `id` and `records`; `relay_stop` with
+//! `id`.
+//!
+//! `cbb_tunnel_relay_credentials` makes the link register with the group's
+//! server credentials (docs/protocol.md, section 18) in place of the
+//! member certificate and the records, and register again at once,
+//! signing with the period's server key through a callback: `{"id",
+//! "public", "credentials", "roots", "names"}`, where `public` is the
+//! server key's public point, `credentials` the period's hubs' and
+//! members' credentials, which must list the key, with the period
+//! credential if the app has it, `roots` the group's roots, the group CA
+//! first, and `names` the device ID each pseudonym of the group's other
+//! devices stands for; the events then name the devices by those IDs. An
+//! empty `credentials` goes back to the member certificate.
+//!
 //! The answer is `{"ok": ...}` or `{"error": {"message", "details"}}`.
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -55,6 +80,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use cbb_core::certs::{self, DeviceId};
+use cbb_core::credential::Credential;
 use cbb_core::error::{Error, Result};
 use cbb_core::invite;
 use cbb_lite::forward::{self, Registration, Report};
@@ -170,6 +196,7 @@ struct RunningRelay {
     _relay: Relay,
     records: Arc<Mutex<Vec<Value>>>,
     connected: Arc<Mutex<HashSet<String>>>,
+    credentials: Arc<Mutex<Option<Arc<relay::Credentialed>>>>,
 }
 
 /// The app's side of a relay link: its callback, and the devices connected
@@ -247,6 +274,7 @@ fn start_relay(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> Res
     let wg_key = key32(&req.key)?;
     let records = Arc::new(Mutex::new(req.records.unwrap_or_default()));
     let connected = Arc::new(Mutex::new(HashSet::new()));
+    let credentials = Arc::new(Mutex::new(None));
     let cfg = relay::Config {
         endpoint,
         pins,
@@ -256,15 +284,56 @@ fn start_relay(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> Res
         wg_key,
         records: records.clone(),
         member_port: req.member_port,
+        credentials: credentials.clone(),
     };
     let ev = Arc::new(AppEvents { f: events, ctx, connected: connected.clone() });
     let r = Relay::start(cfg, ev);
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
     relays(|t| {
-        t.insert(id, RunningRelay { _relay: r, records, connected });
+        t.insert(id, RunningRelay { _relay: r, records, connected, credentials });
         Ok(())
     })?;
     Ok(json!({ "id": id }))
+}
+
+/// The group's credentials for a relay link
+/// (`cbb_tunnel_relay_credentials`).
+#[derive(Deserialize)]
+struct RelayCredentials {
+    id: u64,
+    #[serde(with = "certs::b64", default)]
+    public: Vec<u8>,
+    #[serde(default)]
+    credentials: Vec<Credential>,
+    #[serde(with = "certs::b64::list", default)]
+    roots: Vec<Vec<u8>>,
+    #[serde(default)]
+    names: HashMap<String, String>,
+}
+
+/// Sets what a relay link registers with (the module's comment).
+pub fn relay_credentials(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
+    answer(set_relay_credentials(request, sign, ctx))
+}
+
+fn set_relay_credentials(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
+    let req: RelayCredentials = serde_json::from_slice(request)
+        .map_err(|e| Error::msg(format!("the relay's credentials do not decode: {e}")))?;
+    let cred = if req.credentials.is_empty() {
+        None
+    } else {
+        let key = Arc::new(AppKey { public: req.public, sign, ctx });
+        Some(Arc::new(relay::Credentialed::new(key, req.credentials, req.roots, req.names, now_ms())?))
+    };
+    relays(|t| {
+        let r = t.get(&req.id).ok_or_else(|| Error::msg(format!("there is no relay link {}", req.id)))?;
+        *r.credentials.lock().map_err(|_| Error::msg("the relay link is broken"))? = cred;
+        Ok(json!({}))
+    })
+}
+
+fn now_ms() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 /// A registration with the forwarder (`cbb_tunnel_register`).

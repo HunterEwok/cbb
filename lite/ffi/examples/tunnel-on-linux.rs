@@ -6,9 +6,10 @@
 //! TestRustPhone*): each line on stdin is a request, each answer a line on
 //! stdout. At the end of stdin every tunnel stops with the process.
 //!
-//! `hub_register` goes to `cbb_tunnel_register` and `relay_start` to
-//! `cbb_tunnel_relay`, with a software member key in place of the app's:
-//! `test_key`, its PKCS#8 DER. The relay's events wait for `test_events`,
+//! `hub_register` goes to `cbb_tunnel_register`, `relay_start` to
+//! `cbb_tunnel_relay` and `relay_credentials` to
+//! `cbb_tunnel_relay_credentials`, with a software key in place of the
+//! app's: `test_key`, its PKCS#8 DER. The relay's events wait for `test_events`,
 //! which answers `{"events"}`.
 
 use std::io::{BufRead, Write};
@@ -61,6 +62,8 @@ fn signed(mut req: serde_json::Value) -> Vec<u8> {
     let p = unsafe {
         if req["op"] == "relay_start" {
             cbb_ffi::cbb_tunnel_relay(body.as_ptr(), body.len(), sign, event, ctx, &mut n)
+        } else if req["op"] == "relay_credentials" {
+            cbb_ffi::cbb_tunnel_relay_credentials(body.as_ptr(), body.len(), sign, ctx, &mut n)
         } else {
             cbb_ffi::cbb_tunnel_register(body.as_ptr(), body.len(), sign, ctx, &mut n)
         }
@@ -81,7 +84,7 @@ fn main() {
     for line in stdin.lock().lines() {
         let Ok(line) = line else { break };
         let req: serde_json::Value = serde_json::from_str(&line).unwrap_or_default();
-        let answer = if req["op"] == "hub_register" || req["op"] == "relay_start" {
+        let answer = if req["op"] == "hub_register" || req["op"] == "relay_start" || req["op"] == "relay_credentials" {
             signed(req)
         } else if req["op"] == "test_events" {
             let events: Vec<serde_json::Value> = EVENTS.lock().map(|mut q| q.drain(..).collect()).unwrap_or_default();

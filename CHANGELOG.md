@@ -24,8 +24,10 @@ All notable changes to cbb are documented in this file. The format follows
   with a guest tunnel to the pairing window (`hub_invite`, `TestRustPhoneHubInvite`), and its
   registration with the forwarder, signed by the app's member key (`cbb_tunnel_register`,
   `TestRustPhoneHubForwarder` against the Go forwarder), and its link to the blind relay
-  (`cbb_tunnel_relay`, `TestRustPhoneRelay` against the Go relay and Go members). The apps move
-  to it once their node runs in Rust.
+  (`cbb_tunnel_relay`, `TestRustPhoneRelay` against the Go relay and Go members), with the
+  group's server credentials in place of the member certificate once the period lists the
+  phone (`cbb_tunnel_relay_credentials`, `TestRustPhoneRelayCredentials`). The apps move to it
+  once their node runs in Rust.
 - CI's job "go test with the Rust core" runs the whole Go suite as the release builds are
   made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
 - The phones' member in the Rust core, for the iPhone and Android apps to move onto from
