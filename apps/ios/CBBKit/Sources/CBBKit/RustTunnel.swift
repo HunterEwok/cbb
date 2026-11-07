@@ -5,7 +5,7 @@ import CCbbCore
 import Crypto
 import Foundation
 
-/// The phones' tunnel in Rust (lite/ffi/src/tunnel.rs, the library's
+/// The phones' tunnel in Rust (ffi/src/tunnel.rs, the library's
 /// feature `tunnel`): the tunnel to the hub, the phone as the group's hub
 /// with its remote invitations and its registration with the forwarder, and
 /// the link to the blind relay, under the same protocols as mobile/cbbtun's,

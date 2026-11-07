@@ -21,7 +21,7 @@ import java.util.Timer
 import kotlin.concurrent.fixedRateTimer
 
 /**
- * The phones' tunnel in Rust (lite/ffi/src/tunnel.rs, the library's feature
+ * The phones' tunnel in Rust (ffi/src/tunnel.rs, the library's feature
  * `tunnel`), in place of mobile/cbbtun: the tunnel to the hub, the phone as
  * the group's hub with its remote invitations and its registration with
  * the forwarder, and the link to the blind relay. The app's Tunnels,
