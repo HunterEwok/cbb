@@ -2228,6 +2228,11 @@ final class LiveGroup: GroupController {
     /// clipboard, or saved in Files, so it is taken once.
     private var takenID: String?
 
+    /// What this phone itself sent from its clipboard or took into it last,
+    /// as the button compares it (AppModel.Board.key): the button sends the
+    /// clipboard only when it holds something else (sends).
+    private var ownKey: String?
+
     /// The copy from another device that waits for this phone: younger
     /// than the group's live window and not yet taken; for what the app
     /// takes by itself (byItself), also in a sync mode that takes the
@@ -2249,8 +2254,10 @@ final class LiveGroup: GroupController {
             try await save(e, files: files)
         } else if let part = Images.part(of: e.media) {
             try await receive(e, image: part)
+            ownKey = part.sha256.map(Images.key)
         } else if !e.text.isEmpty {
             write(e.text, kind: e.kind)
+            ownKey = e.text
         }
         takenID = e.id
     }
@@ -2281,7 +2288,8 @@ final class LiveGroup: GroupController {
     /// The one button, and Back Tap through Shortcuts (docs/design.md, "The
     /// one button"): a copy from another device that waits for this phone
     /// comes in; otherwise what this phone copied goes out, however old,
-    /// unless it is the group's text already. board is what the paste
+    /// unless it is the group's text already or what this phone sent or
+    /// took last (sends). board is what the paste
     /// button or Shortcuts handed over; without it the button reads the
     /// clipboard, and only when it sends.
     func sync(board given: AppModel.Board?) async throws -> AppModel.SyncResult {
@@ -2296,7 +2304,7 @@ final class LiveGroup: GroupController {
         var usable = await node.usable?.text
         let media = await node.current?.media
         if let sum = Images.part(of: media)?.sha256 { usable = Images.key(sum) }
-        guard let key = board.key, !key.isEmpty, key != usable else {
+        guard let key = board.key, Self.sends(key, usable: usable, own: ownKey) else {
             if !(await connected(node)) { throw PendingGroup.Failure.noComputers }
             return .nothingNew
         }
@@ -2306,8 +2314,18 @@ final class LiveGroup: GroupController {
         } else if let t = board.text {
             _ = try await node.send(text: t, kind: .text)
         }
+        ownKey = key
         reached = await node.reached
         return .sent(to: devices.filter { $0.online && !$0.isSelf }.map(\.name).sorted())
+    }
+
+    /// Whether the button sends the clipboard's key: not empty, not the
+    /// group's text already (usable), and not what this phone itself sent
+    /// or took last (own). Without own, a text the phone sent before it
+    /// shared an image or files would go out again over that newer copy, as
+    /// the group's copy is then the image or the files.
+    nonisolated static func sends(_ key: String, usable: String?, own: String?) -> Bool {
+        !key.isEmpty && key != usable && key != own
     }
 
     /// What the clipboard holds, read by the app itself, which iOS may ask

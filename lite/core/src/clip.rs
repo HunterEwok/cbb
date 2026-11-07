@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
 use crate::certs::{is_id, random_bytes, random_id};
-use crate::copy::{KEY_SIZE, Sealed};
+use crate::copy::{Blob, KEY_SIZE, Sealed};
 use crate::error::{Error, Result};
 use crate::hlc::{Clock, Timestamp};
 use crate::media::{MAX_ALT_TEXT, Manifest};
@@ -102,6 +102,10 @@ pub struct Event {
     /// The copy's key, which opens its blob, when this member opened it.
     #[serde(skip)]
     pub key: Option<[u8; KEY_SIZE]>,
+    /// The sealed blob of a media copy this member makes, which its sealer
+    /// names in the copy; the copy's `key` sealed it.
+    #[serde(skip)]
+    pub blob: Option<Blob>,
 }
 
 impl Event {
@@ -568,6 +572,55 @@ impl Engine {
         Ok((ev, out))
     }
 
+    /// Makes a media event from a deliberate action: images or files, with
+    /// their plain-text alternative or "", whose blob the caller sealed
+    /// under key (docs/protocol.md, section 4, "The blob"). The member's
+    /// own clipboard is not written: it holds them already.
+    pub fn send_media(
+        &self,
+        text: &str,
+        media: Manifest,
+        via: Via,
+        key: [u8; KEY_SIZE],
+        blob: Option<Blob>,
+    ) -> Result<Event> {
+        media.validate()?;
+        if text.len() > MAX_ALT_TEXT {
+            return Err(Error::msg(format!("a media copy's text of {} bytes is larger than 256 KiB", text.len())));
+        }
+        if !text.is_empty() {
+            check_text(text)?;
+        }
+        if (media.size > 0) != blob.is_some() {
+            return Err(Error::msg("a media copy has a blob when its parts hold bytes, and only then"));
+        }
+        let mut st = self.inner.lock();
+        if self.muted(&mut st) {
+            return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
+        }
+        let now = (self.uptime)();
+        let mut ev = Event {
+            id: random_id(),
+            origin: self.self_id.clone(),
+            via,
+            time: self.clock.now(),
+            kind: Kind::Media,
+            text: text.to_string(),
+            media: Some(media),
+            key: Some(key),
+            blob,
+            ..Event::default()
+        };
+        if let Some(seal) = self.seal.lock().as_ref() {
+            ev.sealed = Some(seal(&ev).map_err(|e| e.context("seal the copy"))?);
+        }
+        add_seen(&mut st, &ev.id);
+        st.current = ev.clone();
+        st.copied_at = now;
+        st.local = Local::default();
+        Ok(ev)
+    }
+
     fn new_event(&self, st: &mut Inner, text: &str, kind: Kind, via: Via, sum: Sum, now: Duration) -> Result<Event> {
         let mut ev = Event {
             id: random_id(),
@@ -823,6 +876,32 @@ mod tests {
         let out = e.reconcile(B, Hello { wall: now, current: Some(event(crate::hlc::MAX_WALL)) }).unwrap();
         assert!(out.forward.is_none() && !out.write);
         assert!(e.received(event(now + 6 * 24 * 3600 * 1000)).is_ok());
+    }
+
+    /// A phone's media copy becomes the group's current one with the key
+    /// its blob was sealed under, and leaves its own clipboard unwritten.
+    #[test]
+    fn sends_media() {
+        use crate::copy::Blob;
+        use crate::media::{Manifest, Part};
+        let t = Arc::new(AtomicU64::new(100_000));
+        let a = engine(A, t);
+        let png = Part { kind: "image/png".into(), size: 3, sha256: Some(alloc::vec![7; 32]), ..Default::default() };
+        let m = Manifest { size: 3, parts: alloc::vec![png] };
+        let blob = Blob { size: 65_552, sha256: alloc::vec![1; 32] };
+        let ev = a.send_media("", m.clone(), Via::Phone, [5; 32], Some(blob.clone())).unwrap();
+        assert_eq!((ev.kind, ev.key, ev.blob.clone()), (Kind::Media, Some([5; 32]), Some(blob)));
+        assert_eq!(a.current().unwrap().id, ev.id);
+        assert!(a.local().is_none());
+        // Bytes without a blob, or a blob without bytes, make no copy.
+        assert!(a.send_media("", m, Via::Phone, [5; 32], None).is_err());
+        let dir = Part { path: "trip".into(), dir: true, ..Default::default() };
+        let empty = Manifest { size: 0, parts: alloc::vec![dir] };
+        assert!(
+            a.send_media("", empty.clone(), Via::Phone, [5; 32], Some(Blob { size: 1, sha256: alloc::vec![1; 32] }))
+                .is_err()
+        );
+        assert!(a.send_media("", empty, Via::Phone, [5; 32], None).is_ok());
     }
 
     /// A media event becomes the group's current one; a lite member takes

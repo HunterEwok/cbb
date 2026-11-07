@@ -2163,11 +2163,11 @@ jobs:
           sudo ip addr add 192.168.69.1/24 dev tap0
           sudo ip link set tap0 up
           CBB_ESP32_ON_LINUX="$PWD/lite/target/release/esp32-on-linux" go test -race ./internal/service -run TestEmbassyJoiner -v
-      - name: the Aurora app's joining through lite/ffi joins a computer's group as a phone
+      - name: the phones' member through lite/ffi joins a computer's group and syncs texts and images with it
         working-directory: .
         run: |
           (cd lite && cargo build --locked --release -p cbb-ffi --features member --example phone-on-linux)
-          CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run TestFFIJoiner -v
+          CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember' -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64
