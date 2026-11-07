@@ -502,12 +502,11 @@ class GroupTest {
     }
 
     /**
-     * W42 and W5: a computer the phone made an admin is the hub, which the
-     * phone's devices list marks; it admits a computer by itself, which the
-     * phone lists (G36); with sync away from home on, the phone, which finds
-     * no hub on its network (the emulator sees no mDNS), reaches it through
-     * the tunnel in the app's process and shows the computer behind it
-     * online; the app and cbb global say where it stands, also while the hub
+     * W42 and W5: a computer the phone made an admin is the hub; it admits a
+     * computer by itself, which the phone lists (G36); with sync away from
+     * home on, the phone, which finds no hub on its network (the emulator
+     * sees no mDNS), reaches it through the tunnel in the app's process,
+     * marks it as the hub in use and shows the computer behind it online; the app and cbb global say where it stands, also while the hub
      * does not answer.
      */
     @Test
@@ -525,11 +524,6 @@ class GroupTest {
         }
         val global = Bench.run(hub, "cbb global")
         assertTrue("cbb global on $hub:\n$global", global.contains("this device is the hub, on UDP port $udp") && global.contains("${Bench.HOST}:$udp"))
-        // The phone's devices list marks the computer as the group's hub.
-        until(60, "$hub marked as the hub: ${model.group.devices.firstOrNull { it.name == hub }}") {
-            runBlocking { model.sync() }
-            model.group.devices.any { it.name == hub && it.hub != null }
-        }
         // G36: the computer the phone made an admin admits a computer by
         // itself, and the phone, the root, takes its record and lists it.
         val guest = Bench.add()
@@ -549,6 +543,11 @@ class GroupTest {
         assertEquals("turning it on says ${model.awayNote}", null, model.awayNote)
         val status = { runBlocking { model.refresh() }; model.away }
         until(120, "the phone connected through $hub's tunnel; the app says ${model.away}") { status()?.status == AwayFromHome.Status.CONNECTED }
+        // The phone's devices list marks the computer as the hub it reaches.
+        until(60, "$hub marked as the hub in use: ${model.group.devices.firstOrNull { it.name == hub }}") {
+            runBlocking { model.sync() }
+            model.group.devices.any { it.name == hub && it.hub == LiveGroup.HubMark.IN_USE }
+        }
         // The computer behind the hub shows online on the phone too.
         until(120, "$guest online on the phone: ${model.group.devices.firstOrNull { it.name == guest }}") {
             runBlocking { model.sync() }
