@@ -58,7 +58,7 @@ var automated = map[string][]string{
 	"S17": {"fleet"}, "S23": {"fleet"}, "G31": {"fleet"}, "G32": {"fleet"}, "K14": {"fleet"}, "K11": {"fleet"}, "G41": {"fleet"}, "Y6": {"fleet"}, "I3": {"fleet"}, "I8": {"fleet"}, "I9": {"fleet"}, "I10": {"fleet"}, "I11": {"fleet"}, "I12": {"fleet"}, "I2": {"fleet"}, "I4": {"fleet"}, "I6": {"fleet"}, "I7": {"fleet"}, "O9": {"fleet"}, "U9": {"fleet"}, "O6": {"fleet"}, "O15": {"fleet"}, "G17": {"fleet"}, "G8": {"fleet"}, "S22": {"fleet"}, "I1": {"fleet"},
 	"I5": {"fleet"}, "I20": {"fleet"}, "S12": {"fleet"}, "G15": {"fleet"}, "S7": {"fleet"}, "S6": {"fleet"}, "H5": {"fleet"},
 	"M8": {"fleet"}, "M9": {"fleet"}, "M10": {"fleet"},
-	"S25": {"fleet"}, "S26": {"fleet"}, "W43": {"fleet"}, "Y36": {"fleet"},
+	"W44": {"fleet"}, "W45": {"fleet"}, "S25": {"fleet"}, "S26": {"fleet"}, "W43": {"fleet"}, "Y36": {"fleet"},
 	"W17": {"fleet"}, "D1": {"fleet"}, "S1": {"fleet"}, "S2": {"fleet"}, "S9": {"fleet"}, "S18": {"fleet"}, "O10": {"fleet"}, "Y34": {"fleet"}, "I25": {"fleet"}, "W2": {"fleet"}, "D10": {"fleet"},
 	// The desktops' own clipboards.
 	"Y24": {"desktop"}, "Y25": {"desktop"}, "Y31": {"desktop"}, "Y32": {"desktop"},

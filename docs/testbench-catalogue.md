@@ -358,6 +358,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W40 | The servers keep nothing: no file or log line with addresses, tags, IDs, names or markers, in either mode; the units' exposure score [S18] | real | |
 | W41 | The push sender: an encrypted push reaches the iPhone and wakes it; cbb.tools stores nothing | ui, real | Apple account |
 | W42 | Phones away: the tunnel in the app's process (`cbbtun`), the loopback port, the kits' member TLS to the hub; the Android foreground service away; the iPhone while the app runs | ui | |
+| W44 | The ways out carry only cbb: a hostile client with a member's keys, sending everything to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback, TCP or UDP, IPv4 or IPv6, and nothing reaches the stand-in for the internet; VLESS, the relay, the phones' hub and the lite member's tunnel in unit tests (roadmap item 61) | fleet | |
+| W45 | A hub on a network that lets only HTTPS through: with UDP and the forwarder's TCP port blocked, it registers inside VLESS and its client away syncs both ways | fleet | |
 
 ## 11. The command line, the control socket and errors (U)
 

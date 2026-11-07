@@ -15,6 +15,11 @@ All notable changes to cbb are documented in this file. The format follows
 - The bench's fleet checks muting: `cbb mute` and `cbb unmute` on the device, across a restart
   and with `-for` (M8), an admin's `cbb mute -on` against the device's own user, a second
   admin and its time (M9), and `cbb incoming` with its bounds and rights (M10).
+- The bench's fleet checks that the ways out carry only cbb: a hostile client with a member's
+  keys reaches neither the internet nor the hub's home network nor its loopback, directly or
+  through the forwarder (W44), and a hub that has only HTTPS registers inside VLESS (W45).
+  The VLESS case (W34) brings its client home for the hub's new offer, as AmneziaWG, which
+  VLESS turns on, needs.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
