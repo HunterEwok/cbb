@@ -640,8 +640,8 @@ func (s *Service) shareLocked() {
 // its offer, which this member keeps as it keeps any hub's. A hub above
 // this one that serves makes this hub, while it serves, its client.
 func (s *Service) hubsShared(from group.DeviceID, chain []*x509.Certificate, h node.HubShare) error {
-	if !s.adminPeer(from, chain) {
-		return errors.New("only the group's root or an admin can be its hub; ignored")
+	if !s.hubPeer(from, chain) {
+		return errors.New("only the group's root, an admin or a hub its records name can be its hub; ignored")
 	}
 	order := s.hubOrder()
 	listed := map[group.DeviceID]bool{}

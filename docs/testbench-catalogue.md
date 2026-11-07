@@ -236,6 +236,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | Y33 | A secret in a hello is a mark only: a member that knows only the mark has no text | fleet | |
 | Y34 | The memory of skipped secrets: a manager offering one again makes no event for 12 h; it holds 4096 entries | fleet, helper | |
 | Y35 | Secrets from the phones; `cbb paste -terminal` refuses a secret without `-secret` | ui, real | |
+| Y36 | A device that joins reads copies from the next one on: the copy made before it joined never reaches it in the clear | fleet | |
 
 ## 6. Sync modes (M)
 
@@ -248,6 +249,9 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | M5 | `cbb mode -on DEVICE` from the root computer, an admin computer, an admin phone: taken; from a member or a frozen admin: refused; to a stopped target: an error within 10 s and nothing changes; to a target not connected to the sender: passed on by a member [P34] | real, fleet | |
 | M6 | A new device starts in `own`; a device without a mode file shares | fleet | |
 | M7 | The phones' automatic paths follow the mode: Android's service writes only in a receiving mode and its accessibility service sends only in a sending mode; the iPhone writes the last 45 s only in a receiving mode | ui | |
+| M8 | `cbb mute` keeps the group's copies out of this device while its own still go out; `cbb status` says so; it lasts across a restart; `cbb unmute` ends it; `-for` ends it by itself | fleet | |
+| M9 | An admin's `cbb mute -on DEVICE`: the device's copies reach no one, every devices list says it is muted, its own user (no admin) cannot end it, another admin can (the last command counts, even a shorter mute after a longer one), `-for` ends it by itself; a mute of a device that cannot be reached is refused with why; a device that is no admin mutes no one | fleet | |
+| M10 | `cbb incoming`: the root or an admin sets how long a copy from another device stays live, every member shows it; out of 5s to 1h, or from a device that is no admin, refused; a device cut off for 10 seconds writes the copy made meanwhile with a window of 1m, not with one of 5s | fleet | |
 
 ## 7. Images, files and formatted text (O)
 
@@ -335,6 +339,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W19 | Client isolation: from a client's tunnel nothing but the hub's member port answers; the hub opens one port [S3, S4] | real, fleet | |
 | W20 | A WireGuard key the group does not know gets no answer from the hub or the forwarder [S5] | real, fleet | |
 | W21 | A removed away device: the hub drops its key at once; no sync; its old invitation refused [S6] | real | |
+| W43 | Two kinds of hub: `cbb global hub -on DEVICE -forward-only` makes a computer that is no admin a hub that only passes the copies on; every device lists it so; the root stops being a hub (`cbb global hub off`) and its client away moves to it | fleet | |
 
 ### 10.3 The forwarder and the relay
 
@@ -352,7 +357,12 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W39 | A new credential period (30 days): new tag, period key and server keys; the servers cannot link two periods; the lists padded | time | |
 | W40 | The servers keep nothing: no file or log line with addresses, tags, IDs, names or markers, in either mode; the units' exposure score [S18] | real | |
 | W41 | The push sender: an encrypted push reaches the iPhone and wakes it; cbb.tools stores nothing | ui, real | Apple account |
-| W42 | Phones away: the tunnel in the app's process (`cbbtun`), the loopback port, the kits' member TLS to the hub; the Android foreground service away; the iPhone while the app runs | ui | |
+| W42 | Phones away: the tunnel in the app's process (`cbbtun`), the loopback port, the kits' member TLS to the hub; the Android foreground service away; the iPhone while the app runs; the devices list marks the hub, and a computer behind it shows online | ui | |
+| W44 | The ways out carry only cbb: a hostile client with a member's keys, sending everything to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback, TCP or UDP, IPv4 or IPv6, and nothing reaches the stand-in for the internet; VLESS, the relay, the phones' hub and the lite member's tunnel in unit tests (roadmap item 61) | fleet | |
+| W45 | A hub on a network that lets only HTTPS through: with UDP and the forwarder's TCP port blocked, it registers inside VLESS and its client away syncs both ways | fleet | |
+| W46 | A forwarder whose VLESS runs over XHTTP behind its site's web server (`cbb forward -vless-xhttp`): with UDP and the forwarder's TCP port blocked, the hub registers through the web server and its client away syncs both ways through it; anyone else gets the site; in the time-scaled build at the real times, whose VLESS alone trusts the web server's own CA (`CBB_TEST_XHTTP_CA`) | time | |
+| W47 | `cbb update` on a client away whose hub uses VLESS asks the mirror on the forwarder's server (`cbb forward -vless-mirror`) only inside VLESS, the mirror's certificate checked on the way; as W46 | time | |
+| W48 | The project's relay (`cbb global relay default`) followed from the signed lists: a group without a hub meets at it by its pin in `keys.json`; when it takes a new key, the newer lists bring every member back without the user; when it moves, the members find it at the `endpoints` of the newest `entries.json` and keep that address | fleet | |
 
 ## 11. The command line, the control socket and errors (U)
 
@@ -412,6 +422,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | A14 | First launch and the Start screen: "This phone is ready", settings before a group, "I already use CBB on another phone" | ui | |
 | A15 | Themes: ten colours in System, Dark and Light; tiles and list; every device icon | ui | |
 | A16 | Plain-language paths: a lost phone ("remove it on your other phone"), a group with one admin advised to add a second, errors in one line with the next step | ui | |
+| A17 | The Aurora OS app: the signed package installs through the store's installer; it joins by its QR code (a computer of the group scans and dials in); the group's copies reach its clipboard while it is in front; a copy goes out when it comes to the front and from the pull-down menu; the main page shows the members and the last copy; "Leave the group" deletes the membership; the key stays in its OP-TEE token across restarts | person | Aurora phone |
 
 ## 14. Security (S)
 
@@ -440,6 +451,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | S22 | Signed releases: the envelope checks against the shared vectors on the devices themselves (Go, the lite member, both kits) | fleet, ui | |
 | S23 | Commands passed on by a member cannot be changed or forged by it | fleet | |
 | S24 | A stolen admin computer (its state copied to a fresh container): it acts until frozen; after the freeze nothing it signs counts | fleet | |
+| S25 | Copies sealed end to end: through a hub that only passes them on, text and a 20 MB file arrive whole both ways, and neither the hub's memory nor its disk ever holds them in the clear, while a member that reads them does; that hub takes no paste | fleet | |
+| S26 | A paste command to a device behind a hub passes through it sealed: the receiver's answer comes back, and the hub never holds the text | fleet | |
 
 ## 15. Load, concurrency and faults (E)
 
@@ -476,5 +489,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 `testbench all BUILD` runs everything the harness has, one suite after another, each after a
 reset, and writes one report with the coverage table and the list of what is skipped and
 why. `testbench coverage` prints the table alone, from these two documents and the harness's
-list of what it runs. Each suite runs alone too (`testbench faults BUILD`), and `-only`
+list of what it runs. A case the harness runs counts as run in full when its suites cover
+every kind of section 0.1 it names (either of "real" and "fleet" when it names both, and a
+person never); the table counts those apart and lists the others with what they lack. That
+compares where a case runs, not each step of its text. Each suite runs alone too (`testbench faults BUILD`), and `-only`
 limits the devices.
