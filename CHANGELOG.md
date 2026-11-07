@@ -23,7 +23,13 @@ All notable changes to cbb are documented in this file. The format follows
   answers with `answer` within ten seconds; `tunnel_key`, `evidence`, `disconnect` and
   `served` (how far the peers read a copy's images or files). A hub command's result keeps
   the new hub's offer through a phone that passes it back, and a phone sends a command for a
-  device it is not connected to through an admin phone that is, as the hub.
+  device it is not connected to through an admin phone that is, as the hub. A phone's member
+  port is of a kind: on the home network every address, for the hub's tunnel and a blind
+  relay's calls the loopback address only, and a relay's call is served only when the app
+  names its caller (the `caller` event and op) and its certificate names that device. The
+  credentials and a hub's share go to one peer when the app says so (`to`, `except`); a
+  command a phone passes on goes out once until it expires; a phone takes tunnel offers and
+  hub shares only from a device that may be a hub, by its chain.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
@@ -1141,7 +1147,8 @@ All notable changes to cbb are documented in this file. The format follows
   for the tunnel, the relay and the home network. The member pauses while the app is in the
   background, and the iPhone's background refresh resumes it for its pass; the iPhone's
   share sends through a member of its own and waits until a computer fetched what it
-  shared. `lite/ffi/bind.sh` builds every library with the member.
+  shared. `lite/ffi/bind.sh` builds every library with the member. The cross tests against
+  Go play the phone through the kits' `CoreMember` (`cbb-interop`, `InteropMain`).
 - Every device follows one clipboard rule (D-85): a copy from another device goes into the
   clipboard while it is live, counted from when it was copied in durations, never by the
   sender's clock; after that it is gone and the device keeps what it copied itself. A

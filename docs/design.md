@@ -334,6 +334,15 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
   impossible on iOS.
 - A group that a computer created stays for users without a phone app (["without the
   app"](guide/without-app.md)).
+- Every phone app syncs through the same member: the lite member's node in the Rust core,
+  which runs in the app's process (`lite/ffi`, docs/core-api.md, "The member"; D-86). The
+  iPhone, Android and Aurora apps keep only what is theirs: their keys and the prompts that
+  unlock them, pairing, the records they sign, finding the computers on the network (Bonjour,
+  NSD) and handing their addresses in, the tunnel and the blind relay, and the answers to what
+  the member asks (renewals, admin CAs, the hub's offers, commands for the phone, the caller
+  of a relay's call). One implementation of the member protocol, the clipboard rule and the
+  button then serves every phone, and the cross tests drive it through the kits
+  (`cbb-interop`, `InteropMain`).
 
 ### Watches
 
@@ -1477,9 +1486,11 @@ sing-box is not used (GPL).
 - On phones the tunnel is ordinary UDP traffic of the app. It does not take the phone's
   single VPN slot, the user's own VPN keeps working, and the app is not a VPN app (Apple's
   guideline 5.4 and Google Play's VpnService rules concern apps that create a device VPN).
-- The Swift kit (Network.framework) and the Kotlin kit (Conscrypt) keep their TLS code: the
-  app opens a port on the loopback address that leads into the tunnel, and the kit dials it.
-  Another app that connects to that port reaches only the hub's member TLS.
+- The phones' member in the Rust core dials the tunnel with its member TLS: the app opens a
+  port on the loopback address that leads into the tunnel and hands it to the member. Another
+  app that connects to that port reaches only the hub's member TLS. A phone that is the hub
+  takes the tunnel's connections on a member port on the loopback address too, and a blind
+  relay's calls on another, each only from the device the relay announced.
 - The lite member does the same: GotaTun's WireGuard over a UDP socket and smoltcp's TCP run
   in one thread of `cbb`, behind a port on the loopback address that its member TLS dials, so
   no TUN device, no root and no capability is needed. GotaTun takes its AEAD from ring, whose

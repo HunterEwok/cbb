@@ -9,8 +9,11 @@ repository stays under the GNU AGPL v3.0 only ([LICENSE](../LICENSE)).
 This document specifies protocol version 1 of Copy Beyond Borders as the code in this
 repository implements it, so that another implementation can interoperate with it. Four
 implementations follow it today: Go (`cbb`, the computers and the servers), Rust (the lite
-member, `lite/core`), Swift (`CBBKit`) and Kotlin (`apps/android/kit`), with
-shared test vectors in `testdata/interop`. [design.md](design.md) explains why the protocol
+member, `lite/core`, whose member the phones' apps run too, through `lite/ffi`), Swift
+(`CBBKit`) and Kotlin (`apps/android/kit`), with shared test vectors in `testdata/interop`.
+The phones' kits keep pairing, restoring, the records they sign and the credentials; the
+member protocol of section 4 runs in the Rust core's member on every phone (docs/core-api.md,
+"The member"). [design.md](design.md) explains why the protocol
 is the way it is; this document only says what it is, and the threats it answers are in the
 [threat model](threat-model.md).
 
@@ -227,7 +230,10 @@ hub").
 member publishes and browses with the `mdns-sd` crate (`lite/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=lite`), with the addresses of its interfaces except
-loopback.
+loopback. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
+resolve the members to their addresses and hand those to the member in the Rust core, which
+starts with its own mDNS off; a phone that is the hub publishes its home port the same way
+(`BonjourPublisher`, `NsdPublisher`).
 
 A full member SHOULD publish, answer queries and take connections on the member port only on
 an interface whose network it knows (design.md, "Known networks"); elsewhere it only
@@ -320,7 +326,8 @@ rescanned every 10 s.
 ## 4. Member protocol
 
 Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
-`internal/service/members.go`.
+`internal/service/members.go`; the lite member's and the phones' `lite/src/node.rs` and
+`lite/src/phone.rs`.
 
 ### Who dials whom
 

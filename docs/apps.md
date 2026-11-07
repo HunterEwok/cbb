@@ -173,8 +173,9 @@ they look, so both apps are built to the same plan.
    away state (Android: a file sealed by a Keystore key; iPhone: the keychain). The phone's
    member in the Rust core listens on the member port (`listen`), the kits' `PhoneHub`
    answers the clients' tunnel keys from the member's `peer` events, the Android app's
-   `HubOnPhone` and the Swift kit's `HubOnPhone` drive cbbtun's hub, and the hub publishes
-   itself on a home network with `r=phone` (docs/protocol.md, section 3). While the hub is registered, "Invite a
+   `HubOnPhone` and the Swift kit's `HubOnPhone` drive cbbtun's hub, the tunnel's connections
+   come to a member port on the loopback address, and on a home network the hub takes members
+   on a port on every address, which it publishes with `r=phone` (docs/protocol.md, section 3). While the hub is registered, "Invite a
    device from afar" makes a remote invitation for an hour (docs/protocol.md, section 12):
    the phone shares the file `cbb.cbbinvite`, the other side runs
    `cbb pair -invite` with it, and the phone asks "Admit …?" with the device's fingerprint,

@@ -127,7 +127,10 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   GTK 4/WebKitGTK; `desk.go` over `internal/control`, `admin_*.go` run cbb through pkexec or
   UAC, `frontend/` plain HTML/JS with `tokens.js` from `tools/tokens` and `l10n/ru.json`);
   CI's `tray app` jobs.
-- `apps/android/kit`: the phone's protocol core in Kotlin, the Android twin of the Swift kit;
+- `apps/android/kit`: the phone's kit in Kotlin, the Android twin of the Swift kit: `CoreMember` (the member in
+  the Rust core through JNA, which syncs), pairing, records, certificates, restoring, credentials; the Kotlin
+  node, its sync engine's network part and its member listener and dialer are gone (D-86), as are the Swift
+  kit's (`MemberNode`, `SyncEngine`, `MemberListener`, `MemberDialer`); `TLSTransport` stays for pairing;
   `apps/android/app`: the Compose app (`WatchLink` tells the Wear OS watch, `BluetoothKeyboard` types
   on a paired device with the kit's `Keyboard` tables), in two flavors: `full` (GitHub, the watch, its own update) and `fdroid` (no Play services; `src/fdroid`, `packaging/fdroid`, reproducible, CI's `fdroid` job);
   `apps/android/wear`: the Wear OS app, through the phone over the Wearable Data Layer;
