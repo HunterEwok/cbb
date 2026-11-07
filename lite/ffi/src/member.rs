@@ -364,6 +364,10 @@ impl Member {
     }
 
     fn op(&self, op: &str, a: Value) -> Result<Value> {
+        /// The argument k, null when the request leaves it out.
+        fn arg<'v>(a: &'v Value, k: &str) -> &'v Value {
+            a.get(k).unwrap_or(&Value::Null)
+        }
         let n = &self.node;
         let done = || Ok(json!({}));
         match op {
@@ -394,12 +398,12 @@ impl Member {
             "current" => Ok(json!({ "copy": n.current().map(|c| copy_json(&c.event, &c.key)) })),
             "waiting" => Ok(json!({ "copy": n.waiting().map(|c| copy_json(&c.event, &c.key)) })),
             "took" => {
-                let id = a["id"].as_str().ok_or_else(|| Error::msg("took needs the copy's id"))?;
+                let id = arg(&a, "id").as_str().ok_or_else(|| Error::msg("took needs the copy's id"))?;
                 n.took(id);
                 done()
             }
             "sends" => {
-                let board = a["board"].as_str().unwrap_or_default();
+                let board = arg(&a, "board").as_str().unwrap_or_default();
                 Ok(json!({ "sends": n.sends(board) }))
             }
             "fetch" => {
@@ -420,11 +424,12 @@ impl Member {
                 done()
             }
             "lost" => {
-                n.lost(a["key"].as_str().unwrap_or_default());
+                n.lost(arg(&a, "key").as_str().unwrap_or_default());
                 done()
             }
             "listen" => {
-                let port = u16::try_from(a["port"].as_u64().unwrap_or(0)).map_err(|_| Error::msg("not a port"))?;
+                let port =
+                    u16::try_from(arg(&a, "port").as_u64().unwrap_or(0)).map_err(|_| Error::msg("not a port"))?;
                 Ok(json!({ "port": n.listen(port)? }))
             }
             "unlisten" => {
@@ -440,27 +445,27 @@ impl Member {
                 done()
             }
             "wait" => {
-                let ms = a["timeout_ms"].as_u64().unwrap_or(5_000).min(60_000);
+                let ms = arg(&a, "timeout_ms").as_u64().unwrap_or(5_000).min(60_000);
                 Ok(json!({ "connected": n.wait_connected(Duration::from_millis(ms)) }))
             }
             "mode" => {
-                n.set_mode(Mode::parse(a["mode"].as_str().unwrap_or_default())?);
+                n.set_mode(Mode::parse(arg(&a, "mode").as_str().unwrap_or_default())?);
                 done()
             }
             "mute" => {
-                n.set_mute(a["until_ms"].as_i64());
+                n.set_mute(arg(&a, "until_ms").as_i64());
                 done()
             }
             // What the app shows.
             "peers" => {
-                let all = a["all"].as_bool().unwrap_or(false);
+                let all = arg(&a, "all").as_bool().unwrap_or(false);
                 let ps = if all { n.all_peers() } else { n.peers() };
                 Ok(json!({ "peers": ps.iter().map(peer_json).collect::<Vec<_>>() }))
             }
             "records" => Ok(json!({ "records": n.records() })),
             // What an admin's app signed.
             "add_records" => {
-                let rs: Vec<Record> = args(a["records"].clone())?;
+                let rs: Vec<Record> = args(arg(&a, "records").clone())?;
                 n.add_records(&rs);
                 done()
             }
@@ -485,11 +490,11 @@ impl Member {
                 Ok(json!({ "sent": n.send_tunnel(&device(&a.to)?, &offer) }))
             }
             "send_hubs" => {
-                let to = n.send_hubs(&a["share"]);
+                let to = n.send_hubs(arg(&a, "share"));
                 Ok(json!({ "to": to.iter().map(ToString::to_string).collect::<Vec<_>>() }))
             }
             "send_credentials" => {
-                let to = n.send_credentials(&a["credentials"]);
+                let to = n.send_credentials(arg(&a, "credentials"));
                 Ok(json!({ "to": to.iter().map(ToString::to_string).collect::<Vec<_>>() }))
             }
             _ => Err(Error::msg(format!("the member has no operation {op:?}"))),
