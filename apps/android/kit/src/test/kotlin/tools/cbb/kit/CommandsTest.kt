@@ -18,6 +18,47 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CommandsTest {
+    /** A command goes to its receiver, whose app answers; one for a device not connected, with no hub between, goes nowhere. */
+    @Test
+    fun commandRoundTrip() = CoreGroup().use { t ->
+        val (a, b) = t.phones
+        t.connect(1, 0)
+        val c = t.g.modeCommand(b.device, "own", t.ca, java.time.Instant.now())
+        val answering = Thread {
+            val e = b.next("the command") { it as? CoreMember.Event.Command }
+            b.member.answer(e.token, Member.CommandResult("", "refused", "not now"))
+        }.apply { start() }
+        val r = a.member.command(c)
+        answering.join()
+        assertEquals(Commands.idOf(c), r.id)
+        assertEquals("refused", r.status)
+        assertEquals("not now", r.reason)
+        val other = t.g.modeCommand(SyncEngine.newID(), "own", t.ca, java.time.Instant.now())
+        assertFailsWith<Core.Refusal> { a.member.command(other) }
+    }
+
+    /** A phone not connected to a command's receiver sends it to the admin phone that is, the hub, which passes it on once; the result comes back the same way. */
+    @Test
+    fun commandPassedOn() = CoreGroup(3).use { t ->
+        val (hub, a, b) = t.phones
+        t.connect(1, 0)
+        t.connect(2, 0)
+        val c = t.g.modeCommand(b.device, "own", t.ca, java.time.Instant.now())
+        val answering = Thread {
+            val e = b.next("the command") { it as? CoreMember.Event.Command }
+            assertEquals(hub.device, e.from)
+            b.member.answer(e.token, Member.CommandResult("", "done"))
+        }.apply { start() }
+        val r = a.member.command(c)
+        answering.join()
+        assertEquals("done", r.status)
+        assertEquals(b.device, r.by)
+        assertTrue(hub.all { it as? CoreMember.Event.Command }.isEmpty(), "the hub does not take it itself")
+        // Not passed on again, not even after its result went back.
+        assertFailsWith<Core.Refusal> { a.member.command(c, 1_000) }
+        assertEquals(1, b.all { it as? CoreMember.Event.Command }.size)
+    }
+
     private val now = Instant.now()
     private val pc = "00112233445566778899aabbccddeeff"
 

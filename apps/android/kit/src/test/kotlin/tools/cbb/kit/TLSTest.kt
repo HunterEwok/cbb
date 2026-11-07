@@ -12,6 +12,18 @@ import kotlin.test.assertTrue
 
 /** TLS 1.3 with Conscrypt between two kits: pairing as a phone joining a phone does it, and a member connection. */
 class TLSTest {
+    /** Two members in the Rust core sync over its member TLS: each sees the other's chain, and a copy each way arrives. */
+    @Test
+    fun membersSyncOverTLS() = CoreGroup().use { t ->
+        val (a, b) = t.phones
+        t.connect(1, 0)
+        assertTrue(b.peer(a.device).chain.first().contentEquals(t.g.memberCert))
+        a.member.copy("over TLS")
+        b.copy("over TLS")
+        b.member.copy("and back")
+        a.copy("and back")
+    }
+
     private val now = Instant.now()
 
     @Test

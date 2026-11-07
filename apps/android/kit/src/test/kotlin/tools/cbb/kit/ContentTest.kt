@@ -21,6 +21,36 @@ import kotlin.test.assertTrue
 
 /** Checks the content of images and files against Go's vectors (go test ./internal/node -update) and between two nodes. */
 class ContentTest {
+    /** A phone's picture and files reach the other phone, which fetches their sealed blob and opens it, each part checked; one over the limit is not fetched. */
+    @Test
+    fun nodesFetch() = CoreGroup().use { t ->
+        val (a, b) = t.phones
+        t.connect(1, 0)
+        val png = ByteArray((5 shl 20) + 1234).also { java.security.SecureRandom().nextBytes(it) }
+        val sent = a.member.copyMedia("", listOf(CoreMember.Part.data("image/png", png)), board = true)
+        assertEquals(Member.Kind.MEDIA, sent.kind)
+        b.next("the picture") { (it as? CoreMember.Event.CopyChanged)?.copy?.takeIf { c -> c.id == sent.id } }
+        assertEquals(sent.id, b.member.waiting()?.id)
+        val out = kotlin.io.path.createTempDirectory("cbb-fetch").toFile()
+        try {
+            val parts = b.member.fetch(sent.id, 64L shl 20, java.io.File(out, "picture"))
+            assertEquals(1, parts.size)
+            assertTrue(parts[0].file.readBytes().contentEquals(png))
+            // The phone that shared it sees it was read to the end.
+            val (served, size) = a.member.served(sent.id)
+            assertEquals(size, served)
+            assertEquals(Blob.sizeOf(png.size.toLong()), size)
+            val files = a.member.copyMedia("", listOf(CoreMember.Part.folder("docs"), CoreMember.Part.file("docs/one.txt", "one".toByteArray())))
+            b.next("the files") { (it as? CoreMember.Event.CopyChanged)?.copy?.takeIf { c -> c.id == files.id } }
+            assertFailsWith<Core.Refusal> { b.member.fetch(files.id, 1, java.io.File(out, "small")) }
+            val opened = b.member.fetch(files.id, 1L shl 20, java.io.File(out, "files"))
+            assertEquals(listOf("docs", "docs/one.txt"), opened.map { it.path })
+            assertEquals("one", opened.first { !it.dir }.file.readText())
+        } finally {
+            out.deleteRecursively()
+        }
+    }
+
     private val v = Interop.read("content.json").jsonObject
 
     @Test

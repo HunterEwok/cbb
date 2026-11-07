@@ -19,6 +19,51 @@ import kotlin.test.assertTrue
 
 /** The phone as the group's hub: admitting clients by their tunnel keys, and the offers over member TLS. */
 class PhoneHubTest {
+    /** The phone as the hub answers a client's tunnel key, as its hello offers it, with its own offer under the client's preshared key. */
+    @Test
+    fun answersTheTunnelKeyOverTLS() = CoreGroup().use { t ->
+        val (phone, client) = t.phones
+        val hub = PhoneHub(key(1))
+        hub.endpoints = listOf("203.0.113.1:8764")
+        client.member.setTunnelKey(key(2) to key(7))
+        t.connect(1, 0)
+        val p = phone.peer(client.device)
+        for (o in hub.offers(p.device, p.tunnelKey!!, p.tunnelPSK, emptyList())) phone.member.sendTunnel(p.device, o)
+        val offer = client.next("the hub's offer") { (it as? CoreMember.Event.Tunnel)?.offer }
+        assertTrue(offer.psk.contentEquals(key(7)), "the client's own preshared key")
+        assertTrue(offer.hubKey.contentEquals(key(1)))
+        assertEquals(listOf("203.0.113.1:8764"), offer.endpoints)
+        assertEquals(listOf(client.device), hub.clients.map { it.device })
+    }
+
+    /** A device of another group does not get through the hub's port. */
+    @Test
+    fun refusesAStranger() = CoreGroup().use { t ->
+        CoreGroup().use { other ->
+            val hub = t.root
+            val port = hub.member.listen(CoreMember.Listen.HOME)
+            other.phones[1].member.found("stranger", listOf("127.0.0.1:$port"), hub.device)
+            Thread.sleep(2_000)
+            assertTrue(hub.member.peers().isEmpty(), "a device of another group got in")
+            assertTrue(other.phones[1].member.peers().isEmpty())
+        }
+    }
+
+    /** The relay's port serves a call only when the app names its caller and its certificate names the same device. */
+    @Test
+    fun servesOnlyTheAnnouncedCaller() = CoreGroup().use { t ->
+        val (a, b) = t.phones
+        val port = b.member.listen(CoreMember.Listen.RELAY)
+        a.member.found("relay", listOf("127.0.0.1:$port"), b.device)
+        val first = b.next("the first call") { it as? CoreMember.Event.Caller }
+        assertEquals(a.device, first.device)
+        b.member.caller(first.token, SyncEngine.newID())
+        val second = b.next("the second call") { (it as? CoreMember.Event.Caller)?.takeIf { c -> c.token != first.token } }
+        assertTrue(b.member.peers().isEmpty(), "a call named wrong was served")
+        b.member.caller(second.token, a.device)
+        b.until("the announced caller connected") { b.connected() == setOf(a.device) }
+    }
+
     private val now = Instant.now()
 
     private fun key(b: Int) = ByteArray(32) { b.toByte() }

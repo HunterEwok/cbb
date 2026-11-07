@@ -274,6 +274,12 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
 
     // Finding the members, listening, the app's life.
 
+    /** How far the peers read the sealed blob of the group's copy [id] this phone made, and its size; zeros for a copy no longer the group's or with no bytes. */
+    fun served(id: String): Pair<Long, Long> {
+        val ok = call("served", Wire.obj("id" to Wire.str(id)))
+        return (ok.optLong("served") ?: 0) to (ok.optLong("size") ?: 0)
+    }
+
     /** Dials the member the app knows as key (an NSD name, the tunnel) at addrs (host:port), again and again until [lost]; device when known. */
     fun found(key: String, addrs: List<String>, device: String? = null) {
         call("found", Wire.obj("key" to Wire.str(key), "addrs" to JsonArray(addrs.map { JsonPrimitive(it) }), "device" to Wire.str(device)))

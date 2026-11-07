@@ -17,6 +17,89 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class EngineTest {
+    /** b gets a's current copy from its hello, then a later one, through the members in the Rust core. */
+    @Test
+    fun nodesSync() = CoreGroup().use { t ->
+        val (a, b) = t.phones
+        a.member.copy("before")
+        t.connect(1, 0)
+        b.copy("before")
+        a.member.copy("after")
+        b.copy("after")
+        assertEquals(listOf(a.device), b.member.peers().map { it.device })
+        assertEquals("after", b.member.current()?.text)
+    }
+
+    /** Records the root's key signs go to the connected peers at once, and a peer's app reads them from its member. */
+    @Test
+    fun nodesExchangeRecords() = CoreGroup().use { t ->
+        val (phone, peer) = t.phones
+        t.connect(1, 0)
+        val r = t.g.rename(peer.device, "Kitchen phone", t.ca, java.time.Instant.now())
+        phone.member.addRecords(listOf(r))
+        peer.until("the new record") { peer.member.records().any { it.body.contentEquals(r.body) } }
+        assertEquals(listOf(peer.device), phone.member.peers().map { it.device })
+    }
+
+    /** An admin phone renews a peer's certificate from the chain its hello carries and sends a device its admin CA; the peer's app gets both. */
+    @Test
+    fun nodeRenewsAndSendsTheAdminCA() = CoreGroup().use { t ->
+        val (phone, peer) = t.phones
+        t.connect(1, 0)
+        val p = phone.peer(peer.device)
+        assertTrue(p.chain.first().contentEquals(peer.cert), "the hello event carries the peer's chain")
+        // A certificate for the same key, as a renewal issues it once one is due.
+        val renewed = GroupCertificates.member(peer.device, peer.key.publicKeyDER, t.g.groupCA, t.ca, java.time.Instant.now().plusSeconds(3600))
+        assertTrue(phone.member.sendCert(peer.device, renewed, null))
+        peer.next("the renewed certificate") { (it as? CoreMember.Event.Identity)?.takeIf { e -> e.cert.contentEquals(renewed) } }
+        assertTrue(phone.member.sendAdminCA(peer.device, byteArrayOf(7, 7)))
+        val admin = peer.next("the admin CA") { (it as? CoreMember.Event.Message)?.message as? Member.Message.Admin }
+        assertTrue(admin.adminCA.contentEquals(byteArrayOf(7, 7)))
+    }
+
+    /** The phone's hello offers the tunnel key the app set, and the root's offer for it reaches the app; one turned off is offered no more. */
+    @Test
+    fun nodeOffersTheTunnelKeyAndKeepsTheOffer() = CoreGroup().use { t ->
+        val (hub, phone) = t.phones
+        val key = ByteArray(32) { 1 }
+        val psk = ByteArray(32) { 4 }
+        phone.member.setTunnelKey(key to psk)
+        t.connect(1, 0)
+        val p = hub.peer(phone.device)
+        assertTrue(p.tunnelKey!!.contentEquals(key))
+        assertTrue(p.tunnelPSK!!.contentEquals(psk))
+        val good = Member.TunnelOffer(ByteArray(32) { 2 }, ByteArray(32) { 3 }, listOf("192.0.2.1:8764"))
+        assertTrue(hub.member.sendTunnel(phone.device, good))
+        val got = phone.next("the offer") { it as? CoreMember.Event.Tunnel }
+        assertEquals(hub.device, got.from)
+        assertTrue(got.offer.hubKey.contentEquals(good.hubKey))
+        assertEquals(good.endpoints, got.offer.endpoints)
+        phone.member.setTunnelKey(null)
+        phone.member.disconnect(hub.device)
+        hub.until("a hello without the key") { hub.member.peers().any { it.device == phone.device && it.tunnelKey == null } }
+    }
+
+    /** The credentials go to the one peer named, and the ones a peer sends reach the app, which passes new ones on to the others. */
+    @Test
+    fun nodeSendsAndTakesCredentials() = CoreGroup(3).use { t ->
+        val (root, b, c) = t.phones
+        t.connect(1, 0)
+        t.connect(2, 0)
+        val signer = SoftwareSigner()
+        fun cred(v: Long) = ServerCredentials.sign(
+            ServerCredentials.Body(type = ServerCredentials.HUBS, group = "0123456789abcdef", version = v, expiresMS = 1, hubs = ServerCredentials.pad(emptyList())),
+            signer,
+        )
+        val kept = cred(1)
+        assertEquals(listOf(b.device), root.member.sendCredentials(listOf(kept), to = b.device))
+        val got = b.next("the credentials") { ((it as? CoreMember.Event.Message)?.message as? Member.Message.Credentials)?.credentials }
+        assertEquals(listOf(kept), got)
+        // New ones go to every other member, not back to the one that sent them.
+        assertEquals(listOf(c.device), root.member.sendCredentials(listOf(cred(2)), except = b.device))
+        c.next("the new credentials") { ((it as? CoreMember.Event.Message)?.message as? Member.Message.Credentials)?.credentials }
+        assertEquals(1, b.all { (it as? CoreMember.Event.Message)?.message as? Member.Message.Credentials }.size)
+    }
+
     @Test
     fun offerChecksAsGo() {
         val (k, p) = ByteArray(32) { 2 } to ByteArray(32) { 3 }

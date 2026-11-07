@@ -39,24 +39,12 @@ apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testDialFailuresBackOff D
 apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testHurry D-86: MemberDialer is gone; the Rust member dials again at once on resume and on a new address
 apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testHurryWhileDialing D-86: MemberDialer is gone; the Rust member dials again at once on resume and on a new address
 apps/ios/CBBTests/AppModelTests.swift testButtonKeepsWhatThePhoneSent D-86: the button's rule is the core's member's (lite/src/button.rs tests, TestFFIMember, CoreMemberTests.testSyncsTheButtonAndCommands)
-apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodesSync D-86: the Kotlin node is gone; the Rust member syncs (lite tests, CoreMemberTest.twoPhonesSyncAndAnswerCommands)
 apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt noSecretsSendsTheMark D-86: the Kotlin node is gone; the Rust member's node keeps the rule
-apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodesExchangeRecords D-86: the Kotlin node is gone; the Rust member exchanges the records
-apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodeRenewsAndSendsTheAdminCA D-86: the Kotlin node is gone; the app renews and sends admin CAs through the member's peer event
-apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodeOffersTheTunnelKeyAndKeepsTheOffer D-86: the Kotlin node is gone; the Rust member offers the key (tunnel_key) and hands offers to the app
-apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodeSendsAndTakesCredentials D-86: the Kotlin node is gone; the Rust member passes credentials messages to the app
-apps/android/kit/src/test/kotlin/tools/cbb/kit/ContentTest.kt nodesFetch D-86: the Kotlin node is gone; the Rust member fetches images and files (TestFFIMember)
 apps/android/kit/src/test/kotlin/tools/cbb/kit/ContentTest.kt tooManyGets D-86: the Kotlin node is gone; the Rust member serves the content
 apps/android/kit/src/test/kotlin/tools/cbb/kit/ContentTest.kt cancelsOfOtherParts D-86: the Kotlin node is gone; the Rust member serves the content
-apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt commandPassedOn D-86: the Kotlin node is gone; the Rust member passes commands on
-apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt commandRoundTrip D-86: the Kotlin node is gone; CoreMemberTest.twoPhonesSyncAndAnswerCommands sends a command through the Rust member
 apps/android/kit/src/test/kotlin/tools/cbb/kit/DiscoveryTest.kt dialer D-86: MemberDialer is gone; the app hands NSD's addresses to the Rust member, which dials them
 apps/android/kit/src/test/kotlin/tools/cbb/kit/DiscoveryTest.kt dialsAtMostMaxDialed D-86: MemberDialer is gone; the Rust member's dialers are bounded
 apps/android/kit/src/test/kotlin/tools/cbb/kit/DiscoveryTest.kt dialFailuresBackOff D-86: MemberDialer is gone; the Rust member's dialers back off
-apps/android/kit/src/test/kotlin/tools/cbb/kit/TLSTest.kt membersSyncOverTLS D-86: the Kotlin node and its member TLS are gone; the Rust member syncs over its own TLS
-apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneHubTest.kt answersTheTunnelKeyOverTLS D-86: MemberListener and the Kotlin node are gone; the app answers the tunnel keys from the member's peer events
-apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneHubTest.kt refusesAStranger D-86: MemberListener is gone; the Rust member's listener checks the peers
-apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneHubTest.kt servesOnlyTheAnnouncedCaller D-86: MemberListener is gone; the relay's calls reach the Rust member's one listener
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt aCopyWaits D-86: the button's rule is the Rust member's now (waiting), tested in lite and by TestFFIMember
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButton D-86: the button's rule is the Rust member's now (sends), tested in lite and by TestFFIMember
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButtonKeepsWhatThePhoneSent D-86: the button's rule is the Rust member's now (sends, took), tested in lite and by TestFFIMember
