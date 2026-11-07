@@ -1,0 +1,55 @@
+{
+	"key": "pKfofOFXNwdiT+cP8vyKCAY99FOTsDq5MKsxiofMyYw=",
+	"cases": [
+		{
+			"prefixes": [
+				"192.168.0.225/24",
+				"fe80::1/64",
+				"2001:db8:1::5/64"
+			],
+			"gateway": "aa:bb:cc:dd:ee:ff",
+			"id": "bdcc8fa8e68b1b1caa75ddbed5bdd0e6"
+		},
+		{
+			"prefixes": [
+				"192.168.0.225/24",
+				"fe80::1/64",
+				"2001:db8:1::5/64"
+			],
+			"gateway": "",
+			"id": "e0ba6290d319735a98a4b979bf32243a"
+		},
+		{
+			"prefixes": [
+				"2001:db8:1::5/64",
+				"fd00:1:2:3::9/64"
+			],
+			"gateway": "",
+			"id": "5803dfd79d9bc6e728b29f963b914684"
+		},
+		{
+			"prefixes": [
+				"192.168.0.7/24",
+				"2001:db8:2::5/64"
+			],
+			"gateway": "aa:bb:cc:dd:ee:ff",
+			"id": "bdcc8fa8e68b1b1caa75ddbed5bdd0e6"
+		},
+		{
+			"prefixes": [
+				"192.168.0.225/24",
+				"fe80::1/64",
+				"2001:db8:1::5/64"
+			],
+			"gateway": "11:22:33:44:55:66",
+			"id": "04fc5007131cdca7f5d8b2824fca1e09"
+		},
+		{
+			"prefixes": [
+				"fe80::1/64"
+			],
+			"gateway": "",
+			"id": ""
+		}
+	]
+}

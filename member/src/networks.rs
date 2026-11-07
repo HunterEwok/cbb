@@ -424,17 +424,32 @@ mod tests {
 
     #[test]
     fn ids_as_go() {
-        // The values Go's netid.ID gives for the same networks.
-        let home = [p("192.168.0.225/24"), p("fe80::1/64"), p("2001:db8:1::5/64")];
-        assert_eq!(id(b"key", &home, "aa:bb:cc:dd:ee:ff"), "82db5862fba2668b8d635ea4987a438b");
-        assert_eq!(id(b"key", &home, ""), "2adcec70816d94a395dfd553b451a30d");
-        assert_eq!(id(b"key", &[p("2001:db8:1::5/64"), p("fd00:1:2:3::9/64")], ""), "bf20abf114f3dccdb874debb256eddc6");
-        assert_eq!(
-            id(b"key", &[p("192.168.0.7/24"), p("2001:db8:2::5/64")], "aa:bb:cc:dd:ee:ff"),
-            id(b"key", &home, "aa:bb:cc:dd:ee:ff")
-        );
-        assert_ne!(id(b"key", &home, "11:22:33:44:55:66"), id(b"key", &home, "aa:bb:cc:dd:ee:ff"));
-        assert_eq!(id(b"key", &[p("fe80::1/64")], ""), "");
+        // The values Go's netid.ID gives for the same networks
+        // (testdata/interop/go-netid.json, written by Go's TestIDVectors).
+        #[derive(Deserialize)]
+        struct Case {
+            prefixes: Vec<String>,
+            gateway: String,
+            id: String,
+        }
+        #[derive(Deserialize)]
+        struct Vectors {
+            #[serde(with = "crate::certs::b64")]
+            key: Vec<u8>,
+            cases: Vec<Case>,
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/go-netid.json");
+        let v: Vectors = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(v.cases.len(), 6);
+        for c in &v.cases {
+            let nets: Vec<(IpAddr, u8)> = c.prefixes.iter().map(|s| p(s)).collect();
+            assert_eq!(id(&v.key, &nets, &c.gateway), c.id, "{:?} {:?}", c.prefixes, c.gateway);
+        }
+        // Another address and IPv6 prefix on the same network: the same;
+        // another gateway: another; a link-local address alone: none.
+        assert_eq!(v.cases[3].id, v.cases[0].id);
+        assert_ne!(v.cases[4].id, v.cases[0].id);
+        assert_eq!(v.cases[5].id, "");
     }
 
     #[test]
