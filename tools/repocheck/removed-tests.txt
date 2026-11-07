@@ -57,3 +57,6 @@ apps/android/kit/src/test/kotlin/tools/cbb/kit/TLSTest.kt membersSyncOverTLS D-8
 apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneHubTest.kt answersTheTunnelKeyOverTLS D-86: MemberListener and the Kotlin node are gone; the app answers the tunnel keys from the member's peer events
 apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneHubTest.kt refusesAStranger D-86: MemberListener is gone; the Rust member's listener checks the peers
 apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneHubTest.kt servesOnlyTheAnnouncedCaller D-86: MemberListener is gone; the relay's calls reach the Rust member's one listener
+apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt aCopyWaits D-86: the button's rule is the Rust member's now (waiting), tested in lite and by TestFFIMember
+apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButton D-86: the button's rule is the Rust member's now (sends), tested in lite and by TestFFIMember
+apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButtonKeepsWhatThePhoneSent D-86: the button's rule is the Rust member's now (sends, took), tested in lite and by TestFFIMember

@@ -16,6 +16,14 @@ All notable changes to cbb are documented in this file. The format follows
   admin's app signed, passes commands on to the devices behind it, and shows each peer as its
   hello presents it; the button's rule is the core's too. `cbb_member_copy` and
   `cbb_member_peers` gave way to it, and the Aurora app calls it.
+- The member's events and calls for what the phones' apps answer themselves: an event for
+  each peer whose hello it took, with the certificate chain the handshake checked (to renew
+  it, send it its admin CA, answer its tunnel key as the hub), one for the tunnel offers of
+  the root and the admins, and one for each command for the phone itself, which the app
+  answers with `answer` within ten seconds; `tunnel_key`, `evidence`, `disconnect` and
+  `served` (how far the peers read a copy's images or files). A hub command's result keeps
+  the new hub's offer through a phone that passes it back, and a phone sends a command for a
+  device it is not connected to through an admin phone that is, as the hub.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
@@ -1124,6 +1132,16 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The iPhone and Android apps sync through the phones' member in the Rust core (D-86), as
+  the Aurora app does, in place of their own Swift and Kotlin nodes: one implementation of
+  the member protocol, the clipboard rule and the button for every phone. The apps still
+  find the computers themselves (Bonjour, NSD) and hand their addresses in, keep their keys,
+  pairing and the records they sign, run the tunnel and the relay, whose loopback ports they
+  hand in, and answer the member's events; the phone as the hub listens on one member port
+  for the tunnel, the relay and the home network. The member pauses while the app is in the
+  background, and the iPhone's background refresh resumes it for its pass; the iPhone's
+  share sends through a member of its own and waits until a computer fetched what it
+  shared. `lite/ffi/bind.sh` builds every library with the member.
 - Every device follows one clipboard rule (D-85): a copy from another device goes into the
   clipboard while it is live, counted from when it was copied in durations, never by the
   sender's clock; after that it is gone and the device keeps what it copied itself. A
