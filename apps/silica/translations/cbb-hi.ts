@@ -688,4 +688,75 @@
         <translation>समूह का हर डिवाइस नया नाम दिखाता है।</translation>
     </message>
 </context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>यहाँ अज्ञात डिवाइस</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>समूह रुका हुआ है: जब तक समूह का रूट तय नहीं करता, इसके डिवाइस केवल अपने रिकॉर्ड बदलते हैं, क्लिपबोर्ड नहीं।</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>जब तक इसका रूट तय नहीं करता, समूह कोई रहस्य नहीं भेजता।</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 ने एक ही कुंजी से दो इतिहासों पर हस्ताक्षर किए, जैसा चोरी हुई कुंजी या बैकअप से बहाली में होता है।</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>एडमिन ने बिना देखे एक-दूसरे को हटाया या फ़्रीज़ किया: %1। रूट उनमें से एक को हटाता है।</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>समूह सँभालने के दो दावे: %1।</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 समूह पर दावा करता है, ताकि उसे उसके रूट से सँभाल ले।</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 समूह पर दावा करता है, ताकि उसे उसके रूट से सँभाल ले: यह %2 घंटे में लागू होगा।</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 समूह पर दावा करता है, और जब तक इसका रूट तय नहीं करता, समूह रुका रहता है।</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>समूह में बाद के संस्करण के रिकॉर्ड हैं (%1): उन्हें पढ़ने के लिए ऐप अपडेट करें।</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>दोनों इतिहास रद्द करें</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>दोनों इतिहास रद्द किए जा रहे हैं</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>दावा रद्द करें</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>दावा रद्द किया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>%1 हटाएँ</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>%1 हटाया जा रहा है</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>समूह का रूट तय करता है।</translation>
+    </message>
+</context>
 </TS>

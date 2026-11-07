@@ -11,6 +11,7 @@
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
@@ -264,6 +265,11 @@ void App::startAdmit(const QString &qr, bool makeAdmin)
     thread->start();
 }
 
+void App::resolve(const QStringList &records)
+{
+    manage(QStringLiteral("resolve"), QString(), records.join(QLatin1Char(',')));
+}
+
 void App::manage(const QString &action, const QString &device, const QString &name, int forMinutes)
 {
     if (!m_member.isAdmin() || !m_node.handle()) {
@@ -284,6 +290,9 @@ void App::manage(const QString &action, const QString &device, const QString &na
         {QStringLiteral("name"), name},
         {QStringLiteral("for_ms"), double(qint64(forMinutes) * 60 * 1000)},
     };
+    // A resolve's records come joined in name, as QML hands them.
+    if (action == QStringLiteral("resolve"))
+        thread->request.insert(QStringLiteral("records"), QJsonArray::fromStringList(name.split(QLatin1Char(','), QString::SkipEmptyParts)));
     if (!m_member.adminCa.isEmpty() && !m_member.root)
         thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
     connect(thread, &QThread::finished, this, [this, thread, action, device]() {

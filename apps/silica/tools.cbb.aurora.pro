@@ -95,6 +95,7 @@ DISTFILES += \
     qml/pages/NewGroupPage.qml \
     qml/pages/AddDevicePage.qml \
     qml/pages/DevicePage.qml \
+    qml/pages/AlertsCard.qml \
     qml/pages/RenameDevicePage.qml \
     qml/pages/DeviceTile.qml \
     qml/pages/SettingsPage.qml \

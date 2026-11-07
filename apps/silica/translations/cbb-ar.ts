@@ -688,4 +688,75 @@
         <translation>تعرض كل أجهزة المجموعة الاسم الجديد.</translation>
     </message>
 </context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>أجهزة غير معروفة هنا</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>المجموعة متوقفة: تتبادل أجهزتها سجلاتها فقط، دون الحافظة، حتى يقرر جذر المجموعة.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>لا ترسل المجموعة أي أسرار حتى يقرر جذرها.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>وقّع %1 تاريخين بمفتاح واحد، كما يحدث مع مفتاح مسروق أو استعادة من نسخة احتياطية.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>أزال المشرفون أو جمّدوا بعضهم دون أن يروا ذلك: %1. يزيل الجذر أحدهم.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>مطالبتان بالاستيلاء على المجموعة: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>يطالب %1 بالمجموعة للاستيلاء عليها من جذرها.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>يطالب %1 بالمجموعة للاستيلاء عليها من جذرها: يسري ذلك خلال %2 ساعة.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>يطالب %1 بالمجموعة، والمجموعة متوقفة حتى يقرر جذرها.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>تحتوي المجموعة على سجلات من إصدار أحدث (%1): حدّث التطبيق لقراءتها.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>إلغاء التاريخين</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>جارٍ إلغاء التاريخين</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>إلغاء المطالبة</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>جارٍ إلغاء المطالبة</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>إزالة %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>جارٍ إزالة %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>يقرر جذر المجموعة.</translation>
+    </message>
+</context>
 </TS>

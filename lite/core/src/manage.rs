@@ -31,6 +31,10 @@ pub enum Change<'a> {
     Rename(&'a str),
     /// End every freeze of a frozen admin.
     Thaw,
+    /// As the root, void the records an alert names: both histories of a
+    /// key, or a claim (docs/protocol.md, section 10, "Stopping the
+    /// exchange"). It names no device.
+    Resolve(Vec<Hash>),
 }
 
 /// A command for a device of the group.
@@ -85,9 +89,20 @@ fn root_recorded(rs: &Records, device: &str) -> bool {
 /// The body of a change, before next_body fills in its place in the
 /// signer's history.
 fn change_body(rs: &Records, s: &Signer, device: &str, c: &Change, now_ms: i64) -> Result<Body> {
-    let d = find(rs, device)?;
     let mut b =
         Body { v: 2, alg: authority::ALG_ES256.into(), signer: s.hash(), time_ms: now_ms, ..Default::default() };
+    if let Change::Resolve(records) = c {
+        if !rs.state().roots.contains(&s.hash()) {
+            return Err(Error::msg("only the group's root decides"));
+        }
+        if records.is_empty() {
+            return Err(Error::msg("a resolve names the records it voids"));
+        }
+        b.kind = authority::TYPE_RESOLVE.into();
+        b.records = records.clone();
+        return Ok(b);
+    }
+    let d = find(rs, device)?;
     match c {
         Change::Remove => {
             if device == s.me {
@@ -142,6 +157,7 @@ fn change_body(rs: &Records, s: &Signer, device: &str, c: &Change, now_ms: i64) 
             b.kind = authority::TYPE_THAW.into();
             b.records = freezes;
         }
+        Change::Resolve(_) => {}
     }
     Ok(b)
 }
@@ -198,6 +214,91 @@ pub fn order(rs: &Records, s: &Signer, device: &str, o: &Order, now_ms: i64) -> 
     }
     let sig = identity::sign_external(s.key, &body)?;
     Ok(Record::new(body, sig, s.chain(rs)))
+}
+
+/// What the group's records stop and what ends it, for the app's card
+/// (docs/protocol.md, section 10, "Stopping the exchange"), as the phone
+/// kits' GroupAlert: the group's stop, each conflict, each claim that waits
+/// or stops the group, and records of a later version.
+#[derive(serde::Serialize, Debug, PartialEq)]
+pub struct Alert {
+    /// stopped (every member exchanges records only), secrets_stopped,
+    /// two_histories (the root voids both: records), admins (admins removed
+    /// or froze each other: the root removes one of devices), claims (two
+    /// claims: the root voids one or both), claim_pending (a claim waits
+    /// left_ms unless the root voids it), claim_stopped (the group stops
+    /// until the root voids the claim), newer (update the app: count).
+    pub kind: &'static str,
+    /// The names and IDs of the devices involved, those known here.
+    pub names: Vec<String>,
+    pub devices: Vec<String>,
+    /// The records a resolve names to end it.
+    pub records: Vec<Hash>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub left_ms: Option<i64>,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub count: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
+}
+
+/// The alerts of the records' state, in the order the apps show them.
+pub fn alerts(rs: &Records) -> Vec<Alert> {
+    let st = rs.state();
+    let devices = rs.devices();
+    // The device of a signer's key: whose admin key it is, or the root's
+    // own device for a root's key.
+    let involved = |keys: &[Hash]| -> (Vec<String>, Vec<String>) {
+        keys.iter()
+            .filter_map(|k| {
+                devices.iter().find(|d| d.admin_key == Some(k.0)).or_else(|| {
+                    if st.roots.contains(k) { devices.iter().find(|d| d.id == st.root_device) } else { None }
+                })
+            })
+            .map(|d| (d.name.clone(), d.id.clone()))
+            .unzip()
+    };
+    let alert = |kind, (names, devices): (Vec<String>, Vec<String>), records: Vec<Hash>| Alert {
+        kind,
+        names,
+        devices,
+        records,
+        left_ms: None,
+        count: 0,
+    };
+    let mut out = Vec::new();
+    match st.stop.as_str() {
+        "full" => out.push(alert("stopped", Default::default(), Vec::new())),
+        "secrets" => out.push(alert("secrets_stopped", Default::default(), Vec::new())),
+        _ => {}
+    }
+    for c in &st.conflicts {
+        let kind = match c.kind {
+            authority::CONFLICT_TWO_HISTORIES => "two_histories",
+            authority::CONFLICT_ADMINS => "admins",
+            authority::CONFLICT_CLAIMS => "claims",
+            _ => continue,
+        };
+        out.push(alert(kind, involved(&c.signers), c.records.clone()));
+    }
+    for c in &st.claims {
+        match c.state {
+            "pending" => out.push(Alert {
+                left_ms: Some(c.left_ms),
+                ..alert("claim_pending", involved(&[c.claimant]), alloc::vec![c.record])
+            }),
+            "disputed" | "competing" => {
+                out.push(alert("claim_stopped", involved(&[c.claimant]), alloc::vec![c.record]))
+            }
+            _ => {}
+        }
+    }
+    if !st.newer.is_empty() {
+        out.push(Alert { count: st.newer.len(), ..alert("newer", Default::default(), Vec::new()) });
+    }
+    out
 }
 
 /// Whether a device whose keys live in store may hold an admin key at the

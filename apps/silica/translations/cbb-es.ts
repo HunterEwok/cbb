@@ -688,4 +688,75 @@
         <translation>Todos los dispositivos del grupo muestran el nuevo nombre.</translation>
     </message>
 </context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>dispositivos desconocidos aquí</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>El grupo está detenido: sus dispositivos solo intercambian sus registros, sin portapapeles, hasta que decida la raíz del grupo.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>El grupo no envía secretos hasta que decida su raíz.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 firmó dos historiales con una sola clave, como haría una clave robada o una restauración desde una copia de seguridad.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>Los admins se quitaron o congelaron entre sí sin verlo: %1. La raíz quita a uno de ellos.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>Dos reclamaciones para tomar el grupo: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 reclama el grupo, para tomarlo de su raíz.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 reclama el grupo, para tomarlo de su raíz: surte efecto en %2 h.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 reclama el grupo, y el grupo queda detenido hasta que decida su raíz.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>El grupo tiene registros de una versión posterior (%1): actualiza la app para leerlos.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>Anular ambos historiales</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>Anulando ambos historiales</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>Cancelar la reclamación</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>Cancelando la reclamación</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>Quitar %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Quitando %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>Decide la raíz del grupo.</translation>
+    </message>
+</context>
 </TS>

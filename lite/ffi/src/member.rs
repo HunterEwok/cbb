@@ -164,7 +164,8 @@ struct CommandArgs {
 
 /// What cbb_member_manage does: `action` is remove, rename, thaw,
 /// make_admin (as the root, for a computer connected), mute or unmute, for
-/// `device`, or renew, which renews every certificate due.
+/// `device`; renew, which renews every certificate due; or resolve, the
+/// root's decision on an alert, which voids its `records`.
 #[derive(Deserialize)]
 struct ManageArgs {
     action: String,
@@ -174,6 +175,9 @@ struct ManageArgs {
     /// keys in a file, which the group's key level must allow too.
     #[serde(default)]
     allow_file_key: bool,
+    /// With resolve: the records an alert names, which the root voids.
+    #[serde(default)]
+    records: Vec<cbb_core::authority::Hash>,
     /// With rename: the new name.
     #[serde(default)]
     name: String,
@@ -540,6 +544,8 @@ impl Member {
                 Ok(json!({ "peers": ps.iter().map(peer_json).collect::<Vec<_>>() }))
             }
             "records" => Ok(json!({ "records": n.records() })),
+            // What the group's records stop, for the alerts card.
+            "alerts" => Ok(json!({ "alerts": n.alerts() })),
             // Every device of the group as the app shows it.
             "devices" => {
                 let ds: Vec<DeviceAnswer> = n
@@ -642,6 +648,7 @@ impl Member {
                 "remove" => self.node.change(&s, &a.device, &Change::Remove)?,
                 "rename" => self.node.change(&s, &a.device, &Change::Rename(&a.name))?,
                 "thaw" => self.node.change(&s, &a.device, &Change::Thaw)?,
+                "resolve" => self.node.change(&s, "", &Change::Resolve(a.records.clone()))?,
                 "make_admin" => self.node.make_admin(&s, &a.device, a.allow_file_key)?,
                 "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
                 "mute" => return order(Order::Mute(a.for_ms)),

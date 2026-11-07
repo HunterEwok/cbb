@@ -688,4 +688,75 @@
         <translation>群组中的每台设备都会显示新名称。</translation>
     </message>
 </context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>此处未知的设备</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>群组已停止：在群组的根做出决定之前，其设备只交换记录，不交换剪贴板。</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>在其根做出决定之前，群组不发送任何机密。</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 用同一把密钥签署了两段历史，就像密钥被盗或从备份恢复时那样。</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>管理员在互不知情的情况下相互移除或冻结：%1。根会移除其中一个。</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>两项接管群组的声明：%1。</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 声明接管群组，要从其根接手。</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 声明接管群组，要从其根接手：将在 %2 小时后生效。</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 声明接管群组，在其根做出决定之前群组已停止。</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>群组包含更高版本的记录（%1）：请更新应用以读取它们。</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>作废两段历史</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>正在作废两段历史</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>取消声明</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>正在取消声明</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>移除 %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>正在移除 %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>由群组的根决定。</translation>
+    </message>
+</context>
 </TS>

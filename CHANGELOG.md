@@ -81,6 +81,10 @@ All notable changes to cbb are documented in this file. The format follows
   computer an admin, each confirmed first; the Rust core signs the record or the command with
   the admin key (`cbb_member_manage`). An admin Aurora phone also renews the member
   certificates that are due, the connected devices' and its own.
+- The Aurora app shows the group's alerts card on its main page, as the other phones do (what
+  the group's records stop and why), and on the group's root offers the decision, confirmed
+  first: void both histories, cancel a claim or remove one of two admins; the Rust core gives
+  the alerts (the member's `alerts` op) and signs the decision.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

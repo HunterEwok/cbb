@@ -65,6 +65,7 @@ on every platform of the class, on the roadmap).
 | One-tap control outside the app | Quick Settings tile, notification button | Control Center control (iOS 18) | the cover's actions: send the clipboard, pause; not yet tried on the phone | the control opens the app for a moment: **OS**, iOS reads the clipboard only in the foreground |
 | Home-screen widget | yes | yes | **OS** (no widgets; the cover instead) | "Sync clipboard"; on the iPhone it opens the app for a moment, as the control does |
 | Rename a device | yes | yes | yes; not yet tried on the phone | Devices, Rename on an admin phone; `cbb rename` on an admin computer; a signed device record |
+| The group's alerts card, and the root's decision on it | yes | yes | yes; not yet tried on the phone | `GroupAlert` in the kits, the core's `alerts` op on Aurora |
 | Error details switch without developer tools | yes | yes | yes | seven taps on the version in Settings show it; `adb` and the Xcode launch argument still work |
 | Wallpaper colours theme | yes | **OS** | the ambience | Material You exists only on Android |
 | Remote paste, images and files | yes | yes | gap | the iPhone takes no remote paste (**OS**: no app may type into another) |

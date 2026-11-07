@@ -688,4 +688,75 @@
         <translation>Все устройства группы покажут новое имя.</translation>
     </message>
 </context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>устройства, неизвестные здесь</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>Группа остановлена: её устройства обмениваются только записями, без буфера обмена, пока корень группы не решит.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>Группа не отправляет секреты, пока её корень не решит.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 подписал две истории одним ключом, как бывает с украденным ключом или при восстановлении из резервной копии.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>Админы удалили или заморозили друг друга, не видя этого: %1. Корень удаляет одного из них.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>Две заявки на захват группы: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 заявляет права на группу, чтобы забрать её у корня.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 заявляет права на группу, чтобы забрать её у корня: это вступит в силу через %2 ч.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 заявляет права на группу, и группа остановлена, пока её корень не решит.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>В группе есть записи более новой версии (%1): обновите приложение, чтобы их прочитать.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>Аннулировать обе истории</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>Аннулирование обеих историй</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>Отменить заявку</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>Отмена заявки</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>Удалить %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Удаление: %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>Решает корень группы.</translation>
+    </message>
+</context>
 </TS>

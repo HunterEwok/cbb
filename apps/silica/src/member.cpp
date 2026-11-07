@@ -130,6 +130,7 @@ void Member::stop()
     m_member = nullptr;
     m_peers.clear();
     m_devices.clear();
+    m_alerts.clear();
     emit devicesChanged();
     m_paused = m_muted = false;
     Errors::log(QStringLiteral("member: stopped"));
@@ -298,8 +299,12 @@ void Member::pollDevices()
         return;
     }
     const QVariantList devices = a.value(QStringLiteral("devices")).toArray().toVariantList();
-    if (devices != m_devices) {
+    const QJsonObject al = call(m_member, QStringLiteral("alerts"), QJsonObject(), &failure);
+    const QVariantList alerts =
+        failure.isNull() ? al.value(QStringLiteral("alerts")).toArray().toVariantList() : m_alerts;
+    if (devices != m_devices || alerts != m_alerts) {
         m_devices = devices;
+        m_alerts = alerts;
         emit devicesChanged();
     }
 }

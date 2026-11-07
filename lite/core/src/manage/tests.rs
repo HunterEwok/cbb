@@ -311,3 +311,46 @@ fn a_due_certificate_is_renewed() {
     .unwrap();
     assert!(renewal(&[stranger], &roots, &admin, later).is_err());
 }
+
+#[test]
+fn the_root_ends_two_histories_from_the_card() {
+    let mut g = group();
+    assert!(alerts(&g.rs).is_empty());
+    // The admin key signs two records with one seq: two histories.
+    let mut sign_twice = Vec::new();
+    for name in ["tv", "radio"] {
+        let body =
+            g.rs.next_body(Body {
+                v: 2,
+                alg: authority::ALG_ES256.into(),
+                kind: authority::TYPE_DEVICE.into(),
+                signer: Hash(g.admin_ca.key_hash()),
+                time_ms: now_ms(),
+                device: DeviceId::random().to_string(),
+                name: name.into(),
+                role: "lite".into(),
+                key: Some(Hash(certs::random_bytes())),
+                ..Default::default()
+            })
+            .unwrap();
+        let sig = identity::sign_external(&*g.admin_key, &body).unwrap();
+        sign_twice.push(Record::new(body, sig, Some(g.admin_ca.der.clone())));
+    }
+    for r in &sign_twice {
+        g.rs.add(r).unwrap();
+    }
+    let a = alerts(&g.rs);
+    let two = a.iter().find(|a| a.kind == "two_histories").expect("an alert of two histories");
+    assert_eq!(two.names, ["R570E"]);
+    assert_eq!(two.devices, [g.admin_phone.clone()]);
+    assert_eq!(two.records.len(), 2);
+
+    // Only the root decides.
+    let admin = Signer { ca: &g.admin_ca, key: &*g.admin_key, me: &g.admin_phone };
+    let e = change(&g.rs, &admin, "", &Change::Resolve(two.records.clone()), now_ms()).err().unwrap();
+    assert!(e.message().contains("only the group's root"));
+    let root = Signer { ca: &g.root, key: &*g.root_key, me: &g.root_phone };
+    let records = two.records.clone();
+    apply(&mut g.rs, &root, "", &Change::Resolve(records), now_ms()).unwrap();
+    assert!(alerts(&g.rs).iter().all(|a| a.kind != "two_histories"), "{:?}", alerts(&g.rs));
+}

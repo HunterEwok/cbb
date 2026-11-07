@@ -96,6 +96,8 @@ public:
     // forMinutes: how long a mute lasts, 0 for until an unmute.
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
                             int forMinutes = 0);
+    // The root's decision on an alert: voids the records it names.
+    Q_INVOKABLE void resolve(const QStringList &records);
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();

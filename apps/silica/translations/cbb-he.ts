@@ -688,4 +688,75 @@
         <translation>כל מכשירי הקבוצה מציגים את השם החדש.</translation>
     </message>
 </context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>מכשירים שאינם מוכרים כאן</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>הקבוצה עצורה: המכשירים שלה מחליפים רק את הרשומות שלהם, בלי לוח העתקה, עד שהשורש של הקבוצה יחליט.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>הקבוצה לא שולחת סודות עד שהשורש שלה יחליט.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 חתם על שתי היסטוריות במפתח אחד, כמו שקורה במפתח גנוב או בשחזור מגיבוי.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>מנהלים הסירו או הקפיאו זה את זה בלי לראות זאת: %1. השורש מסיר אחד מהם.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>שתי תביעות להשתלט על הקבוצה: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 תובע את הקבוצה, כדי להשתלט עליה מהשורש שלה.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 תובע את הקבוצה, כדי להשתלט עליה מהשורש שלה: זה ייכנס לתוקף בעוד %2 שעות.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 תובע את הקבוצה, והקבוצה עצורה עד שהשורש שלה יחליט.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>בקבוצה יש רשומות מגרסה מאוחרת יותר (%1): עדכנו את האפליקציה כדי לקרוא אותן.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>ביטול שתי ההיסטוריות</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>מבטל את שתי ההיסטוריות</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>ביטול התביעה</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>מבטל את התביעה</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>הסרת %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>מסיר את %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>השורש של הקבוצה מחליט.</translation>
+    </message>
+</context>
 </TS>

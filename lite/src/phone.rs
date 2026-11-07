@@ -458,6 +458,11 @@ impl Member {
         Ok(())
     }
 
+    /// What the group's records stop and what ends it, for the app's card.
+    pub fn alerts(&self) -> Vec<manage::Alert> {
+        manage::alerts(&self.node.records().lock().unwrap())
+    }
+
     /// Signs a change to a device of the group with the app's admin key or
     /// the root's (cbb_core::manage), adds it and passes it to the group.
     pub fn change(&self, s: &Signer, device: &str, c: &Change) -> Result<()> {

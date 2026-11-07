@@ -90,10 +90,11 @@ void cbb_member_stop(cbb_member *m);
  * the key public names (the phone's admin key, or the root's key with no
  * admin_ca) through sign, called during this call only (src/member.rs,
  * manage): request is {"action","device","name","for_ms","allow_file_key",
- * "public","admin_ca","timeout_ms"}, action remove, rename, thaw, make_admin
- * (the root, for a computer connected), mute, unmute or renew (every member
- * certificate due, no device); the answer {}, {"result"} for a command, or
- * {"renewed": count}. A command blocks on the network.
+ * "records","public","admin_ca","timeout_ms"}, action remove, rename, thaw,
+ * make_admin (the root, for a computer connected), mute, unmute, renew (every
+ * member certificate due, no device) or resolve (the root voids the records an
+ * alert of the member's alerts op names); the answer {}, {"result"} for a
+ * command, or {"renewed": count}. A command blocks on the network.
  */
 uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            size_t *answer_len);

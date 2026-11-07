@@ -738,6 +738,14 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if got := manage(`{"action":"make_admin","device":"` + string(j.ID) + `"}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("making a computer that is not running an admin: %s", got)
 	}
+	// A group made a moment ago stops nothing.
+	fmt.Fprintln(in, `CALL {"op":"alerts"}`)
+	if got := next("ANSWER "); got != `{"ok":{"alerts":[]}}` {
+		t.Fatalf("the alerts: %s", got)
+	}
+	if got := manage(`{"action":"resolve","records":[]}`); !strings.Contains(got, "names the records") {
+		t.Fatalf("resolving nothing: %s", got)
+	}
 	// Nothing is due in a group made a moment ago.
 	if got := manage(`{"action":"renew"}`); got != `{"ok":{"renewed":0}}` {
 		t.Fatalf("renewing: %s", got)

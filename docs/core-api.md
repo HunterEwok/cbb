@@ -98,6 +98,7 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features}]`, as their hellos and reach messages present them |
 | `records` | none | `{"records"}` |
 | `devices` | none | `{"devices"}`: every device of the group as the app shows it, `[{device, name, role, os, admin, root, frozen, online, self, listed}]`: the group's device records, whether it is connected and whether it is this phone, then the connected members no record lists yet (`listed` false) |
+| `alerts` | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
 | `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
 | `send_cert`, `send_admin_ca`, `send_tunnel` | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |

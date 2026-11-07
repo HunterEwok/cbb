@@ -143,6 +143,8 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
             }
 
+            AlertsCard {}
+
             Label {
                 visible: app.group === "" && !app.busy
                 x: Theme.horizontalPageMargin
