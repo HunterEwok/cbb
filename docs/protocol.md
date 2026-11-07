@@ -3287,6 +3287,7 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
 | `release` (`release.json`) | a release key | `version`, `channel`, `time_ms`, `min_from` (a version, optional), `files`: 1 to 256 of `{name, size, sha256, binaries?}`, `docker` (optional `{image, digest}`) |
 | `channel` (`stable.json`, ...) | a release key or a channel key | `channel`, `seq` (from 1), `time_ms`, `expires_ms`, `release` (the version), `release_sha256` (SHA-256 of that `release.json`'s body, hex) |
 | `entries` (`entries.json`) | a release key or a channel key | `seq` (from 1), `time_ms`, `expires_ms`, `forwarders`: at most 16 of `{name` (the forwarder, `host:port`, each once), `vless`: at most 8 of `{transport` (`xhttp`), `server_name` (a site's name), `port` (1 to 65535), `path` (`/` and 8 to 64 of `A-Z a-z 0-9 - _`)`}}`, `relays` (optional): at most 16 of `{name` (the relay, `host:port`, each once), `endpoints` (optional): at most 8 `host:port` where it is reached now`}` |
+| `zxnext` (`zxnext.json`) | a release key | `version`, `time_ms`, `files`: the ZX Spectrum Next's four, `CBB`, `CBB.OVL`, `CBB.DRV` and `cbb`, each once as `{name, size` (1 to 64 MiB)`, crc32` (8 lowercase hex digits)`, sha256}` |
 | `attest-status` (`attest-status.json`) | a status key | `seq` (from 1), `time_ms`, `expires_ms`, `source_ms` (when Google last changed its list, optional), `android_revoked`: the serial numbers |
 
 - A key of a `use` the reader does not know is in `keys.json` for newer programs and signs
@@ -3322,6 +3323,14 @@ keeps all three at its top and each release's files under `vX.Y.Z/`. A device fe
 `keys.json` and the channel file, then the `release.json` of the version the channel file
 names, and that version's files; `get.sh` and `get.ps1` install the release `stable.json`
 names, not GitHub's latest, which differ for a few minutes after a release.
+
+A release with the ZX Spectrum Next's files also carries `zxnext.json`, and a mirror keeps
+it under `vX.Y.Z/`; cbb.tools serves it over plain HTTP as `zxnext/SIGNED`, the current
+`keys.json` and the newest such release's `zxnext.json`, a line each. `.cbb update` hands
+that to the Pi's `cbb` (`cbb next check-list`), which checks both as in steps 1 and 3 below
+(the `keys.json` without a stored `seq`, the `zxnext.json` under a release key of it, its
+version not below the Pi's own) and writes the four files' names, sizes, CRC-32s and
+SHA-256s; the Next takes a newer `CBB` and its files only from those lines.
 
 `cbb update` tries GitHub, then the mirror. When this device syncs away from home through a
 hub that uses VLESS (section 11), it reaches the default mirror only inside VLESS, through

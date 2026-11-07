@@ -412,8 +412,12 @@ the overlay and of the driver inside `.cbb` (`make PI_CBB=...`, `apps/zxnext/pin
 `ovl.sh`), and lays them out for cbb.tools (`packaging/zxnext/site.sh`) as
 `cbb-zxnext.tar.gz`: `zxnext/` with the four files and `LIST`, a line of name, size, CRC-32
 and SHA-256 for each. `.cbb install` installs only the overlay, the driver and the member its
-own `.cbb` carries; `.cbb update` reads `LIST` to tell of a newer `.cbb`. The four files must
-come from one build: a `.cbb` refuses another build's.
+own `.cbb` carries. The four files must come from one build: a `.cbb` refuses another
+build's. `release-sign publish` signs the same list with the release key as `zxnext.json`
+(docs/protocol.md, section 16; one more touch of the key) and puts it among the release's
+files; `release-sign mirror` writes `zxnext/SIGNED`, that release's `zxnext.json` after the
+current `keys.json`, a line each, on every run, so it follows a new `keys.json`. `.cbb
+update` takes a newer `.cbb` only from `SIGNED`, checked by the Pi's `cbb`.
 
 NextZXOS's `.http` and the ESP8266 have no TLS, so these two paths are served over plain HTTP
 on port 80, where the rest of the site redirects to HTTPS (`site/deploy/nginx.conf`, the
@@ -429,9 +433,9 @@ fetches. A `return 301` at the server's level runs before any location, so the r
 HTTPS has to stay inside `location / { ... }`. The files are in `/srv/cbb.tools/zxnext`, outside
 `www`, so a deploy of the site leaves them alone, and nobody puts them there by hand:
 `cbb-mirror.timer` ("The mirror" below) unpacks them from the newest release that has them,
-once that release checks out under the pinned roots. The checks on the Next guard against a
-damaged download, not against a changed one: a signed list that the Next and the Pi check is
-the next step (docs/roadmap.md, "Installing").
+once that release checks out under the pinned roots. The checks of `.cbb install` guard
+against a damaged download, and `.cbb update`'s also against a changed one; the `CBB` that
+the first `.http` fetches is as trustworthy as the network (docs/threat-model.md).
 
 ## The mirror
 

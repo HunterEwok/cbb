@@ -1504,6 +1504,11 @@ All notable changes to cbb are documented in this file. The format follows
 - The Mac's installer package keeps its files for the service in a folder that only root
   may change, `/Library/Application Support/cbb-package`, and its script checks that before
   it installs them.
+- `.cbb update` on the ZX Spectrum Next takes a newer `CBB` and its files only from a list
+  signed with the release key (`zxnext.json`, which `release-sign publish` signs and the
+  mirror serves as `zxnext/SIGNED`), checked by the Pi's `cbb` against its pinned roots
+  (`cbb next check-list`), and no longer from the site's plain list. It now needs the Pi to
+  answer. docs/threat-model.md says what the first `.http` download trusts.
 - The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
   clipboard off the main thread, for the remote paste sheet's empty field and for a sync
   that reads the clipboard itself, so iOS stops reporting a hang of the app.

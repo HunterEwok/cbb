@@ -419,6 +419,9 @@ extern uint32_t far_sha(void);
 // and each file's size and SHA-256 there, in the order of items[] and the
 // CBB last: a newer CBB comes with the files built with it.
 static uint32_t list_size, list_crc;
+// Which part of the list read_list() does: 0 fetches the site's signed
+// files into text[], 1 reads the lines the Pi's cbb wrote of them.
+static uint8_t list_checked;
 #define LISTED 4
 static uint32_t list_isize[LISTED];
 static char list_isha[LISTED][65];
@@ -1388,7 +1391,8 @@ int net_cmd(void)
 
 #define SITE "cbb.tools"
 #define SITE_DIR "/zxnext/"
-#define SITE_LIST "LIST"
+// keys.json and zxnext.json, a line each, which the Pi's cbb checks.
+#define SITE_LIST "SIGNED"
 // Where NextZXOS looks for dot commands first.
 #define DOT_CBB "c:/dot/CBB"
 // A range is asked for at a time, kept in text[], and written while the
@@ -2034,11 +2038,22 @@ static int install_files(uint8_t update)
     bar(FILE_ROW + 2 * SEND_ROW + 1, 0, bar_ink[SEND_ROW]);
     pi_answers = !pi_sha(pisha);
     link_stopped = 0;
-    if (http_open()) {
+    // .cbb update first fetches the site's signed list, which the Pi's cbb
+    // checks (read_list()), then opens the site again for the files.
+    if (update && !pi_answers) return pi_silent();
+    for (list_checked = !update;;) {
+        if (http_open()) {
+            http_close();
+            link_use(LINK_PI);
+            if (link_stopped) return fail("stopped; .cbb install goes on from here", 0);
+            return fail("cannot reach " SITE "; is the ESP on Wi-Fi?", line);
+        }
+        if (list_checked) break;
+        err = far_read_list();
         http_close();
         link_use(LINK_PI);
-        if (link_stopped) return fail("stopped; .cbb install goes on from here", 0);
-        return fail("cannot reach " SITE "; is the ESP on Wi-Fi?", line);
+        list_checked = 1;
+        if (err || (link_shell() && pi_silent()) || far_read_list()) return 1;
     }
     // .cbb update first looks for a newer CBB in the list: then it
     // installs the files the list names, as built with that one, and
@@ -2046,11 +2061,10 @@ static int install_files(uint8_t update)
     // one in C:/DOT, where .cbb runs it from anywhere, else the one in
     // /cbb that an earlier install had run as ../CBB.
     if (update) {
-        err = far_read_list();
         crc = file_crc(DOT_CBB, &size);
         dot = size != 0;
         if (!dot) crc = file_crc(CBB_CARD, &size);
-        if (!err && (size != list_size || crc != list_crc)) {
+        if (size != list_size || crc != list_crc) {
             newer = 1;
             for (i = 0; i < LISTED; i++)
                 if (!list_isize[i]) err = fail("the list lacks a file", "for the new CBB");
@@ -2422,11 +2436,12 @@ int autoexec(void)
 
 #pragma codeseg PAGE_15
 #pragma constseg PAGE_15
-// Reads the site's list, a line NAME SIZE CRC32 SHA256 for each file, for
-// the size and CRC-32 of the newest CBB and the size and SHA-256 of each
-// file: a newer CBB's files are not those built with this one, so .cbb
-// update takes them as the list has them, as the user took this CBB from
-// the same site at the start. Not static:
+// Fetches the site's signed list into text[] (list_checked 0), for the
+// Pi's cbb to check (below); then (list_checked 1) reads the lines it
+// wrote, NAME SIZE CRC32 SHA256 for each file, for the size and CRC-32 of
+// the newest CBB and the size and SHA-256 of each file: a newer CBB's files
+// are not those built with this one, so .cbb update takes them as the
+// release key signed them. Not static:
 // far_read_list() (far.asm) calls it, from the install's page; it is in
 // the screen's, which has the room.
 // Puts the newer CBB, fetched as CBB.NEW, in place of the running one,
@@ -2466,12 +2481,20 @@ int install_end(void)
 }
 
 static const char *const listed[LISTED] = {"CBB.DRV", "CBB.OVL", "cbb", "CBB"};
+// The words for the Pi, here rather than among MAIN's strings.
+static const char list_go[] = "s=$(stty -g); stty raw -echo -iexten && printf '\\r\\nCBBGO\\r\\n' && timeout 60 head -c %lu >" PI_DIR
+                              "/cbb.list; stty $s\n";
+// An older cbb without check-list says neither CBBOK nor CBBERR.
+static const char list_check[] = PI_DIR "/cbb next check-list " PI_DIR "/cbb.list || echo CBBERR; rm -f " PI_DIR "/cbb.list\n";
+static const char list_line[] = "CBBL %15s %lu %11s %71s";
+static const char list_refused[] = "the Pi's cbb refused the site's list";
 int read_list(void)
 {
-    uint32_t *cbb_size = &list_size, *cbb_crc = &list_crc;
-    char *p, *q;
+    char name[16], sha[72], crc[12];
+    uint32_t size;
     uint8_t i, err;
     uint16_t len;
+    if (list_checked) goto check;
     // The list is short: one range of up to CHUNK bytes, then cut to size.
     link_send_str("GET " SITE_DIR SITE_LIST " HTTP/1.1\r\nHost: " SITE "\r\n\r\n");
     len = 0;
@@ -2496,18 +2519,26 @@ int read_list(void)
         }
         text[len] = 0;
     }
-    *cbb_size = 0;
-    for (p = (char *)text; *p; p = q) {
-        char name[16], sha[72];
-        uint32_t size;
-        char crc[12];
-        q = strchr(p, '\n');
-        if (q) *q++ = 0;
-        else q = p + strlen(p);
-        if (sscanf(p, "%15s %lu %11s %71s", name, &size, crc, sha) != 4) continue;
+    return 0;
+check:
+    // To the Pi's shell as it is, raw, as pi_send() sends the Pi's cbb.
+    sprintf(line, list_go, (uint32_t)strlen((char *)text));
+    link_send_str(line);
+    do {
+        if (link_line(line, sizeof line, 5)) return fail("the Pi did not get ready", "no CBBGO");
+    } while (strcmp(line, "CBBGO"));
+    for (len = 0; text[len]; len++) link_send(text[len]);
+    link_prompt();
+    link_send_str(list_check);
+    list_size = 0;
+    for (;;) {
+        if (link_line(line, sizeof line, 30)) return fail("the Pi did not answer", "no CBBOK");
+        if (strncmp(line, "CBBERR", 6) == 0) return fail(list_refused, line);
+        if (strcmp(line, "CBBOK") == 0) break;
+        if (sscanf(line, list_line, name, &size, crc, sha) != 4) continue;
         if (strcmp(name, "CBB") == 0 && strlen(crc) == 8) {
-            *cbb_size = size;
-            *cbb_crc = strtoul(crc, 0, 16);
+            list_size = size;
+            list_crc = strtoul(crc, 0, 16);
         }
         for (i = 0; i < LISTED; i++) {
             if (strcmp(name, listed[i]) == 0 && strlen(sha) == 64) {
@@ -2516,7 +2547,8 @@ int read_list(void)
             }
         }
     }
-    if (!*cbb_size) return fail("the list lacks a file", "CBB");
+    link_prompt();
+    if (!list_size) return fail("the list lacks a file", "CBB");
     return 0;
 }
 

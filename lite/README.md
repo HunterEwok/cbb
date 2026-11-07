@@ -277,6 +277,7 @@ do. These commands answer in frames a Z80 reads without a parser:
 | --- | --- |
 | `cbb next paste [-max bytes]` | `CBB1 <len> <crc32>`, then len bytes of the latest text (cut to bytes), then CR, then the status line. |
 | `cbb next copy [-secret] <len> <crc32>` | `CBBGO` once the service answers; the Next then sends exactly len bytes, which the lite member reads with the terminal in raw mode (no echo, no CR to LF; it gives up after 10 s without a byte), checks the CRC-32 and sends to the group, as a secret with `-secret` (as `cbb copy -secret`); then the status line. |
+| `cbb next check-list <file>` | For `.cbb update`: the file holds `keys.json` and the release's `zxnext.json`, a line each (at most 16 KiB). It checks them against the pinned roots, refuses a release older than this `cbb`, and writes `CBBL <name> <size> <crc32> <sha256>` for each of the Next's four files; then the status line. |
 | `cbb next pair [-name name] [-port port] [-addr host[:port]]...` | `CBBQ <size>`, then size rows of the QR code for the phone app, each of (size + 3) / 4 hex digits with the leftmost module in the high bit of the first digit and a set bit dark; the Next draws it, the phone scans it, and after the pairing the status line (up to 5 minutes). A join payload makes a code of about 41 modules, which fits the 192 lines of the screen at 4 pixels per module. |
 
 ### The network through the Next's ESP8266

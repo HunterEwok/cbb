@@ -97,11 +97,16 @@ network, take `CBB` from the release instead, whose files are signed
 ([installing](../../docs/guide/install.md#checking-a-download)): copy `zxnext/CBB` of
 `cbb-zxnext.tar.gz` to `C:/DOT` on the card, then `.cbb install`.
 
-`.cbb update` looks at the site's list for a newer `CBB`. Without one, it installs this
-`CBB`'s files where they are missing or differ, or says there are no updates. With one, it
-fetches it as `CBB.NEW` next to the running one (in `C:/DOT`, or in `/cbb` for an old
-install), then the files the list names for it, each checked against the list's size and
-SHA-256: the same trust as the `.http` that fetched `CBB` at the start. Last it closes its
+`.cbb update` trusts the network no more than the release: it fetches the site's `SIGNED`
+(the release's `zxnext.json`, which the release key signs, and the `keys.json` that names
+that key) and hands it to the Pi, whose `cbb` checks it against the root keys it was built
+with and refuses a release older than its own (`cbb next check-list`). Only the names,
+sizes, CRC-32s and SHA-256s that the Pi's `cbb` writes back count, so `.cbb update` needs a
+Pi with a `cbb` of 0.6 or later that answers; without one it changes nothing. Then, without
+a newer `CBB`, it installs this `CBB`'s files where they are missing or differ, or says there
+are no updates. With one, it fetches it as `CBB.NEW` next to the running one (in `C:/DOT`,
+or in `/cbb` for an old install), then the files the signed list names for it, each checked
+against that list's size and SHA-256. Last it closes its
 own file, which NextZXOS keeps open while a dot command over 8K runs (the API's "Large dot
 commands"), erases it and renames `CBB.NEW` in its place; the code in memory runs on. Should
 that fail, it says the `ERASE` and `RENAME` to type after it. The network, if it ran, it

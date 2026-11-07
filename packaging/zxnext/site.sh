@@ -15,8 +15,9 @@
 #   zxnext/LIST  a line NAME SIZE CRC32 SHA256 for each. CBB checks its
 #                overlay, the driver and the Pi's cbb against its own
 #                copy of their SHA-256 (apps/zxnext/pins.sh, ovl.sh),
-#                never the list's; .cbb
-#                update reads the list only to tell of a newer CBB
+#                never the list's. .cbb update reads the signed
+#                copy of the list instead, SIGNED, which release-sign
+#                mirror writes from the release's zxnext.json
 #
 # The site serves zxnext/CBB at /zxnext as well, which
 # `.http -h cbb.tools -u /zxnext -f CBB` fetches (docs/maintaining.md).

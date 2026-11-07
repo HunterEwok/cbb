@@ -193,6 +193,13 @@ func publish(args []string) error {
 		return err
 	}
 	files := map[string]release.File{"keys.json": keysFile, "release.json": rel}
+	zx, hasZX, err := signZXNext(dir, v, rs)
+	if err != nil {
+		return err
+	}
+	if hasZX {
+		files[zxnextName] = zx
+	}
 	if !pre {
 		// A pre-release stays out of the channel, as it stays out of
 		// releases/latest.
@@ -210,8 +217,13 @@ func publish(args []string) error {
 			return err
 		}
 	}
+	upload := []string{"release", "upload", tag, "--repo", s.repo, "--clobber", filepath.Join(dir, "release.json")}
 	step("uploading release.json to %s", tag)
-	if _, err := gh("release", "upload", tag, "--repo", s.repo, "--clobber", filepath.Join(dir, "release.json")); err != nil {
+	if hasZX {
+		upload = append(upload, filepath.Join(dir, zxnextName))
+		step("and %s", zxnextName)
+	}
+	if _, err := gh(upload...); err != nil {
 		return err
 	}
 	if *noPublish || !ask(fmt.Sprintf("Publish %s now? Once published, its files cannot change.", tag)) {
@@ -228,6 +240,7 @@ func publish(args []string) error {
 	step("%s is published; the published workflow updates the Homebrew tap", tag)
 	// The channel names the release only once it is public.
 	delete(files, "release.json")
+	delete(files, zxnextName)
 	return putChannel(s.repo, cur, files, "CBB "+tag)
 }
 
@@ -542,6 +555,19 @@ func checkSigned(files map[string]release.File, dir string) error {
 			return err
 		}
 		if err := r.CheckFile(a.Name, data); err != nil {
+			return err
+		}
+	}
+	if zx, ok := files[zxnextName]; ok {
+		z, err := release.CheckZXNext(files["keys.json"], zx, pinnedRoots(), now(), "")
+		if err != nil {
+			return err
+		}
+		archive, err := readZXNext(filepath.Join(dir, zxnextArchive))
+		if err != nil {
+			return err
+		}
+		if err := zxnextMatches(z, archive, r.Version); err != nil {
 			return err
 		}
 	}

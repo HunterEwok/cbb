@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use cbb_drvtest::next::{Key, Run};
-use cbb_drvtest::peers::{Esp, Pi};
+use cbb_drvtest::peers::{Esp, Pi, SIGNED_OK};
 use cbb_drvtest::sha256;
 
 /// What CBB was built with, and a site with its files.
@@ -98,7 +98,7 @@ fn kit(name: &str) -> Option<Kit> {
             sha256::hex(&data)
         );
     }
-    std::fs::write(site.join("LIST"), list).unwrap();
+    sign_list(&site, &list);
     Some(Kit {
         dot,
         map,
@@ -106,6 +106,12 @@ fn kit(name: &str) -> Option<Kit> {
         pi_cbb,
         site,
     })
+}
+
+/// The site's LIST, and its SIGNED as the played Pi takes it.
+fn sign_list(site: &Path, list: &str) {
+    std::fs::write(site.join("LIST"), list).unwrap();
+    std::fs::write(site.join("SIGNED"), format!("{SIGNED_OK}\n{list}")).unwrap();
 }
 
 /// A card with /cbb/CBB, as `.http` leaves it.
@@ -1073,8 +1079,73 @@ fn installs_then_pairs() {
 fn updates_itself_in_dot() {
     let Some(kit) = kit("newerdot") else { return };
     let (card, pi) = installed(&kit, "newerdot");
-    // The newer CBB: another one of the same size will do, as it does not
-    // run here.
+    let (newer, list) = newer_cbb(&kit);
+    sign_list(&kit.site, &list);
+    std::fs::copy(&kit.dot, card.join("dot/CBB")).unwrap();
+    let o = run(
+        &kit,
+        &card,
+        "update",
+        Esp::new(kit.site.clone()),
+        pi,
+        120.0,
+        None,
+    );
+    assert!(o.has("CBB AND ITS FILES ARE NEW"), "{}", o.screen);
+    // The new CBB and its CBB.OVL on one bar, their sizes summed.
+    assert!(o.has("64K OF    64K"), "{}", o.screen);
+    assert_eq!(std::fs::read(card.join("dot/CBB")).unwrap(), newer);
+    assert!(!card.join("dot/CBB.NEW").exists());
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+/// .cbb update takes a newer CBB only from a list the Pi's cbb checked:
+/// not from one the release keys did not sign, nor with a Pi that does not
+/// answer or a cbb there too old to check it.
+#[test]
+fn updates_only_from_a_list_the_pi_checked() {
+    let Some(kit) = kit("unsigned") else { return };
+    let (newer, list) = newer_cbb(&kit);
+    std::fs::write(kit.site.join("LIST"), &list).unwrap();
+    for (case, signed, answers, checks, want) in [
+        ("unsigned", false, true, true, "CBB REFUSED THE SI"),
+        ("no pi", true, false, true, "THE PI DOES NOT ANSWER"),
+        ("old pi", true, true, false, "CBB REFUSED THE SI"),
+    ] {
+        let first = if signed {
+            SIGNED_OK
+        } else {
+            "{\"played\":\"forged\"}"
+        };
+        std::fs::write(kit.site.join("SIGNED"), format!("{first}\n{list}")).unwrap();
+        let (card, mut pi) = installed(&kit, "unsigned");
+        pi.answers = answers;
+        pi.checks_lists = checks;
+        std::fs::copy(&kit.dot, card.join("dot/CBB")).unwrap();
+        let o = run(
+            &kit,
+            &card,
+            "update",
+            Esp::new(kit.site.clone()),
+            pi,
+            60.0,
+            None,
+        );
+        assert!(o.has(want), "{case}: {}", o.screen);
+        assert!(!o.has("CBB AND ITS FILES ARE NEW"), "{case}: {}", o.screen);
+        assert_ne!(
+            std::fs::read(card.join("dot/CBB")).unwrap(),
+            newer,
+            "{case}"
+        );
+        assert!(!card.join("dot/CBB.NEW").exists(), "{case}");
+        let _ = std::fs::remove_dir_all(&card);
+    }
+}
+
+/// A newer CBB on the site, and the list that names it: another one of the
+/// same size will do, as it does not run here.
+fn newer_cbb(kit: &Kit) -> (Vec<u8>, String) {
     let mut newer = std::fs::read(&kit.dot).unwrap();
     let last = newer.len() - 1;
     newer[last] ^= 0xFF;
@@ -1092,23 +1163,7 @@ fn updates_itself_in_dot() {
             None => format!("{l}\n"),
         })
         .collect();
-    std::fs::write(kit.site.join("LIST"), list).unwrap();
-    std::fs::copy(&kit.dot, card.join("dot/CBB")).unwrap();
-    let o = run(
-        &kit,
-        &card,
-        "update",
-        Esp::new(kit.site.clone()),
-        pi,
-        120.0,
-        None,
-    );
-    assert!(o.has("CBB AND ITS FILES ARE NEW"), "{}", o.screen);
-    // The new CBB and its CBB.OVL on one bar, their sizes summed.
-    assert!(o.has("64K OF    64K"), "{}", o.screen);
-    assert_eq!(std::fs::read(card.join("dot/CBB")).unwrap(), newer);
-    assert!(!card.join("dot/CBB.NEW").exists());
-    let _ = std::fs::remove_dir_all(&card);
+    (newer, list)
 }
 
 /// .cbb update with nothing new says so.

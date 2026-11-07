@@ -992,20 +992,20 @@ signature (apps/zxnext/README.md, "Install"):
   `.http` has no TLS: `CBB`, `CBB.DRV`, the Pi's `cbb` for ARMv6, and a list
   with each file's size, CRC-32 and SHA-256 (`packaging/zxnext/site.sh`, the release's
   `cbb-zxnext.tar.gz`). Each `CBB` carries the size and SHA-256 of the driver and the Pi's
-  `cbb` built with it (`apps/zxnext/pins.sh`) and installs only those (0.6).
+  `cbb` built with it (`apps/zxnext/pins.sh`) and installs only those (0.6); the release
+  key signs the list as `zxnext.json` (0.6).
 - One line fetches `.cbb` into `C:/DOT`: `.http -h cbb.tools -u /zxnext -f CBB`, then `.cbb install` fetches
   the rest through the ESP and keeps them in `/cbb` only. Each file is checked against the
   list before it replaces the old one, a download that broke goes on from where it
   stopped, and a line shows the percentage, the kilobytes, the speed and the time left;
   SPACE stops it.
 - The Pi's `cbb` goes from the card to `/NextPi/nextpi` through the UART with the same line,
-  and the Pi checks its SHA-256 before it swaps the binary. `.cbb update` tells of a newer
-  `CBB`, which its user fetches as at the start.
+  and the Pi checks its SHA-256 before it swaps the binary.
 - `CBB` itself is as trustworthy as the network `.http` fetched it over; one taken from the
-  signed release and copied to the card is not. Next (0.7): `.cbb update` checks a newer
-  `CBB` and its files against the release's signed `release.json` through the `cbb` already
-  on the Pi, which checks releases for its own `cbb update`, so that an update needs no
-  trust in the network either.
+  signed release and copied to the card is not. `.cbb update` (0.6) takes a newer `CBB` and
+  its files only from the signed `zxnext.json`, which the `cbb` already on the Pi checks
+  against its pinned roots (`cbb next check-list`), so that an update needs no trust in the
+  network.
 - The Pi's `cbb` is sent at 460800 baud, at 115200 when the Pi's tty does not take it or
   the copy comes damaged; a real Next measured 31 to 32 KB/s, against 9 at 115200. Next
   (0.7): a faster step first, 921600 (the line's limit is about 92 KB/s, but the card's reads
