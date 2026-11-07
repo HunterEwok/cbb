@@ -6,6 +6,7 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/phone"
@@ -863,4 +865,91 @@ func TestLiteHubCommands(t *testing.T) {
 		a := rust.status(t).Away
 		return a != nil && !a.Hub
 	})
+}
+
+// TestLiteHubForwarder runs the Rust hub behind Go's forwarder only: it
+// registers with its member certificate and the group's records, and the
+// laptop away from home reaches it through the forwarder (docs/protocol.md,
+// section 13).
+func TestLiteHubForwarder(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, desk, laptop)
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair -full: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
+		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
+	}
+	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
+	waitFor(t, "the Rust member a hub", func() bool {
+		_, err := rust.do(t, req, "")
+		if err != nil && !strings.Contains(err.Error(), "admin") {
+			t.Fatalf("cbb global hub on the Rust member: %v", err)
+		}
+		return err == nil
+	})
+	waitFor(t, "the Rust hub registers with the forwarder", func() bool {
+		a := rust.status(t).Away
+		return a != nil && a.Forwarder != nil && a.Forwarder.Registered && a.Forwarder.Seen != ""
+	})
+	rustID := rust.status(t).Device
+	if _, err := laptop.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 30*time.Second, "the laptop keeps the Rust hub's offer at the forwarder", func() bool {
+		hl := tunnelState(t, laptop).Hub(rustID)
+		return hl != nil && len(hl.Endpoints) == 1 && hl.Endpoints[0].String() == f.Addr().String()
+	})
+
+	laptopID := laptop.status(t).Device
+	laptop.stop()
+	h.hide(laptopID)
+	laptop = restartService(t, &h, laptop)
+	waitUpTo(t, 30*time.Second, "the laptop reaches the Rust hub through the forwarder", func() bool {
+		st := laptop.status(t)
+		return st.Away != nil && st.Away.Through && slices.ContainsFunc(st.Peers, func(p control.Device) bool { return p.ID == rustID })
+	})
+	if _, err := laptop.do(t, control.Header{Op: control.OpCopy}, "through the forwarder"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "through the forwarder" })
 }

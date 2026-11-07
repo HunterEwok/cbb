@@ -80,11 +80,18 @@ impl Away {
         Err(Error::msg("sync away from home is off on this computer; this build has no tunnel"))
     }
 
-    pub fn make_hub_on(&self, _a: &Admin, _target: &str, _addrs: &[String], _fwd: &str, _fo: bool) -> Result<()> {
+    pub fn make_hub_on(
+        &self,
+        _a: &Admin,
+        _target: &str,
+        _addrs: &[String],
+        _fwd: (&str, &str),
+        _fo: bool,
+    ) -> Result<()> {
         self.turn_on().map(|_| ())
     }
 
-    pub fn move_hub(&self, _a: &Admin, _target: &str, _addrs: &[String], _fwd: &str) -> Result<()> {
+    pub fn move_hub(&self, _a: &Admin, _target: &str, _addrs: &[String], _fwd: (&str, &str)) -> Result<()> {
         Err(Error::msg("this device is not the group's hub; cbb global hub makes it the hub"))
     }
 

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use super::Away;
-use super::serve::{hub_addrs, own_offer, wait_clients_left};
+use super::serve::{forwarder_of, hub_addrs, own_offer, wait_clients_left};
 use crate::admin::{Admin, find_device};
 use crate::certs::DeviceId;
 use crate::error::{Error, Result};
@@ -33,11 +33,20 @@ pub struct HubOrder {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub stop: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub forwarder: Option<serde_json::Value>,
+    pub forwarder: Option<HubForwarder>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub endpoints: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clients: Vec<Client>,
+}
+
+/// The forwarder a hub command gives: its address and its key's pin.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct HubForwarder {
+    #[serde(default)]
+    pub endpoint: String,
+    #[serde(default)]
+    pub key: String,
 }
 
 /// A client a hub command hands over.
@@ -51,11 +60,6 @@ pub struct Client {
     pub psk: Vec<u8>,
 }
 
-/// The forwarder is not on the Rust service yet.
-fn no_forwarder() -> Error {
-    Error::msg("a hub's forwarder is not on the Rust service yet; give the hub's addresses away from home")
-}
-
 impl Away {
     /// Carries out a hub command from by, as Go's takeHub: this computer,
     /// with sync away from home on, becomes a hub of the group at the
@@ -64,11 +68,12 @@ impl Away {
     pub fn take_hub(&self, node: &Arc<Node>, by: &str, order: &serde_json::Value) -> Result<TunnelOffer> {
         let o: HubOrder =
             serde_json::from_value(order.clone()).map_err(|e| Error::with("the hub order does not decode", e))?;
-        if o.forwarder.is_some() {
-            return Err(no_forwarder());
-        }
-        let eps = hub_addrs(&o.endpoints)?;
-        if eps.is_empty() {
+        let fw = match &o.forwarder {
+            Some(f) => forwarder_of(&f.endpoint, &f.key)?,
+            None => None,
+        };
+        let eps = hub_addrs(&o.endpoints, fw.is_some())?;
+        if eps.is_empty() && fw.is_none() {
             return Err(Error::msg("the hub needs an address away from home or a forwarder"));
         }
         let listed: std::collections::HashSet<String> = node.devices().into_iter().map(|d| d.id).collect();
@@ -87,7 +92,7 @@ impl Away {
             Some(st) => st,
         };
         let mut next = st.clone();
-        (next.is_hub, next.retired, next.endpoints, next.forwarder, next.obfuscation) = (true, false, eps, None, None);
+        (next.is_hub, next.retired, next.endpoints, next.forwarder, next.obfuscation) = (true, false, eps, fw, None);
         // The old hub is no hub any more.
         next.hubs.retain(|h| h.device != by);
         let mut taken = 0;
@@ -140,7 +145,7 @@ impl Away {
         admin: &Admin,
         target: &str,
         addrs: &[String],
-        fwd: &str,
+        fwd: (&str, &str),
         forward_only: bool,
     ) -> Result<()> {
         let d = find_device(admin.node, target)?;
@@ -168,14 +173,13 @@ impl Away {
         if d.frozen {
             return Err(Error::msg(format!("{} is frozen; an admin thaws it first", d.name)));
         }
-        if !fwd.is_empty() {
-            return Err(no_forwarder());
-        }
-        if addrs.is_empty() {
+        let fw = forwarder_of(fwd.0, fwd.1)?;
+        if addrs.is_empty() && fw.is_none() {
             return Err(Error::msg("give the new hub's addresses away from home, or a forwarder"));
         }
-        hub_addrs(addrs)?;
-        let mut order = HubOrder { endpoints: addrs.to_vec(), ..Default::default() };
+        hub_addrs(addrs, fw.is_some())?;
+        let forwarder = fw.map(|f| HubForwarder { endpoint: f.endpoint.to_string(), key: f.pin });
+        let mut order = HubOrder { endpoints: addrs.to_vec(), forwarder, ..Default::default() };
         let self_psk = {
             let cur = self.st.lock().unwrap();
             cur.as_ref().filter(|st| st.relay.is_none()).map(|st| {
@@ -199,14 +203,12 @@ impl Away {
     /// Go's moveHub: it hands over its clients, itself among them, passes
     /// the new hub's offer on to its connected clients and becomes the new
     /// hub's client.
-    pub fn move_hub(&self, admin: &Admin, target: &str, addrs: &[String], fwd: &str) -> Result<()> {
+    pub fn move_hub(&self, admin: &Admin, target: &str, addrs: &[String], fwd: (&str, &str)) -> Result<()> {
         let d = find_device(admin.node, target)?;
         if d.id == self.me.as_str() {
             return Err(Error::msg("this device is the hub already"));
         }
-        if !fwd.is_empty() {
-            return Err(no_forwarder());
-        }
+        let fw = forwarder_of(fwd.0, fwd.1)?;
         let mut order = HubOrder { endpoints: addrs.to_vec(), ..Default::default() };
         let (psks, self_psk) = {
             let cur = self.st.lock().unwrap();
@@ -214,7 +216,12 @@ impl Away {
                 .as_ref()
                 .filter(|s| s.is_hub)
                 .ok_or_else(|| Error::msg("this device is not the group's hub; cbb global hub makes it the hub"))?;
-            if addrs.is_empty() {
+            // The new hub is reached through this hub's forwarder when the
+            // request gives none.
+            order.forwarder = fw
+                .or_else(|| st.forwarder.clone())
+                .map(|f| HubForwarder { endpoint: f.endpoint.to_string(), key: f.pin });
+            if order.forwarder.is_none() && addrs.is_empty() {
                 return Err(Error::msg(
                     "this hub has no forwarder; give the new hub's addresses away from home, or a forwarder",
                 ));

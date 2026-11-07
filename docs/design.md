@@ -251,8 +251,14 @@ ends, the Go service described below is still the computers' member.
   client; `hub -on` makes an admin computer a hub as well; `hub off -on` sends a stop order.
   Received, a hub command makes this device a hub at the order's addresses, serving at once
   and answering with its offer in the result's `tunnel`, or with a stop order stops it after
-  the result went back (`TestLiteHubCommands`). The forwarder, a hub that only passes
-  copies on, the hub's key periods, VLESS, the relay and invitations are still Go's.
+  the result went back (`TestLiteHubCommands`). A hub with a forwarder (`tunnel.json`'s
+  `forwarder`, from a request or a hub command; `default` stands for the project's, by the
+  pins this release knows) registers while it serves through the phones' `forward.rs`: its
+  member certificate with the roots, the group's records as the proof that it is the root or
+  an admin, and hellos from its WireGuard port; status shows the registration as Go's
+  `forwarder` (`TestLiteHubForwarder`). The pins of a newer `keys.json`, the server
+  credentials and the hub's key periods, VLESS, a hub that only passes copies on, the relay
+  and invitations are still Go's.
 
 ### Linux components
 

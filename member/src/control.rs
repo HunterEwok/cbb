@@ -288,10 +288,30 @@ pub struct Away {
     pub through: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keys_in_file: bool,
+    /// On the hub, its forwarder; None without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forwarder: Option<Forwarder>,
     /// What went wrong last, for the user.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
     /// The underlying error, for debugging.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub detail: String,
+}
+
+/// A hub's registration with its forwarder, as Go's control.Forwarder.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct Forwarder {
+    #[serde(default)]
+    pub endpoint: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub registered: bool,
+    /// Where the forwarder reaches the hub's port.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub seen: String,
+    /// Why the hub is not registered, and the underlying error.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub detail: String,
 }

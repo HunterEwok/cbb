@@ -10,16 +10,17 @@
 //! address it came from.
 
 use std::net::{SocketAddr, TcpListener};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::Away;
 use crate::certs::{Cert, DeviceId};
 use crate::control::{self, Header};
 use crate::error::{Context, Error, Result};
+use crate::forward::{self, Registration, Report};
 use crate::hub::{self, Hub};
 use crate::node::{Node, Peer};
-use crate::tunnel::{MEMBER_PORT, State};
+use crate::tunnel::{Forwarder, MEMBER_PORT, State};
 use crate::wire::{self, Message, TunnelOffer};
 
 /// How long the clients a stopping hub passed the next hub's offer to may
@@ -27,11 +28,25 @@ use crate::wire::{self, Message, TunnelOffer};
 const MOVE_GRACE: Duration = Duration::from_secs(10);
 const MOVE_LINGER: Duration = Duration::from_secs(1);
 
+/// The pins of the project's forwarder's key this release knows, as Go's
+/// forward.projectPins, and what stands for them in a hub request.
+const PROJECT_PINS: &[&str] = &["efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="];
+const PROJECT_KEY: &str = "default";
+
 /// The hub while it serves.
 pub(super) struct Serving {
+    /// Dropped first: the registration stops before the hub.
+    forwarding: Option<Forwarding>,
     hub: Arc<Hub>,
     /// When it started serving.
     pub(super) since: Instant,
+}
+
+/// The hub's registration with its forwarder.
+struct Forwarding {
+    _registration: Registration,
+    report: Arc<Mutex<Report>>,
+    endpoint: SocketAddr,
 }
 
 impl Away {
@@ -40,11 +55,10 @@ impl Away {
     /// awayLocked: sync away from home goes on first with consent. Returns
     /// whether the hellos must go again with the keys, which it returns.
     pub fn make_hub(&self, h: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
-        if !h.forwarder.is_empty() || !h.forwarder_key.is_empty() || h.vless {
-            return Err(Error::msg(
-                "a hub's forwarder and VLESS are not on the Rust service yet; give the hub's addresses away from home",
-            ));
+        if h.vless {
+            return Err(Error::msg("VLESS for a hub's clients is not on the Rust service yet; leave -vless out"));
         }
+        let mut fw = forwarder_of(&h.forwarder, &h.forwarder_key)?;
         if !(0..=65535).contains(&h.port) {
             return Err(Error::msg(format!("a bad port {}", h.port)));
         }
@@ -58,7 +72,7 @@ impl Away {
             Some(st) => st,
             None => State::new(&self.group)?,
         };
-        let (mut endpoints, mut port) = (hub_addrs(&h.addrs)?, h.port as u16);
+        let (mut endpoints, mut port) = (hub_addrs(&h.addrs, fw.is_some())?, h.port as u16);
         if h.keep {
             if !st.is_hub {
                 return Err(Error::msg(
@@ -71,8 +85,11 @@ impl Away {
             if h.port == 0 {
                 port = st.listen_port;
             }
+            if h.forwarder.is_empty() {
+                fw.clone_from(&st.forwarder);
+            }
         }
-        if endpoints.is_empty() {
+        if endpoints.is_empty() && fw.is_none() {
             return Err(Error::msg("the hub needs an address away from home or a forwarder"));
         }
         // Kept as they are when the hub is set again, so its clients'
@@ -86,7 +103,7 @@ impl Away {
         st.retired = false;
         st.endpoints = endpoints;
         st.listen_port = port;
-        st.forwarder = None;
+        st.forwarder = fw;
         st.relay = None;
         st.obfuscation = obfuscation;
         st.save(&self.dir)?;
@@ -277,7 +294,51 @@ impl Away {
             }
         });
         (self.log)(&format!("cbb: the hub serves on UDP port {}", hub.udp_port()));
-        Ok(Serving { hub, since: Instant::now() })
+        let forwarding = match &st.forwarder {
+            Some(f) => Some(self.register(node, st, f, &hub)?),
+            None => None,
+        };
+        Ok(Serving { forwarding, hub, since: Instant::now() })
+    }
+
+    /// Keeps the hub registered with its forwarder while it serves, as Go's
+    /// registerForwarderLocked: with its member certificate, the roots and
+    /// the group's records, which show the forwarder it is the root or an
+    /// admin, and hellos from its WireGuard port.
+    fn register(&self, node: &Node, st: &State, f: &Forwarder, hub: &Hub) -> Result<Forwarding> {
+        let ident = node.identity();
+        let key: Arc<dyn cbb_core::identity::ExternalKey> = match &ident.external {
+            Some(k) => k.clone(),
+            None => Arc::new(cbb_core::identity::FileKey::new(&ident.key)?),
+        };
+        let (roots, records) = {
+            let rs = node.records();
+            let rs = rs.lock().unwrap();
+            (rs.roots(), rs.all())
+        };
+        let mut chain = ident.chain();
+        for c in std::iter::once(ident.group_ca.clone()).chain(roots) {
+            if !chain.contains(&c.der) {
+                chain.push(c.der);
+            }
+        }
+        let records = records.iter().filter_map(|r| serde_json::to_value(r).ok()).collect();
+        let pins =
+            if f.project { PROJECT_PINS.iter().map(|p| pin_bytes(p)).collect() } else { vec![pin_bytes(&f.pin)] };
+        let cfg = forward::Config {
+            endpoint: f.endpoint,
+            pins: pins.into_iter().collect::<Result<_>>()?,
+            chain,
+            key,
+            wg_key: st.serving_key(),
+            obfuscation: st.obfuscation.clone(),
+            vless_id: None,
+            records: Arc::new(Mutex::new(records)),
+            send: hub.sender(),
+        };
+        let report = Arc::new(Mutex::new(Report::default()));
+        let registration = Registration::start(cfg, report.clone(), self.log.clone());
+        Ok(Forwarding { _registration: registration, report, endpoint: f.endpoint })
     }
 
     /// Stops the hub, with every connection through it.
@@ -293,6 +354,24 @@ impl Away {
         a.clients = st.members.len() as i64;
         a.obfuscated = st.obfuscation.is_some();
         a.endpoints = st.endpoints.iter().map(ToString::to_string).collect();
+        let serving = self.serving.lock().unwrap();
+        a.forwarder = match serving.as_ref().and_then(|s| s.forwarding.as_ref()) {
+            Some(f) => {
+                let r = f.report.lock().unwrap().clone();
+                let detail = r.error.unwrap_or_default();
+                Some(control::Forwarder {
+                    endpoint: f.endpoint.to_string(),
+                    registered: r.registered,
+                    seen: r.seen.unwrap_or_default(),
+                    error: forwarder_problem(&detail),
+                    detail,
+                })
+            }
+            None => st
+                .forwarder
+                .as_ref()
+                .map(|f| control::Forwarder { endpoint: f.endpoint.to_string(), ..Default::default() }),
+        };
     }
 }
 
@@ -381,29 +460,82 @@ pub(super) fn offer_of(h: &crate::tunnel::Hub) -> TunnelOffer {
 }
 
 /// The hub's addresses away from home, as Go's hubAddrs reads them.
-pub(super) fn hub_addrs(addrs: &[String]) -> Result<Vec<SocketAddr>> {
+pub(super) fn hub_addrs(addrs: &[String], forwarder: bool) -> Result<Vec<SocketAddr>> {
     let mut out = Vec::new();
     for a in addrs {
-        let ep: SocketAddr = match a.parse() {
-            Ok(ep @ SocketAddr::V4(_) | ep @ SocketAddr::V6(_)) if ep.port() != 0 => ep,
+        let ep: SocketAddr = match a.parse::<SocketAddr>() {
+            Ok(ep) if ep.port() != 0 => unmapped(ep),
             _ => {
                 return Err(Error::msg(format!(
                     "{a:?} is not an address with a port, such as 203.0.113.7:8764 or [2001:db8::7]:8764"
                 )));
             }
         };
-        // An IPv4 address mapped into IPv6 is the IPv4 address.
-        let ep = match ep {
-            SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
-                Some(v4) => SocketAddr::from((v4, v6.port())),
-                None => ep,
-            },
-            v4 => v4,
-        };
         out.push(ep);
     }
-    if out.len() > 8 {
+    if out.len() > 7 || !forwarder && out.len() > 8 {
         return Err(Error::msg("at most 8 addresses, the forwarder's included"));
     }
     Ok(out)
+}
+
+/// The hub's forwarder that a request or a hub command gives, as Go's
+/// hubAddrs reads it: its address and its key's pin, or `default` for the
+/// project's forwarder, whose pins this release knows; None for none.
+pub(super) fn forwarder_of(fwd: &str, key: &str) -> Result<Option<Forwarder>> {
+    if fwd.is_empty() {
+        if !key.is_empty() {
+            return Err(Error::msg("a forwarder's key without its address"));
+        }
+        return Ok(None);
+    }
+    let endpoint = match fwd.parse::<SocketAddr>() {
+        Ok(ep) if ep.port() != 0 => unmapped(ep),
+        _ => {
+            return Err(Error::msg(format!(
+                "{fwd:?} is not the forwarder's address with a port, such as 203.0.113.9:8764"
+            )));
+        }
+    };
+    let (pin, project) = if key == PROJECT_KEY {
+        (PROJECT_PINS[0].to_string(), true)
+    } else {
+        pin_bytes(key)?;
+        (key.to_string(), PROJECT_PINS.contains(&key))
+    };
+    Ok(Some(Forwarder { endpoint, pin, vless_id: String::new(), vless: None, project }))
+}
+
+/// A forwarder's pin: SHA-256 of its key, 44 characters of base64.
+fn pin_bytes(pin: &str) -> Result<[u8; 32]> {
+    use base64::Engine as _;
+    let e = base64::engine::general_purpose::STANDARD;
+    e.decode(pin).ok().filter(|b| e.encode(b) == pin).and_then(|b| <[u8; 32]>::try_from(b).ok()).ok_or_else(|| {
+        Error::msg(format!("{pin:?} is not a forwarder's key; cbb forward prints it, 44 characters of base64"))
+    })
+}
+
+/// An IPv4 address mapped into IPv6 is the IPv4 address.
+fn unmapped(ep: SocketAddr) -> SocketAddr {
+    match ep {
+        SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
+            Some(v4) => SocketAddr::from((v4, v6.port())),
+            None => ep,
+        },
+        v4 => v4,
+    }
+}
+
+/// A short message for status of why the hub is not registered, as Go's
+/// forwarderProblem; the whole error goes to the detail.
+fn forwarder_problem(detail: &str) -> String {
+    if detail.is_empty() {
+        String::new()
+    } else if let Some(i) = detail.find("the forwarder refused the registration") {
+        detail[i..].to_string()
+    } else if detail.contains("pin") {
+        "the forwarder's key is not the one given with -forwarder-key".to_string()
+    } else {
+        "the registration with the forwarder failed".to_string()
+    }
 }

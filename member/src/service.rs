@@ -638,14 +638,14 @@ impl Service {
                 away.turn_off()?;
                 node.set_tunnel_key(None);
             }
-            "hub" if !h.device.is_empty() => {
-                self.admin(|a| away.make_hub_on(a, &h.device, &h.addrs, &h.forwarder, h.forward_only))?
-            }
+            "hub" if !h.device.is_empty() => self.admin(|a| {
+                away.make_hub_on(a, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key), h.forward_only)
+            })?,
             "hub-off" if !h.device.is_empty() => self.admin(|a| away.stop_hub_on(a, &h.device, h.force))?,
             "move" if h.device.is_empty() => {
                 return Err(Error::msg("cbb global move names the device to move the hub to"));
             }
-            "move" => self.admin(|a| away.move_hub(a, &h.device, &h.addrs, &h.forwarder))?,
+            "move" => self.admin(|a| away.move_hub(a, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key)))?,
             "hub" => {
                 crate::admin::may_be_hub(&self.state_dir, &node)?;
                 node.set_tunnel_key(Some(away.make_hub(h)?));
