@@ -427,8 +427,9 @@ iPhone, a double tap where the phone offers one), and follows the rule of every 
    themselves, in a mode that takes the group's copies, Android and Aurora take such a copy
    at once and the iPhone when the app comes to the front.
 2. Otherwise what the phone copied goes to the group, however old, unless it is the group's
-   text already. A copy whose live window passed is gone, and there is no separate button
-   to fetch it.
+   text already or what this phone itself sent or took last: a text the phone sent before
+   it shared an image or files stays out, rather than go over that newer copy. A copy whose
+   live window passed is gone, and there is no separate button to fetch it.
 
 The button reads the phone's clipboard only in the second case. On the iPhone the button
 is the system's Paste button, which iOS lets read the clipboard without asking, and the

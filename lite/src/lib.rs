@@ -18,6 +18,8 @@ mod away;
 mod away;
 #[cfg(feature = "tunnel")]
 mod awg;
+pub mod button;
+pub mod content;
 mod control;
 mod device;
 pub mod discovery;
