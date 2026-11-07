@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// The Rust core's entry point (lite/ffi, docs/core-api.md) as a C module for
-// the kit. The library is libcbb_ffi.a, built by lite/ffi/bind.sh; the
+// The Rust core's entry point (ffi/, docs/core-api.md) as a C module for
+// the kit. The library is libcbb_ffi.a, built by ffi/bind.sh; the
 // kit's target links it, and the build gives the folder: swift test
 // -Xlinker -L<folder> for the kit, LIBRARY_SEARCH_PATHS for the app.
 module CCbbCore [system] {

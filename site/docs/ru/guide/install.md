@@ -29,7 +29,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 блокировки.
 
 Небольшим устройствам, которым нужно только синхронизироваться, например роутеру или
-Raspberry Pi Zero, подойдёт более лёгкий [лёгкий участник](../../lite/README.md):
+Raspberry Pi Zero, подойдёт более лёгкий [лёгкий участник](../../member/README.md):
 `... | sudo sh -s -- --lite`.
 
 ### Без sudo (rootless)
@@ -49,7 +49,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 выхода из системы, администратор один раз выполняет `sudo loginctl enable-linger YOUR-USER`.
 Чтобы удалить: `sh ~/.local/share/cbb/uninstall.sh`. Лёгкий участник тоже
 устанавливается так, с `--lite --rootless`
-([лёгкий участник](../../lite/README.md#without-sudo-rootless)).
+([лёгкий участник](../../member/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 

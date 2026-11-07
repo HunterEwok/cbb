@@ -12,7 +12,7 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 
 - Only standard, published constructions; nothing of our own. The one construction from an
   Internet-Draft, CPace, is the CFRG's balanced PAKE and is copied as is
-  (`internal/third_party/cpace`, `lite/core/src/third_party/cpace`).
+  (`internal/third_party/cpace`, `core/src/third_party/cpace`).
 - One curve for signatures: NIST P-256 with ECDSA and SHA-256, everywhere, since the
   phones' secure hardware (the Secure Enclave, Android's Keystore and StrongBox) and TPM 2.0
   all offer it.
@@ -48,7 +48,7 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 | Implementation | Libraries |
 |---|---|
 | Go members, the forwarder, the relay | the Go standard library (`crypto/tls`, `crypto/ecdsa`, `crypto/ecdh`, `crypto/hkdf`, `crypto/sha256`), `golang.org/x/crypto` (ChaCha20, BLAKE2s), amneziawg-go (copied under `internal/third_party`), gVisor's netstack (a module) with wireguard-go's adapter for it (`internal/third_party/netstack`), go-tpm for the TPM, go-libpcsclite (PC/SC through pcscd) and the platforms' PC/SC for the recovery key on a YubiKey, Xray-core for VLESS |
-| The lite member | RustCrypto (`p256`, `sha2`, `hmac`, `x25519-dalek`, `chacha20poly1305`, `aes-gcm`, `x509-cert`), rustls without its default provider, GotaTun for WireGuard with `lite/ring-shim` over RustCrypto |
+| The lite member | RustCrypto (`p256`, `sha2`, `hmac`, `x25519-dalek`, `chacha20poly1305`, `aes-gcm`, `x509-cert`), rustls without its default provider, GotaTun for WireGuard with `ring-shim/` over RustCrypto |
 | The iPhone kit | swift-crypto (CryptoKit's API, BoringSSL on Linux), the Security framework for the keychain and the Secure Enclave, Network.framework for TLS |
 | The Android kit | `java.security` and `javax.crypto`, the Android Keystore, its own X25519 and CPace in Kotlin (`Field25519.kt`, `CPace.kt`), checked against the Go code by the interop vectors |
 | The phones' tunnel | the Go tunnel of `mobile/cbbtun`, bound by gomobile |

@@ -52,7 +52,7 @@ echo 'the text' | sudo cbb keyboard type
 - `layout ru` 或 `layout us` 以及 `rate N` 用来设置布局和速度。
 - `type TEXT` 会在已连接的蓝牙设备上输入，否则在 USB 设备上输入。
 
-发往这块板子的群组远程粘贴也以同样的方式输入。板子自己的指南在 [lite/esp32](../../lite/esp32/README.md)。
+发往这块板子的群组远程粘贴也以同样的方式输入。板子自己的指南在 [esp32/](../../esp32/README.md)。
 
 ## 电脑作为电视遥控器
 

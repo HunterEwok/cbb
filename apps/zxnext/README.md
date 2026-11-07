@@ -5,7 +5,7 @@ the group's latest text, and joins the group, all through the lite member on the
 inside the Accelerated Next. The Pi is a full lite member of the group (TLS 1.3, the same
 certificates as every other device). The Next talks to it only over the UART between the
 two, which never leaves the case (docs/roadmap.md, item 14). The frames on that UART are
-described in [lite/README.md](../../lite/README.md#zx-spectrum-next).
+described in [member/README.md](../../member/README.md#zx-spectrum-next).
 
 Not yet run on a real Next: the UART speed taken from NR 0x7F, waking NextPi's shell, the
 QR code on the screen, and the timeouts are written from the manual and NextPi's own
@@ -199,7 +199,7 @@ the work:
   dropped;
 - it restores the UART selection it found, and stops on the Pi's quit frame.
 
-The frames are those of `cbb next link` (lite/README.md, "The network through the Next's
+The frames are those of `cbb next link` (member/README.md, "The network through the Next's
 ESP8266"). The driver starts off, so that nothing reaches NextPi's shell before the link
 runs; its API turns it on: `DRIVER 124,2,1` (1 the counters: the ESP's overflows, dropped
 frames, bytes taken; 2 on or off, and turning it on starts the counts again, as the link counts its bytes from 0; 3 whether it is on, in A and DE; 4 the bytes sent to and read from the ESP; 5 the last
@@ -232,7 +232,7 @@ do not reach the Pi. After a reset or a power cycle, which drop installed driver
 bank); `.install /cbb/CBB.DRV` still works too. It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
 keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
 member at home, `-serve` the ESP's port for the phones and the lite member's own,
-`-zone` the Next's clock's offset from UTC (lite/README.md, "The network through the Next's
+`-zone` the Next's clock's offset from UTC (member/README.md, "The network through the Next's
 ESP8266"). While the network runs, the ESP's UART is at 19200 (`AT+UART_CUR`, not kept in its
 flash): the driver hands the Pi 2400 of its bytes a second, and the ESP has no flow control, so
 at its stock 115200 a burst would overflow the Next's 512-byte buffer; `.cbb net off` puts it
@@ -249,7 +249,7 @@ address and the ports of `-serve` (so the settings need `-serve`), draws the QR 
 starts the network under it, so the phone that scans the code reaches the Pi through the
 ESP. The phone app says when the Pi has joined; then `cbb service` starts on the Pi with the
 group. With `cbb next link -udp` and `cbb service -tunnel-via`, the Pi syncs away from home
-through the ESP as well (lite/README.md).
+through the ESP as well (member/README.md).
 
 Without the phone app, `sudo cbb pair` on a computer of the group shows a code, and
 `.cbb pair 123-456` on the Next joins with it: it finds the computer whose pairing window is

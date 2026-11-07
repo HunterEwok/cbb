@@ -80,10 +80,10 @@ var testFakes = []string{
 // llvmParts says which files of an llvm-cov export count for each part.
 var llvmParts = map[string]func(file string) bool{
 	"rust-core": func(f string) bool {
-		return strings.Contains(f, "/lite/core/src/") && !strings.Contains(f, "/third_party/") && !strings.Contains(f, "/tests/")
+		return strings.Contains(f, "/core/src/") && !strings.Contains(f, "/third_party/") && !strings.Contains(f, "/tests/")
 	},
 	"rust-lite": func(f string) bool {
-		return strings.Contains(f, "/lite/src/") && !strings.Contains(f, "/tests/")
+		return strings.Contains(f, "/member/src/") && !strings.Contains(f, "/tests/")
 	},
 	"swift-kit": func(f string) bool {
 		return strings.Contains(f, "/CBBKit/Sources/")

@@ -65,7 +65,7 @@ What the design cannot choose:
 - **No third-party servers.** Nothing may depend on a service the project does not run or
   the user cannot run (D-3, D-4).
 - **Licence.** The code is AGPL-3.0-only with one author (D-1); copied code keeps its own
-  licence under `internal/third_party` and `lite/core/src/third_party`.
+  licence under `internal/third_party` and `core/src/third_party`.
 - **Small devices.** The lite member's protocol core is `no_std` Rust with no I/O, so that it
   fits an ESP32.
 - **Signing.** Apple's and Microsoft's code signing need accounts the project is still
@@ -1458,8 +1458,8 @@ relay, or a hub.
      anything else; with AmneziaWG on as well, both apply.
    - Risks: WireGuard over TCP adds latency on a lossy network (TCP inside TCP), which a
      clipboard tolerates; XHTTP's packet-up costs a request per batch of packets.
-3. **The lite member, in 0.6.** AmneziaWG around GotaTun (`lite/src/awg.rs`), and VLESS over
-   XHTTP on Linux, a client of its own on rustls and HTTP/1.1 (`lite/src/vless.rs`, its bytes
+3. **The lite member, in 0.6.** AmneziaWG around GotaTun (`member/src/awg.rs`), and VLESS over
+   XHTTP on Linux, a client of its own on rustls and HTTP/1.1 (`member/src/vless.rs`, its bytes
    in `cbb_core::vless`), without Chrome's TLS fingerprint: a network sees rustls's
    ClientHello and HTTP/1.1 where Xray's client shows a browser's and HTTP/2. The site's
    certificate is checked against the system's roots with `cbb_core::tls::web`, which adds
@@ -1488,11 +1488,11 @@ sing-box is not used (GPL).
   in one thread of `cbb`, behind a port on the loopback address that its member TLS dials, so
   no TUN device, no root and no capability is needed. GotaTun takes its AEAD from ring, whose
   C and assembly would need a C cross compiler for each target; the lite member gives it a
-  stand-in with ring's API on RustCrypto's ChaCha20-Poly1305 (`lite/ring-shim`), the
+  stand-in with ring's API on RustCrypto's ChaCha20-Poly1305 (`ring-shim/`), the
   implementation its TLS uses too, so it stays all Rust and links with rust-lld. GotaTun
   speaks plain WireGuard; the lite member wraps its messages in AmneziaWG for a hub that
-  hides its tunnel (`lite/src/awg.rs`) and carries them over VLESS with XHTTP when the offer
-  has it (`lite/src/vless.rs`). A hub reached over VLESS with REALITY only keeps it at home.
+  hides its tunnel (`member/src/awg.rs`) and carries them over VLESS with XHTTP when the offer
+  has it (`member/src/vless.rs`). A hub reached over VLESS with REALITY only keeps it at home.
 - No push notifications: they go through Apple's and Google's servers. A phone gets the
   current text when the app opens, as at home.
 
@@ -1711,7 +1711,7 @@ in the pairing Info, in its hello and in its device record: `linux`, `windows`, 
 | Role     | Devices                                     | What it does                                                    |
 |----------|---------------------------------------------|-----------------------------------------------------------------|
 | `full`   | a computer with the service: Linux, Windows, macOS | listens on the member port, dials the other full members and the lite members, may create a group and be an admin |
-| `lite`   | the lite member (`lite/`)                   | dials the full members, listens for phones; never holds keys     |
+| `lite`   | the lite member (`member/`)                 | dials the full members, listens for phones; never holds keys     |
 | `phone`  | a phone with the app                        | dials every member, never listens for members                   |
 
 The Mac is a full member like the others. A phone with the app, an iPhone or an Android phone, has its own
@@ -1871,7 +1871,7 @@ pasted newline before the user sees it. The `enter` flag presses Enter afterward
 | Android | the app's accessibility service: the clipboard, then `ACTION_PASTE` on the focused input node (or `ACTION_SET_TEXT`) | views without an editable node (some terminals and games); not on the lock screen |
 | iPhone, iPad | not possible: iOS lets no app put text into another app | sender only |
 | the lite member on Linux | the console helper or tmux, as on Linux | as Linux |
-| Nano ESP32 | not yet: the firmware takes no commands; its USB keyboard (`lite/esp32`, `usb.rs`) types only what its console's `type` gives it, in a `console-type` build | only the characters of the layout set on the board, which must match the host's |
+| Nano ESP32 | not yet: the firmware takes no commands; its USB keyboard (`esp32/`, `usb.rs`) types only what its console's `type` gives it, in a `console-type` build | only the characters of the layout set on the board, which must match the host's |
 | ZX Spectrum Next | none: `.cbb` runs only when started | |
 
 **The lock check.** Synthetic input does not stop at a lock screen: XTEST events pass a
@@ -2016,7 +2016,7 @@ docs/protocol.md, section 16.
   stolen Mac is replaced by a new release key certified by a root, with no reinstall, and a
   thief of the Mac cannot rotate to a key of their own.
 - All signatures are P-256 in the envelope of the group's records (`body`, `sig` and the key's
-  hash), which Go, `lite/core` (no_std), CryptoKit, Kotlin, openssl and PowerShell verify
+  hash), which Go, `core/` (no_std), CryptoKit, Kotlin, openssl and PowerShell verify
   with what they already have. Each file has a `type`, so one kind is never taken for
   another.
 - Each release gets `release.json`: the version, the date, the channel, the lowest version
@@ -2110,7 +2110,7 @@ docs/protocol.md, section 16.
 
 1. **Built but for the keys:** the root keys on the hardware keys, the release key in the
    Mac's Secure Enclave, `keys.json`, `release.json` and `stable.json`, with verifiers in
-   Go, `lite/core`, the Swift kit and the Kotlin kit and shared vectors (valid, bad
+   Go, `core/`, the Swift kit and the Kotlin kit and shared vectors (valid, bad
    signature, expired, wrong type, older version, wrong key, the `keys.json` chain).
 2. **Built but for the keys:** the release flow: the draft, `tools/release-sign`, the
    publishing workflow, the mirror, and `get.sh` and `get.ps1` checking the manifest.
@@ -2143,8 +2143,8 @@ docs/protocol.md, section 16.
    "Check for updates" and "Update automatically", nothing for a copy from a store. Not
    yet run on a device; installs from 2027 need the owner's registration with Google's
    developer verification.
-7. **Built for Linux and OpenWrt:** the lite member's `cbb update` (`lite/src/update.rs`),
-   checked with `lite/core`'s verifier, downloading with the system's curl, wget or
+7. **Built for Linux and OpenWrt:** the lite member's `cbb update` (`member/src/update.rs`),
+   checked with `core/`'s verifier, downloading with the system's curl, wget or
    uclient-fetch, installing and rolling back as step 3 does, with the same timers. The
    Nano ESP32 follows with its sync (item 15): a partition table with two app slots and a
    bootloader with rollback, and OTA from a member, checked against the manifest.
@@ -2274,7 +2274,7 @@ One pull request each, smaller ones together:
 5. The lite member on OpenWrt. Done: the procd script runs `cbb service` for it, `get.sh
    --lite` installs it on aarch64, armv7, x86-64, mips and mipsle, and it takes
    `CBB_INTERFACES`. On mips and mipsle it is built with nightly Rust (`-Zbuild-std`,
-   `lite/packaging/mips.sh`) and without the tunnel in 0.6, since GotaTun needs 64-bit
+   `member/packaging/mips.sh`) and without the tunnel in 0.6, since GotaTun needs 64-bit
    atomics; CI runs its Go tests under qemu-mips; the tunnel there is planned for 0.7
    (roadmap item 37).
 
@@ -2363,7 +2363,7 @@ Desktop Mode.
 
 Built in 0.6 (D-79, roadmap item 39): `sh install.sh --rootless`
 (`packaging/linux/install-rootless.sh`), `internal/rootless` and the lite member's
-`lite/src/rootless.rs`; CI installs and removes a full member and a lite member this way.
+`member/src/rootless.rs`; CI installs and removes a full member and a lite member this way.
 Not yet run on a desktop session.
 
 Every install so far needs root once: for the service's own account, the system unit, its

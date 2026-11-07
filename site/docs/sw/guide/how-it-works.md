@@ -13,7 +13,7 @@ Vifaa vyako huunda **kikundi**. Ni vifaa unavyoviruhusu tu vinavyokuwa ndani yak
 | **Mzizi** | simu iliyounda kikundi (au kompyuta, [bila programu](without-app.md)) | hushikilia ufunguo wa kikundi, huongeza na kuondoa vifaa, huteua wasimamizi |
 | **Msimamizi** | simu ya pili, au kompyuta aliyoichagua mzizi | huongeza na kuondoa vifaa, kama mzizi |
 | **Mwanachama** | kila kompyuta na kila simu | husawazisha ubao wa kunakili |
-| **Mwanachama mwepesi** | kifaa kidogo cha Linux: kipanga njia, Raspberry Pi Zero | husawazisha, hakiongezi mtu yeyote ([mwanachama mwepesi](../../lite/README.md)) |
+| **Mwanachama mwepesi** | kifaa kidogo cha Linux: kipanga njia, Raspberry Pi Zero | husawazisha, hakiongezi mtu yeyote ([mwanachama mwepesi](../../member/README.md)) |
 | **Mwanachama bila root** | kompyuta ya Linux iliyosakinishwa bila `sudo` | husawazisha kama mwanachama, lakini kamwe si mzizi, msimamizi wala kitovu ([tazama hapa chini](#rootless-members)) |
 | **Kitovu** | kompyuta nyumbani, au simu wakati programu yake imefunguliwa, ukipenda | huwezesha vifaa vyako kusawazisha vikiwa mbali na nyumbani; kinachopitisha nakala tu hakisomi yoyote |
 
@@ -42,7 +42,7 @@ Kwenye mtandao mmoja wa nyumbani vifaa hupatana vyenyewe (mDNS) na kuunganishwa 
 
 ![Nyumbani kila kifaa huzungumza moja kwa moja na kila kifaa kingine, bila seva](../images/at-home.svg)
 
-**Mitandao miwili nyumbani**, kwa mfano mtandao tofauti wa vifaa mahiri: mDNS haivuki kipanga njia, kwa hiyo vifaa vilivyo kwenye mitandao tofauti havipatani vyenyewe. Programu za simu hukumbuka anwani za kila kompyuta kutoka kwenye msimbo wake wa QR na bado huifikia; mwanachama mwepesi anaweza kuambiwa anwani ya kompyuta ([`-peer`](../../lite/README.md#install)); na kwa kila kitu kingine kitovu (hapa chini) huunganisha pande zote mbili.
+**Mitandao miwili nyumbani**, kwa mfano mtandao tofauti wa vifaa mahiri: mDNS haivuki kipanga njia, kwa hiyo vifaa vilivyo kwenye mitandao tofauti havipatani vyenyewe. Programu za simu hukumbuka anwani za kila kompyuta kutoka kwenye msimbo wake wa QR na bado huifikia; mwanachama mwepesi anaweza kuambiwa anwani ya kompyuta ([`-peer`](../../member/README.md#install)); na kwa kila kitu kingine kitovu (hapa chini) huunganisha pande zote mbili.
 
 ## Mbali na nyumbani: kitovu
 

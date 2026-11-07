@@ -22,7 +22,7 @@ import kotlinx.serialization.json.jsonPrimitive
 /**
  * The Rust core's one entry point (docs/core-api.md), the group's rules that
  * every member shares: JSON bytes in, JSON bytes out, through the C functions
- * of lite/ffi (lite/ffi/include/cbb_core.h), loaded by JNA from libcbb_ffi:
+ * of ffi/ (ffi/include/cbb_core.h), loaded by JNA from libcbb_ffi:
  * from the app's native libraries on Android, from jna.library.path in the
  * tests. The kit asks the core instead of writing the rules again in Kotlin.
  */

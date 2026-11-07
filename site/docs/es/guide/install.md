@@ -18,7 +18,7 @@ En un escritorio con GTK 4 y WebKitGTK 6.0 (x86-64 y ARM64) también instala la 
 
 El pegado remoto en GNOME y KDE pregunta una vez, en un cuadro de diálogo en el ordenador, antes de que el primer pegado de un administrador pueda pulsar las teclas. Para saltarte el cuadro de diálogo, añade `--uinput` (`... | sudo sh -s -- --uinput`): un pequeño ayudante pulsa entonces las teclas de pegado (Mayús+Insert e Intro) por quien esté usando la pantalla, nunca en una pantalla de inicio de sesión o de bloqueo.
 
-Los dispositivos pequeños que solo deben sincronizar, como un router o una Raspberry Pi Zero, pueden usar el [miembro ligero](../../lite/README.md), más liviano: `... | sudo sh -s -- --lite`.
+Los dispositivos pequeños que solo deben sincronizar, como un router o una Raspberry Pi Zero, pueden usar el [miembro ligero](../../member/README.md), más liviano: `... | sudo sh -s -- --lite`.
 
 ### Sin sudo (sin root)
 
@@ -28,7 +28,7 @@ En un ordenador Linux donde no puedes o no quieres usar `sudo`, instálalo para 
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-Se ejecuta como tu propio servicio en segundo plano mientras tienes la sesión abierta y sincroniza como cualquier miembro. Úsalo solo cuando la instalación normal no sea posible: cualquier programa que ejecutes podría copiar sus claves, así que nunca puede ser la raíz del grupo, un administrador ni el hub ([cómo funciona](how-it-works.md#rootless-members)), y no tiene reglas de cortafuegos, ni TPM, ni `--console` ni `--uinput`. Para mantenerlo en marcha después de cerrar sesión, un administrador ejecuta una vez `sudo loginctl enable-linger YOUR-USER`. Para quitarlo: `sh ~/.local/share/cbb/uninstall.sh`. El miembro ligero también se instala así, con `--lite --rootless` ([miembro ligero](../../lite/README.md#without-sudo-rootless)).
+Se ejecuta como tu propio servicio en segundo plano mientras tienes la sesión abierta y sincroniza como cualquier miembro. Úsalo solo cuando la instalación normal no sea posible: cualquier programa que ejecutes podría copiar sus claves, así que nunca puede ser la raíz del grupo, un administrador ni el hub ([cómo funciona](how-it-works.md#rootless-members)), y no tiene reglas de cortafuegos, ni TPM, ni `--console` ni `--uinput`. Para mantenerlo en marcha después de cerrar sesión, un administrador ejecuta una vez `sudo loginctl enable-linger YOUR-USER`. Para quitarlo: `sh ~/.local/share/cbb/uninstall.sh`. El miembro ligero también se instala así, con `--lite --rootless` ([miembro ligero](../../member/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 

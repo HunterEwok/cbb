@@ -1,5 +1,5 @@
 {
- "comment": "The rule of incoming copies (lite/core/src/rule.rs, internal/clip/rule.go): each case's verdict, and whether a mute or a pause until until_ms (0: until lifted; missing: none) holds at now_ms.",
+ "comment": "The rule of incoming copies (core/src/rule.rs, internal/clip/rule.go): each case's verdict, and whether a mute or a pause until until_ms (0: until lifted; missing: none) holds at now_ms.",
  "cases": [
   {
    "name": "a fresh text is written",

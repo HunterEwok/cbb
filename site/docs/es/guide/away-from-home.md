@@ -57,7 +57,7 @@ En casa, con el hub encendido:
 
 - **Ordenadores**: `sudo cbb global on` (en Windows, en una terminal de administrador).
 - **Teléfonos**: en la app, Ajustes, **Sync away from home**. Después deja la app abierta un momento en casa, para que se encuentre con el hub. Un iPhone sincroniza fuera de casa mientras la app está abierta; Android también en segundo plano. En un grupo creado en un teléfono, ese teléfono empieza siendo el hub, y el interruptor aparece cuando deja de serlo: en **Move the hub to a computer** haz hub al ordenador (guardando antes el reenviador en el teléfono), o apaga **This phone as the hub**.
-- **Miembro ligero**: `sudo cbb global on` en el dispositivo ([miembro ligero](../../lite/README.md#sync-away-from-home)).
+- **Miembro ligero**: `sudo cbb global on` en el dispositivo ([miembro ligero](../../member/README.md#sync-away-from-home)).
 
 ## 4. Compruébalo
 

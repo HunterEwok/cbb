@@ -98,7 +98,7 @@ Global flags, before the command: `-state DIR` (default `/var/lib/cbb`, or
 `CBB_STATE`), `-socket PATH` (default `/run/cbb/control.sock`, or `CBB_SOCKET`),
 `-debug` (the details of errors). The commands that change its state, such as `pair`, run
 as the service's user: `sudo -u cbb cbb pair`. Install and use are in
-[lite/README.md](../../lite/README.md).
+[member/README.md](../../member/README.md).
 
 | Command | What it does |
 |---|---|
@@ -116,7 +116,7 @@ as the service's user: `sudo -u cbb cbb pair`. Install and use are in
 | `cbb action [enable NAME [-by root,phone,computer,watch] [-any-key] [-yes] \| disable NAME \| off]` | Shows the quick actions here, or turns one on or off, as on a full member, with `sudo`: `reboot` (a minute later; only for admins whose keys are in hardware unless `-any-key`), `cancel-shutdown` and `restart`. Enabling `reboot` writes the polkit rule that lets the service ask logind for it, so the device needs polkit. Any admin turns them off from afar. |
 | `cbb paste-receive [on [-enter] [-console] [-no-lock-check] \| off]` | Shows remote paste here, or turns it on or off, as on a full member; setting it needs `sudo`. On, the group's admins may put a text into the tmux pane in use; `-console` lets it reach the active text console and root's tmux, `-enter` lets a paste press Enter, and `-no-lock-check` lets it reach a console whose session logind says nothing about being locked. Any admin turns it off from afar. |
 | `cbb paste-helper tmux\|console` | The paste targets: tmux starts the one for tmux from cbb's `tmux.conf`, the `cbb-console` unit (`install.sh --console`) runs the one for the console. |
-| `cbb next paste [-max BYTES]`, `next copy LEN CRC32`, `next pair [-name NAME] [-port PORT] [-addr HOST[:PORT]]...` | The same for the ZX Spectrum Next's `.cbb` dot command, in frames its Z80 reads; see [lite/README.md](../../lite/README.md#zx-spectrum-next). |
+| `cbb next paste [-max BYTES]`, `next copy LEN CRC32`, `next pair [-name NAME] [-port PORT] [-addr HOST[:PORT]]...` | The same for the ZX Spectrum Next's `.cbb` dot command, in frames its Z80 reads; see [member/README.md](../../member/README.md#zx-spectrum-next). |
 | `cbb update [-check] \| -auto [on\|off] \| -mirror [URL\|default]` (with sudo) | As on a full member, for the lite member's own archive on Linux and OpenWrt: the signed files checked, the download through the system's curl, wget or uclient-fetch, the archive's installer, and the previous program put back when the service does not report the new version within a minute. |
 | `cbb version`, `cbb help` | The version and that this is the lite member; this help. |
 
