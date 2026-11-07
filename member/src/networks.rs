@@ -389,7 +389,8 @@ fn gateways_from(routes: &str, arp: &str, index: &dyn Fn(&str) -> Option<u32>) -
         if flags & 0x2 == 0 {
             continue; // RTF_GATEWAY
         }
-        gw.entry(f[0]).or_insert(std::net::Ipv4Addr::from(raw.swap_bytes()));
+        // The kernel prints the address's bytes read as a native integer.
+        gw.entry(f[0]).or_insert(std::net::Ipv4Addr::from(raw.to_ne_bytes()));
     }
     let mut out = HashMap::new();
     for l in arp.lines().skip(1) {

@@ -39,7 +39,8 @@ func gateways() (map[int]string, error) {
 			continue
 		}
 		var ip [4]byte
-		binary.BigEndian.PutUint32(ip[:], binary.LittleEndian.Uint32(b))
+		// The kernel prints the address's bytes read as a native integer.
+		binary.NativeEndian.PutUint32(ip[:], binary.BigEndian.Uint32(b))
 		if _, ok := gw[f[0]]; !ok {
 			gw[f[0]] = netip.AddrFrom4(ip)
 		}
