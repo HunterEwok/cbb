@@ -86,9 +86,9 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(answer, len)) });
 }
 
-#[cfg(feature = "join")]
 #[cfg(feature = "member")]
 pub mod admit;
+#[cfg(feature = "join")]
 pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
