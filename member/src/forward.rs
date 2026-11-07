@@ -9,8 +9,11 @@
 //! forwarder learns where that port is reached. The phones' hub in Rust
 //! (ffi/) registers through it.
 //!
-//! Over VLESS, when the forwarder's TCP port does not answer, the Go hub
-//! registers inside VLESS; this one does not yet, and reports the failure.
+//! When the forwarder's TCP port does not answer and the group's clients
+//! come over VLESS, the registration goes inside VLESS with XHTTP, as the Go
+//! hub's does (section 13, "VLESS"): through the settings the forwarder's
+//! last answer gave, then the project's ways in, and the hub's hellos then
+//! go over VLESS too, with the group's user ID.
 
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream};
@@ -75,6 +78,93 @@ pub struct Config {
     pub records: Arc<Mutex<Vec<Value>>>,
     /// Sends a datagram from the hub's WireGuard port.
     pub send: SendFn,
+    /// The project's ways in over VLESS, for a hub whose forwarder is the
+    /// project's; the next registration takes what is there then.
+    pub ways: Arc<Mutex<Ways>>,
+    /// The VLESS settings of the forwarder's last answer, an offer's
+    /// `vless`, which a registration over VLESS tries first; kept by the
+    /// hub across its registrations.
+    pub learned: Arc<Mutex<Option<Value>>>,
+}
+
+/// Whether the hub's forwarder is the project's, and the ways in over VLESS
+/// that the newest signed entry points name for it (docs/protocol.md,
+/// section 16, "Entry points"), as cbbtun's SetProjectWays takes them.
+#[derive(Clone, Default, Debug)]
+pub struct Ways {
+    pub project: bool,
+    pub entries: Vec<EntryWay>,
+}
+
+/// A way in of the entry points: `{transport, server_name, port, path}`.
+#[derive(Clone, Debug, Deserialize)]
+pub struct EntryWay {
+    #[serde(default)]
+    pub transport: String,
+    pub server_name: String,
+    pub port: u16,
+    pub path: String,
+}
+
+/// The project's forwarder takes VLESS over XHTTP behind the web server of
+/// cbb.tools, on its port 443 and this path (internal/forward's
+/// ProjectVLESS): no secret the design relies on, it lets a hub that
+/// reaches the forwarder only over VLESS register the first time.
+const PROJECT_SITE: &str = "cbb.tools";
+const PROJECT_XHTTP_PATH: &str = "/banMEJvnYJJap8S";
+/// The most ways in a hub takes.
+pub const MAX_WAYS: usize = 8;
+
+/// The ways a hub tries over VLESS to its forwarder at addr when the
+/// forwarder's TCP port does not answer, as Go's hub: the settings the
+/// forwarder's last answer gave (learned, an offer's `vless`), then, for
+/// the project's forwarder, the entry points' ways in, each site looked up
+/// when it is not the forwarder's own, else the one built in. The user ID
+/// is the group's; the registration puts its own in.
+fn vless_ways(addr: std::net::IpAddr, id: &str, learned: Option<&Value>, ways: &Ways) -> Vec<cbb_core::vless::Link> {
+    let mut out = Vec::new();
+    if let Some(l) = learned.and_then(|v| cbb_core::vless::Link::from_offer(v).ok()) {
+        out.push(l);
+    }
+    if !ways.project {
+        return out;
+    }
+    let Ok(id) = cbb_core::vless::parse_id(id) else { return out };
+    let mut project = Vec::new();
+    for w in ways.entries.iter().take(MAX_WAYS) {
+        if !w.transport.is_empty() && w.transport != "xhttp" {
+            continue;
+        }
+        let at = if w.server_name == PROJECT_SITE {
+            Some(addr)
+        } else {
+            use std::net::ToSocketAddrs;
+            (w.server_name.as_str(), w.port).to_socket_addrs().ok().and_then(|mut a| a.next()).map(|a| a.ip())
+        };
+        let Some(at) = at else { continue };
+        if w.port == 0
+            || cbb_core::vless::check_server_name(&w.server_name).is_err()
+            || cbb_core::vless::check_path(&w.path).is_err()
+        {
+            continue;
+        }
+        project.push(cbb_core::vless::Link {
+            endpoint: SocketAddr::new(at, w.port).to_string(),
+            server_name: w.server_name.clone(),
+            path: w.path.clone(),
+            id,
+        });
+    }
+    if project.is_empty() {
+        project.push(cbb_core::vless::Link {
+            endpoint: SocketAddr::new(addr, 443).to_string(),
+            server_name: PROJECT_SITE.into(),
+            path: PROJECT_XHTTP_PATH.into(),
+            id,
+        });
+    }
+    out.extend(project);
+    out
 }
 
 /// How the registration stands.
@@ -126,7 +216,7 @@ fn run(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn Fn
     let mut backoff = MIN_BACKOFF;
     while !stop.load(Ordering::SeqCst) {
         let start = Instant::now();
-        let err = match once(cfg, report, stop) {
+        let err = match once(cfg, report, stop, log) {
             Ok(()) => return,
             Err(e) => e,
         };
@@ -212,8 +302,44 @@ struct VlessAnswer {
 }
 
 /// One registration, until it breaks or stop.
-fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool) -> Result<()> {
-    let mut reg = Registrar::connect(cfg.endpoint, &cfg.pins, &cfg.chain, &cfg.key, PROTOCOL, "forwarder")?;
+fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn Fn(&str) + Send + Sync>) -> Result<()> {
+    let connect = |at: SocketAddr, tcp: TcpStream| {
+        Registrar::handshake(tcp, at, &cfg.pins, &cfg.chain, &cfg.key, PROTOCOL, "forwarder")
+    };
+    // The stream over VLESS the registration took, and its way in.
+    let mut over: Option<(crate::vless::Stream, cbb_core::vless::Link)> = None;
+    let mut reg = match TcpStream::connect_timeout(&cfg.endpoint, SETUP_TIMEOUT) {
+        Ok(tcp) => connect(cfg.endpoint, tcp)?,
+        Err(direct) => {
+            let direct = Error::msg(format!("reaching the forwarder: {direct}"));
+            let Some(id) = &cfg.vless_id else { return Err(direct) };
+            let ways = cfg.ways.lock().map(|w| w.clone()).unwrap_or_default();
+            let learned = cfg.learned.lock().map(|l| l.clone()).unwrap_or_default();
+            let ways = vless_ways(cfg.endpoint.ip(), id, learned.as_ref(), &ways);
+            if ways.is_empty() {
+                return Err(direct);
+            }
+            // Each way in until one gets through to the registration.
+            let mut last = direct;
+            let mut got = None;
+            for w in ways {
+                let tried = crate::vless::Stream::registration(&w, log.clone()).and_then(|s| {
+                    let tcp = TcpStream::connect_timeout(&s.addr(), SETUP_TIMEOUT)
+                        .context("cannot reach the stream over VLESS")?;
+                    Ok((connect(s.addr(), tcp)?, s))
+                });
+                match tried {
+                    Ok((r, s)) => {
+                        over = Some((s, w));
+                        got = Some(r);
+                        break;
+                    }
+                    Err(e) => last = Error::msg(format!("{}; over VLESS: {}", last.for_log(), e.for_log())),
+                }
+            }
+            got.ok_or(last)?
+        }
+    };
     let proof_key = reg.export(PROOF_LABEL)?;
     let hello_key = reg.export(HELLO_LABEL)?;
     let ch: Challenge = reg.read(stop)?;
@@ -244,6 +370,29 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool) -> Result<()> {
         (Some(_), None) => return Err(Error::msg("registering with the forwarder: it gave no VLESS settings")),
         (None, _) => None,
     };
+    if vless.is_some()
+        && let Ok(mut l) = cfg.learned.lock()
+    {
+        l.clone_from(&vless);
+    }
+    // Over VLESS the hub's own packets go there too, with the group's user
+    // ID, which the forwarder lets in now: from the hub's WireGuard port to
+    // a local port that leads to the forwarder's UDP port.
+    let mut hello_to = cfg.endpoint;
+    let mut _packets = None;
+    if let (Some((_, way)), Some(id)) = (&over, &cfg.vless_id) {
+        let way = serde_json::json!({
+            "transport": "xhttp", "endpoint": way.endpoint, "server_name": way.server_name,
+            "path": way.path, "id": id,
+        });
+        let c = vless
+            .as_ref()
+            .and_then(|v| crate::vless::Client::start(v, log.clone()).ok())
+            .map_or_else(|| crate::vless::Client::start(&way, log.clone()), Ok)
+            .map_err(|e| Error::msg(format!("the hub's packets over VLESS: {}", e.for_log())))?;
+        hello_to = c.addr();
+        _packets = Some(c);
+    }
     if let Ok(mut r) = report.lock() {
         *r = Report { registered: true, vless: vless.clone(), ..Report::default() };
     }
@@ -259,7 +408,7 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool) -> Result<()> {
         if Instant::now() >= next {
             let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
             counter = counter.saturating_add(1).max(now);
-            (cfg.send)(cfg.endpoint, &hello(&mask, &hello_key, a.id, counter));
+            (cfg.send)(hello_to, &hello(&mask, &hello_key, a.id, counter));
             next = Instant::now() + every;
         }
         let Some(f) = reg.next_frame(stop)? else { continue };
@@ -322,10 +471,23 @@ impl Registrar {
         protocol: &[u8],
         what: &'static str,
     ) -> Result<Registrar> {
-        let clock: cbb_core::tls::Clock = Arc::new(SystemClock);
-        let tls = cbb_core::tls::pinned_client(chain.to_vec(), key.clone(), pins.to_vec(), protocol, &clock)?;
         let tcp = TcpStream::connect_timeout(&endpoint, SETUP_TIMEOUT)
             .map_err(|e| Error::msg(format!("reaching the {what}: {e}")))?;
+        Registrar::handshake(tcp, endpoint, pins, chain, key, protocol, what)
+    }
+
+    /// The registration's TLS over a connection to endpoint.
+    pub(crate) fn handshake(
+        tcp: TcpStream,
+        endpoint: SocketAddr,
+        pins: &[certs::KeyHash],
+        chain: &[Vec<u8>],
+        key: &Arc<dyn crate::identity::ExternalKey>,
+        protocol: &[u8],
+        what: &'static str,
+    ) -> Result<Registrar> {
+        let clock: cbb_core::tls::Clock = Arc::new(SystemClock);
+        let tls = cbb_core::tls::pinned_client(chain.to_vec(), key.clone(), pins.to_vec(), protocol, &clock)?;
         tcp.set_read_timeout(Some(SETUP_TIMEOUT)).context("a registration's socket")?;
         tcp.set_write_timeout(Some(SETUP_TIMEOUT)).context("a registration's socket")?;
         let _ = tcp.set_nodelay(true);
@@ -449,6 +611,43 @@ pub fn hello(mask: &[u8; 32], key: &[u8; 32], id: u64, counter: u64) -> Vec<u8> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The ways in over VLESS, as Go's hub orders them: the forwarder's last
+    /// answer, then the project's, the entry points' that are good, else
+    /// the one built in; none for a forwarder that is not the project's
+    /// and has not answered.
+    #[test]
+    fn ways_in_over_vless() {
+        let at: std::net::IpAddr = "192.0.2.7".parse().unwrap();
+        let id = "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d";
+        let learned = serde_json::json!({"transport": "xhttp", "endpoint": "192.0.2.7:8443",
+            "server_name": "cbb.example.org", "path": "/AbC-12_xyz0123456/a-group-of-its-own", "id": id});
+        assert!(vless_ways(at, id, None, &Ways::default()).is_empty());
+        let w = vless_ways(at, id, Some(&learned), &Ways::default());
+        assert_eq!(w.len(), 1);
+        assert_eq!(w[0].endpoint, "192.0.2.7:8443");
+
+        let built_in = vless_ways(at, id, None, &Ways { project: true, entries: vec![] });
+        assert_eq!(built_in.len(), 1);
+        assert_eq!(
+            (built_in[0].endpoint.as_str(), built_in[0].server_name.as_str(), built_in[0].path.as_str()),
+            ("192.0.2.7:443", "cbb.tools", "/banMEJvnYJJap8S")
+        );
+        let entry = |transport: &str, path: &str| EntryWay {
+            transport: transport.into(),
+            server_name: "cbb.tools".into(),
+            port: 8443,
+            path: path.into(),
+        };
+        let ways = Ways {
+            project: true,
+            entries: vec![entry("xhttp", "/a-way-in-of-its-own"), entry("grpc", "/another-way-in"), entry("", "bad")],
+        };
+        let w = vless_ways(at, id, Some(&learned), &ways);
+        assert_eq!(w.len(), 2, "{w:?}");
+        assert_eq!(w[0].server_name, "cbb.example.org");
+        assert_eq!((w[1].endpoint.as_str(), w[1].path.as_str()), ("192.0.2.7:8443", "/a-way-in-of-its-own"));
+    }
 
     #[test]
     fn hellos_open_with_the_mask() {

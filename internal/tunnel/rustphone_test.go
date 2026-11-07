@@ -420,8 +420,132 @@ func TestRustPhoneHubForwarder(t *testing.T) {
 		<-served
 	}()
 
-	// The root phone: its member certificate and the device record its root
-	// key signed.
+	h := startRustRootHub(t, startRustPhone(t, bin))
+	pin, _ := base64.StdEncoding.DecodeString(forward.Pin(fcert.Leaf))
+
+	// Without its device record the phone is a plain member.
+	h.register(f.Addr().String(), pin, nil, "")
+	h.waitFor("a hub that is no admin", func(r map[string]any) bool {
+		e, _ := r["error"].(string)
+		return strings.Contains(e, "neither")
+	})
+
+	h.register(f.Addr().String(), pin, []group.Record{h.own}, "")
+	h.waitFor("the forwarder never saw the hub", func(r map[string]any) bool {
+		seen, _ := r["seen"].(string)
+		ap, err := netip.ParseAddrPort(seen)
+		return err == nil && ap.Port() == h.udpPort
+	})
+	h.echoThrough(f.Addr(), "through the forwarder")
+	h.p.call(t, map[string]any{"op": "hub_stop", "id": h.id})
+}
+
+// TestRustPhoneHubOverXHTTP runs the phone's hub in Rust against a Go
+// forwarder with VLESS over XHTTP behind a web server: the hub learns the
+// way over VLESS from its registration; when the forwarder's TCP port no
+// longer answers, it registers inside VLESS through that way, its own
+// packets go there too, and a client over VLESS gets through to it.
+func TestRustPhoneHubOverXHTTP(t *testing.T) {
+	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
+	}
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	vl := freeAddr(t)
+	web, ca := vlesstest.WebServerCA(t, path, func() string { return vl.String() })
+	vless.TrustForTests(ca)
+	fcert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: fcert, Logf: t.Logf,
+		VLESS: &forward.VLESSConfig{Listen: vl.String(), XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+	caFile := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(caFile, ca, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := startRustRootHub(t, startRustPhone(t, bin, "SSL_CERT_FILE="+caFile))
+	pin, _ := base64.StdEncoding.DecodeString(forward.Pin(fcert.Leaf))
+	id, _ := tunnel.NewVLESSID()
+
+	h.register(f.Addr().String(), pin, []group.Record{h.own}, id)
+	var learned map[string]any
+	h.waitFor("the hub never learned its way over VLESS", func(r map[string]any) bool {
+		learned, _ = r["vless"].(map[string]any)
+		seen, _ := r["seen"].(string)
+		return learned != nil && seen != ""
+	})
+
+	// The forwarder's TCP port no longer answers.
+	h.register(freeAddr(t).String(), pin, []group.Record{h.own}, id)
+	h.waitFor("the forwarder never saw the hub over VLESS", func(r map[string]any) bool {
+		seen, _ := r["seen"].(string)
+		ap, err := netip.ParseAddrPort(seen)
+		// Over VLESS the forwarder sees the hub at the port its side of
+		// VLESS sends the hub's packets from.
+		return err == nil && ap.Port() != h.udpPort
+	})
+	b, _ := json.Marshal(learned)
+	var link tunnel.VLESS
+	if err := json.Unmarshal(b, &link); err != nil {
+		t.Fatal(err)
+	}
+	vc, err := vless.Dial(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer vc.Close()
+	h.echoThrough(vc.Addr(), "over VLESS")
+	h.p.call(t, map[string]any{"op": "hub_stop", "id": h.id})
+}
+
+// freeAddr returns a TCP address on the loopback that nothing listens on.
+func freeAddr(t *testing.T) netip.AddrPort {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).AddrPort()
+}
+
+// rustRootHub is the root phone's hub in Rust, its member listener an echo
+// server, with one Go client.
+type rustRootHub struct {
+	t                 *testing.T
+	p                 *rustPhone
+	id                any
+	udpPort           uint16
+	dev               group.DeviceID
+	leaf              *x509.Certificate
+	root              *group.CA
+	pkcs8, public     []byte
+	own               group.Record
+	hubKey, clientKey tunnel.Key
+	psk               tunnel.Key
+}
+
+// startRustRootHub makes the root phone (its member certificate and the
+// device record its root key signed) and starts its hub in p.
+func startRustRootHub(t *testing.T, p *rustPhone) *rustRootHub {
+	t.Helper()
 	now := time.Now()
 	root, err := group.NewRootCA(now)
 	if err != nil {
@@ -431,77 +555,70 @@ func TestRustPhoneHubForwarder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dev := group.NewDeviceID()
-	leaf, err := root.IssueMember(dev, &memberKey.PublicKey, now)
-	if err != nil {
+	h := &rustRootHub{t: t, p: p, dev: group.NewDeviceID(), root: root}
+	if h.leaf, err = root.IssueMember(h.dev, &memberKey.PublicKey, now); err != nil {
 		t.Fatal(err)
 	}
-	pkcs8, err := x509.MarshalPKCS8PrivateKey(memberKey)
-	if err != nil {
+	if h.pkcs8, err = x509.MarshalPKCS8PrivateKey(memberKey); err != nil {
 		t.Fatal(err)
 	}
-	public, err := memberKey.PublicKey.Bytes()
-	if err != nil {
+	if h.public, err = memberKey.PublicKey.Bytes(); err != nil {
 		t.Fatal(err)
 	}
-	kh := group.KeyHashOf(leaf)
-	own := grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: group.Tag(root.Cert), TimeMS: now.UnixMilli(),
-		Device: string(dev), Name: "phone", Role: group.RolePhone, Key: &kh, HoldsRoot: true}, root.Key)
+	kh := group.KeyHashOf(h.leaf)
+	h.own = grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: group.Tag(root.Cert), TimeMS: now.UnixMilli(),
+		Device: string(h.dev), Name: "phone", Role: group.RolePhone, Key: &kh, HoldsRoot: true}, root.Key)
+	h.hubKey, _ = tunnel.NewPrivateKey()
+	h.clientKey, _ = tunnel.NewPrivateKey()
+	h.psk, _ = tunnel.NewPresharedKey()
+	pub := h.clientKey.Public()
+	started := p.call(t, map[string]any{"op": "hub_start", "key": h.hubKey[:], "device": string(h.dev),
+		"clients":     []map[string]any{{"device": rustPhoneID, "key": pub[:], "psk": h.psk[:]}},
+		"member_port": echoServer(t), "listen": "127.0.0.1:0"})
+	h.id, h.udpPort = started["id"], uint16(started["udp_port"].(float64))
+	return h
+}
 
-	member := echoServer(t)
-	hubKey, _ := tunnel.NewPrivateKey()
-	hubAddr, _ := tunnel.Addr(string(dev))
-	clientKey, _ := tunnel.NewPrivateKey()
-	psk, _ := tunnel.NewPresharedKey()
-	clientAddr, _ := tunnel.Addr(rustPhoneID)
-	pub := clientKey.Public()
-	p := startRustPhone(t, bin)
-	started := p.call(t, map[string]any{"op": "hub_start", "key": hubKey[:], "device": string(dev),
-		"clients":     []map[string]any{{"device": rustPhoneID, "key": pub[:], "psk": psk[:]}},
-		"member_port": member, "listen": "127.0.0.1:0"})
-	id := started["id"]
-	pin, _ := base64.StdEncoding.DecodeString(forward.Pin(fcert.Leaf))
-	register := func(records []group.Record) {
-		p.call(t, map[string]any{"op": "hub_register", "id": id, "endpoint": f.Addr().String(), "pins": [][]byte{pin},
-			"chain": [][]byte{leaf.Raw, root.Cert.Raw}, "public": public, "records": records, "test_key": pkcs8})
+// register registers the hub with the forwarder at endpoint, with the
+// group's VLESS user ID or "".
+func (h *rustRootHub) register(endpoint string, pin []byte, records []group.Record, vlessID string) {
+	req := map[string]any{"op": "hub_register", "id": h.id, "endpoint": endpoint, "pins": [][]byte{pin},
+		"chain": [][]byte{h.leaf.Raw, h.root.Cert.Raw}, "public": h.public, "records": records, "test_key": h.pkcs8}
+	if vlessID != "" {
+		req["vless_id"] = vlessID
 	}
-	// waitFor waits for the registration's report to satisfy ok.
-	waitFor := func(what string, ok func(map[string]any) bool) {
-		t.Helper()
-		var st map[string]any
-		for range 100 {
-			st = p.call(t, map[string]any{"op": "hub_status", "id": id})
-			if r, _ := st["forwarder"].(map[string]any); r != nil && ok(r) {
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
+	h.p.call(h.t, req)
+}
+
+// waitFor waits for the registration's report to satisfy ok.
+func (h *rustRootHub) waitFor(what string, ok func(map[string]any) bool) {
+	h.t.Helper()
+	var st map[string]any
+	for range 300 {
+		st = h.p.call(h.t, map[string]any{"op": "hub_status", "id": h.id})
+		if r, _ := st["forwarder"].(map[string]any); r != nil && ok(r) {
+			return
 		}
-		t.Fatalf("%s: %v", what, st)
+		time.Sleep(100 * time.Millisecond)
 	}
+	h.t.Fatalf("%s: %v", what, st)
+}
 
-	// Without its device record the phone is a plain member.
-	register(nil)
-	waitFor("a hub that is no admin", func(r map[string]any) bool {
-		e, _ := r["error"].(string)
-		return strings.Contains(e, "neither")
-	})
-
-	register([]group.Record{own})
-	waitFor("the forwarder never saw the hub", func(r map[string]any) bool {
-		seen, _ := r["seen"].(string)
-		ap, err := netip.ParseAddrPort(seen)
-		return err == nil && ap.Port() == uint16(started["udp_port"].(float64))
-	})
-	cl, err := tunnel.StartClient(tunnel.ClientConfig{PrivateKey: clientKey, PresharedKey: psk, Addr: clientAddr,
-		HubPublicKey: hubKey.Public(), HubAddr: hubAddr, Endpoint: f.Addr()})
+// echoThrough runs the client through endpoint to the hub's member
+// listener and back.
+func (h *rustRootHub) echoThrough(endpoint netip.AddrPort, msg string) {
+	h.t.Helper()
+	hubAddr, _ := tunnel.Addr(string(h.dev))
+	clientAddr, _ := tunnel.Addr(rustPhoneID)
+	cl, err := tunnel.StartClient(tunnel.ClientConfig{PrivateKey: h.clientKey, PresharedKey: h.psk, Addr: clientAddr,
+		HubPublicKey: h.hubKey.Public(), HubAddr: hubAddr, Endpoint: endpoint})
 	if err != nil {
-		t.Fatal(err)
+		h.t.Fatal(err)
 	}
 	defer cl.Close()
-	if err := echoThrough(cl, "through the forwarder"); err != nil {
-		t.Fatalf("through the forwarder: %v (status %v)", err, p.call(t, map[string]any{"op": "hub_status", "id": id}))
+	if err := echoThrough(cl, msg); err != nil {
+		h.t.Fatalf("%s: %v (status %v)", msg, err, h.p.call(h.t, map[string]any{"op": "hub_status", "id": h.id}))
 	}
-	p.call(t, map[string]any{"op": "hub_stop", "id": id})
 }
 
 // echoServer is the app's member listener in the tests: an echo server on

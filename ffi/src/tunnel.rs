@@ -39,7 +39,15 @@
 //!   whose connections now go to the member port for 2 minutes;
 //!   `guest_close` with `id` and `guest` drops the guest;
 //! - `hub_set_records` with `id` and `records`: the group's authority
-//!   records the next registration with the forwarder carries.
+//!   records the next registration with the forwarder carries;
+//! - `hub_set_project_ways` with `id` and `ways`: the hub's forwarder is
+//!   the project's, and `ways` (`[{"transport", "server_name", "port",
+//!   "path"}]`, at most 8) are the ways in over VLESS that the newest
+//!   signed entry points name for it (docs/protocol.md, section 16): when
+//!   the forwarder's TCP port does not answer, a hub with a VLESS user ID
+//!   registers inside VLESS through the settings the forwarder's last
+//!   answer gave, then these, else the way built in (section 13). It takes
+//!   effect at the next registration.
 //!
 //! `cbb_tunnel_register` registers a hub with the group's forwarder
 //! (docs/protocol.md, section 13), signing its TLS with the app's member
@@ -168,6 +176,11 @@ enum Request {
     HubSetRecords {
         id: u64,
         records: Vec<Value>,
+    },
+    HubSetProjectWays {
+        id: u64,
+        #[serde(default)]
+        ways: Vec<forward::EntryWay>,
     },
     HubStop {
         id: u64,
@@ -394,6 +407,11 @@ struct RunningHub {
     clients: Vec<Peer>,
     guests: Arc<Mutex<HashMap<u64, Guest>>>,
     log: Arc<Mutex<VecDeque<String>>>,
+    /// The project's ways in over VLESS (`hub_set_project_ways`).
+    ways: Arc<Mutex<forward::Ways>>,
+    /// The VLESS settings of the forwarder's last answer, kept across the
+    /// hub's registrations.
+    learned: Arc<Mutex<Option<Value>>>,
 }
 
 /// The guest tunnel of a remote invitation (docs/protocol.md, section 12):
@@ -568,6 +586,15 @@ fn handle(request: &[u8]) -> Result<Value> {
             *f.records.lock().map_err(|_| Error::msg("the hub's records are broken"))? = records;
             Ok(json!({}))
         }),
+        Request::HubSetProjectWays { id, ways } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            if ways.len() > forward::MAX_WAYS {
+                return Err(Error::msg("too many ways in"));
+            }
+            *r.ways.lock().map_err(|_| Error::msg("the hub's ways in are broken"))? =
+                forward::Ways { project: true, entries: ways };
+            Ok(json!({}))
+        }),
         Request::HubStop { id } => {
             let gone = hubs(|t| Ok(t.remove(&id)))?;
             drop(gone);
@@ -658,6 +685,8 @@ fn hub_start(
                 clients,
                 guests,
                 log,
+                ways: Arc::new(Mutex::new(forward::Ways::default())),
+                learned: Arc::new(Mutex::new(None)),
             },
         );
         Ok(())
@@ -703,6 +732,8 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
             vless_id: req.vless_id,
             records: records.clone(),
             send: r.hub.sender(),
+            ways: r.ways.clone(),
+            learned: r.learned.clone(),
         };
         let registration = Registration::start(cfg, report.clone(), logger(r.log.clone()));
         Ok(r.forwarding.replace(Forwarding { _registration: registration, report, records }))

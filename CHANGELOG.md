@@ -73,11 +73,15 @@ All notable changes to cbb are documented in this file. The format follows
   as the group's hub (`hub_start`, `TestRustPhoneHub` with Go clients), its remote invitations
   with a guest tunnel to the pairing window (`hub_invite`, `TestRustPhoneHubInvite`), and its
   registration with the forwarder, signed by the app's member key (`cbb_tunnel_register`,
-  `TestRustPhoneHubForwarder` against the Go forwarder), and its link to the blind relay
+  `TestRustPhoneHubForwarder` against the Go forwarder), inside VLESS with XHTTP when the
+  forwarder's TCP port does not answer, through the way its last answer gave, then the
+  project's ways in (`hub_set_project_ways`, `TestRustPhoneHubOverXHTTP`), and its link to the blind relay
   (`cbb_tunnel_relay`, `TestRustPhoneRelay` against the Go relay and Go members), with the
   group's server credentials in place of the member certificate once the period lists the
-  phone (`cbb_tunnel_relay_credentials`, `TestRustPhoneRelayCredentials`). The apps move to it
-  once their node runs in Rust.
+  phone (`cbb_tunnel_relay_credentials`, `TestRustPhoneRelayCredentials`). The Swift and
+  Kotlin kits wrap it with cbbtun's calls (`RustTunnels`, `RustHubTunnels` and
+  `RustRelayLinks` in Swift, `RustTunnel` in Kotlin), `set_endpoint`, `new_obfuscation` and
+  `new_vless_id` among them, so that the apps move to it by swapping one implementation.
 - CI's job "go test with the Rust core" runs the whole Go suite as the release builds are
   made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
 - The phones' member in the Rust core, for the iPhone and Android apps to move onto from
