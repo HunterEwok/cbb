@@ -20,6 +20,7 @@ pub const GROUP_FILES: &[&str] = &[
     identity::FILE_NAME,
     sealkey::FILE_NAME,
     "tunnel.json",
+    crate::networks::FILE,
     remotepaste::LOG_FILE,
     actions::LOG_FILE,
     crate::mute::FILE_NAME,

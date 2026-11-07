@@ -51,8 +51,10 @@ All notable changes to cbb are documented in this file. The format follows
   table of main hubs (`cbb global hubs`) and turns sync away from home off on another device
   (`cbb global off -on`), and makes a computer a hub that only passes copies on
   (`hub -on DEVICE -forward-only`), which a Rust member can be too (`TestLiteForwardOnly`).
-  The hub's key
-  periods, the relay and invitations come next.
+  It keeps the known networks as Go does (`networks.json`, `cbb network`, the interfaces it
+  keeps quiet on in `cbb status`), publishing itself and taking connections on the member
+  port only there (`TestLiteNetwork`). The hub's key periods, the relay and invitations come
+  next.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

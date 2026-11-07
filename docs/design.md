@@ -712,8 +712,10 @@ sync away from home, the admins, and remote paste.
   comes up there the network is known. `cbb status` names the interfaces where it keeps
   quiet; `sudo cbb network` takes the current networks as known, for a home with a new
   router where every member keeps quiet. A pairing window takes connections on any network
-  while it is open. The lite member publishes itself everywhere: it runs on boards that stay
-  at home.
+  while it is open. The Rust service keeps the same list in the same file
+  (`member/src/networks.rs`, its network IDs checked against Go's), so a computer moving to
+  it keeps its known networks; the lite member on a board, which stays at home, takes the
+  networks it is on as known at its first start in a group. A phone's member keeps no list.
 - **The interface list.** A router or a gateway is on the internet side and the home side
   at once, and its internet side may even carry a private address (double NAT). So the
   service can be limited to some interfaces by name (`CBB_INTERFACES`, which the router's

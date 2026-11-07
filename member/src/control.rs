@@ -178,6 +178,10 @@ fn is_zero_us(n: &usize) -> bool {
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Status {
     pub device: String,
+    /// The interfaces on networks this device has not met its group on,
+    /// where it does not publish itself (cbb network makes them known).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub quiet: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub group: String,
     pub role: String,

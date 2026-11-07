@@ -182,6 +182,9 @@ pub struct Node {
     tunnel_key: Arc<RwLock<TunnelKeys>>,
     on_tunnel: RwLock<Option<OnTunnel>>,
     on_hello: RwLock<Option<OnHello>>,
+    /// The networks where this device met its group, on a computer's
+    /// service: the member port takes connections only on those.
+    networks: RwLock<Option<Arc<crate::networks::Networks>>>,
     on_command: RwLock<Option<OnCommand>>,
     /// The quick actions that are on here, which the hellos name.
     actions: RwLock<Vec<String>>,
@@ -373,6 +376,7 @@ impl Node {
             tunnel_key: Arc::new(RwLock::new(None)),
             on_tunnel: RwLock::new(None),
             on_hello: RwLock::new(None),
+            networks: RwLock::new(None),
             on_command: RwLock::new(None),
             actions: RwLock::new(Vec::new()),
             home: Mutex::new(HashMap::new()),
@@ -495,6 +499,27 @@ impl Node {
     /// Sets what is called with each member's hello.
     pub fn on_hello(&self, f: OnHello) {
         *self.on_hello.write().unwrap() = Some(f);
+    }
+
+    /// Keeps the known networks: the member port then takes connections
+    /// only on them, or while a pairing window is open, and each member
+    /// connection that comes up makes its network known.
+    pub fn set_networks(&self, n: Arc<crate::networks::Networks>) {
+        *self.networks.write().unwrap() = Some(n);
+    }
+
+    /// The known networks, on a computer's service.
+    pub fn networks(&self) -> Option<Arc<crate::networks::Networks>> {
+        self.networks.read().unwrap().clone()
+    }
+
+    /// Whether the member port takes a connection that came to the local
+    /// address a, as Go's takesOn: from loopback, while a pairing window is
+    /// open, on a known network, or always without known networks (a
+    /// phone's app).
+    pub fn takes_on(&self, local: SocketAddr, from: SocketAddr) -> bool {
+        let Some(n) = self.networks.read().unwrap().clone() else { return true };
+        from.ip().is_loopback() || from.ip().to_canonical().is_loopback() || self.window_open() || n.knows(local.ip())
     }
 
     /// Sets what is called with the tunnel offers of full members.
@@ -1302,6 +1327,13 @@ impl Node {
         sock.set_read_timeout(Some(TIMEOUT)).context("the connection broke")?;
         let why = self.records.lock().unwrap().refused(&chain);
         let records_only = matches!(why, Some(Refusal::NotListed | Refusal::Stopped));
+        if !records_only
+            && !addr.ip().to_canonical().is_loopback()
+            && let (Some(n), Ok(local)) = (self.networks.read().unwrap().clone(), sock.local_addr())
+            && n.learn(local.ip())
+        {
+            self.logf(&format!("cbb: {id} connected on a network new to this device; it is known now"));
+        }
         let (tx, rx) = mpsc::sync_channel(QUEUE_LEN);
         let c = Arc::new(Conn {
             id: id.clone(),

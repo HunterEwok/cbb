@@ -38,6 +38,7 @@ mod interfaces;
 mod keys;
 mod leave;
 mod mute;
+pub mod networks;
 mod next;
 mod nextlink;
 pub mod node;

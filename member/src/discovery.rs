@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::certs::DeviceId;
 use crate::interfaces;
@@ -28,6 +28,9 @@ const MAX_HANDSHAKES: usize = 16;
 /// The members found by browsing that are dialed at once, as Go's mDNS
 /// cache reports at most.
 const MAX_FOUND: usize = 64;
+/// How often the networks where this device publishes itself are checked
+/// again: an interface may have come up or moved to another network.
+const RECHECK: Duration = Duration::from_secs(5);
 
 /// The addresses of a found member; None once it is gone.
 type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
@@ -131,6 +134,15 @@ pub fn listen_until(
             if !home_address(addr.ip()) || !interfaces::arrived(&sock) || busy.load(Ordering::SeqCst) >= MAX_HANDSHAKES
             {
                 continue; // dropping the socket closes it
+            }
+            if let Ok(local) = sock.local_addr()
+                && !node.takes_on(local, addr)
+            {
+                log(&format!(
+                    "cbb: a connection from {} to {local}, on a network this device has not met its group on; closed",
+                    addr.ip()
+                ));
+                continue;
             }
             busy.fetch_add(1, Ordering::SeqCst);
             let (node, busy, log, admit) = (node.clone(), busy.clone(), log.clone(), admit.clone());
@@ -295,8 +307,28 @@ fn browse(
     let full = node.role() == "full";
     // The protocol version, the group tag, the role, and p=1 while a
     // pairing window is open, which a joiner looks for.
-    let publish = |window: bool| -> Result<(), mdns_sd::Error> {
+    // With known networks (a computer's service), only the addresses of
+    // the interfaces on them are published, or every address while a
+    // pairing window is open, as Go's responder with Publish; None for all.
+    let where_ = || -> Option<Vec<IpAddr>> {
+        let n = node.networks()?;
+        if node.window_open() {
+            return None;
+        }
+        let mut out: Vec<IpAddr> =
+            n.published().into_iter().flat_map(|f| f.prefixes.into_iter().map(|(a, _)| a)).collect();
+        out.sort();
+        Some(out)
+    };
+    let mut registered: Option<String> = None;
+    let mut publish = |window: bool, at: &Option<Vec<IpAddr>>| -> Result<(), mdns_sd::Error> {
         let Some(port) = port else { return Ok(()) };
+        if let Some(name) = registered.take() {
+            let _ = daemon.unregister(&name);
+        }
+        if at.as_ref().is_some_and(Vec::is_empty) {
+            return Ok(()); // on no known network: browse only
+        }
         let mut txt = vec![("v", "1"), ("g", tag)];
         if !full {
             txt.push(("r", "lite"));
@@ -304,13 +336,18 @@ fn browse(
         if window {
             txt.push(("p", "1"));
         }
-        let info =
-            mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &format!("{}.", me.host_name()), "", port, &txt[..])?
-                .enable_addr_auto();
+        let host = format!("{}.", me.host_name());
+        let info = match at {
+            Some(addrs) => mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &host, &addrs[..], port, &txt[..])?,
+            None => mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &host, "", port, &txt[..])?.enable_addr_auto(),
+        };
+        registered = Some(info.get_fullname().to_string());
         daemon.register(info)
     };
     let mut window = node.window_open();
-    publish(window)?;
+    let mut at = where_();
+    publish(window, &at)?;
+    let mut checked = Instant::now();
     let events = daemon.browse(SERVICE)?;
     let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
     loop {
@@ -318,10 +355,14 @@ fn browse(
         if node.is_closed() {
             break;
         }
-        if node.window_open() != window {
-            window = !window;
-            if let Err(e) = publish(window) {
-                log(&format!("cbb: announcing the pairing window failed: {e}"));
+        if node.window_open() != window || checked.elapsed() >= RECHECK {
+            checked = Instant::now();
+            let now = where_();
+            if node.window_open() != window || now != at {
+                (window, at) = (node.window_open(), now);
+                if let Err(e) = publish(window, &at) {
+                    log(&format!("cbb: announcing this device failed: {e}"));
+                }
             }
         }
         let Ok(ev) = ev else {

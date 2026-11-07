@@ -377,6 +377,9 @@ pub fn run(cfg: Config) -> Result<()> {
             }
         }));
     }
+    // The member port takes connections, and mDNS publishes this device,
+    // only on the networks where it met its group (networks.rs).
+    node.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
     {
         // On a hub, a member's hello brings its tunnel key, which the hub
         // admits, and gets the hub's offers back.
@@ -1635,6 +1638,7 @@ impl Service {
                         .state()
                         .incoming_ms
                         .unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
+                    quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
             }
@@ -1677,6 +1681,21 @@ impl Service {
                 Ok(control::reply(Header { devices: out, ..Default::default() }, Vec::new()))
             }
             "away" => self.global(h),
+            // The networks this device is on now are known: the user says
+            // the group is here (cbb network).
+            "network" => {
+                let node = self.node()?;
+                if let Some(n) = node.networks()
+                    && n.learn_all()
+                {
+                    (self.log)("cbb: the networks this device is on now are known; it publishes itself on them");
+                }
+                let status =
+                    Message { header: Header { op: "status".into(), ..Default::default() }, payload: Vec::new() };
+                let mut res = self.request(&status)?;
+                res.header.done = true;
+                Ok(res)
+            }
             "hubs" => {
                 self.admin(|a| a.set_hubs(&h.hubs))?;
                 Ok(control::reply(Header::default(), Vec::new()))
@@ -1818,6 +1837,10 @@ impl Service {
             Ok(Pairing::Window(w))
         })?;
         let w = win.ok_or_else(|| Error::msg("no window"))?;
+        // The user opens a window where the group is.
+        if let Some(n) = self.node()?.networks() {
+            n.learn_all();
+        }
         let port = *self.port.lock().unwrap();
         let address = port.and_then(|p| crate::pair::qr_addresses(p).into_iter().next()).unwrap_or_default();
         let opened = Header {

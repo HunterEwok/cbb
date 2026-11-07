@@ -31,6 +31,21 @@ import (
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
+// adminOn makes the device name an admin on the root, once it is connected
+// there to get its admin CA.
+func adminOn(t *testing.T, cli string, root *testService, name string) {
+	t.Helper()
+	var out string
+	var err error
+	waitFor(t, name+" connected to "+root.name+" for cbb admin", func() bool {
+		out, err = runCLI(cli, root.socket, "", "admin", "-allow-file-key", name)
+		return err == nil || !strings.Contains(out, "is not connected")
+	})
+	if err != nil {
+		t.Fatalf("cbb admin %s on %s: %v\n%s", name, root.name, err, out)
+	}
+}
+
 // goCLI builds the Go command line for the tests that run it against the
 // Rust service.
 func goCLI(t *testing.T) string {
@@ -381,9 +396,7 @@ func TestLiteTakeover(t *testing.T) {
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "full"
 	})
 
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "laptop"); err != nil {
 		t.Fatalf("cbb admin laptop on the desk: %v\n%s", err, out)
@@ -587,9 +600,7 @@ func TestLiteHub(t *testing.T) {
 	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: hubAt, Consent: true}, ""); err == nil || !strings.Contains(err.Error(), "admin") {
 		t.Errorf("a hub that is no admin: %v", err)
 	}
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	// It is an admin once its admin CA came.
 	var m *control.Message
 	waitFor(t, "the Rust member a hub", func() bool {
@@ -680,9 +691,7 @@ func TestLiteHubs(t *testing.T) {
 	deskAddr := desk.addr()
 	env := []string{"CBB_STANDBY_GRACE=2"}
 	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-full", "-no-listen", "-peer", deskAddr, "-peer", laptop.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	deskPort, rustPort := freeUDP(t), freeUDP(t)
 	for _, s := range []*testService{desk, laptop} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
@@ -798,9 +807,7 @@ func TestLiteHubCommands(t *testing.T) {
 	}
 	c.Close()
 	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	for _, s := range []*testService{desk, laptop} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)
@@ -936,9 +943,7 @@ func TestLiteHubForwarder(t *testing.T) {
 	}
 	c.Close()
 	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
 	waitFor(t, "the Rust member a hub", func() bool {
 		_, err := rust.do(t, req, "")
@@ -1036,9 +1041,7 @@ func TestLiteForwardOnly(t *testing.T) {
 	rustAt := free.Addr().String()
 	free.Close()
 	rust := startLite(t, bin, rustDir, "-no-mdns", "-full", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
 	boardDir := join(rust, rustAt, "board")
 	board := startLite(t, bin, boardDir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
@@ -1135,9 +1138,7 @@ func TestLiteHubVLESS(t *testing.T) {
 	rustAt := free.Addr().String()
 	free.Close()
 	rust := startLite(t, bin, rustDir, "-no-mdns", "-full", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(),
 		ForwarderKey: forward.Pin(cert.Leaf), VLESS: true, Consent: true}
 	waitFor(t, "the Rust member a hub", func() bool {
@@ -1224,4 +1225,31 @@ func TestLiteHubVLESS(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "to the Rust hub, over VLESS" })
+}
+
+// TestLiteNetwork runs cbb network against the Rust service, which keeps
+// the known networks as Go's networks.go does (member/src/networks.rs has
+// the rules' tests, with Go's network IDs): the member port and mDNS then
+// work on the networks this device is on now.
+func TestLiteNetwork(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	root := startLite(t, bin, t.TempDir(), "-no-mdns", "-no-listen")
+	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
+		t.Fatalf("cbb new: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust root in its group", func() bool {
+		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && st.Status.Group != ""
+	})
+	out, err := runCLI(cli, root.socket, "", "network")
+	if err != nil || !strings.Contains(out, "publishes itself and takes connections here") {
+		t.Fatalf("cbb network: %v\n%s", err, out)
+	}
 }
