@@ -49,6 +49,21 @@ pub enum Order {
     Hub(serde_json::Value),
     /// Turn sync away from home off; only its own user turns it on again.
     AwayOff,
+    /// Put the text where its focus is: by the clipboard (`paste`) or by
+    /// typing it (`type`), as `text` or `secret`, with Enter after it if
+    /// asked.
+    Paste {
+        mode: String,
+        kind: String,
+        text: String,
+        enter: bool,
+    },
+    /// Turn remote paste off; only its own user turns it on again.
+    PasteOff,
+    /// Run its quick action of this name.
+    Action(String),
+    /// Turn every quick action off.
+    ActionsOff,
 }
 
 /// The signer: the CA whose key signs (an admin CA, or the group's root),
@@ -216,6 +231,24 @@ pub fn order(rs: &Records, s: &Signer, device: &str, o: &Order, now_ms: i64) -> 
             put("type", "hub".into());
             put("hub", h.clone());
         }
+        Order::Paste { mode, kind, text, enter } => {
+            put("type", "paste".into());
+            put("mode", mode.as_str().into());
+            put("kind", kind.as_str().into());
+            put("text", text.as_str().into());
+            if *enter {
+                put("enter", true.into());
+            }
+        }
+        Order::PasteOff => put("type", "paste-off".into()),
+        Order::Action(name) => {
+            if !command::valid_action_name(name) {
+                return Err(Error::msg(format!("{name:?} is not an action's name")));
+            }
+            put("type", "action".into());
+            put("action", name.as_str().into());
+        }
+        Order::ActionsOff => put("type", "actions-off".into()),
     }
     let mut body = Vec::new();
     crate::strict::write_canonical(&mut body, &serde_json::Value::Object(m));

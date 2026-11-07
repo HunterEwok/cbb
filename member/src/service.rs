@@ -1388,11 +1388,7 @@ impl Service {
             },
             _ => false,
         };
-        if ok {
-            Ok(())
-        } else {
-            Err(Error::msg("no remote paste asked for these keys now"))
-        }
+        if ok { Ok(()) } else { Err(Error::msg("no remote paste asked for these keys now")) }
     }
 
     /// Remote paste here, for the status: the switches and the targets that
@@ -1420,17 +1416,24 @@ impl Service {
             "on" | "off" => {}
             n => return Err(Error::msg(format!("remote paste is on or off, not {n:?}"))),
         }
-        if !h.device.is_empty() {
-            return Err(Error::msg(if h.name == "on" {
-                "only a device's own user turns remote paste on there"
-            } else {
-                "only an admin turns remote paste off on another device; the lite member is never one: use the phone app or a full member"
-            }));
+        if h.name == "on" && (!h.device.is_empty() || h.all) {
+            return Err(Error::msg("only a device's own user turns remote paste on there"));
         }
         if h.name == "off" && (h.enter || h.console || h.no_lock_check) {
             return Err(Error::msg("-enter, -console and -no-lock-check go with on"));
         }
         self.node()?;
+        if !h.device.is_empty() || h.all {
+            let off_here = || {
+                remotepaste::save(&self.state_dir, remotepaste::Settings::default())
+                    .map_err(|e| e.context("saving the remote paste settings"))?;
+                (self.log)("cbb: remote paste is off here");
+                Ok(())
+            };
+            self.admin(|a| a.off_on(&h.device, h.all, true, &off_here))?;
+            let status = Status { paste: self.paste_status(), ..Default::default() };
+            return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
+        }
         let set = remotepaste::Settings {
             on: h.name == "on",
             enter: h.enter,
@@ -1444,6 +1447,21 @@ impl Service {
         ));
         let status = Status { paste: self.paste_status(), ..Default::default() };
         Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
+    }
+
+    /// cbb paste -on: signs a paste command for the member h.device and
+    /// waits for its result, as Go's sendPaste.
+    fn paste_on(&self, h: &Header, payload: &[u8]) -> Result<Message> {
+        let mode = if h.method.is_empty() { "paste" } else { h.method.as_str() };
+        let kind = if h.kind.is_empty() { "text" } else { h.kind.as_str() };
+        let text = remotepaste::clean(&String::from_utf8_lossy(payload));
+        if text.is_empty() {
+            return Err(Error::msg("nothing to paste: the text is empty or only control characters"));
+        }
+        let wait = if mode == "type" { INJECT_WAIT + TYPE_WAIT * text.len() as u32 } else { INJECT_WAIT };
+        let o = cbb_core::manage::Order::Paste { mode: mode.into(), kind: kind.into(), text, enter: h.enter };
+        self.admin(|a| a.paste_on(&h.device, o, wait))?;
+        Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
     }
 
     /// Passes a write the engine decided on to every watcher that holds a
@@ -1843,19 +1861,26 @@ impl Service {
             }
             "paste-receive" => self.set_receive(h),
             "action-set" => self.set_action(h),
-            "actions-off" if h.device.is_empty() && !h.all => {
+            "actions-off" => {
                 let node = self.node()?;
-                self.all_actions_off(&node)?;
-                (self.log)("cbb: the quick actions are off here");
+                let off_here = || {
+                    self.all_actions_off(&node)?;
+                    (self.log)("cbb: the quick actions are off here");
+                    Ok(())
+                };
+                if h.device.is_empty() && !h.all {
+                    off_here()?;
+                } else {
+                    self.admin(|a| a.off_on(&h.device, h.all, false, &off_here))?;
+                }
                 Ok(self.action_reply(&actions::load(&self.state_dir)?))
             }
-            "actions-off" | "action-on" => Err(Error::msg(
-                "only an admin runs or turns off quick actions on another device; the lite member is never one: use the phone app or a full member",
-            )),
+            "action-on" => {
+                self.admin(|a| a.action_on(&h.device, &h.name))?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
             "action-remove" => Err(Error::msg("the lite member has only presets, which cbb action disable turns off")),
-            "paste-on" => Err(Error::msg(
-                "only an admin pastes on another device; the lite member is never one: use the phone app or a full member",
-            )),
+            "paste-on" => self.paste_on(h, &m.payload),
             "mute" | "unmute" => {
                 self.mute_op(h)?;
                 Ok(control::reply(Header::default(), Vec::new()))
