@@ -454,8 +454,8 @@ impl Sealed {
 
     /// Checks the copy's origin against the group's records at t, Unix
     /// seconds: its certificate, through its issuer, verifies to a root on
-    /// the path, the records take it, its key is one of the origin's, and
-    /// it signed the copy. A member does this before it passes a copy on.
+    /// the path, the records take it, its key is one of the origin's, the
+    /// origin does not only pass copies on, and it signed the copy. A member does this before it passes a copy on.
     pub fn check(&self, records: &Records, t: i64) -> Result<()> {
         self.validate()?;
         let mut chain = alloc::vec![Cert::parse(&self.cert)?];
@@ -472,8 +472,12 @@ impl Sealed {
         }
         let leaf = used.first().ok_or_else(|| Error::msg("the copy's certificate chain is empty"))?;
         let key = leaf.key_hash();
-        if !records.devices().iter().any(|d| d.id == self.origin && d.keys.contains(&key)) {
+        let devices = records.devices();
+        let Some(d) = devices.iter().find(|d| d.id == self.origin && d.keys.contains(&key)) else {
             return Err(Error::msg("the copy's certificate is not one its origin's records name"));
+        };
+        if d.forward_only {
+            return Err(Error::msg("the copy's origin only passes copies on"));
         }
         if !leaf.verifies(&self.to_sign(), &self.sig) {
             return Err(Error::msg("the copy's signature does not verify"));

@@ -365,6 +365,8 @@ func checkBody(data []byte) error {
 		_, err = decodeStatus(data)
 	case TypeEntries:
 		_, err = decodeEntries(data)
+	case TypeZXNext:
+		_, err = decodeZXNext(data)
 	default:
 		err = fmt.Errorf("release: unknown type %q", b.Type)
 	}

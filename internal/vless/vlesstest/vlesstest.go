@@ -69,9 +69,25 @@ func Decoy(t testing.TB) string {
 // vless.TrustForTests.
 func WebServer(t testing.TB, path string, back func() string) (netip.AddrPort, []byte) {
 	t.Helper()
+	return WebServerNaming(t, path, back, netip.Addr{})
+}
+
+// WebServerNaming is WebServer naming client as every client's address in
+// X-Real-IP, as nginx's proxy_set_header X-Real-IP $remote_addr does with
+// the address the client connects from; that address if client is not
+// valid.
+func WebServerNaming(t testing.TB, path string, back func() string, client netip.Addr) (netip.AddrPort, []byte) {
+	t.Helper()
 	proxy := &httputil.ReverseProxy{FlushInterval: -1, Rewrite: func(r *httputil.ProxyRequest) {
 		r.SetURL(&url.URL{Scheme: "http", Host: back()})
 		r.Out.Host = r.In.Host
+		from := client
+		if !from.IsValid() {
+			if ap, err := netip.ParseAddrPort(r.In.RemoteAddr); err == nil {
+				from = ap.Addr()
+			}
+		}
+		r.Out.Header.Set("X-Real-IP", from.String())
 	}}
 	site := http.NewServeMux()
 	site.Handle(path+"/", proxy)
