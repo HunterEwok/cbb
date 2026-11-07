@@ -110,6 +110,8 @@ All notable changes to cbb are documented in this file. The format follows
 - The same switch at the top of the Aurora app's main page, with a long press for a time; the
   app takes an admin's `mute` and `unmute` (ffi's `pause_receiving` and `muted` operations
   and the `mute` event) and says when an admin muted the phone.
+- The Aurora app's chosen language now also sets numbers and dates, Arabic and Hebrew lay its
+  pages out from the right, and two messages missing from its translations are translated.
 - The Aurora app shows the group's devices as tiles or as a list (its pull-down menu switches
   them), each with a live dot, its system and its mark (this phone, root, admin, frozen), and a
   tap opens the device's page. Its new Settings page picks the language for the next start,

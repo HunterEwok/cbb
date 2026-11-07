@@ -133,6 +133,10 @@
         <source>The device did not take the command.</source>
         <translation>Kifaa hakikukubali amri.</translation>
     </message>
+    <message>
+        <source>The phone could not delete its key.</source>
+        <translation>Simu haikuweza kufuta ufunguo wake.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -820,6 +824,10 @@
     <message>
         <source>%1 files in Downloads</source>
         <translation>Faili %1 kwenye Vipakuliwa</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>Siri</translation>
     </message>
 </context>
 <context>
