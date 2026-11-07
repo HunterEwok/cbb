@@ -320,8 +320,35 @@ pub fn self_signed(id: &DeviceId, key: &SigningKey) -> Result<Vec<u8>> {
 /// (SEC1, uncompressed), signed by sign: ECDSA P-256 with SHA-256 over the
 /// bytes it gets, DER. A key kept outside the core signs it this way.
 pub fn self_signed_by(id: &DeviceId, point: &[u8], sign: &mut dyn FnMut(&[u8]) -> Result<Vec<u8>>) -> Result<Vec<u8>> {
+    let basic = seq(&[&oid(&ObjectIdentifier::new_unwrap("2.5.29.19")), &[0x01, 0x01, 0xff], &tagged(0x04, &seq(&[]))]);
+    self_signed_cert(id.as_str(), point, &basic, sign)
+}
+
+/// The common name of a server certificate.
+pub const SERVER_CERT_NAME: &str = "cbb server";
+
+/// The certificate of a server key that a device presents a relay or the
+/// forwarder in place of its member certificate (docs/protocol.md, section
+/// 18), as Go's group.ServerCertificate makes it: self-signed, `cbb
+/// server` as its CN, no SAN, valid from 1970 to 9999, key usage digital
+/// signature and extended key usage client authentication. It names
+/// neither a device nor a group. sign signs as for self_signed_by.
+pub fn server_cert_by(point: &[u8], sign: &mut dyn FnMut(&[u8]) -> Result<Vec<u8>>) -> Result<Vec<u8>> {
+    let client_auth = ObjectIdentifier::new_unwrap("1.3.6.1.5.5.7.3.2");
+    let eku = seq(&[&oid(&ObjectIdentifier::new_unwrap("2.5.29.37")), &tagged(0x04, &seq(&[&oid(&client_auth)]))]);
+    self_signed_cert(SERVER_CERT_NAME, point, &eku, sign)
+}
+
+/// A self-signed P-256 certificate with cn as its subject and issuer, key
+/// usage digital signature and the extension ext.
+fn self_signed_cert(
+    cn: &str,
+    point: &[u8],
+    ext: &[u8],
+    sign: &mut dyn FnMut(&[u8]) -> Result<Vec<u8>>,
+) -> Result<Vec<u8>> {
     let alg = seq(&[&oid(&OID_ECDSA_SHA256)]);
-    let name = seq(&[&set(&[&seq(&[&oid(&OID_COMMON_NAME), &tagged(0x0c, id.as_str().as_bytes())])])]);
+    let name = seq(&[&set(&[&seq(&[&oid(&OID_COMMON_NAME), &tagged(0x0c, cn.as_bytes())])])]);
     let spki = seq(&[&seq(&[&oid(&OID_EC_PUBLIC_KEY), &oid(&OID_P256)]), &bit_string(point)]);
     let mut serial = random_bytes::<16>();
     serial[0] = (serial[0] & 0x7f) | 0x01; // positive, and 16 bytes long
@@ -330,7 +357,6 @@ pub fn self_signed_by(id: &DeviceId, point: &[u8], sign: &mut dyn FnMut(&[u8]) -
         &[0x01, 0x01, 0xff],
         &tagged(0x04, &bit_string_bits(0x80, 7)),
     ]);
-    let basic = seq(&[&oid(&ObjectIdentifier::new_unwrap("2.5.29.19")), &[0x01, 0x01, 0xff], &tagged(0x04, &seq(&[]))]);
     let tbs = seq(&[
         &tagged(0xa0, &tagged(0x02, &[2])), // v3
         &tagged(0x02, &serial),
@@ -339,7 +365,7 @@ pub fn self_signed_by(id: &DeviceId, point: &[u8], sign: &mut dyn FnMut(&[u8]) -
         &seq(&[&tagged(0x17, b"700101000000Z"), &tagged(0x18, b"99991231235959Z")]),
         &name,
         &spki,
-        &tagged(0xa3, &seq(&[&key_usage, &basic])),
+        &tagged(0xa3, &seq(&[&key_usage, ext])),
     ]);
     let sig = sign(&tbs)?;
     Ok(seq(&[&tbs, &alg, &bit_string(&sig)]))
