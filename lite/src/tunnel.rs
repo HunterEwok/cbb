@@ -966,6 +966,8 @@ mod tests {
             psk: st.psk.clone(),
             endpoints: vec![sock.local_addr().unwrap()],
             next: vec![],
+            obfuscation: None,
+            vless: None,
         };
         let link = Link::start(&st, &hub, &me, Arc::new(|_: &str| {})).unwrap();
         let (own, peer) = (addr(me.as_str()).unwrap(), addr(hub_dev).unwrap());
