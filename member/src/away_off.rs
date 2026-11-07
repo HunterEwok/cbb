@@ -9,8 +9,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use cbb_core::certs::Cert;
-use cbb_core::wire::Message;
+use cbb_core::wire::{Message, TunnelOffer};
 
+use crate::admin::Admin;
 use crate::certs::DeviceId;
 use crate::control::{self, Header};
 use crate::error::{Error, Result};
@@ -71,8 +72,33 @@ impl Away {
 
     pub fn prune(&self, _node: &Node) {}
 
+    pub fn is_hub(&self) -> bool {
+        false
+    }
+
+    pub fn take_hub(&self, _node: &Arc<Node>, _by: &str, _order: &serde_json::Value) -> Result<TunnelOffer> {
+        Err(Error::msg("sync away from home is off on this computer; this build has no tunnel"))
+    }
+
+    pub fn make_hub_on(&self, _a: &Admin, _target: &str, _addrs: &[String], _fwd: &str, _fo: bool) -> Result<()> {
+        self.turn_on().map(|_| ())
+    }
+
+    pub fn move_hub(&self, _a: &Admin, _target: &str, _addrs: &[String], _fwd: &str) -> Result<()> {
+        Err(Error::msg("this device is not the group's hub; cbb global hub makes it the hub"))
+    }
+
+    pub fn stop_hub_on(&self, _a: &Admin, _target: &str, _anyway: bool) -> Result<()> {
+        self.turn_on().map(|_| ())
+    }
+
     pub fn hubs_shared(self: &Arc<Self>, _node: &Arc<Node>, _from: &DeviceId, _chain: &[Cert], _v: &serde_json::Value) {
     }
 
     pub fn run(self: Arc<Self>, _node: Arc<Node>) {}
+}
+
+/// Whether a hub order is a stop order: this build is never a hub.
+pub fn is_stop(_order: &serde_json::Value) -> bool {
+    false
 }

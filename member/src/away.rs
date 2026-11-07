@@ -24,7 +24,10 @@ use crate::uptime;
 use crate::wire::TunnelOffer;
 
 mod hubs;
+mod movehub;
 mod serve;
+
+pub use movehub::is_stop;
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
 /// The longest wait between tries of a hub that is a phone, there only
@@ -106,6 +109,11 @@ impl Away {
     pub fn via(mut self, via: Option<SocketAddr>) -> Away {
         self.via = via;
         self
+    }
+
+    /// Whether this device is one of the group's hubs.
+    pub fn is_hub(&self) -> bool {
+        self.st.lock().unwrap().as_ref().is_some_and(|s| s.is_hub)
     }
 
     /// The tunnel key and preshared key the hellos offer; None while sync

@@ -638,11 +638,14 @@ impl Service {
                 away.turn_off()?;
                 node.set_tunnel_key(None);
             }
-            "hub" | "hub-off" | "move" if !h.device.is_empty() => {
-                return Err(Error::msg(
-                    "making another device a hub, or stopping or moving it, is not on the Rust service yet; run it on that device",
-                ));
+            "hub" if !h.device.is_empty() => {
+                self.admin(|a| away.make_hub_on(a, &h.device, &h.addrs, &h.forwarder, h.forward_only))?
             }
+            "hub-off" if !h.device.is_empty() => self.admin(|a| away.stop_hub_on(a, &h.device, h.force))?,
+            "move" if h.device.is_empty() => {
+                return Err(Error::msg("cbb global move names the device to move the hub to"));
+            }
+            "move" => self.admin(|a| away.move_hub(a, &h.device, &h.addrs, &h.forwarder))?,
             "hub" => {
                 crate::admin::may_be_hub(&self.state_dir, &node)?;
                 node.set_tunnel_key(Some(away.make_hub(h)?));
@@ -729,7 +732,13 @@ impl Service {
     fn command(&self, peer: &crate::certs::DeviceId, c: &crate::records::Record) -> wire::CommandResult {
         let refused = |id: &str, why: String| {
             (self.log)(&format!("cbb: refused a command from {peer}: {why}"));
-            wire::CommandResult { id: id.to_string(), by: String::new(), status: "refused".into(), reason: why }
+            wire::CommandResult {
+                id: id.to_string(),
+                by: String::new(),
+                status: "refused".into(),
+                reason: why,
+                tunnel: None,
+            }
         };
         let node = match self.node() {
             Ok(n) => n,
@@ -789,7 +798,7 @@ impl Service {
             seen.insert(body.id.clone(), body.expires_ms);
         }
         match body.kind.as_str() {
-            "hub" => return refused(&body.id, "the lite member is never the group's hub".into()),
+            "hub" => return self.hub_command(&node, body),
             "paste" => return self.pasted(&node, c, body),
             "action" => return self.act(&node, c, body),
             "actions-off" => {
@@ -798,6 +807,7 @@ impl Service {
                     by: String::new(),
                     status: "done".into(),
                     reason: String::new(),
+                    tunnel: None,
                 };
                 match self.all_actions_off(&node) {
                     Ok(()) => (self.log)(&format!("cbb: {} turned the quick actions off here", body.by)),
@@ -815,6 +825,7 @@ impl Service {
                     by: String::new(),
                     status: "done".into(),
                     reason: String::new(),
+                    tunnel: None,
                 };
                 match self.away().and_then(|a| a.turn_off()) {
                     Ok(()) => {
@@ -841,6 +852,7 @@ impl Service {
                     by: String::new(),
                     status: "done".into(),
                     reason: String::new(),
+                    tunnel: None,
                 };
                 let until = if body.for_ms == 0 { 0 } else { uptime::wall_ms() + body.for_ms };
                 if let Err(e) = self.set_muted(&node, body.kind == "mute", until, &body.by) {
@@ -856,6 +868,7 @@ impl Service {
                     by: String::new(),
                     status: "done".into(),
                     reason: String::new(),
+                    tunnel: None,
                 };
                 match remotepaste::save(&self.state_dir, remotepaste::Settings::default()) {
                     Ok(()) => (self.log)(&format!("cbb: {} turned remote paste off here", body.by)),
@@ -879,10 +892,72 @@ impl Service {
                 by: String::new(),
                 status: "failed".into(),
                 reason: e.message().to_string(),
+                tunnel: None,
             };
         }
         (self.log)(&format!("cbb: {} set the sync mode to {}", body.by, body.mode));
-        wire::CommandResult { id: body.id, by: String::new(), status: "done".into(), reason: String::new() }
+        wire::CommandResult {
+            id: body.id,
+            by: String::new(),
+            status: "done".into(),
+            reason: String::new(),
+            tunnel: None,
+        }
+    }
+
+    /// Carries out a hub command that verify_command took, as Go's takeHub
+    /// and hubStopped: this device, which may be a hub by the records,
+    /// becomes one, or with a stop order stops being one once the result
+    /// has gone back.
+    fn hub_command(&self, node: &Arc<Node>, body: crate::records::Command) -> wire::CommandResult {
+        let mut res = wire::CommandResult { id: body.id.clone(), status: "done".into(), ..Default::default() };
+        let order = body.hub.clone().unwrap_or_default();
+        let fail = |mut res: wire::CommandResult, status: &str, why: String| {
+            (self.log)(&format!("cbb: did not do what the hub command from {} asked: {why}", body.by));
+            (res.status, res.reason) = (status.into(), why);
+            res
+        };
+        let away = match self.away() {
+            Ok(a) => a,
+            Err(e) => return fail(res, "refused", e.message().to_string()),
+        };
+        if crate::away::is_stop(&order) {
+            if !away.is_hub() {
+                return fail(res, "refused", "this device is no hub of the group".into());
+            }
+            (self.log)(&format!("cbb: {} asked this hub to stop being one", body.by));
+            let node = node.clone();
+            std::thread::spawn(move || {
+                // Its clients' connections end, after the result went back.
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                if let Err(e) = away.stop_hub(&node, true) {
+                    node.logf(&format!("cbb: stopping being the hub: {}", e.for_log()));
+                }
+            });
+            return res;
+        }
+        // A computer the admin just made a hub that only passes copies on
+        // gets the record that makes it one just before the command.
+        let me = node.identity().id.to_string();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !node.records().lock().unwrap().may_host(&me) {
+            if std::time::Instant::now() > until {
+                return fail(
+                    res,
+                    "refused",
+                    "this computer is no admin, and its record does not make it a hub that only passes copies on; only the group's root, an admin, or such a computer can be a hub".into(),
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        match away.take_hub(node, &body.by, &order) {
+            Ok(o) => res.tunnel = Some(Box::new(o)),
+            Err(e) => {
+                let status = if e.message().starts_with("saving") { "failed" } else { "refused" };
+                res = fail(res, status, e.message().to_string());
+            }
+        }
+        res
     }
 
     /// Carries out an action command that verify_command took, as a full
@@ -896,6 +971,7 @@ impl Service {
             by: String::new(),
             status: "refused".into(),
             reason: String::new(),
+            tunnel: None,
         };
         match actions::load(&self.state_dir) {
             Err(e) => {
@@ -954,6 +1030,7 @@ impl Service {
             by: String::new(),
             status: "done".into(),
             reason: String::new(),
+            tunnel: None,
         };
         if body.action == actions::RESTART {
             std::thread::spawn(|| {
@@ -1033,6 +1110,7 @@ impl Service {
             by: String::new(),
             status: "refused".into(),
             reason: String::new(),
+            tunnel: None,
         };
         match remotepaste::load(&self.state_dir) {
             Err(e) => {
@@ -1098,6 +1176,7 @@ impl Service {
             by: String::new(),
             status: "refused".into(),
             reason: String::new(),
+            tunnel: None,
         };
         if text.is_empty() {
             res.reason = "the text has nothing that may be pasted: only control characters".into();

@@ -42,8 +42,10 @@ All notable changes to cbb are documented in this file. The format follows
   hub off` moves its clients to the next hub and retires it (`TestLiteHub`). With other
   hubs it shares its clients and offer, takes theirs, waits as the client of a hub above it
   that serves, serves when that hub is gone and gives way when it is back
-  (`TestLiteHubs`, beside a Go hub). Moving a hub, the forwarder, VLESS, the relay and
-  invitations come next.
+  (`TestLiteHubs`, beside a Go hub). It moves the hub to another computer, makes one a hub
+  and stops one with signed hub commands (`cbb global move`, `hub -on`, `hub off -on`), and
+  carries out the same commands from a Go admin or a phone (`TestLiteHubCommands`). The
+  forwarder, VLESS, the relay and invitations come next.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

@@ -762,3 +762,105 @@ func TestLiteHubs(t *testing.T) {
 	}
 	waitFor(t, "the desk has it", func() bool { return desk.paste(t) == "the desk is back" })
 }
+
+// TestLiteHubCommands runs the hub commands both ways between the Rust
+// service and a Go root: the Rust hub moves the hub to the Go root, the root
+// makes the Rust service a hub again, and each stops the other being one
+// (docs/protocol.md, section 11, "Moving the hub", "Several hubs",
+// "Stopping a hub").
+func TestLiteHubCommands(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, desk, laptop)
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair -full: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
+		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
+	}
+	for _, s := range []*testService{desk, laptop} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deskAt, rustAt := []string{fmt.Sprintf("127.0.0.1:%d", freeUDP(t))}, []string{fmt.Sprintf("127.0.0.1:%d", freeUDP(t))}
+	waitFor(t, "the Rust member a hub", func() bool {
+		_, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Addrs: rustAt, Consent: true}, "")
+		if err != nil && !strings.Contains(err.Error(), "admin") {
+			t.Fatalf("cbb global hub on the Rust member: %v", err)
+		}
+		return err == nil
+	})
+	deskID, rustID := desk.status(t).Device, rust.status(t).Device
+	waitUpTo(t, 30*time.Second, "the laptop keeps the Rust hub's offer", func() bool {
+		return tunnelState(t, laptop).Hub(rustID) != nil
+	})
+
+	waitFor(t, "the Rust hub connected to both again", func() bool { return len(rust.status(t).Peers) == 2 })
+	// The Rust hub moves the hub to the desk and becomes its client; the
+	// laptop gets the desk's offer in place of the Rust hub's.
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "move", Device: "desk", Addrs: deskAt}, ""); err != nil {
+		t.Fatalf("cbb global move desk on the Rust hub: %v", err)
+	}
+	if a := desk.status(t).Away; a == nil || !a.Hub {
+		t.Errorf("the desk after the move: %+v", a)
+	}
+	if a := rust.status(t).Away; a == nil || a.Hub || a.HubDevice != deskID {
+		t.Errorf("the Rust member after the move: %+v", a)
+	}
+	waitFor(t, "the laptop keeps the desk's offer only", func() bool {
+		st := tunnelState(t, laptop)
+		return st.Hub(deskID) != nil && st.Hub(rustID) == nil
+	})
+
+	// The Rust member stops the desk, the only hub, being one.
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub-off", Device: "desk", Force: true}, ""); err != nil {
+		t.Fatalf("cbb global hub off -on desk -yes on the Rust member: %v", err)
+	}
+	waitFor(t, "the desk is no hub", func() bool {
+		a := desk.status(t).Away
+		return a != nil && !a.Hub
+	})
+
+	// The desk makes the Rust member a hub again, and keeps its offer.
+	if _, err := desk.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "rust", Addrs: rustAt}, ""); err != nil {
+		t.Fatalf("cbb global hub -on rust on the desk: %v", err)
+	}
+	if a := rust.status(t).Away; a == nil || !a.Hub {
+		t.Errorf("the Rust member after hub -on: %+v", a)
+	}
+	if tunnelState(t, desk).Hub(rustID) == nil {
+		t.Error("the desk keeps no offer of the Rust hub")
+	}
+
+	// The desk stops the Rust hub being one.
+	if _, err := desk.do(t, control.Header{Op: control.OpAway, Name: "hub-off", Device: "rust"}, ""); err == nil || !strings.Contains(err.Error(), "no other hub") {
+		t.Errorf("stopping the only hub from the desk: %v", err)
+	}
+	if _, err := desk.do(t, control.Header{Op: control.OpAway, Name: "hub-off", Device: "rust", Force: true}, ""); err != nil {
+		t.Fatalf("cbb global hub off -on rust -yes on the desk: %v", err)
+	}
+	waitFor(t, "the Rust member is no hub", func() bool {
+		a := rust.status(t).Away
+		return a != nil && !a.Hub
+	})
+}

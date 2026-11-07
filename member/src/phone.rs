@@ -631,7 +631,13 @@ impl Commands {
     fn command(&self, peer: &crate::certs::DeviceId, c: &crate::records::Record) -> wire::CommandResult {
         let refused = |id: &str, why: String| {
             (self.log)(&format!("cbb: refused a command from {peer}: {why}"));
-            wire::CommandResult { id: id.to_string(), by: String::new(), status: "refused".into(), reason: why }
+            wire::CommandResult {
+                id: id.to_string(),
+                by: String::new(),
+                status: "refused".into(),
+                reason: why,
+                tunnel: None,
+            }
         };
         let Some(node) = self.node.upgrade() else {
             return refused("", "the member stopped".into());
@@ -677,9 +683,13 @@ impl Commands {
         }
         let until = if body.for_ms == 0 { 0 } else { now + body.for_ms };
         match self.set_muted(&node, body.kind == "mute", until, &body.by) {
-            Ok(()) => {
-                wire::CommandResult { id: body.id, by: String::new(), status: "done".into(), reason: String::new() }
-            }
+            Ok(()) => wire::CommandResult {
+                id: body.id,
+                by: String::new(),
+                status: "done".into(),
+                reason: String::new(),
+                tunnel: None,
+            },
             Err(e) => {
                 (self.log)(&format!("cbb: a mute from {peer}: {}", e.for_log()));
                 wire::CommandResult {
@@ -687,6 +697,7 @@ impl Commands {
                     by: String::new(),
                     status: "failed".into(),
                     reason: e.message().to_string(),
+                    tunnel: None,
                 }
             }
         }

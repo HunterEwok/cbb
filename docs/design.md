@@ -244,9 +244,15 @@ ends, the Go service described below is still the computers' member.
   so. The run loop serves only while no hub above answers: starting, it tries them once;
   having lost the hub above, for a minute (`CBB_STANDBY_GRACE` in tests); while it serves,
   every 15 minutes, and when a hub above shares that it serves, after passing that hub's
-  offer on to its clients and waiting for those in its tunnel to leave (`TestLiteHubs`). `move`, a
-  hub on another device, the forwarder and the hub's key periods, VLESS, the relay and
-  invitations are still Go's.
+  offer on to its clients and waiting for those in its tunnel to leave (`TestLiteHubs`). Hub
+  commands (`away/movehub.rs`, Go's `movehub.go` and `stophub.go`) go through the core's
+  `manage::Order::Hub`, signed by the admin and sealed to the receiver: `move` hands over the
+  clients and this device, passes the new hub's offer on as `moved` and keeps it as a
+  client; `hub -on` makes an admin computer a hub as well; `hub off -on` sends a stop order.
+  Received, a hub command makes this device a hub at the order's addresses, serving at once
+  and answering with its offer in the result's `tunnel`, or with a stop order stops it after
+  the result went back (`TestLiteHubCommands`). The forwarder, a hub that only passes
+  copies on, the hub's key periods, VLESS, the relay and invitations are still Go's.
 
 ### Linux components
 

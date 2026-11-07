@@ -1373,6 +1373,7 @@ impl Node {
                                 by: me.to_string(),
                                 status: "refused".into(),
                                 reason: "this device takes no commands".into(),
+                                tunnel: None,
                             }),
                         ),
                     }

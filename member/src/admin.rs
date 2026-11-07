@@ -1014,6 +1014,38 @@ impl Admin<'_> {
         Ok(Some(d.name))
     }
 
+    /// Sends the device d a hub command with the order hub, signed as an
+    /// admin (Go's moveHub, makeHub and stopHub on another device), and
+    /// returns its result once it carried the command out.
+    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+    pub fn hub_command(&self, d: &Device, hub: serde_json::Value) -> Result<crate::wire::CommandResult> {
+        let s = self.signing().map_err(|_| {
+            Error::msg(
+                "only an admin makes a device a hub, moves the hub or stops one: the group's root, an admin it made (cbb admin), or an admin phone",
+            )
+        })?;
+        if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
+            return Err(Error::msg(FROZEN));
+        }
+        let me = self.me();
+        let signer = cbb_core::manage::Signer { ca: &s.ca, key: &*s.key, me: &me };
+        let r = cbb_core::manage::order(
+            &self.node.records().lock().unwrap(),
+            &signer,
+            &d.id,
+            &cbb_core::manage::Order::Hub(hub),
+            uptime::wall_ms(),
+        )?;
+        let res = self
+            .node
+            .command(&r, Duration::from_secs(20))
+            .map_err(|e| Error::msg(format!("the hub command to {}: {}", d.name, e.message())))?;
+        if res.status != "done" {
+            return Err(Error::msg(format!("{} {} it: {}", d.name, res.status, res.reason)));
+        }
+        Ok(res)
+    }
+
     /// Takes the group over from its lost root, on an admin of a group
     /// whose root is a computer, as Go's takeOver (docs/protocol.md,
     /// section 10): it makes a new root, keeps its key in the identity file

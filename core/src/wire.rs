@@ -136,6 +136,10 @@ pub struct CommandResult {
     pub status: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub reason: String,
+    /// In the result of a hub command carried out, the new hub's offer
+    /// without a preshared key (section 11, "Moving the hub").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<alloc::boxed::Box<TunnelOffer>>,
 }
 
 /// The content of a hello.

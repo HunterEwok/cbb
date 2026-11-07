@@ -381,7 +381,7 @@ pub(super) fn offer_of(h: &crate::tunnel::Hub) -> TunnelOffer {
 }
 
 /// The hub's addresses away from home, as Go's hubAddrs reads them.
-fn hub_addrs(addrs: &[String]) -> Result<Vec<SocketAddr>> {
+pub(super) fn hub_addrs(addrs: &[String]) -> Result<Vec<SocketAddr>> {
     let mut out = Vec::new();
     for a in addrs {
         let ep: SocketAddr = match a.parse() {
