@@ -90,6 +90,31 @@ pub trait ExternalKey: Send + Sync {
     }
 }
 
+/// A key the core holds as PKCS #8 behind the [`ExternalKey`] interface,
+/// such as a computer root's group CA key in its identity file: code that
+/// signs with an external key signs with it too.
+pub struct FileKey(SigningKey);
+
+impl FileKey {
+    /// Reads a PKCS #8 P-256 key.
+    pub fn new(pkcs8: &[u8]) -> Result<FileKey> {
+        Ok(FileKey(signing_key(pkcs8)?))
+    }
+}
+
+impl ExternalKey for FileKey {
+    fn public(&self) -> Vec<u8> {
+        self.0.verifying_key().to_sec1_point(false).as_bytes().to_vec()
+    }
+
+    fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>> {
+        use p256::ecdsa::signature::hazmat::PrehashSigner as _;
+        let sig: p256::ecdsa::Signature =
+            self.0.sign_prehash(digest).map_err(|_| Error::msg("cannot sign with the key"))?;
+        Ok(sig.to_der().as_bytes().to_vec())
+    }
+}
+
 /// A device key that the identity file keeps as a blob only the machine's
 /// hardware loads, as the Go member's identity.json does: a TPM's
 /// (`key_tpm`, kept as its JSON) or a Mac's Secure Enclave's (`key_se`).

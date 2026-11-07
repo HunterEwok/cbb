@@ -194,6 +194,17 @@ ends, the Go service described below is still the computers' member.
   (`features: ["media"]`), fetches a copy whole before it writes it to a watcher that takes
   it, and gives the other watchers its text. The Go `cbb` and agent work against it unchanged
   (`TestLiteClients`).
+- **The group's root and its admins.** `cbb new` makes a group with the Rust service as its
+  root: the root CA's key stays in `identity.json` as `group_ca_key`, as the Go member keeps
+  it, and the member key goes into the hardware through the helper where it can. A member
+  whose own device record says `full` presents itself as a full member: its hello says so,
+  it publishes itself without `r=lite` and dials the full members with a higher device ID.
+  On the root or an admin it takes `revoke`, `rename`, `freeze`, `thaw`, `resolve`, `admin`,
+  `key-level` and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
+  each a record signed with the root's key or the admin key under its admin CA, by Go's rules
+  and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
+  `cbb` saves it again. The Go command line runs against it, and a Go computer joins, syncs
+  and takes each record (`TestLiteRoot`).
 
 ### Linux components
 

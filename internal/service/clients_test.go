@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -32,10 +31,7 @@ func TestLiteClients(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := filepath.Join(t.TempDir(), "cbb")
-	if out, err := exec.Command("go", "build", "-o", cli, "github.com/HunterEwok/cbb/cmd/cbb").CombinedOutput(); err != nil {
-		t.Fatalf("go build cbb: %v\n%s", err, out)
-	}
+	cli := goCLI(t)
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinLite(t, bin, pi)
@@ -49,13 +45,7 @@ func TestLiteClients(t *testing.T) {
 	}
 	run := func(stdin string, args ...string) (string, error) {
 		t.Helper()
-		cmd := exec.Command(cli, args...)
-		cmd.Env = append(os.Environ(), "CBB_SOCKET="+lite.socket)
-		cmd.Stdin = strings.NewReader(stdin)
-		var out bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &out, &out
-		err := cmd.Run()
-		return out.String(), err
+		return runCLI(cli, lite.socket, stdin, args...)
 	}
 	must := func(stdin string, args ...string) string {
 		t.Helper()

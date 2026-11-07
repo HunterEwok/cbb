@@ -11,6 +11,7 @@
 //! (`ffi/`, feature `aurora`).
 
 mod actions;
+mod admin;
 #[cfg(feature = "tunnel")]
 mod away;
 #[cfg(not(feature = "tunnel"))]

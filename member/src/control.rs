@@ -96,6 +96,23 @@ pub struct Header {
     /// In copy-media and paste-media, the next part of the copy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub part: Option<Part>,
+    /// In rename, the device's new name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub new_name: String,
+    /// In the answer to key-level, the admins and hubs below the new level.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub below: Vec<String>,
+    /// In pair and join: the code; in pair by QR code, the joiner's
+    /// addresses and its certificate's fingerprint; admins lets the window
+    /// make a phone an admin, on the root.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub code: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addrs: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fingerprint: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub admins: bool,
 }
 
 /// A part of a copy of images or files on the socket, as Go's
@@ -175,6 +192,13 @@ pub struct Status {
     pub removed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media: Option<Media>,
+    /// The group's key level: which keys may be its root, an admin or a hub.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub key_level: String,
+    /// Why this device's own key is in a file although the machine has a
+    /// TPM or a Secure Enclave.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub key_problem: String,
 }
 
 /// A quick action as the device's user set it, with the names of the Go

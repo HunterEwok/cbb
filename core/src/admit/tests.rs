@@ -255,6 +255,7 @@ fn a_phone_makes_its_group_and_admits() {
     let own = OwnDevice {
         name: "phone",
         os: "aurora",
+        role: "phone",
         member_point: &member_key.public(),
         store: "hardware",
         seal: Vec::new(),

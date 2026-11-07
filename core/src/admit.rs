@@ -562,12 +562,14 @@ pub struct NewGroup {
     pub records: Records,
 }
 
-/// The phone's own device in a group it makes: its name, system, member
-/// key (a SEC1 point), where that key lives (`hardware` or `file`) and its
-/// key for sealed messages.
+/// The own device in a group it makes: its name, system, role (`phone`,
+/// or `full` for a computer with the service), member key (a SEC1 point),
+/// where that key lives (`hardware` or `file`) and its key for sealed
+/// messages.
 pub struct OwnDevice<'a> {
     pub name: &'a str,
     pub os: &'a str,
+    pub role: &'a str,
     pub member_point: &'a [u8],
     pub store: &'a str,
     pub seal: Vec<u8>,
@@ -577,6 +579,9 @@ pub struct OwnDevice<'a> {
 /// PhoneGroup.create does: a root CA, a member certificate for the
 /// phone's member key, and the phone's device record, signed by the root.
 pub fn new_group(root_key: &dyn ExternalKey, own: &OwnDevice, now_ms: i64) -> Result<NewGroup> {
+    if own.role != "phone" && own.role != "full" {
+        return Err(Error::msg("a group's root is a phone or a computer with the service"));
+    }
     let now = now_ms.div_euclid(1000);
     let mut sign = |b: &[u8]| identity::sign_external(root_key, b);
     let root = Cert::parse(&issue::root_ca(&root_key.public(), now, &mut sign)?)?;
@@ -592,7 +597,7 @@ pub fn new_group(root_key: &dyn ExternalKey, own: &OwnDevice, now_ms: i64) -> Re
         time_ms: now_ms,
         device: device.to_string(),
         name: own.name.into(),
-        role: "phone".into(),
+        role: own.role.into(),
         os: own.os.into(),
         key: Some(Hash(cert.key_hash())),
         store: own.store.into(),

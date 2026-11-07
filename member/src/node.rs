@@ -338,6 +338,16 @@ impl Node {
         }
     }
 
+    /// The role its hellos present: `lite`, `full` or `phone`.
+    pub fn role(&self) -> &str {
+        &self.presence.role
+    }
+
+    /// The system its hellos present.
+    pub fn os(&self) -> &str {
+        &self.presence.os
+    }
+
     /// The node presenting itself as p in its hellos, before it connects.
     pub fn presenting(mut self, p: Presence) -> Node {
         self.presence = Arc::new(p);
@@ -1392,8 +1402,15 @@ impl Node {
         for c in self.conns.lock().unwrap().values() {
             match st.refused(&c.chain) {
                 Some(Refusal::Refused(why)) => {
+                    // The records that refuse it go first, so that it
+                    // hears it was removed or frozen, as Go's settleRecords.
                     self.logf(&format!("cbb: closing the connection to {}: {why}", c.id));
-                    c.close(false);
+                    if &c.id != from && c.peer.lock().unwrap().is_some() {
+                        for chunk in chunk_records(fresh.clone()) {
+                            self.enqueue(c, Out::Records(chunk));
+                        }
+                    }
+                    c.close(true);
                     continue;
                 }
                 None if c.records_only => {

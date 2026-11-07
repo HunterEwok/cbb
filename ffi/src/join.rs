@@ -282,6 +282,7 @@ pub fn new_group(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
         let own = cbb_core::admit::OwnDevice {
             name: &a.name,
             os: &a.os,
+            role: "phone",
             member_point: &a.public,
             store: &a.store,
             seal: a.seal,

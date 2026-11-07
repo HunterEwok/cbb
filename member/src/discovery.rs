@@ -3,7 +3,8 @@
 
 //! Finding the members and dialing them, and taking the connections of
 //! those that dial this one (docs/protocol.md, sections 3 and 4). A lite
-//! member publishes itself with `r=lite` and listens on the member port, so
+//! member publishes itself with `r=lite`, a computer with the service as a
+//! full member without it, and either listens on the member port, so
 //! that phones reach it without a computer; it dials the full members, and
 //! the lite members whose device ID is greater than its own.
 //! Members can also be given by address, for a network where multicast
@@ -255,12 +256,15 @@ fn browse(
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
     let me = node.identity().id.clone();
+    // A computer with the service publishes itself as a full member does,
+    // without a role.
+    let full = node.role() == "full";
     if let Some(port) = port {
         // The protocol version, the group tag and the role.
-        let txt = [("v", "1"), ("g", tag), ("r", "lite")];
-        let info =
-            mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &format!("{}.", me.host_name()), "", port, &txt[..])?
-                .enable_addr_auto();
+        let lite_txt = [("v", "1"), ("g", tag), ("r", "lite")];
+        let txt = if full { &lite_txt[..2] } else { &lite_txt[..] };
+        let info = mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &format!("{}.", me.host_name()), "", port, txt)?
+            .enable_addr_auto();
         daemon.register(info)?;
     }
     let events = daemon.browse(SERVICE)?;
@@ -277,6 +281,11 @@ fn browse(
                 // phone dials them all.
                 let r = info.get_property_val_str("r");
                 if id == me || info.get_property_val_str("g") != Some(tag) || (lite(r) && id < me && !as_phone) {
+                    continue;
+                }
+                // As Go's full members: the lite members dial this one, and
+                // of two full members the one with the lower ID dials.
+                if full && (lite(r) || id < me) {
                     continue;
                 }
                 // A phone that is the hub publishes itself while its app is

@@ -15,6 +15,13 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb-helper`, as the Go member does: `cbb pair` makes it there, `identity.json` keeps the
   hardware's blob, and every signature goes through the helper (`TestLiteTPM`, on swtpm).
   The helper also signs with a key on a YubiKey after its PIN (`card-sign`).
+- The Rust `cbb` service makes a group and is its root (`cbb new`), as the Go service does:
+  it admits a computer by the QR code that computer shows (`cbb pair -qr`), and removes,
+  renames, freezes and unfreezes devices, makes a computer an admin, sets the key level and
+  voids two histories (`cbb remove`, `rename`, `freeze`, `unfreeze`, `admin`, `keys`,
+  `resolve`), each through the unchanged Go command line (`TestLiteRoot`). It presents itself
+  as a full member when its device record says so. A member the records remove or freeze
+  now gets those records before its connection closes.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

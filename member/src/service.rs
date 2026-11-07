@@ -167,6 +167,10 @@ struct Service {
     /// cbb-helper, where it is beside cbb (helper.rs): what needs Go.
     #[allow(dead_code, reason = "the operations that need Go come in the next steps of the Rust service")]
     helper: Option<Arc<crate::helper::Helper>>,
+    /// This device's name, for the group it makes with cbb new.
+    name: String,
+    /// One cbb new at a time, so two requests cannot make two groups.
+    creating: Mutex<()>,
 }
 
 static STOP: AtomicBool = AtomicBool::new(false);
@@ -221,6 +225,8 @@ pub fn run(cfg: Config) -> Result<()> {
         started_ms: uptime::wall_ms(),
         log: log.clone(),
         helper: crate::helper::shared(),
+        name: cfg.name.clone(),
+        creating: Mutex::new(()),
     });
     if let Some(h) = svc.helper.clone() {
         // Started at once, so that a helper that cannot run shows in the
@@ -279,6 +285,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let tag = ident.tag();
     let away =
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
+    let presence = presence_of(&ident, &records, &cfg.name);
     let node = {
         let svc = svc.clone();
         Arc::new(
@@ -291,7 +298,8 @@ pub fn run(cfg: Config) -> Result<()> {
                 Box::new(move |w| svc.deliver(w)),
                 log.clone(),
             )
-            .with_content(),
+            .with_content()
+            .presenting(presence),
         )
     };
     // Images and files go to the clipboard watchers that take them, as on
@@ -347,6 +355,28 @@ pub fn run(cfg: Config) -> Result<()> {
         return Err(Error::msg("restarting at an admin's request"));
     }
     Ok(())
+}
+
+/// How this member presents itself in its hellos: as a computer with the
+/// service (`full`) when its own device record says so, as the group's
+/// root on a computer made it; as a lite member otherwise. Its keys are in
+/// the hardware when cbb-helper holds the device key.
+fn presence_of(ident: &Identity, records: &Records, name: &str) -> crate::node::Presence {
+    let full = records.devices().iter().any(|d| d.id == ident.id.as_str() && d.role == "full");
+    crate::node::Presence {
+        role: if full { "full" } else { "lite" }.into(),
+        name: name.to_string(),
+        os: if full { crate::admin::os_name() } else { "linux" }.into(),
+        key_store: if ident.external.is_some() {
+            "hardware"
+        } else if crate::rootless::is() {
+            "rootless"
+        } else {
+            "file"
+        }
+        .into(),
+        device: crate::device::own().clone(),
+    }
 }
 
 /// Takes the roots that the records lead to when they differ from the
@@ -1365,8 +1395,8 @@ impl Service {
                 let status = Status {
                     device: id.id.to_string(),
                     group: id.tag(),
-                    role: "lite".into(),
-                    os: "linux".into(),
+                    role: node.role().into(),
+                    os: node.os().into(),
                     peers,
                     version: VERSION.into(),
                     mode: node.engine.mode().name().into(),
@@ -1380,6 +1410,11 @@ impl Service {
                     stop: node.stop(),
                     removed: node.removed(),
                     media: Some(self.media_status()),
+                    key_level: {
+                        let l = node.records().lock().unwrap().state().key_level;
+                        if l.is_empty() { "hardware".into() } else { l }
+                    },
+                    key_problem: String::new(),
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
             }
@@ -1448,9 +1483,38 @@ impl Service {
                 self.set_mode(&h.name)?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "pair" | "pair-phone" | "revoke" => {
-                Err(Error::msg("a lite member admits and removes no devices; use the phone app or a Linux member"))
+            "new" => self.new_group(),
+            "revoke" => {
+                let name = self.admin(|a| a.revoke(&h.name))?;
+                Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
+            "rename" => {
+                let name = self.admin(|a| a.rename(&h.name, &h.new_name))?;
+                Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
+            }
+            "freeze" | "thaw" => {
+                let name = self.admin(|a| a.freeze(&h.name, h.op == "freeze"))?;
+                Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
+            }
+            "resolve" => {
+                let who = self.admin(|a| a.resolve())?;
+                Ok(control::reply(Header { name: who.join(", "), done: true, ..Default::default() }, Vec::new()))
+            }
+            "admin" => {
+                let name = self.admin(|a| a.make_admin(&h.name, h.consent))?;
+                Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
+            }
+            "key-level" => {
+                let below = self.admin(|a| a.set_key_level(&h.value))?;
+                Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
+            }
+            "pair" if !h.addrs.is_empty() => {
+                let name = self.admin(|a| a.admit_by_qr(&h.code, &h.addrs, &h.fingerprint, h.admins))?;
+                Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
+            }
+            "pair" | "pair-phone" => Err(Error::msg(
+                "this device admits a device only by the QR code it shows: run cbb pair there, then cbb pair -qr here",
+            )),
             "join" => Err(Error::msg("run cbb pair on this device, with the service stopped or running")),
             "leave" => {
                 // The node stops first, so nothing writes the group's files
@@ -1472,6 +1536,34 @@ impl Service {
             }
             op => Err(Error::msg(format!("unknown operation {op:?}"))),
         }
+    }
+
+    /// Runs an admin's operation on the group (admin.rs).
+    fn admin<T>(&self, f: impl FnOnce(&crate::admin::Admin) -> Result<T>) -> Result<T> {
+        let node = self.node()?;
+        f(&crate::admin::Admin { node: &node, dir: &self.state_dir })
+    }
+
+    /// Makes a group with this device as its root (cbb new); the service
+    /// then starts in it.
+    fn new_group(&self) -> Result<Message> {
+        let _one = self.creating.lock().unwrap();
+        if self.node.read().unwrap().is_some() {
+            return Err(Error::msg("this device is already in a group; cbb status shows it"));
+        }
+        let (ident, why) = crate::admin::new_group(&self.state_dir, &self.name)?;
+        (self.log)(&format!("cbb: created a new group {}", ident.tag()));
+        let status = Status {
+            device: ident.id.to_string(),
+            group: ident.tag(),
+            role: "full".into(),
+            os: crate::admin::os_name().into(),
+            version: VERSION.into(),
+            key_level: if ident.external.is_some() { "hardware" } else { "files" }.into(),
+            key_problem: why,
+            ..Default::default()
+        };
+        Ok(control::reply(Header { status: Some(status), done: true, ..Default::default() }, Vec::new()))
     }
 
     /// Serves a watcher: what it reports goes to the engine, the writes the
