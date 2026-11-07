@@ -2544,12 +2544,12 @@
         }
       }
     },
-    "On your other phone, tap + and scan this code. Keep this screen open.": {
+    "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "На другом телефоне нажмите + и отсканируйте этот код. Не закрывайте этот экран."
+            "value": "На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран."
           }
         }
       }

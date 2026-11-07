@@ -579,7 +579,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val home = runCatching { MemberListener(n, member.privateKey, g.memberChain, trusted, MEMBER_PORT, null, onError) }
             .recoverCatching { MemberListener(n, member.privateKey, g.memberChain, trusted, 0, null, onError) }
             .onFailure { Log.w(TAG, "the hub cannot listen on the home network", it) }.getOrNull() ?: return
-        val p = NsdPublisher(context, g.device, g.tag, home.port)
+        val p = NsdPublisher.hub(context, g.device, g.tag, home.port)
         synchronized(lock) {
             homeListener = home
             publisher = p
@@ -899,10 +899,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 listener.stop()
                 throw Failure(Failure.Kind.NO_NETWORK)
             }
-            Triple(listener, cert, admin) to JoinCode(JoinCode.newCode(), addrs, Pairing.fingerprint(cert))
+            Triple(listener, cert, admin) to JoinCode(JoinCode.newCode(), addrs, Pairing.fingerprint(cert)) to device
         }
-        val (parts, code) = listening
+        val (parts, code) = listening.first
         val (listener, cert, admin) = parts
+        // Announced while it waits, so that a computer of the group finds
+        // it by the code typed there (docs/protocol.md, section 6).
+        val announced = NsdPublisher(context, listening.second, listener.port, Discovery.joinerTXT(code.fingerprint))
+        announced.start()
         show(code)
         val info = Pairing.Info(PhoneGroup.validName(deviceName), "android", admin?.publicKeyDER, seal = withContext(Dispatchers.IO) { sealKey() })
         val stopped = AtomicBoolean(false)
@@ -916,6 +920,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
         } finally {
             stop()
+            announced.stop()
         }
         if (joined == null) throw Failure(Failure.Kind.TIMED_OUT)
         withContext(Dispatchers.IO) {

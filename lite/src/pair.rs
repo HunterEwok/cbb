@@ -165,7 +165,7 @@ pub fn listen(
     }
     shown(&join_qr(code, &addrs, &joiner.fingerprint()));
     // Announced, so that a computer finds it by the code alone.
-    let _announced = Announced(crate::discovery::announce_joiner(&joiner.id, port, &joiner.fingerprint()));
+    let _announced = crate::discovery::announce_joiner(&joiner.id, port, &joiner.fingerprint());
     ln.set_nonblocking(true).context("cannot listen")?;
     let end = Instant::now() + wait;
     let mut failures = 0;
@@ -196,18 +196,6 @@ pub fn listen(
         }
     }
     Err(Error::msg("no device joined this one in time; run join again"))
-}
-
-/// Shuts an mDNS daemon down when it goes out of scope, which sends the
-/// goodbyes.
-struct Announced(Option<mdns_sd::ServiceDaemon>);
-
-impl Drop for Announced {
-    fn drop(&mut self) {
-        if let Some(d) = self.0.take() {
-            let _ = d.shutdown();
-        }
-    }
 }
 
 #[cfg(test)]

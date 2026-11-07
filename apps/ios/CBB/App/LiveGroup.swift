@@ -604,14 +604,18 @@ final class LiveGroup: GroupController {
         let device = SyncEngine.newID()
         let cert = try GroupCertificates.selfSigned(device: device, signer: member)
         let id = try identity(certificate: cert, member)
-        let listener = try TLSListener(alpn: Pairing.alpn, identity: id) { !$0.isEmpty }
+        let fingerprint = Pairing.fingerprint(cert: cert)
+        // Announced by Bonjour while it waits, so that a computer of the
+        // group finds it by the code typed there (docs/protocol.md, section 6).
+        let listener = try TLSListener(alpn: Pairing.alpn, identity: id,
+                                       service: (name: device, txt: Discovery.joinerTXT(fingerprint: fingerprint))) { !$0.isEmpty }
         let port = try await listener.start()
         let addrs = LocalAddresses.current().map { JoinCode.address(host: $0, port: port) }
         guard !addrs.isEmpty else {
             listener.stop()
             throw Failure.noNetwork
         }
-        let code = JoinCode(code: JoinCode.newCode(), addrs: addrs, fingerprint: Pairing.fingerprint(cert: cert))
+        let code = JoinCode(code: JoinCode.newCode(), addrs: addrs, fingerprint: fingerprint)
         show(code)
         let info = Pairing.Info(name: PhoneGroup.validName(UIDevice.current.name), os: "ios", adminKey: admin.publicKeyDER,
                                 seal: Self.sealKey())

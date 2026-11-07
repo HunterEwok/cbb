@@ -47,7 +47,9 @@ code's text and modules and the code; for each connection a member dials, `cbb_j
 starts an attempt and `cbb_join_feed` takes the bytes that arrive and answers those to send
 and whether the member admitted the phone (with its certificate, the group CA, the roots and
 the records file); `cbb_join_finish` tells the member whether the app stored it, and
-`cbb_join_free` ends the joiner. `cbb_join_new_admin` does the same for a phone that asks to be
+`cbb_join_free` ends the joiner. In the build with the member, `cbb_join_announce` announces the
+joiner by mDNS on the port the app listens on until it is freed, so that a computer of the group
+admits it by the code typed there. `cbb_join_new_admin` does the same for a phone that asks to be
 an admin: the request names `admin_public`, the admin key's public point, and a second callback
 signs with that key; the phone's info offers the key with its proof (docs/protocol.md,
 section 6, ADa), and the joined answer carries `admin_ca`, the admin CA the group's root

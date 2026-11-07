@@ -900,8 +900,11 @@ the app on real devices.
 - A phone joins another phone's group from its Start screen ("I already use Copy Beyond Borders on
   another phone"):
   it makes its admin key, listens with `TLSListener` on a port the system picks, and shows
-  the join QR code with its home network addresses (`LocalAddresses`). An admin phone scans
-  it in "Add a device". The root phone makes every phone it admits an admin; an admin that
+  the join QR code with its home network addresses (`LocalAddresses`) and its six digits.
+  While it waits it announces itself by Bonjour (NsdManager on Android, mDNS through the
+  core on Aurora) with the TXT `j=1` and its fingerprint (`Discovery.joinerTXT`), so that a
+  computer of the group admits it by the digits typed there (`cbb pair -qr`). An admin
+  phone scans it in "Add a device". The root phone makes every phone it admits an admin; an admin that
   is not the root admits phones as plain members. An admin phone that removes the root
   phone takes the group over (`PhoneGroup.takeOver`, docs/records-v2.md): it makes a new
   root key in the Secure Enclave behind Face ID and signs a claim with its admin key. The

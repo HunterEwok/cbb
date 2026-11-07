@@ -26,8 +26,8 @@ const SERVICE: &str = "_cbb._tcp.local.";
 /// Announces a device that listens to join (docs/protocol.md section 3,
 /// TXT `j=1` and `f`, its certificate's fingerprint), so that a computer of
 /// the group finds it by the code it shows. The announcement ends when the
-/// returned daemon is dropped or shut down; None when mDNS is not at hand.
-pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<mdns_sd::ServiceDaemon> {
+/// returned value is dropped; None when mDNS is not at hand.
+pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<Announcement> {
     let daemon = mdns_sd::ServiceDaemon::new().ok()?;
     let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
     let only = interfaces::only();
@@ -40,8 +40,19 @@ pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<md
         .ok()?
         .enable_addr_auto();
     daemon.register(info).ok()?;
-    Some(daemon)
+    Some(Announcement(daemon))
 }
+
+/// An announcement of announce_joiner: dropping it shuts the mDNS daemon
+/// down, which sends the goodbyes.
+pub struct Announcement(mdns_sd::ServiceDaemon);
+
+impl Drop for Announcement {
+    fn drop(&mut self) {
+        let _ = self.0.shutdown();
+    }
+}
+
 const MAX_WAIT: Duration = Duration::from_secs(30);
 const STEADY: Duration = Duration::from_secs(30);
 /// At most this many connections may be in their TLS handshake at once.

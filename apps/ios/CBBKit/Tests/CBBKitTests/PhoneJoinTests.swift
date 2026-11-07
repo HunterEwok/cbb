@@ -278,6 +278,8 @@ final class PhoneJoinTests: XCTestCase {
         XCTAssertEqual(JoinCode(qr: jc.qrText), jc)
         XCTAssertTrue(jc.qrText.hasPrefix("cbb://join?code=246802&addr=192.168.1.20%3A8767&"))
         XCTAssertTrue(jc.qrText.hasSuffix("&fp=ab%2Bc%2Fd%3D"))
+        XCTAssertEqual(jc.grouped, "246 802")
+        XCTAssertEqual(Discovery.joinerTXT(fingerprint: "ab+c/d="), ["v": "1", "j": "1", "f": "ab+c/d="])
         for _ in 0..<20 { XCTAssertTrue(JoinCode(code: JoinCode.newCode(), addrs: [], fingerprint: "").codeIsValid) }
     }
 
