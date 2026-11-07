@@ -536,11 +536,11 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     nothing: VLESS over REALITY and XHTTP (`internal/vless/onlycbb_test.go`: packets reach
     only the forwarder's port, streams only the mirror, the registrations' ID neither), the
     hub's tunnel (`internal/tunnel/onlycbb_test.go`), the phones' hub
-    (`mobile/cbbtun/onlycbb_test.go`) and the relay (`internal/relay/onlycbb_test.go`); the
-    forwarder's `FuzzForwardWire` sends a packet only to an endpoint it knows. The check of
-    cbb.tools is written down in docs/maintaining.md, "Ways out carry only cbb", and was run
-    on 2026-11-07. Left: the same for the lite member's tunnel, which is a client and
-    listens for nothing in it, with a fake hub on GotaTun.
+    (`mobile/cbbtun/onlycbb_test.go`), the relay (`internal/relay/onlycbb_test.go`) and the
+    lite member's tunnel, whose end a fake hub on GotaTun sends to (`lite/src/tunnel.rs`,
+    `link_reaches_nothing_from_the_tunnel`); the forwarder's `FuzzForwardWire` sends a
+    packet only to an endpoint it knows. The check of cbb.tools is written down in
+    docs/maintaining.md, "Ways out carry only cbb", and was run on 2026-11-07.
 
 ## Devices that are hard to type into
 
