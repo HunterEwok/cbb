@@ -19,11 +19,13 @@ use cbb_core::identity::Identity;
 use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
 use crate::button::{self, Own};
+use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
 use crate::error::Result;
 use crate::node::{KeepIdentity, Node, OnMessage, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
 use crate::{discovery, service, uptime};
+use cbb_core::media::Part;
 
 /// What the phone's member starts from.
 pub struct Config {
@@ -97,7 +99,8 @@ impl Member {
                 .cleaned();
         let node = Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone())
             .presenting(Presence { role: "phone".into(), name: cfg.name, os: cfg.os, key_store: cfg.key_store, device })
-            .keeping_identity(cfg.keep_identity);
+            .keeping_identity(cfg.keep_identity)
+            .with_content();
         let node = Arc::new(node);
         engine.set_seal(node.sealer());
         discovery::start(node.clone(), tag.clone(), cfg.peers, false, None, log.clone());
@@ -113,6 +116,31 @@ impl Member {
         self.node.send(text, if secret { Kind::Secret } else { Kind::Text }, Via::Phone)?;
         self.own.sent(text);
         Ok(())
+    }
+
+    /// Sends images or files the user handed to the app: clipboard data
+    /// such as an image (parts with a type), or files and folders (parts
+    /// with a path), with a plain-text alternative or "". The button
+    /// compares the clipboard with it from now on, by the key it returns.
+    pub fn copy_media(&self, text: &str, parts: Vec<(Part, Source)>) -> Result<Copy> {
+        let event = self.node.send_media(text, parts)?;
+        let key = button::key_of(&event).unwrap_or_default();
+        self.own.sent(&key);
+        Ok(Copy { event, key })
+    }
+
+    /// Fetches the images or files of the group's copy id, unless larger
+    /// than max bytes, and opens them into the new folder out; each part
+    /// with where it is. A copy no longer the group's current one is gone.
+    pub fn fetch(&self, id: &str, max: u64, out: &std::path::Path) -> Result<Vec<(Part, std::path::PathBuf)>> {
+        let ev = self
+            .node
+            .engine
+            .current()
+            .filter(|e| e.id == id)
+            .ok_or_else(|| crate::error::Error::msg("the copy is no longer the group's"))?;
+        self.node.fetch(&ev, max)?;
+        self.node.open_media(&ev, out)
     }
 
     /// The members connected now.
@@ -268,6 +296,13 @@ impl Member {
     /// Sends the group's server credentials the app keeps to every member.
     pub fn send_credentials(&self, list: &serde_json::Value) -> Vec<DeviceId> {
         self.node.broadcast(&wire::credentials(list), |_| true)
+    }
+
+    /// Sets what gets each copy that becomes the group's current one from
+    /// another member: a text or secret the phone may take by itself, or
+    /// images or files to fetch.
+    pub fn on_change(&self, f: crate::node::OnChange) {
+        self.node.on_change(f);
     }
 
     /// Sets what gets the admin, hubs and credentials messages peers send.

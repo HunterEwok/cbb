@@ -67,6 +67,59 @@ pub struct Message {
     /// keeps (section 18), kept as they came.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credentials: Option<Value>,
+    /// In a get or missing message, a range of a copy's sealed blob
+    /// ("Content" in section 4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub get: Option<Get>,
+}
+
+/// A range of a copy's sealed blob, by its SHA-256 ("Content" in section
+/// 4): length 1 to [`MAX_GET`] asks for it, 0 cancels every get of the blob.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct Get {
+    #[serde(with = "b64")]
+    pub sha256: Vec<u8>,
+    #[serde(default)]
+    pub offset: i64,
+    #[serde(default)]
+    pub length: i64,
+}
+
+/// The most bytes a get asks for.
+pub const MAX_GET: i64 = 1 << 20;
+/// The most data a chunk carries.
+pub const MAX_CHUNK_DATA: usize = 256 << 10;
+/// A chunk frame's size with its padding at most, its length word apart.
+pub const MAX_CHUNK_FRAME: usize = 278_528;
+
+impl Get {
+    /// Whether it is a get a member may take: a hash of 32 bytes, an
+    /// offset that is not negative, and a length of 0 (a cancel) to MAX_GET.
+    pub fn valid(&self) -> bool {
+        self.sha256.len() == 32 && self.offset >= 0 && (0..=MAX_GET).contains(&self.length)
+    }
+}
+
+/// A get message, or with length 0 the cancel of every get of the blob.
+pub fn get(g: Get) -> Message {
+    Message { kind: "get".into(), get: Some(g), ..Default::default() }
+}
+
+/// A missing message: the answer to a get for a blob this member does not
+/// hold whole.
+pub fn missing(g: Get) -> Message {
+    Message { kind: "missing".into(), get: Some(g), ..Default::default() }
+}
+
+/// The hello m with the features the sender supports beyond its protocol
+/// version (`media`: it serves the content of media events).
+pub fn with_features(mut m: Message, features: &[&str]) -> Message {
+    if !features.is_empty()
+        && let Some(Value::Object(h)) = m.hello.as_mut()
+    {
+        h.insert("features".into(), to_value(features));
+    }
+    m
 }
 
 /// The answer to a command (section 15): `done`, `refused` or `failed`, and
@@ -143,6 +196,10 @@ pub struct HelloBody {
     pub entries_seq: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub entries_keys_seq: u64,
+    /// What the sender supports beyond its protocol version: `media` from
+    /// one that serves the content of media events.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub features: Vec<String>,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -296,6 +353,7 @@ pub fn hello(
         seal: seal.map(<[u8]>::to_vec),
         entries_seq: entries.1,
         entries_keys_seq: if entries.1 == 0 { 0 } else { entries.0 },
+        features: Vec::new(),
     };
     Message { kind: "hello".into(), role: role.into(), hello: Some(to_value(&body)), ..Default::default() }
 }
