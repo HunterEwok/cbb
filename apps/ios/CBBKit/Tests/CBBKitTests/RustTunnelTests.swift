@@ -11,8 +11,8 @@ import XCTest
 /// path itself is tested against Go's hub, forwarder and relay in Go
 /// (internal/tunnel, TestRustPhone*).
 final class RustTunnelTests: XCTestCase {
-    let phone = "80000000000000000000000000000001"
-    let hubID = "80000000000000000000000000000002"
+    let phone = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    let hubID = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
 
     func testHubAndClient() throws {
         let tunnels = RustTunnels()

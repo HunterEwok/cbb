@@ -28,8 +28,8 @@ import kotlin.test.assertTrue
  * hub, forwarder and relay in Go (internal/tunnel, TestRustPhone*).
  */
 class RustTunnelTest {
-    private val phone = "80000000000000000000000000000001"
-    private val hubID = "80000000000000000000000000000002"
+    private val phone = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    private val hubID = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
 
     private fun b64(b: ByteArray) = Base64.getEncoder().encodeToString(b)
 
