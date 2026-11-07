@@ -20,7 +20,7 @@ use core::time::Duration;
 
 use der::asn1::{GeneralizedTime, ObjectIdentifier, UtcTime};
 use der::{DateTime, Encode};
-use sha1::{Digest, Sha1};
+use sha2::{Digest, Sha256};
 
 use crate::certs::{
     Cert, DeviceId, OID_CLIENT_AUTH, OID_COMMON_NAME, OID_EC_PUBLIC_KEY, OID_ECDSA_SHA256, OID_P256, OID_SERVER_AUTH,
@@ -120,9 +120,10 @@ fn in_lifetime(ca: &Cert, now: i64) -> Result<()> {
     Ok(())
 }
 
-/// The key identifier Go uses: SHA-1 over the public key's bits.
+/// The key identifier Go uses since Go 1.25: SHA-256 over the public key's
+/// bits, cut to 160 bits (RFC 7093, section 2, method 1).
 fn key_id(point: &[u8]) -> Vec<u8> {
-    Sha1::digest(point).to_vec()
+    Sha256::digest(point).iter().take(20).copied().collect()
 }
 
 fn name(cn: &str) -> Vec<u8> {
