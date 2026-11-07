@@ -1,0 +1,376 @@
+{
+ "comment": "The rule of incoming copies (lite/core/src/rule.rs, internal/clip/rule.go): each case's verdict, and whether a mute or a pause until until_ms (0: until lifted; missing: none) holds at now_ms.",
+ "cases": [
+  {
+   "name": "a fresh text is written",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "write"
+  },
+  {
+   "name": "a mode that does not receive keeps it out",
+   "incoming": {
+    "receives": false,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "mode"
+  },
+  {
+   "name": "the mode wins over every other reason",
+   "incoming": {
+    "receives": false,
+    "paused": true,
+    "kind": "text",
+    "mark": false,
+    "unread": true,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 999999,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "mode"
+  },
+  {
+   "name": "a pause keeps it out",
+   "incoming": {
+    "receives": true,
+    "paused": true,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "paused"
+  },
+  {
+   "name": "a mark is not written",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "secret",
+    "mark": true,
+    "unread": false,
+    "has_text": false,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "unread"
+  },
+  {
+   "name": "a copy not sealed to this member is not written",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": true,
+    "has_text": false,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "unread"
+  },
+  {
+   "name": "a fresh secret is written",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "secret",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "write"
+  },
+  {
+   "name": "a secret at its time is gone",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "secret",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 60000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "secret_gone"
+  },
+  {
+   "name": "a secret past its time is gone even in a long window",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "secret",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 90000,
+    "window_ms": 3600000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "secret_gone"
+  },
+  {
+   "name": "images on a member that takes them are written",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "media",
+    "mark": false,
+    "unread": false,
+    "has_text": false,
+    "has_media": true,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "write"
+  },
+  {
+   "name": "images without a text on a member that takes only text are not",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "media",
+    "mark": false,
+    "unread": false,
+    "has_text": false,
+    "has_media": true,
+    "takes_media": false,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "no_text"
+  },
+  {
+   "name": "images with a text on a member that takes only text: the text",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "media",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": true,
+    "takes_media": false,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "write"
+  },
+  {
+   "name": "what the clipboard holds is not written again",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": true,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "held"
+  },
+  {
+   "name": "held is checked before age",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": true,
+    "age_ms": 120000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "held"
+  },
+  {
+   "name": "a copy just inside the window is written",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 59999,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "write"
+  },
+  {
+   "name": "a copy at the window's end is old",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 60000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "old"
+  },
+  {
+   "name": "the group's longer window lets an older copy in",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 300000,
+    "window_ms": 600000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "write"
+  },
+  {
+   "name": "the group's shorter window keeps a newer copy out",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 6000,
+    "window_ms": 5000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "old"
+  },
+  {
+   "name": "a copy from the future (age 0) is written",
+   "incoming": {
+    "receives": true,
+    "paused": false,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 0,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000
+   },
+   "verdict": "write"
+  },
+  {
+   "name": "no mute holds",
+   "now_ms": 1000,
+   "holds": false
+  },
+  {
+   "name": "a mute until lifted holds",
+   "until_ms": 0,
+   "now_ms": 1000,
+   "holds": true
+  },
+  {
+   "name": "a mute before its end holds",
+   "until_ms": 2000,
+   "now_ms": 1999,
+   "holds": true
+  },
+  {
+   "name": "a mute at its end is over",
+   "until_ms": 2000,
+   "now_ms": 2000,
+   "holds": false
+  },
+  {
+   "name": "a mute past its end is over",
+   "until_ms": 2000,
+   "now_ms": 5000,
+   "holds": false
+  }
+ ]
+}

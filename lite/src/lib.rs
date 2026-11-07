@@ -16,6 +16,8 @@ mod away;
 #[cfg(not(feature = "tunnel"))]
 #[path = "away_off.rs"]
 mod away;
+#[cfg(feature = "tunnel")]
+mod awg;
 pub mod button;
 pub mod content;
 mod control;
@@ -24,6 +26,10 @@ pub mod discovery;
 pub mod entries;
 pub mod error;
 pub mod files;
+#[cfg(feature = "tunnel")]
+pub mod forward;
+#[cfg(feature = "tunnel")]
+pub mod hub;
 pub mod identity;
 mod interfaces;
 mod leave;
@@ -36,15 +42,19 @@ mod pastehelper;
 pub mod peer;
 pub mod phone;
 pub mod records;
+#[cfg(feature = "tunnel")]
+pub mod relay;
 mod remotepaste;
 mod rootless;
 pub mod sealkey;
 mod service;
 pub mod tls;
 #[cfg(feature = "tunnel")]
-mod tunnel;
+pub mod tunnel;
 mod update;
 pub mod uptime;
+#[cfg(feature = "tunnel")]
+pub mod vless;
 pub mod wire;
 
 use std::io::{Read, Write};

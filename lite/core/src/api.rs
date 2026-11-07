@@ -190,12 +190,22 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "open_copy" => open_copy(serde_json::from_value(args).map_err(bad_args)?),
         "seal_segment" => segment(serde_json::from_value(args).map_err(bad_args)?, true),
         "open_segment" => segment(serde_json::from_value(args).map_err(bad_args)?, false),
+        "copy_verdict" => copy_verdict(serde_json::from_value(args).map_err(bad_args)?),
         "new_device_key" => new_device_key(),
         "sign_digest" => sign_digest(serde_json::from_value(args).map_err(bad_args)?),
         _ => group::dispatch(op, &args)
             .or_else(|| signed::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
     }
+}
+
+/// `copy_verdict`: whether the group's current copy goes into the
+/// member's clipboard, by the one rule of crate::rule, as `{"verdict"}`:
+/// `write`, or why not.
+fn copy_verdict(i: crate::rule::Incoming) -> Result<Vec<u8>, Refusal> {
+    let mut m = serde_json::Map::new();
+    m.insert("verdict".into(), serde_json::to_value(crate::rule::incoming(&i)).unwrap_or_default());
+    Ok(json(Value::Object(m)))
 }
 
 /// `new_device_key`: a new P-256 device key for a phone that keeps it in a

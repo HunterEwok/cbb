@@ -65,6 +65,7 @@ pub mod pair;
 pub mod pair_session;
 pub mod recovery;
 pub mod release;
+pub mod rule;
 pub mod seal;
 pub mod store;
 pub mod strict;
@@ -80,4 +81,5 @@ pub mod third_party {
 pub mod tls;
 #[cfg(test)]
 mod vectors;
+pub mod vless;
 pub mod wire;

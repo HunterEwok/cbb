@@ -175,11 +175,13 @@ dependencies = [
  "base64 0.23.1",
  "chacha20 0.10.2",
  "chacha20poly1305 0.11.0",
+ "crypto-bigint",
  "der",
  "getrandom 0.4.3",
  "hmac 0.13.0",
  "hpke",
  "p256",
+ "p384",
  "proptest",
  "rustls",
  "serde",
@@ -224,15 +226,21 @@ dependencies = [
 name = "cbb-lite"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "blake2",
  "bytes",
  "cbb-core",
+ "chacha20 0.9.1",
+ "chacha20poly1305 0.10.1",
  "getrandom 0.4.3",
  "gotatun",
+ "hmac 0.13.0",
  "if-addrs",
  "libc",
  "mdns-sd",
  "p256",
  "qrcode",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",
@@ -425,6 +433,7 @@ dependencies = [
  "hybrid-array",
  "num-traits",
  "rand_core 0.10.1",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -1388,9 +1397,9 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "libc"
-version = "0.2.191"
+version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
+checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
 name = "linux-raw-sys"
@@ -1591,6 +1600,20 @@ checksum = "d2c9239b2dbc807adbbe147e8cf72ea7450c3a0aabe62cb8e75ff4ec22e1f72a"
 dependencies = [
  "ecdsa",
  "elliptic-curve",
+ "primefield",
+ "primeorder",
+ "sha2",
+]
+
+[[package]]
+name = "p384"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d17b851e6b3e378ab4ecb07fa2ed23f4d15f075735f8fec9fa1e7bdce5f8301f"
+dependencies = [
+ "ecdsa",
+ "elliptic-curve",
+ "fiat-crypto 0.3.0",
  "primefield",
  "primeorder",
  "sha2",

@@ -1458,9 +1458,13 @@ relay, or a hub.
      anything else; with AmneziaWG on as well, both apply.
    - Risks: WireGuard over TCP adds latency on a lossy network (TCP inside TCP), which a
      clipboard tolerates; XHTTP's packet-up costs a request per batch of packets.
-3. **Next, in 0.7: the lite member.** AmneziaWG first, around GotaTun, for Linux and later
-   the ESP32; then VLESS over XHTTP on Linux only, a client of its own on rustls and HTTP/2,
-   without Chrome's TLS fingerprint ([roadmap item 46](roadmap.md#vless-behind-a-web-server)).
+3. **The lite member, in 0.6.** AmneziaWG around GotaTun (`lite/src/awg.rs`), and VLESS over
+   XHTTP on Linux, a client of its own on rustls and HTTP/1.1 (`lite/src/vless.rs`, its bytes
+   in `cbb_core::vless`), without Chrome's TLS fingerprint: a network sees rustls's
+   ClientHello and HTTP/1.1 where Xray's client shows a browser's and HTTP/2. The site's
+   certificate is checked against the system's roots with `cbb_core::tls::web`, which adds
+   RSA and P-384 to the members' provider. REALITY stays Go's: it needs a browser's
+   ClientHello ([roadmap item 46](roadmap.md#vless-behind-a-web-server)).
 
 sing-box is not used (GPL).
 
@@ -1471,7 +1475,7 @@ sing-box is not used (GPL).
 | Go service (Linux, FreeBSD, macOS, Windows) | amneziawg-go with netstack in `cbb`; Xray-core as a Go module                | hub, forwarder, relay or client |
 | iPhone app                     | in the app process, no Network Extension, one Go framework for WireGuard and Xray             | client, or the hub, while the app is open |
 | Android app                    | in the app process, in the foreground service the app already has; no `VpnService`            | client, or the hub while the app is open or in its foreground service |
-| the lite member on Linux       | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; plain WireGuard only    | client                   |
+| the lite member on Linux       | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; AmneziaWG and VLESS over XHTTP of its own, no REALITY | client |
 | the lite member on the ESP32   | none: the home network only, until a mature WireGuard exists for it                           | home only                |
 
 - On phones the tunnel is ordinary UDP traffic of the app. It does not take the phone's
@@ -1486,8 +1490,9 @@ sing-box is not used (GPL).
   C and assembly would need a C cross compiler for each target; the lite member gives it a
   stand-in with ring's API on RustCrypto's ChaCha20-Poly1305 (`lite/ring-shim`), the
   implementation its TLS uses too, so it stays all Rust and links with rust-lld. GotaTun
-  speaks plain WireGuard, not AmneziaWG, so a lite member refuses an obfuscated hub or one
-  reached over VLESS and stays at home; its traffic is plain WireGuard to the network.
+  speaks plain WireGuard; the lite member wraps its messages in AmneziaWG for a hub that
+  hides its tunnel (`lite/src/awg.rs`) and carries them over VLESS with XHTTP when the offer
+  has it (`lite/src/vless.rs`). A hub reached over VLESS with REALITY only keeps it at home.
 - No push notifications: they go through Apple's and Google's servers. A phone gets the
   current text when the app opens, as at home.
 

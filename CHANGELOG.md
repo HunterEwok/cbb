@@ -7,6 +7,27 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The lite member speaks AmneziaWG to a hub that hides its tunnel (lite/src/awg.rs, around
+  GotaTun's WireGuard): it keeps the group's settings from the hub's offer and syncs away from
+  home through the obfuscated hub instead of staying at home (`TestLiteMemberAwayObfuscated`
+  against the Go hub's amneziawg-go).
+- The lite member reaches a hub over VLESS with XHTTP (lite/src/vless.rs, cbb_core::vless):
+  HTTPS to the forwarder's site, its certificate checked against the system's CA certificates
+  or `SSL_CERT_FILE` (RSA and P-384 added to the core's TLS provider for that), HTTP/1.1
+  packet-up requests, its UDP addresses tried first only with AmneziaWG
+  (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server). REALITY stays
+  with the full member.
+- The phones' tunnel in Rust (lite/ffi, `cbb_tunnel`, feature `tunnel`): the lite member's
+  WireGuard with AmneziaWG and VLESS with XHTTP behind a loopback port, for the iPhone and
+  Android apps in place of the Go tunnel (`TestRustPhoneTunnel` against the Go hub); the phone
+  as the group's hub (`hub_start`, `TestRustPhoneHub` with Go clients), its remote invitations
+  with a guest tunnel to the pairing window (`hub_invite`, `TestRustPhoneHubInvite`), and its
+  registration with the forwarder, signed by the app's member key (`cbb_tunnel_register`,
+  `TestRustPhoneHubForwarder` against the Go forwarder), and its link to the blind relay
+  (`cbb_tunnel_relay`, `TestRustPhoneRelay` against the Go relay and Go members). The apps move
+  to it once their node runs in Rust.
+- CI's job "go test with the Rust core" runs the whole Go suite as the release builds are
+  made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
 - The phones' member in the Rust core, for the iPhone and Android apps to move onto from
   their own Swift and Kotlin nodes, as the Aurora app runs it (docs/core-api.md, "The
   member"): `cbb_member_call` in `lite/ffi` takes addresses the app finds itself (Bonjour,
@@ -1185,6 +1206,15 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Go service seals and opens copies through the Rust core in the release builds
+  (`seal_copy_to` and `open_copy`, docs/core-api.md), as the phones and the lite member do,
+  so that every member reads and writes sealed copies with the same code; a build without
+  the core keeps Go's code, which the vectors and a cross test keep the same. The blob's
+  segments stay in Go.
+- The rule of incoming copies (whether the group's copy goes into the clipboard: the mode,
+  a pause, a secret's time, the live window) is one function of the core
+  (`cbb_core::rule`, `copy_verdict`), which the lite member's engine and the Go service ask,
+  pinned by `testdata/interop/copy-verdicts.json`.
 - Every device follows one clipboard rule (D-85): a copy from another device goes into the
   clipboard while it is live, counted from when it was copied in durations, never by the
   sender's clock; after that it is gone and the device keeps what it copied itself. A

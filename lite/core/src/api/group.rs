@@ -177,6 +177,7 @@ pub(super) fn dispatch(op: &str, args: &Value) -> Option<Result<Vec<u8>, Refusal
         "group_admin_peer" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(admin_peer),
         "group_hub_peer" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(hub_peer),
         "group_seal_copy" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_copy),
+        "seal_copy_to" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_copy_to),
         "group_check_copy" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(check_copy),
         "group_command" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(command),
         "group_claim_times" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(claim_times),
@@ -377,6 +378,60 @@ fn seal_copy(a: SealCopyArgs) -> Result<Vec<u8>, Refusal> {
     if made {
         m.insert("key".into(), b64_value(&key));
     }
+    Ok(json(Value::Object(m)))
+}
+
+/// A reader of `seal_copy_to`: its device ID and its public key for sealed
+/// messages.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReaderArg {
+    id: String,
+    #[serde(with = "b64")]
+    seal: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SealCopyToArgs {
+    id: String,
+    origin: String,
+    time: Timestamp,
+    #[serde(with = "b64")]
+    cert: Vec<u8>,
+    #[serde(with = "b64", default)]
+    issuer: Vec<u8>,
+    readers: Vec<ReaderArg>,
+    kind: Kind,
+    #[serde(default)]
+    via: Via,
+    text: String,
+    #[serde(default)]
+    media: Option<Manifest>,
+    #[serde(default)]
+    blob: Option<Blob>,
+    #[serde(with = "b64")]
+    key: Vec<u8>,
+}
+
+/// `seal_copy_to`: seals a copy to the readers the caller names, for a
+/// member that keeps its records itself (the Go service): the same sealing
+/// as `group_seal_copy`, without the set. The answer holds the event
+/// without its signature and `to_sign`.
+fn seal_copy_to(a: SealCopyToArgs) -> Result<Vec<u8>, Refusal> {
+    let bad = |e: Error| refuse(Code::Copy, e.context("The copy cannot be sealed."));
+    let key: [u8; copy::KEY_SIZE] =
+        a.key.as_slice().try_into().map_err(|_| bad(Error::msg("the copy's key is not 32 bytes")))?;
+    let readers: Vec<(String, Vec<u8>)> = a.readers.into_iter().map(|r| (r.id, r.seal)).collect();
+    let content = Content { kind: a.kind, via: a.via, text: a.text, media: a.media };
+    let d = copy::seal(&a.id, &a.origin, a.time, &a.cert, &a.issuer, &readers, &content, a.blob, &key).map_err(bad)?;
+    let mut m = Map::new();
+    m.insert(
+        "event".into(),
+        serde_json::to_value(&d.sealed)
+            .map_err(|e| refuse(Code::Request, Error::with("The copy does not encode.", e)))?,
+    );
+    m.insert("to_sign".into(), b64_value(&d.to_sign));
     Ok(json(Value::Object(m)))
 }
 

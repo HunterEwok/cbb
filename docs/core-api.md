@@ -141,6 +141,18 @@ renews (`renew`) every member certificate that is due, each connected member's, 
 phone's own, as the phone kits do when a peer connects. `TestFFIPhoneRoot` renames and removes a
 computer through it.
 
+Built with the feature `tunnel` (the iPhone and Android libraries), the library is also the
+phones' tunnel (`lite/ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tunnel` takes
+a JSON request by its `op` for the tunnel to the hub (a loopback port that leads to the hub's
+member port, with AmneziaWG and VLESS with XHTTP), for the phone as the group's hub (its
+clients, its remote invitations with a guest tunnel to the pairing window), and their status;
+`cbb_tunnel_register` registers the phone's hub with the group's forwarder and
+`cbb_tunnel_relay` links the phone to the blind relay, both signing their TLS with the member
+key through the same callback, the relay's link telling the app through an events' callback
+which connections it joined. `TestRustPhoneTunnel`, `TestRustPhoneHub`,
+`TestRustPhoneHubInvite`, `TestRustPhoneHubForwarder` and `TestRustPhoneRelay` run them against
+Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
+
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its
 memory functions), run by wazero under the tag `cbbwasm`. Every release build of `cbb`, on
@@ -174,6 +186,8 @@ over `internal/core/cbb_core.wasm`, so no build output lands in the source tree.
 | `group_hub_peer` | the set's arguments, `device`, `chain` | `{"hub"}`: whether the device may be a hub of the group, whose offers a member keeps: the root, an admin, or a device that only passes copies on ([protocol.md](protocol.md), section 11, "Two kinds of hub") |
 | `group_seal_copy` | the set's arguments, `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `kind`, `via` (optional), `text`, `media` (a manifest, optional), `blob` (`{size, sha256}`, optional) and `key` (base64, 32 bytes, the key that sealed the blob; optional without a blob) | `{"event", "to_sign", "readers", "key"}`: the copy sealed to the readers the set names ([protocol.md](protocol.md), section 4, "Sealing" and "Readers"), without `sig`; the caller signs `to_sign` (base64) with its member key, ECDSA P-256 with SHA-256 in DER, and puts it in the event's `sig`. `key` comes back when the core made it. A copy that cannot be sealed is code 17 |
 | `group_check_copy` | the set's arguments, `event` (a copy as the member protocol carries it) | `{}` when the copy's certificate, its issuer, its origin's key and its signature check against the set, as a member checks a copy before it passes it on; code 17 with the reason otherwise |
+| `seal_copy_to` | `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `readers` (`[{id, seal}]`, `seal` base64: each reader's public key for sealed messages), `kind`, `via` (optional), `text`, `media` (optional), `blob` (optional) and `key` (base64, 32 bytes) | `{"event", "to_sign"}`: the copy sealed to the readers given, as `group_seal_copy` seals it, for a member that keeps its records itself (the Go service); the caller signs `to_sign` |
+| `copy_verdict` | `receives`, `paused`, `kind`, `mark`, `unread`, `has_text`, `has_media`, `takes_media`, `held` (booleans, false when left out but `receives`), `age_ms`, `window_ms`, `secret_ttl_ms` | `{"verdict"}`: whether the group's current copy goes into the member's clipboard (`write`), or why not: `mode`, `paused`, `unread`, `secret_gone`, `no_text`, `held` or `old` (`cbb_core::rule`; the cases of `testdata/interop/copy-verdicts.json`) |
 | `open_copy` | `event`, `me` (the reader's device), `secret` (base64, its secret for sealed messages) | `{"kind", "via", "text", "media", "key"}`: what the copy holds, and the copy's key (base64), which opens its blob; code 17 when it is not sealed to `me`, does not open or breaks a rule of its content. It does not check the origin |
 | `seal_segment`, `open_segment` | `key` (base64, the copy's key), `index` (from 0), `last` (the blob's last segment), `data` (base64: at most 64 KiB to seal, 65 552 bytes to open) | `{"data"}`: the segment sealed or opened ([protocol.md](protocol.md), section 4, "The blob"); a segment that does not open is code 17 |
 | `group_command` | the set's arguments, `command` (`{body, sig, chain}`), `me` (the member's device), `secret` (optional, base64: the member's secret for sealed messages) | `{"command", "signer", "root", "sender", "verified", "opened"}`: the command's body as an object, with a sealed command's orders opened with `secret` and put in it (`opened`), the device that signed it, whether it signed as the root, and the device the limits count it for, `verified` when that device's own key signed; a command refused is code 15, as is a sealed one without `secret` or one that does not open with it, and a `paste` in the open for a member whose device record has a `seal` key |
