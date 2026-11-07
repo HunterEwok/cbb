@@ -221,7 +221,9 @@ already expired cannot be renewed this way, since the handshake fails; the devic
 Full members (Linux, FreeBSD, Windows and macOS computers) and lite members publish and browse;
 phones and joining devices only browse, except a phone that is the group's hub, which
 publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
-hub").
+hub"), and a device that listens to join (section 6, "The joiner listens"), which publishes
+its new device ID as the instance, its listening port in the SRV record and `v=1`, `j=1`,
+`f=<fingerprint>` while it waits.
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
 [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns`; a lite
 member publishes and browses with the `mdns-sd` crate (`lite/src/discovery.rs`), which
@@ -252,6 +254,8 @@ TXT strings (each at most 255 bytes):
 | `v` | `1` | protocol version |
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
 | `p` | `1` | present only while a computer pairing window is open |
+| `j` | `1` | present only on a device that listens to join; it has no `g`, so no member dials it as one |
+| `f` | fingerprint | with `j`: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
 | `r` | `lite` or `phone` | `lite` on a lite member, which the full members do not dial (section 4); `phone` on a phone that is the group's hub while its app is open, which the full and lite members do not dial, since it dials them; the other phones dial it |
 
 The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
@@ -1044,7 +1048,7 @@ it joins, the root names its admin key in a `handover` record (`cbb handover`, s
 
 ### The joiner listens (for the phone)
 
-`cbb pair` without `-code` turns the direction round, so that the device that scans
+`cbb pair` without `-code`, on a device in no group, turns the direction round, so that the device that scans
 the QR code dials the computer, and nothing is announced:
 
 - The joiner listens on its member port, which nothing holds while it is in no group, when
@@ -1074,7 +1078,15 @@ the QR code dials the computer, and nothing is announced:
   attempts, one at a time, and gives up after the third wrong code or the 5 minutes.
 - On the member the window counts attempts as above. It is not announced (`p` stays unset)
   and takes no pairing connections on the member port, so the code is good only against the
-  computer whose certificate `fp` names.
+  device whose certificate `fp` names.
+- While it listens the joiner announces itself by mDNS (section 3: TXT `j=1` and `f`, its
+  fingerprint), so that a computer of the group admits it by the six digits alone, which the
+  user types from the joiner's screen, where a phone scans the QR code. The computer browses
+  for such devices for up to 10 s, then dials each with the code, the addresses and `f` taking
+  the place of the QR code's, until one joins; at another device that waits, the code fails
+  as a wrong one there. The announcement is not authenticated, and needs not be: CPace gives
+  a device that does not know the code one guess per attempt and nothing to test guesses
+  with offline, and the code admits only the device the user sees.
 - A phone joins a phone group the same way (CBBKit's `PairingJoiner`): it listens
   while its "Join a group" screen is open, shows this QR code, and an admin phone scans it
   and dials. The phone makes its admin key before it listens and sends it in ADa; the root
@@ -1216,7 +1228,7 @@ A connection carries one request: the service reads the first message and dispat
 | `status` | none | `{status, done}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, incoming_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `incoming_ms` is the group's live window (section 5, "Writing the member's own clipboard"); `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
 | `leave` | none | `{done}`: the device leaves its group (D-83): the service deletes the keys and the group's files, turns remote paste and the quick actions off, and restarts in no group. Refused on the group's root while the group has other devices; taken while the group file is damaged |
 | `new` | none | `{status, done}`: the device creates a group and is its root (section 10). Only on a device in no group |
-| `pair` | none | first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
+| `pair` | none, or `{code, addrs?, fingerprint?, admins?}` | without `code`: first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. With `code`, a device that listens to join (section 6, "The joiner listens") is admitted: at `addrs` with `fingerprint`, as its QR code gives them, or, without them, each device that announces that it waits (section 3, TXT `j`) found within 10 s, until one joins; then `{name, done}` or an error. `admins`, on the root, lets the window make a phone an admin. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
 | `join` | `{code, address?}`, `{code, listen, expires}` or `{invite, consent}` | `{done}` or an error. Without `address` it browses for `p=1`. With `listen` it first answers `{addrs, fingerprint}` for the QR code, then `{done}` or an error when a member admitted it, or after `expires` seconds. With `invite`, the text of a remote invitation (section 12), it needs `consent` (sync away from home is turned on, and the device keeps its keys in files), first answers `{fingerprint}` (of this device's key, for the admin to compare), then `{done}` or an error. Hanging up cancels |
 | `invite` | `{expires?}`: seconds, 3600 if absent, at most 86 400 | Only on the group's hub, when it can admit devices. First `{invite, expires}`: the invitation's text. Then, for each device that used it and proved it knows the secret, `{joining: {id, name, os, fingerprint}}`, which the client answers with `{"op": "answer", consent}` (`true` admits it); last `{name, done}` or an error. Hanging up cancels the invitation |
 | `sync` | `{name, device?, for_ms?}`: `name` `on` or `off`; `device`, a name or device ID, for another device (on an admin); `for_ms`, only with `off` and no `device`, from 1 to 2 592 000 000 (30 days), absent for until turned on | without `device`: `{status, done}`, saved in `sync.json` and in effect, `status.mode` `shared` or `own` and, while off for a time, `status.sync_until_ms` when it turns on again, in Unix milliseconds (design.md, "Sync on and off"); with it: `{done}` once that device answered `done` to the `mode` command (section 15), or an error with its reason. Without `device` on either socket, so that the apps switch it without the administrator; with it only on the admin socket |
@@ -3842,7 +3854,7 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | Media part `type` | `image/png`, `image/jpeg`, `text/html` | 4 |
 | Sync mode | `shared` (sync on), `own` (sync off) | 4, 15 |
 | Key store | `file`, `hardware`, `rootless`, `proven` (records only); proof kinds `android-tee`, `android-strongbox`, `tpm` | 17 |
-| mDNS TXT keys | `v`, `g`, `p`, `r` (`lite`, `phone`) | 3 |
+| mDNS TXT keys | `v`, `g`, `p`, `j`, `f`, `r` (`lite`, `phone`) | 3 |
 | Record `type` | `device`, `revoke`, `root`, `freeze`, `thaw` | 10 |
 | Command `type` | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off` | 15 |
 | Command result `status` | `done`, `refused`, `failed` | 15 |

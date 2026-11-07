@@ -92,6 +92,8 @@ Commands:
                           sends or fetches, at home (100MiB) and away from home (25MiB).
   pair                    In a group: show a code for a new computer. In none: join one,
                           by the phone's QR code or the code from cbb pair on the group.
+  pair -qr                In a group: admit the new device that shows a code and waits;
+                          type its code, or paste its QR code's text.
   pair -code [address]    Join with the code from cbb pair on the root or an admin.
   pair -invite file       Join from afar with an invitation from cbb invite.
   invite [-for 1h]        Invite a device from afar: run on the group's hub.

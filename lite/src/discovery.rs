@@ -22,6 +22,26 @@ use crate::pair::home_address;
 use crate::uptime;
 
 const SERVICE: &str = "_cbb._tcp.local.";
+
+/// Announces a device that listens to join (docs/protocol.md section 3,
+/// TXT `j=1` and `f`, its certificate's fingerprint), so that a computer of
+/// the group finds it by the code it shows. The announcement ends when the
+/// returned daemon is dropped or shut down; None when mDNS is not at hand.
+pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<mdns_sd::ServiceDaemon> {
+    let daemon = mdns_sd::ServiceDaemon::new().ok()?;
+    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
+    let only = interfaces::only();
+    if !only.is_empty() {
+        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
+        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
+    }
+    let txt = [("v", "1"), ("j", "1"), ("f", fingerprint)];
+    let info = mdns_sd::ServiceInfo::new(SERVICE, id.as_str(), &format!("{}.", id.host_name()), "", port, &txt[..])
+        .ok()?
+        .enable_addr_auto();
+    daemon.register(info).ok()?;
+    Some(daemon)
+}
 const MAX_WAIT: Duration = Duration::from_secs(30);
 const STEADY: Duration = Duration::from_secs(30);
 /// At most this many connections may be in their TLS handshake at once.

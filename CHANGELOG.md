@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- A new device shows a code, and a computer of the group types it: a device that listens to
+  join announces itself by mDNS (TXT `j=1` and its fingerprint, docs/protocol.md sections 3
+  and 6), and `cbb pair -qr` takes the six digits as well as the QR code's text, finds the
+  device that waits and admits it (`TestJoinByShownCode`). The lite member announces itself
+  the same way while it waits.
 - The lite member speaks AmneziaWG to a hub that hides its tunnel (lite/src/awg.rs, around
   GotaTun's WireGuard): it keeps the group's settings from the hub's offer and syncs away from
   home through the obfuscated hub instead of staying at home (`TestLiteMemberAwayObfuscated`
