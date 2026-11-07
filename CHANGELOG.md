@@ -1283,6 +1283,12 @@ All notable changes to cbb are documented in this file. The format follows
 - The Rust code is one workspace at the top of the repository: the core in `core/`, the
   member's program `cbb` in `member/`, and `ffi/`, `embassy/`, `esp32/`, `ring-shim/` and
   `wasm/` beside them, instead of all under `lite/`. Nothing changes for an installed member.
+- The Android and iPhone apps take the group over through their member in the Rust core, as
+  the Aurora app does (ffi's `cbb_member_manage`: `root_ca`, `take_over`, `take_handed_over`,
+  `recover`, `finish_takeover`): from a lost root phone, when the root hands the group over,
+  and with the recovery key, on a YubiKey too. The kits no longer sign the claim and the new
+  root's records themselves (`PhoneGroup.takeOver`, `takeHandedOver`, `finishTakeOver` are
+  gone; `CoreMember.claim` and `finishTakeover` take their place).
 - The Android and iPhone apps make their group, admit a phone or a computer and join another
   phone's group through the Rust core's admission (ffi's `cbb_group_new`, `cbb_admit_*`
   and `cbb_join_*`, each kit's `CorePairing`), as the Aurora app does, in place of the kits'

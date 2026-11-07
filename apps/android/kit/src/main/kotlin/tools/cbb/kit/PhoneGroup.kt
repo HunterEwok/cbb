@@ -210,18 +210,18 @@ class PhoneGroup internal constructor(
         )
 
     /**
-     * Claims the group for this admin phone when the root phone lost is gone
-     * (docs/protocol.md, section 10, "Handing the group over"): a claim, signed with
-     * this phone's admin key (adminSigner), that hands the group to newRoot,
-     * a root CA for a new key of this phone. The claim waits the group's
-     * delay (72 hours unless the root set another), and the root cancels it
-     * meanwhile if it is still in use; [finishTakeOver] then makes this phone
-     * the root. It returns the record to send.
+     * Checks that this admin phone may claim the group when the root phone
+     * lost is gone (docs/protocol.md, section 10, "Handing the group over"),
+     * before the app makes a new root key: the core's member then signs the
+     * claim (CoreMember.claim), which waits the group's delay (72 hours unless
+     * the root set another), in which the root cancels it if it is still in
+     * use; [claimed] notes it, and CoreMember.finishTakeover and [becameRoot]
+     * then make this phone the root.
      */
-    fun takeOver(lost: String, adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
+    fun checkTakeOver(lost: String) {
         if (adminCA == null || isRoot) throw Failure("this phone is no admin")
         if (lost != records.rootDevice || lost == device) throw Failure("that phone does not hold the root")
-        return makeClaim(lost, adminSigner, newRoot, now)
+        checkClaim()
     }
 
     /**
@@ -238,48 +238,48 @@ class PhoneGroup internal constructor(
         }
 
     /**
-     * Takes the group the root handed to this phone: a claim, as in
-     * [takeOver], that takes effect at once because the root signed a
-     * handover for this phone's admin key; [finishTakeOver] then makes this
-     * phone the root. The old root's device stays in the group. It returns
-     * the record to send.
+     * Checks that this phone may take the group the root handed to it: a
+     * claim, as in [checkTakeOver], that takes effect at once because the
+     * root signed a handover for this phone's admin key. The old root's
+     * device stays in the group.
      */
-    fun takeHandedOver(adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
+    fun checkHandedOver() {
         if (!handedToMe) throw Failure("the group was not handed to this phone")
-        return makeClaim(null, adminSigner, newRoot, now)
+        checkClaim()
     }
 
     /**
-     * Claims the group with its recovery key (docs/protocol.md, section
-     * 10, "The recovery key"), on a new phone that [Restore] made a member
-     * of it under the key's admin CA: a claim, signed with the recovery key
-     * (recoverySigner), that hands the group to newRoot, as in [takeOver].
-     * The lost root's device goes when it takes effect. It returns the
-     * record to send.
+     * Checks that this new phone, which [Restore] made a member of the group
+     * under the recovery key's admin CA, may claim the group with that key
+     * (docs/protocol.md, section 10, "The recovery key"). The lost root's
+     * device goes when the claim takes effect.
      */
-    internal fun claimWithRecovery(recoverySigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
+    fun checkRecovery() {
         val ca = adminCA ?: throw Failure("this phone holds no recovery key")
         if (isRoot) throw Failure("this phone is the group's root already")
         if (claim != null) throw Failure(CLAIM_WAITING)
         if (records.recovery?.contentEquals(Records.keyHashOfCert(ca)) != true) throw Failure(Restore.NOT_THE_KEY)
-        val b = Records.Body.of("claim", recoverySigner, now)
-        b.root = newRoot
-        val r = sign(b, recoverySigner)
-        claim = newRoot
-        claimedFrom = records.rootDevice
-        return r
     }
 
-    private fun makeClaim(lost: String?, adminSigner: CertificateSigner, newRoot: ByteArray, now: Instant): Member.Record {
+    private fun checkClaim() {
         if (claim != null) throw Failure(CLAIM_WAITING)
         val me = devices.firstOrNull { it.id == device }
         if (me == null || !me.may("takeover")) throw Failure(NO_TAKEOVER)
-        val b = Records.Body.of("claim", adminSigner, now)
-        b.root = newRoot
-        val r = sign(b, adminSigner)
+    }
+
+    /** Notes this phone's claim for newRoot, which the core's member signed, from the lost root's device lost (none for a handed group). */
+    fun claimed(newRoot: ByteArray, lost: String?) {
         claim = newRoot
         claimedFrom = lost
-        return r
+    }
+
+    /** This phone's claim among rs, the member's records, to send on a connection the member does not make (a records-only one). */
+    fun claimRecord(rs: List<Member.Record>): Member.Record? {
+        val c = claim ?: return null
+        return rs.lastOrNull { r ->
+            val o = Wire.parse(r.body) ?: return@lastOrNull false
+            o.optString("type") == "claim" && o.optBytes("root")?.contentEquals(c) == true
+        }
     }
 
     /** The state of this phone's claim, as the records say ("pending", "effective", "cancelled", "void" and the others); null without one. */
@@ -289,6 +289,12 @@ class PhoneGroup internal constructor(
             val k = runCatching { Records.keyHashOfCert(c) }.getOrNull() ?: return null
             return records.claims.lastOrNull { it.root.contentEquals(k) }?.state
         }
+
+    /** Drops this phone's claim, which the core's member said was cancelled or became void. */
+    fun dropClaim() {
+        claim = null
+        claimedFrom = null
+    }
 
     /** Drops this phone's claim when the root cancelled it or it became void; reports whether it did. */
     fun dropEndedClaim(): Boolean {
@@ -300,66 +306,21 @@ class PhoneGroup internal constructor(
     }
 
     /**
-     * Makes this phone the root once the records make its claim's new root
-     * the current root, and signs what a new root starts with: its own device
-     * that holds the root, the admins it keeps, and a removal of the lost
-     * root's device. rootSigner is the new root's key. A
-     * phone that claimed with the recovery key has no device record yet: the
-     * new root signs one, under name, with seal. This phone's member
-     * certificate is reissued from the new root, as a root admits only with
-     * a certificate of its own. A claim that was cancelled or became void is
-     * dropped. It returns the records to send; none while the claim waits.
+     * Makes this phone the root once the core's member finished its claim
+     * (CoreMember.finishTakeover): cert is its member certificate from the
+     * new root, records the member's records, with those the new root
+     * signed. The phone signs with the new root key from then on and holds
+     * no admin CA.
      */
-    fun finishTakeOver(rootSigner: CertificateSigner, now: Instant, name: String = "Android", seal: ByteArray? = null): List<Member.Record> {
-        records.refresh()
+    fun becameRoot(cert: ByteArray, records: List<Member.Record>) {
+        add(records)
         adoptRoots()
-        val c = claim ?: return emptyList()
-        if (!currentRoot.contentEquals(c)) {
-            dropEndedClaim()
-            return emptyList()
-        }
-        val lost = claimedFrom
-        val list = devices
         isRoot = true
+        memberCert = cert
+        memberIssuer = null
+        adminCA = null
         claim = null
         claimedFrom = null
-        val out = mutableListOf<Member.Record>()
-        val memberKey = CertificateInfo(memberCert).publicKey
-        memberCert = GroupCertificates.member(device, memberKey, currentRoot, rootSigner, now)
-        memberIssuer = null
-        val me = list.firstOrNull { it.id == device }
-        out += if (me != null) {
-            record(device, me.name, "phone", me.key, rootSigner, now, os = me.os ?: "android", store = me.store, kind = me.kind, proof = me.proof, seal = me.seal)
-        } else {
-            record(device, validName(name), "phone", Records.keyHash(memberKey), rootSigner, now, os = "android", store = Records.HARDWARE, seal = seal)
-        }
-        val revoke = mutableListOf<ByteArray>()
-        for (d in list) {
-            if (d.id == device) continue
-            val admin = d.adminKey
-            if (d.id == lost) {
-                revoke += d.keys
-            } else if (admin != null && !d.frozen) {
-                out += record(d.id, d.name, d.role, d.key, rootSigner, now, admin, d.os, d.store, d.kind, d.proof, d.powers, d.commands, d.seal, d.forwardOnly)
-            }
-        }
-        if (revoke.isNotEmpty()) {
-            val b = Records.Body.of("revoke", rootSigner, now)
-            b.keys = revoke.distinctBy { it.toHex() }.sortedWith { a, b2 -> compareBytes(a, b2) }
-            out += sign(b, rootSigner)
-        }
-        // The state counts only the current root's settings: the old root's
-        // go on under this one, the takeover delay and key level.
-        val old = Records.keyHashOfCert(if (roots.size >= 2) roots[roots.size - 2] else groupCA)
-        val (delay, level) = settings(old)
-        if (delay != null || level != null) {
-            val b = Records.Body.of("settings", rootSigner, now)
-            b.takeoverDelayMS = delay
-            b.keyLevel = level
-            out += sign(b, rootSigner)
-        }
-        adminCA = null
-        return out
     }
 
     /**
@@ -480,7 +441,7 @@ class PhoneGroup internal constructor(
      * had, and of its admin key for an admin, which every member then
      * refuses, and returns the record to send. What an admin signed before
      * stays (docs/protocol.md, section 10, "Removals and freezes keep what the author
-     * saw"). The root phone is taken over with takeOver instead.
+     * saw"). The root phone is taken over instead (CoreMember.claim).
      */
     fun revoke(device: String, caSigner: CertificateSigner, now: Instant): Member.Record {
         if (!isAdmin) throw Failure("this phone is no admin")

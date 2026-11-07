@@ -276,7 +276,7 @@ class KeystoreSigner(
      * TLS and the root or admin key the certificates and records the core
      * issues. With authorize, the user allows each signature first.
      */
-    fun signDigest(digest: ByteArray): ByteArray {
+    override fun signDigest(digest: ByteArray): ByteArray {
         val s = Signature.getInstance("NONEwithECDSA").apply { initSign(privateKey) }
         return (authorize?.invoke(s) ?: s).run {
             update(digest)

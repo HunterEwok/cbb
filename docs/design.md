@@ -1183,7 +1183,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   the hub moves the role the same way (`cbb global move`). Built in 0.5 (docs/protocol.md,
   section 11, "Moving the hub").
 - **Losing the phone.** When the root phone that is the hub is lost, the admin phone that
-  takes the group over (`PhoneGroup.takeOver`) becomes its hub too, and the clients take
+  takes the group over (the core's `take_over`, docs/core-api.md) becomes its hub too, and the clients take
   its offer because the records no longer make the lost phone an admin. Clients at home learn
   the new hub there; a client far away cannot learn it from a lost phone and joins again
   with a new remote invitation. That is one more reason for a second phone as an admin,

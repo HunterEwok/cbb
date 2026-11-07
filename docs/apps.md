@@ -912,12 +912,16 @@ the app on real devices.
   `CorePairing` over ffi's `cbb_group_new`, `cbb_admit_*` and `cbb_join_*`; the Swift
   kit's `CorePairing.Listener` and `Connection` are the plain TCP sockets around it). An
   admin phone that removes the root
-  phone takes the group over (`PhoneGroup.takeOver`, docs/records-v2.md): it makes a new
-  root key in the Secure Enclave behind Face ID and signs a claim with its admin key. The
-  claim waits as long as the root decided (72 hours by default, `setTakeoverDelay`), and the
-  root's phone may cancel it (`resolve`). Once the wait is over the app finishes the takeover
-  by itself (`finishTakeOver`): as the new root it signs its own record, keeps the other
-  admins and removes the lost phone. The kit keeps the records file and asks the Rust core
+  phone takes the group over (docs/records-v2.md) through its member in the Rust core, as the
+  Aurora app does (docs/core-api.md, `cbb_member_manage`): it makes a new root key in the
+  Secure Enclave behind Face ID, the member makes its root CA (`CoreMember.rootCA`) and
+  signs a claim with the phone's admin key (`CoreMember.claim`, after the kit's
+  `PhoneGroup.checkTakeOver`). The claim waits as long as the root decided (72 hours by
+  default, `setTakeoverDelay`), and the root's phone may cancel it (`resolve`). Once the wait
+  is over the app finishes the takeover by itself (`CoreMember.finishTakeover`, which signs
+  nothing while the claim waits, then `PhoneGroup.becameRoot`): as the new root the member
+  signs the phone's certificate from it, its own record, keeps the other admins and removes
+  the lost phone. The kit keeps the records file and asks the Rust core
   what it says (`RecordSet`, docs/core-api.md, "The record set"); the Android kit does the
   same, with its root key in the Keystore behind BiometricPrompt.
 - A phone joins a computer's group from its Start screen ("My group was made on a computer";
@@ -932,7 +936,7 @@ the app on real devices.
   `handover` record naming this phone's admin key, which `group_view` reports as `handed_to`),
   Home shows "The group is yours to take". Its button makes a new root key (the Secure Enclave
   or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
-  (`takeHandedOver`), which takes effect at once, and finishes the takeover as after a lost
+  (the member's `take_handed_over`), which takes effect at once, and finishes the takeover as after a lost
   root; the computer is not removed.
 - A new phone restores the group with the recovery key from its Start screen ("I have the
   group's recovery sheet"; docs/protocol.md, section 10, "The recovery key"). It scans the
@@ -941,7 +945,9 @@ the app on real devices.
   by their tag and lets the recovery key issue its member certificate (`Restore`). A computer
   takes it on a connection that carries records only and sends the group's first root in its
   hello; the app checks the records and the computer, makes a new root key behind Face ID or
-  BiometricPrompt, signs a claim with the recovery key and sends it, and forgets the key. Home
+  BiometricPrompt, starts its member in the Rust core, which signs a claim with the recovery
+  key (the member's `recover`, `Restore.claim`), sends the claim on that connection too, and
+  forgets the key. Home
   then shows the claim's time left, and once it takes effect the app finishes as after a lost
   root: it signs its own device record and gets a member certificate from the new root.
 - The recovery key on a YubiKey, over NFC (docs/protocol.md, section 10, "On a hardware

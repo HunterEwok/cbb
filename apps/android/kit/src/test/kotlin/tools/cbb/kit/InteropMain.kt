@@ -187,9 +187,25 @@ private fun restoreTLS(host: String, port: Int, key: ByteArray, cert: ByteArray,
     // The handshake takes any certificate; Restore.group checks the computer's against the records.
     fun dial() = TLSTransport.dial(host, port, Member.ALPN, memberKey.keyPair.private, r.chain) { true }
     val g = r.group(Restore.exchange(dial(), "Android", "android", now), now)
-    val newRoot = GroupCertificates.groupCA(SoftwareSigner(), now, pathLength = 1)
-    val claim = r.claim(g, newRoot, now)
-    Restore.exchange(dial(), "Android", "android", Instant.now(), send = listOf(claim))
+    // The core's member signs the claim, as in the app; it goes out on a records-only connection.
+    val dir = kotlin.io.path.createTempDirectory("cbb-restore").toFile()
+    val m = CoreMember.start(
+        CoreMember.Start(dir, "Android", "android", device = r.device, publicKey = memberKey.publicKeyDER, seal = CoreGroup.SEAL,
+            cert = r.memberCert, issuer = r.adminCA, groupCA = g.groupCA, roots = g.trusted),
+        memberKey::signDigest,
+    ) { }
+    val newRoot = try {
+        m.addRecords(g.records.records)
+        val newRootKey = SoftwareSigner()
+        val newRoot = m.rootCA(newRootKey.publicKeyDER, newRootKey::signDigest)
+        r.claim(g, m, newRoot)
+        val claim = g.claimRecord(m.records()) ?: fail("the member holds no claim")
+        Restore.exchange(dial(), "Android", "android", Instant.now(), send = listOf(claim))
+        newRoot
+    } finally {
+        m.close()
+        dir.deleteRecursively()
+    }
     println(r.device)
     println(Base64.getEncoder().encodeToString(newRoot))
     System.out.flush()

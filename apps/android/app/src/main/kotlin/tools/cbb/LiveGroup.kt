@@ -1105,19 +1105,26 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     last = e
                     continue
                 }
-                // A root key left from a group this phone made before goes.
-                val root = newRootKey(g.tag, R.string.reason_restore)
-                val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
-                val claim = r.claim(g, newRoot, Instant.now())
                 synchronized(lock) {
                     newDeviceMode()
                     g.save(file)
                     state = g
                 }
-                // Sync sends the claim too, as the records differ; this way it is out at once.
-                runCatching { Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now(), send = listOf(claim)) }
-                    .onFailure { Log.w(TAG, "sending the claim; sync sends it later", it) }
+                // The core's member, as this new phone, signs the claim with the recovery key.
                 startSync()
+                val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+                // A root key left from a group this phone made before goes.
+                val root = newRootKey(g.tag, R.string.reason_restore)
+                val newRoot = n.rootCA(root.publicKeyDER, root::signDigest)
+                val claimed = copyOfState() ?: return@withContext
+                r.claim(claimed, n, newRoot)
+                claimed.add(n.records())
+                adopt(claimed)
+                // The member sends the claim once it connects; a records-only connection takes it out at once.
+                claimed.claimRecord(n.records())?.let { claim ->
+                    runCatching { Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now(), send = listOf(claim)) }
+                        .onFailure { Log.w(TAG, "sending the claim; sync sends it later", it) }
+                }
                 return@withContext
             }
             throw last
@@ -1901,23 +1908,34 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
             throw last
         }
-        val newRoot = withContext(Dispatchers.IO) {
-            GroupCertificates.groupCA(newRootKey(g.tag, R.string.reason_restore), Instant.now(), pathLength = 1)
-        }
-        waitForSecondTap()
-        val claim = YubiKeyNfc.withCard(ui) { card ->
-            Piv.select(card)
-            r.claim(g, newRoot, Instant.now(), Piv.Signer(card, slot, CertificateInfo(r.adminCA).publicKey, pin))
-        }
-        withContext(Dispatchers.IO) {
+        // The core's member, as this new phone, signs the claim with the key on the card.
+        val n = withContext(Dispatchers.IO) {
             synchronized(lock) {
                 newDeviceMode()
                 g.save(file)
                 state = g
             }
-            runCatching { Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now(), send = listOf(claim)) }
-                .onFailure { Log.w(TAG, "sending the claim; sync sends it later", it) }
             startSync()
+            currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        }
+        val newRoot = withContext(Dispatchers.IO) {
+            val root = newRootKey(g.tag, R.string.reason_restore)
+            n.rootCA(root.publicKeyDER, root::signDigest)
+        }
+        val claimed = withContext(Dispatchers.IO) { copyOfState() } ?: return
+        waitForSecondTap()
+        YubiKeyNfc.withCard(ui) { card ->
+            Piv.select(card)
+            r.claim(claimed, n, newRoot, Piv.Signer(card, slot, CertificateInfo(r.adminCA).publicKey, pin))
+        }
+        withContext(Dispatchers.IO) {
+            claimed.add(n.records())
+            adopt(claimed)
+            // The member sends the claim once it connects; a records-only connection takes it out at once.
+            claimed.claimRecord(n.records())?.let { claim ->
+                runCatching { Restore.exchange(dial(), PhoneGroup.validName(deviceName), "android", Instant.now(), send = listOf(claim)) }
+                    .onFailure { Log.w(TAG, "sending the claim; sync sends it later", it) }
+            }
         }
     }
 
@@ -1976,18 +1994,20 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * [finishTakeOverIfDue] then makes this phone the root.
      */
     private suspend fun takeOver(id: String) {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        withContext(Dispatchers.IO) { copyOfState() }?.checkTakeOver(id) ?: return
         val prompts = Prompts()
         val admin = signer(Keys.ADMIN, R.string.reason_take_over, prompts = prompts)
-        val r = withContext(Dispatchers.IO) {
-            val g = copyOfState() ?: return@withContext null
+        withContext(Dispatchers.IO) {
+            val g = copyOfState() ?: return@withContext
             // A root key left from a group this phone made before goes.
             val root = newRootKey(g.tag, R.string.reason_take_over, prompts)
-            val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
-            val r = g.takeOver(id, admin, newRoot, Instant.now())
+            val newRoot = n.rootCA(root.publicKeyDER, root::signDigest)
+            n.claim(CoreMember.Claim.TAKE_OVER, newRoot, admin.publicKeyDER, g.adminCA ?: return@withContext, admin::signDigest, id)
+            g.claimed(newRoot, id)
             adopt(g)
-            r
-        } ?: return
-        published(listOf(r))
+        }
+        takeRecords(n)
     }
 
     /**
@@ -1998,47 +2018,66 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * computer that was the root stays in the group.
      */
     suspend fun takeHandedGroup() {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        withContext(Dispatchers.IO) { copyOfState() }?.checkHandedOver() ?: return
         val prompts = Prompts()
         val admin = signer(Keys.ADMIN, R.string.reason_take_handed, prompts = prompts)
-        val r = withContext(Dispatchers.IO) {
-            val g = copyOfState() ?: return@withContext null
+        withContext(Dispatchers.IO) {
+            val g = copyOfState() ?: return@withContext
             val root = newRootKey(g.tag, R.string.reason_take_handed, prompts)
-            val newRoot = GroupCertificates.groupCA(root, Instant.now(), pathLength = 1)
-            val r = g.takeHandedOver(admin, newRoot, Instant.now())
+            val newRoot = n.rootCA(root.publicKeyDER, root::signDigest)
+            n.claim(CoreMember.Claim.TAKE_HANDED_OVER, newRoot, admin.publicKeyDER, g.adminCA ?: return@withContext, admin::signDigest)
+            g.claimed(newRoot, null)
             adopt(g)
-            r
-        } ?: return
-        published(listOf(r))
+        }
+        takeRecords(n)
         finishTakeOverIfDue()
     }
 
     /**
-     * Makes this phone the group's root once its claim took effect: it
-     * signs, with the new root key, what a new root starts with, and becomes
-     * the hub when the lost phone was (docs/design.md, "Losing the phone").
-     * A claim that was cancelled is dropped.
+     * Makes this phone the group's root once its claim took effect: the
+     * core's member signs, with the new root key, this phone's certificate
+     * from the new root and what a new root starts with, and the phone
+     * becomes the hub when the lost phone was (docs/design.md, "Losing the
+     * phone"). A claim that was cancelled or became void is dropped; one
+     * that still waits stays.
      */
     suspend fun finishTakeOverIfDue() {
+        val n = currentNode ?: return
         val g = withContext(Dispatchers.IO) { copyOfState() } ?: return
-        if (g.claim == null) return
-        g.records.refresh()
-        g.adoptRoots()
+        val claim = g.claim ?: return
         val lost = g.claimedFrom
-        if (!g.currentRoot.contentEquals(g.claim)) {
-            if (!g.dropEndedClaim()) return
-            Log.i(TAG, "the claim to take the group over ended; this phone stays an admin")
-            withContext(Dispatchers.IO) { adopt(g) }
-            return
-        }
         try {
-            val root = signer(Keys.ROOT, R.string.reason_take_over)
-            val rs = withContext(Dispatchers.IO) {
-                val rs = g.finishTakeOver(root, Instant.now(), PhoneGroup.validName(deviceName), sealKey())
-                adopt(g)
-                rs
+            // The member answers where the claim stands without signing while it waits; only then is the key asked.
+            val root = Keys.load(Keys.ROOT)?.publicKeyDER ?: throw IllegalStateException("the new root key is gone")
+            val ask = { sign: (ByteArray) -> ByteArray ->
+                n.finishTakeover(claim, root, PhoneGroup.validName(deviceName), "android", KitRecords.HARDWARE, sealKey(), sign)
             }
-            published(rs)
-            if (lost != null) currentNode?.let { n -> runCatching { n.disconnect(lost) } }
+            var t = withContext(Dispatchers.IO) { ask { throw IllegalStateException("nothing to sign while the claim waits") } }
+            when (t.state) {
+                "cancelled", "void" -> {
+                    Log.i(TAG, "the claim to take the group over ended (${t.state}); this phone stays an admin")
+                    withContext(Dispatchers.IO) {
+                        g.add(n.records())
+                        g.dropClaim()
+                        adopt(g)
+                    }
+                    return
+                }
+                "effective" -> {}
+                else -> {
+                    Log.i(TAG, "the claim to take the group over is ${t.state}, ${t.leftMS} ms left")
+                    return
+                }
+            }
+            val signer = signer(Keys.ROOT, R.string.reason_take_over)
+            t = withContext(Dispatchers.IO) { ask(signer::signDigest) }
+            val cert = t.cert ?: return
+            withContext(Dispatchers.IO) {
+                g.becameRoot(cert, n.records())
+                adopt(g)
+            }
+            if (lost != null) runCatching { n.disconnect(lost) }
             val wasHub = lost != null && awayFromHome?.hub == lost
             withContext(Dispatchers.IO) { if (wasHub) setPhoneHub(true) else restartSync() }
         } catch (e: Exception) {

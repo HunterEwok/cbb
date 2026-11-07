@@ -162,8 +162,8 @@ shows the devices and removes them, renews certificates (any admin renews any de
 (records, chains, Welcome `issuer`); a second phone joins from its Start
 screen and the root makes it an admin (`CorePairing`, the core's admission, on both phones);
 an admin phone removes a lost root phone by taking the group over with `root` records
-(`PhoneGroup.takeOver`, a claim that waits the root's delay, then `finishTakeOver`; both
-kits' `RecordSet` asks the Rust core);
+(the core's `take_over` through `CoreMember.claim`, a claim that waits the root's delay, then
+`CoreMember.finishTakeover`; both kits' `RecordSet` asks the Rust core);
 a computer of a phone group can be an admin: the root phone's "Make it an admin" certifies
 the admin key its hello offers (`PhoneGroup.makeAdmin`, the `admin` message; Go's
 `Identity.AdminKey`/`AdminCA`); the lite member for Linux (`member/`), with

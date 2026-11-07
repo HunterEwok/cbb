@@ -17,8 +17,9 @@ import java.util.concurrent.TimeUnit
  * under its own admin CA; a computer of the group takes it on a connection
  * that carries records only and sends the group's first root in its hello.
  * The phone checks the records, then claims the group for a new root of its
- * own; the claim waits the group's delay, unless the root cancels it, and
- * [PhoneGroup.finishTakeOver] then makes the phone the root. The recovery
+ * own through the core's member; the claim waits the group's delay, unless
+ * the root cancels it, and CoreMember.finishTakeover and
+ * [PhoneGroup.becameRoot] then make the phone the root. The recovery
  * key is not kept: the claim is the one thing it signs.
  */
 class Restore private constructor(
@@ -109,13 +110,16 @@ class Restore private constructor(
 
     /**
      * Claims group, which [group] returned, for newRoot, a root CA for a
-     * new key of this phone, with the recovery key: the record to send.
-     * with is the recovery key again, as a YubiKey held to the phone a
-     * second time gives it.
+     * new key of this phone (CoreMember.rootCA), with the recovery key,
+     * through member, the core's member running as this phone, which adds
+     * the claim to its records and sends it. with is the recovery key again,
+     * as a YubiKey held to the phone a second time gives it.
      */
-    fun claim(group: PhoneGroup, newRoot: ByteArray, now: Instant, with: CertificateSigner = signer): Member.Record {
+    fun claim(group: PhoneGroup, member: CoreMember, newRoot: ByteArray, with: CertificateSigner = signer) {
         if (!with.publicKeyDER.contentEquals(signer.publicKeyDER)) throw Failure(Kind.NOT_THE_KEY, "this is another key than the one that issued this phone's certificate")
-        return group.claimWithRecovery(with, newRoot, now)
+        group.checkRecovery()
+        member.claim(CoreMember.Claim.RECOVER, newRoot, with.publicKeyDER, adminCA, with::signDigest)
+        group.claimed(newRoot, group.records.rootDevice)
     }
 
     /** What a computer sent on a records-only connection. */
