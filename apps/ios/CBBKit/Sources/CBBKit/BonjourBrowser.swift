@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #if canImport(Network)
+import dnssd
 import Foundation
 import Network
-import Security
 
 /// Browses for the Linux members with Network.framework: the services of
 /// type _cbb._tcp in local., with their TXT records. The app's
@@ -109,35 +109,58 @@ public final class BonjourBrowser: @unchecked Sendable {
     /// The endpoint of a found member, to dial.
     public func endpoint(of device: String) -> NWEndpoint? { lock.withLock { endpoints[device] } }
 
-    /// A dial function for MemberDialer: TLS 1.3 to the member's endpoint
-    /// with the member ALPN protocol and this phone's identity, followed by
-    /// chain (the admin CA that issued its certificate, if one did),
-    /// accepting only that device's certificate from one of roots, the
-    /// group's roots (docs/protocol.md, section 10, "Roots"). A member
-    /// browsing does not find is dialed at the addresses known gives for
-    /// it, one after another.
-    public func dialer(identity: SecIdentity, chain: [Data] = [], roots: [Data],
-                       known: @escaping @Sendable (String) -> [String] = { _ in [] }) -> MemberDialer.Dial {
-        { [weak self] m in
-            let eps = self?.endpoint(of: m.device).map { [$0] } ?? JoinCode.ordered(known(m.device)).compactMap { a -> NWEndpoint? in
-                guard let (host, port) = JoinCode.split(a), let p = NWEndpoint.Port(rawValue: port) else { return nil }
-                return .hostPort(host: NWEndpoint.Host(host), port: p)
-            }
-            var failure: Error = TLSTransport.Failure.notReady("not found")
-            for ep in eps {
-                let t = TLSTransport(endpoint: ep, alpn: Member.alpn, identity: identity, chain: chain) { chain in
-                    (try? GroupCertificates.verifyMember(chain: chain, roots: roots, now: Date())) == m.device
-                }
-                do {
-                    try await t.start()
-                    return t
-                } catch {
-                    t.close()
-                    failure = error
-                }
-            }
-            throw failure
+    /// The addresses of a found member, host:port with numeric hosts, IPv4
+    /// first, as the core's member dials them; empty when it cannot be
+    /// resolved within timeout.
+    public func addresses(of device: String, timeout: TimeInterval = 3) async -> [String] {
+        guard case let .service(name, type, domain, _)? = endpoint(of: device) else { return [] }
+        return await Task.detached { Self.resolve(name: name, type: type, domain: domain, timeout: timeout) }.value
+    }
+
+    /// Resolves a DNS-SD service instance to its host and port, then the
+    /// host to its addresses: IPv4 first, then IPv6 that is not link-local.
+    static func resolve(name: String, type: String, domain: String, timeout: TimeInterval) -> [String] {
+        final class Box { var host: String?, port: UInt16 = 0 }
+        let box = Box()
+        var ref: DNSServiceRef?
+        let ctx = Unmanaged.passUnretained(box).toOpaque()
+        let err = DNSServiceResolve(&ref, 0, 0, name, type, domain.isEmpty ? "local." : domain, { _, _, _, code, _, host, port, _, _, ctx in
+            guard code == kDNSServiceErr_NoError, let host, let ctx else { return }
+            let b = Unmanaged<Box>.fromOpaque(ctx).takeUnretainedValue()
+            (b.host, b.port) = (String(cString: host), UInt16(bigEndian: port))
+        }, ctx)
+        guard err == kDNSServiceErr_NoError, let ref else { return [] }
+        defer { DNSServiceRefDeallocate(ref) }
+        let fd = DNSServiceRefSockFD(ref)
+        let deadline = Date().addingTimeInterval(timeout)
+        while box.host == nil {
+            let left = deadline.timeIntervalSinceNow
+            guard left > 0 else { return [] }
+            var p = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            guard poll(&p, 1, Int32(left * 1000)) > 0, DNSServiceProcessResult(ref) == kDNSServiceErr_NoError else { return [] }
         }
+        guard let host = box.host else { return [] }
+        var hints = addrinfo()
+        hints.ai_socktype = SOCK_STREAM
+        var list: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, String(box.port), &hints, &list) == 0, let first = list else { return [] }
+        defer { freeaddrinfo(first) }
+        var v4: [String] = [], v6: [String] = []
+        var next: UnsafeMutablePointer<addrinfo>? = first
+        while let ai = next {
+            var buf = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            if getnameinfo(ai.pointee.ai_addr, ai.pointee.ai_addrlen, &buf, socklen_t(buf.count), nil, 0, NI_NUMERICHOST) == 0 {
+                let ip = String(cString: buf)
+                if ai.pointee.ai_family == AF_INET {
+                    v4.append("\(ip):\(box.port)")
+                } else if ai.pointee.ai_family == AF_INET6, !ip.contains("%"), !ip.lowercased().hasPrefix("fe80") {
+                    v6.append("[\(ip)]:\(box.port)")
+                }
+            }
+            next = ai.pointee.ai_next
+        }
+        var seen = Set<String>()
+        return (v4 + v6).filter { seen.insert($0).inserted }
     }
 }
 #endif

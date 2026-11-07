@@ -10,8 +10,10 @@
 //! through one call, `cbb_member_call`, a JSON request `{op, args}` and its
 //! answer, as `cbb_call` asks the core (docs/core-api.md, "The member").
 
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use cbb_core::authority::Record;
@@ -20,6 +22,7 @@ use cbb_core::clip::{Event as Copy, Kind, Mode};
 use cbb_core::error::{Error, Result};
 use cbb_core::identity::Identity;
 use cbb_core::media::Part;
+use cbb_core::wire::CommandResult;
 use cbb_lite::content::Source;
 use cbb_lite::node::{Peer, WriteReq};
 use cbb_lite::phone::{self, Member as Node};
@@ -165,6 +168,18 @@ fn ten_seconds() -> u64 {
     10_000
 }
 
+/// How long a command for the phone itself waits for the app's answer.
+const ANSWER_WAIT: Duration = Duration::from_secs(10);
+
+#[derive(Deserialize)]
+struct AnswerArgs {
+    /// The command event's token.
+    token: u64,
+    status: String,
+    #[serde(default)]
+    reason: String,
+}
+
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum Event<'a> {
@@ -187,6 +202,24 @@ enum Event<'a> {
     Message {
         from: String,
         message: Value,
+    },
+    /// A peer whose hello the node took, as `peers` shows it.
+    Peer {
+        peer: Value,
+    },
+    /// A tunnel offer of the group's root or an admin (docs/protocol.md,
+    /// section 11), as it came.
+    Tunnel {
+        from: String,
+        offer: Value,
+    },
+    /// A command for this phone itself (docs/protocol.md, section 15), which
+    /// a peer sent: the app checks and carries it out, and answers with
+    /// `answer` and the token within ten seconds, or it is refused.
+    Command {
+        token: u64,
+        from: String,
+        command: Value,
     },
     /// The phone's place in the group changed: a certificate an admin
     /// renewed, or a new root. The app keeps it in its file.
@@ -234,6 +267,7 @@ fn peer_json(p: &Peer) -> Value {
         "reach": p.reach.iter().map(ToString::to_string).collect::<Vec<_>>(),
         "records_only": p.records_only,
         "features": p.features,
+        "chain": p.chain.iter().map(|c| b64(c)).collect::<Vec<_>>(),
     })
 }
 
@@ -278,8 +312,22 @@ impl Events {
     }
 }
 
+/// The commands for the phone itself that wait for the app's answer, by
+/// token.
+#[derive(Default)]
+struct Answers {
+    next: AtomicU64,
+    waiting: Mutex<HashMap<u64, mpsc::SyncSender<CommandResult>>>,
+}
+
+/// The lock's value, also after a thread panicked holding it.
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 pub struct Member {
     node: Node,
+    answers: Arc<Answers>,
 }
 
 impl Member {
@@ -346,7 +394,36 @@ impl Member {
                     message: serde_json::to_value(m).unwrap_or(Value::Null),
                 });
             }));
-            Ok(Member { node })
+            node.on_peer(Box::new(move |p: &Peer| ev.send(&Event::Peer { peer: peer_json(p) })));
+            node.on_tunnel(Box::new(move |from, offer, _| {
+                ev.send(&Event::Tunnel { from: from.to_string(), offer: offer.clone() });
+            }));
+            let answers = Arc::new(Answers::default());
+            let waiting = answers.clone();
+            node.on_command(Arc::new(move |from: &DeviceId, r: &Record| {
+                let id = serde_json::from_slice::<Value>(&r.body)
+                    .ok()
+                    .and_then(|v| v.get("id").and_then(Value::as_str).map(String::from))
+                    .unwrap_or_default();
+                let token = waiting.next.fetch_add(1, Ordering::SeqCst);
+                let (tx, rx) = mpsc::sync_channel(1);
+                lock(&waiting.waiting).insert(token, tx);
+                ev.send(&Event::Command {
+                    token,
+                    from: from.to_string(),
+                    command: serde_json::to_value(r).unwrap_or(Value::Null),
+                });
+                let got = rx.recv_timeout(ANSWER_WAIT);
+                lock(&waiting.waiting).remove(&token);
+                let mut res = got.unwrap_or_else(|_| CommandResult {
+                    status: "refused".into(),
+                    reason: "the app did not answer".into(),
+                    ..CommandResult::default()
+                });
+                res.id = id;
+                res
+            }));
+            Ok(Member { node, answers })
         })();
         match made {
             Ok(m) => (Some(m), answer(Ok(serde_json::json!({})))),
@@ -463,6 +540,40 @@ impl Member {
                 Ok(json!({ "peers": ps.iter().map(peer_json).collect::<Vec<_>>() }))
             }
             "records" => Ok(json!({ "records": n.records() })),
+            // The phone's own part.
+            "answer" => {
+                let a: AnswerArgs = args(a)?;
+                let tx = lock(&self.answers.waiting).remove(&a.token);
+                let tx = tx.ok_or_else(|| Error::msg("no command waits for that answer"))?;
+                let _ = tx.try_send(CommandResult { status: a.status, reason: a.reason, ..CommandResult::default() });
+                done()
+            }
+            "tunnel_key" => {
+                #[derive(Deserialize)]
+                struct K {
+                    #[serde(with = "certs::b64::opt", default)]
+                    key: Option<Vec<u8>>,
+                    #[serde(with = "certs::b64::opt", default)]
+                    psk: Option<Vec<u8>>,
+                }
+                let k: K = args(a)?;
+                let keys = match (k.key, k.psk) {
+                    (Some(key), Some(psk)) if key.len() == 32 && psk.len() == 32 => Some((key, psk)),
+                    (None, None) => None,
+                    _ => return Err(Error::msg("a tunnel key and its preshared key are 32 bytes each")),
+                };
+                n.set_tunnel_key(keys);
+                done()
+            }
+            "evidence" => {
+                let list = arg(&a, "evidence").as_array().cloned().unwrap_or_default();
+                n.set_evidence(list);
+                done()
+            }
+            "disconnect" => {
+                n.disconnect(&device(arg(&a, "device").as_str().unwrap_or_default())?);
+                done()
+            }
             // What an admin's app signed.
             "add_records" => {
                 let rs: Vec<Record> = args(arg(&a, "records").clone())?;

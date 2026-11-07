@@ -11,7 +11,9 @@
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
 //! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
 //! its certificate, "CHANGE <copy as JSON>" for each copy that became the
-//! group's, and "LOG <line>" for each log line, and takes "COPY <text>",
+//! group's, "PEER <peer as JSON>" for each peer whose hello it took,
+//! "COMMAND <token> <command as JSON>" for each command for the phone
+//! itself, and "LOG <line>" for each log line, and takes "COPY <text>",
 //! "PEERS" and "CALL <request as JSON>" on standard input, answering
 //! "PEERS <count>" and "ANSWER <answer as JSON>" (cbb_member_call).
 //!
@@ -165,6 +167,8 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
         Some("log") => println!("LOG {}", s("line")),
         Some("identity") => println!("IDENTITY {}", s("cert")),
         Some("copy") => println!("CHANGE {}", v["copy"]),
+        Some("peer") => println!("PEER {}", v["peer"]),
+        Some("command") => println!("COMMAND {} {}", v["token"], v["command"]),
         _ => {}
     }
 }

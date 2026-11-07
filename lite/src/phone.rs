@@ -22,7 +22,7 @@ use crate::button::{self, Own};
 use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
 use crate::error::Result;
-use crate::node::{KeepIdentity, Node, OnMessage, Peer, Presence, WriteReq};
+use crate::node::{KeepIdentity, Node, OnCommand, OnMessage, OnPeer, OnTunnel, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
 use crate::{discovery, service, uptime};
 use cbb_core::media::Part;
@@ -313,9 +313,49 @@ impl Member {
         self.node.on_change(f);
     }
 
-    /// Sets what gets the admin, hubs and credentials messages peers send.
+    /// Sets what gets the admin, hubs, credentials and evidence messages
+    /// peers send.
     pub fn on_message(&self, f: OnMessage) {
         self.node.on_message(f);
+    }
+
+    /// Sets what gets each peer once its hello is taken: an admin's app
+    /// renews its certificate, the root's sends it its admin CA, the hub's
+    /// answers its tunnel key.
+    pub fn on_peer(&self, f: OnPeer) {
+        self.node.on_peer(f);
+    }
+
+    /// Sets what gets the tunnel offers of the group's root and admins, for
+    /// the app's tunnel to the hub (docs/protocol.md, section 11).
+    pub fn on_tunnel(&self, f: OnTunnel) {
+        self.node.on_tunnel(f);
+    }
+
+    /// Sets what carries out the commands for this phone itself (a mode, a
+    /// mute, sync away from home off); without it the phone refuses them.
+    /// Commands for other devices it passes on.
+    pub fn on_command(&self, f: OnCommand) {
+        self.node.on_command(f);
+    }
+
+    /// Sets the tunnel key and preshared key the hellos offer the group's
+    /// hubs, None while sync away from home is off, and connects to the
+    /// full members again so that they get them.
+    pub fn set_tunnel_key(&self, key: Option<(Vec<u8>, Vec<u8>)>) {
+        self.node.set_tunnel_key(key);
+    }
+
+    /// Sets the attestations of the phone's keys every peer gets after its
+    /// hello (docs/protocol.md, section 17, "Evidence").
+    pub fn set_evidence(&self, list: Vec<serde_json::Value>) {
+        self.node.set_evidence(list);
+    }
+
+    /// Ends the connection to the member id with a goodbye, as for a device
+    /// the app removed or whose hub moved; it is dialed again later.
+    pub fn disconnect(&self, id: &DeviceId) {
+        self.node.disconnect(id);
     }
 
     /// Stops the member and closes its connections.

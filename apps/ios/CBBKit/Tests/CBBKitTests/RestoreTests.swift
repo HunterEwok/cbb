@@ -166,11 +166,11 @@ final class RestoreTests: XCTestCase {
         kind = try await refused(other.root.records.records, groupCA: other.root.groupCA, chain: [other.computer.cert], key: sheet)
         XCTAssertEqual(kind, .otherGroup)
 
-        let stranger = try GroupCertificates.member(device: SyncEngine.newID(), publicKey: SoftwareSigner().publicKeyDER, ca: other.root.groupCA,
+        let stranger = try GroupCertificates.member(device: Member.newID(), publicKey: SoftwareSigner().publicKeyDER, ca: other.root.groupCA,
                                                     caSigner: other.rootKey, now: t0)
         kind = try await refused(g.root.records.records, groupCA: g.root.groupCA, chain: [stranger], key: sheet)
         XCTAssertEqual(kind, .notAMember, "a computer of another group")
-        let unlisted = try GroupCertificates.member(device: SyncEngine.newID(), publicKey: SoftwareSigner().publicKeyDER, ca: g.root.groupCA,
+        let unlisted = try GroupCertificates.member(device: Member.newID(), publicKey: SoftwareSigner().publicKeyDER, ca: g.root.groupCA,
                                                     caSigner: g.rootKey, now: t0)
         kind = try await refused(g.root.records.records, groupCA: g.root.groupCA, chain: [unlisted], key: sheet)
         XCTAssertEqual(kind, .notAMember, "a computer the records do not list")

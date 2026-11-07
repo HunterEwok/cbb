@@ -14,7 +14,7 @@ final class RootTests: XCTestCase {
 
     /// A computer: its device ID, key and member certificate.
     struct Computer {
-        let device = SyncEngine.newID()
+        let device = Member.newID()
         let key = SoftwareSigner()
         var cert = Data()
         var keyHash: Data { (try? Records.keyHash(cert: cert)) ?? Data() }
@@ -32,7 +32,7 @@ final class RootTests: XCTestCase {
         init(now: Date) throws {
             let rootKey = SoftwareSigner(), adminKey = SoftwareSigner()
             var root = try PhoneGroup.create(caSigner: rootKey, memberKey: SoftwareSigner().publicKeyDER, name: "Lost", now: now)
-            let bDevice = SyncEngine.newID(), bKey = SoftwareSigner()
+            let bDevice = Member.newID(), bKey = SoftwareSigner()
             let adminCA = try GroupCertificates.adminCA(device: bDevice, publicKey: adminKey.publicKeyDER, root: root.groupCA,
                                                         rootSigner: rootKey)
             let bCert = try GroupCertificates.member(device: bDevice, publicKey: bKey.publicKeyDER, ca: root.groupCA, caSigner: rootKey, now: now)
@@ -250,9 +250,9 @@ final class RootTests: XCTestCase {
         stolen.cert = try GroupCertificates.member(device: stolen.device, publicKey: stolen.key.publicKeyDER, ca: g.root.groupCA,
                                                    caSigner: g.rootKey, now: t0)
         let thiefKey = SoftwareSigner()
-        let thiefCA = try GroupCertificates.adminCA(device: SyncEngine.newID(), publicKey: thiefKey.publicKeyDER, root: g.root.groupCA,
+        let thiefCA = try GroupCertificates.adminCA(device: Member.newID(), publicKey: thiefKey.publicKeyDER, root: g.root.groupCA,
                                                     rootSigner: g.rootKey)
-        let viaThief = try GroupCertificates.member(device: SyncEngine.newID(), publicKey: SoftwareSigner().publicKeyDER, ca: thiefCA,
+        let viaThief = try GroupCertificates.member(device: Member.newID(), publicKey: SoftwareSigner().publicKeyDER, ca: thiefCA,
                                                     caSigner: thiefKey, now: t0)
         XCTAssertNotNil(set.refused(chain: [stolen.cert]))
         XCTAssertNotNil(set.refused(chain: [viaThief, thiefCA]))
@@ -295,7 +295,7 @@ final class RootTests: XCTestCase {
     func testWelcomeAfterTakeOver() throws {
         var g = try Group(now: t0)
         _ = try takeOver(&g)
-        let joiner = SyncEngine.newID(), key = SoftwareSigner()
+        let joiner = Member.newID(), key = SoftwareSigner()
         let selfSigned = try GroupCertificates.selfSigned(device: joiner, signer: key)
         var w = Pairing.Welcome(cert: try GroupCertificates.member(device: joiner, publicKey: key.publicKeyDER, ca: g.b.currentRoot,
                                                                    caSigner: g.newRootKey, now: t0), groupCA: g.b.groupCA)
@@ -430,7 +430,7 @@ final class RootTests: XCTestCase {
     /// signs counts for nothing, while the root's does.
     func testGoWatch() throws {
         var g = try Group(now: t0)
-        let watchKey = SoftwareSigner(), watch = SyncEngine.newID()
+        let watchKey = SoftwareSigner(), watch = Member.newID()
         let (ca, _) = try g.root.addWatch(device: watch, name: "Watch", os: "watchos", adminKey: watchKey.publicKeyDER,
                                           rootSigner: g.rootKey, now: t0.addingTimeInterval(1))
         XCTAssertEqual(g.root.devices.first { $0.id == watch }?.powers, Records.watchPowers)

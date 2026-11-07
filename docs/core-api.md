@@ -64,7 +64,12 @@ certificate, issuer, group CA, roots), its public key, its secret for sealed mes
 same signing callback, and a callback that gets each event as JSON from the node's threads:
 `write`, a text for the phone's clipboard, with its kind and, for a secret, how long it may
 stay; `copy`, a copy that became the group's current one from another member (below);
-`message`, an `admin`, `hubs` or `credentials` message a peer sent, for the app to keep;
+`message`, an `admin`, `hubs`, `credentials` or `evidence` message a peer sent, for the app to keep;
+`peer`, a peer whose hello the node took, as `peers` shows it, for the app to answer (renew
+its certificate, send it its admin CA, answer its tunnel key as the hub); `tunnel`, a tunnel
+offer of the group's root or an admin, for the app's tunnel; `command`, a command for the
+phone itself with a `token`, which the app checks against the records, carries out and
+answers with `answer` within ten seconds, or the phone refuses it;
 `log`, a line for the app's log; `identity`, the certificate, issuer and roots after an admin
 renewed the certificate or a takeover made a new root, which the app keeps in its own file, as
 the core keeps no identity file for a key it does not hold. The node signs its TLS handshakes
@@ -92,7 +97,11 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `listen`, `unlisten` | `port` (0 for any) | `{"port"}`: the member port for the members that dial this phone as the group's hub, which the app publishes with `r=phone` |
 | `pause`, `resume`, `wait` | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `waiting`, `pause` |
 | `mode`, `mute` | `mode`; `until_ms` (null unmutes) | `{}` |
-| `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features}]`, as their hellos and reach messages present them |
+| `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features, chain}]`, as their hellos and reach messages present them, `chain` the certificates the handshake checked, leaf first |
+| `answer` | `token` (a `command` event's), `status` (`done`, `refused` or `failed`), `reason` | `{}`: the result the command's sender gets |
+| `tunnel_key` | `key`, `psk` (32 bytes each, base64), or neither while sync away from home is off | `{}`: what the hellos offer the group's hubs; the phone connects to the full members again |
+| `evidence` | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
+| `disconnect` | `device` | `{}`: the connection to it ends with a goodbye; it is dialed again later |
 | `records` | none | `{"records"}` |
 | `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |

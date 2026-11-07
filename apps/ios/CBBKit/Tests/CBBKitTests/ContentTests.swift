@@ -2,6 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 @testable import CBBKit
+import Crypto
 import Foundation
 import XCTest
 
@@ -68,108 +69,51 @@ final class ContentTests: XCTestCase {
         XCTAssertThrowsError(try Member.encode(.chunk(Member.Chunk(sha256: Data(count: 32), offset: 0, data: Data(count: Member.chunkSize + 1)))))
     }
 
+    /// A phone's picture and files reach the other phone, which fetches
+    /// their sealed blob and opens it, each part checked; a copy over the
+    /// limit is not fetched, nor one that is no longer the group's.
     func testNodesFetch() async throws {
-        let store = MemoryContent()
-        let events = Events()
-        // The copies are sealed: b fetches a's blob and opens it.
-        let keys = try TestCopies()
-        let idA = keys.idA, idB = keys.idB
-        let a = MemberNode(engine: SyncEngine(device: idA, clock: HybridClock()), name: "iPhone", content: store, copies: keys.a)
-        let b = MemberNode(engine: SyncEngine(device: idB, clock: HybridClock()), name: "pi", role: .full,
-                           onChange: { events.add($0) }, copies: keys.b)
-        let (pa, pb) = Pipe.pair()
-        let ta = Task { try await a.serve(pa, peer: idB) }
-        let tb = Task { try await b.serve(pb, peer: idA) }
-        try await waitUntil {
-            let (x, y) = (await a.peers, await b.peers)
-            return x == 1 && y == 1
-        }
-        let bMedia = await b.mediaPeers, aMedia = await a.mediaPeers
-        XCTAssertEqual(bMedia, [idA])
-        XCTAssertEqual(aMedia, []) // b serves nothing
-
-        // A picture of 5 MiB and a bit, more than the fetch asks for ahead.
+        let t = try CoreGroup(test: self)
+        let (a, b) = (t.phones[0], t.phones[1])
+        try await t.connect(1, to: 0)
+        // A picture of 5 MiB and a bit, more than a fetch asks for ahead.
         var rng = SystemRandomNumberGenerator()
         let png = Data((0..<(5 << 20 + 1234)).map { _ in UInt8.random(in: 0...255, using: &rng) })
-        let e = try await a.send(text: "", kind: .text, media: Content.manifest(store: store, data: [("image/png", png)]))
-        XCTAssertEqual(e.kind, .media)
-        try await waitUntil { events.all.contains { $0.id == e.id } }
-        let got = events.all.first { $0.id == e.id }!
-        let part = got.media!.parts[0]
-        let blob = got.sealed!.blob!
-        XCTAssertEqual(blob.size, Media.blobSize(part.size))
-        // Events keep flowing while the content does.
-        let fetch = Task { try await Content.data(from: b, event: got, part: part) }
-        try await b.send(text: "meanwhile", kind: .text)
-        try await waitUntil { await a.usable?.text == "meanwhile" }
-        let fetched = try await fetch.value
-        XCTAssertEqual(fetched, png)
+        let sent = try a.member.copyMedia([.data(png, type: "image/png")], board: true)
+        XCTAssertEqual(sent.kind, .media)
+        XCTAssertEqual(sent.key, "\u{0}image:" + Data(SHA256.hash(data: png)).map { String(format: "%02x", $0) }.joined())
+        let got = try await b.next("the picture") { if case let .copy(c) = $0, c.id == sent.id { return c }; return nil }
+        XCTAssertEqual(got.media?.parts.first?.type, "image/png")
+        XCTAssertEqual(try b.member.waiting()?.id, sent.id)
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-fetch-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: out) }
+        let parts = try await b.member.fetch(sent.id, max: 64 << 20, into: out.appendingPathComponent("picture"))
+        XCTAssertEqual(parts.count, 1)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: parts[0].file)), png)
 
-        // The phone serves the sealed blob only, never the part in the open.
+        // Files and a folder go the same way, with their paths.
+        let src = out.appendingPathComponent("src")
+        try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try Data("one".utf8).write(to: src.appendingPathComponent("one.txt"))
+        let files = try a.member.copyMedia([.folder(path: "docs"), .file(src.appendingPathComponent("one.txt"), path: "docs/one.txt")])
+        _ = try await b.next("the files") { if case let .copy(c) = $0, c.id == files.id { return c }; return nil }
+        // Over the limit, nothing is fetched.
         do {
-            try await b.fetch(from: idA, sha256: part.sha256!, size: part.size) { _, _ in }
-            XCTFail("fetched a part in the open")
-        } catch MemberNode.Failure.missing {}
-        // A part the phone does not hold is missing; one over the limit is not fetched.
+            _ = try await b.member.fetch(files.id, max: 1, into: out.appendingPathComponent("small"))
+            XCTFail("fetched a copy over the limit")
+        } catch is Core.Refusal {}
+        let opened = try await b.member.fetch(files.id, max: 1 << 20, into: out.appendingPathComponent("files"))
+        XCTAssertEqual(opened.map(\.path), ["docs", "docs/one.txt"])
+        let file = try XCTUnwrap(opened.first { !$0.dir })
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: file.file)), Data("one".utf8))
+        // A newer copy makes the files no longer the group's.
+        try a.member.copy("newer")
+        _ = try await b.copy("newer")
         do {
-            try await b.fetch(from: idA, sha256: Data(repeating: 1, count: 32), size: 10) { _, _ in }
-            XCTFail("fetched a part nobody has")
-        } catch MemberNode.Failure.missing {}
-        do {
-            _ = try await Content.data(from: b, event: got, part: part, limit: 1 << 20)
-            XCTFail("fetched a part over the limit")
-        } catch Content.Failure.tooLarge {}
-        // b serves nothing.
-        do {
-            try await a.fetch(from: idB, sha256: blob.sha256, size: blob.size) { _, _ in }
-            XCTFail("fetched from a member that serves nothing")
-        } catch MemberNode.Failure.refused {}
-
-        // A cancelled fetch cancels with the peer, and the next one gets it all.
-        let slow = Task { try await b.fetch(from: idA, sha256: blob.sha256, size: blob.size) { _, _ in Thread.sleep(forTimeInterval: 0.05) } }
-        try await Task.sleep(nanoseconds: 100_000_000)
-        slow.cancel()
-        _ = await slow.result
-        let again = try await Content.data(from: b, event: got, part: part)
-        XCTAssertEqual(again, png)
-
-        // A sink that fails ends the fetch with its error.
-        struct Full: Error {}
-        do {
-            try await b.fetch(from: idA, sha256: blob.sha256, size: blob.size) { _, _ in throw Full() }
-            XCTFail("a failing sink did not end the fetch")
-        } catch is Full {}
-        let last = try await Content.data(from: b, event: got, part: part)
-        XCTAssertEqual(last, png)
-
-        await a.closeAll()
-        try await ta.value
-        try await tb.value
-    }
-
-    func testTooManyGets() async throws {
-        // A store that reads slowly, so the gets wait.
-        struct Slow: ContentStore {
-            struct Source: ContentSource {
-                var size: Int64 { 1 << 20 }
-                func read(offset: Int64, length: Int) throws -> Data {
-                    Thread.sleep(forTimeInterval: 2)
-                    return Data(count: length)
-                }
-            }
-            func open(sha256: Data) -> ContentSource? { Source() }
-        }
-        let sum = Data(repeating: 3, count: 32)
-        let a = MemberNode(engine: SyncEngine(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", clock: HybridClock()), name: "iPhone", content: Slow())
-        let (pa, pb) = Pipe.pair()
-        let ta = Task { try await a.serve(pa) }
-        // A peer that asks for more than 64 ranges at once is closed.
-        try? await pb.write(Member.encode(.hello(.full, Member.Hello(wallMS: 0))))
-        for i in 0..<80 { try? await pb.write(Member.encode(.get(Member.Get(sha256: sum, offset: Int64(i) * 1000, length: 1000)))) }
-        do {
-            try await ta.value
-            XCTFail("the connection did not end with an error")
-        } catch MemberNode.Failure.refused {}
+            _ = try await b.member.fetch(files.id, max: 1 << 20, into: out.appendingPathComponent("gone"))
+            XCTFail("fetched a copy that is no longer the group's")
+        } catch is Core.Refusal {}
     }
 
     func testCleanNames() {
@@ -231,26 +175,6 @@ final class ContentTests: XCTestCase {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
         XCTFail("timed out")
-    }
-
-    /// While a part is served, a cancel of a part that is neither queued
-    /// nor served is not kept, as in Go, so the peer's cancels hold at most
-    /// one count for each part it asked for.
-    func testCancelsOfOtherParts() {
-        let c = MemberNode.Conn(transport: Pipe.pair().0, peer: nil)
-        let part = Data(repeating: 7, count: 32)
-        XCTAssertEqual(c.queueGet(Member.Get(sha256: part, offset: 0, length: 1 << 20)), .start)
-        XCTAssertNotNil(c.nextGet())
-        for i in 0..<1000 {
-            var other = Data(repeating: 0, count: 32)
-            other[0] = UInt8(i & 0xff)
-            other[1] = UInt8(i >> 8)
-            c.cancelGets(other)
-        }
-        XCTAssertEqual(c.cancelledParts, 0)
-        c.cancelGets(part)
-        XCTAssertEqual(c.cancelledParts, 1)
-        XCTAssertTrue(c.cancelled(part, since: 0))
     }
 }
 

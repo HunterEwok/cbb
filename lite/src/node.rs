@@ -107,6 +107,9 @@ pub struct Peer {
     /// What it supports beyond its protocol version: `media` from one that
     /// serves the content of media events.
     pub features: Vec<String>,
+    /// Its certificate chain as the handshake checked it, leaf first, DER:
+    /// for a phone's app, which renews it and checks what it may do.
+    pub chain: Vec<Vec<u8>>,
 }
 
 /// The most device IDs a reach message is read for.
@@ -115,8 +118,13 @@ const MAX_REACH: usize = 256;
 const MAX_PASSED: usize = 4096;
 
 /// Gets the messages a peer sends that the node does not handle itself:
-/// `admin`, `hubs` and `credentials` for a phone's app, which keeps them.
+/// `admin`, `hubs`, `credentials` and `evidence` for a phone's app, which
+/// keeps them.
 pub type OnMessage = Box<dyn Fn(&DeviceId, &Message) + Send + Sync>;
+
+/// Gets each peer once its hello is taken, for a phone's app, which may
+/// answer it: renew its certificate, send it an admin CA or tunnel offers.
+pub type OnPeer = Box<dyn Fn(&Peer) + Send + Sync>;
 
 /// Called with a tunnel offer and the device that sent it.
 /// Gets a tunnel offer from the group's root or an admin, and whether the
@@ -183,6 +191,11 @@ pub struct Node {
     /// when it expires (docs/protocol.md, section 15).
     passed: Mutex<HashMap<String, (DeviceId, i64)>>,
     on_message: RwLock<Option<OnMessage>>,
+    on_peer: RwLock<Option<OnPeer>>,
+    /// The attestations of this member's keys, which every peer gets after
+    /// its hello (docs/protocol.md, section 17, "Evidence"): a phone's app
+    /// sets them.
+    evidence: RwLock<Vec<serde_json::Value>>,
     /// The sealed blobs of copies with images or files, for a phone's app,
     /// which makes, fetches and serves them; None on the lite member.
     content: Option<Arc<Store>>,
@@ -304,6 +317,8 @@ impl Node {
             waiting: Mutex::new(HashMap::new()),
             passed: Mutex::new(HashMap::new()),
             on_message: RwLock::new(None),
+            on_peer: RwLock::new(None),
+            evidence: RwLock::new(Vec::new()),
             content: None,
             on_change: RwLock::new(None),
         }
@@ -440,6 +455,16 @@ impl Node {
     /// Sets what gets the messages the node leaves to its app.
     pub fn on_message(&self, f: OnMessage) {
         *self.on_message.write().unwrap() = Some(f);
+    }
+
+    /// Sets what gets each peer once its hello is taken.
+    pub fn on_peer(&self, f: OnPeer) {
+        *self.on_peer.write().unwrap() = Some(f);
+    }
+
+    /// Sets the attestations every peer gets after its hello from now on.
+    pub fn set_evidence(&self, list: Vec<serde_json::Value>) {
+        *self.evidence.write().unwrap() = list;
     }
 
     /// Closes every connection with a goodbye and makes no new one until
@@ -660,6 +685,23 @@ impl Node {
         to
     }
 
+    /// Sends a command to the members that pass it on (docs/protocol.md,
+    /// section 15): the group's hubs connected, full members, and the
+    /// phones among the root and the admins, as the phone that is the hub;
+    /// returns those it went to.
+    fn send_to_passers(&self, m: &Message) -> Vec<DeviceId> {
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        let mut to = Vec::new();
+        for c in conns.iter().filter(|c| !c.records_only) {
+            let role = c.peer.lock().unwrap().as_ref().map(|p| p.role.clone()).unwrap_or_default();
+            if (role == "full" || role == "phone") && self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
+                self.enqueue(c, Out::Message(m.clone()));
+                to.push(c.id.clone());
+            }
+        }
+        to
+    }
+
     /// Takes records this member's app signed (an admin's or the root's),
     /// keeps them and sends them to every peer.
     pub fn add_own_records(&self, rs: &[Record]) {
@@ -682,7 +724,7 @@ impl Node {
         } else if head.kind == "hub" {
             false
         } else {
-            !self.send_to_hubs(&m).is_empty()
+            !self.send_to_passers(&m).is_empty()
         };
         let res = if sent {
             rx.recv_timeout(timeout).map_err(|_| Error::msg(format!("{to} did not answer in time")))
@@ -1115,7 +1157,9 @@ impl Node {
                 }
                 let (mut h, body) = wire::decode_hello(m.hello.as_ref())?;
                 h.current = h.current.and_then(|e| e.sealed).and_then(|s| self.take(s, &c.id));
-                *c.peer.lock().unwrap() = Some(peer_of(&c.id, &m.role, &body, c.records_only));
+                let mut peer = peer_of(&c.id, &m.role, &body, c.records_only);
+                peer.chain = c.chain.iter().map(|x| x.der.clone()).collect();
+                *c.peer.lock().unwrap() = Some(peer.clone());
                 if !c.records_only {
                     let out = self
                         .engine
@@ -1131,6 +1175,14 @@ impl Node {
                     }
                 }
                 drop(st);
+                if !c.records_only {
+                    for e in self.evidence.read().unwrap().iter() {
+                        self.enqueue(c, Out::Message(wire::evidence(e)));
+                    }
+                }
+                if let Some(f) = self.on_peer.read().unwrap().as_ref() {
+                    f(&peer);
+                }
                 // A peer that holds older entry points, or none, gets ours
                 // (docs/protocol.md, section 16, "Entry points").
                 let now = uptime::wall_ms();
@@ -1218,6 +1270,7 @@ impl Node {
                                 by: me.to_string(),
                                 status: "refused".into(),
                                 reason: "this device takes no commands".into(),
+                                tunnel: None,
                             }),
                         ),
                     }
@@ -1250,7 +1303,7 @@ impl Node {
                         p.reach = reach;
                     }
                 }
-                "admin" | "hubs" | "credentials" => {
+                "admin" | "hubs" | "credentials" | "evidence" => {
                     if let Some(f) = self.on_message.read().unwrap().as_ref() {
                         f(&c.id, &m);
                     }
@@ -1636,6 +1689,7 @@ fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool
         reach: Vec::new(),
         records_only,
         features: body.features.iter().take(32).filter(|f| f.len() <= 32).cloned().collect(),
+        chain: Vec::new(),
     }
 }
 

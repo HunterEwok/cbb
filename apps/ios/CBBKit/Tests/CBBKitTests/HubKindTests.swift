@@ -12,13 +12,13 @@ final class HubKindTests: XCTestCase {
         let ca = SoftwareSigner(), ka = SoftwareSigner(), kb = SoftwareSigner()
         let sa = Data((0..<32).map { _ in UInt8.random(in: 0...255) }), sb = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
         var g = try PhoneGroup.create(caSigner: ca, memberKey: ka.publicKeyDER, seal: try Core.sealPublic(sa), now: now)
-        let pc = SyncEngine.newID()
+        let pc = Member.newID()
         _ = try g.record(device: pc, name: "pi", role: "full", os: "linux", key: Records.keyHash(spki: kb.publicKeyDER),
                          store: Records.file, seal: try Core.sealPublic(sb), caSigner: ca, now: now)
         XCTAssertFalse(g.records.mayHost(pc))
         let set = { g.records }
         let keys = CopyKeys(device: g.device, cert: g.memberCert, issuer: nil, signer: ka, secret: sa, records: set)
-        let e = Member.Event(id: SyncEngine.newID(), origin: g.device, time: HybridClock().now(), kind: .text, text: "before")
+        let e = Member.Event(id: Member.newID(), origin: g.device, time: HybridClock().now(), kind: .text, text: "before")
         XCTAssertTrue(try keys.seal(e, key: nil, blob: nil).wraps.contains { $0.to == pc })
 
         XCTAssertNotNil(try g.markForwardOnly(device: pc, caSigner: ca, now: now))

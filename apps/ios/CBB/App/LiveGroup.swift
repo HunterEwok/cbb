@@ -601,7 +601,7 @@ final class LiveGroup: GroupController {
         let se = Self.secureEnclave
         let admin = try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
             ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
-        let device = SyncEngine.newID()
+        let device = Member.newID()
         let cert = try GroupCertificates.selfSigned(device: device, signer: member)
         let id = try identity(certificate: cert, member)
         let listener = try TLSListener(alpn: Pairing.alpn, identity: id) { !$0.isEmpty }
@@ -673,7 +673,7 @@ final class LiveGroup: GroupController {
         let se = Self.secureEnclave
         let admin = try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
             ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
-        let cert = try GroupCertificates.selfSigned(device: SyncEngine.newID(), signer: member)
+        let cert = try GroupCertificates.selfSigned(device: Member.newID(), signer: member)
         let id = try identity(certificate: cert, member)
         let info = Pairing.Info(name: PhoneGroup.validName(UIDevice.current.name), os: "ios", adminKey: admin.publicKeyDER,
                                 seal: Self.sealKey())
@@ -2419,7 +2419,7 @@ final class LiveGroup: GroupController {
     private func write(_ text: String, kind: Member.Kind) {
         if kind == .secret {
             UIPasteboard.general.setItems([[UTType.plainText.identifier: text]],
-                                          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(SyncEngine.secretTTL)])
+                                          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(Member.secretTTL)])
         } else {
             UIPasteboard.general.string = text
         }
