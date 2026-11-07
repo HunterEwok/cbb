@@ -2212,11 +2212,11 @@ jobs:
         run: |
           (cd lite && cargo build --locked --release -p cbb-ffi --features member --example phone-on-linux)
           CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run TestFFIJoiner -v
-      - name: the phones' Rust tunnel through lite/ffi reaches a Go hub (WireGuard, AmneziaWG, VLESS with XHTTP)
+      - name: the phones' Rust tunnel and hub through lite/ffi work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
         working-directory: .
         run: |
           (cd lite && cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux)
-          CBB_TUNNEL_ON_LINUX="$PWD/lite/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhoneTunnel -v
+          CBB_TUNNEL_ON_LINUX="$PWD/lite/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64

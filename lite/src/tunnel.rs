@@ -38,21 +38,21 @@ use crate::wire::TunnelOffer;
 /// The tunnel state's file in the state directory.
 pub const FILE_NAME: &str = "tunnel.json";
 /// Inside the tunnel the hub serves the member protocol on this port only.
-const MEMBER_PORT: u16 = 8764;
-const KEEPALIVE: u16 = 25;
+pub(crate) const MEMBER_PORT: u16 = 8764;
+pub(crate) const KEEPALIVE: u16 = 25;
 /// The MTU inside the tunnel: IPv6's minimum, which fits in a UDP datagram
 /// on any path, so nothing is fragmented.
-const MTU: usize = 1280;
+pub(crate) const MTU: usize = 1280;
 /// How long the link waits for the hub's answer at one endpoint before it
 /// tries the next.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
 const MAX_ENDPOINTS: usize = 8;
-const TCP_BUFFER: usize = 64 << 10;
+pub(crate) const TCP_BUFFER: usize = 64 << 10;
 /// The connections through the tunnel's local port at once; this member
 /// makes one or two.
-const MAX_BRIDGES: usize = 32;
-const HANDSHAKE_RATE_LIMIT: u64 = 100;
-const MAX_POLL: Duration = Duration::from_millis(250);
+pub(crate) const MAX_BRIDGES: usize = 32;
+pub(crate) const HANDSHAKE_RATE_LIMIT: u64 = 100;
+pub(crate) const MAX_POLL: Duration = Duration::from_millis(250);
 
 /// The tunnel state, kept while sync away from home is on: the device's own
 /// key and preshared key, made on it, and the offers of the group's hubs.
@@ -351,13 +351,13 @@ impl Drop for Link {
 
 /// The IP packets between smoltcp and the tunnel.
 #[derive(Default)]
-struct Queues {
-    rx: VecDeque<Vec<u8>>,
-    tx: VecDeque<Vec<u8>>,
+pub(crate) struct Queues {
+    pub(crate) rx: VecDeque<Vec<u8>>,
+    pub(crate) tx: VecDeque<Vec<u8>>,
 }
 
-struct Rx(Vec<u8>);
-struct Tx<'a>(&'a mut VecDeque<Vec<u8>>);
+pub(crate) struct Rx(Vec<u8>);
+pub(crate) struct Tx<'a>(&'a mut VecDeque<Vec<u8>>);
 
 impl RxToken for Rx {
     fn consume<R, F: FnOnce(&[u8]) -> R>(self, f: F) -> R {
@@ -395,16 +395,16 @@ impl Device for Queues {
     }
 }
 
-/// One connection from the loopback port to the hub's member port.
-struct Bridge {
-    local: TcpStream,
-    handle: SocketHandle,
+/// One connection between a local TCP socket and one of smoltcp's.
+pub(crate) struct Bridge {
+    pub(crate) local: TcpStream,
+    pub(crate) handle: SocketHandle,
     /// Read from the local side, not yet taken by smoltcp.
-    up: Vec<u8>,
-    /// From the hub, not yet written to the local side.
-    down: Vec<u8>,
-    local_eof: bool,
-    done: bool,
+    pub(crate) up: Vec<u8>,
+    /// From the tunnel, not yet written to the local side.
+    pub(crate) down: Vec<u8>,
+    pub(crate) local_eof: bool,
+    pub(crate) done: bool,
 }
 
 struct Pump {
@@ -438,7 +438,7 @@ fn udp_for(ep: &SocketAddr) -> Result<UdpSocket> {
     Ok(s)
 }
 
-fn now() -> smoltcp::time::Instant {
+pub(crate) fn now() -> smoltcp::time::Instant {
     smoltcp::time::Instant::now()
 }
 
@@ -673,57 +673,7 @@ impl Pump {
         let mut busy = false;
         let mut buf = [0u8; 16 << 10];
         for b in &mut self.bridges {
-            let s = self.sockets.get_mut::<tcp::Socket>(b.handle);
-            // Local to the hub.
-            if !b.local_eof && b.up.len() < TCP_BUFFER {
-                match b.local.read(&mut buf) {
-                    Ok(0) => b.local_eof = true,
-                    Ok(n) => {
-                        b.up.extend_from_slice(&buf[..n]);
-                        busy = true;
-                    }
-                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(_) => b.done = true,
-                }
-            }
-            if !b.up.is_empty()
-                && s.can_send()
-                && let Ok(n) = s.send_slice(&b.up)
-            {
-                b.up.drain(..n);
-                busy |= n > 0;
-            }
-            if b.local_eof && b.up.is_empty() && s.may_send() {
-                s.close();
-            }
-            // The hub to local.
-            if b.down.len() < TCP_BUFFER
-                && s.can_recv()
-                && let Ok(n) = s.recv_slice(&mut buf)
-            {
-                b.down.extend_from_slice(&buf[..n]);
-                busy |= n > 0;
-            }
-            if !b.down.is_empty() {
-                match b.local.write(&b.down) {
-                    Ok(n) => {
-                        b.down.drain(..n);
-                        busy |= n > 0;
-                    }
-                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(_) => b.done = true,
-                }
-            }
-            if b.down.is_empty() && !s.may_recv() && !s.can_recv() && s.state() != tcp::State::SynSent {
-                let _ = b.local.shutdown(Shutdown::Write);
-                if !s.is_open() || b.local_eof {
-                    b.done = true;
-                }
-            }
-            if b.done {
-                s.abort();
-                let _ = b.local.shutdown(Shutdown::Both);
-            }
+            busy |= move_bytes(b, self.sockets.get_mut::<tcp::Socket>(b.handle), &mut buf);
         }
         let sockets = &mut self.sockets;
         self.bridges.retain(|b| {
@@ -759,6 +709,64 @@ impl Pump {
             libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout.as_millis() as libc::c_int);
         }
     }
+}
+
+/// Moves bytes between one local connection and its smoltcp socket, both
+/// ways, and closes each side when the other ended; reports whether
+/// anything moved.
+pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) -> bool {
+    let mut busy = false;
+    // Local to the hub.
+    if !b.local_eof && b.up.len() < TCP_BUFFER {
+        match b.local.read(buf) {
+            Ok(0) => b.local_eof = true,
+            Ok(n) => {
+                b.up.extend_from_slice(&buf[..n]);
+                busy = true;
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+            Err(_) => b.done = true,
+        }
+    }
+    if !b.up.is_empty()
+        && s.can_send()
+        && let Ok(n) = s.send_slice(&b.up)
+    {
+        b.up.drain(..n);
+        busy |= n > 0;
+    }
+    if b.local_eof && b.up.is_empty() && s.may_send() {
+        s.close();
+    }
+    // The hub to local.
+    if b.down.len() < TCP_BUFFER
+        && s.can_recv()
+        && let Ok(n) = s.recv_slice(buf)
+    {
+        b.down.extend_from_slice(&buf[..n]);
+        busy |= n > 0;
+    }
+    if !b.down.is_empty() {
+        match b.local.write(&b.down) {
+            Ok(n) => {
+                b.down.drain(..n);
+                busy |= n > 0;
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+            Err(_) => b.done = true,
+        }
+    }
+    if b.down.is_empty() && !s.may_recv() && !s.can_recv() && s.state() != tcp::State::SynSent {
+        let _ = b.local.shutdown(Shutdown::Write);
+        if !s.is_open() || b.local_eof {
+            b.done = true;
+        }
+    }
+    if b.done {
+        s.abort();
+        let _ = b.local.shutdown(Shutdown::Both);
+    }
+    busy
 }
 
 /// The kernel's table of IPv4 TCP sockets, or "" where there is none.

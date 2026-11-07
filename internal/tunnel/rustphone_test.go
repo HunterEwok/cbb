@@ -6,6 +6,7 @@ package tunnel_test
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -208,4 +209,117 @@ func rustXHTTP(t *testing.T, port uint16) (tunnel.VLESS, []byte) {
 		t.Fatal(err)
 	}
 	return tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path + "/" + group, ID: id}, ca
+}
+
+// TestRustPhoneHub runs the phone's hub in Rust (lite/ffi) with two Go
+// clients, plain and with AmneziaWG: each client's connection through its
+// tunnel to the hub's member port reaches the app's member listener on the
+// loopback address; a client taken off the list is cut off.
+func TestRustPhoneHub(t *testing.T) {
+	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
+	}
+	t.Run("plain", func(t *testing.T) { rustHub(t, bin, nil) })
+	t.Run("obfuscated", func(t *testing.T) {
+		obf, err := tunnel.NewObfuscation()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rustHub(t, bin, obf)
+	})
+}
+
+func rustHub(t *testing.T, bin string, obf *tunnel.Obfuscation) {
+	// The app's member listener: an echo server on the loopback address.
+	member, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer member.Close()
+	go func() {
+		for {
+			c, err := member.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				io.Copy(c, c)
+			}()
+		}
+	}()
+
+	hubKey, _ := tunnel.NewPrivateKey()
+	hubAddr, _ := tunnel.Addr(rustHubID)
+	ids := []string{rustPhoneID, "0123456789abcdef0123456789abcdef"}
+	type client struct {
+		key, psk tunnel.Key
+		addr     netip.Addr
+	}
+	var cs []client
+	var list []map[string]any
+	for _, id := range ids {
+		k, _ := tunnel.NewPrivateKey()
+		psk, _ := tunnel.NewPresharedKey()
+		a, _ := tunnel.Addr(id)
+		cs = append(cs, client{k, psk, a})
+		pub := k.Public()
+		list = append(list, map[string]any{"device": id, "key": pub[:], "psk": psk[:]})
+	}
+	req := map[string]any{"op": "hub_start", "key": hubKey[:], "device": rustHubID, "clients": list,
+		"member_port": member.Addr().(*net.TCPAddr).Port, "listen": "127.0.0.1:0"}
+	if obf != nil {
+		req["obfuscation"] = obf
+	}
+	p := startRustPhone(t, bin)
+	started := p.call(t, req)
+	id, port := started["id"], int(started["udp_port"].(float64))
+
+	var clients []*tunnel.Client
+	for _, c := range cs {
+		cl, err := tunnel.StartClient(tunnel.ClientConfig{PrivateKey: c.key, PresharedKey: c.psk, Addr: c.addr,
+			HubPublicKey: hubKey.Public(), HubAddr: hubAddr, Obfuscation: obf,
+			Endpoint: netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(port))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cl.Close()
+		clients = append(clients, cl)
+	}
+	echo := func(cl *tunnel.Client, msg string) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		c, err := cl.Dial(ctx)
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		c.SetDeadline(time.Now().Add(15 * time.Second))
+		if _, err := c.Write([]byte(msg)); err != nil {
+			return err
+		}
+		got := make([]byte, len(msg))
+		if _, err := io.ReadFull(c, got); err != nil {
+			return err
+		}
+		if string(got) != msg {
+			return fmt.Errorf("got %q, want %q", got, msg)
+		}
+		return nil
+	}
+	for i, cl := range clients {
+		if err := echo(cl, fmt.Sprintf("hello from %d", i)); err != nil {
+			t.Fatalf("client %d through the Rust hub: %v (status %v)", i, err, p.call(t, map[string]any{"op": "hub_status", "id": id}))
+		}
+	}
+	// The second client goes off the list: it is cut off, the first stays.
+	p.call(t, map[string]any{"op": "hub_set_clients", "id": id, "clients": list[:1]})
+	if err := echo(clients[1], "still there?"); err == nil {
+		t.Fatal("a client taken off the list still reaches the member port")
+	}
+	if err := echo(clients[0], "again"); err != nil {
+		t.Fatalf("the client left on the list: %v", err)
+	}
+	p.call(t, map[string]any{"op": "hub_stop", "id": id})
 }

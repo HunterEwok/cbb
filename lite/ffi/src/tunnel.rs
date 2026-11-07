@@ -18,16 +18,24 @@
 //!   `{"id", "port"}`;
 //! - `status` with `id`: `{"answered", "log"}`, whether the hub answered
 //!   and the log lines since the last status;
-//! - `stop` with `id`: `{}`.
+//! - `stop` with `id`: `{}`;
+//! - `hub_start` with `key`, `device`, `obfuscation` (the group's AmneziaWG
+//!   settings, or none), `clients` (`[{"device", "key", "psk"}]`) and
+//!   `member_port` (the app's member listener on the loopback address):
+//!   `{"id", "udp_port"}`, the phone as the group's hub;
+//! - `hub_set_clients` with `id` and `clients`, `hub_status` with `id`
+//!   (`{"udp_port", "log"}`) and `hub_stop` with `id`.
 //!
 //! The answer is `{"ok": ...}` or `{"error": {"message", "details"}}`.
 
 use std::collections::{HashMap, VecDeque};
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use cbb_core::certs::{self, DeviceId};
 use cbb_core::error::{Error, Result};
+use cbb_lite::hub::{Hub, Peer};
 use cbb_lite::tunnel::{self, Link, State};
 use cbb_lite::wire::TunnelOffer;
 use serde::Deserialize;
@@ -59,7 +67,49 @@ enum Request {
     Stop {
         id: u64,
     },
+    HubStart {
+        #[serde(with = "certs::b64")]
+        key: Vec<u8>,
+        device: String,
+        #[serde(default)]
+        obfuscation: Option<Value>,
+        #[serde(default)]
+        clients: Vec<Client>,
+        member_port: u16,
+        /// Where WireGuard listens, "[::]:0" (any port) by default.
+        #[serde(default)]
+        listen: Option<String>,
+    },
+    HubSetClients {
+        id: u64,
+        clients: Vec<Client>,
+    },
+    HubStatus {
+        id: u64,
+    },
+    HubStop {
+        id: u64,
+    },
 }
+
+/// One of the hub's clients: its device ID, its tunnel key and the
+/// preshared key the hub's offer gave it.
+#[derive(Deserialize)]
+struct Client {
+    device: String,
+    #[serde(with = "certs::b64")]
+    key: Vec<u8>,
+    #[serde(with = "certs::b64")]
+    psk: Vec<u8>,
+}
+
+struct RunningHub {
+    hub: Hub,
+    device: String,
+    log: Arc<Mutex<VecDeque<String>>>,
+}
+
+static HUBS: Mutex<Option<HashMap<u64, RunningHub>>> = Mutex::new(None);
 
 struct Running {
     link: Link,
@@ -85,6 +135,24 @@ fn handle(request: &[u8]) -> Result<Value> {
             let log: Vec<String> = r.log.lock().map(|mut l| l.drain(..).collect()).unwrap_or_default();
             Ok(json!({ "answered": r.link.answered(), "log": log }))
         }),
+        Request::HubStart { key, device, obfuscation, clients, member_port, listen } => {
+            hub_start(&key, &device, obfuscation.as_ref(), &clients, member_port, listen.as_deref())
+        }
+        Request::HubSetClients { id, clients } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            r.hub.set_peers(peers(&clients)?, &r.device)?;
+            Ok(json!({}))
+        }),
+        Request::HubStatus { id } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            let log: Vec<String> = r.log.lock().map(|mut l| l.drain(..).collect()).unwrap_or_default();
+            Ok(json!({ "udp_port": r.hub.udp_port(), "log": log }))
+        }),
+        Request::HubStop { id } => {
+            let gone = hubs(|t| Ok(t.remove(&id)))?;
+            drop(gone);
+            Ok(json!({}))
+        }
         Request::Stop { id } => {
             // Dropping the link stops its thread and closes its port.
             let gone = tunnels(|t| Ok(t.remove(&id)))?;
@@ -100,20 +168,7 @@ fn start(key: &[u8], device: &str, hub: &str, offer: &TunnelOffer) -> Result<Val
     let st = State::with_key(key)?;
     let h = tunnel::hub_from_offer(&from, offer)?;
     let log = Arc::new(Mutex::new(VecDeque::new()));
-    let sink = log.clone();
-    let link = Link::start(
-        &st,
-        &h,
-        &me,
-        Arc::new(move |line: &str| {
-            if let Ok(mut l) = sink.lock() {
-                if l.len() >= MAX_LOG {
-                    l.pop_front();
-                }
-                l.push_back(line.to_string());
-            }
-        }),
-    )?;
+    let link = Link::start(&st, &h, &me, logger(log.clone()))?;
     let port = link.local().port();
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
     tunnels(|t| {
@@ -121,6 +176,70 @@ fn start(key: &[u8], device: &str, hub: &str, offer: &TunnelOffer) -> Result<Val
         Ok(())
     })?;
     Ok(json!({ "id": id, "port": port }))
+}
+
+fn hub_start(
+    key: &[u8],
+    device: &str,
+    obfuscation: Option<&Value>,
+    clients: &[Client],
+    member_port: u16,
+    listen: Option<&str>,
+) -> Result<Value> {
+    let key: [u8; 32] = key.try_into().map_err(|_| Error::msg("the hub's key is not 32 bytes"))?;
+    if member_port == 0 {
+        return Err(Error::msg("the member port is 0"));
+    }
+    let listen: SocketAddr =
+        listen.unwrap_or("[::]:0").parse().map_err(|_| Error::msg("the hub's listening address is not ip:port"))?;
+    let log = Arc::new(Mutex::new(VecDeque::new()));
+    let hub = Hub::start(
+        &key,
+        device,
+        obfuscation,
+        peers(clients)?,
+        listen,
+        // Every client's connection goes to the app's member listener.
+        Arc::new(move |_| Some(member_port)),
+        logger(log.clone()),
+    )?;
+    let port = hub.udp_port();
+    let id = NEXT.fetch_add(1, Ordering::SeqCst);
+    hubs(|t| {
+        t.insert(id, RunningHub { hub, device: device.to_string(), log });
+        Ok(())
+    })?;
+    Ok(json!({ "id": id, "udp_port": port }))
+}
+
+fn peers(clients: &[Client]) -> Result<Vec<Peer>> {
+    clients
+        .iter()
+        .map(|c| {
+            let key = c.key.as_slice().try_into().map_err(|_| Error::msg("a client's key is not 32 bytes"))?;
+            let psk =
+                c.psk.as_slice().try_into().map_err(|_| Error::msg("a client's preshared key is not 32 bytes"))?;
+            let addr = tunnel::addr(&c.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", c.device)))?;
+            Ok(Peer { key, psk, addr })
+        })
+        .collect()
+}
+
+/// A log that keeps its last MAX_LOG lines for the next status.
+fn logger(log: Arc<Mutex<VecDeque<String>>>) -> Arc<dyn Fn(&str) + Send + Sync> {
+    Arc::new(move |line: &str| {
+        if let Ok(mut l) = log.lock() {
+            if l.len() >= MAX_LOG {
+                l.pop_front();
+            }
+            l.push_back(line.to_string());
+        }
+    })
+}
+
+fn hubs<T>(f: impl FnOnce(&mut HashMap<u64, RunningHub>) -> Result<T>) -> Result<T> {
+    let mut g = HUBS.lock().map_err(|_| Error::msg("the hubs' table is broken"))?;
+    f(g.get_or_insert_with(HashMap::new))
 }
 
 fn tunnels<T>(f: impl FnOnce(&mut HashMap<u64, Running>) -> Result<T>) -> Result<T> {
