@@ -64,12 +64,18 @@ aurora)
 	# The Aurora and Sailfish apps' static libraries, by qmake's QT_ARCH. Only
 	# the static library: building the shared one needs the SDK's linker.
 	# With member (and join): the app joins by its QR code and syncs as a
-	# member, with its key in OP-TEE.
+	# member, with its key in OP-TEE; with tunnel, it syncs away from home
+	# through the group's hub as the other phones do.
+	# GotaTun, which the tunnel takes, is also a shared library, which needs
+	# the target's linker even here: the GNU cross compilers, or LINKER_ARM and
+	# LINKER_ARM64 in the environment.
+	export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER="${LINKER_ARM:-arm-linux-gnueabihf-gcc}"
+	export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="${LINKER_ARM64:-aarch64-linux-gnu-gcc}"
 	for pair in arm:armv7-unknown-linux-gnueabihf arm64:aarch64-unknown-linux-gnu; do
 		arch=${pair%%:*}
 		t=${pair#*:}
 		rustup target add "$t" >/dev/null
-		cargo rustc --locked -p cbb-ffi --features member --lib --release --target "$t" --crate-type staticlib
+		cargo rustc --locked -p cbb-ffi --features member,tunnel --lib --release --target "$t" --crate-type staticlib
 		mkdir -p "$out/$arch"
 		cp "target/$t/release/libcbb_ffi.a" "$out/$arch/"
 	done
