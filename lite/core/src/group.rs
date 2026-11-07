@@ -877,6 +877,32 @@ impl Records {
             .map_or((1, None), |(id, b)| (b.seq.saturating_add(1), Some(*id)))
     }
 
+    /// The canonical bytes of body as its signer's next record, to sign:
+    /// the group, seq and prev filled in, and for a removal, a freeze or a
+    /// claim what the set has seen, as the `group_body` call does it. A key
+    /// that signed two histories signs nothing but a resolve until the
+    /// root resolves them.
+    pub fn next_body(&self, mut b: Body) -> Result<Vec<u8>> {
+        if b.kind != authority::TYPE_RESOLVE && self.two_histories(&b.signer) {
+            return Err(Error::msg(
+                "This key signed two histories; the group's root must resolve them before it signs again.",
+            ));
+        }
+        let (seq, prev) = self.next_for(&b.signer);
+        b.group = self.tag.clone();
+        b.seq = seq;
+        b.prev = prev;
+        if [authority::TYPE_REVOKE, authority::TYPE_FREEZE, authority::TYPE_CLAIM].contains(&b.kind.as_str()) {
+            let mut seen = self.seen();
+            if !seen.iter().any(|e| e.key == b.signer) {
+                seen.push(Seen { key: b.signer, seq: seq.saturating_sub(1) });
+            }
+            b.seen = seen;
+        }
+        b.sort();
+        b.encode()
+    }
+
     /// Whether the state names signer in a conflict of two histories: a
     /// record it signed now would count for nothing until the root resolves
     /// them.

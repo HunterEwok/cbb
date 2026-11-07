@@ -88,6 +88,55 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
  */
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 void cbb_member_stop(cbb_member *m);
+/*
+ * An admin's change to a device of the group or command for it, signed with
+ * the key public names (the phone's admin key, or the root's key with no
+ * admin_ca) through sign, called during this call only (src/member.rs,
+ * manage): request is {"action","device","name","for_ms","allow_file_key",
+ * "records","public","admin_ca","timeout_ms"}, action remove, rename, thaw,
+ * make_admin (the root, for a computer connected), mute, unmute, renew (every
+ * member certificate due, no device) or resolve (the root voids the records an
+ * alert of the member's alerts op names); the answer {}, {"result"} for a
+ * command, or {"renewed": count}. A command blocks on the network.
+ */
+uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
+                           size_t *answer_len);
+
+/*
+ * The texts of the QR codes in a grey camera frame (src/qr.rs), only with the
+ * feature join: height rows of width bytes, stride bytes apart; the answer is
+ * {"texts":[...]}.
+ */
+uint8_t *cbb_qr_read(const uint8_t *gray, size_t width, size_t height, size_t stride, size_t *answer_len);
+
+/*
+ * A group the phone makes, its root key the app's (src/join.rs, new_group),
+ * only with the feature join: the request is
+ * {"name","os","store":"hardware"|"file","root_public","public","seal"?}, the
+ * keys' points base64, and sign the root key's callback, called during this
+ * call only; the answer has a join's fields (device, cert, group_ca, roots,
+ * records).
+ */
+uint8_t *cbb_group_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
+
+/*
+ * Admitting a device by its QR code as an admin of the group (src/admit.rs),
+ * only with the feature member: request is {"qr","public","admin_ca","make_admin"},
+ * public the point of the key sign holds (the phone's admin key, or the root's
+ * key with no admin_ca), and the answer {"addrs"} to dial. For each address,
+ * cbb_admit_dial starts a connection and cbb_admit_feed takes what arrives;
+ * both answer {"send","state","wrong_code","device","confirmed","error"}, state
+ * pending, admitted (the device is in the group, its record sent; device is
+ * {"device","name","os","role","admin"}), done or failed. m stays running
+ * until cbb_admit_free.
+ */
+typedef struct cbb_admit cbb_admit;
+
+cbb_admit *cbb_admit_new(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
+                         uint8_t **answer, size_t *answer_len);
+uint8_t *cbb_admit_dial(cbb_admit *a, size_t *answer_len);
+uint8_t *cbb_admit_feed(cbb_admit *a, const uint8_t *data, size_t len, int64_t now_ms, size_t *answer_len);
+void cbb_admit_free(cbb_admit *a);
 
 /*
  * The phones' tunnel to the hub (src/tunnel.rs), only in a library built with

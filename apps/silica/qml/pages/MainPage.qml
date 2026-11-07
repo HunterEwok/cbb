@@ -3,6 +3,7 @@
 
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "devices.js" as Devices
 
 Page {
     // Aurora lets an app read the clipboard only in the foreground: what the
@@ -35,19 +36,43 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"), { admin: true })
             }
             MenuItem {
+                visible: app.group === "" && app.keyLevel !== "none"
+                text: qsTr("Make a group")
+                enabled: !app.busy
+                onClicked: pageStack.push(Qt.resolvedUrl("NewGroupPage.qml"))
+            }
+            MenuItem {
                 visible: app.group !== ""
                 text: qsTr("Leave the group")
-                onClicked: remorse.execute(qsTr("Leaving the group"), function() { app.leave() })
+                // The root's key goes with it: the group then has no root
+                // until an admin phone takes it over.
+                onClicked: remorse.execute(app.root ? qsTr("Leaving the group and deleting its root key")
+                                                    : qsTr("Leaving the group"), function() { app.leave() })
+            }
+            MenuItem {
+                visible: app.admin && app.member.running
+                text: qsTr("Add a device")
+                onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
             }
             MenuItem {
                 visible: app.member.running
-                text: qsTr("Send the clipboard")
-                onClicked: app.member.sendClipboard()
+                text: qsTr("Sync the clipboard")
+                onClicked: app.member.button()
             }
             MenuItem {
+                visible: app.keyLevel === "none"
                 text: qsTr("Check the key again")
                 enabled: !app.busy
                 onClicked: app.setUpKey()
+            }
+            MenuItem {
+                text: qsTr("Settings")
+                onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
+            }
+            MenuItem {
+                visible: app.member.devices.length > 0
+                text: app.deviceList ? qsTr("Show the devices as tiles") : qsTr("Show the devices as a list")
+                onClicked: app.deviceList = !app.deviceList
             }
         }
 
@@ -118,44 +143,96 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
             }
 
-            DetailItem { label: qsTr("Version"); value: app.version }
-            DetailItem { label: qsTr("Core"); value: app.core }
-            DetailItem { label: qsTr("System"); value: app.system }
-            DetailItem {
-                label: qsTr("Key")
-                value: app.busy ? qsTr("Checking…")
-                     : app.keyLevel === "hardware" ? qsTr("In the secure element")
-                     : app.keyLevel === "file" ? qsTr("In a file on the phone")
-                     : qsTr("None yet")
+            AlertsCard {}
+
+            // The one button (docs/design.md, "The one button"): a copy from
+            // another device that waits comes to the phone; otherwise what the
+            // phone copied goes to the group.
+            Button {
+                visible: app.member.running
+                anchors.horizontalCenter: parent.horizontalCenter
+                enabled: !app.member.fetching
+                text: app.member.fetching ? qsTr("Fetching…") : qsTr("Sync")
+                onClicked: app.member.button()
             }
-            DetailItem {
-                label: qsTr("Group")
-                value: app.group !== "" ? app.group : qsTr("None yet")
-            }
-            DetailItem {
-                visible: app.device !== ""
-                label: qsTr("Device")
-                value: app.device
+
+            Label {
+                visible: app.group === "" && !app.busy
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                text: app.keyLevel === "none" ? qsTr("The phone has no key yet. Pull down to check it again.")
+                                              : qsTr("The phone is in no group yet. Pull down to join one or make one.")
+                wrapMode: Text.Wrap
+                color: Theme.highlightColor
             }
             DetailItem {
                 visible: app.group !== ""
                 label: qsTr("In the group")
-                value: app.admin ? qsTr("Admin") : qsTr("Member")
-            }
-            DetailItem {
-                visible: app.group !== ""
-                label: qsTr("Connected to")
-                value: app.member.peers.length > 0 ? app.member.peers.join(", ") : qsTr("No one yet")
+                value: app.root ? qsTr("Root") : app.admin ? qsTr("Admin") : qsTr("Member")
             }
             DetailItem {
                 visible: app.member.last !== ""
                 label: qsTr("Last copy")
                 value: app.member.last
             }
-            DetailItem {
-                visible: app.keyFingerprint !== ""
-                label: qsTr("Key fingerprint")
-                value: app.keyFingerprint
+
+            // The group's devices (docs/apps.md, "Screens", Home), as tiles
+            // or as a list; a tap opens the device's page.
+            SectionHeader {
+                visible: app.member.devices.length > 0
+                text: qsTr("Devices")
+            }
+            Flow {
+                id: tiles
+                visible: !app.deviceList
+                x: Theme.horizontalPageMargin - Theme.paddingSmall
+                width: parent.width - 2 * x
+                property int perRow: Math.max(3, Math.floor(width / (Theme.itemSizeExtraLarge * 1.4)))
+                Repeater {
+                    model: tiles.visible ? app.member.devices : []
+                    DeviceTile {
+                        width: tiles.width / tiles.perRow
+                        device: modelData
+                    }
+                }
+            }
+            Repeater {
+                model: app.deviceList ? app.member.devices : []
+                ListItem {
+                    contentHeight: Theme.itemSizeMedium
+                    onClicked: pageStack.push(Qt.resolvedUrl("DevicePage.qml"), { device: modelData })
+                    Rectangle {
+                        id: dot
+                        x: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Theme.paddingMedium
+                        height: width
+                        radius: width / 2
+                        color: modelData.online || modelData.self ? Theme.highlightColor : "transparent"
+                        border.color: Theme.secondaryColor
+                        border.width: modelData.online || modelData.self ? 0 : 1
+                    }
+                    Column {
+                        anchors.left: dot.right
+                        anchors.leftMargin: Theme.paddingMedium
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        Label {
+                            width: parent.width
+                            text: Devices.name(modelData)
+                            color: highlighted ? Theme.highlightColor : Theme.primaryColor
+                            truncationMode: TruncationMode.Fade
+                        }
+                        Label {
+                            width: parent.width
+                            text: [Devices.kind(modelData), Devices.system(modelData), Devices.mark(modelData)].filter(function(s) { return s !== "" }).join(" · ")
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                            truncationMode: TruncationMode.Fade
+                        }
+                    }
+                }
             }
 
             BusyIndicator {

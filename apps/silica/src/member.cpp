@@ -9,7 +9,15 @@
 
 #include <cbb_core.h>
 
+#include <QBuffer>
 #include <QClipboard>
+#include <QCryptographicHash>
+#include <QDir>
+#include <QFileInfo>
+#include <QMimeData>
+#include <QMimeDatabase>
+#include <QStandardPaths>
+#include <QThread>
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QJsonArray>
@@ -52,7 +60,25 @@ QString b64(const QByteArray &b)
     return QString::fromLatin1(b.toBase64());
 }
 
-// How often the main page's list of connected members is brought up to date.
+// Fetches a copy's images or files off the GUI thread: the core waits
+// for the network.
+class FetchThread : public QThread
+{
+public:
+    cbb_member *member = nullptr;
+    QJsonObject args;
+    QJsonObject answer;
+    Failure failure;
+
+protected:
+    void run() override { answer = call(member, QStringLiteral("fetch"), args, &failure); }
+};
+
+// The most bytes the phone fetches of a copy, or sends of shared files.
+const qint64 maxFetchBytes = 200ll << 20;
+const qint64 maxSendBytes = 50ll << 20;
+
+// How often the main page's devices are brought up to date.
 const int peerPollMs = 3000;
 
 } // namespace
@@ -116,6 +142,7 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     Errors::log(QStringLiteral("member: started in the group %1").arg(membership.groupTag()));
     m_peerTimer.start();
     pollMuted();
+    pollDevices();
     emit changed();
 }
 
@@ -123,23 +150,80 @@ void Member::stop()
 {
     if (!m_member)
         return;
+    // A fetch under way ends with the member; its answer is dropped.
+    if (m_fetch) {
+        m_fetch->disconnect(this);
+        m_fetch->wait();
+        m_fetch->deleteLater();
+        m_fetch = nullptr;
+    }
     current.store(nullptr);
     m_peerTimer.stop();
     cbb_member_stop(m_member);
     m_member = nullptr;
     m_peers.clear();
+    m_devices.clear();
+    m_alerts.clear();
+    emit devicesChanged();
     m_paused = m_muted = false;
     Errors::log(QStringLiteral("member: stopped"));
     emit changed();
 }
 
+void Member::button()
+{
+    if (!m_member || m_fetch)
+        return;
+    Failure failure;
+    const QJsonObject copy = call(m_member, QStringLiteral("waiting"), QJsonObject(), &failure)
+                                 .value(QStringLiteral("copy"))
+                                 .toObject();
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    if (!copy.isEmpty())
+        take(copy);
+    else
+        sendClipboard();
+}
+
 void Member::sendClipboard()
 {
-    if (!m_member)
-        return;
-    const QString text = QGuiApplication::clipboard()->text();
     // A muted phone's copies stay its own; the main page says so.
-    if (text.isEmpty() || text == m_known || m_muted)
+    if (!m_member || m_muted)
+        return;
+    const QMimeData *data = QGuiApplication::clipboard()->mimeData();
+    if (data && data->hasImage() && !data->hasText()) {
+        sendImage(qvariant_cast<QImage>(data->imageData()));
+        return;
+    }
+    const QString text = QGuiApplication::clipboard()->text();
+    if (text.isEmpty())
+        return;
+    Failure failure;
+    const bool sends = call(m_member, QStringLiteral("sends"), QJsonObject{{QStringLiteral("board"), text}}, &failure)
+                           .value(QStringLiteral("sends"))
+                           .toBool();
+    if (failure.isNull() && sends)
+        call(m_member, QStringLiteral("copy"), QJsonObject{{QStringLiteral("text"), text}, {QStringLiteral("board"), true}},
+             &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    if (!sends)
+        return;
+    m_known = text;
+    m_error.clear();
+    setLast(text, false);
+}
+
+void Member::sendText(const QString &text)
+{
+    if (!m_member || m_muted || text.isEmpty())
         return;
     Failure failure;
     call(m_member, QStringLiteral("copy"), QJsonObject{{QStringLiteral("text"), text}}, &failure);
@@ -148,9 +232,149 @@ void Member::sendClipboard()
         emit changed();
         return;
     }
-    m_known = text;
     m_error.clear();
     setLast(text, false);
+}
+
+QString Member::imageKey(const QByteArray &png)
+{
+    return QChar(0) + QStringLiteral("image:") + QString::fromLatin1(QCryptographicHash::hash(png, QCryptographicHash::Sha256).toHex());
+}
+
+void Member::sendImage(const QImage &image)
+{
+    if (image.isNull())
+        return;
+    QByteArray png;
+    QBuffer buf(&png);
+    buf.open(QIODevice::WriteOnly);
+    image.save(&buf, "PNG");
+    const QString key = imageKey(png);
+    if (key == m_tookImage || png.size() > maxSendBytes)
+        return;
+    Failure failure;
+    const bool sends = call(m_member, QStringLiteral("sends"), QJsonObject{{QStringLiteral("board"), key}}, &failure)
+                           .value(QStringLiteral("sends"))
+                           .toBool();
+    if (failure.isNull() && sends) {
+        const QJsonObject part{{QStringLiteral("type"), QStringLiteral("image/png")},
+                               {QStringLiteral("data"), b64(png)}};
+        call(m_member, QStringLiteral("copy_media"),
+             QJsonObject{{QStringLiteral("parts"), QJsonArray{part}}, {QStringLiteral("board"), true}}, &failure);
+    }
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    if (!sends)
+        return;
+    m_error.clear();
+    m_last = tr("An image");
+    emit changed();
+}
+
+void Member::sendFiles(const QStringList &paths)
+{
+    if (!m_member || m_muted || paths.isEmpty())
+        return;
+    QMimeDatabase mimes;
+    QJsonArray parts;
+    qint64 total = 0;
+    for (const QString &p : paths) {
+        const QFileInfo fi(p);
+        if (!fi.isFile())
+            continue;
+        total += fi.size();
+        const QString type = mimes.mimeTypeForFile(fi).name();
+        QJsonObject part{{QStringLiteral("path"), fi.fileName()}, {QStringLiteral("file"), fi.absoluteFilePath()}};
+        // A lone image goes as clipboard data, so that it lands in the
+        // other devices' clipboards; files keep their names.
+        if (paths.size() == 1 && (type == QStringLiteral("image/png") || type == QStringLiteral("image/jpeg")))
+            part = QJsonObject{{QStringLiteral("type"), type}, {QStringLiteral("file"), fi.absoluteFilePath()}};
+        parts.append(part);
+    }
+    Failure failure;
+    if (parts.isEmpty())
+        failure = Failure{tr("There is nothing to send: no file could be read."), QStringLiteral("share: no readable file")};
+    else if (total > maxSendBytes)
+        failure = Failure{tr("The files are too large: up to 50 MB go together."),
+                          QStringLiteral("share: %1 bytes").arg(total)};
+    else
+        call(m_member, QStringLiteral("copy_media"), QJsonObject{{QStringLiteral("parts"), parts}}, &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    m_error.clear();
+    m_last = parts.size() == 1 ? QFileInfo(paths.first()).fileName() : tr("%1 files").arg(parts.size());
+    emit changed();
+}
+
+void Member::take(const QJsonObject &copy)
+{
+    const QString id = copy.value(QStringLiteral("id")).toString();
+    const QString kind = copy.value(QStringLiteral("kind")).toString();
+    if (kind != QStringLiteral("media")) {
+        write(copy.value(QStringLiteral("text")).toString(), kind == QStringLiteral("secret"), 0);
+        Failure failure;
+        call(m_member, QStringLiteral("took"), QJsonObject{{QStringLiteral("id"), id}}, &failure);
+        return;
+    }
+    if (m_fetch)
+        return;
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    const QString folder = QDir(base.isEmpty() ? QDir::homePath() : base)
+                               .filePath(QStringLiteral("CBB/") + QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd hh.mm.ss")));
+    auto *t = new FetchThread;
+    t->member = m_member;
+    t->args = QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("max"), double(maxFetchBytes)}, {QStringLiteral("out"), folder}};
+    m_fetch = t;
+    emit changed();
+    connect(t, &QThread::finished, this, [this, t, id, folder]() {
+        const QJsonArray parts = t->answer.value(QStringLiteral("parts")).toArray();
+        const Failure failure = t->failure;
+        m_fetch = nullptr;
+        t->deleteLater();
+        if (!failure.isNull()) {
+            m_error = Errors::shown(failure);
+            emit changed();
+            return;
+        }
+        Failure f;
+        call(m_member, QStringLiteral("took"), QJsonObject{{QStringLiteral("id"), id}}, &f);
+        int files = 0;
+        QString image;
+        for (const QJsonValue &v : parts) {
+            const QJsonObject p = v.toObject();
+            if (p.value(QStringLiteral("dir")).toBool())
+                continue;
+            ++files;
+            const QString type = p.value(QStringLiteral("type")).toString();
+            if (type == QStringLiteral("image/png") || type == QStringLiteral("image/jpeg"))
+                image = p.value(QStringLiteral("file")).toString();
+        }
+        // One image goes into the clipboard as well, and stays out of the
+        // phone's next sending.
+        if (files == 1 && !image.isEmpty()) {
+            const QImage img(image);
+            if (!img.isNull()) {
+                QGuiApplication::clipboard()->setImage(img);
+                QByteArray png;
+                QBuffer buf(&png);
+                buf.open(QIODevice::WriteOnly);
+                img.save(&buf, "PNG");
+                m_tookImage = imageKey(png);
+            }
+        }
+        m_error.clear();
+        m_last = files == 1 && !image.isEmpty() ? tr("An image") : tr("%1 files in Downloads").arg(files);
+        Errors::log(QStringLiteral("member: saved %1 files of the group's copy").arg(files));
+        emit saved(folder, files);
+        emit changed();
+    });
+    t->start();
 }
 
 void Member::event(const QByteArray &json)
@@ -170,6 +394,13 @@ void Member::event(const QByteArray &json)
                              QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
     } else if (type == QStringLiteral("mute")) {
         pollMuted();
+    } else if (type == QStringLiteral("copy")) {
+        // Images or files from another device come by themselves while the
+        // phone takes the group's copies, as texts do through write; the
+        // button takes them otherwise.
+        const QJsonObject copy = e.value(QStringLiteral("copy")).toObject();
+        if (copy.value(QStringLiteral("kind")).toString() == QStringLiteral("media") && !m_paused)
+            take(copy);
     }
 }
 
@@ -277,6 +508,28 @@ void Member::pollPeers()
     }
     // A pause or a mute that ran out ends on its own.
     pollMuted();
+    pollDevices();
+}
+
+void Member::pollDevices()
+{
+    if (!m_member)
+        return;
+    Failure failure;
+    const QJsonObject a = call(m_member, QStringLiteral("devices"), QJsonObject(), &failure);
+    if (!failure.isNull()) {
+        Errors::log(QStringLiteral("member: the devices: %1 (%2)").arg(failure.message, failure.details));
+        return;
+    }
+    const QVariantList devices = a.value(QStringLiteral("devices")).toArray().toVariantList();
+    const QJsonObject al = call(m_member, QStringLiteral("alerts"), QJsonObject(), &failure);
+    const QVariantList alerts =
+        failure.isNull() ? al.value(QStringLiteral("alerts")).toArray().toVariantList() : m_alerts;
+    if (devices != m_devices || alerts != m_alerts) {
+        m_devices = devices;
+        m_alerts = alerts;
+        emit devicesChanged();
+    }
 }
 
 void Member::setLast(const QString &text, bool secret)
