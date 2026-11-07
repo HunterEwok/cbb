@@ -236,6 +236,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | Y33 | A secret in a hello is a mark only: a member that knows only the mark has no text | fleet | |
 | Y34 | The memory of skipped secrets: a manager offering one again makes no event for 12 h; it holds 4096 entries | fleet, helper | |
 | Y35 | Secrets from the phones; `cbb paste -terminal` refuses a secret without `-secret` | ui, real | |
+| Y36 | A device that joins reads copies from the next one on: the copy made before it joined never reaches it in the clear | fleet | |
 
 ## 6. Sync modes (M)
 
@@ -335,6 +336,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W19 | Client isolation: from a client's tunnel nothing but the hub's member port answers; the hub opens one port [S3, S4] | real, fleet | |
 | W20 | A WireGuard key the group does not know gets no answer from the hub or the forwarder [S5] | real, fleet | |
 | W21 | A removed away device: the hub drops its key at once; no sync; its old invitation refused [S6] | real | |
+| W43 | Two kinds of hub: `cbb global hub -on DEVICE -forward-only` makes a computer that is no admin a hub that only passes the copies on; every device lists it so; the root stops being a hub (`cbb global hub off`) and its client away moves to it | fleet | |
 
 ### 10.3 The forwarder and the relay
 
@@ -440,6 +442,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | S22 | Signed releases: the envelope checks against the shared vectors on the devices themselves (Go, the lite member, both kits) | fleet, ui | |
 | S23 | Commands passed on by a member cannot be changed or forged by it | fleet | |
 | S24 | A stolen admin computer (its state copied to a fresh container): it acts until frozen; after the freeze nothing it signs counts | fleet | |
+| S25 | Copies sealed end to end: through a hub that only passes them on, text and a file arrive whole both ways, and neither the hub's memory nor its disk ever holds them in the clear, while a member that reads them does; that hub takes no paste | fleet | |
+| S26 | A paste command to a device behind a hub passes through it sealed: the receiver's answer comes back, and the hub never holds the text | fleet | |
 
 ## 15. Load, concurrency and faults (E)
 

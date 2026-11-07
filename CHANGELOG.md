@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The bench's fleet checks the copies sealed end to end: through a hub that only passes them
+  on, text and a file arrive both ways and neither its memory nor its disk ever holds them in
+  the clear (S25), a paste command passes through it sealed (S26), making and stopping such a
+  hub (W43), and a device that joins never reads the copy made before it (Y36); the forge
+  looks for a text in a service's memory (`forge memscan`).
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
@@ -1482,6 +1487,13 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A hub that only passes the copies on now passes images and files on too: it fetched no
+  blob, since it reads no copy, and the members fetched it from each other forever.
+- The devices take the offers and shares of a hub that only passes the copies on, as its
+  record allows (the core's `hub_peer`): computers and lite members ignored them, so a client
+  away kept only what the hub before it had passed on.
+- `cbb status` says which devices are hubs, and which of them only pass the copies on, as
+  the apps' device pages do.
 - The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
   clipboard off the main thread, for the remote paste sheet's empty field and for a sync
   that reads the clipboard itself, so iOS stops reporting a hang of the app.

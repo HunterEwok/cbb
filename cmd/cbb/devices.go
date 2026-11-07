@@ -60,11 +60,20 @@ func writeDevices(w io.Writer, devs, peers []control.Device, newest string, now 
 			ver += " (old)"
 			old = true
 		}
+		// A hub says which kind it is: one that only passes the copies on
+		// reads none (docs/protocol.md, section 11, "Two kinds of hub").
+		role := d.Role
+		switch {
+		case d.ForwardOnly:
+			role += ", hub that only passes copies on"
+		case d.Hub:
+			role += ", hub"
+		}
 		mode := d.Mode
 		if d.Muted {
 			mode = strings.TrimSpace(mode + " muted")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, group.OSName(d.OS), ver, d.Role, admin, keys(d), mode, seen(d, now), clock, d.ID)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, group.OSName(d.OS), ver, role, admin, keys(d), mode, seen(d, now), clock, d.ID)
 	}
 	tw.Flush()
 	if unlisted {

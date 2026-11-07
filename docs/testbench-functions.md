@@ -245,6 +245,7 @@ line here with every new function, and a case for it in the catalogue.
 | Y.30 | `cbb copy` reads standard input | Y1 |
 | Y.31 | `cbb paste` prints the clipboard | Y1, M3 |
 | Y.32 | `cbb paste -terminal`, `-lines`, `-secret` | Y35, H3 |
+| Y.33 | A device that joins reads copies from the next one on | Y36 |
 
 ## M. Sync modes
 
@@ -406,6 +407,7 @@ line here with every new function, and a case for it in the catalogue.
 | W.44 | The push sender | W41 |
 | W.45 | Phones away: cbbtun and the loopback port | W42 |
 | W.46 | Away on Android in the background | W42 |
+| W.47 | A hub that only passes the copies on (`-forward-only`), and `cbb global hub off` | W43 |
 
 ## U. The command line, the control socket and errors
 
@@ -503,6 +505,8 @@ line here with every new function, and a case for it in the catalogue.
 | S.9 | Robustness against fuzzed frames | S20 |
 | S.10 | Signed releases checked on the devices | S22 |
 | S.11 | A stolen admin computer | S24 |
+| S.12 | Copies sealed end to end: no device in between reads them | S25 |
+| S.13 | Commands sealed for their receiver | S26 |
 
 ## E. Load, concurrency and faults
 

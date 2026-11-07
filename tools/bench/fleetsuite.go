@@ -76,6 +76,8 @@ func FleetSuite(ctx context.Context, r *Report, cbb string, size int, timeout ti
 		{"E6-hub-load", func() { hubLoad(ctx, r, f, timeout) }},
 		{"W34-vless", func() { vlessAway(ctx, r, f, timeout) }},
 		{"W15-move", func() { hubMoves(ctx, r, f, timeout) }},
+		{"S25-forward-only", func() { forwardOnlyHub(ctx, r, f, timeout) }},
+		{"Y36-joined-later", func() { joinedLater(ctx, r, f, timeout) }},
 		{"E1-latency", func() { latency(ctx, r, f, timeout) }},
 		{"E2-throughput", func() { throughput(ctx, r, f, timeout) }},
 		{"E4-big", func() { bigTransfers(ctx, r, f, timeout) }},
