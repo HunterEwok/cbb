@@ -161,6 +161,16 @@ uint8_t *cbb_tunnel_register(const uint8_t *request, size_t len, cbb_sign_fn sig
 uint8_t *cbb_tunnel_relay(const uint8_t *request, size_t len, cbb_sign_fn sign, cbb_event_fn event, void *ctx,
                           size_t *answer_len);
 
+/*
+ * Makes a relay link of cbb_tunnel_relay register with the group's server
+ * credentials, signed with the period's server key through sign and ctx,
+ * which stay valid until the link stops or is given other credentials; an
+ * empty "credentials" goes back to the member certificate. The answer is as
+ * cbb_tunnel's.
+ */
+uint8_t *cbb_tunnel_relay_credentials(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
+                                      size_t *answer_len);
+
 #ifdef __cplusplus
 }
 #endif

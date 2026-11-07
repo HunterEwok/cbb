@@ -576,6 +576,32 @@ pub unsafe extern "C" fn cbb_tunnel_relay(
     to_c(tunnel::relay_start(req, sign, event, ctx as usize), answer_len)
 }
 
+/// Makes a relay link of `cbb_tunnel_relay` register with the group's
+/// server credentials (src/tunnel.rs tells the request), signing with the
+/// period's server key through `sign` and `ctx`; the answer is as
+/// `cbb_tunnel`'s.
+///
+/// # Safety
+///
+/// As `cbb_tunnel`; `sign` must stay callable with `ctx`, from any thread,
+/// until the link stops or is given other credentials.
+#[cfg(feature = "tunnel")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_tunnel_relay_credentials(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request, not null.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(tunnel::relay_credentials(req, sign, ctx as usize), answer_len)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

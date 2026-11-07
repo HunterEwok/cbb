@@ -153,9 +153,11 @@ clients, its remote invitations with a guest tunnel to the pairing window), and 
 `cbb_tunnel_register` registers the phone's hub with the group's forwarder and
 `cbb_tunnel_relay` links the phone to the blind relay, both signing their TLS with the member
 key through the same callback, the relay's link telling the app through an events' callback
-which connections it joined. `TestRustPhoneTunnel`, `TestRustPhoneHub`,
-`TestRustPhoneHubInvite`, `TestRustPhoneHubForwarder` and `TestRustPhoneRelay` run them against
-Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
+which connections it joined; `cbb_tunnel_relay_credentials` makes the link register with the
+group's server credentials (docs/protocol.md, section 18), signed with the period's server key
+through another callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPhoneHubInvite`,
+`TestRustPhoneHubForwarder`, `TestRustPhoneRelay` and `TestRustPhoneRelayCredentials` run them
+against Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its
