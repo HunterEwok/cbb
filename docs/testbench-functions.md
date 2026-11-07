@@ -262,6 +262,9 @@ line here with every new function, and a case for it in the catalogue.
 | M.9 | New devices in `own`, old ones `shared` | M6 |
 | M.10 | The phones' automatic paths follow the mode | M7 |
 | M.11 | The lite member's mode | M1 |
+| M.12 | `cbb mute` and `cbb unmute` on the device itself | M8 |
+| M.13 | An admin mutes a device for the group (`cbb mute -on`, the `mute` and `unmute` commands) | M9 |
+| M.14 | The group's copies setting (`cbb incoming`) | M10 |
 
 ## O. Images, files and formatted text
 

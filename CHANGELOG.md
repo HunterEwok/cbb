@@ -12,6 +12,9 @@ All notable changes to cbb are documented in this file. The format follows
   the clear (S25), a paste command passes through it sealed (S26), making and stopping such a
   hub (W43), and a device that joins never reads the copy made before it (Y36); the forge
   looks for a text in a service's memory (`forge memscan`).
+- The bench's fleet checks muting: `cbb mute` and `cbb unmute` on the device, across a restart
+  and with `-for` (M8), an admin's `cbb mute -on` against the device's own user, a second
+  admin and its time (M9), and `cbb incoming` with its bounds and rights (M10).
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed

@@ -249,6 +249,9 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | M5 | `cbb mode -on DEVICE` from the root computer, an admin computer, an admin phone: taken; from a member or a frozen admin: refused; to a stopped target: an error within 10 s and nothing changes; to a target not connected to the sender: passed on by a member [P34] | real, fleet | |
 | M6 | A new device starts in `own`; a device without a mode file shares | fleet | |
 | M7 | The phones' automatic paths follow the mode: Android's service writes only in a receiving mode and its accessibility service sends only in a sending mode; the iPhone writes the last 45 s only in a receiving mode | ui | |
+| M8 | `cbb mute` keeps the group's copies out of this device while its own still go out; `cbb status` says so; it lasts across a restart; `cbb unmute` ends it; `-for` ends it by itself | fleet | |
+| M9 | An admin's `cbb mute -on DEVICE`: the device's copies reach no one, every devices list says it is muted, its own user (no admin) cannot end it, another admin can (the last command counts), `-for` ends it by itself; a device that is no admin mutes no one | fleet | |
+| M10 | `cbb incoming`: the root or an admin sets how long a copy from another device stays live, every member shows it; out of 5s to 1h, or from a device that is no admin, refused | fleet | |
 
 ## 7. Images, files and formatted text (O)
 
