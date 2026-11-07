@@ -208,6 +208,46 @@
         <translation>एडमिन के रूप में समूह से जुड़ें</translation>
     </message>
     <message>
+        <source>For 15 minutes</source>
+        <translation>15 मिनट के लिए</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>एक घंटे के लिए</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>8 घंटे के लिए</translation>
+    </message>
+    <message>
+        <source>Until I turn it on</source>
+        <translation>जब तक मैं चालू न करूँ</translation>
+    </message>
+    <message>
+        <source>Taking copies</source>
+        <translation>कॉपियाँ ली जा रही हैं</translation>
+    </message>
+    <message>
+        <source>Not taking copies until %1</source>
+        <translation>%1 तक कॉपियाँ नहीं ली जा रहीं</translation>
+    </message>
+    <message>
+        <source>Not taking copies</source>
+        <translation>कॉपियाँ नहीं ली जा रहीं</translation>
+    </message>
+    <message>
+        <source>Tap to take no copies from the group, or again; hold it for a time</source>
+        <translation>समूह की कॉपियाँ न लेने या फिर से लेने के लिए टैप करें; समय चुनने के लिए दबाकर रखें</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>एक एडमिन ने इस फ़ोन को %1 तक म्यूट किया है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>एक एडमिन ने इस फ़ोन को म्यूट किया है: जब तक कोई एडमिन अनम्यूट न करे, इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>समूह में</translation>
     </message>

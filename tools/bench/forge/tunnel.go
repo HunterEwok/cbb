@@ -29,17 +29,21 @@ import (
 //	forge -state DIR -endpoint HOST:PORT reach:ID,... whether other members answer through the hub
 //	forge -state DIR -endpoint HOST:PORT stranger     a key the group does not know
 //	forge -state DIR -hub-state DIR2 member           whether the hub of DIR2's offer answers
+//	forge -state DIR -endpoint HOST:PORT outside:A:P,... whether any address beyond the hub answers
 //
 // Each prints one line per case: "ports: open 8764", "reach ID: no answer"
 // or "reach ID: answered", "stranger: no answer" or "stranger: answered", "member: answered" or
-// "member: no answer". With -hub-state, the member's own keys go to the
+// "member: no answer", "outside A:P tcp: no answer" or "outside A:P udp:
+// answered". outside routes everything, IPv4 and IPv6, to the hub, as a
+// hostile client would, and tries TCP and UDP to each address: the
+// internet, the hub's own network, its loopback (W44). With -hub-state, the member's own keys go to the
 // hub of another device's offer, with that device's preshared key, as a
 // member of another group that learned it would (W33, S8).
 
 // tunnelCase tells whether c is one of the tunnel's cases.
 func tunnelCase(c string) bool {
 	name, _, _ := strings.Cut(c, ":")
-	return name == "ports" || name == "reach" || name == "stranger" || name == "member"
+	return name == "ports" || name == "reach" || name == "stranger" || name == "member" || name == "outside"
 }
 
 // runTunnel runs the tunnel's cases as the client whose service state is in
@@ -134,6 +138,35 @@ func runTunnel(state, hubState, endpoint string, cases []string) error {
 				}
 			}
 			stop()
+		case "outside":
+			tn, stop, err := startProbeWith(st.Key, h.PresharedKey, []netip.Addr{self, netip.MustParseAddr("10.0.0.2")}, h, ep, "0.0.0.0/0", "::/0")
+			if err != nil {
+				return err
+			}
+			if _, err := dialTunnel(tn, netip.AddrPortFrom(hubAddr, tunnel.Port), 20*time.Second); err != nil {
+				stop()
+				return fmt.Errorf("the hub's member port does not answer through the tunnel: %v", err)
+			}
+			for _, a := range strings.Split(arg, ",") {
+				to, err := netip.ParseAddrPort(a)
+				if err != nil {
+					stop()
+					return err
+				}
+				answer := func(ok bool) string {
+					if ok {
+						return "answered"
+					}
+					return "no answer"
+				}
+				c, err := dialTunnel(tn, to, 5*time.Second)
+				if err == nil {
+					c.Close()
+				}
+				fmt.Printf("outside %s tcp: %s\n", to, answer(err == nil))
+				fmt.Printf("outside %s udp: %s\n", to, answer(udpAnswers(tn, self, to)))
+			}
+			stop()
 		case "stranger":
 			key, err := tunnel.NewPrivateKey()
 			if err != nil {
@@ -173,7 +206,13 @@ func deviceAddr(dir string) (netip.Addr, error) {
 // startProbe brings up a WireGuard client with key that routes the whole
 // tunnel prefix to the hub h at ep.
 func startProbe(key, psk tunnel.Key, self netip.Addr, h tunnel.HubLink, ep netip.AddrPort) (*netstack.Net, func(), error) {
-	tdev, tn, err := netstack.CreateNetTUN([]netip.Addr{self}, nil, tunnel.MTU)
+	return startProbeWith(key, psk, []netip.Addr{self}, h, ep)
+}
+
+// startProbeWith is startProbe with the addresses addrs and more routes to
+// the hub beside the tunnel prefix.
+func startProbeWith(key, psk tunnel.Key, addrs []netip.Addr, h tunnel.HubLink, ep netip.AddrPort, routes ...string) (*netstack.Net, func(), error) {
+	tdev, tn, err := netstack.CreateNetTUN(addrs, nil, tunnel.MTU)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -190,6 +229,9 @@ func startProbe(key, psk tunnel.Key, self netip.Addr, h tunnel.HubLink, ep netip
 	}
 	fmt.Fprintf(&b, "public_key=%s\npreshared_key=%s\nendpoint=%s\nallowed_ip=fd00:cbb::/32\nallowed_ip=fd00:cbc::/32\n",
 		hex.EncodeToString(pub[:]), hex.EncodeToString(psk[:]), ep)
+	for _, r := range routes {
+		fmt.Fprintf(&b, "allowed_ip=%s\n", r)
+	}
 	if err := dev.IpcSet(b.String()); err != nil {
 		dev.Close()
 		return nil, nil, err
@@ -205,4 +247,28 @@ func dialTunnel(tn *netstack.Net, to netip.AddrPort, timeout time.Duration) (int
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return tn.DialContextTCPAddrPort(ctx, to)
+}
+
+// udpAnswers sends a few packets to to through the tunnel, from self or,
+// for an IPv4 address, from 10.0.0.2, and reports whether anything came
+// back.
+func udpAnswers(tn *netstack.Net, self netip.Addr, to netip.AddrPort) bool {
+	from := netip.AddrPortFrom(self, 0)
+	if to.Addr().Is4() {
+		from = netip.MustParseAddrPort("10.0.0.2:0")
+	}
+	u, err := tn.DialUDPAddrPort(from, to)
+	if err != nil {
+		return false
+	}
+	defer u.Close()
+	b := make([]byte, 64)
+	for range 3 {
+		u.Write([]byte("cbb-bench outside"))
+		u.SetReadDeadline(time.Now().Add(time.Second))
+		if _, err := u.Read(b); err == nil {
+			return true
+		}
+	}
+	return false
 }

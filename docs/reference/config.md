@@ -80,6 +80,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_CLOCK` | the bench's time-scaled build (`-tags benchtime`) | What the build adds to the wall clock, so that certificates expire on the bench in minutes. Never in a release. |
 | `CBB_TEST_CLOCK_FILE` | the bench's time-scaled build | A file that holds the value of `CBB_TEST_CLOCK` when that is not set, so the bench moves a member's clock with a restart of the service. |
 | `CBB_TEST_SCALE` | the bench's time-scaled build | How many times faster long times run: 100000 by default, `1` for cases that move only the clock. |
+| `CBB_TEST_XHTTP_CA` | the bench's time-scaled build | A PEM file of a CA that the clients of VLESS over XHTTP trust beside the public ones, for the bench's web server in front of a forwarder (W46). Never in a release. |
 | `CBB_BENCH_SEED` | the bench's random walk (G40) | The walk's seed, which the run prints, to repeat a walk step by step. |
 | `CBB_TPM_SIMULATOR` | the service, in tests | A TPM simulator's command port (`host:port`, the platform port the next one) used in place of the TPM. |
 | `CBB_TPM_REQUIRED` | Go tests of the TPM | Makes a missing `swtpm` a failure instead of a skip, as in CI. |

@@ -12,6 +12,7 @@
 #include "membership.h"
 
 #include <QByteArray>
+#include <QDateTime>
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -27,6 +28,15 @@ class Member : public QObject
     Q_PROPERTY(QStringList peers READ peers NOTIFY changed)
     Q_PROPERTY(QString last READ last NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
+    // The quick switch (design.md, "Muting a device"): the group's copies
+    // stay out of the clipboard, until pausedUntil or, when it is invalid,
+    // until the user turns them on again.
+    Q_PROPERTY(bool paused READ paused NOTIFY changed)
+    Q_PROPERTY(QDateTime pausedUntil READ pausedUntil NOTIFY changed)
+    // An admin muted the phone: its copies stay its own, until mutedUntil
+    // or, when it is invalid, until an admin unmutes it.
+    Q_PROPERTY(bool muted READ muted NOTIFY changed)
+    Q_PROPERTY(QDateTime mutedUntil READ mutedUntil NOTIFY changed)
 
 public:
     explicit Member(QObject *parent = nullptr);
@@ -38,6 +48,10 @@ public:
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
     QString error() const { return m_error; }
+    bool paused() const { return m_paused; }
+    QDateTime pausedUntil() const { return m_pausedUntil; }
+    bool muted() const { return m_muted; }
+    QDateTime mutedUntil() const { return m_mutedUntil; }
 
     // Starts the member of membership as the phone named name.
     void start(const Membership &membership, const QString &name, const QByteArray &publicKey, const QString &os,
@@ -47,6 +61,11 @@ public:
     // Sends the clipboard's text when it is new: neither what the group
     // sent last nor what the phone sent last.
     Q_INVOKABLE void sendClipboard();
+
+    // Keeps the group's copies out of the clipboard for minutes (0 for
+    // until resume), or takes them again; the phone's own still go out.
+    Q_INVOKABLE void pause(int minutes);
+    Q_INVOKABLE void resume();
 
 signals:
     void changed();
@@ -59,6 +78,9 @@ private:
     void write(const QString &text, bool secret, qint64 ttlMs);
     void pollPeers();
     void setLast(const QString &text, bool secret);
+    // Reads the pause and the mute from the core's answer, or asks for it.
+    void readMuted(const QJsonObject &state);
+    void pollMuted();
 
     cbb_member *m_member = nullptr;
     QTimer m_peerTimer;
@@ -67,4 +89,8 @@ private:
     QString m_error;
     // The clipboard's text as the group last set it or the phone last sent it.
     QString m_known;
+    bool m_paused = false;
+    QDateTime m_pausedUntil;
+    bool m_muted = false;
+    QDateTime m_mutedUntil;
 };

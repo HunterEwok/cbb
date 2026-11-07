@@ -245,6 +245,7 @@ line here with every new function, and a case for it in the catalogue.
 | Y.30 | `cbb copy` reads standard input | Y1 |
 | Y.31 | `cbb paste` prints the clipboard | Y1, M3 |
 | Y.32 | `cbb paste -terminal`, `-lines`, `-secret` | Y35, H3 |
+| Y.33 | A device that joins reads copies from the next one on | Y36 |
 
 ## M. Sync modes
 
@@ -261,6 +262,9 @@ line here with every new function, and a case for it in the catalogue.
 | M.9 | New devices in `own`, old ones `shared` | M6 |
 | M.10 | The phones' automatic paths follow the mode | M7 |
 | M.11 | The lite member's mode | M1 |
+| M.12 | `cbb mute` and `cbb unmute` on the device itself | M8 |
+| M.13 | An admin mutes a device for the group (`cbb mute -on`, the `mute` and `unmute` commands) | M9 |
+| M.14 | The group's copies setting (`cbb incoming`) | M10 |
 
 ## O. Images, files and formatted text
 
@@ -406,6 +410,12 @@ line here with every new function, and a case for it in the catalogue.
 | W.44 | The push sender | W41 |
 | W.45 | Phones away: cbbtun and the loopback port | W42 |
 | W.46 | Away on Android in the background | W42 |
+| W.47 | A hub that only passes the copies on (`-forward-only`), and `cbb global hub off` | W43 |
+| W.48 | The ways out carry only cbb | W44 |
+| W.49 | A hub registers inside VLESS | W45, W46 |
+| W.50 | VLESS over XHTTP behind a web server | W46 |
+| W.51 | Updates through the forwarder's mirror over VLESS | W47 |
+| W.52 | The project's relay follows its key and address from the signed lists | W48 |
 
 ## U. The command line, the control socket and errors
 
@@ -487,6 +497,7 @@ line here with every new function, and a case for it in the catalogue.
 | A.22 | Themes and layouts | A15 |
 | A.23 | Plain-language paths | A16 |
 | A.24 | Add a device: camera and six digits | A1, G3 |
+| A.25 | The Aurora OS app: join by QR, sync in front, leave | A17 |
 
 ## S. Security
 
@@ -503,6 +514,8 @@ line here with every new function, and a case for it in the catalogue.
 | S.9 | Robustness against fuzzed frames | S20 |
 | S.10 | Signed releases checked on the devices | S22 |
 | S.11 | A stolen admin computer | S24 |
+| S.12 | Copies sealed end to end: no device in between reads them | S25 |
+| S.13 | Commands sealed for their receiver | S26 |
 
 ## E. Load, concurrency and faults
 

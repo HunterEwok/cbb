@@ -259,6 +259,68 @@ func TestFFIJoiner(t *testing.T) {
 	fmt.Fprintln(in, "COPY from the phone")
 	waitFor(t, "the service has the phone's text", func() bool { return pi.paste(t) == "from the phone" })
 
+	// The app's switch pauses receiving: the group's copies stay out of
+	// the phone's clipboard, its own still go out.
+	fmt.Fprintln(in, "PAUSE 3600000")
+	if got := next("MUTED "); got != "true false" {
+		t.Fatalf("after the pause the phone says %q", got)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "kept out"); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintln(in, "COPY while paused")
+	waitFor(t, "the service has the paused phone's text", func() bool { return pi.paste(t) == "while paused" })
+	fmt.Fprintln(in, "RESUME")
+	if got := next("MUTED "); got != "false false" {
+		t.Fatalf("after the resume the phone says %q", got)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "after the pause"); err != nil {
+		t.Fatal(err)
+	}
+	// The next write is this one: the copy made while paused never came.
+	if got := next("WRITE "); got != "text after the pause" {
+		t.Fatalf("the phone got %q after its pause", got)
+	}
+
+	// The root mutes the phone for the group: the app hears it, its copies
+	// stay its own, and the root lists it as muted once it connected again.
+	if _, err := pi.do(t, control.Header{Op: control.OpMute, Device: "aurora phone", ForMS: time.Hour.Milliseconds()}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := next("MUTE "); !strings.HasPrefix(got, "true ") {
+		t.Fatalf("the app heard %q of the mute", got)
+	}
+	fmt.Fprintln(in, "COPY noise")
+	if got := next("REFUSED "); !strings.Contains(got, "muted") {
+		t.Fatalf("the muted phone's copy: %q", got)
+	}
+	phoneMuted := func(muted bool) bool {
+		for _, d := range pi.devices(t) {
+			if d.Name == "aurora phone" {
+				return d.Muted == muted
+			}
+		}
+		return false
+	}
+	waitFor(t, "the root lists the phone as muted", func() bool { return phoneMuted(true) })
+	waitFor(t, "the phone connected again", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+	if _, err := pi.do(t, control.Header{Op: control.OpUnmute, Device: "aurora phone"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := next("MUTE "); !strings.HasPrefix(got, "false ") {
+		t.Fatalf("the app heard %q of the unmute", got)
+	}
+	waitFor(t, "the root lists the phone as unmuted", func() bool { return phoneMuted(false) })
+	waitFor(t, "the phone connected again", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+	fmt.Fprintln(in, "COPY after the mute")
+	waitFor(t, "the service has the phone's text after the mute", func() bool { return pi.paste(t) == "after the mute" })
+
 	// Eighteen months later the service renews the phone's certificate,
 	// and the app gets it to keep in its own file: the core has no
 	// identity file for a key outside it.

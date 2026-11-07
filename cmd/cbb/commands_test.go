@@ -307,7 +307,8 @@ func TestWriteDevices(t *testing.T) {
 	writeDevices(&b, []control.Device{
 		{ID: "a1", Name: "pi", Role: "full", OS: "linux", Admin: true, Root: true, Online: true, Self: true, Listed: true, Version: "0.6.1"},
 		{ID: "b2", Name: "mac", Role: "full", OS: "macos", LastSeenMS: now.Add(-5 * time.Minute).UnixMilli(), Listed: true, Version: "0.6.0"},
-		{ID: "c3", Name: "deck", Role: "full", OS: "windows", Admin: true, Online: true, Mode: "send"},
+		{ID: "c3", Name: "deck", Role: "full", OS: "windows", Admin: true, Online: true, Mode: "send", Hub: true},
+		{ID: "d4", Name: "nas", Role: "full", OS: "linux", Listed: true, ForwardOnly: true, Hub: true},
 	}, []control.Device{{ID: "c3", SkewMS: 9000}}, "0.6.1", now)
 	out := b.String()
 	for _, want := range []string{"pi (this device)", "online", "5 min ago", "deck *", "not in the devices list yet",
@@ -319,6 +320,12 @@ func TestWriteDevices(t *testing.T) {
 	for _, line := range strings.Split(out, "\n") {
 		if strings.Contains(line, "c3") && !strings.Contains(line, "send") {
 			t.Errorf("deck's line lacks its mode: %q", line)
+		}
+		if strings.Contains(line, "c3") && !strings.Contains(line, "full, hub ") {
+			t.Errorf("deck's line does not say it is a hub: %q", line)
+		}
+		if strings.Contains(line, "d4") && !strings.Contains(line, "hub that only passes copies on") {
+			t.Errorf("nas's line does not say it only passes copies on: %q", line)
 		}
 		if strings.Contains(line, "a1") && strings.Contains(line, "(old)") {
 			t.Errorf("the newest version is marked old: %q", line)

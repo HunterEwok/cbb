@@ -208,6 +208,46 @@
         <translation>الانضمام إلى مجموعة كمشرف</translation>
     </message>
     <message>
+        <source>For 15 minutes</source>
+        <translation>لمدة 15 دقيقة</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>لمدة ساعة</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>لمدة 8 ساعات</translation>
+    </message>
+    <message>
+        <source>Until I turn it on</source>
+        <translation>حتى أشغّله</translation>
+    </message>
+    <message>
+        <source>Taking copies</source>
+        <translation>يستقبل النسخ</translation>
+    </message>
+    <message>
+        <source>Not taking copies until %1</source>
+        <translation>لا يستقبل النسخ حتى %1</translation>
+    </message>
+    <message>
+        <source>Not taking copies</source>
+        <translation>لا يستقبل النسخ</translation>
+    </message>
+    <message>
+        <source>Tap to take no copies from the group, or again; hold it for a time</source>
+        <translation>انقر لإيقاف استقبال نسخ المجموعة أو لاستئنافه؛ اضغط مطولًا لاختيار مدة</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>كتم مشرف هذا الهاتف حتى %1: لا تصل نسخه إلى المجموعة.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>كتم مشرف هذا الهاتف: لا تصل نسخه إلى المجموعة حتى يلغي مشرف الكتم.</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>في المجموعة</translation>
     </message>

@@ -27,6 +27,22 @@ func leaveHome(ctx context.Context, f *Fleet, d *Device) error {
 	return err
 }
 
+// learnAtHome brings the away client c home until it has the hub's new
+// offer, which a change of how the tunnel hides (-obfuscate, -vless) makes
+// it need there (W18), and takes it away again.
+func learnAtHome(ctx context.Context, f *Fleet, a *awayGroup, c *Device) error {
+	if err := comeHome(ctx, f, c); err != nil {
+		return err
+	}
+	err := syncs(ctx, a.benchGroup, a.hub, c, "at home for the new offer", 2*time.Minute)
+	// The hub's offer comes with the connection at home.
+	time.Sleep(10 * time.Second)
+	if lerr := leaveHome(ctx, f, c); err == nil {
+		err = lerr
+	}
+	return err
+}
+
 // moveTo moves d from its network to net for good, as a computer taken
 // from home to another place.
 func moveTo(ctx context.Context, d *Device, net string) error {
@@ -627,7 +643,7 @@ func hubLoad(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 // borrowed site.
 func vlessAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/W34-vless/"
-	a := newAwayGroupWith(ctx, r, f, "fleet/W34-vless", 1, true)
+	a := newAwayGroupWith(ctx, r, f, "fleet/W34-vless", 1, realityVLESS)
 	if a == nil {
 		return
 	}
@@ -644,7 +660,11 @@ func vlessAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) 
 		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
 			return err
 		}
-		// The new offer reaches the client through the tunnel.
+		// VLESS turns AmneziaWG on too, so the client away, which knows
+		// only plain WireGuard, gets the new offer at home (W18).
+		if err := learnAtHome(ctx, f, a, c); err != nil {
+			return err
+		}
 		if err := globalShows(ctx, c, "VLESS", wait); err != nil {
 			return err
 		}
