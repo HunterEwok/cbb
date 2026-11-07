@@ -430,9 +430,8 @@ fn a_joiner_dials_the_window() {
 
 /// A random invitation secret, as the hub makes one.
 fn random_secret() -> [u8; pair::MIN_SECRET] {
-    let mut s = [0u8; pair::MIN_SECRET];
-    getrandom::fill(&mut s).unwrap();
-    s
+    let (a, b) = (getrandom::u64().unwrap(), getrandom::u64().unwrap());
+    (u128::from(a) << 64 | u128::from(b)).to_le_bytes()
 }
 
 /// A remote invitation's window, as Go's TestInvitation: the joiner proves
