@@ -8,6 +8,8 @@
 [workspace]
 members = ["core", "embassy", "ffi", "member", "ring-shim", "wasm"]
 exclude = ["esp32", "core/fuzz"]
+# A cargo build or run without -p or --workspace means the program cbb.
+default-members = ["member"]
 resolver = "3"
 
 # GotaTun's AEAD on RustCrypto instead of ring's C and assembly (ring-shim/src/lib.rs).
