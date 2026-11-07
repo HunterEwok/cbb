@@ -264,11 +264,14 @@ fn installs_then_finds_all_current() {
         std::fs::read(card.join("cbb/CBB.DRV")).unwrap(),
         std::fs::read(kit.site.join("CBB.DRV")).unwrap()
     );
-    // Remote paste is on after the first install, Enter too, and it says so.
-    assert!(o.has("REMOTE PASTE ON"), "{}", o.screen);
-    assert_eq!(
-        std::fs::read_to_string(card.join("cbb/PASTE.CFG")).unwrap(),
-        "on-enter"
+    // Remote paste stays off after the first install: no setting for the
+    // Pi, and no word of remote paste on.
+    assert!(!o.has("REMOTE PASTE ON"), "{}", o.screen);
+    assert!(!card.join("cbb/PASTE.CFG").exists());
+    assert!(
+        !o.pi().log.iter().any(|l| l.contains("-paste")),
+        "{:?}",
+        o.pi().log
     );
     // The network starts after the install: it looks for a computer.
     assert!(
@@ -584,7 +587,6 @@ fn installed(kit: &Kit, name: &str) -> (PathBuf, Pi) {
     std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
     std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
     std::fs::write(card.join("cbb/NET.CFG"), "-serve 8764:8764").unwrap();
-    std::fs::write(card.join("cbb/PASTE.CFG"), "on-enter").unwrap();
     let mut pi = Pi::new();
     pi.cbb_sha = Some(sha256::hex(&kit.pi_cbb));
     (card, pi)
@@ -916,6 +918,19 @@ fn turns_remote_paste_off_for_the_link() {
         "{:?}",
         pi.log
     );
+    // The link takes the setting once: the next start leaves the Pi's own,
+    // which an admin's paste-off may have changed since.
+    assert!(!card.join("cbb/PASTE.CFG").exists());
+    let mut esp = Esp::new(kit.site.clone());
+    esp.members = vec![("192.168.0.175".into(), 8764, String::new())];
+    let mut run = run_on(&kit, &card, "net on", esp, Pi::new(), Vec::new());
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    assert!(
+        pi.log.iter().any(|l| l.contains("-serve 8764:8764 -log"))
+            && !pi.log.iter().any(|l| l.contains("-paste")),
+        "{:?}",
+        pi.log
+    );
     let run = run_on(
         &kit,
         &card,
@@ -929,10 +944,8 @@ fn turns_remote_paste_off_for_the_link() {
         "{}",
         run.hw.screen_text()
     );
-    assert_eq!(
-        std::fs::read_to_string(card.join("cbb/PASTE.CFG")).unwrap(),
-        "off"
-    );
+    // A wrong command writes no setting.
+    assert!(!card.join("cbb/PASTE.CFG").exists());
     let _ = std::fs::remove_dir_all(&card);
 }
 
