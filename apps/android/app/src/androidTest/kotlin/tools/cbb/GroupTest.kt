@@ -379,22 +379,6 @@ class GroupTest {
     }
 
     /**
-     * TEMPORARY, removed before merging: a9 and b1 again and again, to
-     * catch b1's rare lost file with the phone's trace in the message.
-     */
-    @Test
-    fun b1z_filesAgain() {
-        repeat(8) { i ->
-            try {
-                a9_sendFromTileAndWidget()
-                b1_files()
-            } catch (e: Throwable) {
-                throw AssertionError("round ${i + 1} of a9 and b1: ${e.message}", e)
-            }
-        }
-    }
-
-    /**
      * The phone's side of a copy that went missing, for a failure's message:
      * whether its node was made again since the test began, the node's
      * connections and what it sent, took and dropped lately (and the
