@@ -1042,6 +1042,63 @@ impl Admin<'_> {
         .map(|_| ())
     }
 
+    /// Signs the device d a record with forward_only unless its newest has
+    /// it, as Go's markForwardOnly: d then passes the copies on as a hub
+    /// and reads none (docs/protocol.md, section 11, "Two kinds of hub").
+    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+    pub fn mark_forward_only(&self, d: &Device) -> Result<()> {
+        if d.forward_only {
+            return Ok(());
+        }
+        if d.admin_key.is_some() {
+            return Err(Error::msg(format!(
+                "{} is an admin; only a computer that is no admin only passes copies on",
+                d.name
+            )));
+        }
+        if d.role != "full" {
+            return Err(Error::msg(format!("{} is no computer; only a computer only passes copies on", d.name)));
+        }
+        if d.store == "rootless" {
+            return Err(Error::msg(format!(
+                "{} is installed without root, and such a computer is never a hub (D-79)",
+                d.name
+            )));
+        }
+        if d.id == self.root_device() {
+            return Err(Error::msg(format!("{} is the root's own computer, a hub that reads the copies", d.name)));
+        }
+        let s = self.signing()?;
+        self.sign(
+            &s,
+            Body {
+                kind: authority::TYPE_DEVICE.into(),
+                device: d.id.clone(),
+                name: d.name.clone(),
+                role: d.role.clone(),
+                os: d.os.clone(),
+                key: Some(Hash(d.key)),
+                store: d.store.clone(),
+                hardware: d.kind.clone(),
+                proof: d.proof.clone(),
+                seal: d.seal.clone(),
+                forward_only: true,
+                ..Default::default()
+            },
+        )
+        .map_err(|e| {
+            Error::msg(format!(
+                "the group's records did not take the record that makes it a hub: only the root or an admin with the powers admit and hub signs it ({})",
+                e.message()
+            ))
+        })?;
+        self.node.logf(&format!(
+            "cbb: {} ({}) only passes the copies on now, and reads none; the next copies are no longer sealed to it",
+            d.name, d.id
+        ));
+        Ok(())
+    }
+
     /// Signs the table of main hubs, the devices targets name in order, as
     /// Go's setHubs: the root, or an admin that may be a hub.
     pub fn set_hubs(&self, targets: &[String]) -> Result<()> {

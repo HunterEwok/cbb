@@ -257,9 +257,13 @@ ends, the Go service described below is still the computers' member.
   member certificate with the roots, the group's records as the proof that it is the root or
   an admin, and hellos from its WireGuard port; status shows the registration as Go's
   `forwarder` (`TestLiteHubForwarder`). An admin signs the `hubs` record of main hubs as Go's
-  `setHubs` and sends `away-off` (`manage::Order::AwayOff`) to another device. The pins of a newer `keys.json`, the server
-  credentials and the hub's key periods, VLESS, a hub that only passes copies on, the relay
-  and invitations are still Go's.
+  `setHubs` and sends `away-off` (`manage::Order::AwayOff`) to another device. `hub -on
+  DEVICE -forward-only` on an admin that admitted the device signs its record with
+  `forward_only` first (`Admin::mark_forward_only`); such a Rust member takes the hub command
+  without being an admin once that record is in, seals no copies (`node::FORWARD_ONLY`) and
+  refuses paste and action commands (`TestLiteForwardOnly`). The pins of a newer
+  `keys.json`, the server credentials and the hub's key periods, VLESS, the relay and
+  invitations are still Go's.
 
 ### Linux components
 

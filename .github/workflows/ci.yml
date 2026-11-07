@@ -2000,14 +2000,21 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: the MIPS builds under qemu with Go members, all but sync away from home
+        # The hubs' tests need the tunnel, which the MIPS build leaves out.
+        # qemu-user translates netlink for a big-endian guest badly, so
+        # musl's getifaddrs, which a pairing window's addresses call, hangs
+        # or crashes under qemu-mips (and works under qemu-mipsel):
+        # TestLiteRootWindow runs on mipsel only.
         run: |
           for a in mips mipsel; do
+            skip='TestLiteMemberAway|TestLiteHub|TestLiteForwardOnly'
+            if [ "$a" = mips ]; then skip="$skip|TestLiteRootWindow"; fi
             # Ubuntu 26.04's qemu-user is static and has no -static names.
             q=$(command -v "qemu-$a-static" || command -v "qemu-$a")
             printf '#!/bin/sh\nexec %s %s "$@"\n' "$q" "$PWD/target/$a-unknown-linux-musl/release/cbb" >"$RUNNER_TEMP/cbb-$a"
             chmod +x "$RUNNER_TEMP/cbb-$a"
             "$RUNNER_TEMP/cbb-$a" version | grep -q 'linux/mips'
-            CBB_LITE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestLite' -skip 'TestLiteMemberAway' -v
+            CBB_LITE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestLite' -skip "$skip" -v
           done
 
   lite:
@@ -2076,7 +2083,7 @@ jobs:
           sh wasm/build.sh
           go test -race -overlay target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
       - name: the lite member joins by the phone, syncs with Go members, takes their remote pastes and serves the Go command line and agent
-        run: CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless|TestLiteHelper|TestLiteClients|TestLiteTPM|TestLiteRoot|TestLiteTakeover|TestLiteRecovery|TestLiteHub|TestLiteHubs|TestLiteHubCommands|TestLiteHubForwarder' -v
+        run: CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless|TestLiteHelper|TestLiteClients|TestLiteTPM|TestLiteRoot|TestLiteTakeover|TestLiteRecovery|TestLiteHub|TestLiteHubs|TestLiteHubCommands|TestLiteHubForwarder|TestLiteForwardOnly' -v
       - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         run: |
           rel="$RUNNER_TEMP/release"

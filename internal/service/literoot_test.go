@@ -971,3 +971,94 @@ func TestLiteHubForwarder(t *testing.T) {
 	}
 	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "through the forwarder" })
 }
+
+// TestLiteForwardOnly has a Rust admin make another Rust member, no admin,
+// a hub that only passes copies on: it signs the member's record with
+// forward_only, which the Go root takes, and the hub command makes it a
+// hub that then makes no copies (docs/protocol.md, section 11, "Two kinds
+// of hub").
+func TestLiteForwardOnly(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	// A device's record from the root counts before an admin's, so the
+	// Rust admin admits the board itself, and its records then count.
+	join := func(admin *testService, at, name string) string {
+		// A new admin's records say so before its renewed certificate
+		// arrives, and only the certificate opens a window.
+		var c *control.Client
+		var code string
+		waitFor(t, "a pairing window on "+admin.name, func() bool {
+			if admin.status(t).Group == "" {
+				c, code = openWindow(t, admin)
+				return true
+			}
+			c = admin.dial(t)
+			m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPair}})
+			if err != nil {
+				c.Close()
+				return false
+			}
+			code = m.Code
+			return true
+		})
+		if at == "" {
+			// A Go service listens once it is in a group.
+			at = admin.addr()
+		}
+		dir := t.TempDir()
+		cmd := exec.Command(bin, "-state", dir, "pair", "-full", "-name", name, "-code", at)
+		cmd.Stdin = strings.NewReader(code + "\n")
+		cmd.Stderr = testWriter{t, name + " join: ", nil}
+		if out, err := cmd.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+			t.Fatalf("cbb pair -full: %v; %s", err, out)
+		}
+		if m, err := c.Receive(); err != nil || m.Name != name {
+			t.Fatalf("pair on %s ended with %+v, %v", admin.name, m, err)
+		}
+		c.Close()
+		return dir
+	}
+	rustDir := join(desk, "", "rust")
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rustAt := free.Addr().String()
+	free.Close()
+	rust := startLite(t, bin, rustDir, "-no-mdns", "-full", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
+	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
+		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
+	boardDir := join(rust, rustAt, "board")
+	board := startLite(t, bin, boardDir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
+	if _, err := board.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	boardID := board.status(t).Device
+	waitFor(t, "the board connected to both", func() bool { return len(board.status(t).Peers) == 2 })
+	hubAt := []string{fmt.Sprintf("127.0.0.1:%d", freeUDP(t))}
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "board", Addrs: hubAt}, ""); err == nil || !strings.Contains(err.Error(), "may not be a hub") {
+		t.Errorf("a hub -on a member that is no admin: %v", err)
+	}
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "board", Addrs: hubAt, ForwardOnly: true}, ""); err != nil {
+		t.Fatalf("cbb global hub -on board -forward-only on the Rust admin: %v", err)
+	}
+	if a := board.status(t).Away; a == nil || !a.Hub {
+		t.Errorf("the board after the hub command: %+v", a)
+	}
+	waitFor(t, "the desk takes the board's record", func() bool {
+		return slices.Contains(hubOrderIn(desk.dir), group.DeviceID(boardID))
+	})
+	if _, err := board.do(t, control.Header{Op: control.OpCopy}, "from a hub that only passes copies on"); err == nil || !strings.Contains(err.Error(), "only passes the copies on") {
+		t.Errorf("a copy on the board: %v", err)
+	}
+}

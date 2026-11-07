@@ -38,6 +38,10 @@ use crate::uptime;
 use crate::wire::{self, Message};
 use cbb_core::media::{Manifest, Part};
 
+/// What a hub that only passes copies on refuses, as Go's errForwardOnly.
+pub const FORWARD_ONLY: &str =
+    "this computer is a hub of the group that only passes the copies on: it makes, reads and pastes none";
+
 /// How long a device that discovery finds counts as at home without a
 /// connection to it (docs/protocol.md, section 11).
 #[cfg_attr(not(feature = "tunnel"), allow(dead_code))] // used by sync away from home
@@ -498,6 +502,14 @@ impl Node {
         conns.values().filter(|c| !c.records_only).map(|c| (c.id.clone(), c.chain.clone())).collect()
     }
 
+    /// Whether this device's newest record makes it a hub that only passes
+    /// copies on: it makes no copies, and takes no paste or action command
+    /// (docs/protocol.md, section 11, "Two kinds of hub").
+    pub fn forward_only(&self) -> bool {
+        let me = self.identity().id.to_string();
+        self.records.lock().unwrap().devices().iter().any(|d| d.id == me && d.forward_only)
+    }
+
     /// The certificate chain the member id presented, leaf first; empty
     /// while it is not connected.
     pub fn chain_of(&self, id: &DeviceId) -> Vec<Cert> {
@@ -913,6 +925,9 @@ impl Node {
         let node = Arc::downgrade(self);
         Box::new(move |ev: &Event| {
             let n = node.upgrade().ok_or_else(|| cbb_core::error::Error::msg("the member stopped"))?;
+            if n.forward_only() {
+                return Err(cbb_core::error::Error::msg(FORWARD_ONLY));
+            }
             let ident = n.identity();
             let readers = copy::readers(&n.records.lock().unwrap(), ev.kind == Kind::Secret);
             let content = Content { kind: ev.kind, via: ev.via, text: ev.text.clone(), media: ev.media.clone() };

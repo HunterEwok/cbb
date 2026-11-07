@@ -799,6 +799,9 @@ impl Service {
             seen.insert(body.id.clone(), body.expires_ms);
         }
         match body.kind.as_str() {
+            "paste" | "action" if node.forward_only() => {
+                return refused(&body.id, crate::node::FORWARD_ONLY.into());
+            }
             "hub" => return self.hub_command(&node, body),
             "paste" => return self.pasted(&node, c, body),
             "action" => return self.act(&node, c, body),
@@ -1542,6 +1545,9 @@ impl Service {
             }
             "copy" => {
                 let text = String::from_utf8(m.payload.clone()).context("the text is not UTF-8")?;
+                if self.node()?.forward_only() {
+                    return Err(Error::msg(crate::node::FORWARD_ONLY));
+                }
                 self.node()?.send(&text, kind_of(&h.kind)?, via_of(&h.via)?)?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }

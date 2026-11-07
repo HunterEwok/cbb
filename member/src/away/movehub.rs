@@ -159,12 +159,13 @@ impl Away {
                 d.name
             )));
         }
-        if forward_only {
-            return Err(Error::msg(
-                "making a hub that only passes copies on is not on the Rust service yet; an admin on a Go computer or a phone makes it",
-            ));
+        if forward_only && d.admin {
+            return Err(Error::msg(format!(
+                "{} is an admin, a hub that reads the copies; only a computer that is no admin is made one that only passes them on",
+                d.name
+            )));
         }
-        if !may {
+        if !forward_only && !may {
             return Err(Error::msg(format!(
                 "{} may not be a hub: only the group's root or an admin with the hub power is one; make it an admin first",
                 d.name
@@ -172,6 +173,9 @@ impl Away {
         }
         if d.frozen {
             return Err(Error::msg(format!("{} is frozen; an admin thaws it first", d.name)));
+        }
+        if forward_only {
+            admin.mark_forward_only(&d)?;
         }
         let fw = forwarder_of(fwd.0, fwd.1)?;
         if addrs.is_empty() && fw.is_none() {
