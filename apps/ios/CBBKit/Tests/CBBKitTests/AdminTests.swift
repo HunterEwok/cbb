@@ -10,7 +10,7 @@ final class AdminTests: XCTestCase {
     struct Group {
         let t0 = Date()
         let root = SoftwareSigner(), admin = SoftwareSigner()
-        let rootCA: Data, adminCA: Data, adminDevice = SyncEngine.newID()
+        let rootCA: Data, adminCA: Data, adminDevice = Member.newID()
 
         init() throws {
             rootCA = try GroupCertificates.groupCA(signer: root, now: t0, pathLength: 1)
@@ -21,7 +21,7 @@ final class AdminTests: XCTestCase {
 
         /// A member certificate from the admin CA, or from the root.
         func member(byAdmin: Bool = true) throws -> (device: String, key: SoftwareSigner, cert: Data) {
-            let key = SoftwareSigner(), dev = SyncEngine.newID()
+            let key = SoftwareSigner(), dev = Member.newID()
             let cert = try GroupCertificates.member(device: dev, publicKey: key.publicKeyDER, ca: byAdmin ? adminCA : rootCA,
                                                     caSigner: byAdmin ? admin : root, now: t0)
             return (dev, key, cert)

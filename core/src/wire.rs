@@ -67,6 +67,10 @@ pub struct Message {
     /// keeps (section 18), kept as they came.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credentials: Option<Value>,
+    /// In an evidence message, an attestation of one of the sender's keys
+    /// (section 17, "Evidence"), kept as it came.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<Value>,
     /// In a get or missing message, a range of a copy's sealed blob
     /// ("Content" in section 4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -136,10 +140,11 @@ pub struct CommandResult {
     pub status: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub reason: String,
-    /// In the result of a hub command carried out, the new hub's offer
-    /// without a preshared key (section 11, "Moving the hub").
+    /// In the result of a hub command, the new hub's offer (section 11,
+    /// "Moving the hub"), kept as it came, so a phone passes it back and
+    /// its app reads it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tunnel: Option<alloc::boxed::Box<TunnelOffer>>,
+    pub tunnel: Option<Value>,
 }
 
 /// The content of a hello.
@@ -422,6 +427,12 @@ pub fn credentials(list: &Value) -> Message {
     Message { kind: "credentials".into(), credentials: Some(list.clone()), ..Default::default() }
 }
 
+/// An evidence message: an attestation of one of the sender's keys
+/// (section 17, "Evidence").
+pub fn evidence(e: &Value) -> Message {
+    Message { kind: "evidence".into(), evidence: Some(e.clone()), ..Default::default() }
+}
+
 /// A message with only its type, such as a ping or a goodbye.
 pub fn bare(kind: &str) -> Message {
     Message { kind: kind.into(), ..Default::default() }
@@ -481,4 +492,21 @@ pub fn frame_len(head: [u8; 4], max: usize) -> Result<usize> {
         return Err(Error::msg(format!("a frame of {size} bytes is too large")));
     }
     Ok(size)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CommandResult, decode};
+
+    /// A hub command's result keeps the new hub's offer, so a phone that
+    /// passes it back, and its app, read it (section 11, "Moving the hub").
+    #[test]
+    fn a_result_keeps_its_tunnel() {
+        let m = decode(br#"{"t":"result","result":{"id":"c","status":"done","tunnel":{"hub_key":"x"}}}"#).unwrap();
+        let r: CommandResult = m.result.unwrap();
+        assert_eq!(r.tunnel.as_ref().and_then(|t| t["hub_key"].as_str()), Some("x"));
+        let again = serde_json::to_value(&r).unwrap();
+        assert_eq!(again["tunnel"]["hub_key"], "x");
+        assert!(serde_json::to_value(CommandResult::default()).unwrap().get("tunnel").is_none());
+    }
 }

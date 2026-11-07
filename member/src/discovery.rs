@@ -20,11 +20,9 @@ use crate::certs::DeviceId;
 use crate::interfaces;
 use crate::node::Node;
 use crate::pair::home_address;
-use crate::uptime;
 
 const SERVICE: &str = "_cbb._tcp.local.";
 const MAX_WAIT: Duration = Duration::from_secs(30);
-const STEADY: Duration = Duration::from_secs(30);
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
 /// The members found by browsing that are dialed at once, as Go's mDNS
@@ -34,41 +32,55 @@ const MAX_FOUND: usize = 64;
 /// The addresses of a found member; None once it is gone.
 type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
 
-/// Dials the member at addrs again and again, waiting 1 s after a round of
-/// failures, doubling to 30 s; a connection that lasted more than 30 s
-/// resets the wait.
+/// Dials the member at addrs again and again: at once after this member
+/// ended the connection to connect again (a new hello), a second after a
+/// connection that came up ended, and after a round of failures 1 s,
+/// doubling to 30 s.
 fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
-    let mut wait = Duration::from_secs(1);
+    let mut wait = FIRST_WAIT;
     loop {
         if node.is_closed() {
             return;
         }
         let Some(list) = addrs.lock().unwrap().clone() else { return };
-        if node.is_paused() || peer.as_ref().is_some_and(|p| node.connected(p)) {
+        // A connection up to the peer is left alone; a loopback address
+        // (the tunnel's, a relay's) replaces one at home (Node::connected_for).
+        if node.is_paused() || peer.as_ref().is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
             node.nap(Duration::from_secs(1));
             continue;
         }
-        let mut steady = false;
+        let mut up = false;
+        let mut again = false;
         for a in list {
-            let start = uptime::now();
-            let res = node.dial(a, peer.clone());
-            if uptime::now().saturating_sub(start) > STEADY {
-                steady = true;
-            }
-            if res.is_ok() || steady {
+            if let Ok(d) = node.dial_ended(a, peer.clone()) {
+                (up, again) = (d.up, d.again);
                 break;
             }
         }
-        if steady {
-            wait = Duration::from_secs(1);
+        wait = next_wait(wait, up, again);
+        if wait.is_zero() {
+            wait = FIRST_WAIT;
+            continue;
         }
         // A kick (the app resumed, or handed in new addresses) tries again
         // at once.
         if node.nap(wait) {
-            wait = Duration::from_secs(1);
-        } else {
-            wait = (wait * 2).min(MAX_WAIT);
+            wait = FIRST_WAIT;
         }
+    }
+}
+
+/// The first wait before dialing again, after a connection ended.
+const FIRST_WAIT: Duration = Duration::from_secs(1);
+
+/// The wait before the next dial, after one whose connection came up (up)
+/// and that this member ended to connect again (again), from the wait
+/// before it: none, the first wait, or the last doubled for a failure.
+fn next_wait(last: Duration, up: bool, again: bool) -> Duration {
+    match (up, again) {
+        (true, true) => Duration::ZERO,
+        (true, false) => FIRST_WAIT,
+        (false, _) => (last * 2).min(MAX_WAIT),
     }
 }
 
@@ -76,18 +88,28 @@ fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
 /// this one; only home network addresses may connect. It returns the port,
 /// or None when it cannot listen: the lite member then only dials.
 pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<u16> {
-    listen_until(node, port, Arc::new(AtomicBool::new(false)), log)
+    listen_until(node, port, false, None, Arc::new(AtomicBool::new(false)), log)
 }
 
 /// As listen, until stop is set and a connection wakes the listener
 /// (Listener::stop).
+/// With loopback it listens on 127.0.0.1 only, for the connections a
+/// phone's tunnel or relay link makes there; admit checks each connection
+/// before it is served.
 pub fn listen_until(
     node: Arc<Node>,
     port: u16,
+    loopback: bool,
+    admit: Option<crate::node::Admit>,
     stop: Arc<AtomicBool>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 ) -> Option<u16> {
-    let ln = match TcpListener::bind(("::", port)).or_else(|_| TcpListener::bind(("0.0.0.0", port))) {
+    let bound = if loopback {
+        TcpListener::bind(("127.0.0.1", port))
+    } else {
+        TcpListener::bind(("::", port)).or_else(|_| TcpListener::bind(("0.0.0.0", port)))
+    };
+    let ln = match bound {
         Ok(ln) => ln,
         Err(e) => {
             log(&format!(
@@ -111,7 +133,7 @@ pub fn listen_until(
                 continue; // dropping the socket closes it
             }
             busy.fetch_add(1, Ordering::SeqCst);
-            let (node, busy, log) = (node.clone(), busy.clone(), log.clone());
+            let (node, busy, log, admit) = (node.clone(), busy.clone(), log.clone(), admit.clone());
             std::thread::spawn(move || {
                 let mut slot = Some(busy);
                 let mut release = || {
@@ -119,7 +141,7 @@ pub fn listen_until(
                         b.fetch_sub(1, Ordering::SeqCst);
                     }
                 };
-                let res = node.accept(sock, addr, &mut release);
+                let res = node.accept_checked(sock, addr, &mut release, admit.as_ref());
                 release();
                 if let Err(e) = res {
                     log(&format!("cbb: connection from {addr}: {}", e.for_log()));
@@ -141,8 +163,20 @@ pub struct Listener {
 impl Listener {
     /// Listens on port (0: any free one), or None when it cannot.
     pub fn open(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<Listener> {
+        Self::open_with(node, port, false, None, log)
+    }
+
+    /// As open, on the loopback address only with loopback, each connection
+    /// checked by admit before it is served.
+    pub fn open_with(
+        node: Arc<Node>,
+        port: u16,
+        loopback: bool,
+        admit: Option<crate::node::Admit>,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Option<Listener> {
         let stop = Arc::new(AtomicBool::new(false));
-        listen_until(node, port, stop.clone(), log).map(|port| Listener { port, stop })
+        listen_until(node, port, loopback, admit, stop.clone(), log).map(|port| Listener { port, stop })
     }
 
     /// Closes the port: the listener's thread sees the flag at the
@@ -395,6 +429,28 @@ fn order(addrs: impl Iterator<Item = SocketAddr>) -> Vec<SocketAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A connection this member ended to send a new hello (a mode, a tunnel
+    /// key) is dialed again at once, one that came up and ended after a
+    /// second, and failures back off from 1 s to 30 s: a phone whose mode
+    /// changed often waited up to 30 s for its computer (the Android
+    /// emulator's GroupTest).
+    #[test]
+    fn redials_at_once_after_a_reconnect() {
+        use super::{FIRST_WAIT, MAX_WAIT, next_wait};
+        let s = Duration::from_secs;
+        assert_eq!(next_wait(s(16), true, true), Duration::ZERO);
+        assert_eq!(next_wait(s(16), true, false), FIRST_WAIT);
+        assert_eq!(next_wait(FIRST_WAIT, false, false), s(2));
+        assert_eq!(next_wait(s(16), false, false), MAX_WAIT);
+        assert_eq!(next_wait(MAX_WAIT, false, false), MAX_WAIT);
+        // Many reconnects in a row never grow the wait.
+        let mut w = FIRST_WAIT;
+        for _ in 0..10 {
+            w = next_wait(w, true, false);
+        }
+        assert_eq!(w, FIRST_WAIT);
+    }
 
     #[test]
     fn instance_names() {

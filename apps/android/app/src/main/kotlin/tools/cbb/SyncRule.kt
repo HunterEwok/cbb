@@ -3,43 +3,8 @@
 
 package tools.cbb
 
-import tools.cbb.kit.Member
-
-/**
- * The one rule of every device (docs/design.md, "The one button"), as on
- * the iPhone (LiveGroup.sync): a copy from another device that waits for
- * the phone comes in; otherwise what the phone copied goes out, however
- * old, unless it is the group's text already or what this phone itself
- * sent or took last.
- */
+/** The addresses of the computers as the phone dials them (the button's rule is the Rust member's now). */
 object SyncRule {
-    enum class Action { FETCH, SEND, NOTHING }
-
-    /**
-     * Whether current is a copy from another device that waits for this
-     * phone: younger than the group's live window windowMS, with a text, an
-     * image or files (usable), in a sync mode that takes the group's copies
-     * or for the button, which works in every mode (receives), and not the
-     * copy the phone took last (taken).
-     */
-    fun waiting(current: Member.Event?, usable: Pair<String, Member.Kind>?, device: String, windowMS: Long, receives: Boolean, taken: String?): Boolean =
-        receives && current != null && usable != null && !current.isMark && !current.unread && current.origin != device &&
-            current.ageMS < windowMS && current.id != taken
-
-    /**
-     * What the button does: fetch a copy that waits (waiting), else send
-     * what the phone's clipboard holds (board, read only then) when it is
-     * neither the group's text already nor what this phone itself sent or
-     * took last (own). Without own, a text the phone sent before it shared
-     * files would go out again over those newer files, as the group's copy
-     * is then the files and no longer the text.
-     */
-    fun decide(waits: Boolean, board: () -> String?, usable: Pair<String, Member.Kind>?, own: String?): Action {
-        if (waits) return Action.FETCH
-        val b = board()
-        return if (!b.isNullOrEmpty() && b != usable?.first && b != own) Action.SEND else Action.NOTHING
-    }
-
     /** The addresses to try, IPv4 first: a home network reaches those most surely, and each that fails costs its timeout. */
     fun ordered(addrs: List<String>): List<String> = addrs.filter { !it.startsWith("[") } + addrs.filter { it.startsWith("[") }
 

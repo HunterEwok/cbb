@@ -47,6 +47,7 @@
 package tools.cbb.kit
 
 import java.io.DataInputStream
+import java.io.File
 import java.io.DataOutputStream
 import java.net.Socket
 import java.time.Instant
@@ -133,21 +134,28 @@ private fun memberTLS(host: String, port: Int, peer: String) {
     val list = kotlinx.serialization.json.Json.parseToJsonElement(field("records").decodeToString()) as kotlinx.serialization.json.JsonArray
     records.addAll(list.map { Member.Record.fromJson(it as kotlinx.serialization.json.JsonObject) }, ca)
     val me = CertificateInfo(cert).commonName ?: fail("no device ID")
-    val tls = TLSTransport.dial(host, port, Member.ALPN, key.keyPair.private, listOf(cert)) {
-        runCatching { GroupCertificates.verifyMember(it[0], ca, Instant.now()) }.getOrNull() == peer
+    // The phone's member in the Rust core, as the app runs it, dialing the Go member.
+    val dir = kotlin.io.path.createTempDirectory("cbb-interop").toFile()
+    val changes = LinkedBlockingQueue<CoreMember.Copy>()
+    val node = CoreMember.start(
+        CoreMember.Start(dir, "Android", "android", device = me, publicKey = key.publicKeyDER, seal = secret, cert = cert, groupCA = ca,
+            roots = listOf(ca), peers = listOf("$host:$port")),
+        key::signDigest,
+    ) { e ->
+        when (e) {
+            is CoreMember.Event.CopyChanged -> changes.add(e.copy)
+            is CoreMember.Event.Log -> System.err.println("cbb-interop: ${e.line}")
+            else -> {}
+        }
     }
-    val changes = LinkedBlockingQueue<Member.Event>()
-    val store = MemoryContent()
-    val copies = CopyKeys(me, cert, null, key, secret) { records }
-    val node = MemberNode(SyncEngine(me, HybridClock()), "Android", onChange = { changes.add(it) }, content = store, copies = copies)
-    val serving = Thread { node.serve(tls, peer) }.apply { start() }
+    node.addRecords(records.records)
     val deadline = System.nanoTime() + 15_000_000_000L
-    while (node.peers == 0) {
+    while (node.peers().none { it.device == peer }) {
         if (System.nanoTime() > deadline) fail("no hello within 15 s")
         Thread.sleep(50)
     }
-    node.send("from swift", Member.Kind.TEXT) // the text Go's test waits for
-    fun await(text: String): Member.Event {
+    node.copy("from swift", board = false) // the text Go's test waits for
+    fun await(text: String): CoreMember.Copy {
         while (true) {
             val left = deadline - System.nanoTime()
             val e = changes.poll(maxOf(left, 0), TimeUnit.NANOSECONDS) ?: fail("no \"$text\" within 15 s")
@@ -156,18 +164,18 @@ private fun memberTLS(host: String, port: Int, peer: String) {
     }
     await("from go")
     val picture = await("go picture")
-    val part = picture.media?.parts?.singleOrNull() ?: fail("Go's picture has no part")
+    if (picture.media?.parts?.size != 1) fail("Go's picture has no part")
     val png = try {
-        Content.bytes(node, picture, part)
+        node.fetch(picture.id, Media.MAX_MEDIA, File(dir, "picture")).single().file.readBytes()
     } catch (e: Exception) {
         fail("fetching Go's picture: $e")
     }
-    node.send("phone picture", Member.Kind.TEXT, media = Content.manifest(store, listOf("image/png" to png.reversedArray())))
+    node.copyMedia("phone picture", listOf(CoreMember.Part.data("image/png", png.reversedArray())))
     await("done")
     println("ok")
     System.out.flush()
-    node.closeAll()
-    serving.join()
+    node.close()
+    dir.deleteRecursively()
 }
 
 private fun restoreTLS(host: String, port: Int, key: ByteArray, cert: ByteArray, tag: String) {

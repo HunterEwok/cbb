@@ -218,7 +218,7 @@ final class MemberTests: XCTestCase {
         let now = Date()
         let ca = SoftwareSigner()
         let caCert = try GroupCertificates.groupCA(signer: ca, now: now)
-        let dev = SyncEngine.newID()
+        let dev = Member.newID()
         let cert = try GroupCertificates.member(device: dev, publicKey: SoftwareSigner().publicKeyDER, ca: caCert, caSigner: ca, now: now)
         XCTAssertEqual(try GroupCertificates.verifyMember(cert, groupCA: caCert, now: now), dev)
         XCTAssertThrowsError(try GroupCertificates.verifyMember(cert, groupCA: v.group_ca, now: now))
@@ -248,115 +248,44 @@ final class MemberTests: XCTestCase {
         Member.Event(id: id, origin: "0123456789abcdef0123456789abcdef", time: .init(wall: wall, logical: 0), ageMS: age, kind: kind, text: text)
     }
 
+    /// A timestamp more than seven days ahead of the clock is refused, one
+    /// six days ahead is not; a clock before 2026 refuses nothing.
     func testAheadRefused() throws {
         let now: UInt64 = 1_792_886_400_000 // 2026-10-25
-        let e = SyncEngine(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", clock: HybridClock(wallMS: { now }), uptime: { 100 })
-        let far = event("d0000000000000000000000000000000", Member.Timestamp.maxWall)
-        XCTAssertEqual(e.received(far), .init(forward: nil, changed: false))
-        XCTAssertEqual(try e.reconcile(Member.Hello(wallMS: Int64(now), current: far)), .init(forward: nil, changed: false))
-        let near = event("e0000000000000000000000000000000", now + 6 * 24 * 3600 * 1000)
-        XCTAssertEqual(e.received(near), .init(forward: near, changed: true))
-    }
-
-    func testEngine() throws {
-        var up: TimeInterval = 100
-        let e = SyncEngine(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", clock: HybridClock(wallMS: { 1000 }), uptime: { up })
-        let a = event("a0000000000000000000000000000000", 2000, text: "first")
-        XCTAssertEqual(e.received(a), .init(forward: a, changed: true))
-        XCTAssertEqual(e.received(a), .init(forward: nil, changed: false)) // seen
-        // An older event is forwarded but does not become current.
-        let old = event("b0000000000000000000000000000000", 1500, text: "older")
-        XCTAssertEqual(e.received(old), .init(forward: old, changed: false))
-        XCTAssertEqual(e.usable?.text, "first")
-        // A local event is later than everything seen.
-        let mine = try e.local(text: "from the phone", kind: .text)
-        XCTAssertTrue(mine.isLater(than: a))
-        XCTAssertEqual(mine.via, .phone)
-        XCTAssertEqual(e.usable?.text, "from the phone")
-        // An invalid event changes nothing.
-        XCTAssertEqual(e.received(event("short", 9999)), .init(forward: nil, changed: false))
-
-        // A secret arrives first as a mark, then with its text.
-        let secret = event("c0000000000000000000000000000000", 9000, kind: .secret, text: "hunter2", age: 1000)
-        XCTAssertTrue(try e.reconcile(.init(wallMS: 0, current: secret.mark)).changed)
-        XCTAssertNil(e.usable) // a mark has no text
-        XCTAssertEqual(e.hello(name: nil).current?.text, "")
-        XCTAssertEqual(e.received(secret), .init(forward: secret, changed: true))
-        XCTAssertEqual(e.usable?.text, "hunter2")
-        XCTAssertEqual(e.hello(name: "iPhone").current?.text, "", "a hello never carries a secret's text")
-        up += 58 // 59 s after the copy, which was a second before it arrived
-        XCTAssertNotNil(e.usable)
-        up += 1
-        XCTAssertNil(e.usable)
-        XCTAssertEqual(e.currentEvent?.ageMS, 60_000)
-
-        XCTAssertThrowsError(try e.reconcile(.init(wallMS: 0, current: event("d0000000000000000000000000000000", 1, kind: .secret, text: "leak"))))
-        XCTAssertThrowsError(try e.reconcile(.init(wallMS: 0, current: event("bad", 1))))
+        let c = HybridClock(wallMS: { now })
+        XCTAssertTrue(c.ahead(.init(wall: Member.Timestamp.maxWall, logical: 0)))
+        XCTAssertFalse(c.ahead(.init(wall: now + 6 * 24 * 3600 * 1000, logical: 0)))
+        XCTAssertFalse(HybridClock(wallMS: { 1000 }).ahead(.init(wall: Member.Timestamp.maxWall, logical: 0)))
     }
 
     // MARK: - Two nodes over a pipe
 
+    /// b gets a's current copy from its hello, then a later one.
     func testNodesSync() async throws {
-        let (pa, pb) = Pipe.pair()
-        let changes = Changes()
-        let a = MemberNode(engine: SyncEngine(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", clock: HybridClock()), name: "iPhone")
-        let b = MemberNode(engine: SyncEngine(device: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", clock: HybridClock()), name: "pi", role: .full,
-                           onChange: { changes.add($0.text) })
-        try await a.send(text: "before", kind: .text)
-        let ta = Task { try await a.serve(pa) }
-        let tb = Task { try await b.serve(pb) }
-        // b gets a's current event from its hello, then a later event.
-        try await waitUntil { changes.all.contains("before") }
-        try await a.send(text: "after", kind: .text)
-        try await waitUntil { changes.all.contains("after") }
-        let bPeers = await b.peers
-        XCTAssertEqual(bPeers, 1)
-        await a.closeAll()
-        try await ta.value
-        try await tb.value // a goodbye ends it without an error
-        let last = await b.usable?.text
-        XCTAssertEqual(last, "after")
-    }
-
-    /// A store whose state stops secrets to every peer.
-    final class NoSecretsStore: RecordStore, @unchecked Sendable {
-        var digest: String? { nil }
-        var all: [Member.Record] { [] }
-        func add(_ rs: [Member.Record]) -> [Member.Record] { [] }
-        func noSecrets(to device: String?) -> Bool { true }
-    }
-
-    func testNoSecretsSendsTheMark() async throws {
-        // While the records stop secrets to a peer, it gets the mark of a
-        // secret, never its text (docs/protocol.md, section 10, "Stopping
-        // the exchange").
-        let (pa, pb) = Pipe.pair()
-        let changes = Changes()
-        let a = MemberNode(engine: SyncEngine(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", clock: HybridClock()), name: "iPhone",
-                           records: NoSecretsStore())
-        let b = MemberNode(engine: SyncEngine(device: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", clock: HybridClock()), name: "pi", role: .full,
-                           onChange: { changes.add($0.text) })
-        let ta = Task { try await a.serve(pa) }
-        let tb = Task { try await b.serve(pb) }
-        try await a.send(text: "plain", kind: .text)
-        try await waitUntil { changes.all.contains("plain") }
-        try await a.send(text: "hunter2", kind: .secret)
-        try await waitUntil { changes.all.contains("") }
-        XCTAssertFalse(changes.all.contains("hunter2"))
-        await a.closeAll()
-        try await ta.value
-        try await tb.value
+        let t = try CoreGroup(test: self)
+        let (a, b) = (t.phones[0], t.phones[1])
+        try a.member.copy("before")
+        try await t.connect(1, to: 0)
+        _ = try await b.copy("before")
+        try a.member.copy("after")
+        _ = try await b.copy("after")
+        XCTAssertEqual(try b.member.peers().map(\.device), [a.device])
+        XCTAssertEqual(try b.member.current()?.text, "after")
     }
 
     func testFramesForGo() throws {
         // The frames Go decodes in TestSwiftMemberFrames: copies sealed by a
         // phone of a group, which Go checks for their shape.
         let keys = try TestCopies()
-        let engine = SyncEngine(device: keys.idA, clock: HybridClock())
-        engine.seal = { try keys.a.seal($0, key: $1, blob: $2) }
-        let ev = try engine.local(text: "from Swift / <ok>", kind: .text)
-        let secret = try engine.local(text: "hunter2", kind: .secret)
-        let hello = engine.hello(name: "iPhone")
+        let clock = HybridClock()
+        func local(_ text: String, _ kind: Member.Kind) throws -> Member.Event {
+            var e = Member.Event(id: Member.newID(), origin: keys.idA, via: .phone, time: clock.now(), ageMS: 0, kind: kind, text: text)
+            e.sealed = try keys.a.seal(e, key: nil, blob: nil)
+            return e
+        }
+        let ev = try local("from Swift / <ok>", .text)
+        let secret = try local("hunter2", .secret)
+        let hello = Member.Hello(wallMS: Int64(Date().timeIntervalSince1970 * 1000), current: secret.mark, name: "iPhone")
         XCTAssertEqual(hello.current?.isMark, true)
         let frames = try [
             Member.encode(.hello(.phone, hello)),

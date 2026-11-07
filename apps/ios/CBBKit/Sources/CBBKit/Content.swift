@@ -130,42 +130,4 @@ public enum Content {
         /// The store does not hold the parts of a copy to seal.
         case noParts
     }
-
-    /// Fetches the sealed blob of event from the connected members that
-    /// serve content, its origin first, checks it against its hash, opens
-    /// it with the copy's key, and returns the bytes of the manifest's
-    /// parts that hold bytes, in order, each checked against its own hash
-    /// (docs/protocol.md, section 4, "The blob" and "Content"). It throws
-    /// when no member has it whole, it is over limit or does not match.
-    public static func parts(from node: MemberNode, event: Member.Event, limit: Int64 = Media.maxMedia) async throws -> [Data] {
-        guard let m = event.media else { throw Failure.folder }
-        if m.size == 0 { return m.parts.filter { !$0.dir }.map { _ in Data() } }
-        guard let blob = event.sealed?.blob, let key = event.key else { throw Failure.unread }
-        guard blob.size <= Media.blobSize(limit) else { throw Failure.tooLarge(size: m.size, limit: limit) }
-        let peers = await node.mediaPeers.sorted { $0 == event.origin && $1 != event.origin }
-        guard !peers.isEmpty else { throw Failure.noPeer }
-        var last: Error = Failure.noPeer
-        for p in peers {
-            var d = Data()
-            do {
-                try await node.fetch(from: p, sha256: blob.sha256, size: blob.size) { _, data in d.append(data) }
-                guard Data(SHA256.hash(data: d)) == blob.sha256 else {
-                    last = Failure.mismatch
-                    continue
-                }
-                return try Media.openBlob(key: key, blob: blob, data: d, manifest: m)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                last = error
-            }
-        }
-        throw last
-    }
-
-    /// The bytes of part of event, as parts gets them.
-    public static func data(from node: MemberNode, event: Member.Event, part: Media.Part, limit: Int64 = Media.maxMedia) async throws -> Data {
-        guard !part.dir, let i = event.media?.parts.filter({ !$0.dir }).firstIndex(of: part) else { throw Failure.folder }
-        return try await parts(from: node, event: event, limit: limit)[i]
-    }
 }

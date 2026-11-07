@@ -51,9 +51,9 @@ final class PhoneKeys: PeriodKeys, @unchecked Sendable {
     func clear() { keep("") }
 }
 
-/// The group's server credentials for the node, which keeps them with
-/// every member, in credentials.json beside the group.
-final class CredentialBox: CredentialKeeper, @unchecked Sendable {
+/// The group's server credentials, which the phone's member passes to every
+/// member, in credentials.json beside the group.
+final class CredentialBox: @unchecked Sendable {
     private let lock = NSLock()
     private let url: URL
     private var store: CredentialStore

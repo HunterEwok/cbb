@@ -12,7 +12,9 @@
 //! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
 //! its certificate, "MUTE <true|false> <for_ms> <by>" when an admin muted
 //! it or ended the mute, "CHANGE <copy as JSON>" for each copy that became
-//! the group's, and "LOG <line>" for each log line. It takes "COPY <text>"
+//! the group's, "PEER <peer as JSON>" for each peer whose hello it took,
+//! "COMMAND <token> <command as JSON>" for each command for the phone
+//! itself, and "LOG <line>" for each log line. It takes "COPY <text>"
 //! (printing "REFUSED <reason>" when the member does not send it), "PEERS",
 //! answered "PEERS <count>", "PAUSE <ms>", "RESUME" and "MUTED", answered
 //! "MUTED <paused> <muted>", "DEVICES", answered "DEVICES <the devices as a
@@ -203,6 +205,8 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
         Some("log") => println!("LOG {}", s("line")),
         Some("identity") => println!("IDENTITY {}", s("cert")),
         Some("copy") => println!("CHANGE {}", v["copy"]),
+        Some("peer") => println!("PEER {}", v["peer"]),
+        Some("command") => println!("COMMAND {} {}", v["token"], v["command"]),
         Some("mute") => println!("MUTE {} {} {}", v["muted"], v["for_ms"], s("by")),
         _ => {}
     }

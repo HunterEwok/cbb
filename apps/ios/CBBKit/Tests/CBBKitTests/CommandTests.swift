@@ -156,86 +156,61 @@ final class CommandTests: XCTestCase {
         XCTAssertEqual(opened, 2)
     }
 
-    /// A command for a member this one is not connected to goes through
-    /// one that is, and the result comes back, once.
+    /// A phone that is not connected to a command's receiver sends it to an
+    /// admin phone it is connected to, the hub, which passes it on once
+    /// (docs/protocol.md, section 15); the result comes back the same way.
     func testCommandPassedOn() async throws {
-        let (ia, ib, ih) = (String(repeating: "a", count: 32), String(repeating: "b", count: 32), String(repeating: "c", count: 32))
-        final class Got: @unchecked Sendable {
-            let lock = NSLock()
-            var names: [String] = []
-            func add(_ n: String) { lock.withLock { names.append(n) } }
-            var all: [String] { lock.withLock { names } }
+        let t = try CoreGroup(3, test: self)
+        let (hub, a, b) = (t.phones[0], t.phones[1], t.phones[2])
+        try await t.connect(1, to: 0)
+        try await t.connect(2, to: 0)
+        let c = try t.g.modeCommand(to: b.device, mode: "own", caSigner: t.ca, now: Date())
+        async let result = a.member.command(c)
+        let (token, from) = try await b.next("the command") { e -> (UInt64, String)? in
+            if case let .command(token, from, _) = e { return (token, from) }
+            return nil
         }
-        let got = Got()
-        let a = MemberNode(engine: SyncEngine(device: ia, clock: HybridClock()), name: "iPhone")
-        let hub = MemberNode(engine: SyncEngine(device: ih, clock: HybridClock()), name: "Hub", onCommand: { _, r in
-            got.add("hub")
-            return Member.CommandResult(id: Commands.id(of: r) ?? "", status: "done")
-        })
-        let b = MemberNode(engine: SyncEngine(device: ib, clock: HybridClock()), name: "Phone two", onCommand: { _, r in
-            got.add("b")
-            return Member.CommandResult(id: Commands.id(of: r) ?? "", status: "done")
-        })
-        let (p1, p2) = Pipe.pair()
-        let (p3, p4) = Pipe.pair()
-        let ts = [
-            Task { try await a.serve(p1, peer: ih) },
-            Task { try await hub.serve(p2, peer: ia) },
-            Task { try await b.serve(p3, peer: ih) },
-            Task { try await hub.serve(p4, peer: ib) },
-        ]
-        for _ in 0..<300 {
-            if await a.peers == 1, await b.peers == 1, await hub.peers == 2 { break }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        let c = try Commands.mode(to: ib, mode: "own", group: "tag", by: ia, now: Date(), signer: SoftwareSigner())
-        do {
-            _ = try await a.command(c, to: ib)
-            XCTFail("sent to a device that is not connected, without via")
-        } catch MemberNode.Failure.notConnected {}
-        do {
-            _ = try await a.command(c, to: ib, via: ["d"])
-            XCTFail("sent through a member that is not one of the hubs")
-        } catch MemberNode.Failure.notConnected {}
-        let r = try await a.command(c, to: ib, via: ["d", ih])
+        XCTAssertEqual(from, hub.device)
+        try b.member.answer(token, result: .init(id: "", status: "done"))
+        let r = try await result
         XCTAssertEqual(r.status, "done")
-        XCTAssertEqual(r.by, ib)
-        XCTAssertEqual(got.all, ["b"])
+        XCTAssertEqual(r.by, b.device)
+        XCTAssertTrue(hub.all { if case .command = $0 { return true }; return nil }.isEmpty, "the hub does not take it itself")
+        // The same command is not passed on again, not even after its
+        // result went back: the receiver's cache is only a backstop.
         do {
-            _ = try await a.command(c, to: ib, timeout: 0.3, via: [ih])
+            _ = try await a.member.command(c, timeout: .seconds(1))
             XCTFail("the hub passed the same command on twice")
-        } catch MemberNode.Failure.timedOut {}
-        XCTAssertEqual(got.all, ["b"])
-        await a.closeAll()
-        await b.closeAll()
-        await hub.closeAll()
-        for t in ts { try await t.value }
+        } catch CoreMember.Failure.timedOut {}
+        XCTAssertEqual(b.all { if case .command = $0 { return true }; return nil }.count, 1)
     }
 
-    /// A command goes to the named peer, and its result comes back; a phone
-    /// refuses commands.
+    /// A command goes to its receiver, whose app answers; a device that is
+    /// not connected, with no hub between, gets nothing.
     func testCommandRoundTrip() async throws {
-        let (da, db) = ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-        let (pa, pb) = Pipe.pair()
-        let a = MemberNode(engine: SyncEngine(device: da, clock: HybridClock()), name: "iPhone")
-        let b = MemberNode(engine: SyncEngine(device: db, clock: HybridClock()), name: "Phone two")
-        let ta = Task { try await a.serve(pa, peer: db) }
-        let tb = Task { try await b.serve(pb, peer: da) }
-        for _ in 0..<300 {
-            if await a.peers == 1 { break }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        let c = try Commands.mode(to: db, mode: "own", group: "tag", by: da, now: now, signer: SoftwareSigner())
-        let r = try await a.command(c, to: db)
+        let t = try CoreGroup(test: self)
+        let (a, b) = (t.phones[0], t.phones[1])
+        try await t.connect(1, to: 0)
+        // Signed as it is sent, as an admin's app signs it: the member checks
+        // a command before its app gets it, and `now` is as old as the suite.
+        let c = try t.g.modeCommand(to: b.device, mode: "own", caSigner: t.ca, now: Date())
+        async let result = a.member.command(c)
+        let token = try await b.next("the command") { if case let .command(token, _, _) = $0 { return token }; return nil }
+        try b.member.answer(token, result: .init(id: "", status: "refused", reason: "not now"))
+        let r = try await result
         XCTAssertEqual(r.id, Commands.id(of: c))
         XCTAssertEqual(r.status, "refused")
+        XCTAssertEqual(r.reason, "not now")
+        // An expired one the member refuses itself; the app never sees it.
+        let expired = try t.g.modeCommand(to: b.device, mode: "own", caSigner: t.ca, now: Date().addingTimeInterval(-60))
+        let old = try await a.member.command(expired)
+        XCTAssertEqual(old.status, "refused")
+        XCTAssertEqual(b.all { if case .command = $0 { return true }; return nil }.count, 1)
+        let other = try t.g.modeCommand(to: Member.newID(), mode: "own", caSigner: t.ca, now: Date())
         do {
-            _ = try await a.command(c, to: "cccccccccccccccccccccccccccccccc")
+            _ = try await a.member.command(other)
             XCTFail("sent to a device that is not connected")
-        } catch MemberNode.Failure.notConnected {}
-        await a.closeAll()
-        try await ta.value
-        try await tb.value
+        } catch CoreMember.Failure.notConnected {}
     }
 
     /// Writes commands this kit signed, with the root key and with an admin

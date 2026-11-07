@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import CBBKit
+import Network
 import os
 import SwiftUI
 import UIKit
@@ -91,10 +92,9 @@ final class ShareModel: ObservableObject {
         }
         let media = providers.filter { !isText($0) && ($0.hasItemConformingToTypeIdentifier(UTType.image.identifier) || $0.hasItemConformingToTypeIdentifier(UTType.data.identifier)) }
         guard !media.isEmpty else { return nil }
-        let store = ServedContent()
         if media.count == 1, media[0].hasItemConformingToTypeIdentifier(UTType.image.identifier) {
             guard let image = await Images.load(media[0]), image.data.count <= maxShared else { throw TooLarge() }
-            return .media(Content.manifest(store: store.memory, data: [(image.type, image.data)]), store)
+            return .media([.data(image.data, type: image.type)])
         }
         var files: [(name: String, bytes: Data)] = []
         var total = 0
@@ -105,7 +105,9 @@ final class ShareModel: ObservableObject {
             files.append((name, data))
         }
         guard !files.isEmpty else { return nil }
-        return .media(Content.files(store: store.memory, files: files), store)
+        // Each name made one every system takes, and unique (Content.files).
+        let names = Content.files(store: MemoryContent(maxBytes: 0), files: files.map { ($0.name, Data()) }).parts.compactMap(\.path)
+        return .media(zip(names, files).map { CoreMember.Part.bytes($1.bytes, path: $0) })
     }
 
     /// The name and bytes of a shared file.
@@ -168,105 +170,87 @@ struct ShareView: View {
     }
 }
 
-/// One send: dials the computers of the group that browsing finds, as the
-/// app does, and hands them the text once one is connected.
+/// One send: the phone's member in the core, in a folder of its own,
+/// dials the computers of the group that browsing finds, as the app does,
+/// and hands them the text, or the images or files, once one is connected.
 @MainActor
 enum OneShot {
     enum Failure: Error { case noGroup, noKey, noComputers, notFetched }
 
-    /// What Share sends: a text, or images or files with the store that
-    /// serves them.
+    /// What Share sends: a text, or images or files.
     enum What {
         case text(String)
-        case media(Media.Manifest, ServedContent)
+        case media([CoreMember.Part])
     }
 
-    /// Holds the dialer for the browser's callback, which comes first.
-    private final class DialerRef: @unchecked Sendable { var dialer: MemberDialer? }
+    /// Holds the browser for its own callback, which resolves the members
+    /// it finds.
+    private final class BrowserRef: @unchecked Sendable { var browser: BonjourBrowser? }
 
     static func send(_ what: What, wait: Duration = .seconds(8), fetchWait: Duration = .seconds(60)) async throws {
         guard let g = try PhoneGroup.load(from: Shared.groupFile) else { throw Failure.noGroup }
         guard let key = try KeychainIdentity.loadKey(label: Shared.memberLabel) else { throw Failure.noKey }
-        KeychainIdentity.removeCertificates(label: Shared.memberLabel)
-        let id = try KeychainIdentity.identity(certificate: g.memberCert, key: key, label: Shared.memberLabel, storeKey: false)
-        // The copy is sealed to the group's readers and signed, as the app's.
-        let records = g.records
-        let copies = CopyKeys(device: g.device, cert: g.memberCert, issuer: g.memberIssuer, signer: try SecKeySigner(key),
-                              secret: try SealKey.secret(), records: { records })
-        let node = MemberNode(engine: SyncEngine(device: g.device, clock: HybridClock()), name: UIDevice.current.name, os: "ios",
-                              device: Member.DeviceInfo(form: UIDevice.current.userInterfaceIdiom == .pad ? "tablet" : "phone",
-                                                        osVersion: UIDevice.current.systemVersion),
-                              content: { () -> ContentStore? in if case let .media(_, s) = what { return s } else { return nil } }(),
-                              copies: copies)
-        let ref = DialerRef()
-        let browser = BonjourBrowser { found in Task { await ref.dialer?.update(found) } }
-        let dialer = MemberDialer(node: node, group: g.tag,
-                                  dial: browser.dialer(identity: id, chain: g.memberIssuer.map { [$0] } ?? [], roots: g.trusted))
-        ref.dialer = dialer
-        browser.start()
-        let deadline = ContinuousClock.now + wait
-        var online = await node.connected
-        while online.isEmpty, ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(200))
-            online = await node.connected
+        let signer = try SecKeySigner(key)
+        // A folder of its own: the app's member keeps the other, and may run.
+        let dir = Shared.groupFile.deletingLastPathComponent().appendingPathComponent("share-member", isDirectory: true)
+        try? FileManager.default.removeItem(at: dir)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let node = try CoreMember(.init(dir: dir, name: UIDevice.current.name, osVersion: UIDevice.current.systemVersion, device: g.device,
+                                        publicKeyDER: signer.publicKeyDER, seal: try SealKey.secret(), cert: g.memberCert,
+                                        issuer: g.memberIssuer, groupCA: g.groupCA, roots: g.trusted)) { try signer.signature(digest: $0) }
+        defer { node.stop() }
+        try node.addRecords(g.records.records)
+        // The members browsing finds, and those at the addresses they had
+        // when admitted, only the group's devices.
+        // Never this phone itself, which as a hub announces itself.
+        let devices = Set(g.devices.map(\.id)).subtracting([g.device]), known = g.addresses, tag = g.tag
+        let ref = BrowserRef()
+        let browser = BonjourBrowser { found in
+            Task {
+                let members = Discovery.withKnown(found, known: Set(known.keys), group: tag).filter { $0.group == tag && devices.contains($0.device) }
+                for m in members {
+                    let resolved = found.contains { $0.device == m.device } ? await ref.browser?.addresses(of: m.device) ?? [] : []
+                    let addrs = resolved + JoinCode.ordered(known[m.device] ?? []).filter { !resolved.contains($0) && LiveShare.numeric($0) }
+                    if !addrs.isEmpty { try? node.found(m.device, addrs: addrs, device: m.device) }
+                }
+            }
         }
+        ref.browser = browser
+        browser.start()
+        defer { browser.stop() }
+        for (d, addrs) in known where devices.contains(d) {
+            let a = JoinCode.ordered(addrs).filter(LiveShare.numeric)
+            if !a.isEmpty { try? node.found(d, addrs: a, device: d) }
+        }
+        let online = try await node.wait(timeout: wait)
         var fetched = true
-        if !online.isEmpty {
+        if online {
             switch what {
             case let .text(text):
-                _ = try await node.send(text: text, kind: .text)
-                // The event goes out on the connections; give them a moment.
+                try node.copy(text, board: false)
+                // The copy goes out on the connections; give them a moment.
                 try? await Task.sleep(for: .seconds(1))
-            case let .media(m, store):
-                let e = try await node.send(text: "", kind: .text, media: m)
+            case let .media(parts):
+                let c = try node.copyMedia(parts)
                 // The computers fetch the copy's sealed blob from this phone.
-                let blob = e.sealed?.blob
                 let end = ContinuousClock.now + fetchWait
-                while !store.served(blob), ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(200)) }
-                fetched = store.served(blob)
+                func done() -> Bool { (try? node.served(c.id)).map { $0.size == 0 || $0.served >= $0.size } ?? true }
+                while !done(), ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(200)) }
+                fetched = done()
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
-        await dialer.stop()
-        browser.stop()
-        await node.closeAll()
-        if online.isEmpty { throw Failure.noComputers }
+        if !online { throw Failure.noComputers }
         if !fetched { throw Failure.notFetched }
     }
 }
 
-/// The parts Share sends, which notes how far each was read, so the
-/// extension stays until a computer fetched them all.
-final class ServedContent: ContentStore, @unchecked Sendable {
-    let memory = MemoryContent(maxBytes: Int64(ShareModel.maxShared))
-    private let lock = NSLock()
-    private var ends: [Data: Int64] = [:]
-
-    func open(sha256: Data) -> ContentSource? {
-        memory.open(sha256: sha256).map { Source(inner: $0, sum: sha256, store: self) }
-    }
-
-    func sealBlob(_ m: Media.Manifest) throws -> (key: Data, blob: Media.Blob)? { try memory.sealBlob(m) }
-
-    func note(_ sum: Data, end: Int64) { lock.withLock { ends[sum] = max(ends[sum] ?? 0, end) } }
-
-    /// Whether the copy's sealed blob was read to its end; a copy of no
-    /// bytes has none.
-    func served(_ blob: Media.Blob?) -> Bool {
-        guard let blob else { return true }
-        return lock.withLock { (ends[blob.sha256] ?? 0) >= blob.size }
-    }
-
-    struct Source: ContentSource {
-        let inner: ContentSource
-        let sum: Data
-        let store: ServedContent
-        var size: Int64 { inner.size }
-        func read(offset: Int64, length: Int) throws -> Data {
-            let d = try inner.read(offset: offset, length: length)
-            store.note(sum, end: offset + Int64(length))
-            return d
-        }
-        func close() { inner.close() }
+/// What the share's member dials.
+enum LiveShare {
+    /// Whether addr is host:port with an IP address, as the member dials.
+    static func numeric(_ addr: String) -> Bool {
+        guard let (host, _) = JoinCode.split(addr) else { return false }
+        return IPv4Address(host) != nil || IPv6Address(host) != nil
     }
 }

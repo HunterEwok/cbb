@@ -199,7 +199,10 @@ impl Away {
         }
         let res = admin.hub_command(&d, encode(&order)?)?;
         (self.log)(&format!("cbb: {} is a hub of the group now", d.name));
-        let (Some(o), Some(psk)) = (res.tunnel.map(|b| *b), self_psk) else { return Ok(()) };
+        let (Some(o), Some(psk)) = (res.tunnel.and_then(|v| serde_json::from_value::<TunnelOffer>(v).ok()), self_psk)
+        else {
+            return Ok(());
+        };
         self.keep_offer(&d, o, psk, |_| {})
     }
 
@@ -241,7 +244,7 @@ impl Away {
             return Err(Error::msg(format!("this hub has more than {} clients", MAX_CLIENTS - 1)));
         }
         let res = admin.hub_command(&d, encode(&order)?)?;
-        let Some(offer) = res.tunnel.map(|b| *b) else {
+        let Some(offer) = res.tunnel.and_then(|v| serde_json::from_value::<TunnelOffer>(v).ok()) else {
             return Err(Error::msg(format!(
                 "{} became the hub but sent no offer; turn sync away from home off and on again on this device",
                 d.name
