@@ -68,9 +68,9 @@ void cbb_join_free(cbb_join *j);
  * feature member (the phones' apps): the lite member's node on threads of its
  * own, with the app's key through sign. event gets each event as JSON on any
  * thread: {"type":"write","text","kind","ttl_ms"}, {"type":"log","line"},
- * {"type":"identity","cert","issuer","roots"}, {"type":"copy","copy"} or
- * {"type":"message","from","message"}; ctx must stay valid for the rest of
- * the process.
+ * {"type":"identity","cert","issuer","roots"}, {"type":"copy","copy"},
+ * {"type":"message","from","message"} or {"type":"mute","muted","for_ms","by"};
+ * ctx must stay valid for the rest of the process.
  */
 typedef void (*cbb_event_fn)(void *ctx, const uint8_t *event, size_t len);
 

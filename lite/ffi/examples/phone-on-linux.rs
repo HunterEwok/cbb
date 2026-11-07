@@ -10,10 +10,13 @@
 //! -dir, it then runs the member there,
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
 //! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
-//! its certificate, "CHANGE <copy as JSON>" for each copy that became the
-//! group's, and "LOG <line>" for each log line, and takes "COPY <text>",
-//! "PEERS" and "CALL <request as JSON>" on standard input, answering
-//! "PEERS <count>" and "ANSWER <answer as JSON>" (cbb_member_call).
+//! its certificate, "MUTE <true|false> <for_ms> <by>" when an admin muted
+//! it or ended the mute, "CHANGE <copy as JSON>" for each copy that became
+//! the group's, and "LOG <line>" for each log line. It takes "COPY <text>"
+//! (printing "REFUSED <reason>" when the member does not send it), "PEERS",
+//! answered "PEERS <count>", "PAUSE <ms>", "RESUME" and "MUTED", answered
+//! "MUTED <paused> <muted>", and "CALL <request as JSON>", answered
+//! "ANSWER <answer as JSON>" (cbb_member_call), on standard input.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -165,6 +168,7 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
         Some("log") => println!("LOG {}", s("line")),
         Some("identity") => println!("IDENTITY {}", s("cert")),
         Some("copy") => println!("CHANGE {}", v["copy"]),
+        Some("mute") => println!("MUTE {} {} {}", v["muted"], v["for_ms"], s("by")),
         _ => {}
     }
 }
@@ -210,14 +214,23 @@ fn run_member(
         let Ok(line) = line else { break };
         if let Some(text) = line.strip_prefix("COPY ") {
             let a = call(serde_json::json!({ "op": "copy", "args": { "text": text } }).to_string());
-            if a.get("error").is_some() {
-                eprintln!("phone-on-linux: {a}");
+            if let Some(e) = a.get("error") {
+                println!("REFUSED {}", e["message"].as_str().unwrap_or_default());
             }
         } else if line == "PEERS" {
             let a = call(serde_json::json!({ "op": "peers" }).to_string());
             println!("PEERS {}", a["ok"]["peers"].as_array().map_or(0, Vec::len));
         } else if let Some(req) = line.strip_prefix("CALL ") {
             println!("ANSWER {}", call(req.to_string()));
+        } else if line == "MUTED" || line == "RESUME" || line.starts_with("PAUSE ") {
+            let a = if line == "MUTED" {
+                call(serde_json::json!({ "op": "muted" }).to_string())
+            } else {
+                let ms: i64 = line.strip_prefix("PAUSE ").and_then(|v| v.parse().ok()).unwrap_or(0);
+                let args = serde_json::json!({ "pause": line != "RESUME", "for_ms": ms });
+                call(serde_json::json!({ "op": "pause_receiving", "args": args }).to_string())
+            };
+            println!("MUTED {} {}", a["ok"]["paused"], a["ok"]["muted"]);
         }
     }
     ExitCode::SUCCESS

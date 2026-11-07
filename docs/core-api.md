@@ -67,7 +67,8 @@ stay; `copy`, a copy that became the group's current one from another member (be
 `message`, an `admin`, `hubs` or `credentials` message a peer sent, for the app to keep;
 `log`, a line for the app's log; `identity`, the certificate, issuer and roots after an admin
 renewed the certificate or a takeover made a new root, which the app keeps in its own file, as
-the core keeps no identity file for a key it does not hold. The node signs its TLS handshakes
+the core keeps no identity file for a key it does not hold; `mute`, an admin muted the phone or
+ended its mute, with how long it lasts and who. The node signs its TLS handshakes
 and its copies through the callback and presents itself as a phone (role `phone`, key store
 `hardware`, or `file` when the request's `key_store` says so); it dials the members mDNS finds
 (`mdns`, on by default) and those the app hands in. `cbb_member_stop` stops it.
@@ -92,6 +93,8 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `listen`, `unlisten` | `port` (0 for any) | `{"port"}`: the member port for the members that dial this phone as the group's hub, which the app publishes with `r=phone` |
 | `pause`, `resume`, `wait` | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `waiting`, `pause` |
 | `mode`, `mute` | `mode`; `until_ms` (null unmutes) | `{}` |
+| `pause_receiving` | `pause`, `for_ms` (0 for until it is turned on) | the state, as `muted` gives it: keeps the group's copies out of the phone's clipboard for a while, or takes them again (`pause: false`; design.md, "Muting a device") |
+| `muted` | none | `{"paused", "paused_ms", "muted", "muted_ms"}`: how long that pause and an admin's mute last, 0 for until lifted |
 | `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features}]`, as their hellos and reach messages present them |
 | `records` | none | `{"records"}` |
 | `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
@@ -100,10 +103,12 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `send_hubs`, `send_credentials` | `share`, `credentials` | `{"to"}` |
 
 A phone's node passes on a command for another device when it is connected to it, as
-protocol.md section 15 says; the lite member refuses it for itself. It keeps the sealed blobs
+protocol.md section 15 says. For itself it carries out the `mute` and `unmute` commands an
+admin sends, keeps both in `mute.json` as the lite member does, and refuses the other commands,
+which a phone has nothing to carry out for. It keeps the sealed blobs
 of the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
-both ways and a renewal against a Go member through the example `phone-on-linux`,
+both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
 `TestFFIJoinerAdmin` the join as an admin, and `TestFFIMember` the calls: an address handed
 in, the button's rule, images both ways, and pausing.
 

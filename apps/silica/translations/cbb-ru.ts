@@ -208,6 +208,46 @@
         <translation>Войти в группу как админ</translation>
     </message>
     <message>
+        <source>For 15 minutes</source>
+        <translation>На 15 минут</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>На час</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>На 8 часов</translation>
+    </message>
+    <message>
+        <source>Until I turn it on</source>
+        <translation>Пока не включу</translation>
+    </message>
+    <message>
+        <source>Taking copies</source>
+        <translation>Копии принимаются</translation>
+    </message>
+    <message>
+        <source>Not taking copies until %1</source>
+        <translation>Копии не принимаются до %1</translation>
+    </message>
+    <message>
+        <source>Not taking copies</source>
+        <translation>Копии не принимаются</translation>
+    </message>
+    <message>
+        <source>Tap to take no copies from the group, or again; hold it for a time</source>
+        <translation>Нажмите, чтобы не принимать копии группы или снова принимать; удерживайте, чтобы выбрать время</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>Админ заглушил этот телефон до %1: его копии не доходят до группы.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>Админ заглушил этот телефон: его копии не доходят до группы, пока админ не включит его.</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>В группе</translation>
     </message>

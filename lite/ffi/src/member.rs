@@ -198,6 +198,20 @@ enum Event<'a> {
         #[serde(with = "certs::b64::list")]
         roots: Vec<Vec<u8>>,
     },
+    /// An admin muted the phone, or ended its mute: for_ms is how long it
+    /// lasts, 0 for until an admin unmutes it.
+    Mute {
+        muted: bool,
+        for_ms: i64,
+        by: &'a str,
+    },
+}
+
+#[derive(Deserialize)]
+struct PauseArgs {
+    pause: bool,
+    #[serde(default)]
+    for_ms: i64,
 }
 
 /// A copy as the app reads it: its header, its content when this phone
@@ -334,6 +348,11 @@ impl Member {
                     });
                     Ok(())
                 }),
+                on_mute: Box::new(move |until: Option<i64>, by: &str| {
+                    let for_ms = until
+                        .map_or(0, |u| if u == 0 { 0 } else { u.saturating_sub(cbb_lite::uptime::wall_ms()).max(1) });
+                    ev.send(&Event::Mute { muted: until.is_some(), for_ms, by });
+                }),
                 log: Arc::new(move |line: &str| ev.send(&Event::Log { line })),
             })?;
             node.on_change(Box::new(move |c: &Copy| {
@@ -456,6 +475,18 @@ impl Member {
                 n.set_mute(arg(&a, "until_ms").as_i64());
                 done()
             }
+            // The user's pause of the group's copies: `{"pause": true,
+            // "for_ms"}` (0 for until it is turned on) or `{"pause": false}`.
+            "pause_receiving" => {
+                let a: PauseArgs = args(a)?;
+                if a.pause {
+                    n.pause_receiving(a.for_ms)?;
+                } else {
+                    n.resume_receiving()?;
+                }
+                Ok(self.state())
+            }
+            "muted" => Ok(self.state()),
             // What the app shows.
             "peers" => {
                 let all = arg(&a, "all").as_bool().unwrap_or(false);
@@ -499,6 +530,19 @@ impl Member {
             }
             _ => Err(Error::msg(format!("the member has no operation {op:?}"))),
         }
+    }
+
+    /// Whether receiving is paused and whether an admin muted the phone:
+    /// `{"paused", "paused_ms", "muted", "muted_ms"}`, the times what is
+    /// left, 0 for until it is lifted.
+    fn state(&self) -> serde_json::Value {
+        let (paused, muted) = self.node.muted();
+        serde_json::json!({
+            "paused": paused.is_some(),
+            "paused_ms": paused.unwrap_or(0),
+            "muted": muted.is_some(),
+            "muted_ms": muted.unwrap_or(0),
+        })
     }
 
     pub fn stop(&self) {
