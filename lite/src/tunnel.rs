@@ -289,10 +289,8 @@ impl Link {
 
         let secret = st.secret();
         let public = PublicKey::from(&secret);
-        let mut hub_key = [0u8; 32];
-        hub_key.copy_from_slice(&hub.key);
-        let mut psk = [0u8; 32];
-        psk.copy_from_slice(&hub.psk);
+        let hub_key: [u8; 32] = hub.key.as_slice().try_into().context("the hub's key is not 32 bytes")?;
+        let psk: [u8; 32] = hub.psk.as_slice().try_into().context("the tunnel's preshared key is not 32 bytes")?;
         let awg = match &hub.obfuscation {
             Some(v) => Some(crate::awg::Awg::new(crate::awg::Obfuscation::from_offer(v)?, &hub_key, public.as_bytes())),
             None => None,
