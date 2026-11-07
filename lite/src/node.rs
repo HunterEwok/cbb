@@ -189,7 +189,7 @@ pub struct Node {
     waiting: Mutex<HashMap<String, Waiting>>,
     /// The commands a phone passed on, by ID: where each came from, and
     /// when it expires (docs/protocol.md, section 15).
-    passed: Mutex<HashMap<String, (DeviceId, i64)>>,
+    passed: Mutex<HashMap<String, Passed>>,
     on_message: RwLock<Option<OnMessage>>,
     on_peer: RwLock<Option<OnPeer>>,
     /// The attestations of this member's keys, which every peer gets after
@@ -203,6 +203,20 @@ pub struct Node {
     /// for a phone's app, which shows it and fetches images or files.
     on_change: RwLock<Option<OnChange>>,
 }
+
+/// A command a phone passed on: where it came from, when it expires, and
+/// whether its result went back already. It is passed on once until it
+/// expires, whatever its result.
+struct Passed {
+    from: DeviceId,
+    expires_ms: i64,
+    answered: bool,
+}
+
+/// Checks a connection a listener took, by the source port of its loopback
+/// connection and the device its certificate names, before it is served:
+/// a blind relay's calls only from the device the relay announced.
+pub type Admit = Arc<dyn Fn(u16, &DeviceId) -> bool + Send + Sync>;
 
 /// Gets a copy that became the group's current one.
 pub type OnChange = Box<dyn Fn(&Event) + Send + Sync>;
@@ -745,9 +759,9 @@ impl Node {
             }
             return;
         }
-        let back = self.passed.lock().unwrap().get_mut(&res.id).map(|(origin, exp)| {
-            *exp = i64::MIN; // passed back once
-            origin.clone()
+        let back = self.passed.lock().unwrap().get_mut(&res.id).filter(|p| !p.answered).map(|p| {
+            p.answered = true; // passed back once
+            p.from.clone()
         });
         if let Some(origin) = back {
             if res.by.is_empty() {
@@ -766,14 +780,20 @@ impl Node {
         let now = uptime::wall_ms();
         {
             let mut passed = self.passed.lock().unwrap();
-            passed.retain(|_, (_, exp)| *exp > now);
-            if passed.contains_key(&head.id) || passed.len() >= MAX_PASSED {
+            passed.retain(|_, p| p.expires_ms > now);
+            // An expired command, or one that claims to live longer than a
+            // command may, is not passed on (docs/protocol.md, section 15).
+            let lifetime = cbb_core::command::COMMAND_LIFETIME_MS + cbb_core::command::COMMAND_AHEAD_MS;
+            if head.expires_ms <= now
+                || head.expires_ms.saturating_sub(now) > lifetime
+                || passed.contains_key(&head.id)
+                || passed.len() >= MAX_PASSED
+            {
                 return;
             }
             let c = self.conns.lock().unwrap().get(&to).cloned();
             let Some(c) = c.filter(|c| !c.records_only && &c.id != from) else { return };
-            let exp = head.expires_ms.min(now + cbb_core::command::COMMAND_LIFETIME_MS + 1000);
-            passed.insert(head.id.clone(), (from.clone(), exp));
+            passed.insert(head.id.clone(), Passed { from: from.clone(), expires_ms: head.expires_ms, answered: false });
             self.enqueue(&c, Out::Message(wire::command(&r)));
         }
         self.logf(&format!("cbb: passed a command from {from} on to {to}"));
@@ -1008,6 +1028,18 @@ impl Node {
     /// to the same device. handshaken is called once the handshake is over,
     /// whether it worked or not.
     pub fn accept(&self, sock: TcpStream, addr: SocketAddr, handshaken: &mut dyn FnMut()) -> Result<()> {
+        self.accept_checked(sock, addr, handshaken, None)
+    }
+
+    /// As accept, with the listener's check of the peer (Admit), which
+    /// refuses the connection before it is served.
+    pub fn accept_checked(
+        &self,
+        sock: TcpStream,
+        addr: SocketAddr,
+        handshaken: &mut dyn FnMut(),
+        admit: Option<&Admit>,
+    ) -> Result<()> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
         }
@@ -1022,6 +1054,11 @@ impl Node {
         let res = self.handshake(&sock, conn, addr, Usage::Client);
         handshaken();
         let (conn, id, chain) = res?;
+        if let Some(admit) = admit
+            && !admit(addr.port(), &id)
+        {
+            return Err(Error::msg(format!("{id} at {addr} is not the caller this listener expects")));
+        }
         self.run(sock, conn, id, chain, addr)
     }
 
@@ -1237,7 +1274,18 @@ impl Node {
                 // records and the key it proved, not by the role its hello
                 // claims (docs/protocol.md, section 11).
                 "tunnel" if m.tunnel.is_some() => {
-                    if !self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
+                    // A phone takes offers from any device the records let
+                    // be a hub, as the phones' kits did (one that only passes
+                    // copies on among them); the lite member from the root
+                    // and the admins.
+                    let records = self.records.lock().unwrap();
+                    let may = if self.presence.role == "phone" {
+                        records.hub_peer(c.id.as_str(), &c.chain)
+                    } else {
+                        records.admin_peer(c.id.as_str(), &c.chain)
+                    };
+                    drop(records);
+                    if !may {
                         self.logf(&format!(
                             "cbb: ignored a tunnel offer from {}: only the group's root or an admin can be its hub",
                             c.id
@@ -1311,6 +1359,12 @@ impl Node {
                     if let Some(p) = c.peer.lock().unwrap().as_mut() {
                         p.reach = reach;
                     }
+                }
+                // A hub share only from a device that may be a hub, by the
+                // records and the chain it proved (docs/protocol.md, section
+                // 11, "Several hubs").
+                "hubs" if !self.records.lock().unwrap().hub_peer(c.id.as_str(), &c.chain) => {
+                    self.logf(&format!("cbb: ignored a hub share from {}: it may not be a hub of the group", c.id));
                 }
                 "admin" | "hubs" | "credentials" | "evidence" => {
                     if let Some(f) = self.on_message.read().unwrap().as_ref() {

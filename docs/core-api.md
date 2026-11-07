@@ -69,7 +69,9 @@ stay; `copy`, a copy that became the group's current one from another member (be
 its certificate, send it its admin CA, answer its tunnel key as the hub); `tunnel`, a tunnel
 offer of the group's root or an admin, for the app's tunnel; `command`, a command for the
 phone itself with a `token`, which the app checks against the records, carries out and
-answers with `answer` within ten seconds, or the phone refuses it;
+answers with `answer` within ten seconds, or the phone refuses it; `caller`, a call to the
+relay's port with a `token`, its loopback `port` and the `device` its certificate names, which
+the app answers with the op `caller` within five seconds, or the call is closed;
 `log`, a line for the app's log; `identity`, the certificate, issuer and roots after an admin
 renewed the certificate or a takeover made a new root, which the app keeps in its own file, as
 the core keeps no identity file for a key it does not hold. The node signs its TLS handshakes
@@ -95,7 +97,8 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `fetch` | `id`, `max` (bytes of the sealed blob), `out` (a new folder) | `{"parts"}`: each part with `file`, where it is, each checked against its hash |
 | `served` | `id` | `{"served", "size"}`: how far the peers read the sealed blob of the group's copy `id` this phone made, and its size; 0 and 0 for a copy that is no longer the group's or holds no bytes, as the iPhone's share waits until a computer fetched what it shared |
 | `found`, `lost` | `key` (the app's name for the member), `addrs` (`host:port`, loopback too for the tunnel), `device` (optional) | `{}`: dial it again and again, or stop |
-| `listen`, `unlisten` | `port` (0 for any) | `{"port"}`: the member port for the members that dial this phone as the group's hub, which the app publishes with `r=phone` |
+| `listen`, `unlisten` | `port` (0 for any), `kind`: `home` (the default: every address, for the members that dial this phone as the group's hub at home, which the app publishes with `r=phone`), `tunnel` (the loopback address, for the hub's tunnel) or `relay` (the loopback address, for a blind relay's calls: each waits for the app to name its caller, a `caller` event, and is served only when its certificate names that device); `unlisten` without `kind` closes every port | `{"port"}`: the member port, one already open for that kind staying |
+| `caller` | `token` (a `caller` event's), `device` (the device the relay announced from the call's loopback port, or null) | `{}` |
 | `pause`, `resume`, `wait` | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `waiting`, `pause` |
 | `mode`, `mute` | `mode`; `until_ms` (null unmutes) | `{}` |
 | `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features, chain}]`, as their hellos and reach messages present them, `chain` the certificates the handshake checked, leaf first |
@@ -107,10 +110,12 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
 | `send_cert`, `send_admin_ca`, `send_tunnel` | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |
-| `send_hubs`, `send_credentials` | `share`, `credentials` | `{"to"}` |
+| `send_hubs`, `send_credentials` | `share`, `credentials`; `to` (optional: that member only, as a peer that just connected); for `send_credentials` `except` (optional: every member but that one, which sent them) | `{"to"}`: those it went to; without `to` the hubs go to the group's hubs connected, the credentials to every member |
 
 A phone's node passes on a command for another device when it is connected to it, as
-protocol.md section 15 says; the lite member refuses it for itself. It keeps the sealed blobs
+protocol.md section 15 says: once until it expires, never one that has expired or claims to live
+longer than a command may; the lite member refuses it for itself. A phone takes tunnel offers and
+hub shares only from a device the records let be a hub, by the chain it proved. It keeps the sealed blobs
 of the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
 both ways and a renewal against a Go member through the example `phone-on-linux`,

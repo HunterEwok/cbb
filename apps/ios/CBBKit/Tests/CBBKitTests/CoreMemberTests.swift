@@ -80,6 +80,81 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(r.reason, "the app did not answer")
     }
 
+    /// A blind relay's port serves a call only when the app names its
+    /// caller and the call's certificate names the same device; the relay's
+    /// and the tunnel's ports are on the loopback address only.
+    func testRelayServesOnlyTheAnnouncedCaller() async throws {
+        let t = try CoreGroup(test: self)
+        let (a, b) = (t.phones[0], t.phones[1])
+        let port = try b.member.listen(.relay)
+        XCTAssertEqual(try b.member.listen(.relay), port, "a port already open stays")
+        try a.member.found("relay", addrs: ["127.0.0.1:\(port)"], device: b.device)
+        // A call the relay announced from another device is closed.
+        let first = try await b.next("the first call") { e -> (UInt64, UInt16, String)? in
+            if case let .caller(token, port, device) = e { return (token, port, device) }
+            return nil
+        }
+        XCTAssertEqual(first.2, a.device)
+        try b.member.caller(first.0, device: Member.newID())
+        try await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(b.member.connected(), [])
+        XCTAssertThrowsError(try b.member.caller(first.0, device: a.device), "a call is named once")
+        // The next one, which the relay announced from the device its
+        // certificate names, is served.
+        let second = try await b.next("the second call") { e -> UInt64? in
+            if case let .caller(token, _, _) = e, token != first.0 { return token }
+            return nil
+        }
+        try b.member.caller(second, device: a.device)
+        try await b.until("the announced caller connected") { b.member.connected() == [a.device] }
+        // On another address than the loopback one, the relay's and the
+        // tunnel's ports take nothing.
+        let tunnel = try b.member.listen(.tunnel)
+        for host in LocalAddresses.current().filter({ !$0.contains(":") }) {
+            for p in [port, tunnel] { XCTAssertFalse(Self.connects(host, p), "\(host):\(p) took a connection") }
+        }
+        XCTAssertTrue(Self.connects("127.0.0.1", tunnel))
+        // Closed, the port takes nothing once the listener's thread let go.
+        try b.member.unlisten(.relay)
+        try await b.until("the relay's port closed") { !Self.connects("127.0.0.1", port) }
+    }
+
+    /// Whether a TCP connection to host:port is taken.
+    static func connects(_ host: String, _ port: UInt16) -> Bool {
+        #if os(Linux)
+        let fd = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
+        #else
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        #endif
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = port.bigEndian
+        inet_pton(AF_INET, host, &addr.sin_addr)
+        return withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0 }
+        }
+    }
+
+    /// A hub share goes to the one peer the app names; from a device that
+    /// may not be a hub, the member drops it.
+    func testSendsAHubShareToOnePeer() async throws {
+        let t = try CoreGroup(3, test: self)
+        let (root, b, c) = (t.phones[0], t.phones[1], t.phones[2])
+        try await t.connect(1, to: 0)
+        try await t.connect(2, to: 0)
+        let share = Member.HubShare(serving: true)
+        XCTAssertEqual(try root.member.sendHubs(share, to: b.device), [b.device])
+        _ = try await b.next("the share") { if case let .message(_, .hubs(h)) = $0 { return h }; return nil }
+        // C, no hub, sends one to the root, which drops it.
+        XCTAssertEqual(try c.member.sendHubs(share, to: root.device), [root.device])
+        try c.member.copy("after the share")
+        _ = try await root.copy("after the share")
+        XCTAssertTrue(root.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty)
+        XCTAssertTrue(c.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty, "C was not named")
+    }
+
     func testRefusesWhatItDoesNotKnowAndStops() throws {
         let t = try CoreGroup(test: self)
         let a = t.phones[0]

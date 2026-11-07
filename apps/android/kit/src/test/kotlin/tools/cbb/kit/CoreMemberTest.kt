@@ -86,7 +86,7 @@ class CoreMemberTest {
         val b = start(idB, keyB, certB, g.groupCA) { eventsB.add(it) }
         a.addRecords(g.records.records)
         b.addRecords(g.records.records)
-        val port = a.listen(0)
+        val port = a.listen(port = 0)
         b.found("a", listOf("127.0.0.1:$port"), g.device)
 
         val peer = next<CoreMember.Event.PeerConnected>(eventsA).peer
@@ -116,6 +116,34 @@ class CoreMemberTest {
         assertFailsWith<Core.Refusal> { b.setTunnelKey(ByteArray(3) to ByteArray(32)) }
         b.setTunnelKey(null)
         b.lost("a")
+    }
+
+    @Test
+    fun relayServesOnlyTheAnnouncedCaller() {
+        val root = SoftwareSigner()
+        val keyA = SoftwareSigner()
+        val g = PhoneGroup.create(root, keyA.publicKeyDER, now, seal = Core.sealPublic(seal))
+        val keyB = SoftwareSigner()
+        val idB = SyncEngine.newID()
+        val certB = GroupCertificates.member(idB, keyB.publicKeyDER, g.groupCA, root, now)
+        g.record(idB, "Phone two", "phone", Records.keyHash(keyB.publicKeyDER), root, now, os = "android", store = Records.HARDWARE, seal = Core.sealPublic(seal))
+        val eventsB = LinkedBlockingQueue<CoreMember.Event>()
+        val a = start(g.device, keyA, g.memberCert, g.groupCA)
+        val b = start(idB, keyB, certB, g.groupCA) { eventsB.add(it) }
+        a.addRecords(g.records.records)
+        b.addRecords(g.records.records)
+        val port = b.listen(CoreMember.Listen.RELAY)
+        assertEquals(port, b.listen(CoreMember.Listen.RELAY), "a port already open stays")
+        a.found("relay", listOf("127.0.0.1:$port"), idB)
+        // A call the relay announced from another device is closed; the next, named right, is served.
+        val first = next<CoreMember.Event.Caller>(eventsB)
+        assertEquals(g.device, first.device)
+        b.caller(first.token, SyncEngine.newID())
+        val second = next<CoreMember.Event.Caller>(eventsB) { it.token != first.token }
+        assertTrue(b.peers().isEmpty(), "a call the relay did not announce from that device was served")
+        b.caller(second.token, g.device)
+        waitUntil { b.peers().map { it.device } == listOf(g.device) }
+        b.unlisten(CoreMember.Listen.RELAY)
     }
 
     private inline fun <reified T : CoreMember.Event> next(q: LinkedBlockingQueue<CoreMember.Event>, crossinline ok: (T) -> Boolean = { true }): T {

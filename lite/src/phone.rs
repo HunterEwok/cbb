@@ -8,6 +8,7 @@
 //! in; while the app is in the front it may also listen as the group's hub
 //! at home (`listen`), and in the background it pauses.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -60,9 +61,22 @@ pub struct Config {
 pub struct Member {
     node: Arc<Node>,
     dialers: Dialers,
-    listener: Mutex<Option<Listener>>,
+    /// The member ports open now, by what they are for.
+    listeners: Mutex<HashMap<Listen, Listener>>,
     own: Own,
     log: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+/// What a member port a phone opens is for.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Listen {
+    /// The home network, while the phone is the hub: every address.
+    Home,
+    /// The hub's tunnel, whose connections come to the loopback address.
+    Tunnel,
+    /// A blind relay's calls, on the loopback address, each only from the
+    /// device the relay announced (the admit check).
+    Relay,
 }
 
 /// The group's copy as the app shows it and the button fetches it.
@@ -107,7 +121,13 @@ impl Member {
         if cfg.mdns {
             discovery::start_as_phone(node.clone(), tag, log.clone());
         }
-        Ok(Member { node, dialers: Dialers::default(), listener: Mutex::new(None), own: Own::default(), log })
+        Ok(Member {
+            node,
+            dialers: Dialers::default(),
+            listeners: Mutex::new(HashMap::new()),
+            own: Own::default(),
+            log,
+        })
     }
 
     /// Sends a text the user handed to the app; board says it came from
@@ -220,24 +240,34 @@ impl Member {
         self.dialers.lost(&self.node, key);
     }
 
-    /// Listens on port (0: a free one) for the members that dial this phone
-    /// as the group's hub; returns the port, which the app publishes with
-    /// `r=phone`. A port already open stays.
-    pub fn listen(&self, port: u16) -> Result<u16> {
-        let mut l = self.listener.lock().unwrap();
-        if let Some(l) = l.as_ref() {
+    /// Opens a member port for what: on the home network (every address)
+    /// for the members that dial this phone as the group's hub, which the
+    /// app publishes with `r=phone`, or on the loopback address for the
+    /// hub's tunnel or a blind relay's calls; port 0 takes a free one.
+    /// admit checks each connection before it is served. A port already
+    /// open for what stays; returns the port.
+    pub fn listen(&self, what: Listen, port: u16, admit: Option<crate::node::Admit>) -> Result<u16> {
+        let mut ls = self.listeners.lock().unwrap();
+        if let Some(l) = ls.get(&what) {
             return Ok(l.port);
         }
-        let opened = Listener::open(self.node.clone(), port, self.log.clone())
+        let loopback = what != Listen::Home;
+        let opened = Listener::open_with(self.node.clone(), port, loopback, admit, self.log.clone())
             .ok_or_else(|| crate::error::Error::msg(format!("cannot listen on port {port}")))?;
         let p = opened.port;
-        *l = Some(opened);
+        ls.insert(what, opened);
         Ok(p)
     }
 
-    /// Closes the port listen opened.
-    pub fn unlisten(&self) {
-        if let Some(l) = self.listener.lock().unwrap().take() {
+    /// Closes the port listen opened for what, or every port with None.
+    pub fn unlisten(&self, what: Option<Listen>) {
+        let mut ls = self.listeners.lock().unwrap();
+        let gone: Vec<Listener> = match what {
+            Some(w) => ls.remove(&w).into_iter().collect(),
+            None => ls.drain().map(|(_, l)| l).collect(),
+        };
+        drop(ls);
+        for l in gone {
             l.stop();
         }
     }
@@ -245,7 +275,7 @@ impl Member {
     /// Closes every connection with a goodbye and the port, and makes no
     /// new connection until resume: the app went to the background.
     pub fn pause(&self) {
-        self.unlisten();
+        self.unlisten(None);
         self.node.pause();
     }
 
@@ -303,14 +333,30 @@ impl Member {
     }
 
     /// Sends what this hub shares to the group's other hubs connected, the
-    /// full members among the root and the admins; returns those it went to.
-    pub fn send_hubs(&self, share: &serde_json::Value) -> Vec<DeviceId> {
-        self.node.send_to_hubs(&wire::hubs(share))
+    /// full members among the root and the admins, or to the member to
+    /// only; returns those it went to.
+    pub fn send_hubs(&self, share: &serde_json::Value, to: Option<&DeviceId>) -> Vec<DeviceId> {
+        let m = wire::hubs(share);
+        match to {
+            Some(d) => self.node.send_to(d, m).then(|| d.clone()).into_iter().collect(),
+            None => self.node.send_to_hubs(&m),
+        }
     }
 
-    /// Sends the group's server credentials the app keeps to every member.
-    pub fn send_credentials(&self, list: &serde_json::Value) -> Vec<DeviceId> {
-        self.node.broadcast(&wire::credentials(list), |_| true)
+    /// Sends the group's server credentials the app keeps: to the member to
+    /// only (a peer that just connected), or to every member but except
+    /// (the one that sent them).
+    pub fn send_credentials(
+        &self,
+        list: &serde_json::Value,
+        to: Option<&DeviceId>,
+        except: Option<&DeviceId>,
+    ) -> Vec<DeviceId> {
+        let m = wire::credentials(list);
+        match to {
+            Some(d) => self.node.send_to(d, m).then(|| d.clone()).into_iter().collect(),
+            None => self.node.broadcast(&m, |p| Some(&p.id) != except),
+        }
     }
 
     /// Sets what gets each copy that becomes the group's current one from
@@ -367,7 +413,7 @@ impl Member {
 
     /// Stops the member and closes its connections.
     pub fn stop(&self) {
-        self.unlisten();
+        self.unlisten(None);
         self.node.close();
     }
 }

@@ -157,7 +157,7 @@ final class CommandTests: XCTestCase {
     }
 
     /// A phone that is not connected to a command's receiver sends it to an
-    /// admin phone it is connected to, the hub, which passes it on
+    /// admin phone it is connected to, the hub, which passes it on once
     /// (docs/protocol.md, section 15); the result comes back the same way.
     func testCommandPassedOn() async throws {
         let t = try CoreGroup(3, test: self)
@@ -176,14 +176,13 @@ final class CommandTests: XCTestCase {
         XCTAssertEqual(r.status, "done")
         XCTAssertEqual(r.by, b.device)
         XCTAssertTrue(hub.all { if case .command = $0 { return true }; return nil }.isEmpty, "the hub does not take it itself")
-        // Sent again after its result went back, it is passed on again, and
-        // the receiver's app refuses it as carried out (ModeBox's cache).
-        async let again = a.member.command(c)
-        try await b.until("the command again") { b.all { if case .command = $0 { return true }; return nil }.count == 2 }
-        let second = try XCTUnwrap(b.all { if case let .command(token, _, _) = $0 { return token }; return nil }.last)
-        try b.member.answer(second, result: .init(id: "", status: "refused", reason: "this command was carried out already"))
-        let r2 = try await again
-        XCTAssertEqual(r2.status, "refused")
+        // The same command is not passed on again, not even after its
+        // result went back: the receiver's cache is only a backstop.
+        do {
+            _ = try await a.member.command(c, timeout: .seconds(1))
+            XCTFail("the hub passed the same command on twice")
+        } catch CoreMember.Failure.timedOut {}
+        XCTAssertEqual(b.all { if case .command = $0 { return true }; return nil }.count, 1)
     }
 
     /// A command goes to its receiver, whose app answers; a device that is

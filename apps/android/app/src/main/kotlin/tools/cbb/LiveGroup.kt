@@ -243,8 +243,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * for both, as the node listens on one): whether each does; guarded by
      * lock.
      */
-    private var hubListens = false
-    private var relayListens = false
 
     /** The group's server credentials (docs/protocol.md, section 18), beside the group; read when first needed, under the lock. */
     private val credentialsFile = File(file.parentFile, "credentials.json")
@@ -541,8 +539,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * Runs the link to the blind relay while it is on and the phone syncs,
-     * the relay's calls coming to the node's member port; otherwise it stops
-     * it.
+     * with the node's member port on the loopback address, which serves only
+     * the calls the relay announced and only when the certificate names the
+     * caller ([CoreMember.Event.Caller]); otherwise it stops it.
      */
     private fun updateRelay() {
         val (r, n, g) = synchronized(lock) { Triple(relayLink, node, state) }
@@ -551,7 +550,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             return
         }
         val member = runCatching { memberSigner() }.getOrNull() ?: return
-        val port = listen(n, relay = true) ?: return
+        val port = listen(n, CoreMember.Listen.RELAY) ?: return
         // The relay takes the member chain and the group's roots after it, as a forwarder (docs/protocol.md, section 14).
         r.start(HubOnPhone.Group(port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords))
         relayCredentials()
@@ -559,28 +558,23 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     private fun stopRelay() {
         synchronized(lock) { relayLink }?.stop()
-        unlisten(relay = true)
+        unlisten(CoreMember.Listen.RELAY)
     }
 
     /**
-     * Opens the node's member port for the hub or the relay, the computers'
-     * port when it is free, and returns it; null, with the reason in the
-     * log, when the node cannot listen.
+     * Opens the node's member port for [what]: on the home network the
+     * computers' port when it is free, on the loopback address any; null,
+     * with the reason in the log, when the node cannot listen.
      */
-    private fun listen(n: CoreMember, relay: Boolean): Int? {
-        val port = runCatching { n.listen(MEMBER_PORT) }.recoverCatching { n.listen(0) }
-            .onFailure { Log.w(TAG, "the phone cannot listen for members", it) }.getOrNull() ?: return null
-        synchronized(lock) { if (relay) relayListens = true else hubListens = true }
-        return port
+    private fun listen(n: CoreMember, what: CoreMember.Listen): Int? {
+        val first = if (what == CoreMember.Listen.HOME) MEMBER_PORT else 0
+        return runCatching { n.listen(what, first) }.recoverCatching { n.listen(what, 0) }
+            .onFailure { Log.w(TAG, "the phone cannot listen for members (${what.wire})", it) }.getOrNull()
     }
 
-    /** Closes the node's member port once neither the hub nor the relay needs it. */
-    private fun unlisten(relay: Boolean) {
-        val (n, close) = synchronized(lock) {
-            if (relay) relayListens = false else hubListens = false
-            node to (!relayListens && !hubListens)
-        }
-        if (close) n?.let { runCatching { it.unlisten() } }
+    /** Closes the node's member port for [what]. */
+    private fun unlisten(what: CoreMember.Listen) {
+        synchronized(lock) { node }?.let { runCatching { it.unlisten(what) } }
     }
 
     /**
@@ -596,8 +590,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             return
         }
         val member = runCatching { memberSigner() }.getOrNull() ?: return
-        val port = listen(n, relay = false) ?: return
-        Log.i(TAG, "the hub takes member connections on port $port")
+        val port = listen(n, CoreMember.Listen.TUNNEL) ?: return
+        Log.i(TAG, "the hub takes member connections through the tunnel on port $port")
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         h.start(
             HubOnPhone.Group(port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords, entries.ways(HubState.Forwarder.PROJECT_HOST)),
@@ -607,7 +601,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             return
         }
         if (synchronized(lock) { publisher } != null) return
-        val p = NsdPublisher(context, g.device, g.tag, port)
+        val home = listen(n, CoreMember.Listen.HOME) ?: return
+        val p = NsdPublisher(context, g.device, g.tag, home)
         synchronized(lock) { publisher = p }
         p.start()
     }
@@ -615,13 +610,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private fun stopHome() {
         val p = synchronized(lock) { publisher.also { publisher = null } }
         p?.stop()
+        unlisten(CoreMember.Listen.HOME)
     }
 
     private fun stopHub() {
         stopHome()
         val h = synchronized(lock) { hub }
         h?.stop()
-        unlisten(relay = false)
+        unlisten(CoreMember.Listen.TUNNEL)
     }
 
     /** Forgets the hub's clients the records removed and hands its forwarder the new authority records. */
@@ -2210,11 +2206,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 val r = command(e.from, e.command)
                 runCatching { n.answer(e.token, r) }.onFailure { Log.w(TAG, "answering a command", it) }
             }, "command").start()
+            // The device the relay said calls from that loopback port, once.
+            is CoreMember.Event.Caller -> runCatching { n.caller(e.token, synchronized(lock) { relayLink }?.caller(e.port)) }
             is CoreMember.Event.Identity -> Log.i(TAG, "the node holds a renewed certificate or new roots; the group's file keeps its own")
             is CoreMember.Event.Message -> when (val m = e.message) {
                 is Member.Message.Credentials -> {
                     val fresh = addCredentials(m.credentials)
-                    if (fresh.isNotEmpty()) runCatching { n.sendCredentials(fresh) }
+                    // New ones go on to the others, not back to the sender.
+                    if (fresh.isNotEmpty()) runCatching { n.sendCredentials(fresh, except = e.from) }
                 }
                 is Member.Message.Hubs -> hubsShared(n, e.from, m.share, isHub, a, h)
                 is Member.Message.Evidence -> {
@@ -2263,8 +2262,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         renew(p.device, p.chain)
         val g = synchronized(lock) { state } ?: return
         if (g.isRoot) p.adminKey?.let { key -> synchronized(lock) { state?.computerAdminCA(key) }?.let { runCatching { n.sendAdminCA(p.device, it) } } }
+        // The credentials kept go to this peer, after its hello.
         val credentials = allCredentials
-        if (credentials.isNotEmpty()) runCatching { n.sendCredentials(credentials) }
+        if (credentials.isNotEmpty()) runCatching { n.sendCredentials(credentials, to = p.device) }
         if (!isHub) return
         val key = p.tunnelKey
         if (key != null) {
@@ -2272,12 +2272,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val offers = h.offers(p.device, key, p.tunnelPSK, hubOrder()) { shareHub(n, h) }
             for (o in offers) runCatching { n.sendTunnel(p.device, o) }
         }
-        if (p.role == "full" && synchronized(lock) { state?.records?.mayHost(p.device, p.chain) } == true) shareHub(n, h)
+        if (synchronized(lock) { state?.records?.mayHost(p.device, p.chain) } == true) h.share()?.let { runCatching { n.sendHubs(it, to = p.device) } }
     }
 
-    /** Sends what this hub shares to the group's other hubs connected. */
+    /** Sends what this hub shares to each connected peer that may be a hub, by its chain. */
     private fun shareHub(n: CoreMember, h: HubOnPhone) {
-        h.share()?.let { runCatching { n.sendHubs(it) } }
+        val share = h.share() ?: return
+        for (p in runCatching { n.peers() }.getOrDefault(emptyList())) {
+            if (synchronized(lock) { state?.records?.mayHost(p.device, p.chain) } == true) runCatching { n.sendHubs(share, to = p.device) }
+        }
     }
 
     /** What a hub of the group shared: this hub takes its clients and passes the offers on; a client keeps its offer. */
@@ -2347,8 +2350,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 browser = null
                 node = null
                 dialing = emptyMap()
-                hubListens = false
-                relayListens = false
             }
         }
         b?.stop()

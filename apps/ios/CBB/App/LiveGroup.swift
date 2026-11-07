@@ -97,14 +97,18 @@ final class LiveGroup: GroupController {
     private var renewer: Renewer?
     private var admins: AdminBox?
     private var away: AwayFromHome?
-    /// The phone as the group's hub, and while it runs the member port the
-    /// core listens on (the tunnel's and the relay's calls come there too),
-    /// and on a home network its Bonjour service.
+    /// The phone as the group's hub, and while it runs the member's ports:
+    /// on the loopback address for the tunnel, and on a home network on
+    /// every address, published by Bonjour.
     private var hub: HubOnPhone?
-    private var memberPort: UInt16?
+    private var tunnelPort: UInt16?
+    private var homePort: UInt16?
     private var publisher: BonjourPublisher?
-    /// The phone at a blind relay, whose calls come to the member port.
+    /// The phone at a blind relay, and while it runs the member's port on
+    /// the loopback address, which serves only the calls the relay
+    /// announced, each only when its certificate names the caller.
     private var blindRelay: RelayOnPhone?
+    private var relayPort: UInt16?
     /// This phone's TLS identity, for an invitation's pairing window.
     private var memberIdentity: SecIdentity?
     /// Whether the app is in front: the phone is the hub only then (iOS
@@ -1457,6 +1461,7 @@ final class LiveGroup: GroupController {
         let handler = Handler(node: node, box: box, renewer: renewer, admins: admins, hub: isHub ? hub : nil, credentials: credentials,
                               modeBox: modeBox, device: g.device)
         handler.away = away
+        handler.blindRelay = blindRelay
         events = Task { @MainActor [weak self] in
             for await e in node.events {
                 handler.handle(e)
@@ -1539,6 +1544,7 @@ final class LiveGroup: GroupController {
         let modeBox: ModeBox
         let device: String
         var away: AwayFromHome?
+        var blindRelay: RelayOnPhone?
 
         init(node: CoreMember, box: RecordBox, renewer: Renewer, admins: AdminBox, hub: HubOnPhone?, credentials: CredentialBox,
              modeBox: ModeBox, device: String) {
@@ -1555,6 +1561,7 @@ final class LiveGroup: GroupController {
                 guard hub == nil, offer.isValid, box.mayHost(from) else { return }
                 Task { await away?.keep(from: from, offer: offer) }
             case let .message(from, .hubs(share)):
+                // The member took it only from a device that may be a hub, by its chain.
                 guard box.mayHost(from) else { return }
                 guard let hub else {
                     // A client keeps the sharing hub's offer with its own preshared key, as any hub's.
@@ -1569,10 +1576,14 @@ final class LiveGroup: GroupController {
                 for p in (try? node.peers()) ?? [] {
                     for o in hub.offers(for: p.device, order: box.hubOrder) { _ = try? node.sendTunnel(to: p.device, offer: o) }
                 }
-            case let .message(_, .credentials(cs)):
+            case let .message(from, .credentials(cs)):
                 guard !cs.isEmpty, cs.count <= ServerCredentials.maxCredentials else { return }
                 let fresh = credentials.add(cs)
-                if !fresh.isEmpty { _ = try? node.sendCredentials(fresh) }
+                // New ones go on to the others, not back to the sender.
+                if !fresh.isEmpty { _ = try? node.sendCredentials(fresh, except: from) }
+            case let .caller(token, port, _):
+                // The device the relay said calls from that loopback port, once.
+                try? node.caller(token, device: blindRelay?.caller(port: port))
             case let .command(token, from, c):
                 command(token, from: from, c)
             default:
@@ -1597,15 +1608,23 @@ final class LiveGroup: GroupController {
                     let psk = p.tunnelPSK.flatMap { $0.count == 32 ? $0 : nil }
                     // A client admitted now is shared with the other hubs at
                     // once, so that it reaches them when this phone is off.
-                    let offers = hub.offers(device: p.device, key: key, psk: psk, order: box.hubOrder, admitted: { [node] in
-                        if let share = hub.share() { _ = try? node.sendHubs(share) }
-                    })
+                    let offers = hub.offers(device: p.device, key: key, psk: psk, order: box.hubOrder, admitted: { [self] in shareWithHubs(hub) })
                     for o in offers { _ = try? node.sendTunnel(to: p.device, offer: o) }
                 }
-                if p.role == "full", box.mayHost(p.device, chain: p.chain), let share = hub.share() { _ = try? node.sendHubs(share) }
+                if box.mayHost(p.device, chain: p.chain), let share = hub.share() { _ = try? node.sendHubs(share, to: p.device) }
             }
+            // The credentials kept go to this peer, after its hello.
             let all = credentials.all
-            if !all.isEmpty { _ = try? node.sendCredentials(all) }
+            if !all.isEmpty { _ = try? node.sendCredentials(all, to: p.device) }
+        }
+
+        /// Shares the hub's clients with each connected peer that may be a
+        /// hub, by its chain.
+        private func shareWithHubs(_ hub: HubOnPhone) {
+            guard let share = hub.share() else { return }
+            for p in (try? node.peers()) ?? [] where box.mayHost(p.device, chain: p.chain) {
+                _ = try? node.sendHubs(share, to: p.device)
+            }
         }
 
         /// Carries out a command for this phone and answers it; what it
@@ -1690,7 +1709,7 @@ final class LiveGroup: GroupController {
         node?.stop()
         (node, events, browser, relay, recordBox, renewer, admins, away) = (nil, nil, nil, nil, nil, nil, nil, nil)
         publisher?.stop()
-        (publisher, memberPort) = (nil, nil)
+        (publisher, tunnelPort, homePort, relayPort) = (nil, nil, nil, nil)
     }
 
     // MARK: The phone as the hub
@@ -1941,60 +1960,52 @@ final class LiveGroup: GroupController {
     private func hubDone() async { await hubWork?.value }
 
     /// Runs the hub's parts that the moment calls for: with the hub on and
-    /// the app in front, the member port and the tunnel with its
-    /// registration; on a home network besides, the Bonjour service of the
-    /// port. Otherwise it stops them.
+    /// the app in front, the member port on the loopback address and the
+    /// tunnel with its registration; on a home network besides, the member
+    /// port on every address, published by Bonjour. Otherwise it stops them.
     private func updateHub() async {
-        guard let hub, let g = state, g.isAdmin, hub.isOn, foreground, let member = try? memberSigner(),
-              let port = openMemberPort() else { return stopHub() }
+        guard let hub, let node, let g = state, g.isAdmin, hub.isOn, foreground, let member = try? memberSigner() else { return stopHub() }
+        if tunnelPort == nil {
+            do {
+                tunnelPort = try node.listen(.tunnel)
+            } catch {
+                hubLog.error("the hub cannot listen: \(String(reflecting: error), privacy: .public)")
+                return
+            }
+        }
+        guard let port = tunnelPort, self.hub === hub else { return }
         let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         entries.reload()
         hub.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords,
                         ways: entries.ways(for: HubState.Forwarder.projectHost)))
-        guard hub.isHome(network) else {
-            publisher?.stop()
-            publisher = nil
+        guard hub.isHome(network) else { return stopHome() }
+        guard homePort == nil else { return }
+        for p in [Self.memberPort, 0] {
+            guard let home = try? node.listen(.home, port: p) else { continue }
+            homePort = home
+            do {
+                publisher = try BonjourPublisher(name: g.device, port: home, txt: ["v": "1", "g": g.tag, "r": "phone"])
+            } catch {
+                hubLog.error("the hub cannot publish itself on the home network: \(String(reflecting: error), privacy: .public)")
+            }
             return
         }
-        guard publisher == nil else { return }
-        do {
-            publisher = try BonjourPublisher(name: g.device, port: port, txt: ["v": "1", "g": g.tag, "r": "phone"])
-        } catch {
-            hubLog.error("the hub cannot publish itself on the home network: \(String(reflecting: error), privacy: .public)")
-        }
+        hubLog.error("the hub cannot listen on the home network")
     }
 
-    /// The member port the core listens on while the phone is the hub or
-    /// at a blind relay: the computers' own port when it is free, else
-    /// another; nil when it cannot listen.
-    private func openMemberPort() -> UInt16? {
-        if let memberPort { return memberPort }
-        guard let node else { return nil }
-        for p in [Self.memberPort, 0] {
-            if let port = try? node.listen(port: p) {
-                memberPort = port
-                return port
-            }
-        }
-        hubLog.error("the hub cannot listen")
-        return nil
-    }
-
-    /// Closes the member port once neither the hub nor the relay needs it.
-    private func closeMemberPort() {
-        let hubRuns = foreground && state?.isAdmin == true && hub?.isOn == true
-        let relayRuns = foreground && blindRelay?.isOn == true
-        guard memberPort != nil, !hubRuns, !relayRuns else { return }
-        try? node?.unlisten()
-        memberPort = nil
+    private func stopHome() {
+        publisher?.stop()
+        publisher = nil
+        if homePort != nil { try? node?.unlisten(.home) }
+        homePort = nil
     }
 
     private func stopHub() {
-        publisher?.stop()
-        publisher = nil
+        stopHome()
+        if tunnelPort != nil { try? node?.unlisten(.tunnel) }
+        tunnelPort = nil
         hub?.stop()
-        closeMemberPort()
     }
 
     /// Forgets the hub's clients the records removed and hands its
@@ -2010,10 +2021,20 @@ final class LiveGroup: GroupController {
     // MARK: The blind relay
 
     /// Runs the link to the blind relay while it is on and the app is in
-    /// front, its calls coming to the member port; otherwise it stops it.
+    /// front, with the member's port on the loopback address, which serves
+    /// only the calls the relay announced and only when the certificate
+    /// names the caller (the caller events); otherwise it stops them.
     private func updateRelay() async {
-        guard let r = blindRelay, let g = state, r.isOn, foreground, let member = try? memberSigner(),
-              let port = openMemberPort() else { return stopRelay() }
+        guard let r = blindRelay, let node, let g = state, r.isOn, foreground, let member = try? memberSigner() else { return stopRelay() }
+        if relayPort == nil {
+            do {
+                relayPort = try node.listen(.relay)
+            } catch {
+                relayLog.error("the relay's calls cannot be taken: \(String(reflecting: error), privacy: .public)")
+                return
+            }
+        }
+        guard let port = relayPort, blindRelay === r else { return }
         let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
         // The relay takes the member chain and the group's roots after it, as a forwarder (docs/protocol.md, section 14).
         r.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords))
@@ -2021,8 +2042,9 @@ final class LiveGroup: GroupController {
     }
 
     private func stopRelay() {
+        if relayPort != nil { try? node?.unlisten(.relay) }
+        relayPort = nil
         blindRelay?.stop()
-        closeMemberPort()
     }
 
     /// The blind relay as Settings shows it; nil without a group.

@@ -213,6 +213,24 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
 
         /** A command for this phone itself, which the app checks, carries out and answers with [answer] and the token within ten seconds. */
         class Command(val token: Long, val from: String, val command: Member.Record) : Event()
+
+        /**
+         * A call to the relay's port from the loopback port [port], whose certificate names [device]: the app names the caller the
+         * relay announced from there with [caller] and the token within five seconds, or the call is closed.
+         */
+        class Caller(val token: Long, val port: Int, val device: String) : Event()
+    }
+
+    /** What a member port is for. */
+    enum class Listen(val wire: String) {
+        /** The home network, while the phone is the hub: every address; the app publishes it with r=phone. */
+        HOME("home"),
+
+        /** The hub's tunnel, on the loopback address. */
+        TUNNEL("tunnel"),
+
+        /** A blind relay's calls, on the loopback address, each served only when the app names its caller ([Event.Caller]). */
+        RELAY("relay"),
     }
 
     private val closed = AtomicBoolean(false)
@@ -263,13 +281,19 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
         call("lost", Wire.obj("key" to Wire.str(key)))
     }
 
-    /** Listens on port (0: any free one) for the members that dial this phone as the group's hub; the port it listens on, one open already staying. */
-    fun listen(port: Int = 0): Int = call("listen", Wire.obj("port" to Wire.num(port.toLong()))).optLong("port")?.toInt()
-        ?: throw Core.Mismatch("listen answered no port")
+    /** Opens a member port for [what] on port (0: any free one); the port, one open already for [what] staying. */
+    fun listen(what: Listen = Listen.HOME, port: Int = 0): Int =
+        call("listen", Wire.obj("port" to Wire.num(port.toLong()), "kind" to Wire.str(what.wire))).optLong("port")?.toInt()
+            ?: throw Core.Mismatch("listen answered no port")
 
-    /** Closes the port [listen] opened. */
-    fun unlisten() {
-        call("unlisten")
+    /** Closes the port [listen] opened for [what], or every one with null. */
+    fun unlisten(what: Listen? = null) {
+        call("unlisten", Wire.obj("kind" to (what?.let { Wire.str(it.wire) } ?: JsonNull)))
+    }
+
+    /** Answers an [Event.Caller]: the device the relay announced from the call's loopback port, null for a call it did not announce. */
+    fun caller(token: Long, device: String?) {
+        call("caller", Wire.obj("token" to JsonPrimitive(token), "device" to (device?.let { Wire.str(it) } ?: JsonNull)))
     }
 
     /** Closes every connection with a goodbye and makes none until [resume]: the app went to the background. */
@@ -331,12 +355,23 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
     fun sendTunnel(to: String, offer: Member.TunnelOffer): Boolean =
         call("send_tunnel", Wire.obj("to" to Wire.str(to), "offer" to offer.toJson())).optBool("sent") ?: false
 
-    /** Sends what this hub shares to the group's other hubs connected; those it went to. */
-    fun sendHubs(share: Member.HubShare): List<String> = call("send_hubs", Wire.obj("share" to share.toJson())).strings("to")
+    /** Sends what this hub shares to the group's other hubs connected, or to the member [to] only; those it went to. */
+    fun sendHubs(share: Member.HubShare, to: String? = null): List<String> =
+        call("send_hubs", Wire.obj("share" to share.toJson(), "to" to (to?.let { Wire.str(it) } ?: JsonNull))).strings("to")
 
-    /** Sends the group's server credentials to every member; those they went to. */
-    fun sendCredentials(list: List<ServerCredentials.Credential>): List<String> =
-        call("send_credentials", Wire.obj("credentials" to JsonArray(list.map { it.toJson() }))).strings("to")
+    /**
+     * Sends the group's server credentials to the member [to] only (a peer that just connected), or to every member but [except]
+     * (the one that sent them); those they went to.
+     */
+    fun sendCredentials(list: List<ServerCredentials.Credential>, to: String? = null, except: String? = null): List<String> =
+        call(
+            "send_credentials",
+            Wire.obj(
+                "credentials" to JsonArray(list.map { it.toJson() }),
+                "to" to (to?.let { Wire.str(it) } ?: JsonNull),
+                "except" to (except?.let { Wire.str(it) } ?: JsonNull),
+            ),
+        ).strings("to")
 
     // The phone's own part.
 
@@ -490,6 +525,7 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
                     val c = o.optObject("command") ?: return null
                     Event.Command(o.optLong("token") ?: return null, o.optString("from") ?: "", Member.Record.fromJson(c))
                 }
+                "caller" -> Event.Caller(o.optLong("token") ?: return null, o.optLong("port")?.toInt() ?: return null, o.optString("device") ?: "")
                 else -> null
             }
         }

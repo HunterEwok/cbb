@@ -75,18 +75,28 @@ fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
 /// this one; only home network addresses may connect. It returns the port,
 /// or None when it cannot listen: the lite member then only dials.
 pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<u16> {
-    listen_until(node, port, Arc::new(AtomicBool::new(false)), log)
+    listen_until(node, port, false, None, Arc::new(AtomicBool::new(false)), log)
 }
 
 /// As listen, until stop is set and a connection wakes the listener
 /// (Listener::stop).
+/// With loopback it listens on 127.0.0.1 only, for the connections a
+/// phone's tunnel or relay link makes there; admit checks each connection
+/// before it is served.
 pub fn listen_until(
     node: Arc<Node>,
     port: u16,
+    loopback: bool,
+    admit: Option<crate::node::Admit>,
     stop: Arc<AtomicBool>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 ) -> Option<u16> {
-    let ln = match TcpListener::bind(("::", port)).or_else(|_| TcpListener::bind(("0.0.0.0", port))) {
+    let bound = if loopback {
+        TcpListener::bind(("127.0.0.1", port))
+    } else {
+        TcpListener::bind(("::", port)).or_else(|_| TcpListener::bind(("0.0.0.0", port)))
+    };
+    let ln = match bound {
         Ok(ln) => ln,
         Err(e) => {
             log(&format!(
@@ -110,7 +120,7 @@ pub fn listen_until(
                 continue; // dropping the socket closes it
             }
             busy.fetch_add(1, Ordering::SeqCst);
-            let (node, busy, log) = (node.clone(), busy.clone(), log.clone());
+            let (node, busy, log, admit) = (node.clone(), busy.clone(), log.clone(), admit.clone());
             std::thread::spawn(move || {
                 let mut slot = Some(busy);
                 let mut release = || {
@@ -118,7 +128,7 @@ pub fn listen_until(
                         b.fetch_sub(1, Ordering::SeqCst);
                     }
                 };
-                let res = node.accept(sock, addr, &mut release);
+                let res = node.accept_checked(sock, addr, &mut release, admit.as_ref());
                 release();
                 if let Err(e) = res {
                     log(&format!("cbb: connection from {addr}: {}", e.for_log()));
@@ -140,8 +150,20 @@ pub struct Listener {
 impl Listener {
     /// Listens on port (0: any free one), or None when it cannot.
     pub fn open(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<Listener> {
+        Self::open_with(node, port, false, None, log)
+    }
+
+    /// As open, on the loopback address only with loopback, each connection
+    /// checked by admit before it is served.
+    pub fn open_with(
+        node: Arc<Node>,
+        port: u16,
+        loopback: bool,
+        admit: Option<crate::node::Admit>,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Option<Listener> {
         let stop = Arc::new(AtomicBool::new(false));
-        listen_until(node, port, stop.clone(), log).map(|port| Listener { port, stop })
+        listen_until(node, port, loopback, admit, stop.clone(), log).map(|port| Listener { port, stop })
     }
 
     /// Closes the port: the listener's thread sees the flag at the

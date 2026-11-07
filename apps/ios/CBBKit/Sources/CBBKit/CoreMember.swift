@@ -204,6 +204,11 @@ public final class CoreMember: @unchecked Sendable {
         /// the records, carries out and answers with `answer(_:result:)`
         /// within ten seconds, or the phone refuses it.
         case command(token: UInt64, from: String, command: Member.Record)
+        /// A call to the relay's port from the loopback port port, whose
+        /// certificate names device: the app names the caller the relay
+        /// announced from there with `caller(_:device:)` within five
+        /// seconds, or the call is closed.
+        case caller(token: UInt64, port: UInt16, device: String)
     }
 
     /// A part of images or files the app hands in: clipboard data with its
@@ -468,15 +473,39 @@ public final class CoreMember: @unchecked Sendable {
         try run("lost", A(key: key))
     }
 
-    /// Listens on port (0 for any) for the members that dial this phone as
-    /// the group's hub; the port, which the app publishes with r=phone.
-    public func listen(port: UInt16 = 0) throws -> UInt16 {
-        struct A: Encodable { var port: UInt16 }
-        struct R: Decodable { var port: UInt16 }
-        return try run("listen", A(port: port), as: R.self).port
+    /// What a member port is for.
+    public enum Listen: String, Encodable, Sendable {
+        /// The home network, while the phone is the hub: every address;
+        /// the app publishes the port with r=phone.
+        case home
+        /// The hub's tunnel, on the loopback address.
+        case tunnel
+        /// A blind relay's calls, on the loopback address: each is served
+        /// only when the app names its caller (the caller event) and its
+        /// certificate names the same device.
+        case relay
     }
 
-    public func unlisten() throws { try run("unlisten") }
+    /// Opens a member port for what on port (0 for any); the port. A port
+    /// already open for what stays.
+    public func listen(_ what: Listen = .home, port: UInt16 = 0) throws -> UInt16 {
+        struct A: Encodable { var port: UInt16, kind: Listen }
+        struct R: Decodable { var port: UInt16 }
+        return try run("listen", A(port: port, kind: what), as: R.self).port
+    }
+
+    /// Closes the member port for what, or every one with nil.
+    public func unlisten(_ what: Listen? = nil) throws {
+        struct A: Encodable { var kind: Listen? }
+        try run("unlisten", A(kind: what))
+    }
+
+    /// Answers a caller event: the device the relay announced from the
+    /// call's loopback port, nil for a call it did not announce.
+    public func caller(_ token: UInt64, device: String?) throws {
+        struct A: Encodable { var token: UInt64, device: String? }
+        try run("caller", A(token: token, device: device))
+    }
 
     /// Closes every connection and makes none until resume: the app went to
     /// the background.
@@ -567,20 +596,22 @@ public final class CoreMember: @unchecked Sendable {
         return try run("send_tunnel", A(to: to, offer: offer), as: Sent.self).sent
     }
 
-    /// Sends what this hub shares to the group's other hubs connected;
-    /// those it went to.
+    /// Sends what this hub shares to the group's other hubs connected, or
+    /// to the member to only; those it went to.
     @discardableResult
-    public func sendHubs(_ share: Member.HubShare) throws -> [String] {
-        struct A: Encodable { var share: Member.HubShare }
-        return try run("send_hubs", A(share: share), as: To.self).to
+    public func sendHubs(_ share: Member.HubShare, to: String? = nil) throws -> [String] {
+        struct A: Encodable { var share: Member.HubShare, to: String? }
+        return try run("send_hubs", A(share: share, to: to), as: To.self).to
     }
 
-    /// Sends the group's server credentials to every member.
+    /// Sends the group's server credentials to the member to only (a peer
+    /// that just connected), or to every member but except (the one that
+    /// sent them); those it went to.
     @discardableResult
-    public func sendCredentials(_ credentials: [ServerCredentials.Credential]) throws -> [String] {
+    public func sendCredentials(_ credentials: [ServerCredentials.Credential], to: String? = nil, except: String? = nil) throws -> [String] {
         guard !credentials.isEmpty else { return [] }
-        struct A: Encodable { var credentials: [ServerCredentials.Credential] }
-        return try run("send_credentials", A(credentials: credentials), as: To.self).to
+        struct A: Encodable { var credentials: [ServerCredentials.Credential], to: String?, except: String? }
+        return try run("send_credentials", A(credentials: credentials, to: to, except: except), as: To.self).to
     }
 
     /// Answers a command event: the result its sender gets.
@@ -632,6 +663,8 @@ public final class CoreMember: @unchecked Sendable {
         var offer: Member.TunnelOffer?
         var token: UInt64?
         var command: Member.Record?
+        var port: UInt16?
+        var device: String?
     }
 
     struct WireMessage: Decodable {
@@ -663,6 +696,9 @@ public final class CoreMember: @unchecked Sendable {
         case "command":
             guard let token = w.token, let from = w.from, let command = w.command else { return nil }
             return .command(token: token, from: from, command: command)
+        case "caller":
+            guard let token = w.token, let port = w.port, let device = w.device else { return nil }
+            return .caller(token: token, port: port, device: device)
         case "message":
             guard let from = w.from, let m = w.message else { return nil }
             switch m.t {
