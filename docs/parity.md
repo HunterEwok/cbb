@@ -53,7 +53,7 @@ on every platform of the class, on the roadmap).
 
 | Capability | Android | iPhone | Aurora OS | Notes |
 |---|---|---|---|---|
-| Make a group, root key in hardware behind biometrics | yes | yes | gap | StrongBox or TEE; Secure Enclave |
+| Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE, no biometric prompt yet; not yet tried on the phone | StrongBox or TEE; Secure Enclave |
 | Add a computer or a lite device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | the Aurora app reads the code with the core's reader |
 | Join another phone's group | yes | yes | yes | |
 | Make an admin, remove, take over from a lost root, renew certificates | yes | yes | gap | |

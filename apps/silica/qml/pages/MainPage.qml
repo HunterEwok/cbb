@@ -36,9 +36,18 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"), { admin: true })
             }
             MenuItem {
+                visible: app.group === "" && app.keyLevel !== "none"
+                text: qsTr("Make a group")
+                enabled: !app.busy
+                onClicked: pageStack.push(Qt.resolvedUrl("NewGroupPage.qml"))
+            }
+            MenuItem {
                 visible: app.group !== ""
                 text: qsTr("Leave the group")
-                onClicked: remorse.execute(qsTr("Leaving the group"), function() { app.leave() })
+                // The root's key goes with it: the group then has no root
+                // until an admin phone takes it over.
+                onClicked: remorse.execute(app.root ? qsTr("Leaving the group and deleting its root key")
+                                                    : qsTr("Leaving the group"), function() { app.leave() })
             }
             MenuItem {
                 visible: app.admin && app.member.running
@@ -139,14 +148,14 @@ Page {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 text: app.keyLevel === "none" ? qsTr("The phone has no key yet. Pull down to check it again.")
-                                              : qsTr("The phone is in no group yet. Pull down to join one.")
+                                              : qsTr("The phone is in no group yet. Pull down to join one or make one.")
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
             }
             DetailItem {
                 visible: app.group !== ""
                 label: qsTr("In the group")
-                value: app.admin ? qsTr("Admin") : qsTr("Member")
+                value: app.root ? qsTr("Root") : app.admin ? qsTr("Admin") : qsTr("Member")
             }
             DetailItem {
                 visible: app.member.last !== ""

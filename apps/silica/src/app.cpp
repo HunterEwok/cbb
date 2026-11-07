@@ -7,8 +7,12 @@
 #include "errors.h"
 #include "platform/keystore.h"
 
+#include <cbb_core.h>
+
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLocale>
 #include <QSettings>
 #include <QSysInfo>
@@ -28,6 +32,33 @@ protected:
 
 private:
     KeyStore::Which m_which;
+};
+
+// Makes a group off the GUI thread: finds the admin key, which stands as
+// the group's root key, then has the core make the group, which signs
+// with it three times in the TEE.
+class GroupThread : public QThread
+{
+public:
+    QJsonObject request; // without root_public, which the key gives
+    QJsonObject group;   // the core's answer, with a join's fields
+    Failure failure;
+
+protected:
+    void run() override
+    {
+        const KeyStore::Key key = KeyStore::ensure(KeyStore::Which::Admin);
+        if (key.state != KeyStore::State::Ready) {
+            failure = key.failure;
+            return;
+        }
+        request.insert(QStringLiteral("root_public"), QString::fromLatin1(key.publicKey.toBase64()));
+        const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+        size_t len = 0;
+        group = Core::take(cbb_group_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
+                                         Core::signAdminDigest, nullptr, &len),
+                           len, QStringLiteral("group"), &failure);
+    }
 };
 
 // Runs KeyStore::forget in a thread of its own.
@@ -154,7 +185,7 @@ void App::startJoin(bool admin)
     thread->start();
 }
 
-void App::startAdmit(const QString &qr)
+void App::startAdmit(const QString &qr, bool makeAdmin)
 {
     if (!m_member.isAdmin()) {
         m_admit.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("admit: not an admin")});
@@ -166,7 +197,7 @@ void App::startAdmit(const QString &qr)
     emit keyChanged();
     m_admit.setPreparing();
     auto *thread = new KeyThread(KeyStore::Which::Admin);
-    connect(thread, &QThread::finished, this, [this, thread, qr]() {
+    connect(thread, &QThread::finished, this, [this, thread, qr, makeAdmin]() {
         const KeyStore::Key key = thread->key;
         thread->deleteLater();
         m_busy = false;
@@ -175,7 +206,58 @@ void App::startAdmit(const QString &qr)
             m_admit.fail(key.failure);
             return;
         }
-        m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, false);
+        m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, makeAdmin && m_member.root);
+    });
+    thread->start();
+}
+
+void App::makeGroup()
+{
+    if (m_busy || !m_member.isNull())
+        return;
+    if (m_publicKey.isEmpty()) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("group: no key")}));
+        return;
+    }
+    Failure failure;
+    const QByteArray secret = sealSecret(&failure);
+    const QJsonObject seal = secret.isEmpty() ? QJsonObject()
+        : Core::call(QStringLiteral("seal_public"), QJsonObject{{QStringLiteral("secret"), QString::fromLatin1(secret.toBase64())}}, &failure).toObject();
+    if (!failure.isNull()) {
+        show(Errors::shown(failure));
+        return;
+    }
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new GroupThread;
+    thread->request = QJsonObject{
+        {QStringLiteral("name"), phoneName()},
+        {QStringLiteral("os"), phoneOs()},
+        {QStringLiteral("store"), KeyStore::store()},
+        {QStringLiteral("public"), QString::fromLatin1(m_publicKey.toBase64())},
+        {QStringLiteral("seal"), seal.value(QStringLiteral("key"))},
+    };
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const QJsonObject group = thread->group;
+        Failure failure = thread->failure;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            return;
+        }
+        Membership m = Membership::fromJoined(group);
+        m.root = true;
+        if (m.isNull() || !m.save(&failure)) {
+            show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The phone could not save the group."), QStringLiteral("group: no device in the answer")} : failure));
+            return;
+        }
+        Errors::log(QStringLiteral("group: made %1 as its root").arg(m.groupTag()));
+        m_member = m;
+        show(QString());
+        emit groupChanged();
+        startMember();
     });
     thread->start();
 }

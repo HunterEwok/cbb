@@ -248,10 +248,6 @@
         <translation>फ़ोन के पास अभी कोई कुंजी नहीं है। फिर से जाँचने के लिए नीचे खींचें।</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one.</source>
-        <translation>फ़ोन अभी किसी समूह में नहीं है। जुड़ने के लिए नीचे खींचें।</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>डिवाइस</translation>
     </message>
@@ -270,6 +266,22 @@
     <message>
         <source>Add a device</source>
         <translation>डिवाइस जोड़ें</translation>
+    </message>
+    <message>
+        <source>Make a group</source>
+        <translation>समूह बनाएँ</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>समूह छोड़ रहा है और उसकी रूट कुंजी मिटा रहा है</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one or make one.</source>
+        <translation>फ़ोन अभी किसी समूह में नहीं है। किसी समूह से जुड़ने या नया बनाने के लिए नीचे खींचें।</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>रूट</translation>
     </message>
 </context>
 <context>
@@ -515,6 +527,14 @@
         <source>Try again</source>
         <translation>फिर से कोशिश करें</translation>
     </message>
+    <message>
+        <source>Make it an admin</source>
+        <translation>इसे एडमिन बनाएँ</translation>
+    </message>
+    <message>
+        <source>For a phone that joins as an admin</source>
+        <translation>उस फ़ोन के लिए जो एडमिन के रूप में जुड़ता है</translation>
+    </message>
 </context>
 <context>
     <name>Events</name>
@@ -568,6 +588,33 @@
     <message>
         <source>Connected devices: %1</source>
         <translation>जुड़े डिवाइस: %1</translation>
+    </message>
+</context>
+<context>
+    <name>NewGroupPage</name>
+    <message>
+        <source>Make a group</source>
+        <translation>समूह बनाएँ</translation>
+    </message>
+    <message>
+        <source>Make</source>
+        <translation>बनाएँ</translation>
+    </message>
+    <message>
+        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>यह फ़ोन समूह का रूट बनेगा: यह बाकी डिवाइसों को उनके QR कोड से जोड़ता है और माँगने वाले फ़ोनों को एडमिन बनाता है।</translation>
+    </message>
+    <message>
+        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
+        <translation>समूह की रूट कुंजी फ़ोन के सुरक्षित तत्व में बनती है और कभी उससे बाहर नहीं जाती।</translation>
+    </message>
+    <message>
+        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
+        <translation>समूह की रूट कुंजी फ़ोन पर एक फ़ाइल में रखी जाती है: जो भी इसे कॉपी करे, वह समूह के रूट की तरह काम कर सकता है।</translation>
+    </message>
+    <message>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
+        <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह सँभाल लेगा।</translation>
     </message>
 </context>
 </TS>

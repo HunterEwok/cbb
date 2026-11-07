@@ -248,10 +248,6 @@
         <translation>لا يملك الهاتف مفتاحًا بعد. اسحب للأسفل للتحقق مرة أخرى.</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one.</source>
-        <translation>الهاتف ليس في أي مجموعة بعد. اسحب للأسفل للانضمام إلى مجموعة.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>الأجهزة</translation>
     </message>
@@ -270,6 +266,22 @@
     <message>
         <source>Add a device</source>
         <translation>إضافة جهاز</translation>
+    </message>
+    <message>
+        <source>Make a group</source>
+        <translation>إنشاء مجموعة</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>مغادرة المجموعة وحذف مفتاح جذرها</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one or make one.</source>
+        <translation>الهاتف ليس في أي مجموعة بعد. اسحب للأسفل للانضمام إلى مجموعة أو إنشاء واحدة.</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>الجذر</translation>
     </message>
 </context>
 <context>
@@ -515,6 +527,14 @@
         <source>Try again</source>
         <translation>حاول مرة أخرى</translation>
     </message>
+    <message>
+        <source>Make it an admin</source>
+        <translation>اجعله مشرفًا</translation>
+    </message>
+    <message>
+        <source>For a phone that joins as an admin</source>
+        <translation>لهاتف ينضم كمشرف</translation>
+    </message>
 </context>
 <context>
     <name>Events</name>
@@ -568,6 +588,33 @@
     <message>
         <source>Connected devices: %1</source>
         <translation>الأجهزة المتصلة: %1</translation>
+    </message>
+</context>
+<context>
+    <name>NewGroupPage</name>
+    <message>
+        <source>Make a group</source>
+        <translation>إنشاء مجموعة</translation>
+    </message>
+    <message>
+        <source>Make</source>
+        <translation>إنشاء</translation>
+    </message>
+    <message>
+        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>يصبح هذا الهاتف جذر المجموعة: يضيف الأجهزة الأخرى عبر رموز QR الخاصة بها ويجعل الهواتف التي تطلب ذلك مشرفين.</translation>
+    </message>
+    <message>
+        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
+        <translation>يُنشأ مفتاح جذر المجموعة في العنصر الآمن للهاتف ولا يغادره أبدًا.</translation>
+    </message>
+    <message>
+        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
+        <translation>يُحفظ مفتاح جذر المجموعة في ملف على الهاتف: أي شخص ينسخه يمكنه التصرف كجذر المجموعة.</translation>
+    </message>
+    <message>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
+        <translation>اجعل هاتفًا آخر مشرفًا قريبًا: إذا فُقد هذا الهاتف، يستولي هاتف مشرف على المجموعة.</translation>
     </message>
 </context>
 </TS>

@@ -92,6 +92,7 @@ DISTFILES += \
     qml/tools.cbb.aurora.qml \
     qml/pages/MainPage.qml \
     qml/pages/JoinPage.qml \
+    qml/pages/NewGroupPage.qml \
     qml/pages/AddDevicePage.qml \
     qml/pages/DevicePage.qml \
     qml/pages/DeviceTile.qml \

@@ -248,10 +248,6 @@
         <translation>לטלפון עדיין אין מפתח. משכו למטה כדי לבדוק שוב.</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one.</source>
-        <translation>הטלפון עדיין לא בקבוצה. משכו למטה כדי להצטרף לקבוצה.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>מכשירים</translation>
     </message>
@@ -270,6 +266,22 @@
     <message>
         <source>Add a device</source>
         <translation>הוספת מכשיר</translation>
+    </message>
+    <message>
+        <source>Make a group</source>
+        <translation>יצירת קבוצה</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>עוזב את הקבוצה ומוחק את מפתח השורש שלה</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one or make one.</source>
+        <translation>הטלפון עדיין לא בקבוצה. משכו למטה כדי להצטרף לקבוצה או ליצור אחת.</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>שורש</translation>
     </message>
 </context>
 <context>
@@ -515,6 +527,14 @@
         <source>Try again</source>
         <translation>לנסות שוב</translation>
     </message>
+    <message>
+        <source>Make it an admin</source>
+        <translation>להפוך למנהל</translation>
+    </message>
+    <message>
+        <source>For a phone that joins as an admin</source>
+        <translation>לטלפון שמצטרף כמנהל</translation>
+    </message>
 </context>
 <context>
     <name>Events</name>
@@ -568,6 +588,33 @@
     <message>
         <source>Connected devices: %1</source>
         <translation>מכשירים מחוברים: %1</translation>
+    </message>
+</context>
+<context>
+    <name>NewGroupPage</name>
+    <message>
+        <source>Make a group</source>
+        <translation>יצירת קבוצה</translation>
+    </message>
+    <message>
+        <source>Make</source>
+        <translation>יצירה</translation>
+    </message>
+    <message>
+        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>הטלפון הזה הופך לשורש של הקבוצה: הוא מוסיף את שאר המכשירים לפי קודי ה-QR שלהם והופך טלפונים שמבקשים לכך למנהלים.</translation>
+    </message>
+    <message>
+        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
+        <translation>מפתח השורש של הקבוצה נוצר ברכיב המאובטח של הטלפון ולעולם לא יוצא ממנו.</translation>
+    </message>
+    <message>
+        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
+        <translation>מפתח השורש של הקבוצה נשמר בקובץ בטלפון: כל מי שמעתיק אותו יכול לפעול כשורש של הקבוצה.</translation>
+    </message>
+    <message>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
+        <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל ישתלט על הקבוצה.</translation>
     </message>
 </context>
 </TS>

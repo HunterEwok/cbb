@@ -248,10 +248,6 @@
         <translation>У телефона ещё нет ключа. Потяните вниз, чтобы проверить снова.</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one.</source>
-        <translation>Телефон пока не в группе. Потяните вниз, чтобы вступить.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>Устройства</translation>
     </message>
@@ -270,6 +266,22 @@
     <message>
         <source>Add a device</source>
         <translation>Добавить устройство</translation>
+    </message>
+    <message>
+        <source>Make a group</source>
+        <translation>Создать группу</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>Выход из группы и удаление её корневого ключа</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one or make one.</source>
+        <translation>Телефон пока не в группе. Потяните вниз, чтобы вступить в группу или создать её.</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>Корень</translation>
     </message>
 </context>
 <context>
@@ -515,6 +527,14 @@
         <source>Try again</source>
         <translation>Попробовать снова</translation>
     </message>
+    <message>
+        <source>Make it an admin</source>
+        <translation>Сделать админом</translation>
+    </message>
+    <message>
+        <source>For a phone that joins as an admin</source>
+        <translation>Для телефона, который вступает как админ</translation>
+    </message>
 </context>
 <context>
     <name>Events</name>
@@ -568,6 +588,33 @@
     <message>
         <source>Connected devices: %1</source>
         <translation>Подключено устройств: %1</translation>
+    </message>
+</context>
+<context>
+    <name>NewGroupPage</name>
+    <message>
+        <source>Make a group</source>
+        <translation>Создать группу</translation>
+    </message>
+    <message>
+        <source>Make</source>
+        <translation>Создать</translation>
+    </message>
+    <message>
+        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>Этот телефон станет корнем группы: он добавляет остальные устройства по их QR-кодам и делает админами телефоны, которые об этом просят.</translation>
+    </message>
+    <message>
+        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
+        <translation>Корневой ключ группы создаётся в защищённом элементе телефона и никогда его не покидает.</translation>
+    </message>
+    <message>
+        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
+        <translation>Корневой ключ группы хранится в файле на телефоне: любой, кто его скопирует, сможет действовать как корень группы.</translation>
+    </message>
+    <message>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
+        <translation>Вскоре сделайте админом ещё один телефон: если этот телефон потеряется, телефон-админ заберёт группу.</translation>
     </message>
 </context>
 </TS>

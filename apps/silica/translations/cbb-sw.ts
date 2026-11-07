@@ -248,10 +248,6 @@
         <translation>Simu bado haina ufunguo. Vuta chini ili kuangalia tena.</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one.</source>
-        <translation>Simu bado haiko kwenye kikundi. Vuta chini ili ujiunge na kimoja.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>Vifaa</translation>
     </message>
@@ -270,6 +266,22 @@
     <message>
         <source>Add a device</source>
         <translation>Ongeza kifaa</translation>
+    </message>
+    <message>
+        <source>Make a group</source>
+        <translation>Unda kikundi</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>Inaondoka kwenye kikundi na kufuta ufunguo wake wa mzizi</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one or make one.</source>
+        <translation>Simu bado haiko kwenye kikundi. Vuta chini ili ujiunge na kikundi au uunde kimoja.</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>Mzizi</translation>
     </message>
 </context>
 <context>
@@ -515,6 +527,14 @@
         <source>Try again</source>
         <translation>Jaribu tena</translation>
     </message>
+    <message>
+        <source>Make it an admin</source>
+        <translation>Kifanye msimamizi</translation>
+    </message>
+    <message>
+        <source>For a phone that joins as an admin</source>
+        <translation>Kwa simu inayojiunga kama msimamizi</translation>
+    </message>
 </context>
 <context>
     <name>Events</name>
@@ -568,6 +588,33 @@
     <message>
         <source>Connected devices: %1</source>
         <translation>Vifaa vilivyounganishwa: %1</translation>
+    </message>
+</context>
+<context>
+    <name>NewGroupPage</name>
+    <message>
+        <source>Make a group</source>
+        <translation>Unda kikundi</translation>
+    </message>
+    <message>
+        <source>Make</source>
+        <translation>Unda</translation>
+    </message>
+    <message>
+        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>Simu hii inakuwa mzizi wa kikundi: inaongeza vifaa vingine kwa misimbo yao ya QR na kuzifanya simu zinazoomba kuwa wasimamizi.</translation>
+    </message>
+    <message>
+        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
+        <translation>Ufunguo wa mzizi wa kikundi unaundwa kwenye kipengele salama cha simu na hautoki humo kamwe.</translation>
+    </message>
+    <message>
+        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
+        <translation>Ufunguo wa mzizi wa kikundi unahifadhiwa kwenye faili kwenye simu: yeyote anayeunakili anaweza kutenda kama mzizi wa kikundi.</translation>
+    </message>
+    <message>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
+        <translation>Ifanye simu nyingine kuwa msimamizi hivi karibuni: simu hii ikipotea, simu ya msimamizi itachukua kikundi.</translation>
     </message>
 </context>
 </TS>

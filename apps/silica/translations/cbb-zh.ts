@@ -248,10 +248,6 @@
         <translation>手机还没有密钥。下拉可再次检查。</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one.</source>
-        <translation>手机还没有加入任何群组。下拉即可加入。</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>设备</translation>
     </message>
@@ -270,6 +266,22 @@
     <message>
         <source>Add a device</source>
         <translation>添加设备</translation>
+    </message>
+    <message>
+        <source>Make a group</source>
+        <translation>创建群组</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>正在退出群组并删除其根密钥</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one or make one.</source>
+        <translation>手机尚未加入群组。下拉以加入或创建一个群组。</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>根</translation>
     </message>
 </context>
 <context>
@@ -515,6 +527,14 @@
         <source>Try again</source>
         <translation>重试</translation>
     </message>
+    <message>
+        <source>Make it an admin</source>
+        <translation>设为管理员</translation>
+    </message>
+    <message>
+        <source>For a phone that joins as an admin</source>
+        <translation>适用于以管理员身份加入的手机</translation>
+    </message>
 </context>
 <context>
     <name>Events</name>
@@ -568,6 +588,33 @@
     <message>
         <source>Connected devices: %1</source>
         <translation>已连接设备：%1</translation>
+    </message>
+</context>
+<context>
+    <name>NewGroupPage</name>
+    <message>
+        <source>Make a group</source>
+        <translation>创建群组</translation>
+    </message>
+    <message>
+        <source>Make</source>
+        <translation>创建</translation>
+    </message>
+    <message>
+        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>这台手机将成为群组的根：它通过二维码添加其他设备，并将提出请求的手机设为管理员。</translation>
+    </message>
+    <message>
+        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
+        <translation>群组的根密钥在手机的安全元件中生成，永不离开。</translation>
+    </message>
+    <message>
+        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
+        <translation>群组的根密钥保存在手机上的一个文件中：任何复制它的人都可以充当群组的根。</translation>
+    </message>
+    <message>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
+        <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以接管群组。</translation>
     </message>
 </context>
 </TS>

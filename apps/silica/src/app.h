@@ -27,6 +27,7 @@ class App : public QObject
     Q_PROPERTY(QString group READ group NOTIFY groupChanged)
     Q_PROPERTY(QString device READ device NOTIFY groupChanged)
     Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
+    Q_PROPERTY(bool root READ root NOTIFY groupChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
@@ -59,6 +60,7 @@ public:
     QString device() const { return m_member.device; }
     // Whether the group's root made this phone an admin when it joined.
     bool admin() const { return m_member.isAdmin(); }
+    bool root() const { return m_member.root; }
     Join *join() { return &m_join; }
     Member *member() { return &m_node; }
     Admit *admit() { return &m_admit; }
@@ -82,7 +84,11 @@ public:
     Q_INVOKABLE void startJoin(bool admin = false);
     // Adds the device whose join code (a cbb://join link) the camera read,
     // with the admin key, found off the GUI thread.
-    Q_INVOKABLE void startAdmit(const QString &qr);
+    // makeAdmin: the root makes a phone that asks an admin.
+    Q_INVOKABLE void startAdmit(const QString &qr, bool makeAdmin = false);
+    // Makes a group of the phone's own, its root key the admin key in the
+    // TEE (docs/protocol.md, section 3), and starts the member as its root.
+    Q_INVOKABLE void makeGroup();
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();

@@ -23,9 +23,12 @@ struct Membership
     QByteArray groupCa;
     QList<QByteArray> roots;
     QByteArray records; // the records file
+    bool root = false; // the phone made the group and holds its root key
 
     bool isNull() const { return device.isEmpty(); }
-    bool isAdmin() const { return !adminCa.isEmpty(); }
+    // An admin: through its admin CA, or as the group's root, which issues
+    // with the root key itself.
+    bool isAdmin() const { return root || !adminCa.isEmpty(); }
 
     // The group's tag: the first 8 bytes of the group CA's SHA-256, in hex;
     // empty when the phone is in no group.

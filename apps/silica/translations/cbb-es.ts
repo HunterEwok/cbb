@@ -248,10 +248,6 @@
         <translation>El teléfono aún no tiene clave. Desliza hacia abajo para comprobarlo de nuevo.</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one.</source>
-        <translation>El teléfono aún no está en ningún grupo. Desliza hacia abajo para unirte a uno.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>Dispositivos</translation>
     </message>
@@ -270,6 +266,22 @@
     <message>
         <source>Add a device</source>
         <translation>Añadir un dispositivo</translation>
+    </message>
+    <message>
+        <source>Make a group</source>
+        <translation>Crear un grupo</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>Saliendo del grupo y borrando su clave raíz</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one or make one.</source>
+        <translation>El teléfono aún no está en ningún grupo. Desliza hacia abajo para unirte a uno o crear uno.</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>Raíz</translation>
     </message>
 </context>
 <context>
@@ -515,6 +527,14 @@
         <source>Try again</source>
         <translation>Intentar de nuevo</translation>
     </message>
+    <message>
+        <source>Make it an admin</source>
+        <translation>Hacerlo admin</translation>
+    </message>
+    <message>
+        <source>For a phone that joins as an admin</source>
+        <translation>Para un teléfono que se une como admin</translation>
+    </message>
 </context>
 <context>
     <name>Events</name>
@@ -568,6 +588,33 @@
     <message>
         <source>Connected devices: %1</source>
         <translation>Dispositivos conectados: %1</translation>
+    </message>
+</context>
+<context>
+    <name>NewGroupPage</name>
+    <message>
+        <source>Make a group</source>
+        <translation>Crear un grupo</translation>
+    </message>
+    <message>
+        <source>Make</source>
+        <translation>Crear</translation>
+    </message>
+    <message>
+        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>Este teléfono pasa a ser la raíz del grupo: añade los demás dispositivos por sus códigos QR y hace admins a los teléfonos que lo piden.</translation>
+    </message>
+    <message>
+        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
+        <translation>La clave raíz del grupo se crea en el elemento seguro del teléfono y nunca sale de él.</translation>
+    </message>
+    <message>
+        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
+        <translation>La clave raíz del grupo se guarda en un archivo del teléfono: quien la copie puede actuar como la raíz del grupo.</translation>
+    </message>
+    <message>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
+        <translation>Haz admin a otro teléfono pronto: si pierdes este, un teléfono admin toma el control del grupo.</translation>
     </message>
 </context>
 </TS>
