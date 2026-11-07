@@ -34,5 +34,7 @@ QJsonObject take(uint8_t *answer, size_t len, const QString &what, Failure *fail
 
 // The core's signing callback (cbb_sign_fn): the key store signs the digest.
 int32_t signDigest(void *ctx, const uint8_t *digest, uint8_t *sig, size_t *sigLen);
+// The same with the admin key, for a phone that joins as an admin.
+int32_t signAdminDigest(void *ctx, const uint8_t *digest, uint8_t *sig, size_t *sigLen);
 
 } // namespace Core

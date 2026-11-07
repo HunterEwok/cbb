@@ -18,8 +18,9 @@ const deniedText = "No permission to use the service: add your user to the cbb g
 
 // runAdmin runs cbb through pkexec, which asks for the password in the
 // desktop's own dialog; pkexec passes the arguments as they are, without a
-// shell, and clears the environment, so CBB_DEBUG goes through env.
-func runAdmin(args []string, yes, details bool) error {
+// shell, and clears the environment, so CBB_DEBUG goes through env. input,
+// unless empty, is cbb's standard input.
+func runAdmin(args []string, input string, details bool) error {
 	cbb := cbbPath()
 	if cbb == "" {
 		return &adminError{msg: "cbb is not installed where the installer puts it, owned by root: install it again, or run the command with sudo in a terminal.",
@@ -30,8 +31,8 @@ func runAdmin(args []string, yes, details bool) error {
 		return &adminError{msg: "pkexec is not installed: run sudo cbb " + strings.Join(args, " ") + " in a terminal instead.", detail: err.Error()}
 	}
 	cmd := exec.Command(pkexec, pkexecArgs(cbb, args, details)...)
-	if yes {
-		cmd.Stdin = strings.NewReader("yes\n")
+	if input != "" {
+		cmd.Stdin = strings.NewReader(input)
 	}
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out

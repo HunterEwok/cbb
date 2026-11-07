@@ -2560,6 +2560,106 @@
           }
         }
       }
+    },
+    "Admit by QR code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять по QR-коду"
+          }
+        }
+      }
+    },
+    "A phone with Aurora OS or Sailfish OS shows a QR code and waits. Paste the code's text, or open a picture of it:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон с ОС Аврора или Sailfish OS показывает QR-код и ждёт. Вставьте текст кода или откройте его снимок:"
+          }
+        }
+      }
+    },
+    "The QR code's text": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текст QR-кода"
+          }
+        }
+      }
+    },
+    "Open a picture": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть снимок"
+          }
+        }
+      }
+    },
+    "Admit": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять"
+          }
+        }
+      }
+    },
+    "It joined the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство вошло в группу."
+          }
+        }
+      }
+    },
+    "This QR code is not of a device that waits to join.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это QR-код не устройства, которое ждёт входа в группу."
+          }
+        }
+      }
+    },
+    "No QR code was found in the picture.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На снимке не найден QR-код."
+          }
+        }
+      }
+    },
+    "The app could not make the file for cbb.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложению не удалось создать файл для cbb."
+          }
+        }
+      }
+    },
+    "Admit it as an admin: it may then add, remove and renew devices and take the group over after the takeover delay. Only for your own phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять как админа: он сможет добавлять, удалять и продлевать устройства и после задержки забрать группу себе. Только для своего телефона."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

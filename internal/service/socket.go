@@ -650,7 +650,9 @@ func (s *Service) pair(ctx context.Context, c net.Conn, r *control.Reader, admin
 // pairDial admits a joiner that listens (docs/protocol.md section 6, "The
 // joiner listens"), such as a phone that shows its QR code: with the code,
 // the addresses and the fingerprint the QR code carries, it opens the
-// window and dials the joiner, at addresses on the home network only.
+// window and dials the joiner, at addresses on the home network only. With
+// m.Admins, on the root only, the window makes a phone that offers an admin
+// key an admin, as cbb pair -admin does.
 func (s *Service) pairDial(ctx context.Context, c net.Conn, m *control.Message) {
 	code, err := pair.NormalizeCode(m.Code)
 	if err != nil {
@@ -661,7 +663,7 @@ func (s *Service) pairDial(ctx context.Context, c net.Conn, m *control.Message) 
 		fail(c, errors.New("the QR code names no certificate fingerprint"))
 		return
 	}
-	w, _, end, err := s.openWindow(code, false)
+	w, _, end, err := s.openWindow(code, m.Admins)
 	if err != nil {
 		fail(c, err)
 		return

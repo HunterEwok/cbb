@@ -20,8 +20,11 @@ namespace KeyStore {
 
 namespace {
 
-// The labels of the key's two halves.
-const QByteArray keyLabel("cbb-member");
+// The labels of each key's two halves.
+QByteArray labelOf(Which which)
+{
+    return which == Which::Admin ? QByteArrayLiteral("cbb-admin") : QByteArrayLiteral("cbb-member");
+}
 
 QString hex(CK_RV rv) { return QStringLiteral("0x%1").arg(rv, 0, 16); }
 
@@ -112,9 +115,8 @@ public:
         return State::Ready;
     }
 
-    QVector<CK_OBJECT_HANDLE> find(CK_ULONG cls)
+    QVector<CK_OBJECT_HANDLE> find(CK_ULONG cls, QByteArray label)
     {
-        QByteArray label = keyLabel;
         CK_ATTRIBUTE t[] = {{CKA_CLASS, &cls, sizeof cls}, {CKA_LABEL, label.data(), CK_ULONG(label.size())}};
         QVector<CK_OBJECT_HANDLE> out;
         if (m_f->C_FindObjectsInit(m_session, t, 2) != CKR_OK)
@@ -128,10 +130,9 @@ public:
         return out;
     }
 
-    CK_RV generate(CK_OBJECT_HANDLE *pub, CK_OBJECT_HANDLE *priv)
+    CK_RV generate(CK_OBJECT_HANDLE *pub, CK_OBJECT_HANDLE *priv, QByteArray label)
     {
         CK_BBOOL yes = 1, no = 0;
-        QByteArray label = keyLabel;
         // The template the R570E was measured with (2026-11-06): the curve
         // names the key type.
         QByteArray params = QByteArray::fromHex("06082a8648ce3d030107"); // prime256v1
@@ -229,7 +230,7 @@ QString store()
     return QStringLiteral("hardware");
 }
 
-Key ensure()
+Key ensure(Which which)
 {
     Key key;
     Token token;
@@ -237,13 +238,14 @@ Key ensure()
     if (key.state != State::Ready)
         return key;
 
-    const QVector<CK_OBJECT_HANDLE> privs = token.find(CKO_PRIVATE_KEY), pubs = token.find(CKO_PUBLIC_KEY);
+    const QByteArray keyLabel = labelOf(which);
+    const QVector<CK_OBJECT_HANDLE> privs = token.find(CKO_PRIVATE_KEY, keyLabel), pubs = token.find(CKO_PUBLIC_KEY, keyLabel);
     CK_OBJECT_HANDLE priv = 0, pub = 0;
     if (privs.size() == 1 && pubs.size() == 1) {
         priv = privs.first();
         pub = pubs.first();
     } else if (privs.isEmpty() && pubs.isEmpty()) {
-        const CK_RV rv = token.generate(&pub, &priv);
+        const CK_RV rv = token.generate(&pub, &priv, keyLabel);
         if (rv != CKR_OK) {
             key.state = State::Failed;
             key.failure = {QCoreApplication::translate("Errors", "The phone's secure element did not make a key."), QStringLiteral("tee: C_GenerateKeyPair: %1").arg(hex(rv))};
@@ -271,12 +273,13 @@ Key ensure()
     return key;
 }
 
-QByteArray sign(const QByteArray &digest, Failure *failure)
+QByteArray sign(const QByteArray &digest, Failure *failure, Which which)
 {
     Token token;
     if (token.open(failure) != State::Ready)
         return QByteArray();
-    const QVector<CK_OBJECT_HANDLE> privs = token.find(CKO_PRIVATE_KEY);
+    const QByteArray keyLabel = labelOf(which);
+    const QVector<CK_OBJECT_HANDLE> privs = token.find(CKO_PRIVATE_KEY, keyLabel);
     if (privs.size() != 1) {
         *failure = {QCoreApplication::translate("Errors", "The phone's key is missing."), QStringLiteral("tee: %1 private keys labelled %2").arg(privs.size()).arg(QLatin1String(keyLabel))};
         return QByteArray();

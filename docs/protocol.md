@@ -1031,9 +1031,10 @@ in `admin` with the powers of an admin, `takeover` among them (the table in sect
 signs what"). The user chooses that the window makes an admin, never the joiner: any other
 window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
 confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
-phone that offers no admin key, such as the Aurora OS app for now, joins any admin's window as a
-member: the admin signs its `device` record with role `phone` and no `admin`, and the root may make
-it an admin later. Before it certifies an
+phone that offers no admin key, such as the Aurora OS app unless the user asks to join as an
+admin, joins any admin's window as a member: the admin signs its `device` record with role
+`phone` and no `admin`. A phone that listens and shows its QR code ("The joiner listens" below)
+asks to be an admin the same way, and the root admits it as one with `cbb pair -qr -admin`. Before it certifies an
 admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
 `sid` of this connection, so that a key the joiner does not hold, or a proof made for another
 connection, never becomes an admin; the root computer also refuses a key its records name already

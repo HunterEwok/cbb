@@ -18,10 +18,14 @@ namespace {
 class KeyThread : public QThread
 {
 public:
+    explicit KeyThread(KeyStore::Which which = KeyStore::Which::Member) : m_which(which) {}
     KeyStore::Key key;
 
 protected:
-    void run() override { key = KeyStore::ensure(); }
+    void run() override { key = KeyStore::ensure(m_which); }
+
+private:
+    KeyStore::Which m_which;
 };
 
 } // namespace
@@ -39,6 +43,24 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current())
         show(Errors::shown(failure));
     else if (!m_member.isNull())
         Errors::log(QStringLiteral("group: %1 as %2").arg(m_member.groupTag(), m_member.device));
+    connect(&m_node, &Member::identityChanged, this,
+            [this](const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots) {
+                if (m_member.isNull())
+                    return;
+                Membership next = m_member;
+                next.cert = cert;
+                next.issuer = issuer;
+                next.roots = roots;
+                Failure f;
+                if (!next.saveIdentity(&f)) {
+                    // The member runs on with it; the next start loads the
+                    // old one, which an admin renews again.
+                    show(Errors::shown(f));
+                    return;
+                }
+                m_member = next;
+                Errors::log(QStringLiteral("group: kept a new member certificate or root"));
+            });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
         emit groupChanged();
@@ -88,13 +110,34 @@ void App::setUpKey()
     thread->start();
 }
 
-void App::startJoin()
+void App::startJoin(bool admin)
 {
     if (m_publicKey.isEmpty()) {
         show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("join: no key")}));
         return;
     }
-    m_join.start(phoneName(), m_publicKey);
+    if (!admin) {
+        m_join.start(phoneName(), phoneOs(), m_publicKey);
+        return;
+    }
+    if (m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new KeyThread(KeyStore::Which::Admin);
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const KeyStore::Key key = thread->key;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (key.state != KeyStore::State::Ready) {
+            m_join.fail(key.failure);
+            return;
+        }
+        Errors::log(QStringLiteral("key: %1 the admin key").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
+        m_join.start(phoneName(), phoneOs(), m_publicKey, key.publicKey);
+    });
+    thread->start();
 }
 
 void App::leave()
@@ -115,8 +158,12 @@ void App::startMember()
 {
     if (m_member.isNull() || m_publicKey.isEmpty() || m_node.running())
         return;
-    m_node.start(m_member, phoneName(), m_publicKey, m_os.isAurora() ? QStringLiteral("aurora") : QStringLiteral("sailfish"),
-                 system());
+    m_node.start(m_member, phoneName(), m_publicKey, phoneOs(), system());
+}
+
+QString App::phoneOs() const
+{
+    return m_os.isAurora() ? QStringLiteral("aurora") : QStringLiteral("sailfish");
 }
 
 QString App::phoneName() const

@@ -5,9 +5,12 @@
 //! src/member.rs, on Linux with a software key, for internal/service's
 //! TestFFIJoiner. It listens on -addr (host:port), prints the QR code's
 //! text after "QR: ", takes connections until one joins, and prints
-//! "Joined <device> <group tag>". With -dir, it then runs the member there,
+//! "Joined <device> <group tag>"; with -admin it offers an admin key too,
+//! and prints "Admin CA <base64>" when the member made it an admin. With
+//! -dir, it then runs the member there,
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
-//! the clipboard and "LOG <line>" for each log line, and takes "COPY
+//! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
+//! its certificate, and "LOG <line>" for each log line, and takes "COPY
 //! <text>" and "PEERS" on standard input, answering "PEERS <count>".
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
@@ -19,8 +22,8 @@ use std::process::ExitCode;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
-    cbb_free, cbb_join_accept, cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_member_copy,
-    cbb_member_peers, cbb_member_start,
+    cbb_free, cbb_join_accept, cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin,
+    cbb_member_copy, cbb_member_peers, cbb_member_start,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -65,6 +68,9 @@ fn main() -> ExitCode {
     let key = SigningKey::from_slice(&[7u8; 32]).expect("a valid scalar");
     let public = key.verifying_key().to_sec1_point(false);
     let public_b64 = STANDARD.encode(public.as_bytes());
+    let admin = args.iter().any(|a| a == "-admin");
+    let admin_key = SigningKey::from_slice(&[8u8; 32]).expect("a valid scalar");
+    let admin_public = STANDARD.encode(admin_key.verifying_key().to_sec1_point(false).as_bytes());
     let ln = TcpListener::bind(&addr).expect("listen");
     // The secret for sealed messages, and its public key for the device
     // record, as the app has them.
@@ -73,12 +79,23 @@ fn main() -> ExitCode {
     let seal = serde_json::from_slice::<serde_json::Value>(&cbb_ffi::call(seal_req.to_string().into_bytes()))
         .map(|v| v["ok"]["key"].clone())
         .unwrap_or_default();
-    let req = serde_json::json!({"name": name, "os": "aurora", "public": public_b64, "seal": seal, "addrs": [addr]})
-        .to_string();
+    let mut req =
+        serde_json::json!({"name": name, "os": "aurora", "public": public_b64, "seal": seal, "addrs": [addr]});
+    if admin {
+        req["admin_public"] = admin_public.into();
+    }
+    let req = req.to_string();
     let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
-    // SAFETY: req, ans and n live for the call; the key outlives the joiner.
-    let j =
-        unsafe { cbb_join_new(req.as_ptr(), req.len(), sign, &key as *const SigningKey as *mut _, &mut ans, &mut n) };
+    let ctx = &key as *const SigningKey as *mut _;
+    let admin_ctx = &admin_key as *const SigningKey as *mut _;
+    // SAFETY: req, ans and n live for the call; the keys outlive the joiner.
+    let j = unsafe {
+        if admin {
+            cbb_join_new_admin(req.as_ptr(), req.len(), sign, ctx, sign, admin_ctx, &mut ans, &mut n)
+        } else {
+            cbb_join_new(req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n)
+        }
+    };
     let created = take(ans, n);
     if j.is_null() {
         eprintln!("phone-on-linux: {created}");
@@ -110,6 +127,9 @@ fn main() -> ExitCode {
                     let tag = cbb_core::certs::Cert::parse(&b64(&joined["group_ca"]))
                         .map(|ca| cbb_core::certs::tag(&ca))
                         .unwrap_or_default();
+                    if let Some(ca) = joined["admin_ca"].as_str() {
+                        println!("Admin CA {ca}");
+                    }
                     println!("Joined {} {tag}", joined["device"].as_str().unwrap_or_default());
                     break 'conns;
                 }
@@ -141,6 +161,7 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
     match v["type"].as_str() {
         Some("write") => println!("WRITE {} {}", s("kind"), s("text")),
         Some("log") => println!("LOG {}", s("line")),
+        Some("identity") => println!("IDENTITY {}", s("cert")),
         _ => {}
     }
 }

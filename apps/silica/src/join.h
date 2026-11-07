@@ -44,9 +44,13 @@ public:
     QString qr() const { return m_qr; }
     QString error() const { return m_error; }
 
-    // Starts listening as a phone named name, with the key's public point.
-    void start(const QString &name, const QByteArray &publicKey);
+    // Starts listening as a phone named name with system os ("aurora" or
+    // "sailfish") and the key's public point; with adminKey, the admin
+    // key's, it asks to be an admin, which only the group's root admits.
+    void start(const QString &name, const QString &os, const QByteArray &publicKey, const QByteArray &adminKey = QByteArray());
     Q_INVOKABLE void stop();
+    // Ends the join with f shown on the page.
+    void fail(const Failure &f);
 
 signals:
     void changed();
@@ -56,13 +60,13 @@ signals:
 private:
     void accept();
     void feed(const QByteArray &data);
-    void fail(const Failure &f);
     void setState(const QString &state);
 
     cbb_join *m_join = nullptr;
     QTcpServer *m_server = nullptr;
     QPointer<QTcpSocket> m_conn;
     QByteArray m_publicKey;
+    bool m_admin = false;
     int m_wrongCodes = 0;
     QString m_state = QStringLiteral("idle");
     QString m_code;

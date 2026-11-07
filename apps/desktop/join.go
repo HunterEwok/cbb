@@ -64,7 +64,7 @@ func (d *Desk) JoinPhone() {
 	}()
 	details := d.showDetails()
 	d.act(func() (string, error) {
-		err := adminRun([]string{"pair", "-app", path}, false, details)
+		err := adminRun([]string{"pair", "-app", path}, "", details)
 		d.mu.Lock()
 		cancelled := d.joinCancelled
 		d.mu.Unlock()

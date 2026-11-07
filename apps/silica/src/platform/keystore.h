@@ -18,6 +18,13 @@ namespace KeyStore {
 // Where the key lives, as the phone's hello says: "hardware" or "file".
 QString store();
 
+// Which key: the member key, the phone's device key in its group, or the
+// admin key, which a phone that joins as an admin offers and the group's
+// root certifies (docs/protocol.md, section 6, "A phone joins a computer's
+// group"). The admin key is made only when the user asks to join as an
+// admin.
+enum class Which { Member, Admin };
+
 // Why the phone has no hardware key: no OP-TEE at all (Sailfish OS, the
 // emulator, a phone without a TEE), or the TEE failed.
 enum class State { Ready, NoTee, Failed };
@@ -35,11 +42,11 @@ struct Key
 // OP-TEE's: /dev/tee0 is there, the token is the initialized "Aurora TA" one
 // and the key reads back never extractable and always sensitive. Blocks;
 // call it off the GUI thread.
-Key ensure();
+Key ensure(Which which = Which::Member);
 
 // Signs digest (SHA-256, 32 bytes) with the key: ECDSA P-256 in DER, as the
 // member protocol's signatures are. Empty on failure.
-QByteArray sign(const QByteArray &digest, Failure *failure);
+QByteArray sign(const QByteArray &digest, Failure *failure, Which which = Which::Member);
 
 // ECDSA's raw r||s, as PKCS#11 gives it, in DER.
 QByteArray derSignature(const QByteArray &raw);
