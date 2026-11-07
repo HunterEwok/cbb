@@ -452,7 +452,8 @@ mod tests {
 
     #[test]
     fn hellos_open_with_the_mask() {
-        let (mask, key) = ([3u8; 32], [4u8; 32]);
+        let mask: [u8; 32] = crate::tunnel::new_key().unwrap().try_into().unwrap();
+        let key: [u8; 32] = crate::tunnel::new_key().unwrap().try_into().unwrap();
         let a = hello(&mask, &key, 7, 9);
         let b = hello(&mask, &key, 7, 9);
         assert!(a.len() >= NONCE + HELLO && a.len() < NONCE + HELLO + HELLO_TAIL);
