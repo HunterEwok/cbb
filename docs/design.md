@@ -1147,7 +1147,11 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   the registration and its hellos while the app is open. The forwarder finds a hub by its
   key, not its address, so a phone that moves from Wi-Fi to a mobile network stays the same
   hub. The hub's WireGuard runs in the app's process, in the Rust core's tunnel
-  (`ffi/src/tunnel.rs`), beside the client side.
+  (`ffi/src/tunnel.rs`), beside the client side: the lite member's tunnel, one for the lite
+  member and every phone, rather than a Go tunnel bound by gomobile, which would keep a
+  second WireGuard, AmneziaWG and VLESS to maintain and Go in both apps' builds (D-87). The
+  phones then reach a forwarder over VLESS with XHTTP only: REALITY needs a browser's
+  ClientHello, which rustls does not give, so it stays on the Go servers.
 - **The clients come quickly.** A phone hub is there for minutes at a time, so its clients
   keep trying it every few seconds while their own app or service runs, instead of backing
   off to 30 s and more; a handshake initiation to the forwarder costs one small packet, and
