@@ -114,7 +114,7 @@ func (g *fakeGitHub) run(args ...string) ([]byte, error) {
 		}
 		for _, a := range args[3:] {
 			if strings.HasSuffix(a, ".json") {
-				if filepath.Base(a) != "release.json" {
+				if filepath.Base(a) != "release.json" && filepath.Base(a) != zxnextName {
 					g.t.Errorf("uploaded %s to the release", a)
 				}
 				if err := copyFile(a, filepath.Join(g.release(args[2]), filepath.Base(a))); err != nil {

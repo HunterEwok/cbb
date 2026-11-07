@@ -90,6 +90,7 @@ of service, **E**levation of privilege.
 | 27 | release | T | a vulnerable dependency | few dependencies, `govulncheck` for Go and OSV-Scanner for the Rust crates, the Android libraries and the tray app in CI | `.github/workflows/ci.yml` |
 | 28 | members in between | I, T, S | a hub or another member that passes a copy on reads it, changes it, or makes a copy in another device's name | each copy sealed to its readers (X-Wing for each reader's key, ChaCha20-Poly1305 for the copy and its blob in segments) and signed by the origin's member key; every member checks the certificate and the signature before it passes a copy on, and no member takes a copy in the open; a hub may only pass copies on and read none (D-84) | `internal/clip`, `lite/core/src/copy.rs` |
 | 29 | members in between | I | a member in between learns what the copies are | the kind, the text, file names and their number travel inside the seal; sizes show only in steps, an attachment only to 64 KiB; **accepted**: which device sent a copy, when and to which devices | `internal/clip` |
+| 30 | release | T | someone on the network changes the ZX Spectrum Next's files, which NextZXOS fetches over plain HTTP | each `CBB` installs only the overlay, driver and Pi `cbb` whose SHA-256 it carries; `.cbb update` takes a newer `CBB` only from `zxnext.json`, signed by a release key, which the Pi's `cbb` checks against its pinned roots and refuses for a release older than its own; **accepted**: the first `CBB`, which `.http` fetches, is as trustworthy as the network (residual risks) | `apps/zxnext/src/cbb.c`, `lite/src/next.rs`, `internal/release/zxnext.go` |
 
 ## Residual risks
 
@@ -100,6 +101,12 @@ of service, **E**levation of privilege.
 - Keys in a file (Macs, Windows PCs and Linux computers without a TPM, the lite member) can be
   copied by whoever reads the disk; encrypt the disk and remove a lost device at once.
 - A blind relay and the project's forwarder see addresses and times of activity (threat 10).
+- On the ZX Spectrum Next, the first `.http -h cbb.tools -u /zxnext -f CBB` trusts the
+  network it runs over: neither `.http` nor the ESP has TLS, and nothing on the Next can
+  check the `CBB` it fetches. Whoever changes that download controls what the Next installs,
+  the Pi's `cbb` included, and so the keys the Pi checks updates with from then on. On a
+  network you do not trust, take `CBB` from the signed release (`cbb-zxnext.tar.gz`) and
+  copy it to the card instead (apps/zxnext/README.md, "What is checked").
 - The systems' clipboards are readable by any program of the signed-in user; Copy Beyond
   Borders cannot protect a copy from other programs on the same device.
 - What has not run on real devices yet is listed in the [README](../README.md#status); the

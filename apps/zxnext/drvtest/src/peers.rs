@@ -442,6 +442,10 @@ impl Peer for Esp {
     }
 }
 
+/// The first line of a site's SIGNED that the played Pi's cbb takes as
+/// signed by the release keys; the lines after it are the Next's files.
+pub const SIGNED_OK: &str = "{\"played\":\"signed\"}";
+
 /// NextPi's supervisor shell: SUP> and the commands .cbb types.
 pub struct Pi {
     out: Out,
@@ -463,6 +467,8 @@ pub struct Pi {
     pub fast: bool,
     /// Whether the Pi's cbb-state holds an identity: it is in a group.
     pub in_group: bool,
+    /// Whether the Pi's cbb has check-list: an older one has not.
+    pub checks_lists: bool,
     baud: u32,
     /// A speed stty sets, and when.
     pending_baud: Option<(u64, u32)>,
@@ -483,6 +489,7 @@ impl Pi {
             answers: true,
             fast: true,
             in_group: false,
+            checks_lists: true,
             baud: 115_200,
             pending_baud: None,
         }
@@ -516,7 +523,8 @@ impl Pi {
             return self.prompt(now + 50_000);
         }
         if let Some(rest) = cmd.strip_prefix("s=$(stty -g); stty ") {
-            let speed: u32 = rest.split(' ').next().unwrap().parse().unwrap();
+            // Without a speed, the line keeps its own.
+            let speed: u32 = rest.split(' ').next().unwrap().parse().unwrap_or(self.baud);
             let n: usize = cmd
                 .split("head -c ")
                 .nth(1)
@@ -583,6 +591,27 @@ impl Pi {
                 }
                 _ => {}
             }
+        }
+        // cbb next check-list (lite/src/next.rs) on the list that came
+        // raw: here its signature is a first line that says so (SIGNED_OK),
+        // which the tests leave out to stand for a list the release keys
+        // did not sign.
+        if cmd.starts_with(
+            "/NextPi/nextpi/cbb next check-list /NextPi/nextpi/cbb.list || echo CBBERR; ",
+        ) {
+            let text = String::from_utf8_lossy(&self.received).to_string();
+            let mut lines = text.lines();
+            let out = if !self.checks_lists {
+                "cbb: unknown command\r\nCBBERR\r\n".to_string()
+            } else if lines.next() == Some(SIGNED_OK) {
+                let mut out: String = lines.map(|l| format!("CBBL {l}\r")).collect();
+                out += "CBBOK\r";
+                out
+            } else {
+                "CBBERR the signature does not match\r".to_string()
+            };
+            self.say(now + 100_000, &out);
+            return self.prompt(now + 100_000);
         }
         if cmd.starts_with("test -e /NextPi/nextpi/cbb-state/identity.json && echo CBB$((1))IN") {
             let s = if self.in_group {

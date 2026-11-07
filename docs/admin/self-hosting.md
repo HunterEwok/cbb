@@ -157,6 +157,7 @@ location /PATH-FROM-THE-LOG {
     proxy_request_buffering off;
     proxy_redirect off;
     proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
     proxy_read_timeout 86400s;
     proxy_send_timeout 86400s;
     access_log off;
@@ -165,7 +166,10 @@ location /PATH-FROM-THE-LOG {
 
 - The limits bound what strangers, who need no VLESS user to send uploads, make the
   forwarder hold ([the servers' budget](../relay-budget.md#xhttp)); the clients' uploads are
-  never larger than 32 KiB.
+  never larger than 32 KiB. `X-Real-IP` names the client's address, which the forwarder
+  charges for what a stranger makes it hold and for the hubs' registrations over VLESS;
+  without it every client counts as one, and the registrations over VLESS share an eighth
+  of the forwarder's setup slots.
 - The path is made at random once and kept in the forwarder's key file; `-vless-path /PATH`
   sets one of your own (a slash and 8 to 64 letters, digits, `-` or `_`). It keeps scanners
   off the forwarder; the groups' security does not rely on it.

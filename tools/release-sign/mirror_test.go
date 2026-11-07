@@ -8,11 +8,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/HunterEwok/cbb/internal/release"
 )
 
 // zxnext adds the ZX Spectrum Next's archive to a draft, as the release
@@ -23,7 +26,7 @@ func (g *fakeGitHub) zxnext(tag, dot string) {
 	gz := gzip.NewWriter(&tgz)
 	tw := tar.NewWriter(gz)
 	tw.WriteHeader(&tar.Header{Name: "zxnext/", Mode: 0o755, Typeflag: tar.TypeDir})
-	for _, f := range [][2]string{{"CBB", dot}, {"CBB.DRV", "driver"}, {"cbb", "pi"}, {"LIST", "list " + dot}} {
+	for _, f := range [][2]string{{"CBB", dot}, {"CBB.OVL", "overlay"}, {"CBB.DRV", "driver"}, {"cbb", "pi"}, {"LIST", "list " + dot}} {
 		tw.WriteHeader(&tar.Header{Name: "zxnext/" + f[0], Mode: 0o644, Size: int64(len(f[1])), Typeflag: tar.TypeReg})
 		tw.Write([]byte(f[1]))
 	}
@@ -83,6 +86,27 @@ func TestMirror(t *testing.T) {
 	if zxList() != "list rc1" || string(must(os.ReadFile(filepath.Join(zx, "CBB.DRV")))) != "driver" {
 		t.Errorf("the Next's files are %q", zxList())
 	}
+	// SIGNED holds keys.json and the release's zxnext.json, which the
+	// Pi's cbb takes for these files.
+	zxSigned := func() release.ZXNext {
+		t.Helper()
+		lines := strings.Split(strings.TrimSpace(string(must(os.ReadFile(filepath.Join(zx, zxnextSigned))))), "\n")
+		if len(lines) != 2 {
+			t.Fatalf("SIGNED has %d lines", len(lines))
+		}
+		var keys, list release.File
+		if json.Unmarshal([]byte(lines[0]), &keys) != nil || json.Unmarshal([]byte(lines[1]), &list) != nil {
+			t.Fatal("SIGNED holds no signed files")
+		}
+		z, err := release.CheckZXNext(keys, list, pinnedRoots(), now(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return z
+	}
+	if z := zxSigned(); z.Version != "0.6.0-rc.1" || z.Files[0].Name != "CBB" || z.Files[0].Size != 3 {
+		t.Errorf("SIGNED lists %+v", z)
+	}
 
 	// The release the channel names, and its min_from, which stays.
 	g.draft("v0.6.0")
@@ -114,6 +138,27 @@ func TestMirror(t *testing.T) {
 	if zxList() != "list 060" {
 		t.Errorf("the Next's files are %q", zxList())
 	}
+	if z := zxSigned(); z.Version != "0.6.0" {
+		t.Errorf("SIGNED lists %+v", z)
+	}
+	// A zxnext.json that does not list the files the mirror unpacked
+	// leaves no SIGNED, nor does a release without one.
+	zj := filepath.Join(out, "v0.6.0", zxnextName)
+	good := must(os.ReadFile(zj))
+	other := filepath.Join(out, "v0.6.0-rc.1", zxnextName)
+	copyFile(other, zj)
+	run()
+	if _, err := os.Stat(filepath.Join(zx, zxnextSigned)); err == nil {
+		t.Error("SIGNED holds a list of other files")
+	}
+	os.Remove(zj)
+	run()
+	if _, err := os.Stat(filepath.Join(zx, zxnextSigned)); err == nil {
+		t.Error("SIGNED without a zxnext.json")
+	}
+	write(t, zj, good)
+	run()
+	zxSigned()
 
 	// The mirror never goes back to an older channel file than it serves.
 	branchStable := filepath.Join(g.channel(), "stable.json")

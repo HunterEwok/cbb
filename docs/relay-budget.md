@@ -93,7 +93,7 @@ calls, members) and serves no stranger's group at all.
 
 | State | Cost | Lifetime | Charged to | Cap per payer | Cap in all | When full |
 |---|---|---|---|---|---|---|
-| Registration, being set up or held | a goroutine, a TLS connection | while its connection lasts | address, network, wide network, provider | 16, 64, 256, 1024 | 256 being set up; 100,000 groups | the connection is closed; refused |
+| Registration, being set up or held | a goroutine, a TLS connection | while its connection lasts | address, network, wide network, provider, also over VLESS ("XHTTP" below) | 16, 64, 256, 1024 | 256 being set up; 100,000 groups | the connection is closed; refused |
 | A group's clients | an entry per address, handshake and session | 10 s a handshake, 200 s a session | the group | 16 addresses, 64 handshakes waiting | | dropped |
 | A group's packets | forwarding | | the group | 1000 packets and 2 MiB a second | | dropped |
 | Credential version (a period's entry) | about 400 bytes in memory, 200 on disk | until the last credential it saw expires, 35 days at most | the network, wide network and provider it came from | 256, 1024, 4096 | 100,000 | refused |
@@ -135,25 +135,37 @@ What the forwarder guarantees:
 
 VLESS over XHTTP behind a web server (`cbb forward -vless-xhttp`) is the one place where a
 stranger spends memory before any check of the forwarder's: Xray queues a session's uploads
-before it knows the VLESS user, keeps a session that no client opens for 30 seconds, and
-behind the web server every request comes from the loopback address, so the forwarder
-cannot tell sources apart. Its limits are therefore in two places:
+before it knows the VLESS user and keeps a session that no client opens for 30 seconds. Behind
+the web server every request comes from the loopback address, so the web server names the
+client's address (`X-Real-IP`), and the forwarder's own front, which passes the requests on
+to Xray, charges it:
 
 | What | Limit | Where |
 |---|---|---|
 | One upload | 32 KiB (`MaxPostBytes`) | the forwarder; the web server's `client_max_body_size` |
 | Uploads a session holds | 8 (`MaxBufferedPosts`), so 256 KiB a session, for 30 s | the forwarder |
+| Uploads to a session whose download is not open | 32 a second from an address and from a network, 64 from a wide network, 128 from a provider, 256 from all sources; bursts of 64, 64, 128, 256 and 512 | the forwarder's front |
 | Requests | 150 a second from an address, bursts of 300 | the web server |
 | Requests open at once | 16 from an address, 1024 in all | the web server |
 
-A request that finds its session's queue full waits for a place, so the requests open at
-once bound those too. What an address makes the forwarder hold is then at most its requests
-of 30 seconds, about 140 MiB at the full rate, and less the more of them wait; this is the
-accepted bound, since a session costs nothing to make and Xray has no cap on sessions. The
-unit's memory limits (`GOMEMLIMIT` and `MemoryMax` in `packaging/linux/cbb-forward.service`)
-keep the server's other work safe from many addresses at once: past them the forwarder
-starts again, and hubs register again. Our clients send at most 32 KiB an upload, so the limits never cut
-them off. Xray's defaults, 1 MB an upload and 30 of them, let one session hold about 30 MB.
+An upload to a session whose download (GET) is open is read at once and pays nothing; one to
+any other session may stay queued for 30 seconds, so it pays. What strangers make the
+forwarder hold is then at most the uploads of 30 seconds from all sources, about 256 MiB
+((512 + 30 × 256) × 32 KiB), whatever the number of their addresses, within the unit's
+memory limits (`GOMEMLIMIT` and `MemoryMax` in `packaging/linux/cbb-forward.service`); an
+address or a network holds at most about 30 MiB of it, and filling all sources' share takes
+at least 2 wide networks, over IPv6 2 providers. A genuine client opens its download as it
+starts, so a flood delays at most its first few uploads, which it sends again: this is the
+accepted bound, as for the scan budget. Our clients send at most 32 KiB an upload, so the
+limits never cut them off. Xray's defaults, 1 MB an upload and 30 of them, let one session
+hold about 30 MB.
+
+A hub's registration over VLESS (`RegistrationID`) pays as a direct one, from the same setup
+slots and caps, charged to the client's address: over REALITY the one it connects from, over
+XHTTP the one the web server names. When the address is not known (a web server that does
+not name it), the registrations over VLESS share at most an eighth of the setup slots, so
+that they never keep out a hub that registers directly; all of them together are bounded by
+1024.
 
 ## Tests
 
@@ -174,6 +186,11 @@ The guarantees above are tested, in Go:
   `TestVLESSUsersLeaveTheScanBudget`, `TestKnownClientKeepsItsGroup`;
 - XHTTP takes no upload over its limit and queues no more than its limit for a session
   that no client opened: `TestXHTTPHoldsLittleForStrangers`.
+- Uploads to sessions whose download is not open pay by source and from all sources
+  together: `TestFrontUploadsPayBySource`; the client's address comes only from the web
+  server on the loopback: `TestFrontClientAddress`, `TestRegistrationStream`.
+- Registrations over VLESS pay by source, and those from addresses not known leave the
+  direct ones room: `TestRegistrationsOverVLESSPayBySource`.
 
 A new limit goes into this page and into `internal/budget` first: a cap added alone, in one
 file, is one a neighbouring state can go around.
