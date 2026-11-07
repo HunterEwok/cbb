@@ -270,10 +270,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # a release builds from scratch
-      - name: bind the phones' tunnel and build the Rust core, which the app links
-        run: |
-          mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework
-          sh ffi/bind.sh ios apps/ios/CbbCore
+      - name: build the Rust core, with the phones' tunnel, which the app links
+        run: sh ffi/bind.sh ios apps/ios/CbbCore
       - name: generate the Xcode project
         working-directory: apps/ios
         run: |
@@ -313,11 +311,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The app binds the phones' tunnel (mobile/cbbtun) with gomobile as it builds.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false # a release builds from scratch
       - name: build the signed APK
         working-directory: apps/android
         # The release key lives in the environment release's secrets (docs/apps.md, "Releasing the

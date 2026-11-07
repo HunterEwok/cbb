@@ -6,6 +6,7 @@ package tools.cbb
 import tools.cbb.kit.CredentialStore
 import tools.cbb.kit.Member
 import tools.cbb.kit.FrameTransport
+import tools.cbb.kit.RustTunnel
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -74,24 +75,24 @@ interface RelayLinks {
     ): RelayLink
 }
 
-/** The links of mobile/cbbtun to a blind relay. */
-object GoRelayLinks : RelayLinks {
-    override fun newKey(): ByteArray = cbbtun.Cbbtun.newKey()
+/** The links to a blind relay in the Rust core (the kit's RustTunnel). */
+object CoreRelayLinks : RelayLinks {
+    override fun newKey(): ByteArray = RustTunnel.newKey()
     override fun start(
         private: ByteArray, device: String, endpoint: String, pin: String, chain: String,
         sign: (ByteArray) -> ByteArray, records: String, memberPort: Int, events: RelayLinkEvents,
     ): RelayLink {
-        val r = cbbtun.Cbbtun.startRelay(private, device, endpoint, pin, chain, cbbtun.Signer { sign(it) }, records, memberPort.toLong(),
-            object : cbbtun.RelayEvents {
-                override fun dial(peer: String, port: Long) = events.dial(peer, port.toInt())
-                override fun calling(peer: String, localPort: Long) = events.calling(peer, localPort.toInt())
+        val r = RustTunnel.startRelay(private, device, endpoint, pin, chain, sign, records, memberPort,
+            object : RustTunnel.RelayEvents {
+                override fun dial(peer: String, port: Int) = events.dial(peer, port)
+                override fun calling(peer: String, localPort: Int) = events.calling(peer, localPort)
                 override fun wanted(peer: String): Boolean = events.wanted(peer)
                 override fun changed(state: String) = events.changed(state)
             })
         return object : RelayLink {
             override fun setRecords(records: String) = r.setRecords(records)
             override fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String, roots: String, names: String) =
-                r.setCredentials(serverKey, cbbtun.Signer { sign(it) }, creds, roots, names)
+                r.setCredentials(serverKey, sign, creds, roots, names)
             override fun close() = r.close()
         }
     }

@@ -1523,8 +1523,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: bind the phones' tunnel, which the app links
-        run: mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework
       - name: build the Rust core, which the kit links
         run: sh ffi/bind.sh ios apps/ios/CbbCore
       - name: generate the Xcode project
@@ -1790,7 +1788,7 @@ jobs:
           CBB_SWIFT_INTEROP="$tool" go test ./internal/pair -run 'TestSwiftMemberAdmitsGoJoiner$' -v
           CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
           CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
-      - name: the NDK the tunnel and the core are built with
+      - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
       - name: the Rust the core is built with, and cargo-ndk
@@ -1838,7 +1836,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the NDK the tunnel and the core are built with
+      - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
       - name: the Rust the core is built with, and cargo-ndk
@@ -1961,11 +1959,7 @@ jobs:
         with:
           persist-credentials: false
           path: one
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: one/go.mod
-          cache: false
-      - name: the NDK the tunnel and the core are built with
+      - name: the NDK the core is built with
         working-directory: one/apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
       - name: the Rust the core is built with, and cargo-ndk

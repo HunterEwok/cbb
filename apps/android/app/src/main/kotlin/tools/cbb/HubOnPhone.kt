@@ -6,6 +6,7 @@ package tools.cbb
 import tools.cbb.kit.Member
 import tools.cbb.kit.PhoneHub
 import tools.cbb.kit.Releases
+import tools.cbb.kit.RustTunnel
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -153,27 +154,27 @@ interface HubTunnels {
     fun newVLESSID(): String
 }
 
-/** The hub of mobile/cbbtun, WireGuard in the app's process. */
-object GoHubTunnels : HubTunnels {
-    override fun newKey(): ByteArray = cbbtun.Cbbtun.newKey()
-    override fun publicKey(private: ByteArray): ByteArray = cbbtun.Cbbtun.publicKey(private)
-    override fun newObfuscation(): String = cbbtun.Cbbtun.newObfuscation()
-    override fun newVLESSID(): String = cbbtun.Cbbtun.newVLESSID()
+/** The phone's hub in the Rust core (the kit's RustTunnel), WireGuard in the app's process. */
+object CoreHubTunnels : HubTunnels {
+    override fun newKey(): ByteArray = RustTunnel.newKey()
+    override fun publicKey(private: ByteArray): ByteArray = RustTunnel.publicKey(private)
+    override fun newObfuscation(): String = RustTunnel.newObfuscation()
+    override fun newVLESSID(): String = RustTunnel.newVLESSID()
     override fun start(private: ByteArray, device: String, memberPort: Int, obfuscation: String, clients: String): HubTunnel {
-        val h = cbbtun.Cbbtun.startHub(private, device, memberPort.toLong(), obfuscation, clients)
+        val h = RustTunnel.startHub(private, device, memberPort, obfuscation, clients)
         return object : HubTunnel {
             override fun setClients(json: String) = h.setClients(json)
             override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String) =
-                h.register(endpoint, pin, chain, cbbtun.Signer { sign(it) }, records, vlessID)
+                h.register(endpoint, pin, chain, sign, records, vlessID)
             override fun setRecords(records: String) = h.setRecords(records)
             override fun setProjectWays(ways: String) = h.setProjectWays(ways)
             override fun status(): String = h.status()
             override fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int): HubGuest {
-                val g = h.invite(group, endpoints, lifetimeS.toLong(), guestPort.toLong())
+                val g = h.invite(group, endpoints, lifetimeS, guestPort)
                 return object : HubGuest {
-                    override val text: String = g.text()
-                    override val secret: ByteArray = g.secret()
-                    override val expires: Long = g.expires()
+                    override val text: String = g.text
+                    override val secret: ByteArray = g.secret
+                    override val expires: Long = g.expires
                     override fun admitted() = g.admitted()
                     override fun close() = g.close()
                 }

@@ -2085,7 +2085,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         // same TLS as at home, and only while the hub is not found here.
         val a = AwayFromHome(
             g.device,
-            GoTunnels,
+            CoreTunnels,
             load = awayFile::read,
             save = { s -> if (s == null) awayFile.delete() else awayFile.write(s) },
             atHome = ::atHome,
@@ -2098,7 +2098,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         )
         val h = HubOnPhone(
             g.device,
-            GoHubTunnels,
+            CoreHubTunnels,
             load = { hubFile.read()?.let(HubState::decode) },
             save = { s -> if (s == null) hubFile.delete() else hubFile.write(s.encode()) },
             log = { what, e -> Log.w(TAG, what, e) },
@@ -2107,7 +2107,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         // the same TLS as at home, while browsing does not find it here.
         val rl = RelayOnPhone(
             g.device,
-            GoRelayLinks,
+            CoreRelayLinks,
             load = { relayFile.read()?.let(RelaySettings::decode) },
             save = { s -> if (s == null) relayFile.delete() else relayFile.write(s.encode()) },
             dialPeer = { port, peer -> link("relay:$peer", port, peer) },
