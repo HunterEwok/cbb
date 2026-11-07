@@ -15,7 +15,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use super::{Code, Refusal, b64_value, bad_args, json, refuse};
-use crate::authority::{Hash, Record, Seen, TYPE_CLAIM, TYPE_FREEZE, TYPE_RESOLVE, TYPE_REVOKE};
+use crate::authority::{Body, Hash, Record};
 use crate::certs::{Cert, KeyHash, b64};
 use crate::clip::{Kind, Via};
 use crate::copy::{self, Blob, Content, Sealed};
@@ -566,7 +566,8 @@ struct BodyArgs {
 fn body(a: BodyArgs) -> Result<Vec<u8>, Refusal> {
     let s = a.set.open()?;
     let mut b = a.body;
-    let signer: Hash = b
+    // The signer is checked first, for its own refusal.
+    let _signer: Hash = b
         .get("signer")
         .cloned()
         .ok_or_else(|| refuse(Code::Body, Error::msg("The record names no signer.")))
@@ -574,35 +575,13 @@ fn body(a: BodyArgs) -> Result<Vec<u8>, Refusal> {
             serde_json::from_value(v)
                 .map_err(|e| refuse(Code::Body, Error::with("The record's signer does not read.", e)))
         })?;
-    let kind = String::from(b.get("type").and_then(Value::as_str).unwrap_or_default());
-    let kind = kind.as_str();
-    // A root ends its own two histories with a resolve, which counts
-    // whatever forks its chain has; nothing else of a forked key counts.
-    if kind != TYPE_RESOLVE && s.two_histories(&signer) {
-        return Err(refuse(
-            Code::Body,
-            Error::msg("This key signed two histories; the group's root must resolve them before it signs again."),
-        ));
-    }
-    let (seq, prev) = s.next_for(&signer);
+    // The set fills these in; they only have to be there to read.
     b.insert("group".into(), Value::from(s.tag()));
-    b.insert("seq".into(), Value::from(seq));
-    match prev {
-        Some(p) => b.insert("prev".into(), b64_value(&p.0)),
-        None => b.remove("prev"),
-    };
-    if [TYPE_REVOKE, TYPE_FREEZE, TYPE_CLAIM].contains(&kind) {
-        let mut seen = s.seen();
-        if !seen.iter().any(|e| e.key == signer) {
-            seen.push(Seen { key: signer, seq: seq.saturating_sub(1) });
-        }
-        b.insert(
-            "seen".into(),
-            serde_json::to_value(&seen)
-                .map_err(|e| refuse(Code::Body, Error::with("The record could not be written.", e)))?,
-        );
-    }
-    super::canonical_body(Value::Object(b))
+    b.insert("seq".into(), Value::from(1));
+    let body: Body = serde_json::from_value(Value::Object(b))
+        .map_err(|e| refuse(Code::Body, Error::with("The record could not be written.", e)))?;
+    let bytes = s.next_body(body).map_err(|e| refuse(Code::Body, e))?;
+    Ok(json(super::body_answer(&bytes)))
 }
 
 #[cfg(test)]

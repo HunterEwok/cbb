@@ -223,6 +223,65 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
+name = "cbb-core"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64",
+ "chacha20",
+ "chacha20poly1305",
+ "der 0.8.3",
+ "getrandom 0.4.3",
+ "hmac 0.13.0",
+ "hpke",
+ "p256 0.14.0",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "spin",
+ "x25519-dalek",
+ "x509-cert",
+]
+
+[[package]]
+name = "cbb-embassy"
+version = "0.1.0"
+dependencies = [
+ "cbb-core",
+ "embassy-net",
+ "embassy-time",
+ "embedded-io-async 0.7.0",
+]
+
+[[package]]
+name = "cbb-esp32"
+version = "0.1.0"
+dependencies = [
+ "cbb-core",
+ "cbb-embassy",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-net",
+ "embassy-sync 0.8.0",
+ "embassy-time",
+ "embassy-usb",
+ "embedded-io-async 0.7.0",
+ "esp-alloc",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-println",
+ "esp-radio",
+ "esp-rtos",
+ "getrandom 0.4.3",
+ "rustls",
+ "static_cell",
+ "trouble-host",
+]
+
+[[package]]
 name = "cc"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -283,64 +342,6 @@ dependencies = [
  "block-buffer 0.12.1",
  "crypto-common 0.2.2",
  "inout 0.2.5",
-]
-
-[[package]]
-name = "cbb-core"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "base64",
- "chacha20",
- "chacha20poly1305",
- "der 0.8.3",
- "getrandom 0.4.3",
- "hmac 0.13.0",
- "hpke",
- "p256 0.14.0",
- "rustls",
- "serde",
- "serde_json",
- "sha2",
- "spin",
- "x25519-dalek",
- "x509-cert",
-]
-
-[[package]]
-name = "cbb-embassy"
-version = "0.1.0"
-dependencies = [
- "cbb-core",
- "embassy-net",
- "embassy-time",
- "embedded-io-async 0.7.0",
-]
-
-[[package]]
-name = "cbb-esp32"
-version = "0.1.0"
-dependencies = [
- "cbb-core",
- "cbb-embassy",
- "embassy-executor",
- "embassy-futures",
- "embassy-net",
- "embassy-sync 0.8.0",
- "embassy-time",
- "embassy-usb",
- "embedded-io-async 0.7.0",
- "esp-alloc",
- "esp-backtrace",
- "esp-bootloader-esp-idf",
- "esp-hal",
- "esp-println",
- "esp-radio",
- "esp-rtos",
- "getrandom 0.4.3",
- "rustls",
- "static_cell",
- "trouble-host",
 ]
 
 [[package]]
@@ -2696,6 +2697,17 @@ checksum = "66cf8fedced2fcf12406bcb34223dffb92eaf34908ede12fed414c82b7f00b3e"
 dependencies = [
  "base16ct 1.0.0",
  "serde",
+]
+
+[[package]]
+name = "sha1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
 ]
 
 [[package]]

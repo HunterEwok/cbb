@@ -2211,7 +2211,7 @@ jobs:
         working-directory: .
         run: |
           (cd lite && cargo build --locked --release -p cbb-ffi --features member --example phone-on-linux)
-          CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember' -v
+          CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember|TestFFIPhoneRoot' -v
       - name: the phones' Rust tunnel and hub through lite/ffi work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
         working-directory: .
         run: |

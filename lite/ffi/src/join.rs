@@ -67,6 +67,11 @@ impl TimeProvider for SystemClock {
     }
 }
 
+/// The system's clock, for the core's TLS.
+pub(crate) fn clock() -> Clock {
+    Arc::new(SystemClock)
+}
+
 pub(crate) fn wall_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| i64::try_from(d.as_millis()).unwrap_or(0)).unwrap_or(0)
 }
@@ -145,13 +150,13 @@ struct JoinedAnswer {
 }
 
 #[derive(Serialize)]
-struct ErrorAnswer {
+pub(crate) struct ErrorAnswer {
     message: String,
     details: String,
 }
 
 impl ErrorAnswer {
-    fn of(e: &Error) -> ErrorAnswer {
+    pub(crate) fn of(e: &Error) -> ErrorAnswer {
         ErrorAnswer { message: e.to_string(), details: e.details() }
     }
 }
@@ -194,7 +199,7 @@ impl Join {
                 qr,
                 modules,
             };
-            Ok((Join { joiner, code, clock: Arc::new(SystemClock), attempt: None }, ans))
+            Ok((Join { joiner, code, clock: clock(), attempt: None }, ans))
         })();
         match made {
             Ok((j, ans)) => (Some(j), answer(Ok(ans))),
@@ -243,6 +248,55 @@ impl Join {
         }
         answer(Ok(Last { send: att.finish(saved) }))
     }
+}
+
+#[derive(Deserialize)]
+struct NewGroupArgs {
+    /// The phone's name and system, as for a join.
+    name: String,
+    os: String,
+    /// Where the member key lives: `hardware` or `file`.
+    store: String,
+    /// The root key's public point, SEC1 uncompressed: the key whose
+    /// callback signs.
+    #[serde(with = "certs::b64")]
+    root_public: Vec<u8>,
+    /// The member key's public point, SEC1 uncompressed.
+    #[serde(with = "certs::b64")]
+    public: Vec<u8>,
+    #[serde(with = "certs::b64", default)]
+    seal: Vec<u8>,
+}
+
+/// A group the phone makes with its root key (cbb_core::admit::new_group),
+/// from the app's request (NewGroupArgs); the answer has a join's fields,
+/// so the app keeps it as it keeps a join.
+pub fn new_group(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
+    answer((|| -> Result<JoinedAnswer> {
+        let a: NewGroupArgs = serde_json::from_slice(request)
+            .map_err(|e| Error::msg(format!("the group request does not decode: {e}")))?;
+        if a.store != "hardware" && a.store != "file" {
+            return Err(Error::msg(format!("the key store is hardware or file, not {:?}", a.store)));
+        }
+        let root_key = AppKey { public: a.root_public, sign, ctx };
+        let own = cbb_core::admit::OwnDevice {
+            name: &a.name,
+            os: &a.os,
+            member_point: &a.public,
+            store: &a.store,
+            seal: a.seal,
+        };
+        let g = cbb_core::admit::new_group(&root_key, &own, wall_ms())?;
+        Ok(JoinedAnswer {
+            device: g.device.to_string(),
+            cert: g.cert.der.clone(),
+            issuer: None,
+            group_ca: g.root.der.clone(),
+            roots: Vec::new(),
+            records: g.records.to_file()?,
+            admin_ca: None,
+        })
+    })())
 }
 
 fn joined_answer(j: &cbb_core::pair_session::Joined, now_ms: i64) -> Result<JoinedAnswer> {
