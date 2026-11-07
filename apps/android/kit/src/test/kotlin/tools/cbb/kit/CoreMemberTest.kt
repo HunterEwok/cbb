@@ -163,6 +163,32 @@ class CoreMemberTest {
         b.unlisten(CoreMember.Listen.RELAY)
     }
 
+    /**
+     * Calls from other threads while the member stops answer or fail, and never reach freed memory: an event's handler that
+     * called the member as the app restarted it crashed the Android app.
+     */
+    @Test
+    fun stopsWhileCalled() {
+        val root = SoftwareSigner()
+        val key = SoftwareSigner()
+        val g = PhoneGroup.create(root, key.publicKeyDER, now, seal = Core.sealPublic(seal))
+        val m = start(g.device, key, g.memberCert, g.groupCA)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val callers = List(4) {
+            Thread {
+                repeat(2_000) {
+                    runCatching { m.current(); m.peers() }
+                    calls.incrementAndGet()
+                }
+            }.apply { start() }
+        }
+        Thread.sleep(20)
+        m.close()
+        callers.forEach { it.join() }
+        assertEquals(8_000, calls.get())
+        assertFailsWith<IllegalStateException> { m.current() }
+    }
+
     private inline fun <reified T : CoreMember.Event> next(q: LinkedBlockingQueue<CoreMember.Event>, crossinline ok: (T) -> Boolean = { true }): T {
         val deadline = System.nanoTime() + 15_000_000_000L
         while (true) {

@@ -87,6 +87,11 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
  * command and wait block on the network: call them off the main thread.
  */
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
+/*
+ * Stops the member. It stays valid for the rest of the process: another
+ * thread may still call it, and a call after the stop answers that the
+ * member stopped; stopping it again does nothing.
+ */
 void cbb_member_stop(cbb_member *m);
 /*
  * An admin's change to a device of the group or command for it, signed with

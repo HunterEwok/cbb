@@ -106,6 +106,9 @@ pub struct Member {
     state_dir: PathBuf,
     /// What carries out the commands for the phone other than a mute.
     others: Arc<RwLock<Option<OnCommand>>>,
+    /// What gets the tunnel offers besides sync away from home, which
+    /// always gets them.
+    tunnels: Arc<RwLock<Option<OnTunnel>>>,
     away: Arc<Away>,
 }
 
@@ -179,12 +182,16 @@ impl Member {
         };
         node.on_command(Arc::new(move |peer, c| commands.command(peer, c)));
         node.set_tunnel_key(away.key());
+        let tunnels: Arc<RwLock<Option<OnTunnel>>> = Arc::new(RwLock::new(None));
         {
-            let away = away.clone();
+            let (away, app) = (away.clone(), tunnels.clone());
             let n = Arc::downgrade(&node);
             node.on_tunnel(Box::new(move |from, v, may_host| {
                 if let (Some(hub), Some(node)) = (away.offered(from, v, may_host), n.upgrade()) {
                     away.retry(&node, &hub);
+                }
+                if let Some(f) = app.read().unwrap().as_ref() {
+                    f(from, v, may_host);
                 }
             }));
         }
@@ -204,6 +211,7 @@ impl Member {
             log,
             state_dir,
             others,
+            tunnels,
             away,
         })
     }
@@ -507,9 +515,10 @@ impl Member {
     }
 
     /// Sets what gets the tunnel offers of the group's root and admins, for
-    /// the app's tunnel to the hub (docs/protocol.md, section 11).
+    /// the app's tunnel to the hub (docs/protocol.md, section 11). Sync away
+    /// from home in the core gets them too, before it.
     pub fn on_tunnel(&self, f: OnTunnel) {
-        self.node.on_tunnel(f);
+        *self.tunnels.write().unwrap() = Some(f);
     }
 
     /// Sets what carries out the commands for this phone itself other than

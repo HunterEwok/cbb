@@ -171,6 +171,31 @@ final class CoreMemberTests: XCTestCase {
         }
     }
 
+    /// Calls from other threads while the member stops answer or fail, and
+    /// never reach freed memory: an event's handler that called the member
+    /// as the app restarted it crashed the Android app.
+    func testStopsWhileCalled() throws {
+        let t = try CoreGroup(test: self)
+        let m = t.phones[0].member
+        let done = DispatchGroup()
+        let calls = NSLock()
+        var n = 0
+        for _ in 0..<4 {
+            DispatchQueue.global().async(group: done) {
+                for _ in 0..<2_000 {
+                    _ = try? m.current()
+                    _ = try? m.peers()
+                    calls.withLock { n += 1 }
+                }
+            }
+        }
+        Thread.sleep(forTimeInterval: 0.02)
+        m.stop()
+        done.wait()
+        XCTAssertEqual(calls.withLock { n }, 8_000)
+        XCTAssertThrowsError(try m.current()) { XCTAssertTrue($0 is CoreMember.Stopped) }
+    }
+
     func testRefusesWhatItDoesNotKnowAndStops() throws {
         let t = try CoreGroup(test: self)
         let a = t.phones[0]

@@ -418,6 +418,8 @@ pub struct Member {
     node: Arc<Node>,
     answers: Arc<Answers>,
     events: Events,
+    /// Set by stop: the member stays allocated, and answers no more.
+    stopped: std::sync::atomic::AtomicBool,
 }
 
 impl Member {
@@ -518,7 +520,7 @@ impl Member {
                 res.id = id;
                 res
             }));
-            Ok(Member { node: Arc::new(node), answers, events: ev })
+            Ok(Member { node: Arc::new(node), answers, events: ev, stopped: std::sync::atomic::AtomicBool::new(false) })
         })();
         match made {
             Ok(m) => (Some(m), answer(Ok(serde_json::json!({})))),
@@ -529,6 +531,9 @@ impl Member {
     /// Answers a request of cbb_member_call, `{op, args}`.
     pub fn call(&self, request: &[u8]) -> Vec<u8> {
         answer((|| -> Result<Value> {
+            if self.stopped.load(Ordering::SeqCst) {
+                return Err(Error::msg("the member stopped"));
+            }
             let r: Request = serde_json::from_slice(request)
                 .map_err(|e| Error::msg(format!("the member's request does not decode: {e}")))?;
             self.op(&r.op, r.args)
@@ -798,8 +803,11 @@ impl Member {
         })
     }
 
+    /// Stops the member once; calls answer that it stopped from then on.
     pub fn stop(&self) {
-        self.node.stop();
+        if !self.stopped.swap(true, Ordering::SeqCst) {
+            self.node.stop();
+        }
     }
 
     /// Signs a change to a device of the group, or a command for it, with
