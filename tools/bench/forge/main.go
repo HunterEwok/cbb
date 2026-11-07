@@ -24,7 +24,10 @@
 // socket's in control.go, the TVs in tv.go, the mDNS records in mdns.go,
 // the renewals in cert.go, watching the writes in watch.go, the fetch
 // limits in fetch.go, the phone that scans a QR code in qr.go, a relay
-// between two pairing sessions in relay.go. It is never part of a release.
+// between two pairing sessions in relay.go, looking for a text in the
+// services' memory in memscan.go, the stand-in for the internet in
+// outside.go, the web server in front of a forwarder's XHTTP in web.go. It
+// is never part of a release.
 package main
 
 import (
@@ -56,6 +59,24 @@ func main() {
 	socket := flag.String("socket", "", "the control socket's cases: its path, if not the default")
 	flag.StringVar(&targetState, "target-state", "", "the renewals' cases: the target's state directory, for its key")
 	flag.Parse()
+	if flag.NArg() > 0 && outsideCase(flag.Arg(0)) {
+		// It serves until it fails.
+		fmt.Fprintln(os.Stderr, "forge:", runOutside(*addr, flag.Arg(0)))
+		os.Exit(1)
+	}
+	if flag.NArg() > 0 && webCase(flag.Arg(0)) {
+		// It serves until it fails.
+		fmt.Fprintln(os.Stderr, "forge:", runWeb(*addr, flag.Arg(0)))
+		os.Exit(1)
+	}
+	if flag.Arg(0) == "memscan" {
+		// forge memscan TEXT looks for TEXT in the services' memory.
+		if err := runMemscan(flag.Arg(1)); err != nil {
+			fmt.Fprintln(os.Stderr, "forge:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if name, ok := strings.CutPrefix(flag.Arg(0), "site:"); ok {
 		// forge -addr :443 site:NAME serves as the well-known site NAME.
 		if err := runSite(*addr, name); err != nil {

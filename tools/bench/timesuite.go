@@ -58,6 +58,11 @@ func TimeSuite(ctx context.Context, r *Report, cbb string, timeout time.Duration
 	if ctx.Err() == nil && scenario("K5-ca-end") {
 		caEnd(ctx, r, f, timeout)
 	}
+	if ctx.Err() == nil && scenario("W46-xhttp") {
+		f.serverEnv, f.memberEnv = xhttpEnv, xhttpEnv
+		hubOverXHTTP(ctx, r, f, timeout)
+		f.serverEnv, f.memberEnv = nil, nil
+	}
 }
 
 // certificates (K1, K2, K4, K7, W39): renewal, credential periods and a
