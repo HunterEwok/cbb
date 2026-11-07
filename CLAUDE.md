@@ -44,6 +44,9 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   member TLS, signed device and revocation records; `keys.go` puts new member and admin keys
   in the TPM (`internal/tpmkey`, go-tpm, tested against swtpm) on Linux.
 - `internal/pair`: pairing (CPace inside TLS, the Welcome), both directions.
+- `cmd/cbb-helper`, `internal/helper`: the Go helper the Rust `cbb` starts as its child and
+  talks to over its inherited pipes (`member/src/helper.rs`, docs/design.md "The service and its
+  helper"); it takes over what needs Go as the Rust service replaces the Go one.
 - `internal/node`: the member protocol and sync, commands passed on to members; `internal/service`: the daemon and CLI.
 - Remote paste targets, each a `connector.Target`: `internal/desktop/x11paste.go` (XTEST),
   `waylandpaste.go` (the virtual keyboard), `portal.go` (the RemoteDesktop portal on GNOME and KDE,

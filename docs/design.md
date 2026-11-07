@@ -151,6 +151,35 @@ The containers (C4 level 2): the programs of a group and how they talk.
 
 ![The containers: the programs of a computer, a phone, a lite member and the hub, and how they talk](images/containers.svg)
 
+### The service and its helper
+
+The Rust program `cbb` (`member/`) becomes the one member on every device, a computer as
+much as a router: the group, sync, records, seals, admitting devices, commands and the
+control socket. What needs Go stays in Go, in `cbb-helper` (`cmd/cbb-helper`,
+`internal/helper`): keys in the TPM, the Secure Enclave and on a YubiKey, the hub's and the
+forwarder's tunnel with VLESS and REALITY, the relay, remote paste into desktop sessions and
+Windows, quick actions, TVs and the Bluetooth keyboard. The move happens in steps; until it
+ends, the Go service described below is still the computers' member.
+
+- **Started by `cbb` only.** `cbb` starts `cbb-helper` as its child, from beside its own
+  program or from `CBB_HELPER` (empty for none), and talks to it only over the child's
+  standard input and output, the pipes it inherits; the helper logs to its standard error,
+  which goes to `cbb`'s log. No socket or pipe has a name, so no other process can ask the
+  helper for anything, and above all for a signature with a device's key. Started by hand,
+  on a terminal or with arguments, the helper refuses to run.
+- **Messages.** The control socket's: a JSON header on one line, then `len` bytes of
+  payload (docs/protocol.md, section 8). A request carries a `seq` of `cbb`'s own; the
+  helper answers it with op `reply`, the same `seq` and `done`, or with `error` and, in
+  `detail`, the underlying causes, which `cbb` keeps as the error's details (shown in debug
+  mode, always logged). Requests may overlap: each runs on its own, and the answers come in
+  the order they end. A handler that panics fails only its own request.
+- **`hello`** is the first request: the helper answers with its build and the operations it
+  serves, which `cbb` logs. A `cbb` without a helper beside it, as on a router, runs
+  without what the helper does.
+- **Lifetime.** The end of its input tells the helper to exit, so it ends with `cbb`, also
+  when `cbb` is killed. If the helper stops, `cbb` starts it again at the next request, at
+  most once in two seconds.
+
 ### Linux components
 
 Copy Beyond Borders for Linux is one program that runs as up to three processes with different rights

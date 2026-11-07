@@ -138,6 +138,9 @@ struct Service {
     /// command signed before is refused.
     started_ms: i64,
     log: Arc<dyn Fn(&str) + Send + Sync>,
+    /// cbb-helper, where it is beside cbb (helper.rs): what needs Go.
+    #[allow(dead_code, reason = "the operations that need Go come in the next steps of the Rust service")]
+    helper: Option<Arc<crate::helper::Helper>>,
 }
 
 static STOP: AtomicBool = AtomicBool::new(false);
@@ -185,7 +188,18 @@ pub fn run(cfg: Config) -> Result<()> {
         commands: Mutex::new(HashMap::new()),
         started_ms: uptime::wall_ms(),
         log: log.clone(),
+        helper: crate::helper::locate().map(|p| Arc::new(crate::helper::Helper::new(&p, log.clone()))),
     });
+    if let Some(h) = svc.helper.clone() {
+        // Started at once, so that a helper that cannot run shows in the
+        // log at the start rather than at the first request.
+        let log = log.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = h.hello() {
+                log(&format!("cbb: {}", e.for_log()));
+            }
+        });
+    }
     let only = crate::interfaces::only();
     if !only.is_empty() {
         log(&format!("cbb: the member port and mDNS work only on {} (CBB_INTERFACES)", only.join(", ")));

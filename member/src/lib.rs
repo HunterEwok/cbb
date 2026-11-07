@@ -26,6 +26,7 @@ pub mod discovery;
 pub mod entries;
 pub mod error;
 pub mod files;
+pub mod helper;
 #[cfg(feature = "tunnel")]
 pub mod forward;
 #[cfg(feature = "tunnel")]

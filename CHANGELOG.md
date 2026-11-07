@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
+  helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
+  its hello and starts it again when it stops. It does nothing else yet; the steps that make
+  the Rust `cbb` every computer's service hand it what needs Go.
 - The lite member speaks AmneziaWG to a hub that hides its tunnel (member/src/awg.rs, around
   GotaTun's WireGuard): it keeps the group's settings from the hub's offer and syncs away from
   home through the obfuscated hub instead of staying at home (`TestLiteMemberAwayObfuscated`
