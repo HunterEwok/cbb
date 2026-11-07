@@ -16,9 +16,7 @@ use crate::error::{Error, Result};
 pub fn write_atomic(path: &Path, data: &[u8], mode: u32) -> Result<()> {
     let fail = |e| Error::with(format!("cannot write {}", path.display()), e);
     let dir = path.parent().unwrap_or(Path::new("."));
-    let mut rnd = [0u8; 8];
-    getrandom::fill(&mut rnd).map_err(|_| Error::msg("cannot write a file: the system has no randomness"))?;
-    let rnd: String = rnd.iter().map(|b| format!("{b:02x}")).collect();
+    let rnd = random_name();
     let tmp = dir.join(format!(".{}.{rnd}.tmp", path.file_name().and_then(|n| n.to_str()).unwrap_or("file")));
     let mut opts = fs::OpenOptions::new();
     opts.write(true).create_new(true);
@@ -40,6 +38,18 @@ pub fn write_atomic(path: &Path, data: &[u8], mode: u32) -> Result<()> {
         let _ = d.sync_all();
     }
     Ok(())
+}
+
+/// Sixteen random hex digits for a new file's or folder's name. Without the
+/// system's randomness it falls back to the process and the time, which still
+/// tells apart the names one process makes.
+pub fn random_name() -> String {
+    let mut rnd = [0u8; 8];
+    if getrandom::fill(&mut rnd).is_err() {
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        rnd = ((t as u64) ^ (u64::from(std::process::id()) << 32)).to_le_bytes();
+    }
+    rnd.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[cfg(test)]

@@ -21,14 +21,15 @@ mod awg;
 pub mod button;
 pub mod content;
 mod control;
+mod copies;
 mod device;
 pub mod discovery;
 pub mod entries;
 pub mod error;
 pub mod files;
-pub mod helper;
 #[cfg(feature = "tunnel")]
 pub mod forward;
+pub mod helper;
 #[cfg(feature = "tunnel")]
 pub mod hub;
 pub mod identity;

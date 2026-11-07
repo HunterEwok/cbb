@@ -179,6 +179,14 @@ ends, the Go service described below is still the computers' member.
 - **Lifetime.** The end of its input tells the helper to exit, so it ends with `cbb`, also
   when `cbb` is killed. If the helper stops, `cbb` starts it again at the next request, at
   most once in two seconds.
+- **The clients' operations.** The Rust service already takes what the command line and the
+  desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
+  copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,
+  `copied` and `write`, and images and files: `copy-media`, `copied-media` and `paste-media`
+  with their `part` and `data` messages. It keeps and serves the blobs of media copies
+  (`features: ["media"]`), fetches a copy whole before it writes it to a watcher that takes
+  it, and gives the other watchers its text. The Go `cbb` and agent work against it unchanged
+  (`TestLiteClients`).
 
 ### Linux components
 

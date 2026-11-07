@@ -71,6 +71,19 @@ fn is_zero(n: &i64) -> bool {
 }
 
 impl Manifest {
+    /// What tells two copies of images or files apart, as Go's
+    /// Manifest.key: each part's type, path and hash.
+    pub fn key(&self) -> Vec<u8> {
+        let mut k = b"media\0".to_vec();
+        for p in &self.parts {
+            k.extend_from_slice(p.kind.as_bytes());
+            k.extend_from_slice(p.path.as_bytes());
+            k.push(0);
+            k.extend_from_slice(p.sha256.as_deref().unwrap_or_default());
+        }
+        k
+    }
+
     /// Reports whether this is a copy of files, not clipboard data.
     pub fn files(&self) -> bool {
         self.parts.first().is_some_and(|p| !p.path.is_empty())

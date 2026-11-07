@@ -8,15 +8,16 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use crate::actions;
 use crate::away::Away;
-use crate::clip::{Engine, Kind, Mode, Via};
+use crate::clip::{Engine, Event, Kind, Mode, Via};
 use crate::control::{self, Device, Header, Message, Status};
+use crate::copies;
 use crate::discovery;
 use crate::error::{Context, Error, Result};
 use crate::files;
@@ -30,6 +31,7 @@ use crate::records::Stored as _;
 use crate::remotepaste;
 use crate::uptime;
 use crate::wire;
+use cbb_core::media::Manifest;
 
 /// The release's version, such as "0.3.0", which the release build passes in
 /// `CBB_VERSION`; other builds say "dev", as the Go service does.
@@ -99,7 +101,22 @@ struct Watcher {
     board: bool,
     /// Its user, read when it offers a target (peer.rs).
     uid: Option<u32>,
+    /// Its clipboard takes images, files and formatted text whole.
+    images: bool,
+    files: bool,
+    html: bool,
     tx: SyncSender<ToWatcher>,
+}
+
+impl Watcher {
+    /// Whether its clipboard takes the copy m whole, as on a full member.
+    fn takes(&self, m: &Manifest) -> bool {
+        let has = |t: &str| m.parts.iter().any(|p| p.kind == t);
+        if m.files() {
+            return self.files;
+        }
+        self.images && (has("image/png") || has("image/jpeg")) || self.html && has("text/html")
+    }
 }
 
 /// How the service runs.
@@ -130,6 +147,14 @@ struct Service {
     /// The limits of quick actions per sender, as remote paste's.
     acts: Mutex<remotepaste::Limiter>,
     pending: Mutex<Option<WriteReq>>, // a write decided while no watcher was connected
+    /// The seq of the latest write: a copy of images or files fetched after
+    /// a newer write is not written.
+    latest: AtomicU64,
+    /// The latest copy of images or files this member made or wrote, which
+    /// paste-media opens.
+    media: Mutex<Option<Arc<Event>>>,
+    /// This device's largest copy of images or files (cbb config).
+    limits: Mutex<copies::Limits>,
     state_dir: PathBuf,
     /// The replay cache: the IDs of the commands carried out, until they
     /// expire, in milliseconds since the Unix epoch.
@@ -184,6 +209,12 @@ pub fn run(cfg: Config) -> Result<()> {
         pastes: Mutex::new(remotepaste::Limiter::default()),
         acts: Mutex::new(remotepaste::Limiter::default()),
         pending: Mutex::new(None),
+        latest: AtomicU64::new(0),
+        media: Mutex::new(None),
+        limits: Mutex::new(copies::Limits::load(&cfg.state_dir).unwrap_or_else(|e| {
+            log(&format!("cbb: {}; the largest copy is the default", e.for_log()));
+            copies::Limits::default()
+        })),
         state_dir: cfg.state_dir.clone(),
         commands: Mutex::new(HashMap::new()),
         started_ms: uptime::wall_ms(),
@@ -200,6 +231,8 @@ pub fn run(cfg: Config) -> Result<()> {
             }
         });
     }
+    // Parts of copies on their way when the service last stopped.
+    let _ = std::fs::remove_dir_all(cfg.state_dir.join("tmp"));
     let only = crate::interfaces::only();
     if !only.is_empty() {
         log(&format!("cbb: the member port and mDNS work only on {} (CBB_INTERFACES)", only.join(", ")));
@@ -247,16 +280,22 @@ pub fn run(cfg: Config) -> Result<()> {
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
     let node = {
         let svc = svc.clone();
-        Arc::new(Node::new(
-            ident,
-            &cfg.name,
-            engine.clone(),
-            records,
-            cfg.state_dir.clone(),
-            Box::new(move |w| svc.deliver(w)),
-            log.clone(),
-        ))
+        Arc::new(
+            Node::new(
+                ident,
+                &cfg.name,
+                engine.clone(),
+                records,
+                cfg.state_dir.clone(),
+                Box::new(move |w| svc.deliver(w)),
+                log.clone(),
+            )
+            .with_content(),
+        )
     };
+    // Images and files go to the clipboard watchers that take them, as on
+    // a full member.
+    engine.set_takes_media(true);
     // The copies this member makes are sealed to the group's readers and
     // signed (docs/protocol.md, section 4).
     engine.set_seal(node.sealer());
@@ -424,7 +463,8 @@ fn via_of(s: &str) -> Result<Via> {
 
 fn kind_name(k: Kind) -> &'static str {
     match k {
-        // Of images or files a lite member has only their text.
+        // A write of images or files goes as kind media (watch); elsewhere
+        // such a copy is its text.
         Kind::Text | Kind::Media => "text",
         Kind::Secret => "secret",
     }
@@ -1068,24 +1108,58 @@ impl Service {
 
     /// Passes a write the engine decided on to every watcher that holds a
     /// clipboard; with none, it waits for the next one.
-    fn deliver(&self, w: WriteReq) {
+    ///
+    /// A copy of images or files goes whole to the watchers that take it,
+    /// once fetched; the others get its plain-text alternative, if any.
+    fn deliver(self: &Arc<Self>, w: WriteReq) {
+        self.latest.fetch_max(w.seq, Ordering::SeqCst);
+        let Some(ev) = w.event.clone() else {
+            if !self.send_writes(|_| Some(w.clone())) {
+                *self.pending.lock().unwrap() = Some(w);
+            }
+            return;
+        };
+        *self.media.lock().unwrap() = Some(ev.clone());
+        let Some(m) = ev.media.clone() else { return };
+        let alt = (!w.text.is_empty()).then(|| WriteReq { kind: Kind::Text, media: None, event: None, ..w.clone() });
+        let node = self.node().ok().filter(|_| self.watchers.lock().unwrap().iter().any(|x| x.board && x.takes(&m)));
+        let takers = node.is_some();
+        if let Some(node) = node {
+            let svc = self.clone();
+            let (alt, m) = (alt.clone(), m.clone());
+            std::thread::spawn(move || {
+                let limit = svc.limits.lock().unwrap().home as u64;
+                let fetched = node.fetch(&ev, limit);
+                if svc.latest.load(Ordering::SeqCst) != w.seq {
+                    return; // a newer write came
+                }
+                if let Err(e) = &fetched {
+                    (svc.log)(&format!("cbb: fetching a copy's images or files: {}", e.for_log()));
+                }
+                let whole = fetched.is_ok().then_some(w);
+                svc.send_writes(|x| if x.takes(&m) { whole.clone().or_else(|| alt.clone()) } else { None });
+            });
+        }
+        let Some(alt) = alt else { return };
+        if !self.send_writes(|x| if x.takes(&m) && takers { None } else { Some(alt.clone()) }) && !takers {
+            *self.pending.lock().unwrap() = Some(alt);
+        }
+    }
+
+    /// Sends each watcher that holds a clipboard the write pick gives it;
+    /// reports whether there is such a watcher.
+    fn send_writes(&self, pick: impl Fn(&Watcher) -> Option<WriteReq>) -> bool {
         let mut ws = self.watchers.lock().unwrap();
-        let mut got = false;
+        let mut boards = false;
         ws.retain(|x| {
             if !x.board {
                 return true;
             }
-            match x.tx.try_send(ToWatcher::Write(w.clone())) {
-                Err(mpsc::TrySendError::Disconnected(_)) => false,
-                _ => {
-                    got = true;
-                    true
-                }
-            }
+            boards = true;
+            let Some(w) = pick(x) else { return true };
+            !matches!(x.tx.try_send(ToWatcher::Write(w)), Err(mpsc::TrySendError::Disconnected(_)))
         });
-        if !got {
-            *self.pending.lock().unwrap() = Some(w);
-        }
+        boards
     }
 
     fn serve(&self, conn: UnixStream, admin: bool) {
@@ -1116,6 +1190,29 @@ impl Service {
             self.watch(m, r, out);
             return;
         }
+        if m.header.op == "copy-media" || m.header.op == "copied-media" {
+            let answer = match self.copy_media(&m, &mut r) {
+                Ok(()) => control::reply(Header::default(), Vec::new()),
+                Err(e) => {
+                    (self.log)(&format!("cbb: {}: {}", m.header.op, e.for_log()));
+                    // What the client still sends is read before the
+                    // answer, so that closing the socket does not reset it.
+                    if let Ok(c) = out.try_clone() {
+                        let _ = c.set_read_timeout(Some(Duration::from_secs(5)));
+                    }
+                    while let Ok(Some(_)) = r.read() {}
+                    control::failure(&e)
+                }
+            };
+            let _ = control::write(&mut out, &answer);
+            return;
+        }
+        if m.header.op == "paste-media" {
+            if let Err(e) = self.paste_media(&mut out) {
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
+            return;
+        }
         let answer = match self.request(&m) {
             Ok(a) => a,
             Err(e) => {
@@ -1126,9 +1223,82 @@ impl Service {
         let _ = control::write(&mut out, &answer);
     }
 
+    /// Takes cbb copy FILE, or a watcher's copied image: the parts and their
+    /// bytes come in part and data messages after the request, which
+    /// carries the plain-text alternative. The copy is sealed, kept to
+    /// serve, and sent to the group.
+    fn copy_media(&self, m: &Message, r: &mut control::Reader<UnixStream>) -> Result<()> {
+        let node = self.node()?;
+        let limit = self.limits.lock().unwrap().home;
+        let mut got = copies::receive(r, &m.payload, limit, &self.tmp_dir()?)?;
+        let parts = std::mem::take(&mut got.parts);
+        let ev = if m.header.op == "copied-media" {
+            node.copied_media(&got.text, parts, Via::Copy)?
+        } else {
+            Some(node.send_media(&got.text, parts, Via::Copy)?)
+        };
+        if let Some(ev) = ev {
+            *self.media.lock().unwrap() = Some(Arc::new(ev));
+        }
+        Ok(())
+    }
+
+    /// Answers cbb paste -o and a watcher's fetch: the images or files of
+    /// the member's own clipboard, or of the group's copy in a mode that
+    /// keeps its clipboard to itself, once fetched; the plain-text
+    /// alternative, then each part and its bytes.
+    fn paste_media(&self, out: &mut UnixStream) -> Result<()> {
+        let node = self.node()?;
+        let engine = &node.engine;
+        let ev = if engine.mode().receives() {
+            let (m, _, _) = engine.local_media().ok_or_else(|| Error::msg("the clipboard holds no images or files"))?;
+            let ev = self.media.lock().unwrap().clone();
+            ev.filter(|ev| ev.media.as_ref().is_some_and(|e| e.key() == m.key()))
+                .ok_or_else(|| Error::msg("the copy's images or files are no longer kept here; copy them again"))?
+        } else {
+            let ev = engine.current().filter(|ev| ev.media.is_some());
+            Arc::new(ev.ok_or_else(|| Error::msg("the group's copy is no images or files"))?)
+        };
+        node.fetch(&ev, self.limits.lock().unwrap().home as u64)?;
+        let dir = self.tmp_dir()?.join(format!("paste-{}", files::random_name()));
+        let parts = node.open_media(&ev, &dir);
+        let sent = parts.and_then(|parts| copies::send(out, &ev.text, &parts));
+        let _ = std::fs::remove_dir_all(&dir);
+        sent
+    }
+
+    /// The folder for the parts of copies on their way, in the state
+    /// folder, which only the service reads.
+    fn tmp_dir(&self) -> Result<PathBuf> {
+        let dir = self.state_dir.join("tmp");
+        std::fs::create_dir_all(&dir).context("cannot make the folder for copies on their way")?;
+        Ok(dir)
+    }
+
+    /// Images and files in cbb status and cbb config.
+    fn media_status(&self) -> control::Media {
+        let l = *self.limits.lock().unwrap();
+        control::Media { max_copy: l.home, max_copy_away: l.away }
+    }
+
     fn request(&self, m: &Message) -> Result<Message> {
         let h = &m.header;
         match h.op.as_str() {
+            // Shows this device's settings, or sets the setting name to
+            // value: max-copy or max-copy-away.
+            "config" => {
+                if !h.name.is_empty() {
+                    let l = copies::Limits::set(&self.state_dir, &h.name, &h.value)?;
+                    *self.limits.lock().unwrap() = l;
+                    (self.log)(&format!(
+                        "cbb: the largest copy is {} at home and {} away from home now",
+                        copies::size_text(l.home),
+                        copies::size_text(l.away)
+                    ));
+                }
+                let status = Status { media: Some(self.media_status()), ..Default::default() };
+                Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
+            }
             "copy" => {
                 let text = String::from_utf8(m.payload.clone()).context("the text is not UTF-8")?;
                 self.node()?.send(&text, kind_of(&h.kind)?, via_of(&h.via)?)?;
@@ -1144,7 +1314,18 @@ impl Service {
                 } else {
                     engine.current().filter(|ev| !ev.text.is_empty()).map(|ev| (ev.text, ev.kind, Duration::ZERO))
                 };
-                let (text, kind, _) = got.ok_or_else(|| Error::msg("the clipboard is empty"))?;
+                let Some((text, kind, _)) = got else {
+                    let media = if engine.mode().receives() {
+                        engine.local_media().is_some()
+                    } else {
+                        engine.current().is_some_and(|ev| ev.media.is_some())
+                    };
+                    return Err(Error::msg(if media {
+                        "the clipboard holds images or files without a text; cbb paste -o DIR saves them"
+                    } else {
+                        "the clipboard is empty"
+                    }));
+                };
                 Ok(control::reply(Header { kind: kind_name(kind).into(), ..Default::default() }, text.into_bytes()))
             }
             // The version the service runs, in a group or not: cbb update's
@@ -1194,6 +1375,7 @@ impl Service {
                     actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
                     stop: node.stop(),
                     removed: node.removed(),
+                    media: Some(self.media_status()),
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
             }
@@ -1318,6 +1500,7 @@ impl Service {
             target.clear();
         }
         let board = !m.header.paste_only && target != TMUX && !keyboard;
+        let (images, files, html) = (m.header.images, m.header.files, m.header.html);
         if board && let (Ok(text), Ok(kind)) = (String::from_utf8(m.payload), kind_of(&m.header.kind)) {
             node.engine.clipboard_is(&text, kind);
         }
@@ -1336,7 +1519,7 @@ impl Service {
             let _ = tx.try_send(ToWatcher::Write(w));
         }
         let id = self.next_watcher.fetch_add(1, Ordering::SeqCst);
-        self.watchers.lock().unwrap().push(Watcher { id, target: target.clone(), board, uid, tx });
+        self.watchers.lock().unwrap().push(Watcher { id, target: target.clone(), board, uid, images, files, html, tx });
         let waiting: Arc<Mutex<Waiting>> = Arc::default();
         {
             let waiting = waiting.clone();
@@ -1347,7 +1530,7 @@ impl Service {
                         ToWatcher::Write(w) => Message::new(
                             Header {
                                 op: "write".into(),
-                                kind: kind_name(w.kind).into(),
+                                kind: if w.media.is_some() { "media".into() } else { kind_name(w.kind).into() },
                                 via: if w.via == Via::Copy { String::new() } else { via_name(w.via).into() },
                                 seq: w.seq,
                                 ttl_ms: w.ttl.map(|d| d.as_millis() as i64).unwrap_or(0),

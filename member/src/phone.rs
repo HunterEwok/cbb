@@ -258,7 +258,7 @@ impl Member {
     /// shared from another app do not, and a text the clipboard sent before
     /// them stays out of the button's sending (trace b1).
     pub fn copy_media(&self, text: &str, parts: Vec<(Part, Source)>, board: bool) -> Result<Copy> {
-        let event = self.node.send_media(text, parts)?;
+        let event = self.node.send_media(text, parts, Via::Phone)?;
         let key = button::key_of(&event).unwrap_or_default();
         if board {
             self.own.sent(&key);

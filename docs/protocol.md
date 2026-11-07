@@ -492,7 +492,7 @@ depends on a version number.
 | `release_keys_seq` | integer or absent | with `release_seq`: the `seq` of that release's `keys.json`; absent when it holds none |
 | `entries_seq` | integer or absent | the `seq` of the newest signed `entries.json` the sender holds (section 16, "Entry points"); absent when it holds none |
 | `entries_keys_seq` | integer or absent | with `entries_seq`: the `seq` of the `keys.json` it came with; absent when it holds none |
-| `features` | array of strings or absent | what the sender supports beyond the protocol of its ALPN version, each name once: `media` from a member that serves the content of media events ("Content", below), so others may send it `get` (the lite member serves none). A receiver reads the first 32 names and ignores those it does not know, so a later release adds a feature without a new ALPN version |
+| `features` | array of strings or absent | what the sender supports beyond the protocol of its ALPN version, each name once: `media` from a member that serves the content of media events ("Content", below), so others may send it `get`. A receiver reads the first 32 names and ignores those it does not know, so a later release adds a feature without a new ALPN version |
 | `group_ca` | string or absent | from a full member on a connection that carries records only with a device no `device` record names ("Records only" in the exchange): the group's first root, DER in base64, so that a new phone restoring the group with the recovery key builds the group's path from the records (section 10, "The recovery key"). Every other hello leaves it out |
 | `seal` | string or absent | the sender's public key for sealed messages, 1216 bytes in base64 (an X-Wing key, `internal/seal`), which the group's root puts in the sender's device record (`seal`, section 10) so that commands for it can be sealed (section 15); a key of another size is ignored; absent from the phones for now |
 
@@ -685,7 +685,7 @@ on the wire the event shows only its `blob`:
 {"t":"event","event":{"id":"77aa...","origin":"3b1e...","time":"1761024002000.0","age_ms":5,"cert":"MIIB...","wraps":[{"to":"3b1e...","key":"..."},{"to":"9c40...","key":"..."}],"payload":"...","blob":{"size":65552,"sha256":"Zm9v..."},"sig":"MEUC..."}}
 ```
 
-A member that does not take images or files (the lite member) takes
+A member that does not take images or files takes
 the event like any other, so the group converges, forwards it, and writes only its text, as
 a text, to its clipboard; with no text it keeps its clipboard.
 

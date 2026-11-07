@@ -72,6 +72,9 @@ pub struct WriteReq {
     pub seq: u64,
     /// For a secret: how long it may stay in the clipboard.
     pub ttl: Option<Duration>,
+    /// For a copy with images or files, its event, which fetch and
+    /// open_media take.
+    pub event: Option<Arc<Event>>,
 }
 
 /// A connected member, as its hello and its reach messages present it:
@@ -528,14 +531,32 @@ impl Node {
         to
     }
 
-    /// Makes a copy of images or files from the parts the app hands in:
-    /// seals their blob, keeps it to serve, and sends the copy.
-    pub fn send_media(&self, text: &str, parts: Vec<(Part, Source)>) -> Result<Event> {
+    /// Makes a copy of images or files from the parts handed in, as a
+    /// deliberate action: seals their blob, keeps it to serve, and sends the
+    /// copy; on a member that takes media, writes it to its own clipboard
+    /// unless that holds it already.
+    pub fn send_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via) -> Result<Event> {
         let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
         let key = copy::new_key();
         let (manifest, blob) = store.seal(parts, &key)?;
-        let ev = self.engine.send_media(text, manifest, Via::Phone, key, blob)?;
+        let (ev, out) = self.engine.send_media(text, manifest, via, key, blob)?;
         self.forward(&ev, None);
+        if out.write {
+            self.write(&ev, out.seq);
+        }
+        Ok(ev)
+    }
+
+    /// Passes images or files a clipboard watcher reported to the engine,
+    /// sealed and kept to serve, and sends the event, if any.
+    pub fn copied_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via) -> Result<Option<Event>> {
+        let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
+        let key = copy::new_key();
+        let (manifest, blob) = store.seal(parts, &key)?;
+        let ev = self.engine.copied_media(text, manifest, via, key, blob)?;
+        if let Some(ev) = &ev {
+            self.forward(ev, None);
+        }
         Ok(ev)
     }
 
@@ -799,6 +820,7 @@ impl Node {
             via: ev.via,
             seq,
             ttl,
+            event: ev.media.is_some().then(|| Arc::new(ev.clone())),
         });
     }
 

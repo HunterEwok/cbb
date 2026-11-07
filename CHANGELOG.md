@@ -11,6 +11,11 @@ All notable changes to cbb are documented in this file. The format follows
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
   its hello and starts it again when it stops. It does nothing else yet; the steps that make
   the Rust `cbb` every computer's service hand it what needs Go.
+- The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
+  desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
+  `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and
+  serves the content of media copies, and gives a watcher that takes them the copy whole; the
+  Go command line and agent work against it unchanged (`TestLiteClients`).
 - The lite member speaks AmneziaWG to a hub that hides its tunnel (member/src/awg.rs, around
   GotaTun's WireGuard): it keeps the group's settings from the hub's offer and syncs away from
   home through the obfuscated hub instead of staying at home (`TestLiteMemberAwayObfuscated`

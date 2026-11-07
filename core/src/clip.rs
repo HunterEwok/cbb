@@ -10,6 +10,7 @@ use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::format;
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::time::Duration;
 
 use hmac::{Hmac, KeyInit, Mac};
@@ -284,9 +285,23 @@ pub struct Outcome {
 
 #[derive(Clone, Default)]
 struct Local {
-    text: String, // empty when unknown
+    text: String, // empty when unknown, or images or files without a text
     kind: Kind,
     at: Duration,
+    /// Images or files, on a member that takes them (set_takes_media).
+    media: Option<Manifest>,
+}
+
+impl Local {
+    /// What tells the clipboard's content apart, as Go's localText.key.
+    fn key(&self) -> Vec<u8> {
+        self.media.as_ref().map_or_else(|| self.text.as_bytes().to_vec(), Manifest::key)
+    }
+}
+
+/// What tells an event's content apart, as Go's Event.key.
+fn event_key(ev: &Event) -> Vec<u8> {
+    ev.media.as_ref().map_or_else(|| ev.text.as_bytes().to_vec(), Manifest::key)
 }
 
 type Sum = [u8; 32];
@@ -310,6 +325,9 @@ struct Inner {
     /// milliseconds, 0 for until it is lifted.
     mute: Option<i64>,
     pause: Option<i64>,
+    /// Whether this member takes images and files into its clipboard, as a
+    /// computer does; a phone's and a small device's member does not.
+    takes_media: bool,
 }
 
 /// The state of one member. It is safe for concurrent use.
@@ -356,6 +374,7 @@ impl Engine {
                 mode: Mode::Shared,
                 mute: None,
                 pause: None,
+                takes_media: false,
             }),
         }
     }
@@ -364,6 +383,14 @@ impl Engine {
     /// leaves the copy unmade.
     pub fn set_seal(&self, seal: SealFn) {
         *self.seal.lock() = Some(seal);
+    }
+
+    /// Makes this member take images and files into its own clipboard and
+    /// report them from it, as a computer's member does (copied_media,
+    /// local_media): the group's media copies are written to it, and its
+    /// own count as what its clipboard holds.
+    pub fn set_takes_media(&self, on: bool) {
+        self.inner.lock().takes_media = on;
     }
 
     /// The sync mode.
@@ -473,10 +500,14 @@ impl Engine {
         true
     }
 
-    #[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
     fn sum(&self, text: &str) -> Sum {
+        self.sum_key(text.as_bytes())
+    }
+
+    #[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
+    fn sum_key(&self, key: &[u8]) -> Sum {
         let mut m = Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC takes a key of any length");
-        m.update(text.as_bytes());
+        m.update(key);
         m.finalize().into_bytes().into()
     }
 
@@ -490,21 +521,37 @@ impl Engine {
 
     /// The text of this member's own clipboard, its kind, and how long ago
     /// it was copied; None when unknown or an expired secret.
+    /// For images or files, their plain-text alternative, as a text.
     pub fn local(&self) -> Option<(String, Kind, Duration)> {
         let st = self.inner.lock();
         let now = (self.uptime)();
-        local_live(&st, now).then(|| (st.local.text.clone(), st.local.kind, now.saturating_sub(st.local.at)))
+        if !local_live(&st, now) || st.local.text.is_empty() {
+            return None;
+        }
+        let kind = if st.local.kind == Kind::Media { Kind::Text } else { st.local.kind };
+        Some((st.local.text.clone(), kind, now.saturating_sub(st.local.at)))
+    }
+
+    /// The images or files of this member's own clipboard, with their
+    /// plain-text alternative and how long ago they were copied; None when
+    /// it holds none, as far as the engine knows.
+    pub fn local_media(&self) -> Option<(Manifest, String, Duration)> {
+        let st = self.inner.lock();
+        let now = (self.uptime)();
+        let m = st.local.media.clone()?;
+        Some((m, st.local.text.clone(), now.saturating_sub(st.local.at)))
     }
 
     /// Records what the local clipboard holds without making an event.
     pub fn clipboard_is(&self, text: &str, kind: Kind) {
         let mut st = self.inner.lock();
-        if check_text(text).is_err() {
+        // Images or files are never only told.
+        if check_text(text).is_err() || kind == Kind::Media {
             st.local = Local::default();
             return;
         }
         let now = (self.uptime)();
-        st.local = Local { text: text.to_string(), kind, at: now };
+        st.local = Local { text: text.to_string(), kind, at: now, media: None };
         if kind == Kind::Secret {
             add_secret(&mut st, self.sum(text), now);
         }
@@ -527,7 +574,7 @@ impl Engine {
             return Ok(None);
         }
         if via == Via::Universal && self.live(&st, now) && st.current.text == text {
-            st.local = Local { text: text.to_string(), kind: st.current.kind, at: st.copied_at };
+            st.local = Local { text: text.to_string(), kind: st.current.kind, at: st.copied_at, media: None };
             return Ok(None);
         }
         if kind == Kind::Text && has_secret(&st, &sum, now) {
@@ -535,7 +582,7 @@ impl Engine {
             return Ok(None);
         }
         if !st.mode.sends() || self.muted(&mut st) {
-            st.local = Local { text: text.to_string(), kind, at: now };
+            st.local = Local { text: text.to_string(), kind, at: now, media: None };
             if kind == Kind::Secret {
                 add_secret(&mut st, sum, now);
             }
@@ -574,8 +621,9 @@ impl Engine {
 
     /// Makes a media event from a deliberate action: images or files, with
     /// their plain-text alternative or "", whose blob the caller sealed
-    /// under key (docs/protocol.md, section 4, "The blob"). The member's
-    /// own clipboard is not written: it holds them already.
+    /// under key (docs/protocol.md, section 4, "The blob"). On a member
+    /// that takes media, as send, the outcome tells whether they go to its
+    /// own clipboard; on another, it never writes them.
     pub fn send_media(
         &self,
         text: &str,
@@ -583,14 +631,8 @@ impl Engine {
         via: Via,
         key: [u8; KEY_SIZE],
         blob: Option<Blob>,
-    ) -> Result<Event> {
-        media.validate()?;
-        if text.len() > MAX_ALT_TEXT {
-            return Err(Error::msg(format!("a media copy's text of {} bytes is larger than 256 KiB", text.len())));
-        }
-        if !text.is_empty() {
-            check_text(text)?;
-        }
+    ) -> Result<(Event, Outcome)> {
+        check_media(&media, text)?;
         if (media.size > 0) != blob.is_some() {
             return Err(Error::msg("a media copy has a blob when its parts hold bytes, and only then"));
         }
@@ -599,6 +641,77 @@ impl Engine {
             return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
         }
         let now = (self.uptime)();
+        let held = st.takes_media && local_holds(&st, &media.key(), true, now);
+        let ev = self.new_media(&mut st, text, media, via, key, blob, now)?;
+        let mut out = Outcome::default();
+        if st.takes_media && !held {
+            st.seq = st.seq.saturating_add(1);
+            out.write = true;
+            out.seq = st.seq;
+            let sum = self.sum_key(&event_key(&ev));
+            add_written(&mut st, sum, now);
+        }
+        Ok((ev, out))
+    }
+
+    /// Records images or files a clipboard watcher reported, whose blob the
+    /// caller sealed under key, as copied does a text: it returns the event
+    /// to send, or None when the clipboard did not really change for the
+    /// group. Only a member that takes media makes them.
+    #[allow(clippy::too_many_arguments, reason = "the parts of a media event, as send_media takes them")]
+    pub fn copied_media(
+        &self,
+        text: &str,
+        media: Manifest,
+        via: Via,
+        key: [u8; KEY_SIZE],
+        blob: Option<Blob>,
+    ) -> Result<Option<Event>> {
+        check_media(&media, text)?;
+        let mut st = self.inner.lock();
+        if !st.takes_media {
+            return Err(Error::msg("this member takes no images or files from its clipboard"));
+        }
+        let now = (self.uptime)();
+        let k = media.key();
+        let sum = self.sum_key(&k);
+        if local_holds(&st, &k, true, now)
+            || st.written.iter().any(|(s, at)| *s == sum && now.saturating_sub(*at) <= ECHO_WINDOW)
+        {
+            return Ok(None);
+        }
+        if via == Via::Universal && self.live(&st, now) && st.current.media.as_ref().is_some_and(|m| m.key() == k) {
+            st.local = Local {
+                text: st.current.text.clone(),
+                kind: Kind::Media,
+                at: st.copied_at,
+                media: st.current.media.clone(),
+            };
+            return Ok(None);
+        }
+        if !st.mode.sends() || self.muted(&mut st) {
+            st.local = Local { text: text.to_string(), kind: Kind::Media, at: now, media: Some(media) };
+            return Ok(None);
+        }
+        if (media.size > 0) != blob.is_some() {
+            return Err(Error::msg("a media copy has a blob when its parts hold bytes, and only then"));
+        }
+        Ok(Some(self.new_media(&mut st, text, media, via, key, blob, now)?))
+    }
+
+    /// Makes a media event this member's current one, and, on a member that
+    /// takes media, its clipboard's content.
+    #[allow(clippy::too_many_arguments, reason = "the parts of a media event, and the engine's state")]
+    fn new_media(
+        &self,
+        st: &mut Inner,
+        text: &str,
+        media: Manifest,
+        via: Via,
+        key: [u8; KEY_SIZE],
+        blob: Option<Blob>,
+        now: Duration,
+    ) -> Result<Event> {
         let mut ev = Event {
             id: random_id(),
             origin: self.self_id.clone(),
@@ -614,10 +727,14 @@ impl Engine {
         if let Some(seal) = self.seal.lock().as_ref() {
             ev.sealed = Some(seal(&ev).map_err(|e| e.context("seal the copy"))?);
         }
-        add_seen(&mut st, &ev.id);
+        add_seen(st, &ev.id);
         st.current = ev.clone();
         st.copied_at = now;
-        st.local = Local::default();
+        st.local = if st.takes_media {
+            Local { text: ev.text.clone(), kind: Kind::Media, at: now, media: ev.media.clone() }
+        } else {
+            Local::default()
+        };
         Ok(ev)
     }
 
@@ -637,7 +754,7 @@ impl Engine {
         add_seen(st, &ev.id);
         st.current = ev.clone();
         st.copied_at = now;
-        st.local = Local { text: text.to_string(), kind, at: now };
+        st.local = Local { text: text.to_string(), kind, at: now, media: None };
         if kind == Kind::Secret {
             add_secret(st, sum, now);
         }
@@ -754,8 +871,13 @@ impl Engine {
     /// than the live window. An older one never does: the member's own text,
     /// however old, stays.
     fn decide_write(&self, st: &mut Inner, mut out: Outcome, now: Duration) -> Outcome {
-        // Images or files without a text leave this member's clipboard as
-        // it is: it never fetches their content (takes_media false).
+        // On a member that does not take media, images or files without a
+        // text leave its clipboard as it is: it never fetches their content.
+        let held = if st.takes_media {
+            local_holds(st, &event_key(&st.current), st.current.media.is_some(), now)
+        } else {
+            local_has(st, &st.current.text, now)
+        };
         let incoming = crate::rule::Incoming {
             receives: st.mode.receives(),
             paused: self.paused(st),
@@ -764,8 +886,8 @@ impl Engine {
             unread: st.current.unread,
             has_text: !st.current.text.is_empty(),
             has_media: st.current.media.is_some(),
-            takes_media: false,
-            held: local_has(st, &st.current.text, now),
+            takes_media: st.takes_media,
+            held,
             age_ms: ms(now.saturating_sub(st.copied_at)),
             window_ms: ms(st.window),
             secret_ttl_ms: ms(SECRET_TTL),
@@ -776,8 +898,19 @@ impl Engine {
         st.seq = st.seq.saturating_add(1);
         out.write = true;
         out.seq = st.seq;
+        if st.takes_media {
+            st.local = Local {
+                text: st.current.text.clone(),
+                kind: st.current.kind,
+                at: st.copied_at,
+                media: st.current.media.clone(),
+            };
+            let sum = self.sum_key(&event_key(&st.current));
+            add_written(st, sum, now);
+            return out;
+        }
         let kind = if st.current.kind == Kind::Media { Kind::Text } else { st.current.kind };
-        st.local = Local { text: st.current.text.clone(), kind, at: st.copied_at };
+        st.local = Local { text: st.current.text.clone(), kind, at: st.copied_at, media: None };
         let sum = self.sum(&st.current.text);
         add_written(st, sum, now);
         out
@@ -803,11 +936,30 @@ fn ms(d: Duration) -> i64 {
 }
 
 fn local_live(st: &Inner, now: Duration) -> bool {
-    !st.local.text.is_empty() && (st.local.kind != Kind::Secret || now.saturating_sub(st.local.at) < SECRET_TTL)
+    (!st.local.text.is_empty() || st.local.media.is_some())
+        && (st.local.kind != Kind::Secret || now.saturating_sub(st.local.at) < SECRET_TTL)
 }
 
 fn local_has(st: &Inner, text: &str, now: Duration) -> bool {
-    local_live(st, now) && st.local.text == text
+    local_live(st, now) && st.local.media.is_none() && st.local.text == text
+}
+
+/// Whether the local clipboard holds the content whose key is key, images
+/// or files when media.
+fn local_holds(st: &Inner, key: &[u8], media: bool, now: Duration) -> bool {
+    local_live(st, now) && st.local.media.is_some() == media && st.local.key() == key
+}
+
+/// Checks a media event's manifest and plain-text alternative.
+fn check_media(media: &Manifest, text: &str) -> Result<()> {
+    media.validate()?;
+    if text.len() > MAX_ALT_TEXT {
+        return Err(Error::msg(format!("a media copy's text of {} bytes is larger than 256 KiB", text.len())));
+    }
+    if !text.is_empty() {
+        check_text(text)?;
+    }
+    Ok(())
 }
 
 fn add_seen(st: &mut Inner, id: &str) {
@@ -902,7 +1054,8 @@ mod tests {
         let png = Part { kind: "image/png".into(), size: 3, sha256: Some(alloc::vec![7; 32]), ..Default::default() };
         let m = Manifest { size: 3, parts: alloc::vec![png] };
         let blob = Blob { size: 65_552, sha256: alloc::vec![1; 32] };
-        let ev = a.send_media("", m.clone(), Via::Phone, [5; 32], Some(blob.clone())).unwrap();
+        let (ev, out) = a.send_media("", m.clone(), Via::Phone, [5; 32], Some(blob.clone())).unwrap();
+        assert!(!out.write);
         assert_eq!((ev.kind, ev.key, ev.blob.clone()), (Kind::Media, Some([5; 32]), Some(blob)));
         assert_eq!(a.current().unwrap().id, ev.id);
         assert!(a.local().is_none());
@@ -915,6 +1068,70 @@ mod tests {
                 .is_err()
         );
         assert!(a.send_media("", empty, Via::Phone, [5; 32], None).is_ok());
+    }
+
+    /// A member that takes media, as a computer's, writes the group's images
+    /// and files to its clipboard and reports its own, as Go's engine.
+    #[test]
+    fn takes_media() {
+        use crate::copy::Blob;
+        use crate::media::{Manifest, Part};
+        let t = Arc::new(AtomicU64::new(100_000));
+        let a = engine(A, t.clone());
+        a.set_takes_media(true);
+        a.reconcile(B, Hello { wall: 1_761_024_000_000, current: None }).unwrap();
+        a.connected(B);
+        let part =
+            |b: u8| Part { kind: "image/png".into(), size: 3, sha256: Some(alloc::vec![b; 32]), ..Default::default() };
+        let manifest = |b: u8| Manifest { size: 3, parts: alloc::vec![part(b)] };
+        let blob = || Some(Blob { size: 65_552, sha256: alloc::vec![1; 32] });
+
+        // The group's images without a text are written, and then held.
+        let ev = Event {
+            id: random_id(),
+            origin: B.to_string(),
+            via: Via::Copy,
+            time: Timestamp { wall: 1_761_024_000_000 + 200_000, logical: 0 },
+            kind: Kind::Media,
+            media: Some(manifest(7)),
+            ..Event::default()
+        };
+        let out = a.received(ev).unwrap();
+        assert!(out.write);
+        let (m, text, _) = a.local_media().unwrap();
+        assert_eq!((m, text.as_str()), (manifest(7), ""));
+        assert!(a.local().is_none());
+        // Their echo from the clipboard makes no copy.
+        assert!(a.copied_media("", manifest(7), Via::Copy, [5; 32], blob()).unwrap().is_none());
+
+        // New images from the clipboard make one, with its text.
+        let ev = a.copied_media("a picture", manifest(8), Via::Copy, [5; 32], blob()).unwrap().unwrap();
+        assert_eq!((ev.kind, ev.text.as_str()), (Kind::Media, "a picture"));
+        assert_eq!(a.local().unwrap().0, "a picture");
+        assert_eq!(a.local().unwrap().1, Kind::Text);
+        // A deliberate copy of what the clipboard holds is not written again,
+        let (_, out) = a.send_media("a picture", manifest(8), Via::Copy, [5; 32], blob()).unwrap();
+        assert!(!out.write);
+        // of something else it is.
+        let (_, out) = a.send_media("", manifest(9), Via::Copy, [5; 32], blob()).unwrap();
+        assert!(out.write);
+        assert_eq!(a.local_media().unwrap().0, manifest(9));
+
+        // A text from the clipboard replaces the images.
+        assert!(a.copied("words", Kind::Text, Via::Copy).unwrap().is_some());
+        assert!(a.local_media().is_none());
+
+        // In a mode that keeps its copies, they only become its clipboard's.
+        a.set_mode(Mode::Receive);
+        assert!(a.copied_media("", manifest(10), Via::Copy, [5; 32], blob()).unwrap().is_none());
+        assert_eq!(a.local_media().unwrap().0, manifest(10));
+        // Images are never only told.
+        a.clipboard_is("x", Kind::Media);
+        assert!(a.local_media().is_none() && a.local().is_none());
+
+        // A member that does not take media makes none from its clipboard.
+        let b = engine(B, t);
+        assert!(b.copied_media("", manifest(7), Via::Copy, [5; 32], blob()).is_err());
     }
 
     /// A media event becomes the group's current one; a lite member takes

@@ -67,6 +67,14 @@ pub struct Header {
     /// In a watch request: the watcher holds no clipboard and only pastes.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paste_only: bool,
+    /// In a watch request: the watcher's clipboard takes and gives images,
+    /// files and formatted text, each fetched with paste-media.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub images: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub files: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub html: bool,
     /// In an injected answer: error is a refusal, not a failure.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub refused: bool,
@@ -82,6 +90,34 @@ pub struct Header {
     /// In mute, how long, 0 for until unmute.
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub for_ms: i64,
+    /// In config, the value of the setting name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub value: String,
+    /// In copy-media and paste-media, the next part of the copy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<Part>,
+}
+
+/// A part of a copy of images or files on the socket, as Go's
+/// control.Part: clipboard data of a type, or a file or folder at a path.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
+pub struct Part {
+    #[serde(rename = "type", default, skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub path: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dir: bool,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub size: i64,
+}
+
+/// Images and files in the status: this device's largest copy at home and
+/// away from home, as Go's control.Media.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct Media {
+    pub max_copy: i64,
+    pub max_copy_away: i64,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -137,6 +173,8 @@ pub struct Status {
     /// cbb leave.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub removed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media: Option<Media>,
 }
 
 /// A quick action as the device's user set it, with the names of the Go
@@ -298,6 +336,12 @@ pub fn is_admin(op: &str) -> bool {
         op,
         "copy"
             | "paste"
+            | "copy-media"
+            | "copied-media"
+            | "paste-media"
+            | "part"
+            | "data"
+            | "config"
             | "status"
             | "version"
             | "devices"
