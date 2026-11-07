@@ -10,6 +10,10 @@ ApplicationWindow {
     initialPage: Component { MainPage {} }
     cover: Component { CoverPage {} }
     allowedOrientations: defaultAllowedOrientations
+    // Pages from the right in Arabic and Hebrew (main.cpp sets the
+    // direction from the language).
+    LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
+    LayoutMirroring.childrenInherit: true
 
     // The notifications and the share menu, each through a module some
     // systems lack; a missing one leaves the rest of the app working.
