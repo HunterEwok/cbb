@@ -42,6 +42,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_SOCKET` | `cbb`, the lite member, the Mac app | Another control socket, for tests or a second instance. |
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
 | `CBB_STATE` | the lite member | Another state directory. |
+| `CBB_STANDBY_GRACE` | the lite member's `cbb service` | Seconds a hub that lost the hub above it tries the hubs above before it serves again, 60 by default; tests set it shorter. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-site www.example.com`. |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
 

@@ -642,3 +642,123 @@ func TestLiteHub(t *testing.T) {
 		t.Errorf("tunnel.json after hub off: %v\n%s", err, raw)
 	}
 }
+
+// TestLiteHubs runs the Rust service as the second of two hubs, below the
+// Go root's: it waits as the root's client while the root serves, learns
+// the laptop's keys from what the root shares, serves the laptop when the
+// root is off, and gives way when the root serves again
+// (docs/protocol.md, section 11, "Several hubs").
+func TestLiteHubs(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, desk, laptop)
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair -full: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	deskAddr := desk.addr()
+	env := []string{"CBB_STANDBY_GRACE=2"}
+	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-full", "-no-listen", "-peer", deskAddr, "-peer", laptop.addr())
+	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
+		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
+	}
+	deskPort, rustPort := freeUDP(t), freeUDP(t)
+	for _, s := range []*testService{desk, laptop} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := desk.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: deskPort, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", deskPort)}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust member a hub", func() bool {
+		_, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: rustPort, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", rustPort)}, Consent: true}, "")
+		if err != nil && !strings.Contains(err.Error(), "admin") {
+			t.Fatalf("cbb global hub on the Rust member: %v", err)
+		}
+		return err == nil
+	})
+	deskID, rustID, laptopID := desk.status(t).Device, rust.status(t).Device, laptop.status(t).Device
+	waitUpTo(t, 30*time.Second, "the laptop keeps both hubs' offers", func() bool {
+		st := tunnelState(t, laptop)
+		return st.Hub(deskID) != nil && st.Hub(rustID) != nil && st.PSK == st.Hub(rustID).PresharedKey
+	})
+	waitUpTo(t, 30*time.Second, "the Rust hub waits as the desk's client", func() bool {
+		a := rust.status(t).Away
+		return a != nil && a.Hub && a.Standby && a.HubDevice == deskID
+	})
+	if a := desk.status(t).Away; a == nil || a.Standby {
+		t.Errorf("the desk, the first hub, does not serve: %+v", a)
+	}
+	waitUpTo(t, 30*time.Second, "the desk keeps the Rust hub's offer and the Rust hub the laptop", func() bool {
+		raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+		return tunnelState(t, desk).Hub(rustID) != nil && err == nil && strings.Contains(string(raw), laptopID)
+	})
+
+	// The laptop leaves home and reaches the desk through the tunnel.
+	laptop.stop()
+	h.hide(laptopID)
+	laptop = restartService(t, &h, laptop)
+	through := func(hub string) func() bool {
+		return func() bool {
+			st := laptop.status(t)
+			return st.Away != nil && st.Away.Through && st.Away.HubDevice == hub &&
+				slices.ContainsFunc(st.Peers, func(p control.Device) bool { return p.ID == hub })
+		}
+	}
+	waitUpTo(t, 30*time.Second, "the laptop reaches the desk through the tunnel", through(deskID))
+
+	// The desk stops: the Rust hub serves, and the laptop reaches it.
+	desk.stop()
+	waitUpTo(t, 60*time.Second, "the Rust hub serves", func() bool {
+		a := rust.status(t).Away
+		return a != nil && a.Hub && !a.Standby
+	})
+	waitUpTo(t, 90*time.Second, "the laptop reaches the Rust hub through the tunnel", through(rustID))
+	if _, err := laptop.do(t, control.Header{Op: control.OpCopy}, "while the desk is off"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "while the desk is off" })
+
+	// The desk comes back where the Rust member dials it: the Rust hub
+	// gives way, and the laptop moves back.
+	back := &testService{name: desk.name, dir: desk.dir, os: desk.os}
+	back.cfg = func(c *Config) {
+		c.listen = func() (net.Listener, error) {
+			ln, err := net.Listen("tcp", deskAddr)
+			if err == nil {
+				back.mu.Lock()
+				back.memberAddr = ln.Addr().String()
+				back.mu.Unlock()
+			}
+			return ln, err
+		}
+	}
+	desk = startIn(t, &h, back)
+	waitUpTo(t, 60*time.Second, "the Rust hub gives way to the desk", func() bool {
+		a := rust.status(t).Away
+		return a != nil && a.Standby
+	})
+	waitUpTo(t, 90*time.Second, "the laptop reaches the desk again", through(deskID))
+	if _, err := laptop.do(t, control.Header{Op: control.OpCopy}, "the desk is back"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the desk has it", func() bool { return desk.paste(t) == "the desk is back" })
+}

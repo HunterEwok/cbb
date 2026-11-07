@@ -237,8 +237,16 @@ ends, the Go service described below is still the computers' member.
   from the device whose tunnel address it came from (`Node::accept_tunneled`). The claim
   loop drops members the records refuse or no longer list. `hub off` passes the next hub's
   offer to the clients as `moved`, waits up to ten seconds for them to leave, and keeps the
-  state as `retired` (`TestLiteHub`). Several hubs and `move`, a hub on another device, the
-  forwarder and the hub's key periods, VLESS, the relay and invitations are still Go's.
+  state as `retired` (`TestLiteHub`). With several hubs (`away/hubs.rs`, Go's `hubs.go`) it
+  sends each peer that may be a hub its `hubs` share after the hello, and again when it
+  starts or stops serving or admits a client; it takes the clients and the offer another hub
+  shares, and a device that stopped being a hub tells the computers and the possible hubs
+  so. The run loop serves only while no hub above answers: starting, it tries them once;
+  having lost the hub above, for a minute (`CBB_STANDBY_GRACE` in tests); while it serves,
+  every 15 minutes, and when a hub above shares that it serves, after passing that hub's
+  offer on to its clients and waiting for those in its tunnel to leave (`TestLiteHubs`). `move`, a
+  hub on another device, the forwarder and the hub's key periods, VLESS, the relay and
+  invitations are still Go's.
 
 ### Linux components
 

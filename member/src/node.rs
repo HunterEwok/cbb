@@ -498,6 +498,12 @@ impl Node {
         conns.values().filter(|c| !c.records_only).map(|c| (c.id.clone(), c.chain.clone())).collect()
     }
 
+    /// The certificate chain the member id presented, leaf first; empty
+    /// while it is not connected.
+    pub fn chain_of(&self, id: &DeviceId) -> Vec<Cert> {
+        self.conns.lock().unwrap().get(id).map(|c| c.chain.clone()).unwrap_or_default()
+    }
+
     /// The connected members that sent their hello, those whose connection
     /// carries records only among them, sorted by device ID.
     pub fn all_peers(&self) -> Vec<Peer> {

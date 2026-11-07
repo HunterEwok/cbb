@@ -503,6 +503,81 @@ impl State {
         Ok((c, true))
     }
 
+    /// Adds a client another hub shared or handed over, with its key and
+    /// preshared key and no chain yet, as Go's State.Take: a client this hub
+    /// met itself stays as it is. Returns whether the state changed.
+    pub fn take(&mut self, device: &str, public: &[u8], psk: &[u8]) -> Result<bool> {
+        addr(device).ok_or_else(|| Error::msg(format!("{device} is not a device ID")))?;
+        let zero = |k: &[u8]| k.len() != 32 || k.iter().all(|&b| b == 0);
+        if zero(public) || zero(psk) {
+            return Err(Error::msg("a client without a key"));
+        }
+        if self.own_key(public) {
+            return Err(Error::msg(format!("{device} has the hub's own key")));
+        }
+        let mut i = None;
+        for (j, o) in self.members.iter().enumerate() {
+            if o.device == device {
+                i = Some(j);
+            } else if o.key == public {
+                return Err(Error::msg(format!("{device} has the key of {}", o.device)));
+            }
+        }
+        if let Some(i) = i {
+            let c = &mut self.members[i];
+            if !c.chain.is_empty() || c.key == public && c.psk == psk {
+                return Ok(false);
+            }
+            (c.key, c.psk) = (public.to_vec(), psk.to_vec());
+            return Ok(true);
+        }
+        if self.members.len() >= MAX_MEMBERS {
+            return Err(Error::msg("the hub has too many clients"));
+        }
+        self.members.push(Member {
+            device: device.to_string(),
+            key: public.to_vec(),
+            psk: psk.to_vec(),
+            chain: Vec::new(),
+        });
+        Ok(true)
+    }
+
+    /// Keeps the offer of a hub in place of its earlier one, as Go's
+    /// State.SetHub; returns whether the state changed.
+    pub fn set_hub(&mut self, h: Hub) -> Result<bool> {
+        if self.own_key(&h.key) || !h.next.is_empty() && self.own_key(&h.next) {
+            return Err(Error::msg("the hub offered this device's own key"));
+        }
+        let full = self.hubs.len() >= MAX_MEMBERS;
+        match self.hubs.iter_mut().find(|o| o.device == h.device) {
+            Some(o) if *o == h => Ok(false),
+            Some(o) => {
+                *o = h;
+                Ok(true)
+            }
+            None if full => Err(Error::msg("too many hubs")),
+            None => {
+                self.hubs.push(h);
+                Ok(true)
+            }
+        }
+    }
+
+    /// Forgets the offers of the hubs keep refuses and returns their
+    /// devices.
+    pub fn forget_hubs(&mut self, keep: &dyn Fn(&Hub) -> bool) -> Vec<String> {
+        let mut gone = Vec::new();
+        self.hubs.retain(|h| {
+            let k = keep(h);
+            if !k {
+                gone.push(h.device.clone());
+            }
+            k
+        });
+        gone
+    }
+
     /// Forgets the hub's keys for the server credentials' periods, once
     /// it is no hub.
     pub fn clear_periods(&mut self) {

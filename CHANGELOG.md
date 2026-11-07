@@ -39,8 +39,11 @@ All notable changes to cbb are documented in this file. The format follows
   the addresses away from home and `-port`): it admits each member's tunnel key from its
   hello, offers itself to them, serves the WireGuard tunnel (AmneziaWG when obfuscated) on
   its UDP port, and takes the members' connections through it as Go's hub does; `cbb global
-  hub off` moves its clients to the next hub and retires it (`TestLiteHub`). Several hubs,
-  moving a hub, the forwarder, VLESS, the relay and invitations come next.
+  hub off` moves its clients to the next hub and retires it (`TestLiteHub`). With other
+  hubs it shares its clients and offer, takes theirs, waits as the client of a hub above it
+  that serves, serves when that hub is gone and gives way when it is back
+  (`TestLiteHubs`, beside a Go hub). Moving a hub, the forwarder, VLESS, the relay and
+  invitations come next.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

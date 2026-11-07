@@ -30,6 +30,8 @@ const MOVE_LINGER: Duration = Duration::from_secs(1);
 /// The hub while it serves.
 pub(super) struct Serving {
     hub: Arc<Hub>,
+    /// When it started serving.
+    pub(super) since: Instant,
 }
 
 impl Away {
@@ -156,6 +158,8 @@ impl Away {
         *st = next_st;
         drop(cur);
         self.stop_serving();
+        // The computers and the devices that may be hubs forget its offer.
+        self.share(node, None);
         (self.log)(&match next {
             Some(n) => format!("cbb: this device is no hub of the group any more; its clients go to {}", n.device),
             None => "cbb: this device is no hub of the group any more, and the group has no other".to_string(),
@@ -167,9 +171,13 @@ impl Away {
     /// the offers for it: its own and those of the other hubs it passes on,
     /// as Go's tunnelKeyOffered. chain is the member's verified chain.
     pub fn hello(&self, node: &Node, from: &DeviceId, peer: &Peer, chain: &[Cert]) -> Vec<Message> {
-        let Some((key, psk)) = peer.tunnel_key.as_ref() else { return Vec::new() };
+        let share = || self.share_for(node, from).into_iter().collect();
+        let Some((key, psk)) = peer.tunnel_key.as_ref() else { return share() };
         let mut cur = self.st.lock().unwrap();
-        let Some(st) = cur.as_mut().filter(|s| s.is_hub) else { return Vec::new() };
+        let Some(st) = cur.as_mut().filter(|s| s.is_hub) else {
+            drop(cur);
+            return share();
+        };
         let mut next = st.clone();
         let ders = chain.iter().map(|c| c.der.clone()).collect();
         let (m, changed) = match next.admit(from.as_str(), key, psk, ders) {
@@ -191,48 +199,28 @@ impl Away {
         if changed {
             self.set_peers(st);
         }
-        offers.iter().filter_map(|o| serde_json::to_value(o).ok()).map(|v| wire::tunnel(&v)).collect()
-    }
-
-    /// Forgets, on the hub, the clients the records now refuse, as Go's
-    /// pruneTunnel: refused reports a member's chain refused, listed whether
-    /// the records list a device that has no chain here yet.
-    pub fn prune(&self, refused: &dyn Fn(&[Cert]) -> bool, listed: &dyn Fn(&str) -> bool) {
-        let mut cur = self.st.lock().unwrap();
-        let Some(st) = cur.as_mut().filter(|s| !s.members.is_empty()) else { return };
-        let mut next = st.clone();
-        let gone = next.prune(&|m| {
-            if m.chain.is_empty() {
-                return listed(&m.device);
-            }
-            match m.chain.iter().map(|d| Cert::parse(d)).collect::<std::result::Result<Vec<_>, _>>() {
-                Ok(chain) => !refused(&chain),
-                Err(_) => false,
-            }
-        });
-        if gone.is_empty() {
-            return;
+        drop(cur);
+        let mut out: Vec<Message> =
+            offers.iter().filter_map(|o| serde_json::to_value(o).ok()).map(|v| wire::tunnel(&v)).collect();
+        out.extend(self.share_for(node, from));
+        if changed {
+            // The other hubs learn every client before this one is off.
+            self.share(node, Some(from));
         }
-        for d in &gone {
-            (self.log)(&format!("cbb: {d} was removed from the group; the hub drops its tunnel"));
-        }
-        if let Err(e) = next.save(&self.dir) {
-            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
-        }
-        *st = next;
-        self.set_peers(st);
+        out
     }
 
     /// Gives the running hub the clients st admits.
-    fn set_peers(&self, st: &State) {
+    pub(super) fn set_peers(&self, st: &State) {
         let Some(s) = self.serving.lock().unwrap().as_ref().map(|s| s.hub.clone()) else { return };
         if let Err(e) = st.peers().and_then(|p| s.set_peers(p, self.me.as_str())) {
             self.fail(&e.context("the hub could not take its clients"));
         }
     }
 
-    /// Serves as the hub with st unless it serves already; on an error it
-    /// fails closed, and status says why.
+    /// Serves as the hub with st unless it serves already, and tells the
+    /// other hubs once it starts; on an error it fails closed, and status
+    /// says why.
     pub(super) fn serve(&self, node: &Arc<Node>, st: &State) {
         if self.serving.lock().unwrap().is_some() {
             return;
@@ -241,6 +229,7 @@ impl Away {
             Ok(s) => {
                 *self.serving.lock().unwrap() = Some(s);
                 *self.error.lock().unwrap() = None;
+                self.share(node, None);
             }
             Err(e) => self.fail(&e),
         }
@@ -288,7 +277,7 @@ impl Away {
             }
         });
         (self.log)(&format!("cbb: the hub serves on UDP port {}", hub.udp_port()));
-        Ok(Serving { hub })
+        Ok(Serving { hub, since: Instant::now() })
     }
 
     /// Stops the hub, with every connection through it.
@@ -325,7 +314,7 @@ fn tunnel_addr_of(hub: &Hub, from_port: u16) -> Option<std::net::Ipv6Addr> {
 /// Says goodbye to the clients the next hub's offer went to that are
 /// connected through this hub's tunnel, and waits up to MOVE_GRACE for them
 /// to leave, as Go's waitClientsLeft; those at home stay connected.
-fn wait_clients_left(node: &Node, sent: &[DeviceId], log: &Arc<dyn Fn(&str) + Send + Sync>) {
+pub(super) fn wait_clients_left(node: &Node, sent: &[DeviceId], log: &Arc<dyn Fn(&str) + Send + Sync>) {
     let through: Vec<DeviceId> = node.tunneled().into_iter().filter(|d| sent.contains(d)).collect();
     if through.is_empty() {
         return;
@@ -352,10 +341,23 @@ fn wait_clients_left(node: &Node, sent: &[DeviceId], log: &Arc<dyn Fn(&str) + Se
 /// Go's hubOffersLocked; none while the offers wait for the forwarder's
 /// VLESS settings.
 fn offers(st: &State, client: &str, psk: &[u8], order: &[String]) -> Vec<TunnelOffer> {
-    if st.forwarder.as_ref().is_some_and(|f| !f.vless_id.is_empty() && f.vless.is_none()) {
-        return Vec::new();
+    let Some(own) = own_offer(st, psk) else { return Vec::new() };
+    let mut out = vec![own];
+    for h in &st.hubs {
+        if h.device != client && order.contains(&h.device) {
+            out.push(super::hubs::passed_on(h, psk));
+        }
     }
-    let own = TunnelOffer {
+    out
+}
+
+/// The hub's own offer with the preshared key psk, as Go's
+/// hubOfferLocked; None while it waits for the forwarder's VLESS settings.
+pub(super) fn own_offer(st: &State, psk: &[u8]) -> Option<TunnelOffer> {
+    if st.forwarder.as_ref().is_some_and(|f| !f.vless_id.is_empty() && f.vless.is_none()) {
+        return None;
+    }
+    Some(TunnelOffer {
         hub_key: crate::tunnel::public_key_of(&st.serving_key()),
         psk: psk.to_vec(),
         endpoints: st.hub_endpoints().iter().map(ToString::to_string).collect(),
@@ -363,21 +365,11 @@ fn offers(st: &State, client: &str, psk: &[u8], order: &[String]) -> Vec<TunnelO
         vless: st.forwarder.as_ref().filter(|f| !f.vless_id.is_empty()).and_then(|f| f.vless.clone()),
         next_key: st.next_public(),
         ..Default::default()
-    };
-    let mut out = vec![own];
-    for h in &st.hubs {
-        if h.device == client || !order.contains(&h.device) {
-            continue;
-        }
-        let mut o = offer_of(h);
-        (o.psk, o.hub) = (psk.to_vec(), Some(h.device.clone()));
-        out.push(o);
-    }
-    out
+    })
 }
 
 /// The offer a member keeps as h, without its preshared key.
-fn offer_of(h: &crate::tunnel::Hub) -> TunnelOffer {
+pub(super) fn offer_of(h: &crate::tunnel::Hub) -> TunnelOffer {
     TunnelOffer {
         hub_key: h.key.clone(),
         endpoints: h.endpoints.iter().map(ToString::to_string).collect(),

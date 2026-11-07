@@ -69,7 +69,10 @@ impl Away {
         Vec::new()
     }
 
-    pub fn prune(&self, _refused: &dyn Fn(&[Cert]) -> bool, _listed: &dyn Fn(&str) -> bool) {}
+    pub fn prune(&self, _node: &Node) {}
+
+    pub fn hubs_shared(self: &Arc<Self>, _node: &Arc<Node>, _from: &DeviceId, _chain: &[Cert], _v: &serde_json::Value) {
+    }
 
     pub fn run(self: Arc<Self>, _node: Arc<Node>) {}
 }

@@ -13,7 +13,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::certs::DeviceId;
 use crate::control;
@@ -23,6 +23,7 @@ use crate::tunnel::{self, Link, State};
 use crate::uptime;
 use crate::wire::TunnelOffer;
 
+mod hubs;
 mod serve;
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
@@ -56,6 +57,10 @@ pub struct Away {
     via: Option<SocketAddr>,
     /// The hub, while this device serves as one.
     serving: Mutex<Option<serve::Serving>>,
+    /// Why the hub, while it serves, is to try the hubs above it.
+    standby: Mutex<Option<String>>,
+    /// The hub passes a hub above's offer on before it gives way.
+    giving_way: AtomicBool,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -90,6 +95,8 @@ impl Away {
             using: Mutex::new(None),
             via: None,
             serving: Mutex::new(None),
+            standby: Mutex::new(None),
+            giving_way: AtomicBool::new(false),
             log,
         }
     }
@@ -224,11 +231,16 @@ impl Away {
         let mut a = control::Away { keys_in_file: true, ..Default::default() };
         let using = self.using.lock().unwrap().clone().map(|(d, _)| d);
         let hubs = st.hubs_above(&node.hub_order(), self.me.as_str());
+        // A hub waiting as the client of a hub above shows that hub.
+        let standby = st.is_hub && self.serving.lock().unwrap().is_none();
         if st.is_hub {
-            self.hub_status(st, &mut a, self.serving.lock().unwrap().is_none());
+            self.hub_status(st, &mut a, standby);
         }
-        if let Some(h) =
-            using.as_deref().and_then(|d| st.hub(d)).or(hubs.first()).filter(|_| !st.is_hub || using.is_some())
+        if let Some(h) = using
+            .as_deref()
+            .and_then(|d| st.hub(d))
+            .or(hubs.first())
+            .filter(|_| !st.is_hub || standby || using.is_some())
         {
             a.hub_device = h.device.clone();
             a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();
@@ -254,21 +266,47 @@ impl Away {
     /// Dials, through the tunnel, the first hub in the group's order that
     /// answers, whenever no hub is found at home or connected, until the
     /// service stops; on a hub below the first it tries the ones above
-    /// again after UP_CHECK.
+    /// again after UP_CHECK. A hub serves while no hub above it answers
+    /// (Go's reachHubs with standby): starting, it tries them once; once it
+    /// loses the hub above, it tries them for a minute (standby_grace); while it
+    /// serves, it tries them again every HUB_RECHECK and when a hub above
+    /// says it serves.
     pub fn run(self: Arc<Self>, node: Arc<Node>) {
         std::thread::sleep(FIRST_WAIT);
         let mut wait = Duration::from_secs(1);
         let mut links = 0u64;
+        let grace_over = || Instant::now().checked_sub(hubs::standby_grace());
+        // When this hub last had a hub above it.
+        let mut lost = grace_over();
         while !node.is_closed() {
             let st = self.st.lock().unwrap().clone();
             let hubs = st.as_ref().map(|s| s.hubs_above(&node.hub_order(), self.me.as_str())).unwrap_or_default();
-            // A hub serves while no hub above it answers (Go's reachHubs
-            // with standby): it tries those first, as their client.
             match &st {
-                Some(s) if s.is_hub && hubs.is_empty() => {
-                    self.serve(&node, s);
-                    std::thread::sleep(Duration::from_secs(1));
-                    continue;
+                Some(s) if s.is_hub => {
+                    let since = self.serving.lock().unwrap().as_ref().map(|v| v.since);
+                    let why = self.standby.lock().unwrap().take();
+                    if let Some(since) = since {
+                        let why = why.or_else(|| {
+                            (since.elapsed() >= hubs::HUB_RECHECK)
+                                .then(|| "it is time to look for the hubs above this one".to_string())
+                        });
+                        match why {
+                            Some(why) if !hubs.is_empty() => {
+                                (self.log)(&format!("cbb: {why}; this hub tries the hubs above it"));
+                                self.stop_serving();
+                                self.share(&node, None);
+                                lost = grace_over();
+                            }
+                            _ => {
+                                std::thread::sleep(Duration::from_secs(1));
+                                continue;
+                            }
+                        }
+                    } else if hubs.is_empty() {
+                        self.serve(&node, s);
+                        std::thread::sleep(Duration::from_secs(1));
+                        continue;
+                    }
                 }
                 _ => self.stop_serving(),
             }
@@ -283,8 +321,10 @@ impl Away {
             };
             let ids: Vec<DeviceId> = hubs.iter().filter_map(|h| DeviceId::parse(&h.device).ok()).collect();
             if ids.iter().any(|id| node.connected(id) || node.at_home(id)) {
-                // At home the tunnel is not used, so it sends nothing.
+                // At home the tunnel is not used, so it sends nothing; a hub
+                // waits as the client of the hub above.
                 wait = Duration::from_secs(1);
+                lost = Some(Instant::now());
                 std::thread::sleep(Duration::from_secs(1));
                 continue;
             }
@@ -335,6 +375,12 @@ impl Away {
                 }
             }
             if reached {
+                lost = Some(Instant::now());
+                continue;
+            }
+            if st.is_hub && lost.is_none_or(|l| l.elapsed() >= hubs::standby_grace()) {
+                (self.log)("cbb: no hub above this one answers; this device serves as the group's hub");
+                self.serve(&node, &st);
                 continue;
             }
             std::thread::sleep(wait);

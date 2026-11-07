@@ -347,12 +347,18 @@ pub fn run(cfg: Config) -> Result<()> {
             Ok(offer) => node.offer_admin_key(offer),
             Err(e) => log(&format!("cbb: making the admin key: {}", e.for_log())),
         }
-        let (dir, n, log) = (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone());
+        let (dir, n, log, away) = (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone(), away.clone());
         node.on_message(Box::new(move |from, m| {
-            if let (Some(der), Some(node)) = (m.admin_ca.as_deref().filter(|_| m.kind == "admin"), n.upgrade())
+            let Some(node) = n.upgrade() else { return };
+            if let Some(der) = m.admin_ca.as_deref().filter(|_| m.kind == "admin")
                 && let Err(e) = crate::admin::become_admin(&dir, &node, der)
             {
                 log(&format!("cbb: the admin CA from {from}: {}", e.for_log()));
+            }
+            // What another of the group's hubs shares (docs/protocol.md,
+            // section 11, "Several hubs").
+            if let (Some(v), "hubs") = (m.hubs.as_ref(), m.kind.as_str()) {
+                away.hubs_shared(&node, from, &node.chain_of(from), v);
             }
         }));
     }
@@ -394,10 +400,9 @@ pub fn run(cfg: Config) -> Result<()> {
             let renewed = std::sync::Mutex::new(std::collections::HashMap::new());
             while !node.is_closed() {
                 crate::admin::renew_admin_cas(&dir, &node, &renewed);
-                // A hub drops the clients the records now refuse.
-                away.prune(&|chain| node.records().lock().unwrap().refused(chain).is_some(), &|dev| {
-                    node.records().lock().unwrap().devices().iter().any(|d| d.id == dev)
-                });
+                // A hub drops the clients the records now refuse, and every
+                // member the offers of devices that may no longer be hubs.
+                away.prune(&node);
                 let now = claim_states(&node);
                 if now != last {
                     last = now;
