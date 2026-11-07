@@ -1260,6 +1260,86 @@ func TestLiteRemotePaste(t *testing.T) {
 	}
 }
 
+// TestLiteKeysGrant: the Rust service lets the uinput helper press the keys
+// of a remote paste it handed to a desktop session only, for that session's
+// user: the paste keys once, Enter once when the command asked for it, and
+// none after the session answered, as TestKeysGrant on the Go service.
+func TestLiteKeysGrant(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	dir := joinLite(t, bin, pi)
+	lite := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	waitFor(t, "the lite member connected", func() bool {
+		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && len(m.Status.Peers) == 1
+	})
+	waitFor(t, "pi has the lite member", func() bool { return len(pi.status(t).Peers) == 1 })
+	if _, err := lite.do(t, control.Header{Op: control.OpReceive, Name: "on", Enter: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	uid := strconv.Itoa(os.Getuid())
+	keys := func(grant, req string) error {
+		c, err := control.Dial(lite.socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		c.SetDeadline(time.Now().Add(10 * time.Second))
+		_, err = c.Do(&control.Message{Header: control.Header{Op: control.OpKeys, Name: req, Value: uid, Keys: grant}})
+		return err
+	}
+	w := lite.dial(t)
+	defer w.Close()
+	w.SetDeadline(time.Now().Add(60 * time.Second))
+	if _, err := w.Do(&control.Message{Header: control.Header{Op: control.OpWatch, Inject: targetDesktop, PasteOnly: true}}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the lite member offers the desktop", func() bool {
+		p := lite.status(t).Paste
+		return p != nil && len(p.Targets) == 1 && p.Targets[0] == targetDesktop
+	})
+	pasted := make(chan error, 1)
+	go func() {
+		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "lite", Enter: true}, "ls")
+		pasted <- err
+	}()
+	m, err := w.Receive()
+	if err != nil || m.Op != control.OpInject || len(m.Keys) != 32 || !m.Enter {
+		t.Fatalf("the desktop session got %+v, %v", m, err)
+	}
+	if err := keys(m.Keys, "enter"); err == nil {
+		t.Error("Enter before the paste keys")
+	}
+	if err := keys("00"+m.Keys[2:], "paste"); err == nil {
+		t.Error("the paste keys under another grant")
+	}
+	if err := keys(m.Keys, "paste"); err != nil {
+		t.Errorf("the paste keys: %v", err)
+	}
+	if err := keys(m.Keys, "paste"); err == nil {
+		t.Error("the paste keys twice")
+	}
+	if err := keys(m.Keys, "enter"); err != nil {
+		t.Errorf("Enter after the paste: %v", err)
+	}
+	if err := keys(m.Keys, "enter"); err == nil {
+		t.Error("Enter twice")
+	}
+	if err := w.Send(&control.Message{Header: control.Header{Op: control.OpInjected, Seq: m.Seq}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-pasted; err != nil {
+		t.Fatalf("the paste: %v", err)
+	}
+	if err := keys(m.Keys, "paste"); err == nil {
+		t.Error("keys after the session answered")
+	}
+}
+
 // TestLiteQuickActions: the lite member runs only the presets its own user
 // turned on, for the signers they allow, and restarts at an admin's request by ending with an error, after which
 // systemd starts it again. A reboot is not run here.

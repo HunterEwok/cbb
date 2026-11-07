@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::actions;
 use crate::away::Away;
@@ -84,9 +84,24 @@ struct Inject {
     /// The target may paste where nothing tells whether the session is
     /// locked (remotepaste::Settings).
     no_lock_check: bool,
+    /// The grant for the uinput helper, for a desktop session.
+    keys: String,
     kind: String,
     name: String,
     done: SyncSender<(String, String)>,
+}
+
+/// A grant lets the uinput helper press the keys of one remote paste for
+/// the user of the desktop session the service handed it to, as Go's
+/// keysGrant: the paste keys once, then Enter once if the command asked for
+/// it. The helper presses keys anywhere, so it presses none the service did
+/// not ask for, after the paste switches and the checks on the signer.
+struct Grant {
+    uid: u32,
+    enter: bool,
+    pasted: bool,
+    done: bool,
+    until: Instant,
 }
 
 /// The pastes sent to a watcher that wait for its answer, by their seq.
@@ -145,6 +160,9 @@ struct Service {
     node: RwLock<Option<Arc<Node>>>,
     away: RwLock<Option<Arc<Away>>>,
     watchers: Mutex<Vec<Watcher>>,
+    /// The grants of the remote pastes handed to desktop sessions, for the
+    /// uinput helper's keys, by their tokens.
+    grants: Mutex<HashMap<String, Grant>>,
     next_watcher: AtomicUsize,
     /// The limits of remote paste per sender.
     pastes: Mutex<remotepaste::Limiter>,
@@ -237,6 +255,7 @@ pub fn run(cfg: Config) -> Result<()> {
         node: RwLock::new(None),
         away: RwLock::new(None),
         watchers: Mutex::new(Vec::new()),
+        grants: Mutex::new(HashMap::new()),
         next_watcher: AtomicUsize::new(0),
         pastes: Mutex::new(remotepaste::Limiter::default()),
         acts: Mutex::new(remotepaste::Limiter::default()),
@@ -1264,7 +1283,7 @@ impl Service {
         // the system tells who that is.
         let secret = body.paste_kind == "secret";
         let mut why = "";
-        let targets: Vec<(String, SyncSender<ToWatcher>)> = targets
+        let targets: Vec<(String, Option<u32>, SyncSender<ToWatcher>)> = targets
             .into_iter()
             .filter(|(t, uid, _)| match peer::may_take(*uid, t, peer::at_screen) {
                 peer::Verdict::Allowed => true,
@@ -1280,7 +1299,6 @@ impl Service {
                     false
                 }
             })
-            .map(|(t, _, tx)| (t, tx))
             .collect();
         if targets.is_empty() {
             res.reason = why.into();
@@ -1288,21 +1306,30 @@ impl Service {
         }
         let wait = if body.mode == "type" { INJECT_WAIT + TYPE_WAIT * text.len() as u32 } else { INJECT_WAIT };
         let mut reasons: Vec<String> = Vec::new();
-        for (target, tx) in targets {
+        for (target, uid, tx) in targets {
             let (done, answer) = mpsc::sync_channel(1);
+            let keys = match uid {
+                Some(uid) if target == DESKTOP => self.grant_keys(uid, body.enter, wait),
+                _ => String::new(),
+            };
             let i = Inject {
                 text: text.to_string(),
                 method: body.mode.clone(),
                 enter: body.enter,
                 no_lock_check: set.no_lock_check,
+                keys: keys.clone(),
                 kind: body.paste_kind.clone(),
                 name: name.to_string(),
                 done,
             };
             if tx.try_send(ToWatcher::Inject(i)).is_err() {
+                self.grants.lock().unwrap().remove(&keys);
                 continue;
             }
-            let reason = match answer.recv_timeout(wait) {
+            let answered = answer.recv_timeout(wait);
+            // The grant ends with the session's answer.
+            self.grants.lock().unwrap().remove(&keys);
+            let reason = match answered {
                 Ok((status, _)) if status == "done" => {
                     res.status = status;
                     return res;
@@ -1326,6 +1353,46 @@ impl Service {
         }
         res.reason = reasons.join("; ");
         res
+    }
+
+    /// Makes the grant of a remote paste for uid, a desktop session's user,
+    /// valid for wait, as Go's grantKeys.
+    fn grant_keys(&self, uid: u32, enter: bool, wait: Duration) -> String {
+        let mut b = [0u8; 16];
+        if getrandom::fill(&mut b).is_err() {
+            return String::new();
+        }
+        let token: String = b.iter().map(|x| format!("{x:02x}")).collect();
+        let now = Instant::now();
+        let mut grants = self.grants.lock().unwrap();
+        grants.retain(|_, g| g.until > now);
+        grants.insert(token.clone(), Grant { uid, enter, pasted: false, done: false, until: now + wait });
+        token
+    }
+
+    /// Answers the uinput helper's keys (Go's takeKeys): whether it may
+    /// press the keys req, paste or enter, for the user uid under the grant.
+    fn take_keys(&self, grant: &str, req: &str, uid: &str) -> Result<()> {
+        let mut grants = self.grants.lock().unwrap();
+        let ok = match grants.get_mut(grant) {
+            Some(g) if g.until > Instant::now() && g.uid.to_string() == uid => match req {
+                "paste" if !g.pasted => {
+                    g.pasted = true;
+                    true
+                }
+                "enter" if g.enter && g.pasted && !g.done => {
+                    g.done = true;
+                    true
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err(Error::msg("no remote paste asked for these keys now"))
+        }
     }
 
     /// Remote paste here, for the status: the switches and the targets that
@@ -1488,6 +1555,17 @@ impl Service {
                 (self.log)(&format!("cbb: pair: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
             }
+            return;
+        }
+        if m.header.op == "keys" {
+            let answer = if peer::uid(&out).is_some_and(peer::privileged) {
+                self.take_keys(&m.header.keys, &m.header.name, &m.header.value)
+                    .map(|()| control::reply(Header::default(), Vec::new()))
+                    .unwrap_or_else(|e| control::failure(&e))
+            } else {
+                control::failure(&Error::msg("only the uinput helper, as root, asks for a paste's keys"))
+            };
+            let _ = control::write(&mut out, &answer);
             return;
         }
         if m.header.op == "invite" {
@@ -2071,6 +2149,7 @@ impl Service {
                                     method: i.method,
                                     enter: i.enter,
                                     no_lock_check: i.no_lock_check,
+                                    keys: i.keys,
                                     kind: i.kind,
                                     name: i.name,
                                     ..Default::default()

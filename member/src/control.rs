@@ -146,6 +146,11 @@ pub struct Header {
     /// In hubs: the table of main hubs, names or device IDs in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+    /// In an inject to a desktop session, the grant its desktop connector
+    /// hands the uinput helper, which asks with keys whether it may press
+    /// the paste's keys.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub keys: String,
     /// The text of a remote invitation: made by invite, used by join.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub invite: String,
@@ -498,6 +503,9 @@ pub fn is_admin(op: &str) -> bool {
             | "write"
             | "inject"
             | "injected"
+            // The uinput helper, as root, through the socket's group; the
+            // service checks that it is root.
+            | "keys"
             // This device's own pause of receiving (design.md, "Muting a
             // device"); the lite member mutes no other device.
             | "mute"
