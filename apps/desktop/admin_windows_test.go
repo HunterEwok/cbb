@@ -11,13 +11,13 @@ import (
 
 // Every argument is a literal: a name with quotes and $ runs nothing.
 func TestPSScript(t *testing.T) {
-	s := psScript(`C:\Program Files\cbb\cbb.exe`, []string{"rename", "ab12", "Bob's $(x)"}, false, true, `C:\T\o.txt`)
+	s := psScript(`C:\Program Files\cbb\cbb.exe`, []string{"rename", "ab12", "Bob's $(x)"}, "", true, `C:\T\o.txt`)
 	want := "$env:CBB_DEBUG = '1'\n& 'C:\\Program Files\\cbb\\cbb.exe' 'rename' 'ab12' 'Bob''s $(x)' *> 'C:\\T\\o.txt'\nexit $LASTEXITCODE\n"
 	if s != want {
 		t.Errorf("psScript =\n%s\nwant\n%s", s, want)
 	}
-	if s := psScript("cbb", []string{"global", "on"}, true, false, "o"); !strings.HasPrefix(s, "'yes' | & 'cbb'") {
-		t.Errorf("with yes: %q", s)
+	if s := psScript("cbb", []string{"global", "on"}, `C:\T\i.txt`, false, "o"); !strings.HasPrefix(s, `Get-Content -Raw -LiteralPath 'C:\T\i.txt' | & 'cbb'`) {
+		t.Errorf("with input: %q", s)
 	}
 }
 

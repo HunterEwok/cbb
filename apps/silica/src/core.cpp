@@ -88,10 +88,12 @@ QJsonObject take(uint8_t *answer, size_t len, const QString &what, Failure *fail
     return a.value(QStringLiteral("ok")).toObject();
 }
 
-int32_t signDigest(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
+namespace {
+
+int32_t signWith(KeyStore::Which which, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
 {
     Failure failure;
-    const QByteArray der = KeyStore::sign(QByteArray(reinterpret_cast<const char *>(digest), 32), &failure);
+    const QByteArray der = KeyStore::sign(QByteArray(reinterpret_cast<const char *>(digest), 32), &failure, which);
     if (der.isEmpty() || der.size() > 72) {
         Errors::log(QStringLiteral("key: the key did not sign: %1 %2").arg(failure.message, failure.details));
         return 1;
@@ -99,6 +101,18 @@ int32_t signDigest(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
     std::memcpy(sig, der.constData(), size_t(der.size()));
     *sigLen = size_t(der.size());
     return 0;
+}
+
+} // namespace
+
+int32_t signDigest(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
+{
+    return signWith(KeyStore::Which::Member, digest, sig, sigLen);
+}
+
+int32_t signAdminDigest(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
+{
+    return signWith(KeyStore::Which::Admin, digest, sig, sigLen);
 }
 
 } // namespace Core

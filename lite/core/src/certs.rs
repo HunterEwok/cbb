@@ -84,6 +84,13 @@ const P256_SPKI_PREFIX: [u8; 27] = [
     0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00, 0x04,
 ];
 
+/// The SubjectPublicKeyInfo of a P-256 key from its uncompressed point.
+pub fn p256_spki_of(point: &[u8]) -> Vec<u8> {
+    let mut spki = P256_SPKI_PREFIX[..26].to_vec();
+    spki.extend_from_slice(point);
+    spki
+}
+
 /// The P-256 key in spki, a SubjectPublicKeyInfo with an uncompressed
 /// point; a compressed point is refused, as Go refuses it.
 pub fn p256_spki(spki: &[u8]) -> Option<VerifyingKey> {

@@ -82,6 +82,18 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(line, #"CBB_DEBUG=1 '/usr/local/bin/cbb' 'rename' 'ab12' 'Bob'\''s "Mac" $(x)'"#)
         XCTAssertEqual(Admin.shellCommand("/usr/local/bin/cbb", ["global", "on"], answer: true, details: false), "echo yes | '/usr/local/bin/cbb' 'global' 'on'")
         XCTAssertEqual(Admin.appleScript(shell: #"a "b" \c"#), #"do shell script "a \"b\" \\c" with administrator privileges"#)
+        // cbb pair -qr reads the code from a file, never from the command line.
+        XCTAssertEqual(Admin.shellCommand("/usr/local/bin/cbb", ["pair", "-qr"], answer: false, input: "/tmp/in's.txt", details: false),
+                       #"'/usr/local/bin/cbb' 'pair' '-qr' < '/tmp/in'\''s.txt'"#)
+    }
+
+    /// Only the QR code of a device that listens, with its address and
+    /// fingerprint, is admitted from the app.
+    func testWaitingJoiner() {
+        XCTAssertTrue(MacModel.isWaitingJoiner("cbb://join?code=123456&addr=192.0.2.7:8764&fp=AbC%2Bd%2F0="))
+        XCTAssertFalse(MacModel.isWaitingJoiner("cbb://join?code=123456"))
+        XCTAssertFalse(MacModel.isWaitingJoiner("https://cbb.tools/join?code=1&addr=a:1&fp=x"))
+        XCTAssertFalse(MacModel.isWaitingJoiner(""))
     }
 
     func testAdminFailure() {

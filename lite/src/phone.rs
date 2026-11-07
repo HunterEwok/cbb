@@ -14,7 +14,7 @@ use cbb_core::identity::Identity;
 use cbb_core::wire::DeviceInfo;
 
 use crate::error::Result;
-use crate::node::{Node, Peer, Presence, WriteReq};
+use crate::node::{KeepIdentity, Node, Peer, Presence, WriteReq};
 use crate::records::{Records, Stored as _};
 use crate::{discovery, service, uptime};
 
@@ -41,6 +41,9 @@ pub struct Config {
     pub seal_secret: Vec<u8>,
     /// Gets each text to put into the phone's clipboard.
     pub on_write: Box<dyn Fn(WriteReq) + Send + Sync>,
+    /// Keeps the identity when it changes: a certificate an admin renewed,
+    /// the root a takeover made. The app keeps it in its own file.
+    pub keep_identity: KeepIdentity,
     pub log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -73,10 +76,9 @@ impl Member {
         let device =
             DeviceInfo { form: "phone".into(), os_version: cfg.os_version, version: cfg.version, mac: String::new() }
                 .cleaned();
-        let node =
-            Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone()).presenting(
-                Presence { role: "phone".into(), name: cfg.name, os: cfg.os, key_store: cfg.key_store, device },
-            );
+        let node = Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone())
+            .presenting(Presence { role: "phone".into(), name: cfg.name, os: cfg.os, key_store: cfg.key_store, device })
+            .keeping_identity(cfg.keep_identity);
         let node = Arc::new(node);
         engine.set_seal(node.sealer());
         discovery::start(node.clone(), tag.clone(), cfg.peers, false, None, log.clone());

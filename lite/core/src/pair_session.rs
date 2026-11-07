@@ -28,6 +28,9 @@ pub struct Joined {
     pub identity: Identity,
     pub records: Vec<Record>,
     pub claim_times: Vec<ClaimTime>,
+    /// The admin CA for the phone's admin key, when the member made it an
+    /// admin (pair::Joiner::offering_admin_key).
+    pub admin_ca: Option<Vec<u8>>,
 }
 
 /// Where an attempt is after a step.
@@ -168,6 +171,7 @@ impl Attempt {
                             identity,
                             records: ex.records(),
                             claim_times: ex.claim_times(),
+                            admin_ca: ex.admin_ca(),
                         }))),
                         Err(error) => {
                             let _ = self.session.write(&pair::done(false));

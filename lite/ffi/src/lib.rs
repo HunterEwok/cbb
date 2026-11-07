@@ -128,7 +128,41 @@ pub unsafe extern "C" fn cbb_join_new(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (j, ans) = join::Join::new(req, sign, ctx as usize);
+    let (j, ans) = join::Join::new(req, sign, ctx as usize, None);
+    // SAFETY: the caller gives a writable pointer at answer.
+    unsafe { answer.write(to_c(ans, answer_len)) };
+    j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
+}
+
+/// As `cbb_join_new`, for a phone that asks to be an admin: the request
+/// names `admin_public`, the admin key's public point, and `admin_sign`
+/// with `admin_ctx` signs with that key, as `sign` does with the device
+/// key. The joined answer carries `admin_ca` when the member made the phone
+/// an admin.
+///
+/// # Safety
+///
+/// As `cbb_join_new`; `admin_sign` and `admin_ctx` stay valid as `sign`
+/// and `ctx` do.
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments, reason = "a C function takes each callback and its context")]
+pub unsafe extern "C" fn cbb_join_new_admin(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    admin_sign: join::SignFn,
+    admin_ctx: *mut core::ffi::c_void,
+    answer: *mut *mut u8,
+    answer_len: *mut usize,
+) -> *mut join::Join {
+    if request.is_null() || answer.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    let (j, ans) = join::Join::new(req, sign, ctx as usize, Some((admin_sign, admin_ctx as usize)));
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))

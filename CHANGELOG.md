@@ -50,7 +50,14 @@ All notable changes to cbb are documented in this file. The format follows
   (docs/protocol.md, section 10, "Who signs what"); only the root makes a phone an admin.
 - `cbb pair -qr` on the group's root or an admin, on Linux, Windows and macOS alike, admits a
   device that shows a QR code and waits, such as the Aurora phone: it reads the code's text
-  and dials the device.
+  and dials the device. With `-admin`, on the root, a phone that asks to be an admin becomes
+  one. The Mac app and the tray app do it from "Add a device" ("Admit by QR code"): paste the
+  code's text or open a picture of it, and on the root choose to admit it as an admin.
+- The Aurora app joins as an admin when the user asks ("Join a group as an admin"): it makes a
+  second key, the admin key, in its OP-TEE token (in a file on Sailfish OS and Aurora 4),
+  offers it with its proof, and keeps the admin CA the root issues for it; the main page says
+  whether the phone is an admin. The app keeps a certificate an admin renewed, and a new root,
+  in its own file.
 - The Rust core joins a phone by its QR code with a key it does not hold, such as the Aurora
   app's key in OP-TEE: lite/ffi's `cbb_join_*` functions run the pairing inside the core's TLS
   and ask the app to sign; a test joins them to a computer's group.

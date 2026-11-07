@@ -123,7 +123,14 @@ pub struct Node {
     home: Mutex<HashMap<DeviceId, Duration>>,
     /// The signed entry points this member holds and passes on.
     entries: Arc<Entries>,
+    /// Keeps the identity when it changes (a renewed certificate, a new
+    /// root), where identity.json cannot: a phone's app whose key is
+    /// outside the core keeps its own file.
+    keep_identity: Option<KeepIdentity>,
 }
+
+/// Keeps a changed identity in place of identity.json.
+pub type KeepIdentity = Box<dyn Fn(&Identity) -> Result<()> + Send + Sync>;
 
 enum Out {
     Hello(Hello, Duration, crate::clip::Mode, Option<i64>, Vec<String>),
@@ -183,6 +190,20 @@ impl Node {
             actions: RwLock::new(Vec::new()),
             home: Mutex::new(HashMap::new()),
             entries,
+            keep_identity: None,
+        }
+    }
+
+    /// The node keeping its identity through f, not in identity.json.
+    pub fn keeping_identity(mut self, f: KeepIdentity) -> Node {
+        self.keep_identity = Some(f);
+        self
+    }
+
+    fn save_identity(&self, id: &Identity) -> Result<()> {
+        match &self.keep_identity {
+            Some(f) => f(id),
+            None => id.save(&self.state_dir),
         }
     }
 
@@ -769,7 +790,7 @@ impl Node {
             return Err(Error::msg("its issuer was removed from the group"));
         }
         drop(records);
-        next.save(&self.state_dir)?;
+        self.save_identity(&next)?;
         self.logf(&format!("cbb: got a renewed certificate, valid until {}", date(next.cert.not_after)));
         *ident = Arc::new(next);
         Ok(())
@@ -817,7 +838,7 @@ impl Node {
             if roots.iter().map(|c| &c.der).ne(ident.roots.iter().map(|c| &c.der)) {
                 let mut next = (**ident).clone();
                 next.roots = roots;
-                match next.save(&self.state_dir) {
+                match self.save_identity(&next) {
                     Ok(()) => *ident = Arc::new(next),
                     Err(e) => self.logf(&format!("cbb: keeping the group's new root: {}", e.for_log())),
                 }

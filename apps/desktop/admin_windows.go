@@ -21,8 +21,10 @@ const deniedText = "No permission to use the service: add your user to the cbb g
 // runAdmin runs cbb as the administrator through the UAC prompt: an
 // elevated PowerShell, started with ShellExecuteEx's runas, calls cbb with
 // each argument as a literal and writes what it printed to a file the app
-// reads after.
-func runAdmin(args []string, yes, details bool) error {
+// reads after. input, unless empty, is cbb's standard input, from a file in
+// the user's temporary folder: never on the command line, which other
+// programs may read.
+func runAdmin(args []string, input string, details bool) error {
 	out, err := os.CreateTemp("", "cbb-desktop-*.txt")
 	if err != nil {
 		return err
@@ -30,8 +32,24 @@ func runAdmin(args []string, yes, details bool) error {
 	outPath := out.Name()
 	out.Close()
 	defer os.Remove(outPath)
+	inPath := ""
+	if input != "" {
+		in, err := os.CreateTemp("", "cbb-desktop-in-*.txt")
+		if err != nil {
+			return err
+		}
+		inPath = in.Name()
+		defer os.Remove(inPath)
+		_, err = in.WriteString(input)
+		if cerr := in.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			return err
+		}
+	}
 
-	script := psScript(cbbPath(), args, yes, details, outPath)
+	script := psScript(cbbPath(), args, inPath, details, outPath)
 	code, err := elevate("powershell.exe", "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand "+encodePS(script))
 	if errors.Is(err, windows.ERROR_CANCELLED) {
 		return errCancelled
@@ -47,14 +65,15 @@ func runAdmin(args []string, yes, details bool) error {
 }
 
 // psScript is the PowerShell that runs cbb: every argument a single-quoted
-// literal, so no name can run anything.
-func psScript(cbb string, args []string, yes, details bool, outPath string) string {
+// literal, so no name can run anything; with inPath, that file is its
+// standard input.
+func psScript(cbb string, args []string, inPath string, details bool, outPath string) string {
 	var b strings.Builder
 	if details {
 		b.WriteString("$env:CBB_DEBUG = '1'\n")
 	}
-	if yes {
-		b.WriteString("'yes' | ")
+	if inPath != "" {
+		b.WriteString("Get-Content -Raw -LiteralPath " + psQuote(inPath) + " | ")
 	}
 	b.WriteString("& " + psQuote(cbb))
 	for _, a := range args {

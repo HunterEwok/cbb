@@ -424,7 +424,7 @@ func (w *window) admin(t *testing.T) {
 	w.t = t
 	t.Setenv("CBB_DEBUG", "0")
 	old := adminRun
-	adminRun = func(args []string, _, _ bool) error {
+	adminRun = func(args []string, _ string, _ bool) error {
 		w.mu.Lock()
 		defer w.mu.Unlock()
 		w.ran = append(w.ran, args)
@@ -569,7 +569,7 @@ func (w *window) joinPhone(t *testing.T) {
 	joined := make(chan struct{})
 	ran := make(chan []string, 4)
 	old := adminRun
-	adminRun = func(args []string, _, _ bool) error {
+	adminRun = func(args []string, _ string, _ bool) error {
 		ran <- args
 		if len(args) != 3 || args[0] != "pair" || args[1] != "-app" {
 			return fmt.Errorf("ran %q", args)
