@@ -786,4 +786,173 @@ mod tests {
         assert!(State::load(&dir).unwrap().is_none());
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    /// The internet checksum over the IPv6 pseudo-header and the segment.
+    fn checksum6(src: &Ipv6Addr, dst: &Ipv6Addr, proto: u8, seg: &[u8]) -> u16 {
+        let mut sum: u32 = 0;
+        let mut add = |b: &[u8]| {
+            for c in b.chunks(2) {
+                sum += u32::from(u16::from_be_bytes([c[0], *c.get(1).unwrap_or(&0)]));
+            }
+        };
+        add(&src.octets());
+        add(&dst.octets());
+        add(&(seg.len() as u32).to_be_bytes());
+        add(&[0, 0, 0, proto]);
+        add(seg);
+        while sum >> 16 != 0 {
+            sum = (sum & 0xffff) + (sum >> 16);
+        }
+        !(sum as u16)
+    }
+
+    /// An IPv6 packet from src to dst carrying seg of protocol proto, its
+    /// checksum filled in at sum_at.
+    fn ip6(src: Ipv6Addr, dst: Ipv6Addr, proto: u8, mut seg: Vec<u8>, sum_at: usize) -> Vec<u8> {
+        let c = checksum6(&src, &dst, proto, &seg);
+        seg[sum_at..sum_at + 2].copy_from_slice(&c.to_be_bytes());
+        let mut p = vec![0x60, 0, 0, 0];
+        p.extend_from_slice(&(seg.len() as u16).to_be_bytes());
+        p.extend_from_slice(&[proto, 64]);
+        p.extend_from_slice(&src.octets());
+        p.extend_from_slice(&dst.octets());
+        p.extend_from_slice(&seg);
+        p
+    }
+
+    fn syn(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
+        let mut t = vec![0u8; 20];
+        t[0..2].copy_from_slice(&40000u16.to_be_bytes());
+        t[2..4].copy_from_slice(&port.to_be_bytes());
+        t[4..8].copy_from_slice(&1u32.to_be_bytes());
+        t[12] = 5 << 4;
+        t[13] = 0x02; // SYN
+        t[14..16].copy_from_slice(&65535u16.to_be_bytes());
+        ip6(src, dst, 6, t, 16)
+    }
+
+    fn udp(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
+        let mut u = vec![0u8; 8];
+        u[0..2].copy_from_slice(&40000u16.to_be_bytes());
+        u[2..4].copy_from_slice(&port.to_be_bytes());
+        u.extend_from_slice(b"a packet");
+        let n = u.len() as u16;
+        u[4..6].copy_from_slice(&n.to_be_bytes());
+        ip6(src, dst, 17, u, 6)
+    }
+
+    /// The hub, or anyone holding its key, sends TCP and UDP through the
+    /// tunnel to the lite member's address on any port, to other addresses
+    /// and as IPv4: nothing is accepted, nothing answered but a reset, and
+    /// nothing reaches the computer the member runs on. The member's end
+    /// only dials the hub's member port and forwards nothing.
+    #[test]
+    fn link_reaches_nothing_from_the_tunnel() {
+        // The computer's own services.
+        let host_tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+        host_tcp.set_nonblocking(true).unwrap();
+        let host_udp = UdpSocket::bind("127.0.0.1:0").unwrap();
+        host_udp.set_nonblocking(true).unwrap();
+        let (tcp_port, udp_port) = (host_tcp.local_addr().unwrap().port(), host_udp.local_addr().unwrap().port());
+
+        let st = State::new("g").unwrap();
+        let me = DeviceId::parse("0123456789abcdef0123456789abcdef").unwrap();
+        let hub_dev = "fedcba9876543210fedcba9876543210";
+        let mut raw = [0u8; 32];
+        raw.copy_from_slice(&random_key().unwrap());
+        let hub_secret = StaticSecret::from(raw);
+        let hub_public = PublicKey::from(&hub_secret);
+        let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+        sock.set_read_timeout(Some(Duration::from_millis(200))).unwrap();
+        let hub = Hub {
+            device: hub_dev.into(),
+            key: hub_public.as_bytes().to_vec(),
+            psk: st.psk.clone(),
+            endpoints: vec![sock.local_addr().unwrap()],
+            next: vec![],
+        };
+        let link = Link::start(&st, &hub, &me, Arc::new(|_: &str| {})).unwrap();
+        let (own, peer) = (addr(me.as_str()).unwrap(), addr(hub_dev).unwrap());
+
+        let mut psk = [0u8; 32];
+        psk.copy_from_slice(&st.psk);
+        let limiter = Arc::new(RateLimiter::new(&hub_public, HANDSHAKE_RATE_LIMIT));
+        let mut tunn = Tunn::new(
+            hub_secret,
+            PublicKey::from(&st.secret()),
+            Some(psk),
+            None,
+            IndexTable::from_os_rng(),
+            limiter.clone(),
+        );
+        let mut lite: Option<SocketAddr> = None;
+        // Takes what the member sends: answers the handshake and returns
+        // the IP packets that came through the tunnel.
+        let take = |tunn: &mut Tunn, lite: &mut Option<SocketAddr>, until: Instant| -> Vec<Vec<u8>> {
+            let mut got = Vec::new();
+            let mut buf = [0u8; 2048];
+            while Instant::now() < until {
+                let Ok((n, from)) = sock.recv_from(&mut buf) else { continue };
+                *lite = Some(from);
+                let Ok(wg) = limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(&buf[..n]))) else {
+                    continue;
+                };
+                match tunn.handle_incoming_packet(wg) {
+                    TunnResult::WriteToNetwork(p) => {
+                        let _ = sock.send_to(Packet::from(p).as_ref(), from);
+                    }
+                    TunnResult::WriteToTunnel(p) => got.push(AsRef::<[u8]>::as_ref(&p).to_vec()),
+                    _ => {}
+                }
+            }
+            got
+        };
+        // The handshake, and the member's first packet, which makes the
+        // session the hub's to send in.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !(tunn.has_active_session() && link.answered()) && Instant::now() < deadline {
+            take(&mut tunn, &mut lite, Instant::now() + Duration::from_millis(300));
+        }
+        assert!(tunn.has_active_session(), "no session with the member");
+        let to = lite.unwrap();
+
+        let v4 = {
+            // An IPv4 header to the computer's own TCP port.
+            let mut p = vec![0x45, 0, 0, 40, 0, 0, 0, 0, 64, 6, 0, 0, 10, 0, 0, 1, 127, 0, 0, 1];
+            p.extend_from_slice(&[0x9c, 0x40]);
+            p.extend_from_slice(&tcp_port.to_be_bytes());
+            p.extend_from_slice(&[0, 0, 0, 1, 0, 0, 0, 0, 0x50, 0x02, 0xff, 0xff, 0, 0, 0, 0]);
+            p
+        };
+        let packets = vec![
+            syn(peer, own, MEMBER_PORT),
+            syn(peer, own, 22),
+            syn(peer, own, tcp_port),
+            syn(peer, Ipv6Addr::LOCALHOST, tcp_port),
+            syn(peer, "2606:4700:4700::1111".parse().unwrap(), 443),
+            udp(peer, own, udp_port),
+            udp(peer, Ipv6Addr::LOCALHOST, udp_port),
+            v4,
+        ];
+        for p in &packets {
+            if let Some(w) = tunn.handle_outgoing_packet(Packet::from_bytes(BytesMut::from(&p[..])), None) {
+                sock.send_to(Packet::from(w).as_ref(), to).unwrap();
+            }
+        }
+        let mut resets = 0;
+        for ip in take(&mut tunn, &mut lite, Instant::now() + Duration::from_secs(3)) {
+            if ip.len() >= 54 && ip[6] == 6 {
+                resets += usize::from(ip[40 + 13] & 0x04 != 0);
+                // A reset may come back, never a SYN-ACK.
+                assert_ne!(ip[40 + 13] & 0x12, 0x12, "the member accepted a stream through the tunnel");
+            } else if ip.len() > 40 {
+                assert_ne!(ip[6], 17, "the member answered a UDP packet through the tunnel");
+            }
+        }
+        // The packets did arrive: the member's own ports answered with resets.
+        assert!(resets > 0, "nothing came back through the tunnel");
+        assert!(host_tcp.accept().is_err(), "a stream from the tunnel reached the computer");
+        assert!(host_udp.recv_from(&mut [0u8; 64]).is_err(), "a packet from the tunnel reached the computer");
+        drop(link);
+    }
 }
