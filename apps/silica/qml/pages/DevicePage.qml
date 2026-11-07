@@ -47,6 +47,13 @@ Page {
             visible: page.acts || (app.admin && app.member.running)
             busy: app.busy
             MenuItem {
+                // An admin takes a lost root's group over (cbb_core::takeover).
+                visible: page.acts && page.device.root && !app.root && app.claimState === ""
+                text: qsTr("Take the group over")
+                onClicked: remorse.execute(qsTr("Taking the group over from %1").arg(Devices.name(page.device)),
+                                           function() { app.takeOver(page.device.device) })
+            }
+            MenuItem {
                 visible: page.acts && !page.device.root
                 text: qsTr("Remove")
                 onClicked: remorse.execute(qsTr("Removing %1").arg(Devices.name(page.device)),
@@ -108,6 +115,14 @@ Page {
             DetailItem { label: qsTr("In the group"); value: Devices.role(page.device) }
             DetailItem { label: qsTr("Status"); value: Devices.status(page.device) }
             DetailItem { label: qsTr("Device ID"); value: page.device.device }
+            DetailItem {
+                visible: page.device.root && app.claimState !== ""
+                label: qsTr("Taking the group over")
+                value: app.claimState === "pending"
+                       ? qsTr("Waiting, %1 h left").arg(Math.ceil(app.claimLeftMs / 3600000))
+                       : app.claimState === "none" ? qsTr("Waiting for the group to get the claim")
+                       : qsTr("In dispute: the group's root answered the claim")
+            }
         }
         VerticalScrollDecorator {}
     }

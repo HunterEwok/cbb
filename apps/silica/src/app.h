@@ -29,6 +29,11 @@ class App : public QObject
     Q_PROPERTY(QString device READ device NOTIFY groupChanged)
     Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
     Q_PROPERTY(bool root READ root NOTIFY groupChanged)
+    // The phone's claim to take the group over: "" without one, else
+    // "pending", "competing", "disputed" or "none" (not in the records yet).
+    Q_PROPERTY(QString claimState READ claimState NOTIFY claimChanged)
+    // How long a pending claim still waits, in milliseconds.
+    Q_PROPERTY(double claimLeftMs READ claimLeftMs NOTIFY claimChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
@@ -62,6 +67,8 @@ public:
     // Whether the group's root made this phone an admin when it joined.
     bool admin() const { return m_member.isAdmin(); }
     bool root() const { return m_member.root; }
+    QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
+    double claimLeftMs() const { return double(m_claimLeftMs); }
     Join *join() { return &m_join; }
     Member *member() { return &m_node; }
     Admit *admit() { return &m_admit; }
@@ -96,6 +103,12 @@ public:
     // forMinutes: how long a mute lasts, 0 for until an unmute.
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
                             int forMinutes = 0);
+    // Takes the group over from its lost root, the device with the ID
+    // device, as an admin (cbb_core::takeover): a new root CA for the admin
+    // key, kept first, and the claim, as the root handed the group to this
+    // phone or else after the group's delay; the claim is then checked
+    // every minute until it makes this phone the root, off the GUI thread.
+    Q_INVOKABLE void takeOver(const QString &device);
     // The root's decision on an alert: voids the records it names.
     Q_INVOKABLE void resolve(const QStringList &records);
     // Leaves the group on this phone: stops the member and deletes the
@@ -109,6 +122,7 @@ signals:
     void settingsChanged();
     // ok: the change is in the group's records or the device took the command.
     void managed(const QString &action, const QString &device, bool ok);
+    void claimChanged();
 
 private:
     void show(const QString &error);
@@ -119,6 +133,11 @@ private:
     // devices' connected and the phone's own, quietly: only the log says.
     void renew();
     QString phoneOs() const;
+    // While the phone has a claim: where it stands, and once it took
+    // effect, the phone as the group's root.
+    void finishTakeover();
+    // Keeps next as the membership, or shows why it could not.
+    bool keep(const Membership &next);
 
     OsInfo m_os;
     QString m_core;
@@ -132,6 +151,9 @@ private:
     Events m_events;
     bool m_busy = false;
     QTimer m_renewTimer;
+    QTimer m_claimTimer;
+    QString m_claimState;
+    qint64 m_claimLeftMs = 0;
     QString m_error;
     QString m_startLanguage;
 };

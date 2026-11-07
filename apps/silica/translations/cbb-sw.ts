@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>Mzizi wa kikundi umeghairi ombi; simu inabaki kuwa msimamizi.</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>Ombi la kuchukua kikundi limebatilika; simu inabaki kuwa msimamizi.</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>Unganisha simu kwenye Wi-Fi ya nyumbani ili ujiunge na kikundi.</translation>
     </message>
@@ -306,6 +314,30 @@
 </context>
 <context>
     <name>DevicePage</name>
+    <message>
+        <source>Take the group over</source>
+        <translation>Chukua kikundi</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>Inachukua kikundi kutoka %1</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>Kuchukua kikundi</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>Inasubiri, zimebaki saa %1</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>Inasubiri kikundi kipokee ombi</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>Kuna mzozo: mzizi wa kikundi umejibu ombi</translation>
+    </message>
     <message>
         <source>System</source>
         <translation>Mfumo</translation>
