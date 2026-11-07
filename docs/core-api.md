@@ -71,6 +71,18 @@ connected and `cbb_member_stop` stops it. `TestFFIJoiner` runs the join, sync bo
 renewal against a Go member through the example `phone-on-linux`, and `TestFFIJoinerAdmin` the
 join as an admin.
 
+Built with the feature `tunnel` (the iPhone and Android libraries), the library is also the
+phones' tunnel (`lite/ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tunnel` takes
+a JSON request by its `op` for the tunnel to the hub (a loopback port that leads to the hub's
+member port, with AmneziaWG and VLESS with XHTTP), for the phone as the group's hub (its
+clients, its remote invitations with a guest tunnel to the pairing window), and their status;
+`cbb_tunnel_register` registers the phone's hub with the group's forwarder and
+`cbb_tunnel_relay` links the phone to the blind relay, both signing their TLS with the member
+key through the same callback, the relay's link telling the app through an events' callback
+which connections it joined. `TestRustPhoneTunnel`, `TestRustPhoneHub`,
+`TestRustPhoneHubInvite`, `TestRustPhoneHubForwarder` and `TestRustPhoneRelay` run them against
+Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
+
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its
 memory functions), run by wazero under the tag `cbbwasm`. Every release build of `cbb`, on
