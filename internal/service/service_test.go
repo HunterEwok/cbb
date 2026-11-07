@@ -418,11 +418,16 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 	waitUpTo(t, 10*time.Second, what, ok)
 }
 
-func waitUpTo(t *testing.T, d time.Duration, what string, ok func() bool) {
+// waitUpTo waits up to d for ok; on a timeout, the message has what each
+// of state says.
+func waitUpTo(t *testing.T, d time.Duration, what string, ok func() bool, state ...func() string) {
 	t.Helper()
 	deadline := time.Now().Add(d)
 	for !ok() {
 		if time.Now().After(deadline) {
+			for _, f := range state {
+				what += "; " + f()
+			}
 			t.Fatalf("timed out waiting for %s", what)
 		}
 		time.Sleep(20 * time.Millisecond)

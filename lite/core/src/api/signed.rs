@@ -26,8 +26,8 @@ struct ParseArgs {
 }
 
 /// The kinds of body `parse_body` reads.
-pub const KINDS: [&str; 8] =
-    ["command", "credential", "keys", "release", "channel", "attest-status", "entries", "manifest"];
+pub const KINDS: [&str; 9] =
+    ["command", "credential", "keys", "release", "channel", "attest-status", "entries", "zxnext", "manifest"];
 
 /// Reads a body of the kind and gives it back as its value.
 fn read(kind: &str, body: &[u8]) -> Result<Value> {
@@ -36,7 +36,7 @@ fn read(kind: &str, body: &[u8]) -> Result<Value> {
     }
     // The release files carry their body inside an envelope of at most
     // this size, as Go's and the kits' readers check first.
-    let release = matches!(kind, "keys" | "release" | "channel" | "attest-status" | "entries");
+    let release = matches!(kind, "keys" | "release" | "channel" | "attest-status" | "entries" | "zxnext");
     if release && body.len() > crate::release::MAX_BODY {
         return Err(Error::msg("The file is too large."));
     }
@@ -48,6 +48,7 @@ fn read(kind: &str, body: &[u8]) -> Result<Value> {
         "channel" => value(crate::release::decode_channel(body)?),
         "attest-status" => value(crate::release::decode_status(body)?),
         "entries" => value(crate::release::decode_entries(body)?),
+        "zxnext" => value(crate::release::decode_zxnext(body)?),
         "manifest" => value(crate::media::Manifest::parse(body)?),
         _ => Err(Error::msg(alloc::format!("The core reads no body of the kind {kind:?}."))),
     }
@@ -296,7 +297,7 @@ mod tests {
         assert_eq!(got["ok"]["kind"], "command");
         assert!(got["ok"]["value"]["type"].is_string(), "{got}");
         assert_eq!(ask("nothing", b"{}")["error"]["name"], "request");
-        assert_eq!(KINDS.len(), 8);
+        assert_eq!(KINDS.len(), 9);
         for kind in KINDS {
             assert_eq!(ask(kind, b"{}")["error"]["name"], "signed", "{kind}");
         }

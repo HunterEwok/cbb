@@ -1611,7 +1611,7 @@ jobs:
           pkgutil --pkg-info tools.cbb.pkg
           for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
           sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
-          [ ! -e /usr/local/share/cbb/package ]
+          [ ! -e "/Library/Application Support/cbb-package" ]
           sudo sh /usr/local/share/cbb/uninstall.sh --purge
           for f in /Applications/CBB.app /usr/local/bin/cbb "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
             if [ -e "$f" ]; then

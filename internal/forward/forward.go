@@ -69,8 +69,8 @@ type Limits struct {
 	// thousands of /48s; 1024 if zero.
 	PerAddress, PerNetwork, PerWide, PerProvider int
 	// OverVLESS bounds the registrations, held or being set up, that came
-	// over VLESS, which all come from the forwarder's own address; 1024 if
-	// zero.
+	// over VLESS, which are also charged to their source like the others
+	// when the VLESS server knows it; 1024 if zero.
 	OverVLESS int
 }
 
@@ -127,6 +127,7 @@ type Forwarder struct {
 	setting   int                             // registrations being set up
 	pathKey   [32]byte                        // keys the groups' XHTTP paths, from the forwarder's key
 	overVLESS int                             // registrations over VLESS, held or being set up
+	vlessSet  int                             // of them, being set up from an address not known
 	mask      [32]byte                        // the key of the hellos' mask, given to every hub
 	vless     *vless.Server
 	vlessUser func(netip.AddrPort) (string, bool) // vless.Server.User
