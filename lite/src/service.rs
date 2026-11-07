@@ -524,7 +524,7 @@ impl Service {
     fn command(&self, peer: &crate::certs::DeviceId, c: &crate::records::Record) -> wire::CommandResult {
         let refused = |id: &str, why: String| {
             (self.log)(&format!("cbb: refused a command from {peer}: {why}"));
-            wire::CommandResult { id: id.to_string(), status: "refused".into(), reason: why }
+            wire::CommandResult { id: id.to_string(), by: String::new(), status: "refused".into(), reason: why }
         };
         let node = match self.node() {
             Ok(n) => n,
@@ -588,7 +588,12 @@ impl Service {
             "paste" => return self.pasted(&node, c, body),
             "action" => return self.act(&node, c, body),
             "actions-off" => {
-                let mut res = wire::CommandResult { id: body.id.clone(), status: "done".into(), reason: String::new() };
+                let mut res = wire::CommandResult {
+                    id: body.id.clone(),
+                    by: String::new(),
+                    status: "done".into(),
+                    reason: String::new(),
+                };
                 match self.all_actions_off(&node) {
                     Ok(()) => (self.log)(&format!("cbb: {} turned the quick actions off here", body.by)),
                     Err(e) => {
@@ -600,7 +605,12 @@ impl Service {
                 return res;
             }
             "away-off" => {
-                let mut res = wire::CommandResult { id: body.id.clone(), status: "done".into(), reason: String::new() };
+                let mut res = wire::CommandResult {
+                    id: body.id.clone(),
+                    by: String::new(),
+                    status: "done".into(),
+                    reason: String::new(),
+                };
                 match self.away().and_then(|a| a.turn_off()) {
                     Ok(()) => {
                         (self.log)(&format!("cbb: {} turned sync away from home off here", body.by));
@@ -621,7 +631,12 @@ impl Service {
                 return res;
             }
             "mute" | "unmute" => {
-                let mut res = wire::CommandResult { id: body.id.clone(), status: "done".into(), reason: String::new() };
+                let mut res = wire::CommandResult {
+                    id: body.id.clone(),
+                    by: String::new(),
+                    status: "done".into(),
+                    reason: String::new(),
+                };
                 let until = if body.for_ms == 0 { 0 } else { uptime::wall_ms() + body.for_ms };
                 if let Err(e) = self.set_muted(&node, body.kind == "mute", until, &body.by) {
                     (self.log)(&format!("cbb: a mute from {peer}: {}", e.for_log()));
@@ -631,7 +646,12 @@ impl Service {
                 return res;
             }
             "paste-off" => {
-                let mut res = wire::CommandResult { id: body.id.clone(), status: "done".into(), reason: String::new() };
+                let mut res = wire::CommandResult {
+                    id: body.id.clone(),
+                    by: String::new(),
+                    status: "done".into(),
+                    reason: String::new(),
+                };
                 match remotepaste::save(&self.state_dir, remotepaste::Settings::default()) {
                     Ok(()) => (self.log)(&format!("cbb: {} turned remote paste off here", body.by)),
                     Err(e) => {
@@ -649,10 +669,15 @@ impl Service {
         }
         if let Err(e) = self.set_mode(&body.mode) {
             (self.log)(&format!("cbb: a command from {peer}: {}", e.for_log()));
-            return wire::CommandResult { id: body.id, status: "failed".into(), reason: e.message().to_string() };
+            return wire::CommandResult {
+                id: body.id,
+                by: String::new(),
+                status: "failed".into(),
+                reason: e.message().to_string(),
+            };
         }
         (self.log)(&format!("cbb: {} set the sync mode to {}", body.by, body.mode));
-        wire::CommandResult { id: body.id, status: "done".into(), reason: String::new() }
+        wire::CommandResult { id: body.id, by: String::new(), status: "done".into(), reason: String::new() }
     }
 
     /// Carries out an action command that verify_command took, as a full
@@ -661,7 +686,12 @@ impl Service {
     /// limits per sender.
     fn act(&self, node: &Node, c: &crate::records::Record, body: crate::records::Command) -> wire::CommandResult {
         let from = Sender::of(node, c, &body);
-        let mut res = wire::CommandResult { id: body.id.clone(), status: "refused".into(), reason: String::new() };
+        let mut res = wire::CommandResult {
+            id: body.id.clone(),
+            by: String::new(),
+            status: "refused".into(),
+            reason: String::new(),
+        };
         match actions::load(&self.state_dir) {
             Err(e) => {
                 res.status = "failed".into();
@@ -714,7 +744,12 @@ impl Service {
 
     /// Runs a preset that passed the checks.
     fn run_action(&self, body: &crate::records::Command) -> wire::CommandResult {
-        let mut res = wire::CommandResult { id: body.id.clone(), status: "done".into(), reason: String::new() };
+        let mut res = wire::CommandResult {
+            id: body.id.clone(),
+            by: String::new(),
+            status: "done".into(),
+            reason: String::new(),
+        };
         if body.action == actions::RESTART {
             std::thread::spawn(|| {
                 std::thread::sleep(RESTART_AFTER);
@@ -788,7 +823,12 @@ impl Service {
     /// member does (internal/service/paste.go).
     fn pasted(&self, node: &Node, c: &crate::records::Record, body: crate::records::Command) -> wire::CommandResult {
         let from = Sender::of(node, c, &body);
-        let mut res = wire::CommandResult { id: body.id.clone(), status: "refused".into(), reason: String::new() };
+        let mut res = wire::CommandResult {
+            id: body.id.clone(),
+            by: String::new(),
+            status: "refused".into(),
+            reason: String::new(),
+        };
         match remotepaste::load(&self.state_dir) {
             Err(e) => {
                 res.status = "failed".into();
@@ -848,7 +888,12 @@ impl Service {
         set: remotepaste::Settings,
         name: &str,
     ) -> wire::CommandResult {
-        let mut res = wire::CommandResult { id: body.id.clone(), status: "refused".into(), reason: String::new() };
+        let mut res = wire::CommandResult {
+            id: body.id.clone(),
+            by: String::new(),
+            status: "refused".into(),
+            reason: String::new(),
+        };
         if text.is_empty() {
             res.reason = "the text has nothing that may be pasted: only control characters".into();
             return res;

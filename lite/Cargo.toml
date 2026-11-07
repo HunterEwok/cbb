@@ -36,6 +36,7 @@ mdns-sd = "0.21.6"
 qrcode = { version = "0.14.1", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.11"
 # WireGuard for sync away from home: GotaTun's noise protocol, sans I/O, with
 # the ring stand-in below; smoltcp is the TCP inside the tunnel.
 gotatun = { version = "0.10.2", default-features = false, features = ["ring"], optional = true }

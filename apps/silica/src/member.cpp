@@ -37,6 +37,16 @@ void onEvent(void *, const uint8_t *json, size_t len)
     QMetaObject::invokeMethod(m, "event", Qt::QueuedConnection, Q_ARG(QByteArray, bytes));
 }
 
+// Asks the member through cbb_member_call: {"op", "args"}.
+QJsonObject call(cbb_member *m, const QString &op, const QJsonObject &args, Failure *failure)
+{
+    const QByteArray req =
+        QJsonDocument(QJsonObject{{QStringLiteral("op"), op}, {QStringLiteral("args"), args}}).toJson(QJsonDocument::Compact);
+    size_t len = 0;
+    return Core::take(cbb_member_call(m, reinterpret_cast<const uint8_t *>(req.constData()), size_t(req.size()), &len), len,
+                      QStringLiteral("member"), failure);
+}
+
 QString b64(const QByteArray &b)
 {
     return QString::fromLatin1(b.toBase64());
@@ -131,11 +141,8 @@ void Member::sendClipboard()
     // A muted phone's copies stay its own; the main page says so.
     if (text.isEmpty() || text == m_known || m_muted)
         return;
-    const QByteArray req = QJsonDocument(QJsonObject{{QStringLiteral("text"), text}}).toJson(QJsonDocument::Compact);
-    size_t len = 0;
     Failure failure;
-    Core::take(cbb_member_copy(m_member, reinterpret_cast<const uint8_t *>(req.constData()), size_t(req.size()), &len), len,
-               QStringLiteral("member"), &failure);
+    call(m_member, QStringLiteral("copy"), QJsonObject{{QStringLiteral("text"), text}}, &failure);
     if (!failure.isNull()) {
         m_error = Errors::shown(failure);
         emit changed();
@@ -170,14 +177,11 @@ void Member::pause(int minutes)
 {
     if (!m_member)
         return;
-    const QByteArray req = QJsonDocument(QJsonObject{{QStringLiteral("pause"), true},
-                                                     {QStringLiteral("for_ms"), double(qint64(minutes) * 60 * 1000)}})
-                               .toJson(QJsonDocument::Compact);
-    size_t len = 0;
     Failure failure;
-    const QJsonObject a = Core::take(cbb_member_pause(m_member, reinterpret_cast<const uint8_t *>(req.constData()),
-                                                      size_t(req.size()), &len),
-                                     len, QStringLiteral("member"), &failure);
+    const QJsonObject a = call(m_member, QStringLiteral("pause_receiving"),
+                               QJsonObject{{QStringLiteral("pause"), true},
+                                           {QStringLiteral("for_ms"), double(qint64(minutes) * 60 * 1000)}},
+                               &failure);
     if (!failure.isNull()) {
         m_error = Errors::shown(failure);
         emit changed();
@@ -192,12 +196,9 @@ void Member::resume()
 {
     if (!m_member)
         return;
-    const QByteArray req = QJsonDocument(QJsonObject{{QStringLiteral("pause"), false}}).toJson(QJsonDocument::Compact);
-    size_t len = 0;
     Failure failure;
-    const QJsonObject a = Core::take(cbb_member_pause(m_member, reinterpret_cast<const uint8_t *>(req.constData()),
-                                                      size_t(req.size()), &len),
-                                     len, QStringLiteral("member"), &failure);
+    const QJsonObject a =
+        call(m_member, QStringLiteral("pause_receiving"), QJsonObject{{QStringLiteral("pause"), false}}, &failure);
     if (!failure.isNull()) {
         m_error = Errors::shown(failure);
         emit changed();
@@ -211,9 +212,8 @@ void Member::pollMuted()
 {
     if (!m_member)
         return;
-    size_t len = 0;
     Failure failure;
-    const QJsonObject a = Core::take(cbb_member_muted(m_member, &len), len, QStringLiteral("member"), &failure);
+    const QJsonObject a = call(m_member, QStringLiteral("muted"), QJsonObject(), &failure);
     if (failure.isNull())
         readMuted(a);
 }
@@ -263,9 +263,8 @@ void Member::pollPeers()
 {
     if (!m_member)
         return;
-    size_t len = 0;
     Failure failure;
-    const QJsonObject a = Core::take(cbb_member_peers(m_member, &len), len, QStringLiteral("member"), &failure);
+    const QJsonObject a = call(m_member, QStringLiteral("peers"), QJsonObject(), &failure);
     QStringList names;
     for (const QJsonValue &p : a.value(QStringLiteral("peers")).toArray()) {
         const QJsonObject o = p.toObject();

@@ -2060,10 +2060,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     val image = Images.part(e.media)
                     if (image != null) {
                         // Fetched off the node's thread, which reads the chunks.
-                        onImage?.let { f -> Thread({ fetchImage(e, image)?.let { f(it, e.text); taken = e.id } }, "image").start() }
+                        onImage?.let { f -> Thread({ fetchImage(e, image)?.let { f(it, e.text); taken = e.id; own = Images.key(image.sha256!!) } }, "image").start() }
                     } else if (e.text.isNotEmpty()) {
                         onCopy?.invoke(e.text, e.kind)
                         taken = e.id
+                        own = e.text
                     }
                 }
             },
@@ -2375,7 +2376,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         // The button works in every mode; only what the phone takes by itself follows it.
         val waits = SyncRule.waiting(current, usable, device, incomingMS, receives = true, taken = taken)
         var read: Clipboard.Board? = null
-        return when (SyncRule.decide(waits, { board().also { read = it }?.key }, usable)) {
+        return when (SyncRule.decide(waits, { board().also { read = it }?.key }, usable, own)) {
             SyncRule.Action.FETCH -> {
                 if (files != null) {
                     if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
@@ -2383,18 +2384,21 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     taken = current.id
                     return SyncResult.FETCHED to Got.Files(saved)
                 }
-                if (image == null) return SyncResult.FETCHED to usable?.let { taken = current?.id; Got.Text(it.first, it.second) }
+                if (image == null) return SyncResult.FETCHED to usable?.let { taken = current?.id; own = it.first; Got.Text(it.first, it.second) }
                 if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
                 val f = fetchImage(current!!, image, quiet = false) ?: throw Failure(Failure.Kind.NO_COMPUTERS)
                 taken = current.id
+                own = usable?.first
                 SyncResult.FETCHED to Got.Image(f, current.text)
             }
             SyncRule.Action.SEND -> {
                 if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
-                when (val b = read!!) {
+                val b = read!!
+                when (b) {
                     is Clipboard.Board.Text -> n.send(b.text, Member.Kind.TEXT)
                     is Clipboard.Board.Image -> sendImage(n, b.image)
                 }
+                own = b.key
                 SyncResult.SENT to null
             }
             SyncRule.Action.NOTHING -> {
@@ -2455,6 +2459,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** The ID of the last copy from another device this phone put in its clipboard, or saved in Downloads, so it is taken once. */
     @Volatile private var taken: String? = null
+
+    /**
+     * What this phone itself sent from its clipboard or took into it last,
+     * as the button compares it (Clipboard.Board.key): the button sends the
+     * clipboard only when it holds something else (SyncRule.decide).
+     */
+    @Volatile private var own: String? = null
 
     /** Sends what the user shared with the app: an image, or files, which the computers fetch from this phone. */
     fun sendShared(shared: Files.Shared): SyncResult {

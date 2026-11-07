@@ -7,6 +7,15 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The phones' member in the Rust core, for the iPhone and Android apps to move onto from
+  their own Swift and Kotlin nodes, as the Aurora app runs it (docs/core-api.md, "The
+  member"): `cbb_member_call` in `lite/ffi` takes addresses the app finds itself (Bonjour,
+  NSD, the tunnel's loopback port), listens as the group's hub while the app is in the front,
+  pauses in the background, sends images and files and fetches and opens them, sends the
+  commands, records, certificates, admin CAs, tunnel offers, hub shares and credentials an
+  admin's app signed, passes commands on to the devices behind it, and shows each peer as its
+  hello presents it; the button's rule is the core's too. `cbb_member_copy` and
+  `cbb_member_peers` gave way to it, and the Aurora app calls it.
 - The bench's fleet checks the copies sealed end to end: through a hub that only passes them
   on, text and a 20 MB file arrive both ways and neither its memory nor its disk ever holds them in
   the clear (S25), a paste command passes through it sealed (S26), making and stopping such a
@@ -45,7 +54,7 @@ All notable changes to cbb are documented in this file. The format follows
   page mutes it for the group or unmutes it. The phones take `mute` and `unmute` commands, and
   the phone kits sign them and read the hello's mute.
 - The same switch at the top of the Aurora app's main page, with a long press for a time; the
-  app takes an admin's `mute` and `unmute` (lite/ffi's `cbb_member_pause`, `cbb_member_muted`
+  app takes an admin's `mute` and `unmute` (lite/ffi's `pause_receiving` and `muted` operations
   and the `mute` event) and says when an admin muted the phone.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
@@ -1538,6 +1547,9 @@ All notable changes to cbb are documented in this file. The format follows
   mirror serves as `zxnext/SIGNED`), checked by the Pi's `cbb` against its pinned roots
   (`cbb next check-list`), and no longer from the site's plain list. It now needs the Pi to
   answer. docs/threat-model.md says what the first `.http` download trusts.
+- The iPhone and Android apps' button no longer sends a text the phone sent before over the
+  image or files it shared since: it compares the clipboard with what the phone itself sent
+  or took last, besides the group's copy (design.md, "The one button").
 - A hub that only passes the copies on now passes images and files on too: it fetched no
   blob, since it reads no copy, and the members fetched it from each other forever.
 - The devices take the offers and shares of a hub that only passes the copies on, as its
