@@ -59,7 +59,7 @@ android)
 host)
 	# Only the static library: the linker would take a shared one beside it,
 	# which the tests would then have to find at run time.
-	cargo build --locked -p cbb-ffi --features member --release
+	cargo build --locked -p cbb-ffi --features member,tunnel --release
 	cp target/release/libcbb_ffi.a "$out/"
 	;;
 aurora)
