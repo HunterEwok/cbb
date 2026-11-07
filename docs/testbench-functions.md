@@ -494,6 +494,7 @@ line here with every new function, and a case for it in the catalogue.
 | A.22 | Themes and layouts | A15 |
 | A.23 | Plain-language paths | A16 |
 | A.24 | Add a device: camera and six digits | A1, G3 |
+| A.25 | The Aurora OS app: join by QR, sync in front, leave | A17 |
 
 ## S. Security
 

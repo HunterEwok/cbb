@@ -419,6 +419,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | A14 | First launch and the Start screen: "This phone is ready", settings before a group, "I already use CBB on another phone" | ui | |
 | A15 | Themes: ten colours in System, Dark and Light; tiles and list; every device icon | ui | |
 | A16 | Plain-language paths: a lost phone ("remove it on your other phone"), a group with one admin advised to add a second, errors in one line with the next step | ui | |
+| A17 | The Aurora OS app: the signed package installs through the store's installer; it joins by its QR code (a computer of the group scans and dials in); the group's copies reach its clipboard while it is in front; a copy goes out when it comes to the front and from the pull-down menu; the main page shows the members and the last copy; "Leave the group" deletes the membership; the key stays in its OP-TEE token across restarts | person | Aurora phone |
 
 ## 14. Security (S)
 
