@@ -59,6 +59,10 @@ impl Peer {
     }
 }
 
+/// The tunnel address each connection the hub made to a loopback port came
+/// from, by the port it came from there, while it lasts.
+type Dialed = Arc<Mutex<HashMap<u16, Ipv6Addr>>>;
+
 /// The loopback port a connection through the tunnel from a client's address
 /// goes to, or None to close it.
 pub type Target = Arc<dyn Fn(Ipv6Addr) -> Option<u16> + Send + Sync>;
@@ -83,6 +87,7 @@ pub fn is_guest(a: &Ipv6Addr) -> bool {
 pub struct Hub {
     port: u16,
     out: Arc<UdpSocket>,
+    dialed: Dialed,
     peers: Arc<Mutex<Option<Vec<Peer>>>>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -121,6 +126,7 @@ impl Hub {
         let _ = iface.routes_mut().add_default_ipv6_route(own);
         let shared = Arc::new(Mutex::new(Some(peers)));
         let stop = Arc::new(AtomicBool::new(false));
+        let dialed: Dialed = Arc::default();
         let mut pump = Pump {
             secret,
             public,
@@ -139,13 +145,21 @@ impl Hub {
             listening: Vec::new(),
             bridges: Vec::new(),
             target,
+            dialed: dialed.clone(),
             log,
         };
         let thread = {
             let stop = stop.clone();
             std::thread::spawn(move || pump.run(&stop))
         };
-        Ok(Hub { port, out, peers: shared, stop, thread: Some(thread) })
+        Ok(Hub { port, out, dialed, peers: shared, stop, thread: Some(thread) })
+    }
+
+    /// The client's tunnel address a connection to a loopback port came
+    /// from, by the port it came from there: the caller checks that the
+    /// device of the connection is the one of that address.
+    pub fn tunnel_addr(&self, from_port: u16) -> Option<Ipv6Addr> {
+        self.dialed.lock().ok()?.get(&from_port).copied()
     }
 
     /// The hub's WireGuard UDP port.
@@ -232,6 +246,7 @@ struct Pump {
     listening: Vec<Listening>,
     bridges: Vec<Bridge>,
     target: Target,
+    dialed: Dialed,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -501,6 +516,9 @@ impl Pump {
                 }
             };
             let _ = local.set_nodelay(true);
+            if let (Ok(a), Ok(mut d)) = (local.local_addr(), self.dialed.lock()) {
+                d.insert(a.port(), from);
+            }
             self.bridges.push(Bridge {
                 local,
                 handle: l.handle,
@@ -521,9 +539,13 @@ impl Pump {
             busy |= move_bytes(b, self.sockets.get_mut::<tcp::Socket>(b.handle), &mut buf);
         }
         let sockets = &mut self.sockets;
+        let mut dialed = self.dialed.lock().ok();
         self.bridges.retain(|b| {
             if b.done {
                 sockets.remove(b.handle);
+                if let (Some(d), Ok(a)) = (dialed.as_mut(), b.local.local_addr()) {
+                    d.remove(&a.port());
+                }
             }
             !b.done
         });

@@ -371,18 +371,33 @@ pub fn run(cfg: Config) -> Result<()> {
             }
         }));
     }
+    {
+        // On a hub, a member's hello brings its tunnel key, which the hub
+        // admits, and gets the hub's offers back.
+        let (away, n) = (away.clone(), Arc::downgrade(&node));
+        node.on_hello(Box::new(move |from, peer, chain| match n.upgrade() {
+            Some(node) => away.hello(&node, from, peer, chain),
+            None => Vec::new(),
+        }));
+    }
     *svc.node.write().unwrap() = Some(node.clone());
     {
         // The claims to take the group over: one takes effect when its
         // delay ends, without a new record, and this admin's own makes it
         // the root then. A root also renews the admin CAs of the admins
-        // connected that have one from an earlier root.
-        let (node, dir, name, log) = (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone());
+        // connected that have one from an earlier root, and a hub forgets
+        // the clients the records remove.
+        let (node, dir, name, log, away) =
+            (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone(), away.clone());
         std::thread::spawn(move || {
             let (mut last, mut failed) = (String::new(), String::new());
             let renewed = std::sync::Mutex::new(std::collections::HashMap::new());
             while !node.is_closed() {
                 crate::admin::renew_admin_cas(&dir, &node, &renewed);
+                // A hub drops the clients the records now refuse.
+                away.prune(&|chain| node.records().lock().unwrap().refused(chain).is_some(), &|dev| {
+                    node.records().lock().unwrap().devices().iter().any(|d| d.id == dev)
+                });
                 let now = claim_states(&node);
                 if now != last {
                     last = now;
@@ -618,10 +633,21 @@ impl Service {
                 away.turn_off()?;
                 node.set_tunnel_key(None);
             }
-            "hub" | "relay" => {
+            "hub" | "hub-off" | "move" if !h.device.is_empty() => {
                 return Err(Error::msg(
-                    "the lite member is a client of the group's hub; make a full member the hub, or meet at a relay, there",
+                    "making another device a hub, or stopping or moving it, is not on the Rust service yet; run it on that device",
                 ));
+            }
+            "hub" => {
+                crate::admin::may_be_hub(&self.state_dir, &node)?;
+                node.set_tunnel_key(Some(away.make_hub(h)?));
+                // The members connect again, so their hellos carry the key
+                // and get the hub's offer.
+                node.reconnect();
+            }
+            "hub-off" => away.stop_hub(&node, h.force)?,
+            "relay" => {
+                return Err(Error::msg("meeting at a relay is not on the Rust service yet; use a hub of the group"));
             }
             n => return Err(Error::msg(format!("unknown cbb global {n:?}"))),
         }

@@ -35,7 +35,12 @@ All notable changes to cbb are documented in this file. The format follows
   the new root (`TestLiteTakeover`). Any of its members
   claims the group with the recovery key (`cbb recovery`, the sheet's text or QR code, or
   `-yubikey` with the key on a YubiKey through cbb-helper) when the root is lost
-  (`TestLiteRecovery`).
+  (`TestLiteRecovery`). An admin Rust service is the group's hub (`cbb global hub`, with
+  the addresses away from home and `-port`): it admits each member's tunnel key from its
+  hello, offers itself to them, serves the WireGuard tunnel (AmneziaWG when obfuscated) on
+  its UDP port, and takes the members' connections through it as Go's hub does; `cbb global
+  hub off` moves its clients to the next hub and retires it (`TestLiteHub`). Several hubs,
+  moving a hub, the forwarder, VLESS, the relay and invitations come next.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

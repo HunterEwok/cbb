@@ -226,6 +226,19 @@ ends, the Go service described below is still the computers' member.
   member claims the group the same way with the recovery key (`recovery`): the sheet's key,
   or with `yubikey` the card's, which cbb-helper's `card-sign` uses after the PIN, signs the
   claim under the recovery key's admin CA from the records or the sheet (`TestLiteRecovery`).
+- **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the
+  group's hub as Go's `cbb global hub` does: the state in `tunnel.json` becomes a hub's
+  (`is_hub`, `endpoints`, `listen_port`, obfuscation kept or made), and its hellos offer the
+  hub's tunnel key. A member's hello with a tunnel key is admitted by Go's `Admit` rules
+  (`members`, at most 256) and answered with the hub's offer and the offers of the hubs
+  after it in the group's order. The hub serves while no hub above it has an offer: GotaTun
+  through `hub.rs` on the UDP port (8764 when none is set), each tunneled TCP connection to
+  the member port passed to a loopback listener of its own, where the node takes it only
+  from the device whose tunnel address it came from (`Node::accept_tunneled`). The claim
+  loop drops members the records refuse or no longer list. `hub off` passes the next hub's
+  offer to the clients as `moved`, waits up to ten seconds for them to leave, and keeps the
+  state as `retired` (`TestLiteHub`). Several hubs and `move`, a hub on another device, the
+  forwarder and the hub's key periods, VLESS, the relay and invitations are still Go's.
 
 ### Linux components
 

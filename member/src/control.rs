@@ -119,6 +119,25 @@ pub struct Header {
     pub expires: i64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub address: String,
+    /// In away hub: the UDP port (0 for the member port), the forwarder and
+    /// its key, AmneziaWG, VLESS, and to keep the hub's settings where the
+    /// message gives none; in away hub-off, to stop the group's only hub.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub port: i64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub forwarder: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub forwarder_key: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub obfuscate: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vless: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keep: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub force: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub forward_only: bool,
 }
 
 /// A part of a copy of images or files on the socket, as Go's
@@ -245,6 +264,20 @@ pub struct Paste {
 /// the Go service's status.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Away {
+    /// This device is one of the group's hubs; standby while a hub above
+    /// it serves; its UDP port and the clients it admitted.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hub: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub standby: bool,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub port: i64,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub clients: i64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub obfuscated: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vless: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub endpoints: Vec<String>,
     /// The hub; empty until it offered its tunnel.

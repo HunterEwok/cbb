@@ -1335,6 +1335,28 @@ pub fn record_admitted(node: &Node, admitter: &admit::Admitter, a: &admit::Admit
     Ok(())
 }
 
+/// Why this device may not be one of the group's hubs, if it may not, as
+/// Go's away does: only the root or an admin, whose key the group's key
+/// level still lets be a hub (it had the user's consent when it was made
+/// one).
+pub fn may_be_hub(dir: &Path, node: &Node) -> Result<()> {
+    let ident = node.identity();
+    if signer(dir, &ident)?.is_none() {
+        return Err(Error::msg(
+            "only the group's root or an admin can be its hub, since the members take the hub's offer from them only; make this device an admin first (cbb admin on the root)",
+        ));
+    }
+    let store = if crate::rootless::is() {
+        "rootless"
+    } else if ident.external.is_some() {
+        "hardware"
+    } else {
+        "file"
+    };
+    let level = node.records().lock().unwrap().state().key_level;
+    level_allows(if level.is_empty() { "hardware" } else { &level }, store, "this device", "", true)
+}
+
 const NO_RECOVERY_KEY: &str = "the group has no recovery key: the root phone has not made one, or removed it";
 
 const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";

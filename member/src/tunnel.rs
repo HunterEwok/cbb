@@ -407,7 +407,142 @@ impl State {
     pub fn public_key(&self) -> Vec<u8> {
         PublicKey::from(&self.secret()).as_bytes().to_vec()
     }
+
+    /// The key the hub serves its clients with: the period's, else its own.
+    pub fn serving_key(&self) -> [u8; 32] {
+        let k = if self.serving.len() == 32 { &self.serving } else { &self.key };
+        k.as_slice().try_into().unwrap_or([0; 32])
+    }
+
+    /// The public key of the hub's next period, empty for none.
+    pub fn next_public(&self) -> Vec<u8> {
+        public_of(&self.next)
+    }
+
+    /// Whether pub is one of this device's public keys.
+    fn own_key(&self, public: &[u8]) -> bool {
+        [&self.key, &self.serving, &self.next].iter().any(|k| !k.is_empty() && public_of(k) == public)
+    }
+
+    /// The addresses the hub gives its clients: its own, then its
+    /// forwarder's, which they try last.
+    pub fn hub_endpoints(&self) -> Vec<SocketAddr> {
+        let mut eps = self.endpoints.clone();
+        if let Some(f) = &self.forwarder
+            && !eps.contains(&f.endpoint)
+        {
+            eps.push(f.endpoint);
+        }
+        eps
+    }
+
+    /// The offers this member tries, as hubs_to_try, on a hub only those of
+    /// the hubs above self in the group's order (Go's hubsToTry).
+    pub fn hubs_above(&self, order: &[String], me: &str) -> Vec<Hub> {
+        let limit = if self.is_hub { order.iter().position(|d| d == me).unwrap_or(order.len()) } else { order.len() };
+        let above: Vec<String> = order.iter().take(limit).filter(|d| *d != me).cloned().collect();
+        self.hubs_to_try(&above)
+    }
+
+    /// The hub's clients as the running hub takes them.
+    pub fn peers(&self) -> Result<Vec<crate::hub::Peer>> {
+        self.members
+            .iter()
+            .map(|m| {
+                let addr = addr(&m.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", m.device)))?;
+                let key: [u8; 32] = m.key.as_slice().try_into().context("a client's key is not 32 bytes")?;
+                let psk: [u8; 32] = m.psk.as_slice().try_into().context("a client's preshared key is not 32 bytes")?;
+                if self.own_key(&key) {
+                    return Err(Error::msg("a client has the hub's key"));
+                }
+                Ok(crate::hub::Peer { key, psk, addr, until: None })
+            })
+            .collect()
+    }
+
+    /// Adds or updates the client device with the key and preshared key it
+    /// offered and the chain it presented, as Go's State.Admit, and returns
+    /// the client as the hub keeps it and whether the state changed. An
+    /// empty psk keeps the client's, or makes one for a new key.
+    pub fn admit(&mut self, device: &str, public: &[u8], psk: &[u8], chain: Vec<Vec<u8>>) -> Result<(Member, bool)> {
+        addr(device).ok_or_else(|| Error::msg(format!("{device} is not a device ID")))?;
+        if chain.is_empty() {
+            return Err(Error::msg("a client without a certificate"));
+        }
+        if public.len() != 32 || public.iter().all(|&b| b == 0) || self.own_key(public) {
+            return Err(Error::msg("a client offered no key or the hub's own"));
+        }
+        if !psk.is_empty() && psk.len() != 32 {
+            return Err(Error::msg("a client offered a preshared key that is not 32 bytes"));
+        }
+        let psk = if psk.iter().all(|&b| b == 0) { &[][..] } else { psk };
+        let i = self.members.iter().position(|m| m.device == device);
+        if let Some(o) = self.members.iter().enumerate().find(|(j, m)| Some(*j) != i && m.key == public) {
+            return Err(Error::msg(format!("{device} offered the key of {}", o.1.device)));
+        }
+        if let Some(i) = i {
+            let c = &mut self.members[i];
+            if c.key == public && (psk.is_empty() || c.psk == psk) && c.chain == chain {
+                return Ok((c.clone(), false));
+            }
+            if !psk.is_empty() {
+                c.psk = psk.to_vec();
+            } else if c.key != public {
+                c.psk = random_key()?;
+            }
+            c.key = public.to_vec();
+            c.chain = chain;
+            return Ok((c.clone(), true));
+        }
+        if self.members.len() >= MAX_MEMBERS {
+            return Err(Error::msg("the hub has too many clients"));
+        }
+        let psk = if psk.is_empty() { random_key()? } else { psk.to_vec() };
+        let c = Member { device: device.to_string(), key: public.to_vec(), psk, chain };
+        self.members.push(c.clone());
+        Ok((c, true))
+    }
+
+    /// Forgets the hub's keys for the server credentials' periods, once
+    /// it is no hub.
+    pub fn clear_periods(&mut self) {
+        for (key, tpm, se, sealed_for) in self.slots().into_iter().skip(1) {
+            (*key, *tpm, *se, *sealed_for) = (Vec::new(), None, None, Vec::new());
+        }
+        self.serving_for.clear();
+        self.next_for.clear();
+        self.next_at_ms = 0;
+    }
+
+    /// Forgets the clients keep refuses and returns their devices.
+    pub fn prune(&mut self, keep: &dyn Fn(&Member) -> bool) -> Vec<String> {
+        let mut gone = Vec::new();
+        self.members.retain(|m| {
+            let k = keep(m);
+            if !k {
+                gone.push(m.device.clone());
+            }
+            k
+        });
+        gone
+    }
 }
+
+/// The public key of a private key.
+pub fn public_key_of(key: &[u8; 32]) -> Vec<u8> {
+    public_of(key)
+}
+
+/// The public key of a private key, empty for none.
+fn public_of(key: &[u8]) -> Vec<u8> {
+    match <[u8; 32]>::try_from(key) {
+        Ok(k) => PublicKey::from(&StaticSecret::from(k)).as_bytes().to_vec(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// The clients a hub keeps at most, as Go's.
+const MAX_MEMBERS: usize = 256;
 
 /// A new tunnel key, which a phone's app keeps (ffi/).
 pub fn new_key() -> Result<Vec<u8>> {
@@ -465,15 +600,7 @@ pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
 /// The tunnel address of a device: fd00:cbb::/32 followed by the first 96
 /// bits of its ID (32 lowercase hex characters).
 pub fn addr(id: &str) -> Option<Ipv6Addr> {
-    if !crate::certs::is_id(id) {
-        return None;
-    }
-    let mut a = [0u8; 16];
-    a[0..4].copy_from_slice(&[0xfd, 0x00, 0x0c, 0xbb]);
-    for (i, b) in a[4..].iter_mut().enumerate() {
-        *b = u8::from_str_radix(&id[2 * i..2 * i + 2], 16).ok()?;
-    }
-    Some(Ipv6Addr::from(a))
+    crate::tunnel_addr(id)
 }
 
 /// The running link to the hub. Dropping it stops it.

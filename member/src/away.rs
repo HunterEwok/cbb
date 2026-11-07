@@ -23,6 +23,8 @@ use crate::tunnel::{self, Link, State};
 use crate::uptime;
 use crate::wire::TunnelOffer;
 
+mod serve;
+
 const MAX_WAIT: Duration = Duration::from_secs(30);
 /// The longest wait between tries of a hub that is a phone, there only
 /// while its app is open (docs/design.md, "The phone as the hub"): a try
@@ -52,6 +54,8 @@ pub struct Away {
     using: Mutex<Option<(String, u64)>>,
     /// Where the tunnel sends its packets instead of the hubs' addresses.
     via: Option<SocketAddr>,
+    /// The hub, while this device serves as one.
+    serving: Mutex<Option<serve::Serving>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -85,6 +89,7 @@ impl Away {
             through: AtomicBool::new(false),
             using: Mutex::new(None),
             via: None,
+            serving: Mutex::new(None),
             log,
         }
     }
@@ -121,6 +126,7 @@ impl Away {
     pub fn turn_off(&self) -> Result<()> {
         let mut st = self.st.lock().unwrap();
         State::remove(&self.dir)?;
+        self.stop_serving();
         if st.take().is_some() {
             (self.log)("cbb: sync away from home is off");
         }
@@ -217,8 +223,13 @@ impl Away {
         };
         let mut a = control::Away { keys_in_file: true, ..Default::default() };
         let using = self.using.lock().unwrap().clone().map(|(d, _)| d);
-        let hubs = st.hubs_to_try(&node.hub_order());
-        if let Some(h) = using.as_deref().and_then(|d| st.hub(d)).or(hubs.first()) {
+        let hubs = st.hubs_above(&node.hub_order(), self.me.as_str());
+        if st.is_hub {
+            self.hub_status(st, &mut a, self.serving.lock().unwrap().is_none());
+        }
+        if let Some(h) =
+            using.as_deref().and_then(|d| st.hub(d)).or(hubs.first()).filter(|_| !st.is_hub || using.is_some())
+        {
             a.hub_device = h.device.clone();
             a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();
             a.through = self.through.load(Ordering::SeqCst)
@@ -250,7 +261,17 @@ impl Away {
         let mut links = 0u64;
         while !node.is_closed() {
             let st = self.st.lock().unwrap().clone();
-            let hubs = st.as_ref().map(|s| s.hubs_to_try(&node.hub_order())).unwrap_or_default();
+            let hubs = st.as_ref().map(|s| s.hubs_above(&node.hub_order(), self.me.as_str())).unwrap_or_default();
+            // A hub serves while no hub above it answers (Go's reachHubs
+            // with standby): it tries those first, as their client.
+            match &st {
+                Some(s) if s.is_hub && hubs.is_empty() => {
+                    self.serve(&node, s);
+                    std::thread::sleep(Duration::from_secs(1));
+                    continue;
+                }
+                _ => self.stop_serving(),
+            }
             // A phone's app in the background makes no connection.
             if node.is_paused() {
                 std::thread::sleep(Duration::from_secs(1));

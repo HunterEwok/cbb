@@ -8,12 +8,14 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -539,5 +541,104 @@ func rootIs(t *testing.T, s *testService, name string) func() bool {
 			}
 		}
 		return false
+	}
+}
+
+// TestLiteHub: an admin Rust service is the group's hub (cbb global hub,
+// docs/protocol.md, section 11): a Go computer keeps its offer at home,
+// then reaches it only through the tunnel and syncs, and cbb global hub off
+// refuses to stop the only hub without -yes, then stops it.
+func TestLiteHub(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, desk, laptop)
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair -full: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	waitFor(t, "the Rust member connected to both", func() bool {
+		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "full"
+	})
+	port := freeUDP(t)
+	hubAt := []string{fmt.Sprintf("127.0.0.1:%d", port)}
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: hubAt, Consent: true}, ""); err == nil || !strings.Contains(err.Error(), "admin") {
+		t.Errorf("a hub that is no admin: %v", err)
+	}
+	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
+		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
+	}
+	// It is an admin once its admin CA came.
+	var m *control.Message
+	waitFor(t, "the Rust member a hub", func() bool {
+		var err error
+		m, err = rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: hubAt, Consent: true}, "")
+		if err != nil && !strings.Contains(err.Error(), "admin") {
+			t.Fatalf("cbb global hub on the Rust member: %v", err)
+		}
+		return err == nil
+	})
+	if a := m.Status.Away; a == nil || !a.Hub || a.Port != port {
+		t.Fatalf("the Rust hub's status: %+v", a)
+	}
+	rustID := rust.status(t).Device
+	if _, err := laptop.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the laptop keeps the Rust hub's offer", func() bool {
+		a := laptop.status(t).Away
+		return a != nil && a.HubDevice == rustID
+	})
+
+	// The laptop leaves home: it reaches the Rust hub only through the
+	// tunnel, which the hub admitted its key for.
+	rust.stop()
+	rust = startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr())
+	laptopID := laptop.status(t).Device
+	laptop.stop()
+	h.hide(laptopID)
+	laptop = restartService(t, &h, laptop)
+	waitUpTo(t, 30*time.Second, "the laptop reaches the Rust hub through the tunnel", func() bool {
+		st := laptop.status(t)
+		return st.Away != nil && st.Away.Through && slices.ContainsFunc(st.Peers, func(p control.Device) bool { return p.ID == rustID })
+	})
+	if a := rust.status(t).Away; a == nil || !a.Hub || a.Clients != 1 {
+		t.Errorf("the Rust hub's status with its client: %+v", a)
+	}
+	if _, err := laptop.do(t, control.Header{Op: control.OpCopy}, "through the Rust hub"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "through the Rust hub" })
+
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub-off"}, ""); err == nil || !strings.Contains(err.Error(), "no other hub") {
+		t.Errorf("stopping the only hub: %v", err)
+	}
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub-off", Force: true}, ""); err != nil {
+		t.Fatalf("cbb global hub off -yes: %v", err)
+	}
+	if a := rust.status(t).Away; a == nil || a.Hub {
+		t.Errorf("the Rust member after hub off: %+v", a)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+	if err != nil || !strings.Contains(string(raw), `"retired": true`) || strings.Contains(string(raw), `"is_hub"`) {
+		t.Errorf("tunnel.json after hub off: %v\n%s", err, raw)
 	}
 }

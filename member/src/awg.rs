@@ -163,6 +163,54 @@ impl Obfuscation {
         Ok(o)
     }
 
+    /// New random settings for a group's hub, as internal/tunnel's
+    /// NewObfuscation makes them: each header range in its own quarter of
+    /// the space above WireGuard's types, in a random order.
+    pub fn random() -> Result<Obfuscation> {
+        let num = |lo: u32, hi: u32| lo + below(hi - lo + 1);
+        let jc = num(3, 8);
+        let jmin = num(40, 100);
+        let jmax = jmin + num(100, 500);
+        let mut s;
+        loop {
+            s = [
+                num(MIN_PADDING, MAX_PADDING),
+                num(MIN_PADDING, MAX_PADDING),
+                num(MIN_PADDING, 32),
+                num(MIN_PADDING, 32),
+            ];
+            let (a, b, c) = (INITIATION + s[0] as usize, RESPONSE + s[1] as usize, COOKIE_REPLY + s[2] as usize);
+            if a != b && a != c && b != c {
+                break;
+            }
+        }
+        let mut quarters = [0u32, 1, 2, 3];
+        for i in (1..4).rev() {
+            quarters.swap(i, num(0, i as u32) as usize);
+        }
+        let h = quarters.map(|q| {
+            let start = (q << 30) + 16 + num(0, 1 << 29);
+            Range { min: start, max: start + (1u32 << num(16, 24)) - 1 }
+        });
+        let mut header_key = [0u8; 32];
+        getrandom::fill(&mut header_key).map_err(|_| Error::msg("cannot make a key: the system has no randomness"))?;
+        let o = Obfuscation { jc, jmin, jmax, s, h, header_key };
+        o.check()?;
+        Ok(o)
+    }
+
+    /// The settings as the offers and the state file carry them.
+    pub fn to_value(&self) -> Value {
+        use base64::Engine as _;
+        let r = |r: &Range| format!("{}-{}", r.min, r.max);
+        serde_json::json!({
+            "jc": self.jc, "jmin": self.jmin, "jmax": self.jmax,
+            "s1": self.s[0], "s2": self.s[1], "s3": self.s[2], "s4": self.s[3],
+            "h1": r(&self.h[0]), "h2": r(&self.h[1]), "h3": r(&self.h[2]), "h4": r(&self.h[3]),
+            "header_protection_key": base64::engine::general_purpose::STANDARD.encode(self.header_key),
+        })
+    }
+
     fn check(&self) -> Result<()> {
         if self.jc > MAX_JUNK_COUNT {
             return Err(Error::msg(format!("the hub's settings have {} junk packets", self.jc)));
@@ -392,6 +440,14 @@ mod tests {
     /// The two ends of a link: each one's AmneziaWG of the other's
     /// handshake reads back as the WireGuard message, with a mac1 its own
     /// key makes.
+    #[test]
+    fn random_settings_check_and_read_back() {
+        for _ in 0..50 {
+            let o = Obfuscation::random().unwrap();
+            assert_eq!(Obfuscation::from_offer(&o.to_value()).unwrap(), o);
+        }
+    }
+
     #[test]
     fn handshakes_and_data_go_both_ways() {
         let (a, b) = (key(), key());

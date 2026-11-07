@@ -818,6 +818,21 @@ fn parse_duration_ms(s: &str) -> Option<i64> {
     go_duration_ms(s).filter(|ms| *ms <= mute::MAX_MS)
 }
 
+/// The tunnel address of a device (docs/protocol.md, section 11):
+/// fd00:cbb::/32 followed by the first 96 bits of its ID (32 lowercase hex
+/// characters).
+pub(crate) fn tunnel_addr(id: &str) -> Option<std::net::Ipv6Addr> {
+    if !certs::is_id(id) {
+        return None;
+    }
+    let mut a = [0u8; 16];
+    a[0..4].copy_from_slice(&[0xfd, 0x00, 0x0c, 0xbb]);
+    for (i, b) in a[4..].iter_mut().enumerate() {
+        *b = u8::from_str_radix(&id[2 * i..2 * i + 2], 16).ok()?;
+    }
+    Some(std::net::Ipv6Addr::from(a))
+}
+
 /// Reads a duration as Go writes one, such as 0s, 90s, 15m, 72h or 1h30m,
 /// in milliseconds.
 pub(crate) fn go_duration_ms(s: &str) -> Option<i64> {

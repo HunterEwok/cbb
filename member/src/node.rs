@@ -121,6 +121,11 @@ const MAX_PASSED: usize = 4096;
 /// `admin`, `hubs` and `credentials` for a phone's app, which keeps them.
 pub type OnMessage = Box<dyn Fn(&DeviceId, &Message) + Send + Sync>;
 
+/// Called with each member's hello, its peer and verified chain, once the
+/// hello is in; returns the messages to send it back first, such as a hub's
+/// offers for the tunnel key it offered.
+pub type OnHello = Box<dyn Fn(&DeviceId, &Peer, &[Cert]) -> Vec<Message> + Send + Sync>;
+
 /// Called with a tunnel offer and the device that sent it.
 /// Gets a tunnel offer from the group's root or an admin, and whether the
 /// records make a device the root or an admin, by its ID alone.
@@ -165,6 +170,7 @@ pub struct Node {
     /// None while sync away from home is off.
     tunnel_key: Arc<RwLock<TunnelKeys>>,
     on_tunnel: RwLock<Option<OnTunnel>>,
+    on_hello: RwLock<Option<OnHello>>,
     on_command: RwLock<Option<OnCommand>>,
     /// The quick actions that are on here, which the hellos name.
     actions: RwLock<Vec<String>>,
@@ -272,6 +278,8 @@ struct Conn {
     /// connection carries records and nothing else, until the records let
     /// the peer in and it connects again as a member.
     records_only: bool,
+    /// The peer came through this hub's tunnel.
+    tunneled: bool,
     closed: AtomicBool,
     bye: AtomicBool,
     /// The gets the peer asked for, served in order a chunk at a time.
@@ -311,6 +319,7 @@ impl Node {
             closed: AtomicBool::new(false),
             tunnel_key: Arc::new(RwLock::new(None)),
             on_tunnel: RwLock::new(None),
+            on_hello: RwLock::new(None),
             on_command: RwLock::new(None),
             actions: RwLock::new(Vec::new()),
             home: Mutex::new(HashMap::new()),
@@ -423,6 +432,11 @@ impl Node {
     /// The group's records.
     pub fn records(&self) -> Arc<Mutex<Records>> {
         self.records.clone()
+    }
+
+    /// Sets what is called with each member's hello.
+    pub fn on_hello(&self, f: OnHello) {
+        *self.on_hello.write().unwrap() = Some(f);
     }
 
     /// Sets what is called with the tunnel offers of full members.
@@ -825,6 +839,11 @@ impl Node {
 
     /// Ends the connection to the member id, if there is one, with bye.
     #[cfg_attr(not(feature = "tunnel"), allow(dead_code))] // used by sync away from home
+    /// The members connected through this hub's tunnel.
+    pub fn tunneled(&self) -> Vec<DeviceId> {
+        self.conns.lock().unwrap().values().filter(|c| c.tunneled).map(|c| c.id.clone()).collect()
+    }
+
     pub fn disconnect(&self, id: &DeviceId) {
         if let Some(c) = self.conns.lock().unwrap().get(id) {
             c.close(true);
@@ -1032,6 +1051,24 @@ impl Node {
     /// to the same device. handshaken is called once the handshake is over,
     /// whether it worked or not.
     pub fn accept(&self, sock: TcpStream, addr: SocketAddr, handshaken: &mut dyn FnMut()) -> Result<()> {
+        self.accept_from(sock, addr, None, handshaken)
+    }
+
+    /// Runs a member connection that came through the hub's tunnel from
+    /// the tunnel address from: the member protocol only, from the device
+    /// whose address that is, as Go's serveTunnelMember.
+    pub fn accept_tunneled(&self, sock: TcpStream, from: std::net::Ipv6Addr) -> Result<()> {
+        let addr = SocketAddr::from((from, 0));
+        self.accept_from(sock, addr, Some(from), &mut || {})
+    }
+
+    fn accept_from(
+        &self,
+        sock: TcpStream,
+        addr: SocketAddr,
+        tunneled: Option<std::net::Ipv6Addr>,
+        handshaken: &mut dyn FnMut(),
+    ) -> Result<()> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
         }
@@ -1041,7 +1078,7 @@ impl Node {
         let _ = sock.set_nodelay(true);
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
         sock.set_write_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
-        let pairing = self.on_pairing.read().unwrap().clone();
+        let pairing = if tunneled.is_some() { None } else { self.on_pairing.read().unwrap().clone() };
         let (ident, refused, clock) = (self.identity(), tls::refused(&self.records), tls::clock());
         let (cfg, exporter) = match pairing {
             Some(_) => tls::member_or_pair_server(&ident, refused, &clock)?,
@@ -1059,6 +1096,14 @@ impl Node {
         let res = res.and_then(|()| self.check(conn, addr, Usage::Client));
         handshaken();
         let (conn, id, chain) = res?;
+        if let Some(from) = tunneled
+            && crate::tunnel_addr(id.as_str()) != Some(from)
+        {
+            let _ = sock.shutdown(Shutdown::Both);
+            return Err(Error::msg(format!(
+                "a member connection through the tunnel from {from} is not from the device of that key; closed"
+            )));
+        }
         self.run(sock, conn, id, chain, addr)
     }
 
@@ -1109,6 +1154,7 @@ impl Node {
             peer: Mutex::new(None),
             chain,
             records_only,
+            tunneled: matches!(addr.ip(), std::net::IpAddr::V6(a) if a.octets()[..4] == [0xfd, 0x00, 0x0c, 0xbb]),
             closed: AtomicBool::new(false),
             bye: AtomicBool::new(false),
             gets: Mutex::new(VecDeque::new()),
@@ -1209,7 +1255,15 @@ impl Node {
                 }
                 let (mut h, body) = wire::decode_hello(m.hello.as_ref())?;
                 h.current = h.current.and_then(|e| e.sealed).and_then(|s| self.take(s, &c.id));
-                *c.peer.lock().unwrap() = Some(peer_of(&c.id, &m.role, &body, c.records_only));
+                let peer = peer_of(&c.id, &m.role, &body, c.records_only);
+                *c.peer.lock().unwrap() = Some(peer.clone());
+                if !c.records_only
+                    && let Some(f) = self.on_hello.read().unwrap().as_ref()
+                {
+                    for out in f(&c.id, &peer, &c.chain) {
+                        self.enqueue(c, Out::Message(out));
+                    }
+                }
                 if !c.records_only {
                     let out = self
                         .engine
