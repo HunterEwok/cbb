@@ -61,6 +61,54 @@ fn call(helper: &Helper, op: &str, req: &Wire) -> Result<Wire> {
     serde_json::from_slice(&ans.payload).context("the helper's answer about a key is not understood")
 }
 
+/// A secret sealed by the TPM or the Secure Enclave, as Go's state files
+/// keep it (keyseal.Blob): the blob in tpm or se, or the secret itself
+/// where secrets stay in files.
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Debug)]
+pub struct Sealed {
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    pub secret: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tpm: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub se: Option<serde_json::Value>,
+}
+
+impl Sealed {
+    /// Whether the hardware holds the secret.
+    pub fn is_sealed(&self) -> bool {
+        self.tpm.is_some() || self.se.is_some()
+    }
+}
+
+/// Seals secret with the device's hardware through cbb-helper, as Go's
+/// group.Sealer; None where secrets stay in files: no helper beside cbb,
+/// or no TPM or Secure Enclave that seals.
+pub fn seal(secret: &[u8]) -> Result<Option<Sealed>> {
+    let Some(helper) = crate::helper::shared() else { return Ok(None) };
+    let req = Sealed { secret: secret.to_vec(), ..Sealed::default() };
+    let payload = serde_json::to_vec(&req).context("cannot encode a sealing request")?;
+    let ans = helper.call(Header { op: "seal".into(), ..Default::default() }, payload, KEY_TIME)?;
+    let b: Sealed = serde_json::from_slice(&ans.payload).context("the helper's sealed secret is not understood")?;
+    Ok(b.is_sealed().then_some(Sealed { secret: Vec::new(), ..b }))
+}
+
+/// Opens what seal sealed, through cbb-helper.
+pub fn unseal(b: &Sealed) -> Result<Vec<u8>> {
+    let helper = crate::helper::shared().ok_or_else(|| {
+        Error::msg("the key is sealed by the TPM or the Secure Enclave, which cbb opens only through cbb-helper, and there is no cbb-helper beside cbb")
+    })?;
+    let req = Sealed { secret: Vec::new(), ..b.clone() };
+    let payload = serde_json::to_vec(&req).context("cannot encode an unsealing request")?;
+    let ans = helper.call(Header { op: "unseal".into(), ..Default::default() }, payload, KEY_TIME)?;
+    let open: Sealed =
+        serde_json::from_slice(&ans.payload).context("the helper's unsealed secret is not understood")?;
+    if open.secret.is_empty() {
+        return Err(Error::msg("the helper unsealed no secret"));
+    }
+    Ok(open.secret)
+}
+
 /// A key on a YubiKey (Go's internal/piv), which the helper signs with
 /// after its PIN: the recovery key a root phone put there. The key whose
 /// certificate's public key has the hash key_hash signs; public is that

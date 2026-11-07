@@ -81,6 +81,31 @@ func TestKeysInTPM(t *testing.T) {
 	}
 }
 
+// TestSealInTPM: seal seals a secret in the TPM, unseal in a new helper
+// opens it, and a broken request is refused.
+func TestSealInTPM(t *testing.T) {
+	tpmtest.Start(t)
+	group.ReopenTPM()
+	t.Cleanup(group.ReopenTPM)
+	s := New("test")
+	s.HandleKeys()
+	got := exchange(t, s, request(t, OpSeal, 1, Sealed{Secret: []byte("a tunnel key")}))
+	var b Sealed
+	if err := json.Unmarshal(got[1].Payload, &b); err != nil || got[1].Error != "" || b.TPM == nil || b.Secret != nil {
+		t.Fatalf("seal: %v, %+v, %+v", err, got[1].Header, b)
+	}
+	s = New("test")
+	s.HandleKeys()
+	got = exchange(t, s, request(t, OpUnseal, 2, b), request(t, OpUnseal, 3, Sealed{}))
+	var open Sealed
+	if err := json.Unmarshal(got[2].Payload, &open); err != nil || string(open.Secret) != "a tunnel key" {
+		t.Fatalf("unseal: %v, %+v", err, got[2].Header)
+	}
+	if got[3].Error == "" {
+		t.Error("unseal took a request without a blob")
+	}
+}
+
 // TestKeysWithoutHardware: where new keys go into a file, key-new makes
 // none and says why, so that cbb keeps the key in its own file.
 func TestKeysWithoutHardware(t *testing.T) {
@@ -94,6 +119,11 @@ func TestKeysWithoutHardware(t *testing.T) {
 	}
 	if k.TPM != nil || k.SE != nil || len(k.Public) != 0 || !strings.Contains(k.Why, group.TPMEnv) {
 		t.Errorf("key-new without hardware: %+v", k)
+	}
+	got = exchange(t, s, request(t, OpSeal, 2, Sealed{Secret: []byte("a tunnel key")}))
+	var b Sealed
+	if err := json.Unmarshal(got[2].Payload, &b); err != nil || got[2].Error != "" || b.TPM != nil || b.SE != nil {
+		t.Errorf("seal without hardware: %v, %+v, %+v", err, got[2].Header, b)
 	}
 }
 

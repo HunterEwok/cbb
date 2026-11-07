@@ -17,7 +17,9 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/keyseal"
 	"github.com/HunterEwok/cbb/internal/piv"
+	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
 // The operations on keys that hardware holds (docs/design.md, "The service
@@ -34,7 +36,22 @@ const (
 	// OpCardSign signs a digest with a key on a YubiKey (internal/piv)
 	// after its PIN; the answer is a Signed.
 	OpCardSign = "card-sign"
+	// OpSeal seals a secret with the TPM or the Secure Enclave
+	// (group.Sealer); the request and the answer are a Sealed, the
+	// answer with no blob where secrets stay in files.
+	OpSeal = "seal"
+	// OpUnseal opens what seal sealed; the request and the answer are a
+	// Sealed.
+	OpUnseal = "unseal"
 )
+
+// Sealed is a secret and the blob the hardware sealed it in, as the state
+// files keep it: key_tpm or key_se.
+type Sealed struct {
+	Secret []byte          `json:"secret,omitempty"`
+	TPM    *tpmkey.Blob    `json:"tpm,omitempty"`
+	SE     json.RawMessage `json:"se,omitempty"`
+}
 
 // Key is a device key that hardware holds: where the identity file keeps it,
 // and its public key, SEC1 uncompressed. Why says, when key-new made no key
@@ -83,6 +100,32 @@ func (s *Server) handleKeys(openCard func(func(*x509.Certificate) bool) (*piv.Ke
 	s.Handle(OpKeyPublic, k.public)
 	s.Handle(OpKeySign, k.sign)
 	s.Handle(OpCardSign, k.cardSign)
+	s.Handle(OpSeal, seal)
+	s.Handle(OpUnseal, unseal)
+}
+
+func seal(req *control.Message) (*control.Message, error) {
+	var r Sealed
+	if err := json.Unmarshal(req.Payload, &r); err != nil || len(r.Secret) == 0 {
+		return nil, errors.New("a sealing request that is not understood")
+	}
+	b, err := group.Sealer{}.Seal(r.Secret)
+	if err != nil || b == nil {
+		return answer(Sealed{})
+	}
+	return answer(Sealed{TPM: b.TPM, SE: b.SE})
+}
+
+func unseal(req *control.Message) (*control.Message, error) {
+	var r Sealed
+	if err := json.Unmarshal(req.Payload, &r); err != nil || r.TPM == nil && r.SE == nil {
+		return nil, errors.New("an unsealing request that is not understood")
+	}
+	secret, err := group.Sealer{}.Unseal(&keyseal.Blob{TPM: r.TPM, SE: r.SE})
+	if err != nil {
+		return nil, err
+	}
+	return answer(Sealed{Secret: secret})
 }
 
 func answer(v any) (*control.Message, error) {

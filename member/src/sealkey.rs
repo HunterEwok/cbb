@@ -14,7 +14,6 @@ use std::sync::OnceLock;
 use cbb_core::seal;
 use serde::{Deserialize, Serialize};
 
-use crate::certs::b64;
 use crate::error::{Context, Error, Result};
 use crate::files;
 
@@ -24,8 +23,10 @@ pub const FILE_NAME: &str = "seal.json";
 #[derive(Serialize, Deserialize)]
 struct File {
     v: i64,
-    #[serde(with = "b64")]
-    secret: Vec<u8>,
+    /// The secret, or the blob the TPM or the Secure Enclave sealed it in,
+    /// as Go keeps it.
+    #[serde(flatten)]
+    sealed: crate::keys::Sealed,
 }
 
 /// The secret and its public key, once the service loaded them.
@@ -38,10 +39,13 @@ pub fn load(dir: &Path) -> Result<Vec<u8>> {
         Ok(d) => d,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             let secret = seal::generate_secret().map_err(|e| e.context("cannot make a key for sealed messages"))?;
-            let f = File { v: 1, secret: secret.to_vec() };
+            // Sealed by the hardware where it can be, as Go's newSealSecret.
+            let sealed = crate::keys::seal(&secret)?
+                .unwrap_or_else(|| crate::keys::Sealed { secret: secret.to_vec(), ..Default::default() });
+            let f = File { v: 1, sealed };
             let data = serde_json::to_vec_pretty(&f).context("cannot encode the key for sealed messages")?;
             files::write_atomic(&path, &data, 0o600)?;
-            return Ok(f.secret);
+            return Ok(secret.to_vec());
         }
         Err(e) => return Err(Error::with(format!("cannot read {}", path.display()), e)),
     };
@@ -49,14 +53,19 @@ pub fn load(dir: &Path) -> Result<Vec<u8>> {
     if f.v != 1 {
         return Err(Error::msg(format!("{} is of unknown version {}", path.display(), f.v)));
     }
-    if seal::public_key(&f.secret).is_err() {
+    let secret = if f.sealed.is_sealed() {
+        crate::keys::unseal(&f.sealed).map_err(|e| e.context(path.display().to_string()))?
+    } else {
+        f.sealed.secret
+    };
+    if seal::public_key(&secret).is_err() {
         return Err(Error::msg(format!(
             "{} is damaged: the secret is not {} bytes",
             path.display(),
             seal::SECRET_SIZE
         )));
     }
-    Ok(f.secret)
+    Ok(secret)
 }
 
 /// Keeps the secret for the rest of the run: the hello offers its public

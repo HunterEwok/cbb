@@ -112,4 +112,26 @@ func TestLiteTPM(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "pi has the copy", func() bool { return pi.paste(t) == "signed in the TPM" })
+
+	// The secrets in files the TPM seals too, as Go keeps them: the key
+	// for sealed messages and the tunnel key, which a restart opens again.
+	if _, err := lite.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatalf("cbb global on: %v", err)
+	}
+	sealed := func(name, plain, blob string) {
+		t.Helper()
+		var f map[string]json.RawMessage
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil || json.Unmarshal(raw, &f) != nil || f[plain] != nil || f[blob] == nil {
+			t.Errorf("%s keeps %q in the file or not %q in the TPM (%v):\n%s", name, plain, blob, err, raw)
+		}
+	}
+	sealed("seal.json", "secret", "tpm")
+	sealed("tunnel.json", "key", "key_tpm")
+	lite.stop()
+	lite = startLiteEnv(t, bin, dir, []string{sim}, "-no-mdns", "-peer", pi.addr())
+	waitFor(t, "the Rust member connected again with its sealed keys", func() bool {
+		st, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 1 && st.Status.Away != nil
+	})
 }

@@ -61,8 +61,9 @@ pub struct State {
     #[serde(rename = "v")]
     pub version: u32,
     /// The group this state belongs to; a state of another group is dropped.
+    #[serde(default)]
     pub group: String,
-    #[serde(with = "b64")]
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     key: Vec<u8>,
     /// The preshared key every hub uses for this device (docs/protocol.md,
     /// section 11, "Several hubs").
@@ -71,6 +72,127 @@ pub struct State {
     /// The offers of the group's hubs, one per hub.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<Hub>,
+    /// The key sealed by the TPM or the Secure Enclave, as Go keeps it;
+    /// key stays out of the file then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_tpm: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_se: Option<serde_json::Value>,
+    /// Whether this member is one of the group's hubs, which admit the
+    /// other members' keys; endpoints are the addresses it gives its
+    /// clients, listen_port its UDP port (0 for the member port).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub is_hub: bool,
+    /// It stopped being a hub and tells the peers that keep its offer to
+    /// forget it (docs/protocol.md, section 11, "Stopping a hub").
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub retired: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub endpoints: Vec<SocketAddr>,
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub listen_port: u16,
+    /// On a hub, its clients.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<Member>,
+    /// The user agreed to sync away from home with the keys in files.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub keys_in_file: bool,
+    /// Where the hub registers for the clients that cannot reach it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forwarder: Option<Forwarder>,
+    /// The blind relay this device meets its group at, without a hub.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<Forwarder>,
+    /// On the hub, the group's AmneziaWG settings, which it gives its
+    /// clients (src/awg.rs reads them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obfuscation: Option<serde_json::Value>,
+    /// On a hub, the key it serves its clients with in the period
+    /// serving_for, and the next one, from next_at_ms on (docs/protocol.md,
+    /// section 11, "The hub's key"); empty for none.
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    serving: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    serving_tpm: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    serving_se: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub serving_for: String,
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    next: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    next_tpm: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    next_se: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub next_for: String,
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub next_at_ms: i64,
+    /// The keys the sealed blobs hold: key, serving and next.
+    #[serde(skip)]
+    sealed_for: [Vec<u8>; 3],
+}
+
+/// A client as its hub keeps it: its WireGuard key, its own preshared key,
+/// and the chain it presented with the key, so that the hub drops it when
+/// the records revoke it; empty for one another hub handed over.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+pub struct Member {
+    pub device: String,
+    #[serde(with = "b64")]
+    pub key: Vec<u8>,
+    #[serde(with = "b64")]
+    pub psk: Vec<u8>,
+    #[serde(with = "b64_list", default)]
+    pub chain: Vec<Vec<u8>>,
+}
+
+/// A hub's forwarder or a device's relay: its address, for UDP and TCP,
+/// and the pin of its key; for a forwarder the group's VLESS user ID and
+/// way once it registered, and whether it is the project's.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+pub struct Forwarder {
+    pub endpoint: SocketAddr,
+    #[serde(rename = "key")]
+    pub pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub vless_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vless: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub project: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+fn is_zero_u16(n: &u16) -> bool {
+    *n == 0
+}
+
+fn is_zero_i64(n: &i64) -> bool {
+    *n == 0
+}
+
+/// A list of byte strings in standard base64, as Go's [][]byte: null is
+/// none, both ways.
+mod b64_list {
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &[Vec<u8>], s: S) -> Result<S::Ok, S::Error> {
+        if v.is_empty() {
+            return s.serialize_none();
+        }
+        s.collect_seq(v.iter().map(|b| STANDARD.encode(b)))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Vec<u8>>, D::Error> {
+        let list: Option<Vec<String>> = Option::deserialize(d)?;
+        list.unwrap_or_default().iter().map(|t| STANDARD.decode(t).map_err(serde::de::Error::custom)).collect()
+    }
 }
 
 /// The offer of one of the group's hubs, as this member keeps it.
@@ -112,7 +234,7 @@ impl Hub {
 impl State {
     /// A new state with a new key and preshared key.
     pub fn new(group: &str) -> Result<State> {
-        Ok(State { version: 1, group: group.to_string(), key: random_key()?, psk: random_key()?, hubs: vec![] })
+        Ok(State { version: 1, group: group.to_string(), key: random_key()?, psk: random_key()?, ..State::empty() })
     }
 
     /// A state with a key the app keeps itself, as a phone does (ffi/).
@@ -120,7 +242,85 @@ impl State {
         if key.len() != 32 || key.iter().all(|&b| b == 0) {
             return Err(Error::msg("the tunnel key is not 32 bytes, or is zeros"));
         }
-        Ok(State { version: 1, group: String::new(), key: key.to_vec(), psk: random_key()?, hubs: vec![] })
+        Ok(State { version: 1, group: String::new(), key: key.to_vec(), psk: random_key()?, ..State::empty() })
+    }
+
+    fn empty() -> State {
+        State {
+            version: 1,
+            group: String::new(),
+            key: Vec::new(),
+            psk: Vec::new(),
+            hubs: Vec::new(),
+            key_tpm: None,
+            key_se: None,
+            is_hub: false,
+            retired: false,
+            endpoints: Vec::new(),
+            listen_port: 0,
+            members: Vec::new(),
+            keys_in_file: false,
+            forwarder: None,
+            relay: None,
+            obfuscation: None,
+            serving: Vec::new(),
+            serving_tpm: None,
+            serving_se: None,
+            serving_for: String::new(),
+            next: Vec::new(),
+            next_tpm: None,
+            next_se: None,
+            next_for: String::new(),
+            next_at_ms: 0,
+            sealed_for: Default::default(),
+        }
+    }
+
+    /// The key slots and their sealed blobs: key, serving and next.
+    #[allow(clippy::type_complexity)]
+    fn slots(
+        &mut self,
+    ) -> [(&mut Vec<u8>, &mut Option<serde_json::Value>, &mut Option<serde_json::Value>, &mut Vec<u8>); 3] {
+        let [a, b, c] = &mut self.sealed_for;
+        [
+            (&mut self.key, &mut self.key_tpm, &mut self.key_se, a),
+            (&mut self.serving, &mut self.serving_tpm, &mut self.serving_se, b),
+            (&mut self.next, &mut self.next_tpm, &mut self.next_se, c),
+        ]
+    }
+
+    /// Opens the keys the hardware sealed, through cbb-helper.
+    fn unseal(&mut self) -> Result<()> {
+        for (key, tpm, se, sealed_for) in self.slots() {
+            if tpm.is_none() && se.is_none() {
+                continue;
+            }
+            let b = crate::keys::Sealed { secret: Vec::new(), tpm: tpm.clone(), se: se.clone() };
+            *key = crate::keys::unseal(&b)?;
+            *sealed_for = key.clone();
+        }
+        Ok(())
+    }
+
+    /// Seals each key once, and again when it changed, where the hardware
+    /// seals, as Go's State.seal; reports whether a blob changed.
+    fn seal(&mut self) -> Result<bool> {
+        let mut changed = false;
+        for (key, tpm, se, sealed_for) in self.slots() {
+            if (tpm.is_some() || se.is_some()) && *sealed_for == *key && !key.is_empty() {
+                continue;
+            }
+            changed |= tpm.is_some() || se.is_some();
+            (*tpm, *se, *sealed_for) = (None, None, Vec::new());
+            if key.is_empty() {
+                continue;
+            }
+            if let Some(b) = crate::keys::seal(key).map_err(|e| e.context("cannot seal the tunnel key"))? {
+                (*tpm, *se, *sealed_for) = (b.tpm, b.se, key.clone());
+                changed = true;
+            }
+        }
+        Ok(changed)
     }
 
     /// Reads dir/tunnel.json; None if there is none.
@@ -131,12 +331,23 @@ impl State {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(Error::with(format!("cannot read {}", path.display()), e)),
         };
-        let st: State = serde_json::from_slice(&data).context(format!("{} is damaged", path.display()))?;
+        let mut st: State = serde_json::from_slice(&data).context(format!("{} is damaged", path.display()))?;
+        if st.version != 1 {
+            return Err(Error::msg(format!("{} is of unknown version {}", path.display(), st.version)));
+        }
+        st.unseal().map_err(|e| e.context(path.display().to_string()))?;
         if st.key.len() != 32 {
             return Err(Error::msg(format!("{} is damaged: the key is not 32 bytes", path.display())));
         }
         if st.psk.len() != 32 {
             return Err(Error::msg(format!("{} is damaged: the preshared key is not 32 bytes", path.display())));
+        }
+        if [&st.serving, &st.next].iter().any(|k| !k.is_empty() && k.len() != 32) {
+            return Err(Error::msg(format!("{} is damaged: a hub's key is not 32 bytes", path.display())));
+        }
+        // A key from the file is sealed when the device has the hardware.
+        if st.key_tpm.is_none() && st.key_se.is_none() && st.seal()? {
+            st.save(dir)?;
         }
         Ok(Some(st))
     }
@@ -163,8 +374,15 @@ impl State {
     }
 
     /// Writes dir/tunnel.json, readable only by its owner.
-    pub fn save(&self, dir: &Path) -> Result<()> {
-        let data = serde_json::to_vec_pretty(self).context("cannot encode the tunnel state")?;
+    pub fn save(&mut self, dir: &Path) -> Result<()> {
+        self.seal()?;
+        let mut f = self.clone();
+        for (key, tpm, se, _) in f.slots() {
+            if tpm.is_some() || se.is_some() {
+                key.clear();
+            }
+        }
+        let data = serde_json::to_vec_pretty(&f).context("cannot encode the tunnel state")?;
         files::write_atomic(&dir.join(FILE_NAME), &data, 0o600)
     }
 
@@ -811,6 +1029,25 @@ fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
 mod tests {
     use super::*;
 
+    /// A Go hub's state (testdata/interop/tunnel-state.json, which
+    /// internal/tunnel's TestStateVectors writes) reads and saves again
+    /// the same.
+    #[test]
+    fn a_go_hubs_state_saves_the_same() {
+        let want: serde_json::Value =
+            serde_json::from_str(include_str!("../../testdata/interop/tunnel-state.json")).unwrap();
+        let dir = std::env::temp_dir().join(format!("cbb-tunnel-go-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(FILE_NAME), want.to_string()).unwrap();
+        let mut st = State::load(&dir).unwrap().unwrap();
+        assert!(st.is_hub && st.members.len() == 2 && st.members[0].chain.len() == 2 && st.forwarder.is_some());
+        assert_eq!((st.serving.len(), st.next_for.as_str(), st.listen_port), (32, "2026-12", 51820));
+        st.save(&dir).unwrap();
+        let got: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join(FILE_NAME)).unwrap()).unwrap();
+        assert_eq!(got, want);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn local_port_takes_its_own_user() {
         let ln = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -904,7 +1141,7 @@ mod tests {
     fn state_keeps_its_key() {
         let dir = std::env::temp_dir().join(format!("cbb-tunnel-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let st = State::new("abc").unwrap();
+        let mut st = State::new("abc").unwrap();
         st.save(&dir).unwrap();
         let back = State::load(&dir).unwrap().unwrap();
         assert_eq!(back.public_key(), st.public_key());

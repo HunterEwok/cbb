@@ -185,7 +185,10 @@ ends, the Go service described below is still the computers' member.
   the blob as the Go member's file does (`key_tpm`, `key_se`); `key-public` loads it by the
   blob and `key-sign` signs a SHA-256 digest with it, so `cbb`'s handshakes, copies and
   records are signed in the hardware and the key never leaves it. `card-sign` signs with a
-  key on a YubiKey, found by its certificate's key hash, after its PIN.
+  key on a YubiKey, found by its certificate's key hash, after its PIN. `seal` and `unseal`
+  seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
+  the key for sealed messages (`seal.json`) and the tunnel's keys (`tunnel.json`, with the
+  hub's fields Go writes) sealed in the same fields as the Go member.
 - **The clients' operations.** The Rust service already takes what the command line and the
   desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
   copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,

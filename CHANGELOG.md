@@ -14,7 +14,10 @@ All notable changes to cbb are documented in this file. The format follows
 - The Rust `cbb` keeps its device key in the TPM, or a Mac's Secure Enclave, through
   `cbb-helper`, as the Go member does: `cbb pair` makes it there, `identity.json` keeps the
   hardware's blob, and every signature goes through the helper (`TestLiteTPM`, on swtpm).
-  The helper also signs with a key on a YubiKey after its PIN (`card-sign`).
+  The helper also signs with a key on a YubiKey after its PIN (`card-sign`), and seals
+  secrets (`seal`, `unseal`): the Rust `cbb` keeps `seal.json` and `tunnel.json` sealed by
+  the hardware, and reads and writes a Go hub's `tunnel.json` as Go does
+  (`testdata/interop/tunnel-state.json`).
 - The Rust `cbb` service makes a group and is its root (`cbb new`), as the Go service does:
   it admits a computer by the QR code that computer shows (`cbb pair -qr`), and removes,
   renames, freezes and unfreezes devices, makes a computer an admin, sets the key level and

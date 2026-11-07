@@ -107,7 +107,7 @@ impl Away {
     pub fn turn_on(&self) -> Result<(Vec<u8>, Vec<u8>)> {
         let mut st = self.st.lock().unwrap();
         if st.is_none() {
-            let next = State::new(&self.group)?;
+            let mut next = State::new(&self.group)?;
             next.save(&self.dir)?;
             *st = Some(next);
             (self.log)("cbb: sync away from home is on");
