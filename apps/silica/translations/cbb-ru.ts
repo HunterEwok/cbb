@@ -89,6 +89,42 @@
         <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
         <translation>Другое устройство не приняло этот телефон как админа. Админов назначает только корень группы: там примите его как админа (cbb pair -qr -admin) или войдите в группу не как админ.</translation>
     </message>
+    <message>
+        <source>Another device answered at the code's address. Scan the code again.</source>
+        <translation>По адресу из кода ответило другое устройство. Отсканируйте код ещё раз.</translation>
+    </message>
+    <message>
+        <source>Only an admin of the group adds devices.</source>
+        <translation>Добавлять устройства может только админ группы.</translation>
+    </message>
+    <message>
+        <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
+        <translation>Этот телефон просит стать админом. Админов назначает только корень группы; на том телефоне вступите без прав админа.</translation>
+    </message>
+    <message>
+        <source>The code did not match. Scan the code the other device shows now.</source>
+        <translation>Код не совпал. Отсканируйте код, который другое устройство показывает сейчас.</translation>
+    </message>
+    <message>
+        <source>The device joined, but the group did not take its record yet.</source>
+        <translation>Устройство вступило, но группа ещё не приняла его запись.</translation>
+    </message>
+    <message>
+        <source>The other device did not join.</source>
+        <translation>Другое устройство не вступило.</translation>
+    </message>
+    <message>
+        <source>The phone cannot reach the other device. Check that both are on the same Wi-Fi, and that the other device still shows its code.</source>
+        <translation>Телефон не может связаться с другим устройством. Проверьте, что оба в одной сети Wi-Fi и что другое устройство всё ещё показывает код.</translation>
+    </message>
+    <message>
+        <source>The phone is not connected to its group yet. Try again in a moment.</source>
+        <translation>Телефон ещё не подключился к своей группе. Попробуйте чуть позже.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
+        <translation>Это не код CBB. На другом устройстве выберите «Вступить в группу» и отсканируйте код, который оно покажет.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -230,6 +266,10 @@
     <message>
         <source>Show the devices as a list</source>
         <translation>Показывать устройства списком</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Добавить устройство</translation>
     </message>
 </context>
 <context>
@@ -411,6 +451,49 @@
     <message>
         <source>Offline</source>
         <translation>Не в сети</translation>
+    </message>
+</context>
+<context>
+    <name>AddDevicePage</name>
+    <message>
+        <source>Add a device</source>
+        <translation>Добавить устройство</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 теперь в группе.</translation>
+    </message>
+    <message>
+        <source>Add another device</source>
+        <translation>Добавить ещё устройство</translation>
+    </message>
+    <message>
+        <source>Adding the device…</source>
+        <translation>Добавляю устройство…</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>Подключаюсь к устройству…</translation>
+    </message>
+    <message>
+        <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
+        <translation>На добавляемом устройстве выберите «Вступить в группу» и наведите камеру на код, который оно покажет.</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://join…</source>
+        <translation>Или вставьте текст кода, cbb://join…</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Камера не запускается: %1</translation>
+    </message>
+    <message>
+        <source>The device is in the group now.</source>
+        <translation>Устройство теперь в группе.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
     </message>
 </context>
 </TS>

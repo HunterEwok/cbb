@@ -89,6 +89,42 @@
         <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
         <translation>El otro dispositivo no admitió este teléfono como administrador. Solo la raíz del grupo nombra administradores: allí, admítelo como administrador (cbb pair -qr -admin), o únete sin ser administrador.</translation>
     </message>
+    <message>
+        <source>Another device answered at the code's address. Scan the code again.</source>
+        <translation>Respondió otro dispositivo en la dirección del código. Escanea el código de nuevo.</translation>
+    </message>
+    <message>
+        <source>Only an admin of the group adds devices.</source>
+        <translation>Solo un admin del grupo añade dispositivos.</translation>
+    </message>
+    <message>
+        <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
+        <translation>Ese teléfono pide ser admin. Solo la raíz del grupo nombra admins; en ese teléfono, únete sin ser admin.</translation>
+    </message>
+    <message>
+        <source>The code did not match. Scan the code the other device shows now.</source>
+        <translation>El código no coincide. Escanea el código que muestra ahora el otro dispositivo.</translation>
+    </message>
+    <message>
+        <source>The device joined, but the group did not take its record yet.</source>
+        <translation>El dispositivo se unió, pero el grupo aún no ha aceptado su registro.</translation>
+    </message>
+    <message>
+        <source>The other device did not join.</source>
+        <translation>El otro dispositivo no se unió.</translation>
+    </message>
+    <message>
+        <source>The phone cannot reach the other device. Check that both are on the same Wi-Fi, and that the other device still shows its code.</source>
+        <translation>El teléfono no llega al otro dispositivo. Comprueba que ambos están en la misma Wi-Fi y que el otro dispositivo sigue mostrando su código.</translation>
+    </message>
+    <message>
+        <source>The phone is not connected to its group yet. Try again in a moment.</source>
+        <translation>El teléfono aún no está conectado a su grupo. Inténtalo de nuevo en un momento.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
+        <translation>Este no es un código de CBB. En el otro dispositivo, elige unirte a un grupo y escanea el código que muestre.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -230,6 +266,10 @@
     <message>
         <source>Show the devices as a list</source>
         <translation>Mostrar los dispositivos en lista</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Añadir un dispositivo</translation>
     </message>
 </context>
 <context>
@@ -411,6 +451,49 @@
     <message>
         <source>Offline</source>
         <translation>Sin conexión</translation>
+    </message>
+</context>
+<context>
+    <name>AddDevicePage</name>
+    <message>
+        <source>Add a device</source>
+        <translation>Añadir un dispositivo</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 ya está en el grupo.</translation>
+    </message>
+    <message>
+        <source>Add another device</source>
+        <translation>Añadir otro dispositivo</translation>
+    </message>
+    <message>
+        <source>Adding the device…</source>
+        <translation>Añadiendo el dispositivo…</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>Conectando con el dispositivo…</translation>
+    </message>
+    <message>
+        <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
+        <translation>En el dispositivo que quieres añadir, elige unirte a un grupo y apunta la cámara al código que muestre.</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://join…</source>
+        <translation>O pega el texto del código, cbb://join…</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>La cámara no se inicia: %1</translation>
+    </message>
+    <message>
+        <source>The device is in the group now.</source>
+        <translation>El dispositivo ya está en el grupo.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Intentar de nuevo</translation>
     </message>
 </context>
 </TS>

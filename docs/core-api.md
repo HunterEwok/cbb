@@ -76,7 +76,8 @@ an admin's mute last, and `cbb_member_stop` stops it. The node carries out the `
 `unmute` commands an admin sends the phone, keeps both in `mute.json` as the lite member does,
 and refuses the other commands, which a phone has nothing to carry out for.
 
-An admin phone admits a device by the device's QR code with `cbb_admit_new`, `cbb_admit_dial`,
+`cbb_qr_read` (feature `join`, `src/qr.rs`) reads the QR codes in a grey camera frame with the
+`rqrr` crate, since Aurora gives an app no reader of its own. An admin phone admits a device by the device's QR code with `cbb_admit_new`, `cbb_admit_dial`,
 `cbb_admit_feed` and `cbb_admit_free` (`src/admit.rs` over `cbb_core::admit`): the app dials one
 of the code's addresses and passes the connection's bytes; the core checks the joiner against the
 code's fingerprint, confirms the code first, issues the member certificate with the phone's admin

@@ -89,6 +89,42 @@
         <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
         <translation>המכשיר השני לא קיבל את הטלפון הזה כמנהל. רק השורש של הקבוצה ממנה מנהלים: שם, קבלו אותו כמנהל (cbb pair -qr -admin), או הצטרפו בלי להיות מנהל.</translation>
     </message>
+    <message>
+        <source>Another device answered at the code's address. Scan the code again.</source>
+        <translation>מכשיר אחר ענה בכתובת של הקוד. סרקו את הקוד שוב.</translation>
+    </message>
+    <message>
+        <source>Only an admin of the group adds devices.</source>
+        <translation>רק מנהל של הקבוצה מוסיף מכשירים.</translation>
+    </message>
+    <message>
+        <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
+        <translation>הטלפון הזה מבקש להיות מנהל. רק השורש של הקבוצה ממנה מנהלים; בטלפון ההוא, הצטרפו בלי להיות מנהל.</translation>
+    </message>
+    <message>
+        <source>The code did not match. Scan the code the other device shows now.</source>
+        <translation>הקוד לא תאם. סרקו את הקוד שהמכשיר השני מציג עכשיו.</translation>
+    </message>
+    <message>
+        <source>The device joined, but the group did not take its record yet.</source>
+        <translation>המכשיר הצטרף, אבל הקבוצה עדיין לא קיבלה את הרשומה שלו.</translation>
+    </message>
+    <message>
+        <source>The other device did not join.</source>
+        <translation>המכשיר השני לא הצטרף.</translation>
+    </message>
+    <message>
+        <source>The phone cannot reach the other device. Check that both are on the same Wi-Fi, and that the other device still shows its code.</source>
+        <translation>הטלפון לא מצליח להגיע למכשיר השני. ודאו ששניהם באותה רשת Wi-Fi ושהמכשיר השני עדיין מציג את הקוד שלו.</translation>
+    </message>
+    <message>
+        <source>The phone is not connected to its group yet. Try again in a moment.</source>
+        <translation>הטלפון עדיין לא מחובר לקבוצה שלו. נסו שוב בעוד רגע.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
+        <translation>זה לא קוד של CBB. במכשיר השני, בחרו להצטרף לקבוצה וסרקו את הקוד שהוא מציג.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -230,6 +266,10 @@
     <message>
         <source>Show the devices as a list</source>
         <translation>הצגת המכשירים כרשימה</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>הוספת מכשיר</translation>
     </message>
 </context>
 <context>
@@ -411,6 +451,49 @@
     <message>
         <source>Offline</source>
         <translation>לא מחובר</translation>
+    </message>
+</context>
+<context>
+    <name>AddDevicePage</name>
+    <message>
+        <source>Add a device</source>
+        <translation>הוספת מכשיר</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 בקבוצה עכשיו.</translation>
+    </message>
+    <message>
+        <source>Add another device</source>
+        <translation>הוספת מכשיר נוסף</translation>
+    </message>
+    <message>
+        <source>Adding the device…</source>
+        <translation>מוסיף את המכשיר…</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>מתחבר למכשיר…</translation>
+    </message>
+    <message>
+        <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
+        <translation>במכשיר שמוסיפים, בחרו להצטרף לקבוצה, ואז כוונו את המצלמה לקוד שהוא מציג.</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://join…</source>
+        <translation>או הדביקו את טקסט הקוד, cbb://join…</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>המצלמה לא מופעלת: %1</translation>
+    </message>
+    <message>
+        <source>The device is in the group now.</source>
+        <translation>המכשיר בקבוצה עכשיו.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>לנסות שוב</translation>
     </message>
 </context>
 </TS>

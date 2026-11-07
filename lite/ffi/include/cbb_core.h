@@ -89,6 +89,13 @@ uint8_t *cbb_member_muted(const cbb_member *m, size_t *answer_len);
 void cbb_member_stop(cbb_member *m);
 
 /*
+ * The texts of the QR codes in a grey camera frame (src/qr.rs), only with the
+ * feature join: height rows of width bytes, stride bytes apart; the answer is
+ * {"texts":[...]}.
+ */
+uint8_t *cbb_qr_read(const uint8_t *gray, size_t width, size_t height, size_t stride, size_t *answer_len);
+
+/*
  * Admitting a device by its QR code as an admin of the group (src/admit.rs),
  * only with the feature member: request is {"qr","public","admin_ca","make_admin"},
  * public the point of the key sign holds (the phone's admin key, or the root's

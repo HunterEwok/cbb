@@ -92,6 +92,8 @@ pub mod admit;
 pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
+#[cfg(feature = "join")]
+pub mod qr;
 
 /// Hands an answer to C: its bytes, which the caller gives back with
 /// `cbb_free`, their length written to `answer_len` when not null.
@@ -104,6 +106,32 @@ fn to_c(answer: Vec<u8>, answer_len: *mut usize) -> *mut u8 {
     // SAFETY: the caller gives a writable size_t at answer_len, not null.
     unsafe { answer_len.write(answer.len()) };
     Box::into_raw(answer).cast::<u8>()
+}
+
+/// The texts of the QR codes in a grey frame (src/qr.rs): `gray` holds
+/// `height` rows of `width` bytes, `stride` bytes apart. The answer is
+/// `{"texts": [...]}`; null only when `answer_len` is null or `gray` is.
+///
+/// # Safety
+///
+/// `gray` must point to `stride * (height - 1) + width` readable bytes and
+/// `answer_len` to a writable `size_t`, for the time of the call.
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_qr_read(
+    gray: *const u8,
+    width: usize,
+    height: usize,
+    stride: usize,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if gray.is_null() {
+        return core::ptr::null_mut();
+    }
+    let len = stride.saturating_mul(height.saturating_sub(1)).saturating_add(width);
+    // SAFETY: the caller gives that many readable bytes at gray.
+    let frame = unsafe { core::slice::from_raw_parts(gray, len) };
+    to_c(qr::read(frame, width, height, stride), answer_len)
 }
 
 /// A joiner that listens with the app's key (src/join.rs): `request` is

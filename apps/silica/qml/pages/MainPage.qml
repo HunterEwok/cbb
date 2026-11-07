@@ -41,6 +41,11 @@ Page {
                 onClicked: remorse.execute(qsTr("Leaving the group"), function() { app.leave() })
             }
             MenuItem {
+                visible: app.admin && app.member.running
+                text: qsTr("Add a device")
+                onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
+            }
+            MenuItem {
                 visible: app.member.running
                 text: qsTr("Send the clipboard")
                 onClicked: app.member.sendClipboard()

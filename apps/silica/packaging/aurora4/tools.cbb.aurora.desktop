@@ -8,6 +8,6 @@ Exec=/usr/bin/tools.cbb.aurora
 Name=CBB
 
 [X-Application]
-Permissions=Internet
+Permissions=Internet;Camera
 OrganizationName=tools.cbb
 ApplicationName=aurora

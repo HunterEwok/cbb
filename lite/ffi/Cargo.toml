@@ -19,7 +19,7 @@ crate-type = ["lib", "staticlib", "cdylib"]
 [features]
 # join: a phone that joins by its QR code with a key the core does not hold
 # (src/join.rs), on the core's TLS; only the Aurora app's build takes it.
-join = ["cbb-core/tls", "dep:qrcode", "dep:serde", "dep:serde_json"]
+join = ["cbb-core/tls", "dep:qrcode", "dep:rqrr", "dep:serde", "dep:serde_json"]
 # member: the lite member's node inside the app, with the app's key
 # (src/member.rs); only the Aurora app's build takes it.
 member = ["join", "dep:cbb-lite"]
@@ -28,6 +28,7 @@ member = ["join", "dep:cbb-lite"]
 cbb-core = { path = "../core", features = ["std"] }
 cbb-lite = { path = "..", default-features = false, optional = true }
 qrcode = { version = "0.14.1", default-features = false, optional = true }
+rqrr = { version = "0.11.0", default-features = false, optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 

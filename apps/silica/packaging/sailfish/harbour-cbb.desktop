@@ -8,6 +8,6 @@ Exec=harbour-cbb
 Name=CBB
 
 [X-Sailjail]
-Permissions=Internet
+Permissions=Internet;Camera
 OrganizationName=tools.cbb
 ApplicationName=cbb

@@ -89,6 +89,42 @@
         <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
         <translation>另一台设备没有以管理员身份接纳此手机。只有群组的根设备可以设立管理员：请在根设备上以管理员身份接纳它（cbb pair -qr -admin），或者以非管理员身份加入。</translation>
     </message>
+    <message>
+        <source>Another device answered at the code's address. Scan the code again.</source>
+        <translation>二维码中的地址由另一台设备应答。请重新扫描。</translation>
+    </message>
+    <message>
+        <source>Only an admin of the group adds devices.</source>
+        <translation>只有群组管理员才能添加设备。</translation>
+    </message>
+    <message>
+        <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
+        <translation>该手机请求成为管理员。只有群组的根才能设置管理员；请在那台手机上以非管理员身份加入。</translation>
+    </message>
+    <message>
+        <source>The code did not match. Scan the code the other device shows now.</source>
+        <translation>代码不匹配。请扫描另一台设备当前显示的二维码。</translation>
+    </message>
+    <message>
+        <source>The device joined, but the group did not take its record yet.</source>
+        <translation>设备已加入，但群组尚未接收其记录。</translation>
+    </message>
+    <message>
+        <source>The other device did not join.</source>
+        <translation>另一台设备未能加入。</translation>
+    </message>
+    <message>
+        <source>The phone cannot reach the other device. Check that both are on the same Wi-Fi, and that the other device still shows its code.</source>
+        <translation>手机无法连接另一台设备。请确认两者在同一 Wi-Fi 下，且另一台设备仍在显示二维码。</translation>
+    </message>
+    <message>
+        <source>The phone is not connected to its group yet. Try again in a moment.</source>
+        <translation>手机尚未连接到其群组。请稍后再试。</translation>
+    </message>
+    <message>
+        <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
+        <translation>这不是 CBB 二维码。请在另一台设备上选择加入群组，然后扫描它显示的二维码。</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -230,6 +266,10 @@
     <message>
         <source>Show the devices as a list</source>
         <translation>以列表显示设备</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>添加设备</translation>
     </message>
 </context>
 <context>
@@ -411,6 +451,49 @@
     <message>
         <source>Offline</source>
         <translation>离线</translation>
+    </message>
+</context>
+<context>
+    <name>AddDevicePage</name>
+    <message>
+        <source>Add a device</source>
+        <translation>添加设备</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 已加入群组。</translation>
+    </message>
+    <message>
+        <source>Add another device</source>
+        <translation>再添加一台设备</translation>
+    </message>
+    <message>
+        <source>Adding the device…</source>
+        <translation>正在添加设备…</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>正在连接设备…</translation>
+    </message>
+    <message>
+        <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
+        <translation>在要添加的设备上选择加入群组，然后将相机对准它显示的二维码。</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://join…</source>
+        <translation>或粘贴二维码的文本 cbb://join…</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>相机无法启动：%1</translation>
+    </message>
+    <message>
+        <source>The device is in the group now.</source>
+        <translation>设备已加入群组。</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
     </message>
 </context>
 </TS>

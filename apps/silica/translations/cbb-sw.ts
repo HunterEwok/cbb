@@ -89,6 +89,42 @@
         <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
         <translation>Kifaa kingine hakikukubali simu hii kama msimamizi. Ni mzizi wa kikundi pekee unaoteua wasimamizi: huko, ikubali kama msimamizi (cbb pair -qr -admin), au jiunge bila kuwa msimamizi.</translation>
     </message>
+    <message>
+        <source>Another device answered at the code's address. Scan the code again.</source>
+        <translation>Kifaa kingine kilijibu kwenye anwani ya msimbo. Changanua msimbo tena.</translation>
+    </message>
+    <message>
+        <source>Only an admin of the group adds devices.</source>
+        <translation>Ni msimamizi wa kikundi pekee anayeongeza vifaa.</translation>
+    </message>
+    <message>
+        <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
+        <translation>Simu hiyo inaomba kuwa msimamizi. Ni mzizi wa kikundi pekee anayeteua wasimamizi; kwenye simu hiyo, jiunge bila kuwa msimamizi.</translation>
+    </message>
+    <message>
+        <source>The code did not match. Scan the code the other device shows now.</source>
+        <translation>Msimbo haukulingana. Changanua msimbo unaoonyeshwa na kifaa kingine sasa.</translation>
+    </message>
+    <message>
+        <source>The device joined, but the group did not take its record yet.</source>
+        <translation>Kifaa kimejiunga, lakini kikundi bado hakijapokea rekodi yake.</translation>
+    </message>
+    <message>
+        <source>The other device did not join.</source>
+        <translation>Kifaa kingine hakikujiunga.</translation>
+    </message>
+    <message>
+        <source>The phone cannot reach the other device. Check that both are on the same Wi-Fi, and that the other device still shows its code.</source>
+        <translation>Simu haiwezi kufikia kifaa kingine. Hakikisha vyote viko kwenye Wi-Fi moja, na kifaa kingine bado kinaonyesha msimbo wake.</translation>
+    </message>
+    <message>
+        <source>The phone is not connected to its group yet. Try again in a moment.</source>
+        <translation>Simu bado haijaunganishwa na kikundi chake. Jaribu tena baada ya muda mfupi.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
+        <translation>Huu si msimbo wa CBB. Kwenye kifaa kingine, chagua kujiunga na kikundi, kisha changanua msimbo unaoonyesha.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -230,6 +266,10 @@
     <message>
         <source>Show the devices as a list</source>
         <translation>Onyesha vifaa kama orodha</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Ongeza kifaa</translation>
     </message>
 </context>
 <context>
@@ -411,6 +451,49 @@
     <message>
         <source>Offline</source>
         <translation>Nje ya mtandao</translation>
+    </message>
+</context>
+<context>
+    <name>AddDevicePage</name>
+    <message>
+        <source>Add a device</source>
+        <translation>Ongeza kifaa</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 sasa yuko kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>Add another device</source>
+        <translation>Ongeza kifaa kingine</translation>
+    </message>
+    <message>
+        <source>Adding the device…</source>
+        <translation>Inaongeza kifaa…</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>Inaunganisha na kifaa…</translation>
+    </message>
+    <message>
+        <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
+        <translation>Kwenye kifaa unachoongeza, chagua kujiunga na kikundi, kisha elekeza kamera kwenye msimbo unaoonyesha.</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://join…</source>
+        <translation>Au bandika maandishi ya msimbo, cbb://join…</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Kamera haianzi: %1</translation>
+    </message>
+    <message>
+        <source>The device is in the group now.</source>
+        <translation>Kifaa sasa kiko kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
     </message>
 </context>
 </TS>

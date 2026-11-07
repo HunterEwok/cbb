@@ -89,6 +89,42 @@
         <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
         <translation>दूसरे डिवाइस ने इस फ़ोन को एडमिन के रूप में स्वीकार नहीं किया। केवल समूह का रूट एडमिन बनाता है: वहाँ इसे एडमिन के रूप में स्वीकार करें (cbb pair -qr -admin), या एडमिन बने बिना जुड़ें।</translation>
     </message>
+    <message>
+        <source>Another device answered at the code's address. Scan the code again.</source>
+        <translation>कोड के पते पर किसी दूसरे डिवाइस ने जवाब दिया। कोड फिर से स्कैन करें।</translation>
+    </message>
+    <message>
+        <source>Only an admin of the group adds devices.</source>
+        <translation>केवल समूह का एडमिन ही डिवाइस जोड़ता है।</translation>
+    </message>
+    <message>
+        <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
+        <translation>वह फ़ोन एडमिन बनना चाहता है। एडमिन केवल समूह का रूट बनाता है; उस फ़ोन पर एडमिन बने बिना जुड़ें।</translation>
+    </message>
+    <message>
+        <source>The code did not match. Scan the code the other device shows now.</source>
+        <translation>कोड मेल नहीं खाया। दूसरा डिवाइस अभी जो कोड दिखा रहा है उसे स्कैन करें।</translation>
+    </message>
+    <message>
+        <source>The device joined, but the group did not take its record yet.</source>
+        <translation>डिवाइस जुड़ गया, पर समूह ने अभी उसका रिकॉर्ड नहीं लिया।</translation>
+    </message>
+    <message>
+        <source>The other device did not join.</source>
+        <translation>दूसरा डिवाइस नहीं जुड़ा।</translation>
+    </message>
+    <message>
+        <source>The phone cannot reach the other device. Check that both are on the same Wi-Fi, and that the other device still shows its code.</source>
+        <translation>फ़ोन दूसरे डिवाइस तक नहीं पहुँच पा रहा। जाँचें कि दोनों एक ही Wi-Fi पर हैं और दूसरा डिवाइस अब भी अपना कोड दिखा रहा है।</translation>
+    </message>
+    <message>
+        <source>The phone is not connected to its group yet. Try again in a moment.</source>
+        <translation>फ़ोन अभी अपने समूह से नहीं जुड़ा है। थोड़ी देर में फिर कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
+        <translation>यह CBB का कोड नहीं है। दूसरे डिवाइस पर समूह से जुड़ना चुनें और उसका दिखाया कोड स्कैन करें।</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -230,6 +266,10 @@
     <message>
         <source>Show the devices as a list</source>
         <translation>डिवाइस सूची के रूप में दिखाएँ</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>डिवाइस जोड़ें</translation>
     </message>
 </context>
 <context>
@@ -411,6 +451,49 @@
     <message>
         <source>Offline</source>
         <translation>ऑफ़लाइन</translation>
+    </message>
+</context>
+<context>
+    <name>AddDevicePage</name>
+    <message>
+        <source>Add a device</source>
+        <translation>डिवाइस जोड़ें</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 अब समूह में है।</translation>
+    </message>
+    <message>
+        <source>Add another device</source>
+        <translation>एक और डिवाइस जोड़ें</translation>
+    </message>
+    <message>
+        <source>Adding the device…</source>
+        <translation>डिवाइस जोड़ा जा रहा है…</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>डिवाइस से जुड़ रहा है…</translation>
+    </message>
+    <message>
+        <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
+        <translation>जिस डिवाइस को जोड़ना है उस पर समूह से जुड़ना चुनें, फिर कैमरे को उसके दिखाए कोड की ओर करें।</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://join…</source>
+        <translation>या कोड का टेक्स्ट चिपकाएँ, cbb://join…</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>कैमरा शुरू नहीं हो रहा: %1</translation>
+    </message>
+    <message>
+        <source>The device is in the group now.</source>
+        <translation>डिवाइस अब समूह में है।</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>फिर से कोशिश करें</translation>
     </message>
 </context>
 </TS>

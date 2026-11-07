@@ -153,6 +153,32 @@ void App::startJoin(bool admin)
     thread->start();
 }
 
+void App::startAdmit(const QString &qr)
+{
+    if (!m_member.isAdmin()) {
+        m_admit.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("admit: not an admin")});
+        return;
+    }
+    if (m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    m_admit.setPreparing();
+    auto *thread = new KeyThread(KeyStore::Which::Admin);
+    connect(thread, &QThread::finished, this, [this, thread, qr]() {
+        const KeyStore::Key key = thread->key;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (key.state != KeyStore::State::Ready) {
+            m_admit.fail(key.failure);
+            return;
+        }
+        m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, false);
+    });
+    thread->start();
+}
+
 void App::leave()
 {
     if (m_busy)

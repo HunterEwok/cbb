@@ -4,6 +4,7 @@
 // What the QML pages show: the app, the core, the system and the phone's key.
 #pragma once
 
+#include "admit.h"
 #include "join.h"
 #include "member.h"
 #include "membership.h"
@@ -27,6 +28,7 @@ class App : public QObject
     Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
+    Q_PROPERTY(Admit *admit READ admit CONSTANT)
     // Settings: the error details under each error message (Errors::
     // showDetails), the language the next start uses ("" for the
     // system's), and whether the main page shows the devices as a list.
@@ -57,6 +59,7 @@ public:
     bool admin() const { return m_member.isAdmin(); }
     Join *join() { return &m_join; }
     Member *member() { return &m_node; }
+    Admit *admit() { return &m_admit; }
 
     bool errorDetails() const;
     void setErrorDetails(bool on);
@@ -74,6 +77,9 @@ public:
     // the phone asks to be an admin and offers its admin key, made now the
     // first time, off the GUI thread.
     Q_INVOKABLE void startJoin(bool admin = false);
+    // Adds the device whose join code (a cbb://join link) the camera read,
+    // with the admin key, found off the GUI thread.
+    Q_INVOKABLE void startAdmit(const QString &qr);
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();
@@ -99,6 +105,7 @@ private:
     Membership m_member;
     Join m_join;
     Member m_node;
+    Admit m_admit;
     bool m_busy = false;
     QString m_error;
     QString m_startLanguage;
