@@ -15,7 +15,8 @@
 # OUT is made absolute; nothing it writes belongs in git. The Kotlin kit's
 # tests build the host's shared library themselves (apps/android/kit). Every
 # library carries the member (the feature member, docs/core-api.md, "The
-# member"): the phones' apps sync through it.
+# member"), which the phones' apps sync through, and the tunnel (the feature
+# tunnel), which takes them to the hub away from home.
 set -eu
 if [ $# -ne 2 ]; then
 	echo "usage: bind.sh ios|android|host|aurora OUT" >&2
@@ -43,7 +44,7 @@ case $target in
 ios)
 	for t in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
 		rustup target add "$t" >/dev/null
-		IPHONEOS_DEPLOYMENT_TARGET=17.0 cargo build --locked -p cbb-ffi --features member --release --target "$t"
+		IPHONEOS_DEPLOYMENT_TARGET=17.0 cargo build --locked -p cbb-ffi --features member,tunnel --release --target "$t"
 	done
 	mkdir -p "$out/iphoneos" "$out/iphonesimulator"
 	cp target/aarch64-apple-ios/release/libcbb_ffi.a "$out/iphoneos/"
@@ -53,7 +54,7 @@ ios)
 android)
 	rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android >/dev/null
 	for abi in arm64-v8a armeabi-v7a x86_64; do
-		cargo ndk --platform 29 -t "$abi" -o "$out/jniLibs" build --locked -p cbb-ffi --features member --release
+		cargo ndk --platform 29 -t "$abi" -o "$out/jniLibs" build --locked -p cbb-ffi --features member,tunnel --release
 	done
 	;;
 host)
