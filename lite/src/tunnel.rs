@@ -272,11 +272,23 @@ pub struct Link {
 impl Link {
     /// Starts the link of this device (me) to the hub.
     pub fn start(st: &State, hub: &Hub, me: &DeviceId, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<Link> {
+        let own = addr(me.as_str()).ok_or_else(|| Error::msg(format!("{me} is not a device ID")))?;
+        let peer = addr(&hub.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", hub.device)))?;
+        Link::start_at(st, hub, own, peer, log)
+    }
+
+    /// Starts a link with the tunnel addresses given: own, this device's,
+    /// and peer, the hub's, as the blind relay gives them.
+    pub fn start_at(
+        st: &State,
+        hub: &Hub,
+        own: Ipv6Addr,
+        peer: Ipv6Addr,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Result<Link> {
         if !hub.reachable() {
             return Err(Error::msg("the group's hub has no address away from home yet"));
         }
-        let own = addr(me.as_str()).ok_or_else(|| Error::msg(format!("{me} is not a device ID")))?;
-        let peer = addr(&hub.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", hub.device)))?;
         // With VLESS, the hub's addresses are tried over UDP only when its
         // tunnel is hidden with AmneziaWG, and VLESS after them, or first
         // when it reached the hub the last time.

@@ -48,7 +48,7 @@
 //!
 //! The answer is `{"ok": ...}` or `{"error": {"message", "details"}}`.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -59,12 +59,13 @@ use cbb_core::error::{Error, Result};
 use cbb_core::invite;
 use cbb_lite::forward::{self, Registration, Report};
 use cbb_lite::hub::{self, Hub, Peer};
+use cbb_lite::relay::{self, Relay};
 use cbb_lite::tunnel::{self, Link, State};
 use cbb_lite::wire::TunnelOffer;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::join::{AppKey, SignFn, answer};
+use crate::join::{AppKey, EventFn, SignFn, answer};
 
 /// The log lines a tunnel keeps until the app asks for its status.
 const MAX_LOG: usize = 200;
@@ -134,6 +135,136 @@ enum Request {
     HubStop {
         id: u64,
     },
+    RelaySetConnected {
+        id: u64,
+        devices: Vec<String>,
+    },
+    RelaySetRecords {
+        id: u64,
+        records: Vec<Value>,
+    },
+    RelayStop {
+        id: u64,
+    },
+}
+
+/// A link to the relay (`cbb_tunnel_relay`).
+#[derive(Deserialize)]
+struct RelayStart {
+    #[serde(with = "certs::b64")]
+    key: Vec<u8>,
+    device: String,
+    endpoint: String,
+    #[serde(with = "certs::b64::list")]
+    pins: Vec<Vec<u8>>,
+    #[serde(with = "certs::b64::list")]
+    chain: Vec<Vec<u8>>,
+    #[serde(with = "certs::b64")]
+    public: Vec<u8>,
+    #[serde(default)]
+    records: Option<Vec<Value>>,
+    member_port: u16,
+}
+
+struct RunningRelay {
+    _relay: Relay,
+    records: Arc<Mutex<Vec<Value>>>,
+    connected: Arc<Mutex<HashSet<String>>>,
+}
+
+/// The app's side of a relay link: its callback, and the devices connected
+/// another way.
+struct AppEvents {
+    f: EventFn,
+    ctx: usize,
+    connected: Arc<Mutex<HashSet<String>>>,
+}
+
+impl AppEvents {
+    fn send(&self, e: &Value) {
+        if let Ok(b) = serde_json::to_vec(e) {
+            // SAFETY: the app gave a callback that stays valid, and may be
+            // called from any thread, until relay_stop returns.
+            unsafe { (self.f)(self.ctx as *mut core::ffi::c_void, b.as_ptr(), b.len()) }
+        }
+    }
+}
+
+impl relay::Events for AppEvents {
+    fn wanted(&self, peer: &str) -> bool {
+        self.connected.lock().map(|c| !c.contains(peer)).unwrap_or(true)
+    }
+    fn dial(&self, peer: &str, port: u16) {
+        self.send(&json!({ "type": "dial", "peer": peer, "port": port }));
+    }
+    fn calling(&self, peer: &str, port: u16) {
+        self.send(&json!({ "type": "calling", "peer": peer, "port": port }));
+    }
+    fn changed(&self, r: &relay::Report) {
+        let mut v = serde_json::to_value(r).unwrap_or_default();
+        if let Some(o) = v.as_object_mut() {
+            o.insert("type".into(), Value::from("changed"));
+        }
+        self.send(&v);
+    }
+    fn log(&self, line: &str) {
+        self.send(&json!({ "type": "log", "line": line }));
+    }
+}
+
+static RELAYS: Mutex<Option<HashMap<u64, RunningRelay>>> = Mutex::new(None);
+
+fn relays<T>(f: impl FnOnce(&mut HashMap<u64, RunningRelay>) -> Result<T>) -> Result<T> {
+    let mut g = RELAYS.lock().map_err(|_| Error::msg("the relays' table is broken"))?;
+    f(g.get_or_insert_with(HashMap::new))
+}
+
+/// Links the phone to the relay (the module's comment).
+pub fn relay_start(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> Vec<u8> {
+    answer(start_relay(request, sign, events, ctx))
+}
+
+fn start_relay(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> Result<Value> {
+    let req: RelayStart =
+        serde_json::from_slice(request).map_err(|e| Error::msg(format!("the relay request does not decode: {e}")))?;
+    let endpoint: SocketAddr = req.endpoint.parse().map_err(|_| Error::msg("the relay's address is not ip:port"))?;
+    let pins = req
+        .pins
+        .iter()
+        .map(|p| key32(p).map_err(|_| Error::msg("a relay's pin is not 32 bytes")))
+        .collect::<Result<Vec<_>>>()?;
+    if pins.is_empty() {
+        return Err(Error::msg("the relay has no pin"));
+    }
+    if req.chain.is_empty() {
+        return Err(Error::msg("the device has no member certificate"));
+    }
+    if req.member_port == 0 {
+        return Err(Error::msg("the member port is 0"));
+    }
+    DeviceId::parse(&req.device)?;
+    State::with_key(&req.key)?;
+    let wg_key = key32(&req.key)?;
+    let records = Arc::new(Mutex::new(req.records.unwrap_or_default()));
+    let connected = Arc::new(Mutex::new(HashSet::new()));
+    let cfg = relay::Config {
+        endpoint,
+        pins,
+        chain: req.chain,
+        key: Arc::new(AppKey { public: req.public, sign, ctx }),
+        device: req.device,
+        wg_key,
+        records: records.clone(),
+        member_port: req.member_port,
+    };
+    let ev = Arc::new(AppEvents { f: events, ctx, connected: connected.clone() });
+    let r = Relay::start(cfg, ev);
+    let id = NEXT.fetch_add(1, Ordering::SeqCst);
+    relays(|t| {
+        t.insert(id, RunningRelay { _relay: r, records, connected });
+        Ok(())
+    })?;
+    Ok(json!({ "id": id }))
 }
 
 /// A registration with the forwarder (`cbb_tunnel_register`).
@@ -349,6 +480,21 @@ fn handle(request: &[u8]) -> Result<Value> {
         }),
         Request::HubStop { id } => {
             let gone = hubs(|t| Ok(t.remove(&id)))?;
+            drop(gone);
+            Ok(json!({}))
+        }
+        Request::RelaySetConnected { id, devices } => relays(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no relay link {id}")))?;
+            *r.connected.lock().map_err(|_| Error::msg("the relay link is broken"))? = devices.into_iter().collect();
+            Ok(json!({}))
+        }),
+        Request::RelaySetRecords { id, records } => relays(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no relay link {id}")))?;
+            *r.records.lock().map_err(|_| Error::msg("the relay link is broken"))? = records;
+            Ok(json!({}))
+        }),
+        Request::RelayStop { id } => {
+            let gone = relays(|t| Ok(t.remove(&id)))?;
             drop(gone);
             Ok(json!({}))
         }

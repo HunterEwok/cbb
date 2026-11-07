@@ -213,58 +213,24 @@ struct VlessAnswer {
 
 /// One registration, until it breaks or stop.
 fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool) -> Result<()> {
-    let clock: cbb_core::tls::Clock = Arc::new(SystemClock);
-    let tls = cbb_core::tls::pinned_client(cfg.chain.clone(), cfg.key.clone(), cfg.pins.clone(), PROTOCOL, &clock)?;
-    let tcp = TcpStream::connect_timeout(&cfg.endpoint, SETUP_TIMEOUT).context("reaching the forwarder")?;
-    tcp.set_read_timeout(Some(SETUP_TIMEOUT)).context("reaching the forwarder")?;
-    tcp.set_write_timeout(Some(SETUP_TIMEOUT)).context("reaching the forwarder")?;
-    let _ = tcp.set_nodelay(true);
-    let conn = rustls::ClientConnection::new(Arc::new(tls), ServerName::IpAddress(cfg.endpoint.ip().into()))
-        .map_err(|e| Error::msg(format!("registering with the forwarder: {e}")))?;
-    let mut s = rustls::StreamOwned::new(conn, tcp);
-    while s.conn.is_handshaking() {
-        s.conn.complete_io(&mut s.sock).map_err(|e| Error::msg(format!("registering with the forwarder: {e}")))?;
-    }
-    if s.conn.alpn_protocol() != Some(PROTOCOL) {
-        return Err(Error::msg("the forwarder does not speak the registration protocol"));
-    }
-    let export = |label: &[u8]| -> Result<[u8; 32]> {
-        let out = s
-            .conn
-            .export_keying_material(bytes::BytesMut::zeroed(32), label, None)
-            .map_err(|e| Error::msg(format!("registering with the forwarder: {e}")))?;
-        out[..].try_into().map_err(|_| Error::msg("registering with the forwarder: a short key"))
-    };
-    let proof_key = export(PROOF_LABEL)?;
-    let hello_key = export(HELLO_LABEL)?;
-
-    let mut inbox = Vec::new();
-    let ch: Challenge = serde_json::from_slice(&next_frame(&mut s, &mut inbox, stop)?.unwrap_or_default())
-        .map_err(|_| Error::msg("registering with the forwarder: a bad challenge"))?;
-    let e: [u8; 32] =
-        ch.e.as_slice().try_into().map_err(|_| Error::msg("registering with the forwarder: a bad challenge"))?;
-    let secret = StaticSecret::from(cfg.wg_key);
-    let shared = secret.diffie_hellman(&PublicKey::from(e));
-    if !shared.was_contributory() {
-        return Err(Error::msg("registering with the forwarder: a bad challenge"));
-    }
-    let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(shared.as_bytes())
-        .map_err(|_| Error::msg("registering with the forwarder: a bad challenge"))?;
-    m.update(&proof_key);
+    let mut reg = Registrar::connect(cfg.endpoint, &cfg.pins, &cfg.chain, &cfg.key, PROTOCOL, "forwarder")?;
+    let proof_key = reg.export(PROOF_LABEL)?;
+    let hello_key = reg.export(HELLO_LABEL)?;
+    let ch: Challenge = reg.read(stop)?;
+    let (public, proof) = prove(&cfg.wg_key, &ch.e, &proof_key)
+        .ok_or_else(|| Error::msg("registering with the forwarder: a bad challenge"))?;
     let mut records = cfg.records.lock().map(|r| r.clone()).unwrap_or_default();
     records.truncate(MAX_RECORDS);
     let claim = Claim {
-        key: PublicKey::from(&secret).as_bytes().to_vec(),
-        proof: m.finalize().into_bytes().to_vec(),
+        key: public.to_vec(),
+        proof,
         obfuscation: cfg.obfuscation.as_ref(),
         vless: cfg.vless_id.as_deref(),
         admin_sig: None,
         records,
     };
-    s.write_all(&crate::wire::json_frame(&claim, MAX_FRAME)?).context("registering with the forwarder")?;
-    s.flush().context("registering with the forwarder")?;
-    let a: Answer = serde_json::from_slice(&next_frame(&mut s, &mut inbox, stop)?.unwrap_or_default())
-        .map_err(|_| Error::msg("registering with the forwarder: a bad answer"))?;
+    reg.write(&claim)?;
+    let a: Answer = reg.read(stop)?;
     if !a.error.is_empty() {
         return Err(Error::msg(format!("the forwarder refused the registration: {}", a.error)));
     }
@@ -284,7 +250,7 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool) -> Result<()> {
 
     // Hellos until the connection breaks: every second until the forwarder
     // saw one, then every HELLO_EVERY; between them, its answers.
-    s.sock.set_read_timeout(Some(Duration::from_millis(250))).context("the connection to the forwarder")?;
+    reg.set_waiting()?;
     let mut counter = 0u64;
     let mut seen = String::new();
     let mut every = HELLO_FIRST;
@@ -296,7 +262,7 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool) -> Result<()> {
             (cfg.send)(cfg.endpoint, &hello(&mask, &hello_key, a.id, counter));
             next = Instant::now() + every;
         }
-        let Some(f) = next_frame(&mut s, &mut inbox, stop)? else { continue };
+        let Some(f) = reg.next_frame(stop)? else { continue };
         let a: Answer = serde_json::from_slice(&f).unwrap_or_default();
         if !a.seen.is_empty() && a.seen != seen && a.seen.parse::<SocketAddr>().is_ok() {
             seen.clone_from(&a.seen);
@@ -335,40 +301,125 @@ fn base64_std(b: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(b)
 }
 
-/// The next whole frame from the forwarder, gathering what arrives in
-/// inbox; None when nothing came before the socket's read timeout once the
-/// registration is set up.
-fn next_frame(
-    s: &mut rustls::StreamOwned<rustls::ClientConnection, TcpStream>,
-    inbox: &mut Vec<u8>,
-    stop: &AtomicBool,
-) -> Result<Option<Vec<u8>>> {
-    let deadline = Instant::now() + SETUP_TIMEOUT;
-    let mut buf = [0u8; 4096];
-    loop {
-        if let Some(head) = inbox.get(..4).and_then(|h| <[u8; 4]>::try_from(h).ok()) {
-            let n = crate::wire::frame_len(head, MAX_FRAME)?;
-            if inbox.len() >= 4 + n {
-                let f = inbox[4..4 + n].to_vec();
-                inbox.drain(..4 + n);
-                return Ok(Some(f));
-            }
+/// The TLS connection of a registration with a server known by the pin
+/// of its key, the forwarder or the relay (what, in the errors), as Go's
+/// forward.TLSVerifiedByPin: its frames, JSON behind a 4-byte length, and
+/// the keys exported from its TLS.
+pub(crate) struct Registrar {
+    s: rustls::StreamOwned<rustls::ClientConnection, TcpStream>,
+    inbox: Vec<u8>,
+    what: &'static str,
+    /// Set up: a read that times out returns at once.
+    waiting: bool,
+}
+
+impl Registrar {
+    pub(crate) fn connect(
+        endpoint: SocketAddr,
+        pins: &[certs::KeyHash],
+        chain: &[Vec<u8>],
+        key: &Arc<dyn crate::identity::ExternalKey>,
+        protocol: &[u8],
+        what: &'static str,
+    ) -> Result<Registrar> {
+        let clock: cbb_core::tls::Clock = Arc::new(SystemClock);
+        let tls = cbb_core::tls::pinned_client(chain.to_vec(), key.clone(), pins.to_vec(), protocol, &clock)?;
+        let tcp = TcpStream::connect_timeout(&endpoint, SETUP_TIMEOUT)
+            .map_err(|e| Error::msg(format!("reaching the {what}: {e}")))?;
+        tcp.set_read_timeout(Some(SETUP_TIMEOUT)).context("a registration's socket")?;
+        tcp.set_write_timeout(Some(SETUP_TIMEOUT)).context("a registration's socket")?;
+        let _ = tcp.set_nodelay(true);
+        // The server has no name; the pin names it, and the hello carries
+        // no server name.
+        let conn = rustls::ClientConnection::new(Arc::new(tls), ServerName::IpAddress(endpoint.ip().into()))
+            .map_err(|e| Error::msg(format!("registering with the {what}: {e}")))?;
+        let mut s = rustls::StreamOwned::new(conn, tcp);
+        while s.conn.is_handshaking() {
+            s.conn.complete_io(&mut s.sock).map_err(|e| Error::msg(format!("registering with the {what}: {e}")))?;
         }
-        match s.read(&mut buf) {
-            Ok(0) => return Err(Error::msg("the forwarder closed the connection")),
-            Ok(n) => inbox.extend_from_slice(&buf[..n]),
-            Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {
-                // Once set up, the caller sends its hellos between reads.
-                if s.sock.read_timeout().ok().flatten() != Some(SETUP_TIMEOUT) || stop.load(Ordering::SeqCst) {
-                    return Ok(None);
-                }
-                if Instant::now() >= deadline {
-                    return Err(Error::msg("the forwarder did not answer"));
+        if s.conn.alpn_protocol() != Some(protocol) {
+            return Err(Error::msg(format!("the {what} does not speak the registration protocol")));
+        }
+        Ok(Registrar { s, inbox: Vec::new(), what, waiting: false })
+    }
+
+    /// A key from the registration's TLS under label.
+    pub(crate) fn export(&self, label: &[u8]) -> Result<[u8; 32]> {
+        let out = self
+            .s
+            .conn
+            .export_keying_material(bytes::BytesMut::zeroed(32), label, None)
+            .map_err(|e| Error::msg(format!("registering with the {}: {e}", self.what)))?;
+        out[..].try_into().map_err(|_| Error::msg(format!("registering with the {}: a short key", self.what)))
+    }
+
+    pub(crate) fn write<T: Serialize>(&mut self, v: &T) -> Result<()> {
+        let what = self.what;
+        let f = crate::wire::json_frame(v, MAX_FRAME)?;
+        self.s
+            .write_all(&f)
+            .and_then(|()| self.s.flush())
+            .map_err(|e| Error::msg(format!("registering with the {what}: {e}")))
+    }
+
+    /// The next message during the setup.
+    pub(crate) fn read<T: serde::de::DeserializeOwned>(&mut self, stop: &AtomicBool) -> Result<T> {
+        let f =
+            self.next_frame(stop)?.ok_or_else(|| Error::msg(format!("registering with the {}: stopped", self.what)))?;
+        serde_json::from_slice(&f).map_err(|_| Error::msg(format!("registering with the {}: a bad message", self.what)))
+    }
+
+    /// Ends the setup: from now on reads wait a moment only, so that the
+    /// caller does its work between them.
+    pub(crate) fn set_waiting(&mut self) -> Result<()> {
+        self.waiting = true;
+        self.s.sock.set_read_timeout(Some(Duration::from_millis(250))).context("a registration's socket")
+    }
+
+    /// The next whole frame, gathering what arrives; None when nothing came
+    /// in a moment once the setup ended, or on stop.
+    pub(crate) fn next_frame(&mut self, stop: &AtomicBool) -> Result<Option<Vec<u8>>> {
+        let deadline = Instant::now() + SETUP_TIMEOUT;
+        let mut buf = [0u8; 4096];
+        loop {
+            if let Some(head) = self.inbox.get(..4).and_then(|h| <[u8; 4]>::try_from(h).ok()) {
+                let n = crate::wire::frame_len(head, MAX_FRAME)?;
+                if self.inbox.len() >= 4 + n {
+                    let f = self.inbox[4..4 + n].to_vec();
+                    self.inbox.drain(..4 + n);
+                    return Ok(Some(f));
                 }
             }
-            Err(e) => return Err(Error::msg(format!("the connection to the forwarder broke: {e}"))),
+            match self.s.read(&mut buf) {
+                Ok(0) => return Err(Error::msg(format!("the {} closed the connection", self.what))),
+                Ok(n) => self.inbox.extend_from_slice(&buf[..n]),
+                Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {
+                    if self.waiting || stop.load(Ordering::SeqCst) {
+                        return Ok(None);
+                    }
+                    if Instant::now() >= deadline {
+                        return Err(Error::msg(format!("the {} did not answer", self.what)));
+                    }
+                }
+                Err(e) => return Err(Error::msg(format!("the connection to the {} broke: {e}", self.what))),
+            }
         }
     }
+}
+
+/// The proof that the device holds its WireGuard key wg_key, for the
+/// server's ephemeral key e: its public key and HMAC-SHA256(X25519(wg_key,
+/// e), proof_key); None for a bad e.
+pub(crate) fn prove(wg_key: &[u8; 32], e: &[u8], proof_key: &[u8; 32]) -> Option<([u8; 32], Vec<u8>)> {
+    let e: [u8; 32] = e.try_into().ok()?;
+    let secret = StaticSecret::from(*wg_key);
+    let shared = secret.diffie_hellman(&PublicKey::from(e));
+    if !shared.was_contributory() {
+        return None;
+    }
+    let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(shared.as_bytes()).ok()?;
+    m.update(proof_key);
+    Some((*PublicKey::from(&secret).as_bytes(), m.finalize().into_bytes().to_vec()))
 }
 
 /// A hub's hello for the registration id (Go's forward.hello): the counter

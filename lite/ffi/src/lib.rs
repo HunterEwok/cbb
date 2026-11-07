@@ -376,6 +376,33 @@ pub unsafe extern "C" fn cbb_tunnel_register(
     to_c(tunnel::register(req, sign, ctx as usize), answer_len)
 }
 
+/// Links the phone to the group's blind relay (src/tunnel.rs tells the
+/// request and the events), signing its TLS with the member key through
+/// `sign` and telling the app through `event`, both with `ctx`; the answer
+/// is as `cbb_tunnel`'s, `{"id"}` for the `relay_...` requests.
+///
+/// # Safety
+///
+/// As `cbb_tunnel`; `sign` and `event` must stay callable with `ctx`, from
+/// any thread, until `relay_stop` returns.
+#[cfg(feature = "tunnel")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_tunnel_relay(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    event: join::EventFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request, not null.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(tunnel::relay_start(req, sign, event, ctx as usize), answer_len)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

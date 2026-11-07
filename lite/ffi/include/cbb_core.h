@@ -97,6 +97,15 @@ uint8_t *cbb_tunnel(const uint8_t *request, size_t len, size_t *answer_len);
  */
 uint8_t *cbb_tunnel_register(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
 
+/*
+ * Links the phone to the group's blind relay, its TLS signed with the member
+ * key through sign, its events (dial, calling, changed, log) given to event,
+ * both with ctx, which stay valid until relay_stop returns; the answer is
+ * as cbb_tunnel's, with the link's "id".
+ */
+uint8_t *cbb_tunnel_relay(const uint8_t *request, size_t len, cbb_sign_fn sign, cbb_event_fn event, void *ctx,
+                          size_t *answer_len);
+
 #ifdef __cplusplus
 }
 #endif

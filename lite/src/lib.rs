@@ -40,6 +40,8 @@ mod pastehelper;
 pub mod peer;
 pub mod phone;
 pub mod records;
+#[cfg(feature = "tunnel")]
+pub mod relay;
 mod remotepaste;
 mod rootless;
 pub mod sealkey;

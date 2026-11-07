@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use crate::join::{AppKey, SignFn, answer};
 
 /// Gets an event as JSON bytes, on one of the member's threads.
-pub type EventFn = unsafe extern "C" fn(ctx: *mut core::ffi::c_void, event: *const u8, len: usize);
+pub use crate::join::EventFn;
 
 #[derive(Deserialize)]
 struct StartArgs {
