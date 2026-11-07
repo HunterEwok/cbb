@@ -35,7 +35,13 @@ func TestRemote(t *testing.T) {
 	if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "code", Code: "123456"}, ""); err == nil {
 		t.Error("a code with no pairing was taken")
 	}
-	m, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "add", Address: tv.Addr()}, "")
+	// Adding an Android TV makes the remote's 2048-bit RSA key, which takes
+	// far longer than one request's usual deadline on an emulated CPU (the
+	// linux/mips job under QEMU).
+	c := deck.dial(t)
+	c.SetDeadline(time.Now().Add(3 * time.Minute))
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpRemote, Name: "add", Address: tv.Addr()}})
+	c.Close()
 	if err != nil {
 		t.Fatal(err)
 	}

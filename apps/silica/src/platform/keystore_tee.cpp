@@ -158,6 +158,8 @@ public:
         return m_f->C_GenerateKeyPair(m_session, &gen, pubT, 6, privT, 7, pub, priv);
     }
 
+    CK_RV destroy(CK_OBJECT_HANDLE h) { return m_f->C_DestroyObject(m_session, h); }
+
     bool flag(CK_OBJECT_HANDLE h, CK_ULONG type)
     {
         CK_BBOOL v = 0;
@@ -291,6 +293,27 @@ QByteArray sign(const QByteArray &digest, Failure *failure, Which which)
         return QByteArray();
     }
     return derSignature(raw);
+}
+
+bool forget(Failure *failure)
+{
+    Token token;
+    if (token.open(failure) != State::Ready)
+        return false;
+    for (const Which which : {Which::Member, Which::Admin}) {
+        const QByteArray keyLabel = labelOf(which);
+        for (const CK_ULONG cls : {CKO_PRIVATE_KEY, CKO_PUBLIC_KEY}) {
+            for (const CK_OBJECT_HANDLE h : token.find(cls, keyLabel)) {
+                const CK_RV rv = token.destroy(h);
+                if (rv != CKR_OK) {
+                    *failure = {QCoreApplication::translate("Errors", "The phone could not delete its key."),
+                                QStringLiteral("tee: C_DestroyObject %1: %2").arg(QLatin1String(keyLabel), hex(rv))};
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 QByteArray derSignature(const QByteArray &raw)

@@ -58,6 +58,66 @@ Page {
 
             PageHeader { title: "CBB" }
 
+            // The quick switch (design.md, "Muting a device"): a tap keeps
+            // the group's copies out of the clipboard, or takes them again;
+            // a long press picks for how long. The phone's own copies still
+            // go out.
+            ListItem {
+                id: takeCopies
+                visible: app.member.running
+                contentHeight: Theme.itemSizeMedium
+                onClicked: app.member.paused ? app.member.resume() : app.member.pause(0)
+                menu: ContextMenu {
+                    MenuItem { text: qsTr("For 15 minutes"); onClicked: app.member.pause(15) }
+                    MenuItem { text: qsTr("For an hour"); onClicked: app.member.pause(60) }
+                    MenuItem { text: qsTr("For 8 hours"); onClicked: app.member.pause(8 * 60) }
+                    MenuItem { text: qsTr("Until I turn it on"); onClicked: app.member.pause(0) }
+                }
+                Switch {
+                    id: takeSwitch
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: Theme.horizontalPageMargin - Theme.paddingLarge
+                    automaticCheck: false
+                    checked: !app.member.paused
+                    onClicked: app.member.paused ? app.member.resume() : app.member.pause(0)
+                    onPressAndHold: takeCopies.openMenu()
+                }
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: takeSwitch.right
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.horizontalPageMargin
+                    Label {
+                        width: parent.width
+                        text: !app.member.paused ? qsTr("Taking copies")
+                            : app.member.pausedUntil.getTime() > 0
+                                ? qsTr("Not taking copies until %1").arg(Qt.formatTime(app.member.pausedUntil, "hh:mm"))
+                                : qsTr("Not taking copies")
+                        color: takeCopies.highlighted ? Theme.highlightColor : Theme.primaryColor
+                        truncationMode: TruncationMode.Fade
+                    }
+                    Label {
+                        width: parent.width
+                        text: qsTr("Tap to take no copies from the group, or again; hold it for a time")
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+
+            Label {
+                visible: app.member.muted
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                text: app.member.mutedUntil.getTime() > 0
+                      ? qsTr("An admin muted this phone until %1: its copies do not reach the group.").arg(Qt.formatDateTime(app.member.mutedUntil, "d MMM hh:mm"))
+                      : qsTr("An admin muted this phone: its copies do not reach the group until an admin unmutes it.")
+                wrapMode: Text.Wrap
+                color: Theme.errorColor
+                font.pixelSize: Theme.fontSizeSmall
+            }
+
             DetailItem { label: qsTr("Version"); value: app.version }
             DetailItem { label: qsTr("Core"); value: app.core }
             DetailItem { label: qsTr("System"); value: app.system }

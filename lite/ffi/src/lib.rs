@@ -311,6 +311,46 @@ pub unsafe extern "C" fn cbb_member_peers(m: *const member::Member, answer_len: 
     to_c(m.peers(), answer_len)
 }
 
+/// Pauses receiving or ends the pause: `request` is `{"pause": true,
+/// "for_ms"}` (0 for until it is turned on) or `{"pause": false}`; the
+/// answer is the state, as `cbb_member_muted` gives it.
+///
+/// # Safety
+///
+/// As `cbb_member_copy`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_pause(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(m.pause(req), answer_len)
+}
+
+/// Whether receiving is paused and whether an admin muted the phone:
+/// `{"paused", "paused_ms", "muted", "muted_ms"}`, the times what is left,
+/// 0 for until it is lifted.
+///
+/// # Safety
+///
+/// As `cbb_member_copy`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_muted(m: *const member::Member, answer_len: *mut usize) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    to_c(m.muted(), answer_len)
+}
+
 /// Stops the member and frees it; null does nothing. Its callbacks may still
 /// run for a moment on threads that were in the middle of a call. The
 /// secret for sealed messages stays the first member's for the process.
