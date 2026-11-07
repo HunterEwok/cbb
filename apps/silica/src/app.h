@@ -5,6 +5,7 @@
 #pragma once
 
 #include "admit.h"
+#include "events.h"
 #include "join.h"
 #include "member.h"
 #include "membership.h"
@@ -29,6 +30,7 @@ class App : public QObject
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
+    Q_PROPERTY(Events *events READ events CONSTANT)
     // Settings: the error details under each error message (Errors::
     // showDetails), the language the next start uses ("" for the
     // system's), and whether the main page shows the devices as a list.
@@ -60,6 +62,7 @@ public:
     Join *join() { return &m_join; }
     Member *member() { return &m_node; }
     Admit *admit() { return &m_admit; }
+    Events *events() { return &m_events; }
 
     bool errorDetails() const;
     void setErrorDetails(bool on);
@@ -106,6 +109,7 @@ private:
     Join m_join;
     Member m_node;
     Admit m_admit;
+    Events m_events;
     bool m_busy = false;
     QString m_error;
     QString m_startLanguage;

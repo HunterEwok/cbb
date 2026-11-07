@@ -369,6 +369,26 @@
         <source>Device</source>
         <translation>Устройство</translation>
     </message>
+    <message>
+        <source>Notifications</source>
+        <translation>Уведомления</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>Устройства вступают или уходят</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>Устройство становится админом</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>Устройство замораживают или размораживают</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>Другой телефон забирает группу</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -494,6 +514,60 @@
     <message>
         <source>Try again</source>
         <translation>Попробовать снова</translation>
+    </message>
+</context>
+<context>
+    <name>Events</name>
+    <message>
+        <source>%1 joined the group.</source>
+        <translation>%1 вступил в группу.</translation>
+    </message>
+    <message>
+        <source>%1 was removed from the group.</source>
+        <translation>%1 удалён из группы.</translation>
+    </message>
+    <message>
+        <source>%1 is an admin now.</source>
+        <translation>%1 теперь админ.</translation>
+    </message>
+    <message>
+        <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
+        <translation>%1 заморожен: остальные отказывают ему, пока админ его не разморозит.</translation>
+    </message>
+    <message>
+        <source>%1 was unfrozen.</source>
+        <translation>%1 разморожен.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over: it holds the group's root now.</source>
+        <translation>%1 забрал группу: теперь корень группы у него.</translation>
+    </message>
+</context>
+<context>
+    <name>CoverPage</name>
+    <message>
+        <source>Not in a group</source>
+        <translation>Не в группе</translation>
+    </message>
+    <message>
+        <source>Not running</source>
+        <translation>Не работает</translation>
+    </message>
+    <message>
+        <source>Muted</source>
+        <translation>Заглушён</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>На паузе</translation>
+    </message>
+    <message>
+        <source>Looking for devices</source>
+        <translation>Ищу устройства</translation>
+    </message>
+    <message>
+        <source>Connected devices: %1</source>
+        <translation>Подключено устройств: %1</translation>
     </message>
 </context>
 </TS>

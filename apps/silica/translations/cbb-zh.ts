@@ -369,6 +369,26 @@
         <source>Device</source>
         <translation>设备</translation>
     </message>
+    <message>
+        <source>Notifications</source>
+        <translation>通知</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>设备加入或离开</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>设备成为管理员</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>设备被冻结或解冻</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>另一台手机接管群组</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -494,6 +514,60 @@
     <message>
         <source>Try again</source>
         <translation>重试</translation>
+    </message>
+</context>
+<context>
+    <name>Events</name>
+    <message>
+        <source>%1 joined the group.</source>
+        <translation>%1 加入了群组。</translation>
+    </message>
+    <message>
+        <source>%1 was removed from the group.</source>
+        <translation>%1 已被移出群组。</translation>
+    </message>
+    <message>
+        <source>%1 is an admin now.</source>
+        <translation>%1 现在是管理员。</translation>
+    </message>
+    <message>
+        <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
+        <translation>%1 已被冻结：在管理员解冻前，其他设备会拒绝它。</translation>
+    </message>
+    <message>
+        <source>%1 was unfrozen.</source>
+        <translation>%1 已解冻。</translation>
+    </message>
+    <message>
+        <source>%1 took the group over: it holds the group's root now.</source>
+        <translation>%1 接管了群组：现在由它持有群组的根。</translation>
+    </message>
+</context>
+<context>
+    <name>CoverPage</name>
+    <message>
+        <source>Not in a group</source>
+        <translation>未加入群组</translation>
+    </message>
+    <message>
+        <source>Not running</source>
+        <translation>未运行</translation>
+    </message>
+    <message>
+        <source>Muted</source>
+        <translation>已静音</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>已暂停</translation>
+    </message>
+    <message>
+        <source>Looking for devices</source>
+        <translation>正在查找设备</translation>
+    </message>
+    <message>
+        <source>Connected devices: %1</source>
+        <translation>已连接设备：%1</translation>
     </message>
 </context>
 </TS>

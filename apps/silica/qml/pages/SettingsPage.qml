@@ -46,6 +46,28 @@ Page {
                 onClicked: app.errorDetails = !app.errorDetails
             }
 
+            SectionHeader { text: qsTr("Notifications") }
+
+            // One switch for each kind of the group's events (src/events.h),
+            // all on by default, as on the other phones.
+            Repeater {
+                model: [
+                    { kind: "devices", text: qsTr("Devices join or leave") },
+                    { kind: "admins", text: qsTr("A device becomes an admin") },
+                    { kind: "frozen", text: qsTr("A device is frozen or unfrozen") },
+                    { kind: "takeover", text: qsTr("Another phone takes the group over") }
+                ]
+                TextSwitch {
+                    text: modelData.text
+                    automaticCheck: false
+                    checked: app.events.isOn(modelData.kind)
+                    onClicked: {
+                        app.events.setOn(modelData.kind, !checked)
+                        checked = app.events.isOn(modelData.kind)
+                    }
+                }
+            }
+
             SectionHeader { text: qsTr("About") }
 
             BackgroundItem {

@@ -369,6 +369,26 @@
         <source>Device</source>
         <translation>מכשיר</translation>
     </message>
+    <message>
+        <source>Notifications</source>
+        <translation>התראות</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>מכשירים מצטרפים או עוזבים</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>מכשיר הופך למנהל</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>מכשיר מוקפא או מופשר</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>טלפון אחר משתלט על הקבוצה</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -494,6 +514,60 @@
     <message>
         <source>Try again</source>
         <translation>לנסות שוב</translation>
+    </message>
+</context>
+<context>
+    <name>Events</name>
+    <message>
+        <source>%1 joined the group.</source>
+        <translation>%1 הצטרף לקבוצה.</translation>
+    </message>
+    <message>
+        <source>%1 was removed from the group.</source>
+        <translation>%1 הוסר מהקבוצה.</translation>
+    </message>
+    <message>
+        <source>%1 is an admin now.</source>
+        <translation>%1 מנהל עכשיו.</translation>
+    </message>
+    <message>
+        <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
+        <translation>%1 הוקפא: האחרים דוחים אותו עד שמנהל יפשיר אותו.</translation>
+    </message>
+    <message>
+        <source>%1 was unfrozen.</source>
+        <translation>%1 הופשר.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over: it holds the group's root now.</source>
+        <translation>%1 השתלט על הקבוצה: השורש של הקבוצה אצלו עכשיו.</translation>
+    </message>
+</context>
+<context>
+    <name>CoverPage</name>
+    <message>
+        <source>Not in a group</source>
+        <translation>לא בקבוצה</translation>
+    </message>
+    <message>
+        <source>Not running</source>
+        <translation>לא פועל</translation>
+    </message>
+    <message>
+        <source>Muted</source>
+        <translation>מושתק</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>מושהה</translation>
+    </message>
+    <message>
+        <source>Looking for devices</source>
+        <translation>מחפש מכשירים</translation>
+    </message>
+    <message>
+        <source>Connected devices: %1</source>
+        <translation>מכשירים מחוברים: %1</translation>
     </message>
 </context>
 </TS>

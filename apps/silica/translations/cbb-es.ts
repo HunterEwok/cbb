@@ -369,6 +369,26 @@
         <source>Device</source>
         <translation>Dispositivo</translation>
     </message>
+    <message>
+        <source>Notifications</source>
+        <translation>Notificaciones</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>Dispositivos que se unen o salen</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>Un dispositivo pasa a ser admin</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>Un dispositivo se congela o descongela</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>Otro teléfono toma el control del grupo</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -494,6 +514,60 @@
     <message>
         <source>Try again</source>
         <translation>Intentar de nuevo</translation>
+    </message>
+</context>
+<context>
+    <name>Events</name>
+    <message>
+        <source>%1 joined the group.</source>
+        <translation>%1 se unió al grupo.</translation>
+    </message>
+    <message>
+        <source>%1 was removed from the group.</source>
+        <translation>%1 fue eliminado del grupo.</translation>
+    </message>
+    <message>
+        <source>%1 is an admin now.</source>
+        <translation>%1 ahora es admin.</translation>
+    </message>
+    <message>
+        <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
+        <translation>%1 fue congelado: los demás lo rechazan hasta que un admin lo descongele.</translation>
+    </message>
+    <message>
+        <source>%1 was unfrozen.</source>
+        <translation>%1 fue descongelado.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over: it holds the group's root now.</source>
+        <translation>%1 tomó el control del grupo: ahora tiene la raíz del grupo.</translation>
+    </message>
+</context>
+<context>
+    <name>CoverPage</name>
+    <message>
+        <source>Not in a group</source>
+        <translation>Sin grupo</translation>
+    </message>
+    <message>
+        <source>Not running</source>
+        <translation>Detenido</translation>
+    </message>
+    <message>
+        <source>Muted</source>
+        <translation>Silenciado</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>En pausa</translation>
+    </message>
+    <message>
+        <source>Looking for devices</source>
+        <translation>Buscando dispositivos</translation>
+    </message>
+    <message>
+        <source>Connected devices: %1</source>
+        <translation>Dispositivos conectados: %1</translation>
     </message>
 </context>
 </TS>

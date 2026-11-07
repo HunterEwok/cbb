@@ -369,6 +369,26 @@
         <source>Device</source>
         <translation>Kifaa</translation>
     </message>
+    <message>
+        <source>Notifications</source>
+        <translation>Arifa</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>Vifaa vinajiunga au kuondoka</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>Kifaa kinakuwa msimamizi</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>Kifaa kinagandishwa au kuyeyushwa</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>Simu nyingine inachukua kikundi</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -494,6 +514,60 @@
     <message>
         <source>Try again</source>
         <translation>Jaribu tena</translation>
+    </message>
+</context>
+<context>
+    <name>Events</name>
+    <message>
+        <source>%1 joined the group.</source>
+        <translation>%1 amejiunga na kikundi.</translation>
+    </message>
+    <message>
+        <source>%1 was removed from the group.</source>
+        <translation>%1 ameondolewa kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>%1 is an admin now.</source>
+        <translation>%1 sasa ni msimamizi.</translation>
+    </message>
+    <message>
+        <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
+        <translation>%1 imegandishwa: vingine vinakikataa hadi msimamizi akiyeyushe.</translation>
+    </message>
+    <message>
+        <source>%1 was unfrozen.</source>
+        <translation>%1 imeyeyushwa.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over: it holds the group's root now.</source>
+        <translation>%1 imechukua kikundi: sasa ndiyo inashikilia mzizi wa kikundi.</translation>
+    </message>
+</context>
+<context>
+    <name>CoverPage</name>
+    <message>
+        <source>Not in a group</source>
+        <translation>Haiko kwenye kikundi</translation>
+    </message>
+    <message>
+        <source>Not running</source>
+        <translation>Haifanyi kazi</translation>
+    </message>
+    <message>
+        <source>Muted</source>
+        <translation>Imenyamazishwa</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>Imesitishwa</translation>
+    </message>
+    <message>
+        <source>Looking for devices</source>
+        <translation>Inatafuta vifaa</translation>
+    </message>
+    <message>
+        <source>Connected devices: %1</source>
+        <translation>Vifaa vilivyounganishwa: %1</translation>
     </message>
 </context>
 </TS>

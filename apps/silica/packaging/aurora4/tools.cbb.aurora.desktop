@@ -6,8 +6,14 @@ X-Nemo-Application-Type=silica-qt5
 Icon=tools.cbb.aurora
 Exec=/usr/bin/tools.cbb.aurora
 Name=CBB
+X-Share-Methods=text
 
 [X-Application]
 Permissions=Internet;Camera
 OrganizationName=tools.cbb
 ApplicationName=aurora
+
+[X-Share Method text]
+Description=Send to the group
+Capabilities=text/plain
+SupportsMultipleFiles=no

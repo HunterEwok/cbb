@@ -369,6 +369,26 @@
         <source>Device</source>
         <translation>डिवाइस</translation>
     </message>
+    <message>
+        <source>Notifications</source>
+        <translation>सूचनाएँ</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>डिवाइस जुड़ते या हटते हैं</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>कोई डिवाइस एडमिन बनता है</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>कोई डिवाइस फ़्रीज़ या अनफ़्रीज़ होता है</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>कोई दूसरा फ़ोन समूह सँभाल लेता है</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -494,6 +514,60 @@
     <message>
         <source>Try again</source>
         <translation>फिर से कोशिश करें</translation>
+    </message>
+</context>
+<context>
+    <name>Events</name>
+    <message>
+        <source>%1 joined the group.</source>
+        <translation>%1 समूह में शामिल हुआ।</translation>
+    </message>
+    <message>
+        <source>%1 was removed from the group.</source>
+        <translation>%1 को समूह से हटा दिया गया।</translation>
+    </message>
+    <message>
+        <source>%1 is an admin now.</source>
+        <translation>%1 अब एडमिन है।</translation>
+    </message>
+    <message>
+        <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
+        <translation>%1 को फ़्रीज़ कर दिया गया: जब तक कोई एडमिन इसे अनफ़्रीज़ न करे, बाकी इसे मना करेंगे।</translation>
+    </message>
+    <message>
+        <source>%1 was unfrozen.</source>
+        <translation>%1 को अनफ़्रीज़ कर दिया गया।</translation>
+    </message>
+    <message>
+        <source>%1 took the group over: it holds the group's root now.</source>
+        <translation>%1 ने समूह सँभाल लिया: अब समूह का रूट इसके पास है।</translation>
+    </message>
+</context>
+<context>
+    <name>CoverPage</name>
+    <message>
+        <source>Not in a group</source>
+        <translation>किसी समूह में नहीं</translation>
+    </message>
+    <message>
+        <source>Not running</source>
+        <translation>चल नहीं रहा</translation>
+    </message>
+    <message>
+        <source>Muted</source>
+        <translation>म्यूट</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>रुका हुआ</translation>
+    </message>
+    <message>
+        <source>Looking for devices</source>
+        <translation>डिवाइस खोज रहा है</translation>
+    </message>
+    <message>
+        <source>Connected devices: %1</source>
+        <translation>जुड़े डिवाइस: %1</translation>
     </message>
 </context>
 </TS>

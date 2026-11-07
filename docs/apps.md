@@ -246,6 +246,14 @@ background, so it hears of most events at once. It posts on its own channel, "Th
 events", with the permission it asks for the service's notification. Android shows them
 on a paired watch as well.
 
+The Aurora app (`apps/silica/src/events.cpp`, the same events and the same order, without the
+hub's until it has the tunnel) looks whenever the core's list of devices changes, while the
+app runs, its cover included, and shows them through the system's notifications
+(`Nemo.Notifications`). Its cover shows whether the phone takes copies, the devices it
+reaches, the last copy and the latest event, with two actions: send the clipboard and pause
+or resume. A text shared to CBB from the system's share menu (`ShareProvider`, the desktop
+entry's `X-Share Method text`) goes to the group as the phone's copy.
+
 ## Apple Watch
 
 The watch app (`apps/ios/Watch`, watchOS 10) has no network of its own: watchOS gives an

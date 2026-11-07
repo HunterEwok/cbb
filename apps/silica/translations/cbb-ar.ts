@@ -369,6 +369,26 @@
         <source>Device</source>
         <translation>الجهاز</translation>
     </message>
+    <message>
+        <source>Notifications</source>
+        <translation>الإشعارات</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>انضمام الأجهزة أو مغادرتها</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>يصبح جهاز مشرفًا</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>تجميد جهاز أو إلغاء تجميده</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>هاتف آخر يستولي على المجموعة</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -494,6 +514,60 @@
     <message>
         <source>Try again</source>
         <translation>حاول مرة أخرى</translation>
+    </message>
+</context>
+<context>
+    <name>Events</name>
+    <message>
+        <source>%1 joined the group.</source>
+        <translation>انضم %1 إلى المجموعة.</translation>
+    </message>
+    <message>
+        <source>%1 was removed from the group.</source>
+        <translation>أُزيل %1 من المجموعة.</translation>
+    </message>
+    <message>
+        <source>%1 is an admin now.</source>
+        <translation>أصبح %1 مشرفًا الآن.</translation>
+    </message>
+    <message>
+        <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
+        <translation>جُمّد %1: يرفضه الآخرون حتى يُلغي مشرف تجميده.</translation>
+    </message>
+    <message>
+        <source>%1 was unfrozen.</source>
+        <translation>أُلغي تجميد %1.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over: it holds the group's root now.</source>
+        <translation>استولى %1 على المجموعة: أصبح يحمل جذر المجموعة الآن.</translation>
+    </message>
+</context>
+<context>
+    <name>CoverPage</name>
+    <message>
+        <source>Not in a group</source>
+        <translation>ليس في مجموعة</translation>
+    </message>
+    <message>
+        <source>Not running</source>
+        <translation>متوقف</translation>
+    </message>
+    <message>
+        <source>Muted</source>
+        <translation>مكتوم</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>متوقف مؤقتًا</translation>
+    </message>
+    <message>
+        <source>Looking for devices</source>
+        <translation>جارٍ البحث عن أجهزة</translation>
+    </message>
+    <message>
+        <source>Connected devices: %1</source>
+        <translation>الأجهزة المتصلة: %1</translation>
     </message>
 </context>
 </TS>

@@ -128,9 +128,13 @@ void Member::stop()
 
 void Member::sendClipboard()
 {
+    sendText(QGuiApplication::clipboard()->text());
+}
+
+void Member::sendText(const QString &text)
+{
     if (!m_member)
         return;
-    const QString text = QGuiApplication::clipboard()->text();
     // A muted phone's copies stay its own; the main page says so.
     if (text.isEmpty() || text == m_known || m_muted)
         return;

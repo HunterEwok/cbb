@@ -61,8 +61,8 @@ on every platform of the class, on the roadmap).
 | Sync away from home | yes, in the background | while the app runs | gap, with the core's tunnel | **OS**: iOS stops a background app's network |
 | Receive copies without a tap | yes (foreground service) | **OS** | yes | iOS lets an app read and write the clipboard only in the foreground; Aurora lets it write in the background |
 | Send without a tap | yes (accessibility service) | **OS** | **OS** | iOS: Back Tap or the Action button runs the app's shortcut, one gesture; Aurora reads the clipboard only in the foreground, so the app sends when it comes to the front |
-| Send from the share sheet and the text selection menu | yes | yes | gap | the iPhone's share extension; its menu's Share |
-| One-tap control outside the app | Quick Settings tile, notification button | Control Center control (iOS 18) | gap, on the app's cover | the control opens the app for a moment: **OS**, iOS reads the clipboard only in the foreground |
+| Send from the share sheet and the text selection menu | yes | yes | yes, text, through the system's share menu; not yet tried on the phone | the iPhone's share extension; its menu's Share |
+| One-tap control outside the app | Quick Settings tile, notification button | Control Center control (iOS 18) | the cover's actions: send the clipboard, pause; not yet tried on the phone | the control opens the app for a moment: **OS**, iOS reads the clipboard only in the foreground |
 | Home-screen widget | yes | yes | **OS** (no widgets; the cover instead) | "Sync clipboard"; on the iPhone it opens the app for a moment, as the control does |
 | Rename a device | yes | yes | gap | Devices, Rename on an admin phone; `cbb rename` on an admin computer; a signed device record |
 | Error details switch without developer tools | yes | yes | yes | seven taps on the version in Settings show it; `adb` and the Xcode launch argument still work |

@@ -68,6 +68,8 @@ public:
     // Sends the clipboard's text when it is new: neither what the group
     // sent last nor what the phone sent last.
     Q_INVOKABLE void sendClipboard();
+    // Sends a text shared to the app, as a copy of this phone.
+    Q_INVOKABLE void sendText(const QString &text);
 
     // Keeps the group's copies out of the clipboard for minutes (0 for
     // until resume), or takes them again; the phone's own still go out.

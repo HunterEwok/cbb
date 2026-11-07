@@ -36,6 +36,7 @@ SOURCES += \
     src/app.cpp \
     src/core.cpp \
     src/errors.cpp \
+    src/events.cpp \
     src/join.cpp \
     src/member.cpp \
     src/membership.cpp \
@@ -45,6 +46,7 @@ HEADERS += \
     src/app.h \
     src/core.h \
     src/errors.h \
+    src/events.h \
     src/join.h \
     src/member.h \
     src/membership.h \
@@ -96,6 +98,8 @@ DISTFILES += \
     qml/pages/SettingsPage.qml \
     qml/pages/devices.js \
     qml/cover/CoverPage.qml \
+    qml/system/Notifier.qml \
+    qml/system/ShareTarget.qml \
     packaging/$$CBB_TARGET/$${TARGET}.desktop \
     packaging/$$CBB_TARGET/$${TARGET}.spec
 

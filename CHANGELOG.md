@@ -37,6 +37,10 @@ All notable changes to cbb are documented in this file. The format follows
 - An admin Aurora phone adds a device to the group: "Add a device" in the pull-down menu opens
   the camera, which reads the code the device shows when it joins (lite/ffi's `cbb_qr_read`),
   or takes the code's pasted text, and the phone dials the device and admits it.
+- The Aurora app's cover shows whether the phone takes copies, the devices it reaches and the
+  last copy, and sends the clipboard or pauses from its actions; the app notifies of the
+  group's events as the other phones do, each kind with a switch in Settings, and takes a
+  text shared to it from the system's share menu as the phone's copy.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

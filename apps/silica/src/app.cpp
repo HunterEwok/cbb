@@ -56,6 +56,7 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
         show(Errors::shown(failure));
     else if (!m_member.isNull())
         Errors::log(QStringLiteral("group: %1 as %2").arg(m_member.groupTag(), m_member.device));
+    connect(&m_node, &Member::devicesChanged, this, [this]() { m_events.observe(m_node.devices()); });
     connect(&m_node, &Member::identityChanged, this,
             [this](const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots) {
                 if (m_member.isNull())
@@ -191,6 +192,7 @@ void App::leave()
     }
     Errors::log(QStringLiteral("group: left %1").arg(m_member.groupTag()));
     m_member = Membership();
+    m_events.forget();
     show(QString());
     emit groupChanged();
 
