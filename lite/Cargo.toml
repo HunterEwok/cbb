@@ -31,7 +31,10 @@ tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp
 [dependencies]
 cbb-core = { path = "core", features = ["std", "tls"] }
 if-addrs = "0.15.0"
-libc = "0.2.191"
+# libc 0.2.190 made SYSPROTO_CONTROL and UTUN_OPT_IFNAME macOS-only, which
+# nix 0.31.3 (under GotaTun) still uses on iOS: Cargo.lock keeps 0.2.189 until
+# a nix release follows.
+libc = "0.2.189"
 mdns-sd = "0.21.6"
 qrcode = { version = "0.14.1", default-features = false }
 serde = { version = "1", features = ["derive"] }
