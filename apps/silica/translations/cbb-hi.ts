@@ -461,6 +461,38 @@
         <source>Another phone takes the group over</source>
         <translation>कोई दूसरा फ़ोन समूह सँभाल लेता है</translation>
     </message>
+    <message>
+        <source>Away from home</source>
+        <translation>घर से दूर</translation>
+    </message>
+    <message>
+        <source>Sync away from home</source>
+        <translation>घर से दूर सिंक करें</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>जब फ़ोन घर के नेटवर्क पर नहीं होता, तो वह आपके अपने हब की WireGuard सुरंग से सिंक करता है, जो समूह का एक कंप्यूटर है जिसे cbb global hub से सेट किया गया है; उसका पोर्ट इंटरनेट से पहुँचा जा सकता है, पर केवल समूह की कुंजियों वाले WireGuard से। हब इस फ़ोन को अगली बार जवाब देता है जब यह घर पर जुड़ता है। कुछ भी कहीं और नहीं जाता, और सुरंग के बिना कोई कनेक्शन नहीं होता। इसे बंद करने पर यह फ़ोन अपनी सुरंग कुंजी भूल जाता है।</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>घर पर: सीधे सिंक हो रहा है।</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>सुरंग से हब से जुड़ रहा है…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>सुरंग से हब %1 से जुड़ा है।</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>सुरंग से हब से जुड़ा है।</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>हब की प्रतीक्षा: घर पर समूह के किसी कंप्यूटर के पास एक बार ऐप खोलें।</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>

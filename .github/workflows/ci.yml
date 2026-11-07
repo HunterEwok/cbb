@@ -2033,6 +2033,7 @@ jobs:
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features tunnel --all-targets -- -D warnings
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
@@ -2196,10 +2197,10 @@ jobs:
           sudo ip addr add 192.168.69.1/24 dev tap0
           sudo ip link set tap0 up
           CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" go test -race ./internal/service -run TestEmbassyJoiner -v
-      - name: the phones' member through ffi/ joins a computer's group and syncs texts and images with it
+      - name: the phones' member through ffi/ joins a computer's group, syncs texts and images with it, and syncs away from home through its tunnel
         run: |
-          cargo build --locked --release -p cbb-ffi --features member --example phone-on-linux
-          CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember|TestFFIPhoneRoot' -v
+          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
+          CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember|TestFFIPhoneRoot|TestFFIPhoneAway' -v
       - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
         run: |
           cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
@@ -2391,7 +2392,7 @@ jobs:
           SYSTEM: ${{ matrix.system }}
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q p7zip-full imagemagick
+          sudo apt-get install -y -q p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
           rustup toolchain install stable --profile minimal
           rustup default stable
           apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCH" "$RUNNER_TEMP/rpm"

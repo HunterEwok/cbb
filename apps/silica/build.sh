@@ -6,6 +6,7 @@
 #   build.sh prepare      the Rust core for armv7hl and aarch64 (core/, through
 #                         ffi/bind.sh aurora) and the icons (icons/, from
 #                         apps/design/icon/aurora.png with ImageMagick); needs rustup
+#                         and the GNU cross compilers for armhf and arm64
 #   build.sh rpm TARGET [SYSTEM]
 #                         builds the RPM in the Platform SDK, where mb2 runs, for
 #                         a target snapshot such as AuroraOS-5.1.5.105-base-armv7hl.default;

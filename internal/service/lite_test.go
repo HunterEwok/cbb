@@ -481,6 +481,121 @@ func TestFFIMember(t *testing.T) {
 	}
 }
 
+// TestFFIPhoneAway syncs the phone's member away from home through a Go
+// hub's tunnel, as the Aurora app does (member/src/away.rs inside the phone's
+// node): turned on at home, it keeps the hub's offer; with no address of
+// the hub but its tunnel's, it reaches the hub through the tunnel; off, it
+// forgets the keys. CBB_PHONE_ON_LINUX names phone-on-linux built with the
+// features member and tunnel.
+func TestFFIPhoneAway(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	port := freeUDP(t)
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	piID := pi.status(t).Device
+	dir := t.TempDir()
+	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", dir)
+	jc, ok := phone.ParseJoinQR(next("QR: "))
+	if !ok {
+		t.Fatal("not a join QR code")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
+		t.Fatalf("admitting the phone: %v", err)
+	}
+	next("Joined ")
+	try := func(op string, args any) (map[string]any, map[string]any) {
+		t.Helper()
+		req, err := json.Marshal(map[string]any{"op": op, "args": args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(in, "CALL %s\n", req)
+		var ans struct {
+			OK    map[string]any `json:"ok"`
+			Error map[string]any `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
+			t.Fatalf("%s: %v", op, err)
+		}
+		return ans.OK, ans.Error
+	}
+	call := func(op string, args any) map[string]any {
+		t.Helper()
+		ok, e := try(op, args)
+		if e != nil {
+			t.Fatalf("%s: %v", op, e)
+		}
+		return ok
+	}
+	peers := func() int { return len(call("peers", nil)["peers"].([]any)) }
+	away := func() map[string]any {
+		a, _ := call("away_status", nil)["away"].(map[string]any)
+		return a
+	}
+
+	// At home: off until the user turns it on; then, on the next
+	// connection, the hub's offer comes.
+	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
+	waitFor(t, "the phone connected", func() bool { return peers() == 1 })
+	if a := away(); a != nil {
+		t.Fatalf("sync away from home is on before it was turned on: %v", a)
+	}
+	if _, e := try("away", map[string]any{"on": true}); e != nil {
+		if strings.Contains(fmt.Sprint(e), "no tunnel") {
+			t.Skip("phone-on-linux was built without the feature tunnel")
+		}
+		t.Fatalf("away: %v", e)
+	}
+	call("pause", nil)
+	waitFor(t, "the phone let go", func() bool { return peers() == 0 })
+	call("resume", nil)
+	waitFor(t, "the phone keeps the hub's offer", func() bool {
+		a := away()
+		return a != nil && a["hub_device"] == piID && a["through"] != true
+	})
+
+	// Away: the app lost the hub's address, so the phone reaches it
+	// through the tunnel.
+	call("lost", map[string]any{"key": "pi"})
+	call("pause", nil)
+	waitFor(t, "the phone let go", func() bool { return peers() == 0 && len(pi.status(t).Peers) == 0 })
+	call("resume", nil)
+	waitUpTo(t, 30*time.Second, "the phone reaches the hub through the tunnel", func() bool {
+		a := away()
+		return a != nil && a["through"] == true && peers() == 1
+	})
+	call("copy", map[string]any{"text": "from the phone, away"})
+	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the phone, away" })
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the phone, away"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the phone has it", func() bool {
+		c, _ := call("current", nil)["copy"].(map[string]any)
+		return c != nil && c["text"] == "to the phone, away"
+	})
+
+	// Off: the keys are gone, and so is the connection through the tunnel.
+	if a := call("away", map[string]any{"on": false})["away"]; a != nil {
+		t.Fatalf("still on after turning it off: %v", a)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tunnel.json")); !os.IsNotExist(err) {
+		t.Errorf("tunnel.json after turning it off: %v", err)
+	}
+	waitFor(t, "the phone syncs at home only", func() bool { return peers() == 0 })
+}
+
 // phoneOnLinux starts ffi's example phone-on-linux, the Aurora app on
 // Linux, listening on a free port with the arguments, and returns what
 // reads its next line with a prefix and its standard input.

@@ -99,6 +99,7 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `records` | none | `{"records"}` |
 | `devices` | none | `{"devices"}`: every device of the group as the app shows it, `[{device, name, role, os, admin, root, frozen, online, self, listed}]`: the group's device records, whether it is connected and whether it is this phone, then the connected members no record lists yet (`listed` false) |
 | `alerts` | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
+| `away`, `away_status` | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it on the lite member (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
 | `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
 | `send_cert`, `send_admin_ca`, `send_tunnel` | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |
@@ -111,6 +112,9 @@ which a phone has nothing to carry out for. It keeps the sealed blobs
 of the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
 both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
+`TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
+lite member's (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
+dials the first that answers through its tunnel's loopback port),
 `TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
 listens, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
 root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,

@@ -461,6 +461,38 @@
         <source>Another phone takes the group over</source>
         <translation>טלפון אחר משתלט על הקבוצה</translation>
     </message>
+    <message>
+        <source>Away from home</source>
+        <translation>מחוץ לבית</translation>
+    </message>
+    <message>
+        <source>Sync away from home</source>
+        <translation>סנכרון מחוץ לבית</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>בבית: מסתנכרן ישירות.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>מתחבר לרכזת דרך המנהרה…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>מחובר לרכזת %1 דרך המנהרה.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>מחובר לרכזת דרך המנהרה.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>ממתין לרכזת: פתח את האפליקציה פעם אחת בבית, ליד מחשב של הקבוצה.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>

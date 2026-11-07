@@ -461,6 +461,38 @@
         <source>Another phone takes the group over</source>
         <translation>Simu nyingine inachukua kikundi</translation>
     </message>
+    <message>
+        <source>Away from home</source>
+        <translation>Mbali na nyumbani</translation>
+    </message>
+    <message>
+        <source>Sync away from home</source>
+        <translation>Sawazisha ukiwa mbali na nyumbani</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>Simu isipokuwa kwenye mtandao wa nyumbani, husawazisha kupitia handaki la WireGuard la kitovu chako mwenyewe, kompyuta ya kikundi iliyowekwa kwa cbb global hub; mlango wake unafikika kutoka intaneti, lakini kupitia WireGuard yenye funguo za kikundi pekee. Kitovu hujibu simu hii itakapounganika nyumbani wakati ujao. Hakuna kinachoenda kwingine, na bila handaki hakuna muunganisho. Kuzima husahaulisha simu hii ufunguo wake wa handaki.</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>Nyumbani: inasawazisha moja kwa moja.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>Inaunganisha na kitovu kupitia handaki…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>Imeunganishwa na kitovu %1 kupitia handaki.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>Imeunganishwa na kitovu kupitia handaki.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>Inasubiri kitovu: fungua programu mara moja nyumbani, karibu na kompyuta ya kikundi.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
