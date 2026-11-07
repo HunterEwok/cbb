@@ -31,6 +31,17 @@ func notArrives(ctx context.Context, to *Device, text string, timeout time.Durat
 	return nil
 }
 
+// gone waits until d no longer lists name online.
+func gone(ctx context.Context, d *Device, name string, timeout time.Duration) error {
+	return eventually(ctx, timeout, func() error {
+		row, err := statusRow(ctx, d, name)
+		if err == nil && strings.Contains(row, "online") {
+			err = fmt.Errorf("%s still lists %s online", d.Name, name)
+		}
+		return err
+	})
+}
+
 // copyMaybe copies text on d, which may refuse it (a muted device sends
 // nothing, not even a deliberate copy); any other failure is an error.
 func copyMaybe(ctx context.Context, d *Device, text string) error {
@@ -134,7 +145,9 @@ func muteHere(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 // muteByAdmin (M9): an admin mutes a device for the whole group: its copies
 // reach no one, every devices list says it is muted, its own user, no
 // admin, cannot end it, another admin can (the last command counts), a mute
-// for a time ends by itself, and a device that is no admin mutes no one.
+// for a time ends by itself, and a device that is no admin mutes no one; a
+// mute of a device that cannot be reached is refused with why; of two
+// admins' mutes the later stands, even a shorter one.
 func muteByAdmin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/M9-admin-mute/"
 	g := fleetGroup(ctx, r, f, "fleet/M9-admin-mute", 3)
@@ -220,11 +233,67 @@ func muteByAdmin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 			return syncs(ctx, g, b, root, "after the mute's time ran out", 10*time.Second)
 		})
 	})
+	r.Do("fleet/M9-offline", func() error {
+		// The mute is a command to the device: one that cannot be reached
+		// is refused with why, and stays as it was when it is back.
+		for _, d := range []*Device{root, admin} {
+			if err := cut(ctx, b, d); err != nil {
+				return err
+			}
+		}
+		defer heal(ctx, root, admin, b)
+		if err := gone(ctx, root, b.Name, timeout); err != nil {
+			return err
+		}
+		out, err := Run(ctx, root, "cbb mute -on "+bID, "")
+		var re *RunError
+		if !errors.As(err, &re) {
+			return fmt.Errorf("a mute of a device that cannot be reached was not refused: %q, %v", strings.TrimSpace(out), err)
+		}
+		if !strings.Contains(re.Output, "did not answer in time") {
+			return fmt.Errorf("refused with %q, not because the device did not answer", strings.TrimSpace(re.Output))
+		}
+		if err := heal(ctx, root, admin, b); err != nil {
+			return err
+		}
+		if err := listsAs(ctx, []*Device{root}, b.Name, "online", false, timeout); err != nil {
+			return err
+		}
+		return mutedRow(ctx, []*Device{root, admin, b}, b.Name, false, timeout)
+	})
+	r.Do("fleet/M9-last-counts", func() error {
+		// Two admins one after the other, before either's record has
+		// reached the other: the later command stands everywhere, even when
+		// it shortens the mute.
+		if err := succeeds(ctx, admin, "cbb unmute -on "+bID, "", "is no longer muted"); err != nil {
+			return err
+		}
+		if err := mutedRow(ctx, []*Device{root, admin, b}, b.Name, false, timeout); err != nil {
+			return err
+		}
+		if err := succeeds(ctx, root, "cbb mute -on "+bID+" -for 1h", "", "is muted until"); err != nil {
+			return err
+		}
+		if err := succeeds(ctx, admin, "cbb mute -on "+bID+" -for 15s", "", "is muted until"); err != nil {
+			return err
+		}
+		start := time.Now()
+		if err := silent("between the two admins' mutes"); err != nil {
+			return err
+		}
+		time.Sleep(time.Until(start.Add(18 * time.Second)))
+		if err := mutedRow(ctx, []*Device{root, admin, b}, b.Name, false, timeout); err != nil {
+			return err
+		}
+		return syncs(ctx, g, b, root, "after the later, shorter mute ran out", timeout)
+	})
 }
 
 // incoming (M10): the group's copies setting: the root sets how long a copy
 // from another device stays live, every member shows it, a value out of
-// 5s to 1h and a device that is no admin are refused, and it goes back.
+// 5s to 1h and a device that is no admin are refused; a device cut off for
+// 10 seconds writes the copy made meanwhile with a window of 1m, and not
+// with one of 5s.
 func incoming(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/M10-incoming/"
 	g := fleetGroup(ctx, r, f, "fleet/M10-incoming", 2)
@@ -251,10 +320,50 @@ func incoming(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		fails(ctx, r, p+"bounds-"+v, root, errorCase{cmd: "cbb incoming " + v, want: []string{"from 5s to 1h"}})
 	}
 	fails(ctx, r, p+"not-admin", b, errorCase{cmd: "cbb incoming 10s", want: []string{"only the group's root or an admin"}})
+	// late cuts b off, copies on the root, waits 10 seconds and brings b
+	// back, which then writes the copy only within the live window.
+	late := func(what string, live bool) error {
+		if err := cut(ctx, root, b); err != nil {
+			return err
+		}
+		defer heal(ctx, root, b)
+		// Only once the connection is gone: a copy sent into one that
+		// stalls arrives with the age it had when it was sent.
+		if err := gone(ctx, b, root.Name, timeout); err != nil {
+			return err
+		}
+		text := "cbb-bench " + g.run + " " + what
+		if err := Copy(ctx, root, text); err != nil {
+			return err
+		}
+		time.Sleep(10 * time.Second)
+		if err := heal(ctx, root, b); err != nil {
+			return err
+		}
+		if live {
+			return arrives(ctx, b, text, timeout)
+		}
+		if err := notArrives(ctx, b, text, 20*time.Second); err != nil {
+			return fmt.Errorf("%w after the window of 5s had passed", err)
+		}
+		return syncs(ctx, g, root, b, "after the late copy", timeout)
+	}
+	r.Do("fleet/M10-window", func() error {
+		if err := succeeds(ctx, root, "cbb incoming 5s", "", "for 5s after it arrives"); err != nil {
+			return err
+		}
+		if err := shows(b, "5s"); err != nil {
+			return err
+		}
+		return late("past the window", false)
+	})
 	r.Do(p+"back", func() error {
 		if err := succeeds(ctx, root, "cbb incoming 1m", "", "for 1m after it arrives"); err != nil {
 			return err
 		}
-		return shows(b, "1m")
+		if err := shows(b, "1m"); err != nil {
+			return err
+		}
+		return late("within the window", true)
 	})
 }

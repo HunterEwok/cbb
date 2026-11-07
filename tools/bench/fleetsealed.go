@@ -155,10 +155,11 @@ func forwardOnlyHub(ctx context.Context, r *Report, f *Fleet, timeout time.Durat
 		return readsNone(ctx, hub, back, "the copy sent back")
 	})
 	r.Do("fleet/S25-file", func() error {
-		// A file whose every line is the marker, sent as a sealed blob in
-		// 64 KiB segments, arrives whole and is never clear on the hub.
+		// A 20 MB file, within the hub's limit away from home (25 MiB),
+		// whose every line is the marker, sent as a sealed blob in 64 KiB
+		// segments, arrives whole and is never clear on the hub.
 		marker := "cbb-bench-" + a.run + "-sealed-file"
-		mk := "rm -rf /tmp/s && mkdir /tmp/s && for i in $(seq 1 20000); do echo " + marker + "; done >/tmp/s/sealed.txt && sha256sum </tmp/s/sealed.txt"
+		mk := "rm -rf /tmp/s && mkdir /tmp/s && yes " + marker + " | head -c 20000000 >/tmp/s/sealed.txt && sha256sum </tmp/s/sealed.txt"
 		want, err := RunFor(ctx, c, mk, "", time.Minute)
 		if err != nil {
 			return err
@@ -167,7 +168,7 @@ func forwardOnlyHub(ctx context.Context, r *Report, f *Fleet, timeout time.Durat
 			return err
 		}
 		if err := eventually(ctx, wait, func() error {
-			if err := pasteInto(ctx, home, "/tmp/o", time.Minute); err != nil {
+			if err := pasteInto(ctx, home, "/tmp/o", 5*time.Minute); err != nil {
 				return err
 			}
 			got, err := Run(ctx, home, "sha256sum </tmp/o/sealed.txt", "")
