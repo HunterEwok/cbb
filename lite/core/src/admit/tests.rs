@@ -260,7 +260,13 @@ fn a_phone_makes_its_group_and_admits() {
         seal: Vec::new(),
     };
     let g = new_group(&*root_key, &own, now_ms()).unwrap();
-    let id = certs::verify_member(&[g.cert.clone()], &[g.root.clone()], now_ms() / 1000, certs::Usage::Client).unwrap();
+    let id = certs::verify_member(
+        std::slice::from_ref(&g.cert),
+        std::slice::from_ref(&g.root),
+        now_ms() / 1000,
+        certs::Usage::Client,
+    )
+    .unwrap();
     assert_eq!(id, g.device);
     let d = g.records.devices().into_iter().find(|d| d.id == g.device.as_str()).unwrap();
     assert_eq!((d.role.as_str(), d.os.as_str(), d.name.as_str()), ("phone", "aurora", "phone"));
