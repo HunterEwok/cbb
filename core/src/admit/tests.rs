@@ -428,13 +428,20 @@ fn a_joiner_dials_the_window() {
     assert!(text(joined.err()).contains(Refusal::WrongCode.message()));
 }
 
+/// A random invitation secret, as the hub makes one.
+fn random_secret() -> [u8; pair::MIN_SECRET] {
+    let mut s = [0u8; pair::MIN_SECRET];
+    getrandom::fill(&mut s).unwrap();
+    s
+}
+
 /// A remote invitation's window, as Go's TestInvitation: the joiner proves
 /// the secret, the admin is asked about it with its fingerprint, and only
 /// a yes admits it; a no tells the joiner that the admin declined.
 #[test]
 fn an_invitation_asks_the_admin() {
     let (admitter, rs) = root_group();
-    let secret = [7u8; pair::MIN_SECRET];
+    let secret = random_secret();
     let secret_window = |rs: &Records| {
         let (cfg, exporter) =
             tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap();
@@ -458,14 +465,14 @@ fn an_invitation_asks_the_admin() {
 
     // A wrong secret asks nobody.
     let mut adm = secret_window(&rs);
-    let (admitted, _, member_err, _, asked) = dial_with(&mut adm, &other, &[8u8; pair::MIN_SECRET], Some(true));
+    let (admitted, _, member_err, _, asked) = dial_with(&mut adm, &other, &random_secret(), Some(true));
     assert!(asked.is_none() && admitted.is_none());
     assert!(text(member_err).contains(Refusal::WrongCode.message()));
     assert!(
         Admission::accept_secret(
             admitter.clone(),
             GroupView::of(&rs),
-            &[1; 8],
+            &random_secret()[..8],
             Session::server(Arc::new(
                 tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap().0
             ))
