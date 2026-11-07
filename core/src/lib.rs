@@ -70,6 +70,7 @@ pub mod seal;
 pub mod store;
 pub mod strict;
 pub mod sync;
+pub mod takeover;
 pub mod third_party {
     // Copied code, kept close to its source: its field arithmetic wraps on
     // purpose (u128 limbs, reduced modulo p), and its indexes and unwraps

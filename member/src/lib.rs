@@ -52,6 +52,7 @@ mod remotepaste;
 mod rootless;
 pub mod sealkey;
 mod service;
+pub mod takeover;
 pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
