@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Back to the group's order</source>
+        <translation>Volver al orden del grupo</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Nueva colección…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>Comprobar la clave de nuevo</translation>
     </message>
@@ -875,6 +883,109 @@
     <message>
         <source>%1 files</source>
         <translation>%1 archivos</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>Ordenar</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>Mover al principio</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>Mover antes</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>Mover después</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>Mover al final</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>Mover a %1</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Nueva colección…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>Sacar de la colección</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Renombrar colección…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>Desagrupar</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>Crear</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Renombrar</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>Nueva colección</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>Renombrar colección</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Nombre</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>Oficina, Casa, Televisores…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 de %2 en línea</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 de %2 en línea</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>Desagrupar</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Renombrar colección…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 de %2 en línea</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>Aún no hay dispositivos en esta colección. Mantén pulsado el mosaico de un dispositivo en la pantalla principal para moverlo aquí.</translation>
     </message>
 </context>
 </TS>

@@ -786,6 +786,15 @@ iPhone, with **Arrange devices** and **Back to the group's order** in the toolba
 tile's menu on a right click, and Option with the arrow keys, Home or End moving the
 focused tile in Arrange mode.
 
+**In the Aurora app** (`qml/pages/DeviceItems.qml`, `ArrangePage.qml` and the collection's
+pages, the model in the core's `arrange` call through `App::arranged`, kept as
+`ui/arrangement` in its settings): a long press on a tile or a row opens a page with every
+change (Move to start, Move earlier, Move later, Move to end, Move to each collection, New
+collection…, Take out of collection, and on a collection Rename collection… and Ungroup); there
+is no drag. A collection is a tile, or a section in the list, and a tap opens its page, with
+Rename and Ungroup in its pull-down menu. The main page's pull-down menu has **New
+collection…** and **Back to the group's order**.
+
 **On the watches**: the phone sends its devices in the user's order, each with the name
 of its collection (`collection` in WatchState), and the
 watch lists the devices in no collection under **Devices**, then a section for each

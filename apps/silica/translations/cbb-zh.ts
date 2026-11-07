@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Back to the group's order</source>
+        <translation>恢复群组的顺序</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>新建集合…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>重新检查密钥</translation>
     </message>
@@ -875,6 +883,109 @@
     <message>
         <source>%1 files</source>
         <translation>%1 个文件</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>整理</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>移到开头</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>前移</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>后移</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>移到末尾</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>移到“%1”</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>新建集合…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>移出集合</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>重命名集合…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>解散集合</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>创建</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重命名</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>新建集合</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>重命名集合</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>名称</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>办公室、家、电视…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>解散集合</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>重命名集合…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>此集合中还没有设备。在主页面长按设备的磁贴即可将其移到这里。</translation>
     </message>
 </context>
 </TS>

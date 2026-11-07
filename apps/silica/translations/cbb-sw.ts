@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Back to the group's order</source>
+        <translation>Rudi kwenye mpangilio wa kikundi</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Mkusanyiko mpya…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>Kagua ufunguo tena</translation>
     </message>
@@ -875,6 +883,109 @@
     <message>
         <source>%1 files</source>
         <translation>faili %1</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>Panga</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>Hamishia mwanzo</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>Sogeza mbele</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>Sogeza nyuma</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>Hamishia mwisho</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>Hamishia %1</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Mkusanyiko mpya…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>Toa kwenye mkusanyiko</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Badilisha jina la mkusanyiko…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>Vunja mkusanyiko</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>Unda</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Badilisha jina</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>Mkusanyiko mpya</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>Badilisha jina la mkusanyiko</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Jina</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>Ofisi, Nyumbani, Televisheni…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>Vunja mkusanyiko</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Badilisha jina la mkusanyiko…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>Bado hakuna vifaa kwenye mkusanyiko huu. Shikilia kigae cha kifaa kwenye ukurasa mkuu ili kukihamishia hapa.</translation>
     </message>
 </context>
 </TS>

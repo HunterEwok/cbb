@@ -98,8 +98,15 @@ DISTFILES += \
     qml/pages/AlertsCard.qml \
     qml/pages/RenameDevicePage.qml \
     qml/pages/DeviceTile.qml \
+    qml/pages/DeviceRow.qml \
+    qml/pages/DeviceItems.qml \
+    qml/pages/CollectionTile.qml \
+    qml/pages/CollectionPage.qml \
+    qml/pages/CollectionNameDialog.qml \
+    qml/pages/ArrangePage.qml \
     qml/pages/SettingsPage.qml \
     qml/pages/devices.js \
+    qml/pages/arrange.js \
     qml/cover/CoverPage.qml \
     qml/system/Notifier.qml \
     qml/system/ShareTarget.qml \

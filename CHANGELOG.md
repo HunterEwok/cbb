@@ -14,6 +14,11 @@ All notable changes to cbb are documented in this file. The format follows
   group over through it, `cbb_member_manage` offers it to the phones' apps, and the Aurora app
   takes a lost root's group over from the root's page, its admin key in the TEE becoming the
   new root (`TestFFIPhoneTakeover`).
+- The tiles' order and collections are in the Rust core (`cbb_core::arrange`, checked against
+  the same vectors as the tray app and the kits), and the Aurora app has them: a long press on
+  a tile or a row moves it, puts it into a collection or a new one and takes it out, a
+  collection's tile shows how many of its devices are online and opens its page, and the
+  pull-down menu has New collection… and Back to the group's order.
 - `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
   its hello and starts it again when it stops. It does nothing else yet; the steps that make

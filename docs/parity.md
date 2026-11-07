@@ -70,7 +70,7 @@ on every platform of the class, on the roadmap).
 | Wallpaper colours theme | yes | **OS** | the ambience | Material You exists only on Android |
 | Remote paste, images and files | yes | yes | images and files both ways, through the share menu, the clipboard's image and Downloads; not yet tried on the phone. Gap: remote paste | the iPhone takes no remote paste (**OS**: no app may type into another) |
 | Remote invitations | planned | planned | planned | roadmap item 12; computers have them |
-| Arrange the tiles and collections | yes | yes | gap | kept on each installation; the watches show their phone's |
+| Arrange the tiles and collections | yes | yes | yes, by a long press's menu; not yet tried on the phone | kept on each installation; the watches show their phone's; Silica has no drag of tiles in a grid, so Aurora moves them by menu only |
 | Act as a Bluetooth keyboard for a TV, tablet or computer | yes | **OS** | gap | iOS keeps the HID service to the system; some Android makers leave the profile out, which the app says |
 | Tested on a real phone | not yet | yes | yes, on Aurora 5.1.5 | the iPhone app on an iPhone 12 Pro Max, built with a developer's own team; the Aurora app on an F+ R570E |
 

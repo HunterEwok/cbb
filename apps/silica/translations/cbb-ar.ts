@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Back to the group's order</source>
+        <translation>العودة إلى ترتيب المجموعة</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>تجميعة جديدة…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>افحص المفتاح مجددًا</translation>
     </message>
@@ -875,6 +883,109 @@
     <message>
         <source>%1 files</source>
         <translation>ملفات: %1</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>ترتيب</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>نقل إلى البداية</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>نقل إلى الأمام</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>نقل إلى الخلف</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>نقل إلى النهاية</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>نقل إلى %1</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>تجميعة جديدة…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>إخراج من التجميعة</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>إعادة تسمية التجميعة…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>فك التجميعة</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>إنشاء</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>إعادة تسمية</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>تجميعة جديدة</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>إعادة تسمية التجميعة</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>الاسم</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>المكتب، المنزل، أجهزة التلفاز…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 من %2 متصل</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 من %2 متصل</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>فك التجميعة</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>إعادة تسمية التجميعة…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 من %2 متصل</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>لا توجد أجهزة في هذه التجميعة بعد. اضغط مطولًا على مربع جهاز في الصفحة الرئيسية لنقله إلى هنا.</translation>
     </message>
 </context>
 </TS>

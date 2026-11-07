@@ -11,6 +11,7 @@
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -676,4 +677,91 @@ QString App::languageName(const QString &code) const
 {
     const QString name = QLocale(code).nativeLanguageName();
     return name.isEmpty() ? code : name.left(1).toUpper() + name.mid(1);
+}
+
+static const QString arrangementKey = QStringLiteral("ui/arrangement");
+
+bool App::hasArrangement() const
+{
+    return QSettings().contains(arrangementKey);
+}
+
+QJsonObject App::callArrange(const QStringList &ids, bool prune, const QJsonValue &op)
+{
+    QSettings settings;
+    const QJsonDocument stored = QJsonDocument::fromJson(settings.value(arrangementKey).toByteArray());
+    QJsonObject args{
+        {QStringLiteral("group"), m_member.groupTag()},
+        {QStringLiteral("devices"), QJsonArray::fromStringList(ids)},
+        {QStringLiteral("prune"), prune},
+    };
+    if (!m_member.device.isEmpty())
+        args.insert(QStringLiteral("self"), m_member.device);
+    if (stored.isObject())
+        args.insert(QStringLiteral("stored"), stored.object());
+    if (!op.isNull())
+        args.insert(QStringLiteral("op"), op);
+    Failure failure;
+    const QJsonObject answer = Core::call(QStringLiteral("arrange"), args, &failure).toObject();
+    if (!failure.isNull()) {
+        show(Errors::shown(failure));
+        return QJsonObject();
+    }
+    // Until the user changes something nothing is stored (docs/apps.md).
+    const QJsonObject next = answer.value(QStringLiteral("stored")).toObject();
+    if (next.value(QStringLiteral("items")).toArray().isEmpty())
+        settings.remove(arrangementKey);
+    else if (!stored.isObject() || stored.object() != next)
+        settings.setValue(arrangementKey, QJsonDocument(next).toJson(QJsonDocument::Compact));
+    return answer;
+}
+
+QVariantList App::arranged(const QVariantList &devices, int)
+{
+    if (m_member.isNull())
+        return QVariantList();
+    QStringList ids;
+    QHash<QString, QVariant> byId;
+    for (const QVariant &d : devices) {
+        const QString id = d.toMap().value(QStringLiteral("device")).toString();
+        ids << id;
+        byId.insert(id, d);
+    }
+    m_arrangeIds = ids;
+    const QJsonObject answer = callArrange(ids, ids.contains(m_member.device), QJsonValue());
+    if (answer.isEmpty()) {
+        // The group's order, so the devices still show.
+        QVariantList flat;
+        for (const QVariant &d : devices)
+            flat << QVariantMap{{QStringLiteral("kind"), QStringLiteral("device")}, {QStringLiteral("device"), d}};
+        return flat;
+    }
+    QVariantList view;
+    for (const QJsonValue &item : answer.value(QStringLiteral("view")).toArray()) {
+        const QJsonObject o = item.toObject();
+        if (o.contains(QStringLiteral("device"))) {
+            view << QVariantMap{{QStringLiteral("kind"), QStringLiteral("device")},
+                                {QStringLiteral("device"), byId.value(o.value(QStringLiteral("device")).toString())}};
+            continue;
+        }
+        const QJsonObject c = o.value(QStringLiteral("collection")).toObject();
+        QVariantList inside;
+        for (const QJsonValue &id : c.value(QStringLiteral("devices")).toArray())
+            inside << byId.value(id.toString());
+        view << QVariantMap{{QStringLiteral("kind"), QStringLiteral("collection")},
+                            {QStringLiteral("id"), c.value(QStringLiteral("id")).toString()},
+                            {QStringLiteral("name"), c.value(QStringLiteral("name")).toString()},
+                            {QStringLiteral("devices"), inside}};
+    }
+    return view;
+}
+
+bool App::arrange(const QVariantMap &op)
+{
+    if (m_member.isNull())
+        return false;
+    const bool ok = !callArrange(m_arrangeIds, false, QJsonObject::fromVariantMap(op)).isEmpty();
+    ++m_arrangement;
+    emit arrangementChanged();
+    return ok;
 }

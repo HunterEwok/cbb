@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Back to the group's order</source>
+        <translation>समूह के क्रम पर लौटें</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>नया संग्रह…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>कुंजी फिर से जाँचें</translation>
     </message>
@@ -875,6 +883,109 @@
     <message>
         <source>%1 files</source>
         <translation>%1 फ़ाइलें</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>व्यवस्थित करें</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>शुरू में ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>पहले ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>बाद में ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>अंत में ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>%1 में ले जाएँ</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>नया संग्रह…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>संग्रह से निकालें</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>संग्रह का नाम बदलें…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>संग्रह हटाएँ</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>बनाएँ</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>नाम बदलें</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>नया संग्रह</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>संग्रह का नाम बदलें</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>नाम</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>दफ़्तर, घर, टीवी…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 में से %1 ऑनलाइन</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 में से %1 ऑनलाइन</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>संग्रह हटाएँ</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>संग्रह का नाम बदलें…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 में से %1 ऑनलाइन</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>इस संग्रह में अभी कोई डिवाइस नहीं है। किसी डिवाइस को यहाँ लाने के लिए मुख्य पेज पर उसकी टाइल दबाकर रखें।</translation>
     </message>
 </context>
 </TS>

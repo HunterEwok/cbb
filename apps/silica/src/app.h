@@ -11,9 +11,11 @@
 #include "membership.h"
 #include "platform/osinfo.h"
 
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QVariantList>
 
 class App : public QObject
 {
@@ -45,6 +47,12 @@ class App : public QObject
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY settingsChanged)
     Q_PROPERTY(bool deviceList READ deviceList WRITE setDeviceList NOTIFY settingsChanged)
     // The language chosen differs from the one the app started with.
+    // Bumped when the user's arrangement of the tiles changes; arranged
+    // takes it so that QML asks again.
+    Q_PROPERTY(int arrangement READ arrangement NOTIFY arrangementChanged)
+    // Whether the user has an arrangement of their own, for "Back to the
+    // group's order".
+    Q_PROPERTY(bool hasArrangement READ hasArrangement NOTIFY arrangementChanged)
     Q_PROPERTY(bool languagePending READ languagePending NOTIFY settingsChanged)
 
 public:
@@ -103,6 +111,18 @@ public:
     // forMinutes: how long a mute lasts, 0 for until an unmute.
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
                             int forMinutes = 0);
+    // The member's devices (Member::devices) in the user's order and
+    // collections (docs/apps.md, "Collections and the order of the tiles";
+    // cbb_core::arrange through the core's arrange call): each item is
+    // {kind: "device", device} or {kind: "collection", id, name, devices}.
+    // The arrangement forgets devices that left the group once the list is
+    // whole (it holds this phone). stamp is the arrangement property.
+    Q_INVOKABLE QVariantList arranged(const QVariantList &devices, int stamp);
+    // Applies a change of the arrangement, an operation of the core's
+    // arrange call ({op: "move", item: {device: id}, before: …}, "into",
+    // "out", "new", "rename", "ungroup", "reset") on the devices arranged
+    // was last given, keeps it in the settings and tells arrangementChanged.
+    Q_INVOKABLE bool arrange(const QVariantMap &op);
     // Takes the group over from its lost root, the device with the ID
     // device, as an admin (cbb_core::takeover): a new root CA for the admin
     // key, kept first, and the claim, as the root handed the group to this
@@ -123,6 +143,7 @@ signals:
     // ok: the change is in the group's records or the device took the command.
     void managed(const QString &action, const QString &device, bool ok);
     void claimChanged();
+    void arrangementChanged();
 
 private:
     void show(const QString &error);
@@ -136,6 +157,11 @@ private:
     // While the phone has a claim: where it stands, and once it took
     // effect, the phone as the group's root.
     void finishTakeover();
+    int arrangement() const { return m_arrangement; }
+    bool hasArrangement() const;
+    // The core's arrange call on ids with op (null for none): {view, stored},
+    // the stored arrangement kept in the settings; null on a refusal, shown.
+    QJsonObject callArrange(const QStringList &ids, bool prune, const QJsonValue &op);
     // Keeps next as the membership, or shows why it could not.
     bool keep(const Membership &next);
 
@@ -156,4 +182,6 @@ private:
     qint64 m_claimLeftMs = 0;
     QString m_error;
     QString m_startLanguage;
+    int m_arrangement = 0;
+    QStringList m_arrangeIds; // the devices arranged was last given
 };

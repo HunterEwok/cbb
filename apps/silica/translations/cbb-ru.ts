@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Back to the group's order</source>
+        <translation>Вернуть порядок группы</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Новая коллекция…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>Проверить ключ снова</translation>
     </message>
@@ -875,6 +883,109 @@
     <message>
         <source>%1 files</source>
         <translation>файлов: %1</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>Упорядочить</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>В начало</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>Переместить раньше</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>Переместить позже</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>В конец</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>В коллекцию «%1»</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Новая коллекция…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>Убрать из коллекции</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Переименовать коллекцию…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>Разгруппировать</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>Создать</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>Новая коллекция</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>Переименовать коллекцию</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Название</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>Офис, Дом, Телевизоры…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 из %2 в сети</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 из %2 в сети</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>Разгруппировать</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Переименовать коллекцию…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 из %2 в сети</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>В коллекции пока нет устройств. Удерживайте плитку устройства на главном экране, чтобы переместить его сюда.</translation>
     </message>
 </context>
 </TS>

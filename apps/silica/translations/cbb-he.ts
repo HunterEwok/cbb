@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Back to the group's order</source>
+        <translation>חזרה לסדר של הקבוצה</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>אוסף חדש…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>בדיקת המפתח שוב</translation>
     </message>
@@ -875,6 +883,109 @@
     <message>
         <source>%1 files</source>
         <translation>%1 קבצים</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>סידור</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>העברה להתחלה</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>הקדמה</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>דחייה לאחור</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>העברה לסוף</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>העברה אל %1</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>אוסף חדש…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>הוצאה מהאוסף</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>שינוי שם האוסף…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>פירוק האוסף</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>יצירה</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>שינוי שם</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>אוסף חדש</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>שינוי שם האוסף</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>שם</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>משרד, בית, טלוויזיות…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>פירוק האוסף</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>שינוי שם האוסף…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>עדיין אין מכשירים באוסף הזה. לחצו לחיצה ארוכה על אריח של מכשיר בדף הראשי כדי להעביר אותו לכאן.</translation>
     </message>
 </context>
 </TS>
