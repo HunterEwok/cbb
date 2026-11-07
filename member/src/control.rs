@@ -146,6 +146,22 @@ pub struct Header {
     /// In hubs: the table of main hubs, names or device IDs in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+    /// The text of a remote invitation: made by invite, used by join.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub invite: String,
+    /// In invite: a device to confirm, before it is admitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joining: Option<Joining>,
+}
+
+/// A device that used a remote invitation, for the admin to confirm, as
+/// Go's control.Joining.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct Joining {
+    pub id: String,
+    pub name: String,
+    pub os: String,
+    pub fingerprint: String,
 }
 
 /// A part of a copy of images or files on the socket, as Go's
@@ -444,6 +460,12 @@ impl<R: Read> Reader<R> {
 /// The answer to a request: op reply, done.
 pub fn reply(header: Header, payload: Vec<u8>) -> Message {
     Message::new(Header { op: "reply".into(), done: true, ..header }, payload)
+}
+
+/// An answer to a request that more answers follow: op reply, not done.
+#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+pub fn partial(header: Header) -> Message {
+    Message::new(Header { op: "reply".into(), done: false, ..header }, Vec::new())
 }
 
 /// A failed request.

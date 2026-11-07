@@ -664,7 +664,7 @@ pub fn public_key_of(key: &[u8; 32]) -> Vec<u8> {
 }
 
 /// The public key of a private key, empty for none.
-fn public_of(key: &[u8]) -> Vec<u8> {
+pub(crate) fn public_of(key: &[u8]) -> Vec<u8> {
     match <[u8; 32]>::try_from(key) {
         Ok(k) => PublicKey::from(&StaticSecret::from(k)).as_bytes().to_vec(),
         Err(_) => Vec::new(),

@@ -195,6 +195,12 @@ struct PairingSlot<'a> {
 }
 
 static STOP: AtomicBool = AtomicBool::new(false);
+
+/// Whether the service is stopping.
+#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+pub(crate) fn stopping() -> bool {
+    STOP.load(Ordering::SeqCst)
+}
 /// An admin had the service restart: it stops with an error, after which
 /// systemd starts it again.
 static RESTART: AtomicBool = AtomicBool::new(false);
@@ -1480,6 +1486,16 @@ impl Service {
         if m.header.op == "pair" && m.header.addrs.is_empty() {
             if let Err(e) = self.pair_window(&m, r, &mut out) {
                 (self.log)(&format!("cbb: pair: {}", e.for_log()));
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
+            return;
+        }
+        if m.header.op == "invite" {
+            let res = self
+                .admin(|a| a.admitter(false))
+                .and_then(|admitter| self.away()?.invite(admitter, m.header.expires, r, &mut out));
+            if let Err(e) = res {
+                (self.log)(&format!("cbb: invite: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
             }
             return;

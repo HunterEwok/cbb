@@ -295,7 +295,17 @@ ends, the Go service described below is still the computers' member.
   showing the server key's certificate in place of its member certificate and the records,
   and registers again at once when a newer one comes; it serves its clients with a key of
   its own for each period, which its offers carry ahead of time (Go's `rotateHubKey`,
-  `TestLiteHubCredential`). Invitations are still Go's.
+  `TestLiteHubCredential`). A Rust hub makes remote invitations as Go's does
+  (`member/src/away/invite.rs`): a guest key and preshared key in the invitation, a guest
+  peer in the hub, and a pairing window on the invitation's secret whose admin confirms the
+  device (`Joining`, `answer`); the hub's connections from a guest go to a loopback port of
+  their own, where only the window's pairing and then the admitted device's member
+  connection are served, and the guest goes once the hub answered that device's key, two
+  minutes after it was admitted at most (`TestLiteInvite`). The Rust member joins with an
+  invitation (`cbb pair -invite`) through the guest tunnel, turns sync away from home on with
+  the join, and keeps the invitation in `invite-guest` until its service has offered its own
+  key to the hub through the guest tunnel and the hub's offer came, ten minutes at most
+  (`TestLiteJoinInvite`).
 
 ### Linux components
 

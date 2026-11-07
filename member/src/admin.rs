@@ -1443,6 +1443,7 @@ impl Admin<'_> {
                     }
                     return Ok(name);
                 }
+                admit::Outcome::Confirm(_) => return Err(Error::msg("a QR code's pairing asks no admin")),
                 admit::Outcome::Failed { error, wrong_code } => {
                     return Err(if wrong_code {
                         Error::with("the pairing failed", cbb_core::pair::Refusal::WrongCode)

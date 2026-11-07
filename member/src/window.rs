@@ -38,6 +38,8 @@ const REFUSE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The device a window admitted.
 pub struct Joined {
+    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+    pub device: String,
     pub name: String,
     /// Whether it said that it stored its identity.
     pub confirmed: bool,
@@ -48,6 +50,8 @@ struct State {
     expires: Duration, // on the uptime clock
     busy: bool,
     committed: bool,
+    /// close came while committed: the window closes if the attempt fails.
+    closing: bool,
     failures: u32,
     idle: HashMap<IpAddr, u32>,
     /// The running attempt's socket, which close shuts.
@@ -56,10 +60,22 @@ struct State {
     end: Option<std::result::Result<Joined, Refusal>>,
 }
 
+/// Asked whether to admit a device that proved it knows a remote
+/// invitation's secret, as Go's pair.Options.Confirm; it may take up to
+/// CONFIRM_WAIT for the admin's answer, and a no declines the device.
+pub type Confirm = Box<dyn Fn(&admit::Request) -> bool + Send + Sync>;
+
+/// How long a window waits for its admin to confirm a device that used an
+/// invitation, as Go's confirmWait.
+pub const CONFIRM_WAIT: Duration = crate::pair::CONFIRM_WAIT;
+
 /// An open pairing window.
 pub struct Window {
     admitter: Admitter,
     code: String,
+    /// A remote invitation's secret, in place of the code, and who
+    /// confirms the device that proves it.
+    secret: Option<(Vec<u8>, Confirm)>,
     state: Mutex<State>,
     changed: Condvar,
 }
@@ -69,7 +85,25 @@ impl Window {
     pub fn open(admitter: Admitter, code: &str) -> Result<Arc<Window>> {
         let code = cbb_core::pair::normalize_code(code)?;
         let state = State { expires: uptime::now() + LIFETIME, ..Default::default() };
-        Ok(Arc::new(Window { admitter, code, state: Mutex::new(state), changed: Condvar::new() }))
+        Ok(Arc::new(Window { admitter, code, secret: None, state: Mutex::new(state), changed: Condvar::new() }))
+    }
+
+    /// Opens a remote invitation's window on the admitter, for lifetime:
+    /// its secret in place of a code, and confirm asked about the device
+    /// that proves it (docs/design.md, "Joining from another network").
+    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+    pub fn open_secret(admitter: Admitter, secret: &[u8], lifetime: Duration, confirm: Confirm) -> Result<Arc<Window>> {
+        if secret.len() < cbb_core::pair::MIN_SECRET {
+            return Err(Error::msg("the invitation's secret is too short"));
+        }
+        let state = State { expires: uptime::now() + lifetime, ..Default::default() };
+        Ok(Arc::new(Window {
+            admitter,
+            code: String::new(),
+            secret: Some((secret.to_vec(), confirm)),
+            state: Mutex::new(state),
+            changed: Condvar::new(),
+        }))
     }
 
     /// The window's code, six digits.
@@ -81,7 +115,12 @@ impl Window {
     /// started sending the Welcome; the device is admitted then.
     pub fn close(&self) {
         let mut st = self.state.lock().unwrap();
-        if st.committed || st.end.is_some() {
+        if st.end.is_some() {
+            return;
+        }
+        if st.committed {
+            // succeed closes the window, or release if the attempt fails.
+            st.closing = true;
             return;
         }
         st.end = Some(Err(Refusal::Closed));
@@ -109,7 +148,10 @@ impl Window {
                 drop(st);
                 self.close();
                 st = self.state.lock().unwrap();
-                continue;
+                // An attempt sending the Welcome ends first.
+                if st.end.is_some() {
+                    continue;
+                }
             }
             st = self.changed.wait_timeout(st, Duration::from_secs(1)).unwrap().0;
         }
@@ -153,6 +195,9 @@ impl Window {
         let mut st = self.state.lock().unwrap();
         st.busy = false;
         st.running = None;
+        if std::mem::take(&mut st.committed) && st.closing && st.end.is_none() {
+            st.end = Some(Err(Refusal::Closed));
+        }
         if failed {
             st.failures += 1;
             if st.failures >= MAX_FAILURES && st.end.is_none() {
@@ -192,7 +237,10 @@ impl Window {
             return Err(Error::with("the pairing failed", why));
         }
         let view = admit::GroupView::of(&node.records().lock().unwrap());
-        let res = Admission::accept(self.admitter.clone(), view, &self.code, session, exporter);
+        let res = match &self.secret {
+            Some((secret, _)) => Admission::accept_secret(self.admitter.clone(), view, secret, session, exporter),
+            None => Admission::accept(self.admitter.clone(), view, &self.code, session, exporter),
+        };
         let mut adm = match res {
             Ok(a) => a,
             Err(e) => {
@@ -204,16 +252,16 @@ impl Window {
         let res = self.attempt(node, &mut adm, &sock, &mut name);
         let _ = sock.shutdown(Shutdown::Both);
         match (res, name) {
-            (Ok(confirmed), Some(name)) => {
-                self.succeed(Joined { name: name.clone(), confirmed });
+            (Ok(confirmed), Some((device, name))) => {
+                self.succeed(Joined { device, name: name.clone(), confirmed });
                 if confirmed {
                     Ok(())
                 } else {
                     Err(Error::msg(format!("{name} got its certificate but did not confirm that it stored it")))
                 }
             }
-            (Err(e), Some(name)) => {
-                self.succeed(Joined { name, confirmed: false });
+            (Err(e), Some((device, name))) => {
+                self.succeed(Joined { device, name, confirmed: false });
                 Err(e)
             }
             (Ok(_), None) => {
@@ -231,24 +279,47 @@ impl Window {
 
     /// Runs the exchange; name is set once the device is admitted. Returns
     /// whether the device confirmed that it stored its identity.
-    fn attempt(&self, node: &Node, adm: &mut Admission, sock: &TcpStream, name: &mut Option<String>) -> Result<bool> {
-        let end = Instant::now() + ATTEMPT_TIMEOUT;
+    fn attempt(
+        &self,
+        node: &Node,
+        adm: &mut Admission,
+        sock: &TcpStream,
+        name: &mut Option<(String, String)>,
+    ) -> Result<bool> {
+        let wait = if self.secret.is_some() { CONFIRM_WAIT } else { Duration::ZERO };
+        let end = Instant::now() + ATTEMPT_TIMEOUT + wait;
         let first = Instant::now() + FIRST_TIMEOUT;
         let mut sock = sock;
         let mut input: Vec<u8> = Vec::new();
         let mut buf = vec![0u8; 16 << 10];
         loop {
-            let step = adm.feed(&input, uptime::wall_ms());
+            let mut step = adm.feed(&input, uptime::wall_ms());
+            if let (Outcome::Confirm(r), Some((_, confirm))) = (&step.outcome, &self.secret) {
+                // The joiner waits while the admin is asked.
+                if !step.send.is_empty() {
+                    sock.write_all(&step.send).context("cannot send to the device")?;
+                }
+                let yes = confirm(r);
+                if !yes {
+                    (crate::service::log_line)(&format!(
+                        "cbb: the admin did not confirm {} ({}), which used an invitation",
+                        r.name, r.device
+                    ));
+                }
+                step = adm.answer(yes, uptime::wall_ms());
+            }
             match step.outcome {
                 Outcome::Pending => {}
+                Outcome::Confirm(_) => return Err(Error::msg("a window with a code asks no admin")),
                 Outcome::Admitted(a) => {
                     if !self.commit() {
                         return Err(Error::with("the pairing failed", Refusal::Closed));
                     }
                     // From here on the device counts as admitted: the
                     // Welcome may reach it even if this side sees an error.
-                    *name = Some(a.info.name.clone());
-                    crate::admin::record_admitted(node, &self.admitter, &a, "by its code")?;
+                    *name = Some((a.device.to_string(), a.info.name.clone()));
+                    let how = if self.secret.is_some() { "with an invitation" } else { "by its code" };
+                    crate::admin::record_admitted(node, &self.admitter, &a, how)?;
                 }
                 Outcome::Done { confirmed } => {
                     let _ = sock.write_all(&step.send);

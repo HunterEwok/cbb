@@ -24,10 +24,12 @@ use crate::uptime;
 use crate::wire::TunnelOffer;
 
 mod hubs;
+mod invite;
 mod meet;
 mod movehub;
 mod serve;
 
+pub use invite::join_invite;
 pub use movehub::is_stop;
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
@@ -74,6 +76,8 @@ pub struct Away {
     standby: Mutex<Option<String>>,
     /// The hub passes a hub above's offer on before it gives way.
     giving_way: AtomicBool,
+    /// The guest tunnels of the open invitations, on the hub.
+    guests: invite::Guests,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -114,6 +118,7 @@ impl Away {
             fetching: Arc::new(AtomicBool::new(false)),
             standby: Mutex::new(None),
             giving_way: AtomicBool::new(false),
+            guests: Default::default(),
             log,
         }
     }
@@ -357,6 +362,14 @@ impl Away {
             // A phone's app in the background makes no connection.
             if node.is_paused() {
                 std::thread::sleep(Duration::from_secs(1));
+                continue;
+            }
+            // A device that joined with an invitation offers its key through
+            // the guest tunnel until the hub's offer comes.
+            if hubs.is_empty()
+                && let Some(s) = &st
+                && self.through_guest(&node, s)
+            {
                 continue;
             }
             let (Some(st), false) = (st, hubs.is_empty()) else {

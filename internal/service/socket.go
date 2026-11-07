@@ -858,6 +858,8 @@ func (s *Service) keyKnown(h group.KeyHash) bool {
 
 // windowResult returns how a window that closed ended, and logs it.
 func (s *Service) windowResult(w *pair.Window) (*pair.Result, error) {
+	// A window closed while its attempt sends the Welcome ends with it.
+	<-w.Done()
 	res, err := w.Result()
 	if err != nil {
 		return nil, err

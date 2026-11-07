@@ -82,6 +82,9 @@ Commands:
                        (-addr: where the phone reaches this device, when the
                        code would name the wrong addresses).
   pair -code host:port Join with the code from cbb pair on a full member.
+  pair -invite file    Join with a remote invitation from cbb invite on the
+                       group's hub, through its tunnel; sync away from home
+                       goes on.
   pair -full ...       Join as a computer with the service, a full member
                        that may become an admin, rather than a lite member.
   service [-name name] [-port port] [-peer host:port]... [-no-mdns]
@@ -297,6 +300,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut port = member_port();
     let mut addrs = Vec::new();
     let mut code_addr = None;
+    let mut invite = None;
     let mut full = false;
     let mut i = 0;
     while i < args.len() {
@@ -311,17 +315,35 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
             Some("code") if !for_next => code_addr = Some(next()?),
+            Some("invite") if !for_next => invite = Some(next()?),
             _ => return Err(Error::msg(format!("unknown argument {:?}; see cbb help", args[i]))),
         }
         i += 2;
     }
+    let invite = match invite {
+        Some(path) => Some(invite_consent(&path)?),
+        None => None,
+    };
     let (mut joiner, save) = joiner(g, &name)?;
     if full {
         joiner = joiner.as_computer(admin::os_name());
     }
     let save = &*save;
-    let id = match code_addr {
-        Some(a) => {
+    let id = match (invite, code_addr) {
+        (Some((path, text)), _) => {
+            let shown = |fp: &str| {
+                println!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp));
+                println!("Whoever invited you sees it on the hub and admits this device if it matches.");
+                println!("Waiting for them; press Ctrl+C to give up.");
+                std::io::stdout().flush().ok();
+            };
+            let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
+            let id = away::join_invite(&g.state, &joiner, save, &text, &shown, log)?;
+            // It is used up, and was a secret; nothing needs it any more.
+            let _ = std::fs::remove_file(&path);
+            id
+        }
+        (None, Some(a)) => {
             print!("Pairing code: ");
             std::io::stdout().flush().ok();
             let mut line = String::new();
@@ -331,7 +353,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 .context(format!("cannot connect to {a}"))?;
             pair::join(&joiner, sock, &code, save)?
         }
-        None => {
+        (None, None) => {
             let ln = TcpListener::bind(("::", port))
                 .or_else(|_| TcpListener::bind(("0.0.0.0", port)))
                 .or_else(|_| TcpListener::bind(("0.0.0.0", 0)))
@@ -386,6 +408,27 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Reads a remote invitation's file for cbb pair -invite and asks the user
+/// to agree that sync away from home goes on with the join; returns the
+/// path and the invitation's text.
+fn invite_consent(path: &str) -> Result<(String, String)> {
+    let text = std::fs::read_to_string(path).context(format!("cannot read {path}"))?;
+    let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
+    if inv.expired(uptime::wall_ms() / 1000) {
+        return Err(Error::msg("the invitation has expired; ask for a new one"));
+    }
+    println!("A device that joins with an invitation syncs away from home through the");
+    println!("group's hub, so sync away from home is turned on here.\n");
+    print!("Type yes to join and turn sync away from home on: ");
+    std::io::stdout().flush().ok();
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
+    if !line.trim().eq_ignore_ascii_case("yes") {
+        return Err(Error::msg("nothing changed"));
+    }
+    Ok((path.to_string(), text))
 }
 
 /// The joiner of a device in no group yet, and how it saves the group it

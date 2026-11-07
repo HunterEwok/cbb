@@ -64,8 +64,13 @@ All notable changes to cbb are documented in this file. The format follows
   newer ones through the relay's address when the relay refuses it, and moves to the next
   address the lists or DNS give when the relay is gone (`TestLiteRelayProject`). A Rust hub
   registers with its forwarder with the group's hubs' credential, and serves its clients
-  with a new key in each period of the credentials (`TestLiteHubCredential`). Invitations
-  come next.
+  with a new key in each period of the credentials (`TestLiteHubCredential`). A Rust hub
+  makes remote invitations (`invite`, with the admin's confirmation of each device that uses
+  one, `TestLiteInvite`), and the Rust member joins with one (`cbb pair -invite`), offering
+  its own tunnel key through the guest tunnel once it joined (`TestLiteJoinInvite`).
+- A pairing window closed while it sent its Welcome now ends when that attempt ends, also when
+  the attempt fails, in Go and in Rust; an invitation cancelled at that moment no longer
+  crashes the Go service.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

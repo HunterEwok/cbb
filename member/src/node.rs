@@ -269,6 +269,14 @@ pub type OnChange = Box<dyn Fn(&Event) + Send + Sync>;
 /// TLS session, the exporter of its secrets and the joiner's address.
 pub type OnPairing = Arc<dyn Fn(TcpStream, tls::Session, Arc<tls::Exporter>, SocketAddr) -> Result<()> + Send + Sync>;
 
+/// Where a connection through the hub's tunnel came from: a client's tunnel
+/// address, or an invitation's guest, with its pairing and the device it
+/// admitted.
+enum Tunneled {
+    Member(std::net::Ipv6Addr),
+    Guest(OnPairing, Option<DeviceId>),
+}
+
 /// A piece of a fetch a connection's reader hands on.
 enum Piece {
     Chunk(wire::Chunk),
@@ -1240,14 +1248,29 @@ impl Node {
     /// whose address that is, as Go's serveTunnelMember.
     pub fn accept_tunneled(&self, sock: TcpStream, from: std::net::Ipv6Addr) -> Result<()> {
         let addr = SocketAddr::from((from, 0));
-        self.accept_from(sock, addr, Some(from), &mut || {}, None)
+        self.accept_from(sock, addr, Some(Tunneled::Member(from)), &mut || {}, None)
+    }
+
+    /// Runs a connection that came through an invitation's guest tunnel
+    /// from the guest address from, as Go's serveGuest: the invitation's
+    /// pairing, which pairing serves, and once that admitted a device, that
+    /// device's member connection, nothing else.
+    pub fn accept_guest(
+        &self,
+        sock: TcpStream,
+        from: std::net::Ipv6Addr,
+        pairing: OnPairing,
+        admitted: Option<DeviceId>,
+    ) -> Result<()> {
+        let addr = SocketAddr::from((from, 0));
+        self.accept_from(sock, addr, Some(Tunneled::Guest(pairing, admitted)), &mut || {}, None)
     }
 
     fn accept_from(
         &self,
         sock: TcpStream,
         addr: SocketAddr,
-        tunneled: Option<std::net::Ipv6Addr>,
+        tunneled: Option<Tunneled>,
         handshaken: &mut dyn FnMut(),
         admit: Option<&Admit>,
     ) -> Result<()> {
@@ -1260,7 +1283,11 @@ impl Node {
         let _ = sock.set_nodelay(true);
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
         sock.set_write_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
-        let pairing = if tunneled.is_some() { None } else { self.on_pairing.read().unwrap().clone() };
+        let pairing = match &tunneled {
+            None => self.on_pairing.read().unwrap().clone(),
+            Some(Tunneled::Member(_)) => None,
+            Some(Tunneled::Guest(p, _)) => Some(p.clone()),
+        };
         let (ident, refused, clock) = (self.identity(), tls::refused(&self.records), tls::clock());
         let (cfg, exporter) = match pairing {
             Some(_) => tls::member_or_pair_server(&ident, refused, &clock)?,
@@ -1278,13 +1305,20 @@ impl Node {
         let res = res.and_then(|()| self.check(conn, addr, Usage::Client));
         handshaken();
         let (conn, id, chain) = res?;
-        if let Some(from) = tunneled
-            && crate::tunnel_addr(id.as_str()) != Some(from)
-        {
-            let _ = sock.shutdown(Shutdown::Both);
-            return Err(Error::msg(format!(
-                "a member connection through the tunnel from {from} is not from the device of that key; closed"
-            )));
+        match tunneled {
+            Some(Tunneled::Member(from)) if crate::tunnel_addr(id.as_str()) != Some(from) => {
+                let _ = sock.shutdown(Shutdown::Both);
+                return Err(Error::msg(format!(
+                    "a member connection through the tunnel from {from} is not from the device of that key; closed"
+                )));
+            }
+            Some(Tunneled::Guest(_, admitted)) if admitted.as_ref() != Some(&id) => {
+                let _ = sock.shutdown(Shutdown::Both);
+                return Err(Error::msg(
+                    "a member connection through a guest tunnel is not from the device it admitted; closed",
+                ));
+            }
+            _ => {}
         }
         if let Some(admit) = admit
             && !admit(addr.port(), &id)

@@ -217,6 +217,7 @@ impl Away {
         }
         *st = next;
         let offers = offers(st, from.as_str(), &m.psk, &node.hub_order());
+        self.guest_offered(from);
         if changed {
             self.set_peers(st);
         }
@@ -234,7 +235,11 @@ impl Away {
     /// Gives the running hub the clients st admits.
     pub(super) fn set_peers(&self, st: &State) {
         let Some(s) = self.serving.lock().unwrap().as_ref().map(|s| s.hub.clone()) else { return };
-        if let Err(e) = st.peers().and_then(|p| s.set_peers(p, self.me.as_str())) {
+        let peers = st.peers().map(|mut p| {
+            p.extend(self.guest_peers());
+            p
+        });
+        if let Err(e) = peers.and_then(|p| s.set_peers(p, self.me.as_str())) {
             self.fail(&e.context("the hub could not take its clients"));
         }
     }
@@ -260,14 +265,18 @@ impl Away {
         let port = if st.listen_port == 0 { MEMBER_PORT } else { st.listen_port };
         let ln = TcpListener::bind("127.0.0.1:0").context("cannot open the hub's local port")?;
         let local = ln.local_addr().context("cannot open the hub's local port")?.port();
-        let target: hub::Target = Arc::new(move |a| if hub::is_guest(&a) { None } else { Some(local) });
+        let guests = TcpListener::bind("127.0.0.1:0").context("cannot open the hub's local port")?;
+        let guest_port = guests.local_addr().context("cannot open the hub's local port")?.port();
+        let target: hub::Target = Arc::new(move |a| Some(if hub::is_guest(&a) { guest_port } else { local }));
+        let mut peers = st.peers()?;
+        peers.extend(self.guest_peers());
         // Both IPv6 and IPv4 where the system has IPv6, else IPv4 alone.
         let start = |ip: std::net::IpAddr| -> Result<Hub> {
             Hub::start(
                 &st.serving_key(),
                 self.me.as_str(),
                 st.obfuscation.as_ref(),
-                st.peers()?,
+                peers.clone(),
                 SocketAddr::from((ip, port)),
                 target.clone(),
                 self.log.clone(),
@@ -277,6 +286,7 @@ impl Away {
             .or_else(|_| start(std::net::Ipv4Addr::UNSPECIFIED.into()))
             .map_err(|e| e.context(format!("the hub could not listen on UDP port {port}")))?;
         let hub = Arc::new(hub);
+        super::invite::serve_guests(guests, Arc::downgrade(&hub), Arc::downgrade(node), self.guests.clone());
         // The members' connections through the tunnel: each checked
         // against the address it came from.
         let (weak, n) = (Arc::downgrade(&hub), Arc::downgrade(node));
@@ -440,7 +450,7 @@ impl Away {
 
 /// The tunnel address the connection from the loopback port from_port came
 /// from: the hub notes it just after it connects, so a moment is given.
-fn tunnel_addr_of(hub: &Hub, from_port: u16) -> Option<std::net::Ipv6Addr> {
+pub(super) fn tunnel_addr_of(hub: &Hub, from_port: u16) -> Option<std::net::Ipv6Addr> {
     let until = Instant::now() + Duration::from_secs(1);
     loop {
         if let Some(a) = hub.tunnel_addr(from_port) {

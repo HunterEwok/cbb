@@ -34,9 +34,7 @@ impl Away {
     }
 
     pub fn turn_on(&self) -> Result<(Vec<u8>, Vec<u8>)> {
-        Err(Error::msg(
-            "this build of the lite member has no tunnel for sync away from home (MIPS); it syncs at home only",
-        ))
+        Err(off())
     }
 
     pub fn turn_off(&self) -> Result<()> {
@@ -78,6 +76,16 @@ impl Away {
         self.turn_on()
     }
 
+    pub fn invite(
+        self: &Arc<Self>,
+        _admitter: cbb_core::admit::Admitter,
+        _expires: i64,
+        _r: control::Reader<std::os::unix::net::UnixStream>,
+        _out: &mut std::os::unix::net::UnixStream,
+    ) -> Result<()> {
+        Err(off())
+    }
+
     pub fn is_hub(&self) -> bool {
         false
     }
@@ -114,4 +122,21 @@ impl Away {
 /// Whether a hub order is a stop order: this build is never a hub.
 pub fn is_stop(_order: &serde_json::Value) -> bool {
     false
+}
+
+/// Joining with a remote invitation, which needs the tunnel.
+pub fn join_invite(
+    _dir: &std::path::Path,
+    _joiner: &crate::pair::Joiner,
+    _save: &crate::pair::Save,
+    _text: &str,
+    _shown: &dyn Fn(&str),
+    _log: Arc<dyn Fn(&str) + Send + Sync>,
+) -> Result<crate::identity::Identity> {
+    Err(off())
+}
+
+/// Why sync away from home is off in this build.
+fn off() -> Error {
+    Error::msg("this build of the lite member has no tunnel for sync away from home (MIPS); it syncs at home only")
 }
