@@ -1501,6 +1501,11 @@ All notable changes to cbb are documented in this file. The format follows
 - The iPhone and Android apps' button no longer sends a text the phone sent before over the
   image or files it shared since: it compares the clipboard with what the phone itself sent
   or took last, besides the group's copy (design.md, "The one button").
+- A phone that is the hub while its app is open no longer dials itself: its browser found
+  its own announcement and the phone kept a second connection to its own device ID.
+- The Android emulator check of files from a computer waits for the computer's files to
+  reach the phone before it presses the button; pressed earlier, the button sent the
+  phone's older clipboard text, which then won over the files.
 - The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
   clipboard off the main thread, for the remote paste sheet's empty field and for a sync
   that reads the clipboard itself, so iOS stops reporting a hang of the app.
