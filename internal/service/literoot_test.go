@@ -505,7 +505,10 @@ func TestLiteRecovery(t *testing.T) {
 	desk = restartService(t, &h, desk)
 	waitFor(t, "the Rust member holds the recovery key's record", func() bool { return recordsHold(dir, `"recovery"`) })
 	qr := func(group string) string {
-		k := sheet.Key.D.FillBytes(make([]byte, 32))
+		k, err := sheet.Key.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
 		enc := base64.RawURLEncoding.EncodeToString
 		return "cbb://recover?g=" + group + "&k=" + enc(k) + "&c=" + enc(sheet.Cert)
 	}
