@@ -18,7 +18,12 @@
 //!   `{"id", "port"}`;
 //! - `status` with `id`: `{"answered", "log"}`, whether the hub answered
 //!   and the log lines since the last status;
+//! - `set_endpoint` with `id` and `endpoint` ("ip:port"): the tunnel tries
+//!   that endpoint of the hub from now on (nothing over VLESS alone);
 //! - `stop` with `id`: `{}`;
+//! - `new_obfuscation`: `{"obfuscation"}`, new AmneziaWG settings for a
+//!   group whose hub is the phone; `new_vless_id`: `{"id"}`, a new VLESS
+//!   user ID for a group whose clients reach it only over VLESS;
 //! - `hub_start` with `key`, `device`, `obfuscation` (the group's AmneziaWG
 //!   settings, or none), `clients` (`[{"device", "key", "psk"}]`) and
 //!   `member_port` (the app's member listener on the loopback address):
@@ -114,6 +119,12 @@ enum Request {
     Status {
         id: u64,
     },
+    SetEndpoint {
+        id: u64,
+        endpoint: String,
+    },
+    NewObfuscation,
+    NewVlessId,
     Stop {
         id: u64,
     },
@@ -507,6 +518,16 @@ fn handle(request: &[u8]) -> Result<Value> {
             let log: Vec<String> = r.log.lock().map(|mut l| l.drain(..).collect()).unwrap_or_default();
             Ok(json!({ "answered": r.link.answered(), "log": log }))
         }),
+        Request::SetEndpoint { id, endpoint } => {
+            let at: SocketAddr =
+                endpoint.parse().map_err(|_| Error::msg(format!("{endpoint:?} is not an endpoint (ip:port)")))?;
+            with(id, |r| {
+                r.link.set_endpoint(at);
+                Ok(json!({}))
+            })
+        }
+        Request::NewObfuscation => Ok(json!({ "obfuscation": tunnel::new_obfuscation()? })),
+        Request::NewVlessId => Ok(json!({ "id": tunnel::new_vless_id() })),
         Request::HubStart { key, device, obfuscation, clients, member_port, listen } => {
             hub_start(&key, &device, obfuscation.as_ref(), &clients, member_port, listen.as_deref())
         }
@@ -754,6 +775,11 @@ mod tests {
 
     #[test]
     fn keys() {
+        let o = ok(json!({"op": "new_obfuscation"}))["obfuscation"].clone();
+        assert!(o["jc"].as_u64().is_some() && o["header_protection_key"].as_str().is_some(), "{o}");
+        let v = ok(json!({"op": "new_vless_id"}))["id"].as_str().unwrap().to_string();
+        assert!(cbb_core::vless::parse_id(&v).is_ok(), "{v}");
+        assert_ne!(v, ok(json!({"op": "new_vless_id"}))["id"].as_str().unwrap());
         let k = ok(json!({"op": "new_key"}))["key"].as_str().unwrap().to_string();
         let p = ok(json!({"op": "public_key", "key": k}));
         assert_eq!(p["public"].as_str().unwrap().len(), 44);
@@ -772,6 +798,8 @@ mod tests {
         assert!(t["port"].as_u64().unwrap() > 0);
         let s = ok(json!({"op": "status", "id": id}));
         assert_eq!(s["answered"], false);
+        ok(json!({"op": "set_endpoint", "id": id, "endpoint": "127.0.0.1:10"}));
+        assert!(!refused(json!({"op": "set_endpoint", "id": id, "endpoint": "nowhere"})).is_empty());
         ok(json!({"op": "stop", "id": id}));
         assert!(refused(json!({"op": "status", "id": id})).contains("no tunnel"));
         // An offer the member refuses: REALITY, which rustls cannot hide.

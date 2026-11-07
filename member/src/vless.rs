@@ -161,6 +161,11 @@ fn between(lo: u32, hi: u32) -> u32 {
 
 /// A session's ID as Xray's client makes it: a random UUID.
 fn session_id() -> String {
+    random_uuid()
+}
+
+/// A random UUID (version 4), as a session's ID or a group's VLESS user ID.
+pub(crate) fn random_uuid() -> String {
     let mut b: [u8; 16] = random();
     b[6] = b[6] & 0x0f | 0x40;
     b[8] = b[8] & 0x3f | 0x80;
