@@ -607,7 +607,8 @@ no other copy has either.
 A member checks a copy whose `id` it has not seen before it passes it on or keeps it:
 `cert` chains to a root on the path of the group's records, through `issuer` when there is
 one, which is neither revoked nor frozen (section 10); its key's hash is among the `keys`
-of `origin`'s device in the state; and `sig` verifies with that key. It drops a copy that
+of `origin`'s device in the state; that device does not only pass copies on (its record has
+no `forward_only`, section 11, "Two kinds of hub"); and `sig` verifies with that key. It drops a copy that
 fails, and logs it. A member that reads copies then finds the wrap whose `to` is its own
 device ID, opens `K` with its `seal` secret and `h`, and opens `payload`. A copy that has
 no wrap for it, or that does not open, it still keeps and passes on by the rules of section
@@ -2267,7 +2268,8 @@ passes them between. A group has two kinds of hub, chosen when a device is made 
   level (section 17) applies to it as to every admin.
 - A hub that **only passes copies on** is a computer whose newest device record has
   `forward_only` (section 10), signed by the root or an admin with `admit` and `hub`. No copy is sealed to
-  it, so it reads none; it makes no copies, writes none to a clipboard and takes no `paste`
+  it, so it reads none; it makes no copies (every member refuses one whose origin has
+  `forward_only`, section 4, "Opening"), writes none to a clipboard and takes no `paste`
   or `action` command. It holds no CA key, so it makes no remote invitation (section 12): a
   device far away joins through a trusted hub, or at home. No key level applies to it, since
   whoever takes its keys can hold copies back and learn what any member in between learns
@@ -2795,8 +2797,11 @@ Either way:
   for the first time are those an earlier registration gave the hub, or, for the project's
   forwarder, those the signed entry points name (section 16, "Entry points"), else the
   built-in ones: XHTTP on port 443 of `cbb.tools`, the path `/banMEJvnYJJap8S`.
-  The registrations over VLESS, held or being set up, all come from the forwarder's own
-  address, so they are bounded together, at 1024, instead of by address.
+  A registration over VLESS is charged to the client's own address as a direct one is:
+  over REALITY the address it connects from, over XHTTP the one the web server in front
+  names (`X-Real-IP`); when that is not known, those registrations share an eighth of
+  the setup slots. All the registrations over VLESS, held or being set up, are bounded
+  together at 1024 (relay-budget.md, "XHTTP").
   The forwarder knows which group's ID each of those ports serves, and the per-source
   handshake limit and the per-network budget of "Limits" count what comes over VLESS by
   that ID, as one source and one network for each group; a client's own group's limits

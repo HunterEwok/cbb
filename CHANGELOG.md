@@ -1489,6 +1489,14 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Every member checks the role of a copy's origin when it takes the copy: one from a hub that
+  only passes copies on is dropped, as docs/protocol.md section 11 says, in Go and in the Rust
+  core that the lite member and the phones use.
+- The forwarder charges a hub's registration over VLESS to the hub's own address, as it does
+  a direct one, and the uploads that XHTTP holds before a client opens its session to the
+  client's network and to all sources together; the web server in front names the client's
+  address in `X-Real-IP` (docs/relay-budget.md, "XHTTP"; add the line to an existing nginx
+  location).
 - The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
   clipboard off the main thread, for the remote paste sheet's empty field and for a sync
   that reads the clipboard itself, so iOS stops reporting a hang of the app.

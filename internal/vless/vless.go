@@ -83,8 +83,11 @@ type ServerConfig struct {
 	Mirror string
 	// Register, if set, takes a hub's registration that came over VLESS:
 	// a TCP stream to RegistrationPort, from any user let in, the
-	// RegistrationID too, which is let in for nothing else.
-	Register func(net.Conn)
+	// RegistrationID too, which is let in for nothing else. from is the
+	// client's own address, which pays for the registration: over REALITY
+	// the address it connected from, over XHTTP the one the web server in
+	// front names (FromHeader); a loopback address when it is not known.
+	Register func(conn net.Conn, from netip.Addr)
 }
 
 // RegistrationID is the VLESS user ID by which a hub that reaches its
@@ -183,7 +186,11 @@ func listenOnce(cfg ServerConfig) (*Server, error) {
 		// it passes is taken; what matters is the path. Two inbounds on
 		// the loopback, behind the paths.
 		stream := func() *internet.StreamConfig {
-			return xhttpStream(&splithttp.Config{Path: cfg.Path, Mode: "packet-up", ScMaxBufferedPosts: MaxBufferedPosts}, nil)
+			sc := xhttpStream(&splithttp.Config{Path: cfg.Path, Mode: "packet-up", ScMaxBufferedPosts: MaxBufferedPosts}, nil)
+			// The front names the client's address; only it reaches
+			// these inbounds, on the loopback.
+			sc.SocketSettings = &internet.SocketConfig{TrustedXForwardedFor: []string{frontHeader}}
+			return sc
 		}
 		groups, err := listenAddr("127.0.0.1:0")
 		if err != nil {
