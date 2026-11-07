@@ -42,7 +42,7 @@ QString b64(const QByteArray &b)
     return QString::fromLatin1(b.toBase64());
 }
 
-// How often the main page's list of connected members is brought up to date.
+// How often the main page's devices are brought up to date.
 const int peerPollMs = 3000;
 
 } // namespace
@@ -106,6 +106,7 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     Errors::log(QStringLiteral("member: started in the group %1").arg(membership.groupTag()));
     m_peerTimer.start();
     pollMuted();
+    pollDevices();
     emit changed();
 }
 
@@ -118,6 +119,8 @@ void Member::stop()
     cbb_member_stop(m_member);
     m_member = nullptr;
     m_peers.clear();
+    m_devices.clear();
+    emit devicesChanged();
     m_paused = m_muted = false;
     Errors::log(QStringLiteral("member: stopped"));
     emit changed();
@@ -278,6 +281,25 @@ void Member::pollPeers()
     }
     // A pause or a mute that ran out ends on its own.
     pollMuted();
+    pollDevices();
+}
+
+void Member::pollDevices()
+{
+    if (!m_member)
+        return;
+    size_t len = 0;
+    Failure failure;
+    const QJsonObject a = Core::take(cbb_member_devices(m_member, &len), len, QStringLiteral("member"), &failure);
+    if (!failure.isNull()) {
+        Errors::log(QStringLiteral("member: the devices: %1 (%2)").arg(failure.message, failure.details));
+        return;
+    }
+    const QVariantList devices = a.value(QStringLiteral("devices")).toArray().toVariantList();
+    if (devices != m_devices) {
+        m_devices = devices;
+        emit devicesChanged();
+    }
 }
 
 void Member::setLast(const QString &text, bool secret)

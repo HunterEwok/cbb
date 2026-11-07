@@ -132,44 +132,8 @@
         <translation>Kagua ufunguo tena</translation>
     </message>
     <message>
-        <source>Checking…</source>
-        <translation>Inakagua…</translation>
-    </message>
-    <message>
-        <source>Connected to</source>
-        <translation>Imeunganishwa na</translation>
-    </message>
-    <message>
-        <source>Core</source>
-        <translation>Kiini</translation>
-    </message>
-    <message>
-        <source>Device</source>
-        <translation>Kifaa</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>Kikundi</translation>
-    </message>
-    <message>
-        <source>In a file on the phone</source>
-        <translation>Katika faili kwenye simu</translation>
-    </message>
-    <message>
-        <source>In the secure element</source>
-        <translation>Katika kipengele salama</translation>
-    </message>
-    <message>
         <source>Join a group</source>
         <translation>Jiunge na kikundi</translation>
-    </message>
-    <message>
-        <source>Key</source>
-        <translation>Ufunguo</translation>
-    </message>
-    <message>
-        <source>Key fingerprint</source>
-        <translation>Alama ya ufunguo</translation>
     </message>
     <message>
         <source>Last copy</source>
@@ -184,24 +148,8 @@
         <translation>Inaondoka kwenye kikundi</translation>
     </message>
     <message>
-        <source>No one yet</source>
-        <translation>Bado hakuna mtu</translation>
-    </message>
-    <message>
-        <source>None yet</source>
-        <translation>Bado hakuna</translation>
-    </message>
-    <message>
         <source>Send the clipboard</source>
         <translation>Tuma ubao wa kunakili</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>Mfumo</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation>Toleo</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -258,6 +206,211 @@
     <message>
         <source>Member</source>
         <translation>Mwanachama</translation>
+    </message>
+    <message>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>Simu bado haina ufunguo. Vuta chini ili kuangalia tena.</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one.</source>
+        <translation>Simu bado haiko kwenye kikundi. Vuta chini ili ujiunge na kimoja.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>Vifaa</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Mipangilio</translation>
+    </message>
+    <message>
+        <source>Show the devices as tiles</source>
+        <translation>Onyesha vifaa kama vigae</translation>
+    </message>
+    <message>
+        <source>Show the devices as a list</source>
+        <translation>Onyesha vifaa kama orodha</translation>
+    </message>
+</context>
+<context>
+    <name>DevicePage</name>
+    <message>
+        <source>System</source>
+        <translation>Mfumo</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>Katika kikundi</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>Aina</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Hali</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>Kitambulisho cha kifaa</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPage</name>
+    <message>
+        <source>Settings</source>
+        <translation>Mipangilio</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>Lugha</translation>
+    </message>
+    <message>
+        <source>Applies when the app starts again</source>
+        <translation>Itatumika programu ikianza tena</translation>
+    </message>
+    <message>
+        <source>As the phone</source>
+        <translation>Kama simu</translation>
+    </message>
+    <message>
+        <source>Show error details</source>
+        <translation>Onyesha maelezo ya hitilafu</translation>
+    </message>
+    <message>
+        <source>Puts the error itself under each error message</source>
+        <translation>Huweka hitilafu yenyewe chini ya kila ujumbe wa hitilafu</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>Kuhusu</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>Toleo</translation>
+    </message>
+    <message>
+        <source>Core</source>
+        <translation>Kiini</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>Mfumo</translation>
+    </message>
+    <message>
+        <source>Key</source>
+        <translation>Ufunguo</translation>
+    </message>
+    <message>
+        <source>Checking…</source>
+        <translation>Inakagua…</translation>
+    </message>
+    <message>
+        <source>In the secure element</source>
+        <translation>Katika kipengele salama</translation>
+    </message>
+    <message>
+        <source>In a file on the phone</source>
+        <translation>Katika faili kwenye simu</translation>
+    </message>
+    <message>
+        <source>None yet</source>
+        <translation>Bado hakuna</translation>
+    </message>
+    <message>
+        <source>Key fingerprint</source>
+        <translation>Alama ya ufunguo</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Kikundi</translation>
+    </message>
+    <message>
+        <source>Device</source>
+        <translation>Kifaa</translation>
+    </message>
+</context>
+<context>
+    <name>devices</name>
+    <message>
+        <source>lite member</source>
+        <translation>mwanachama mwepesi</translation>
+    </message>
+    <message>
+        <source>device</source>
+        <translation>kifaa</translation>
+    </message>
+    <message>
+        <source>Phone</source>
+        <translation>Simu</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation>Saa</translation>
+    </message>
+    <message>
+        <source>Board</source>
+        <translation>Bodi</translation>
+    </message>
+    <message>
+        <source>Lite member</source>
+        <translation>Mwanachama mwepesi</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>Kompyuta</translation>
+    </message>
+    <message>
+        <source>this phone</source>
+        <translation>simu hii</translation>
+    </message>
+    <message>
+        <source>frozen</source>
+        <translation>imegandishwa</translation>
+    </message>
+    <message>
+        <source>root</source>
+        <translation>mzizi</translation>
+    </message>
+    <message>
+        <source>admin</source>
+        <translation>msimamizi</translation>
+    </message>
+    <message>
+        <source>Admin, frozen by another admin</source>
+        <translation>Msimamizi, amegandishwa na msimamizi mwingine</translation>
+    </message>
+    <message>
+        <source>Root and admin</source>
+        <translation>Mzizi na msimamizi</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>Mzizi</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>Msimamizi</translation>
+    </message>
+    <message>
+        <source>Not in the records yet</source>
+        <translation>Bado haiko kwenye rekodi</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>Mwanachama</translation>
+    </message>
+    <message>
+        <source>This phone</source>
+        <translation>Simu hii</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>Mtandaoni</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>Nje ya mtandao</translation>
     </message>
 </context>
 </TS>

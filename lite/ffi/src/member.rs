@@ -124,6 +124,21 @@ struct PeerAnswer {
     os: String,
 }
 
+#[derive(Serialize)]
+struct DeviceAnswer {
+    device: String,
+    name: String,
+    role: String,
+    os: String,
+    admin: bool,
+    root: bool,
+    frozen: bool,
+    online: bool,
+    #[serde(rename = "self")]
+    this: bool,
+    listed: bool,
+}
+
 /// The app's callback and its context, called from the member's threads.
 #[derive(Clone, Copy)]
 struct Events {
@@ -231,6 +246,29 @@ impl Member {
             .map(|p| PeerAnswer { device: p.id.to_string(), name: p.name, role: p.role, os: p.os })
             .collect();
         answer(Ok(serde_json::json!({ "peers": peers })))
+    }
+
+    /// Every device of the group: `{"devices": [{"device", "name", "role",
+    /// "os", "admin", "root", "frozen", "online", "self", "listed"}]}`.
+    pub fn devices(&self) -> Vec<u8> {
+        let devices: Vec<DeviceAnswer> = self
+            .node
+            .devices()
+            .into_iter()
+            .map(|d| DeviceAnswer {
+                device: d.id,
+                name: d.name,
+                role: d.role,
+                os: d.os,
+                admin: d.admin,
+                root: d.root,
+                frozen: d.frozen,
+                online: d.online,
+                this: d.this,
+                listed: d.listed,
+            })
+            .collect();
+        answer(Ok(serde_json::json!({ "devices": devices })))
     }
 
     /// Pauses receiving (`{"pause": true, "for_ms"}`, 0 for until it is

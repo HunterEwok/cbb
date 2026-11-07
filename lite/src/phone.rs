@@ -56,6 +56,30 @@ pub struct Config {
     pub log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
+/// A device of the group as the phone's app shows it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DeviceView {
+    pub id: String,
+    pub name: String,
+    /// `full`, `phone`, `lite` or `watch`.
+    pub role: String,
+    /// Its system, from its hello when it is connected, else its record's;
+    /// empty when neither tells.
+    pub os: String,
+    pub admin: bool,
+    /// It holds the group's root.
+    pub root: bool,
+    /// Another admin froze it.
+    pub frozen: bool,
+    /// It is connected to this phone now.
+    pub online: bool,
+    /// It is this phone.
+    pub this: bool,
+    /// The group's records list it; a connected member they do not list
+    /// yet is shown too.
+    pub listed: bool,
+}
+
 /// A running member of a phone's app.
 pub struct Member {
     node: Arc<Node>,
@@ -142,6 +166,48 @@ impl Member {
     /// The members connected now.
     pub fn peers(&self) -> Vec<Peer> {
         self.node.peers()
+    }
+
+    /// Every device of the group as the app shows it: the group's device
+    /// records, the system a connected member's hello names over its
+    /// record's, and after them the connected members no record lists yet.
+    pub fn devices(&self) -> Vec<DeviceView> {
+        let me = self.node.identity().id.to_string();
+        let peers = self.node.peers();
+        let root = self.node.records().lock().unwrap().root_member().map(|(id, _)| id);
+        let mut out: Vec<DeviceView> = self
+            .node
+            .devices()
+            .into_iter()
+            .map(|d| {
+                let peer = peers.iter().find(|p| p.id.as_str() == d.id);
+                DeviceView {
+                    os: peer.filter(|p| !p.os.is_empty()).map_or(d.os.clone(), |p| p.os.clone()),
+                    online: peer.is_some(),
+                    this: d.id == me,
+                    root: root.as_deref() == Some(d.id.as_str()),
+                    listed: true,
+                    admin: d.admin,
+                    frozen: d.frozen,
+                    id: d.id,
+                    name: d.name,
+                    role: d.role,
+                }
+            })
+            .collect();
+        for p in peers {
+            if !out.iter().any(|d| d.id == p.id.as_str()) {
+                out.push(DeviceView {
+                    id: p.id.to_string(),
+                    name: p.name,
+                    role: p.role,
+                    os: p.os,
+                    online: true,
+                    ..Default::default()
+                });
+            }
+        }
+        out
     }
 
     /// Stops the member and closes its connections.

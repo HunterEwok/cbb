@@ -132,44 +132,8 @@
         <translation>בדיקת המפתח שוב</translation>
     </message>
     <message>
-        <source>Checking…</source>
-        <translation>בודק…</translation>
-    </message>
-    <message>
-        <source>Connected to</source>
-        <translation>מחובר אל</translation>
-    </message>
-    <message>
-        <source>Core</source>
-        <translation>ליבה</translation>
-    </message>
-    <message>
-        <source>Device</source>
-        <translation>מכשיר</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>קבוצה</translation>
-    </message>
-    <message>
-        <source>In a file on the phone</source>
-        <translation>בקובץ בטלפון</translation>
-    </message>
-    <message>
-        <source>In the secure element</source>
-        <translation>ברכיב המאובטח</translation>
-    </message>
-    <message>
         <source>Join a group</source>
         <translation>הצטרפות לקבוצה</translation>
-    </message>
-    <message>
-        <source>Key</source>
-        <translation>מפתח</translation>
-    </message>
-    <message>
-        <source>Key fingerprint</source>
-        <translation>טביעת האצבע של המפתח</translation>
     </message>
     <message>
         <source>Last copy</source>
@@ -184,24 +148,8 @@
         <translation>יוצא מהקבוצה</translation>
     </message>
     <message>
-        <source>No one yet</source>
-        <translation>עדיין לא לאף אחד</translation>
-    </message>
-    <message>
-        <source>None yet</source>
-        <translation>עדיין אין</translation>
-    </message>
-    <message>
         <source>Send the clipboard</source>
         <translation>שליחת הלוח</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>מערכת</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation>גרסה</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -258,6 +206,211 @@
     <message>
         <source>Member</source>
         <translation>חבר</translation>
+    </message>
+    <message>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>לטלפון עדיין אין מפתח. משכו למטה כדי לבדוק שוב.</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one.</source>
+        <translation>הטלפון עדיין לא בקבוצה. משכו למטה כדי להצטרף לקבוצה.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>מכשירים</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>הגדרות</translation>
+    </message>
+    <message>
+        <source>Show the devices as tiles</source>
+        <translation>הצגת המכשירים כאריחים</translation>
+    </message>
+    <message>
+        <source>Show the devices as a list</source>
+        <translation>הצגת המכשירים כרשימה</translation>
+    </message>
+</context>
+<context>
+    <name>DevicePage</name>
+    <message>
+        <source>System</source>
+        <translation>מערכת</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>בקבוצה</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>סוג</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>מצב</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>מזהה מכשיר</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPage</name>
+    <message>
+        <source>Settings</source>
+        <translation>הגדרות</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>שפה</translation>
+    </message>
+    <message>
+        <source>Applies when the app starts again</source>
+        <translation>ייכנס לתוקף כשהיישום יופעל מחדש</translation>
+    </message>
+    <message>
+        <source>As the phone</source>
+        <translation>כמו בטלפון</translation>
+    </message>
+    <message>
+        <source>Show error details</source>
+        <translation>הצגת פרטי שגיאות</translation>
+    </message>
+    <message>
+        <source>Puts the error itself under each error message</source>
+        <translation>מציג את השגיאה עצמה מתחת לכל הודעת שגיאה</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>אודות</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>גרסה</translation>
+    </message>
+    <message>
+        <source>Core</source>
+        <translation>ליבה</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>מערכת</translation>
+    </message>
+    <message>
+        <source>Key</source>
+        <translation>מפתח</translation>
+    </message>
+    <message>
+        <source>Checking…</source>
+        <translation>בודק…</translation>
+    </message>
+    <message>
+        <source>In the secure element</source>
+        <translation>ברכיב המאובטח</translation>
+    </message>
+    <message>
+        <source>In a file on the phone</source>
+        <translation>בקובץ בטלפון</translation>
+    </message>
+    <message>
+        <source>None yet</source>
+        <translation>עדיין אין</translation>
+    </message>
+    <message>
+        <source>Key fingerprint</source>
+        <translation>טביעת האצבע של המפתח</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>קבוצה</translation>
+    </message>
+    <message>
+        <source>Device</source>
+        <translation>מכשיר</translation>
+    </message>
+</context>
+<context>
+    <name>devices</name>
+    <message>
+        <source>lite member</source>
+        <translation>חבר קל</translation>
+    </message>
+    <message>
+        <source>device</source>
+        <translation>מכשיר</translation>
+    </message>
+    <message>
+        <source>Phone</source>
+        <translation>טלפון</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation>שעון</translation>
+    </message>
+    <message>
+        <source>Board</source>
+        <translation>לוח</translation>
+    </message>
+    <message>
+        <source>Lite member</source>
+        <translation>חבר קל</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>מחשב</translation>
+    </message>
+    <message>
+        <source>this phone</source>
+        <translation>הטלפון הזה</translation>
+    </message>
+    <message>
+        <source>frozen</source>
+        <translation>מוקפא</translation>
+    </message>
+    <message>
+        <source>root</source>
+        <translation>שורש</translation>
+    </message>
+    <message>
+        <source>admin</source>
+        <translation>מנהל</translation>
+    </message>
+    <message>
+        <source>Admin, frozen by another admin</source>
+        <translation>מנהל, הוקפא על ידי מנהל אחר</translation>
+    </message>
+    <message>
+        <source>Root and admin</source>
+        <translation>שורש ומנהל</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>שורש</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>מנהל</translation>
+    </message>
+    <message>
+        <source>Not in the records yet</source>
+        <translation>עדיין לא ברשומות</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>חבר</translation>
+    </message>
+    <message>
+        <source>This phone</source>
+        <translation>הטלפון הזה</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>מחובר</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>לא מחובר</translation>
     </message>
 </context>
 </TS>

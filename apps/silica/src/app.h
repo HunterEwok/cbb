@@ -27,6 +27,14 @@ class App : public QObject
     Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
+    // Settings: the error details under each error message (Errors::
+    // showDetails), the language the next start uses ("" for the
+    // system's), and whether the main page shows the devices as a list.
+    Q_PROPERTY(bool errorDetails READ errorDetails WRITE setErrorDetails NOTIFY settingsChanged)
+    Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY settingsChanged)
+    Q_PROPERTY(bool deviceList READ deviceList WRITE setDeviceList NOTIFY settingsChanged)
+    // The language chosen differs from the one the app started with.
+    Q_PROPERTY(bool languagePending READ languagePending NOTIFY settingsChanged)
 
 public:
     explicit App(QObject *parent = nullptr);
@@ -50,6 +58,16 @@ public:
     Join *join() { return &m_join; }
     Member *member() { return &m_node; }
 
+    bool errorDetails() const;
+    void setErrorDetails(bool on);
+    QString language() const;
+    void setLanguage(const QString &code);
+    bool languagePending() const { return language() != m_startLanguage; }
+    bool deviceList() const;
+    // The language's name in itself (Russian's in Russian), for Settings.
+    Q_INVOKABLE QString languageName(const QString &code) const;
+    void setDeviceList(bool on);
+
     // Finds or makes the phone's key, off the GUI thread.
     Q_INVOKABLE void setUpKey();
     // Listens for the device that scans this phone's QR code; with admin,
@@ -64,6 +82,7 @@ signals:
     void keyChanged();
     void errorChanged();
     void groupChanged();
+    void settingsChanged();
 
 private:
     void show(const QString &error);
@@ -82,4 +101,5 @@ private:
     Member m_node;
     bool m_busy = false;
     QString m_error;
+    QString m_startLanguage;
 };

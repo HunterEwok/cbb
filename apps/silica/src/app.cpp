@@ -9,6 +9,8 @@
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QLocale>
+#include <QSettings>
 #include <QSysInfo>
 #include <QThread>
 
@@ -30,7 +32,7 @@ private:
 
 } // namespace
 
-App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current())
+App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLanguage(language())
 {
     Failure failure;
     m_core = Core::versionLine(&failure);
@@ -180,4 +182,54 @@ void App::show(const QString &error)
         return;
     m_error = error;
     emit errorChanged();
+}
+
+bool App::errorDetails() const
+{
+    return Errors::showDetails();
+}
+
+void App::setErrorDetails(bool on)
+{
+    if (on == errorDetails())
+        return;
+    QSettings().setValue(QStringLiteral("errors/details"), on);
+    Errors::log(QStringLiteral("settings: error details %1").arg(on ? QStringLiteral("on") : QStringLiteral("off")));
+    emit settingsChanged();
+}
+
+QString App::language() const
+{
+    return QSettings().value(QStringLiteral("ui/language")).toString();
+}
+
+void App::setLanguage(const QString &code)
+{
+    if (code == language())
+        return;
+    QSettings settings;
+    if (code.isEmpty())
+        settings.remove(QStringLiteral("ui/language"));
+    else
+        settings.setValue(QStringLiteral("ui/language"), code);
+    emit settingsChanged();
+}
+
+bool App::deviceList() const
+{
+    return QSettings().value(QStringLiteral("ui/devices")).toString() == QStringLiteral("list");
+}
+
+void App::setDeviceList(bool on)
+{
+    if (on == deviceList())
+        return;
+    QSettings().setValue(QStringLiteral("ui/devices"), on ? QStringLiteral("list") : QStringLiteral("tiles"));
+    emit settingsChanged();
+}
+
+QString App::languageName(const QString &code) const
+{
+    const QString name = QLocale(code).nativeLanguageName();
+    return name.isEmpty() ? code : name.left(1).toUpper() + name.mid(1);
 }

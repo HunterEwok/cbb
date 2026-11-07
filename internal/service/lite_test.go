@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -248,6 +249,37 @@ func TestFFIJoiner(t *testing.T) {
 	for _, d := range pi.devices(t) {
 		if d.Name == "aurora phone" && (d.OS != group.OSAurora || d.Store != "hardware" || d.Form != "phone" || d.OSVersion != "Aurora OS 5.1.5") {
 			t.Fatalf("the connected phone is listed as %+v", d)
+		}
+	}
+	// The app's devices list: the group's root online, and this phone,
+	// both from the records.
+	type appDevice struct {
+		Device, Name, Role, OS            string
+		Admin, Root, Frozen, Online, Self bool
+		Listed                            bool
+	}
+	var devs []appDevice
+	waitFor(t, "the app lists the group's devices", func() bool {
+		fmt.Fprintln(in, "DEVICES")
+		devs = nil
+		if err := json.Unmarshal([]byte(next("DEVICES ")), &devs); err != nil {
+			t.Fatal(err)
+		}
+		return len(devs) == 2 && devs[0].Listed && devs[1].Listed
+	})
+	piID := pi.status(t).Device
+	for _, d := range devs {
+		switch {
+		case d.Device == piID:
+			if !d.Root || !d.Online || d.Self || d.OS == "" {
+				t.Fatalf("the app lists the root as %+v", d)
+			}
+		case d.Name == "aurora phone":
+			if !d.Self || d.Root || d.Admin || d.Role != group.RolePhone || d.OS != group.OSAurora {
+				t.Fatalf("the app lists itself as %+v", d)
+			}
+		default:
+			t.Fatalf("the app lists an unknown device %+v", d)
 		}
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the phone"); err != nil {

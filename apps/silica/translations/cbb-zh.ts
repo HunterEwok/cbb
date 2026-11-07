@@ -132,44 +132,8 @@
         <translation>重新检查密钥</translation>
     </message>
     <message>
-        <source>Checking…</source>
-        <translation>正在检查…</translation>
-    </message>
-    <message>
-        <source>Connected to</source>
-        <translation>已连接到</translation>
-    </message>
-    <message>
-        <source>Core</source>
-        <translation>核心</translation>
-    </message>
-    <message>
-        <source>Device</source>
-        <translation>设备</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>群组</translation>
-    </message>
-    <message>
-        <source>In a file on the phone</source>
-        <translation>在手机上的文件中</translation>
-    </message>
-    <message>
-        <source>In the secure element</source>
-        <translation>在安全元件中</translation>
-    </message>
-    <message>
         <source>Join a group</source>
         <translation>加入群组</translation>
-    </message>
-    <message>
-        <source>Key</source>
-        <translation>密钥</translation>
-    </message>
-    <message>
-        <source>Key fingerprint</source>
-        <translation>密钥指纹</translation>
     </message>
     <message>
         <source>Last copy</source>
@@ -184,24 +148,8 @@
         <translation>正在退出群组</translation>
     </message>
     <message>
-        <source>No one yet</source>
-        <translation>暂未连接</translation>
-    </message>
-    <message>
-        <source>None yet</source>
-        <translation>暂无</translation>
-    </message>
-    <message>
         <source>Send the clipboard</source>
         <translation>发送剪贴板</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>系统</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation>版本</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -258,6 +206,211 @@
     <message>
         <source>Member</source>
         <translation>成员</translation>
+    </message>
+    <message>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>手机还没有密钥。下拉可再次检查。</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one.</source>
+        <translation>手机还没有加入任何群组。下拉即可加入。</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>设备</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>Show the devices as tiles</source>
+        <translation>以图块显示设备</translation>
+    </message>
+    <message>
+        <source>Show the devices as a list</source>
+        <translation>以列表显示设备</translation>
+    </message>
+</context>
+<context>
+    <name>DevicePage</name>
+    <message>
+        <source>System</source>
+        <translation>系统</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>在群组中</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>类型</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>状态</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>设备 ID</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPage</name>
+    <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>语言</translation>
+    </message>
+    <message>
+        <source>Applies when the app starts again</source>
+        <translation>将在应用下次启动时生效</translation>
+    </message>
+    <message>
+        <source>As the phone</source>
+        <translation>跟随手机</translation>
+    </message>
+    <message>
+        <source>Show error details</source>
+        <translation>显示错误详情</translation>
+    </message>
+    <message>
+        <source>Puts the error itself under each error message</source>
+        <translation>在每条错误消息下显示错误本身</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>关于</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>版本</translation>
+    </message>
+    <message>
+        <source>Core</source>
+        <translation>核心</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>系统</translation>
+    </message>
+    <message>
+        <source>Key</source>
+        <translation>密钥</translation>
+    </message>
+    <message>
+        <source>Checking…</source>
+        <translation>正在检查…</translation>
+    </message>
+    <message>
+        <source>In the secure element</source>
+        <translation>在安全元件中</translation>
+    </message>
+    <message>
+        <source>In a file on the phone</source>
+        <translation>在手机上的文件中</translation>
+    </message>
+    <message>
+        <source>None yet</source>
+        <translation>暂无</translation>
+    </message>
+    <message>
+        <source>Key fingerprint</source>
+        <translation>密钥指纹</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>群组</translation>
+    </message>
+    <message>
+        <source>Device</source>
+        <translation>设备</translation>
+    </message>
+</context>
+<context>
+    <name>devices</name>
+    <message>
+        <source>lite member</source>
+        <translation>轻量成员</translation>
+    </message>
+    <message>
+        <source>device</source>
+        <translation>设备</translation>
+    </message>
+    <message>
+        <source>Phone</source>
+        <translation>手机</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation>手表</translation>
+    </message>
+    <message>
+        <source>Board</source>
+        <translation>开发板</translation>
+    </message>
+    <message>
+        <source>Lite member</source>
+        <translation>轻量成员</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>电脑</translation>
+    </message>
+    <message>
+        <source>this phone</source>
+        <translation>本机</translation>
+    </message>
+    <message>
+        <source>frozen</source>
+        <translation>已冻结</translation>
+    </message>
+    <message>
+        <source>root</source>
+        <translation>根</translation>
+    </message>
+    <message>
+        <source>admin</source>
+        <translation>管理员</translation>
+    </message>
+    <message>
+        <source>Admin, frozen by another admin</source>
+        <translation>管理员，已被另一位管理员冻结</translation>
+    </message>
+    <message>
+        <source>Root and admin</source>
+        <translation>根和管理员</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>根</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>管理员</translation>
+    </message>
+    <message>
+        <source>Not in the records yet</source>
+        <translation>尚未在记录中</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>成员</translation>
+    </message>
+    <message>
+        <source>This phone</source>
+        <translation>本机</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>在线</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>离线</translation>
     </message>
 </context>
 </TS>

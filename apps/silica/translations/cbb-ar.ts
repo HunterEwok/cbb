@@ -132,44 +132,8 @@
         <translation>افحص المفتاح مجددًا</translation>
     </message>
     <message>
-        <source>Checking…</source>
-        <translation>جارٍ الفحص…</translation>
-    </message>
-    <message>
-        <source>Connected to</source>
-        <translation>متصل بـ</translation>
-    </message>
-    <message>
-        <source>Core</source>
-        <translation>النواة</translation>
-    </message>
-    <message>
-        <source>Device</source>
-        <translation>الجهاز</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>المجموعة</translation>
-    </message>
-    <message>
-        <source>In a file on the phone</source>
-        <translation>في ملف على الهاتف</translation>
-    </message>
-    <message>
-        <source>In the secure element</source>
-        <translation>في العنصر الآمن</translation>
-    </message>
-    <message>
         <source>Join a group</source>
         <translation>الانضمام إلى مجموعة</translation>
-    </message>
-    <message>
-        <source>Key</source>
-        <translation>المفتاح</translation>
-    </message>
-    <message>
-        <source>Key fingerprint</source>
-        <translation>بصمة المفتاح</translation>
     </message>
     <message>
         <source>Last copy</source>
@@ -184,24 +148,8 @@
         <translation>جارٍ مغادرة المجموعة</translation>
     </message>
     <message>
-        <source>No one yet</source>
-        <translation>لا أحد بعد</translation>
-    </message>
-    <message>
-        <source>None yet</source>
-        <translation>لا يوجد بعد</translation>
-    </message>
-    <message>
         <source>Send the clipboard</source>
         <translation>إرسال الحافظة</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>النظام</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation>الإصدار</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -258,6 +206,211 @@
     <message>
         <source>Member</source>
         <translation>عضو</translation>
+    </message>
+    <message>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>لا يملك الهاتف مفتاحًا بعد. اسحب للأسفل للتحقق مرة أخرى.</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one.</source>
+        <translation>الهاتف ليس في أي مجموعة بعد. اسحب للأسفل للانضمام إلى مجموعة.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>الأجهزة</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>الإعدادات</translation>
+    </message>
+    <message>
+        <source>Show the devices as tiles</source>
+        <translation>عرض الأجهزة كمربعات</translation>
+    </message>
+    <message>
+        <source>Show the devices as a list</source>
+        <translation>عرض الأجهزة كقائمة</translation>
+    </message>
+</context>
+<context>
+    <name>DevicePage</name>
+    <message>
+        <source>System</source>
+        <translation>النظام</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>في المجموعة</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>النوع</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>الحالة</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>معرّف الجهاز</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPage</name>
+    <message>
+        <source>Settings</source>
+        <translation>الإعدادات</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>اللغة</translation>
+    </message>
+    <message>
+        <source>Applies when the app starts again</source>
+        <translation>يُطبَّق عند تشغيل التطبيق مرة أخرى</translation>
+    </message>
+    <message>
+        <source>As the phone</source>
+        <translation>مثل الهاتف</translation>
+    </message>
+    <message>
+        <source>Show error details</source>
+        <translation>إظهار تفاصيل الأخطاء</translation>
+    </message>
+    <message>
+        <source>Puts the error itself under each error message</source>
+        <translation>يضع الخطأ نفسه تحت كل رسالة خطأ</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>حول</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>الإصدار</translation>
+    </message>
+    <message>
+        <source>Core</source>
+        <translation>النواة</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>النظام</translation>
+    </message>
+    <message>
+        <source>Key</source>
+        <translation>المفتاح</translation>
+    </message>
+    <message>
+        <source>Checking…</source>
+        <translation>جارٍ الفحص…</translation>
+    </message>
+    <message>
+        <source>In the secure element</source>
+        <translation>في العنصر الآمن</translation>
+    </message>
+    <message>
+        <source>In a file on the phone</source>
+        <translation>في ملف على الهاتف</translation>
+    </message>
+    <message>
+        <source>None yet</source>
+        <translation>لا يوجد بعد</translation>
+    </message>
+    <message>
+        <source>Key fingerprint</source>
+        <translation>بصمة المفتاح</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>المجموعة</translation>
+    </message>
+    <message>
+        <source>Device</source>
+        <translation>الجهاز</translation>
+    </message>
+</context>
+<context>
+    <name>devices</name>
+    <message>
+        <source>lite member</source>
+        <translation>عضو خفيف</translation>
+    </message>
+    <message>
+        <source>device</source>
+        <translation>جهاز</translation>
+    </message>
+    <message>
+        <source>Phone</source>
+        <translation>هاتف</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation>ساعة</translation>
+    </message>
+    <message>
+        <source>Board</source>
+        <translation>لوحة</translation>
+    </message>
+    <message>
+        <source>Lite member</source>
+        <translation>عضو خفيف</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>حاسوب</translation>
+    </message>
+    <message>
+        <source>this phone</source>
+        <translation>هذا الهاتف</translation>
+    </message>
+    <message>
+        <source>frozen</source>
+        <translation>مجمَّد</translation>
+    </message>
+    <message>
+        <source>root</source>
+        <translation>الجذر</translation>
+    </message>
+    <message>
+        <source>admin</source>
+        <translation>مشرف</translation>
+    </message>
+    <message>
+        <source>Admin, frozen by another admin</source>
+        <translation>مشرف، جمّده مشرف آخر</translation>
+    </message>
+    <message>
+        <source>Root and admin</source>
+        <translation>الجذر ومشرف</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>الجذر</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>مشرف</translation>
+    </message>
+    <message>
+        <source>Not in the records yet</source>
+        <translation>ليس في السجلات بعد</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>عضو</translation>
+    </message>
+    <message>
+        <source>This phone</source>
+        <translation>هذا الهاتف</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>متصل</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>غير متصل</translation>
     </message>
 </context>
 </TS>

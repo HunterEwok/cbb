@@ -72,6 +72,8 @@ void cbb_join_free(cbb_join *j);
  * on any thread; ctx must stay valid for the rest of the process.
  * cbb_member_pause takes {"pause":true,"for_ms"} or {"pause":false}; it and
  * cbb_member_muted answer {"paused","paused_ms","muted","muted_ms"}.
+ * cbb_member_devices answers {"devices":[{"device","name","role","os","admin",
+ * "root","frozen","online","self","listed"}]}.
  */
 typedef void (*cbb_event_fn)(void *ctx, const uint8_t *event, size_t len);
 
@@ -81,6 +83,7 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
                              uint8_t **answer, size_t *answer_len);
 uint8_t *cbb_member_copy(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 uint8_t *cbb_member_peers(const cbb_member *m, size_t *answer_len);
+uint8_t *cbb_member_devices(const cbb_member *m, size_t *answer_len);
 uint8_t *cbb_member_pause(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 uint8_t *cbb_member_muted(const cbb_member *m, size_t *answer_len);
 void cbb_member_stop(cbb_member *m);

@@ -68,12 +68,14 @@ The node signs
 its TLS handshakes and its copies through the callback, presents itself as a phone (role
 `phone`, key store `hardware`, or `file` when the request's `key_store` says so), never listens and dials the members mDNS finds;
 `cbb_member_copy` sends a text the user handed to the app, `cbb_member_peers` lists the members
-connected, `cbb_member_pause` keeps the group's copies out of the phone's clipboard for a while or
+connected, `cbb_member_devices` lists every device of the group as the app shows it (the group's
+device records with `admin`, `root`, `frozen`, whether it is `online` and whether it is this phone,
+`self`, then the connected members no record lists yet, `listed` false), `cbb_member_pause` keeps the group's copies out of the phone's clipboard for a while or
 takes them again (design.md, "Muting a device"), `cbb_member_muted` says how long that pause and
 an admin's mute last, and `cbb_member_stop` stops it. The node carries out the `mute` and
 `unmute` commands an admin sends the phone, keeps both in `mute.json` as the lite member does,
 and refuses the other commands, which a phone has nothing to carry out for. `TestFFIJoiner` runs the join, sync both ways and a
-pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`, and `TestFFIJoinerAdmin` the
+pause, an admin's mute, the devices list and a renewal against a Go member through the example `phone-on-linux`, and `TestFFIJoinerAdmin` the
 join as an admin.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking

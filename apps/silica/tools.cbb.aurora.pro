@@ -88,6 +88,10 @@ DISTFILES += \
     qml/tools.cbb.aurora.qml \
     qml/pages/MainPage.qml \
     qml/pages/JoinPage.qml \
+    qml/pages/DevicePage.qml \
+    qml/pages/DeviceTile.qml \
+    qml/pages/SettingsPage.qml \
+    qml/pages/devices.js \
     qml/cover/CoverPage.qml \
     packaging/$$CBB_TARGET/$${TARGET}.desktop \
     packaging/$$CBB_TARGET/$${TARGET}.spec

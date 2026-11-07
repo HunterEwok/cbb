@@ -18,6 +18,7 @@
 #include <QString>
 #include <QStringList>
 #include <QTimer>
+#include <QVariantList>
 
 struct cbb_member;
 
@@ -26,6 +27,9 @@ class Member : public QObject
     Q_OBJECT
     Q_PROPERTY(bool running READ running NOTIFY changed)
     Q_PROPERTY(QStringList peers READ peers NOTIFY changed)
+    // Every device of the group, as cbb_member_devices lists it: maps with
+    // device, name, role, os, admin, root, frozen, online, self and listed.
+    Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
     Q_PROPERTY(QString last READ last NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     // The quick switch (design.md, "Muting a device"): the group's copies
@@ -45,6 +49,7 @@ public:
     bool running() const { return m_member != nullptr; }
     // The names of the members connected now.
     QStringList peers() const { return m_peers; }
+    QVariantList devices() const { return m_devices; }
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
     QString error() const { return m_error; }
@@ -69,6 +74,7 @@ public:
 
 signals:
     void changed();
+    void devicesChanged();
     // An admin renewed the member certificate, or a takeover made a new
     // root: the phone keeps them in member.json.
     void identityChanged(const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots);
@@ -77,6 +83,7 @@ private:
     Q_INVOKABLE void event(const QByteArray &json);
     void write(const QString &text, bool secret, qint64 ttlMs);
     void pollPeers();
+    void pollDevices();
     void setLast(const QString &text, bool secret);
     // Reads the pause and the mute from the core's answer, or asks for it.
     void readMuted(const QJsonObject &state);
@@ -85,6 +92,7 @@ private:
     cbb_member *m_member = nullptr;
     QTimer m_peerTimer;
     QStringList m_peers;
+    QVariantList m_devices;
     QString m_last;
     QString m_error;
     // The clipboard's text as the group last set it or the phone last sent it.

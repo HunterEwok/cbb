@@ -14,7 +14,8 @@
 //! it or ended the mute, and "LOG <line>" for each log line. It takes
 //! "COPY <text>" (printing "REFUSED <reason>" when the member does not send
 //! it), "PEERS", answered "PEERS <count>", and "PAUSE <ms>", "RESUME" and
-//! "MUTED", answered "MUTED <paused> <muted>", on standard input.
+//! "MUTED", answered "MUTED <paused> <muted>", and "DEVICES", answered
+//! "DEVICES <the devices as a JSON array>", on standard input.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -26,7 +27,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_free, cbb_join_accept, cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin,
-    cbb_member_copy, cbb_member_muted, cbb_member_pause, cbb_member_peers, cbb_member_start,
+    cbb_member_copy, cbb_member_devices, cbb_member_muted, cbb_member_pause, cbb_member_peers, cbb_member_start,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -215,6 +216,10 @@ fn run_member(
             // SAFETY: m runs; n lives for the call.
             let a = take(unsafe { cbb_member_peers(m, &mut n) }, n);
             println!("PEERS {}", a["ok"]["peers"].as_array().map_or(0, Vec::len));
+        } else if line == "DEVICES" {
+            // SAFETY: m runs; n lives for the call.
+            let a = take(unsafe { cbb_member_devices(m, &mut n) }, n);
+            println!("DEVICES {}", a["ok"]["devices"]);
         } else if line == "MUTED" || line == "RESUME" || line.starts_with("PAUSE ") {
             let a = if line == "MUTED" {
                 // SAFETY: m runs; n lives for the call.

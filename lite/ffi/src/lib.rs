@@ -351,6 +351,21 @@ pub unsafe extern "C" fn cbb_member_muted(m: *const member::Member, answer_len: 
     to_c(m.muted(), answer_len)
 }
 
+/// Every device of the group, as JSON (docs/core-api.md); null only when
+/// `m` or `answer_len` is null.
+///
+/// # Safety
+///
+/// `m` must be null or a running member of `cbb_member_start`, and
+/// `answer_len` null or valid for a write.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_devices(m: *const member::Member, answer_len: *mut usize) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    to_c(m.devices(), answer_len)
+}
+
 /// Stops the member and frees it; null does nothing. Its callbacks may still
 /// run for a moment on threads that were in the middle of a call. The
 /// secret for sealed messages stays the first member's for the process.

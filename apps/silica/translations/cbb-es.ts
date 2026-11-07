@@ -132,44 +132,8 @@
         <translation>Comprobar la clave de nuevo</translation>
     </message>
     <message>
-        <source>Checking…</source>
-        <translation>Comprobando…</translation>
-    </message>
-    <message>
-        <source>Connected to</source>
-        <translation>Conectado a</translation>
-    </message>
-    <message>
-        <source>Core</source>
-        <translation>Núcleo</translation>
-    </message>
-    <message>
-        <source>Device</source>
-        <translation>Dispositivo</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>Grupo</translation>
-    </message>
-    <message>
-        <source>In a file on the phone</source>
-        <translation>En un archivo del teléfono</translation>
-    </message>
-    <message>
-        <source>In the secure element</source>
-        <translation>En el elemento seguro</translation>
-    </message>
-    <message>
         <source>Join a group</source>
         <translation>Unirse a un grupo</translation>
-    </message>
-    <message>
-        <source>Key</source>
-        <translation>Clave</translation>
-    </message>
-    <message>
-        <source>Key fingerprint</source>
-        <translation>Huella de la clave</translation>
     </message>
     <message>
         <source>Last copy</source>
@@ -184,24 +148,8 @@
         <translation>Saliendo del grupo</translation>
     </message>
     <message>
-        <source>No one yet</source>
-        <translation>A nadie todavía</translation>
-    </message>
-    <message>
-        <source>None yet</source>
-        <translation>Todavía no</translation>
-    </message>
-    <message>
         <source>Send the clipboard</source>
         <translation>Enviar el portapapeles</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>Sistema</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation>Versión</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -258,6 +206,211 @@
     <message>
         <source>Member</source>
         <translation>Miembro</translation>
+    </message>
+    <message>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>El teléfono aún no tiene clave. Desliza hacia abajo para comprobarlo de nuevo.</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one.</source>
+        <translation>El teléfono aún no está en ningún grupo. Desliza hacia abajo para unirte a uno.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>Dispositivos</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Ajustes</translation>
+    </message>
+    <message>
+        <source>Show the devices as tiles</source>
+        <translation>Mostrar los dispositivos en mosaico</translation>
+    </message>
+    <message>
+        <source>Show the devices as a list</source>
+        <translation>Mostrar los dispositivos en lista</translation>
+    </message>
+</context>
+<context>
+    <name>DevicePage</name>
+    <message>
+        <source>System</source>
+        <translation>Sistema</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>En el grupo</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>Tipo</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Estado</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>ID del dispositivo</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPage</name>
+    <message>
+        <source>Settings</source>
+        <translation>Ajustes</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>Idioma</translation>
+    </message>
+    <message>
+        <source>Applies when the app starts again</source>
+        <translation>Se aplica cuando la app se vuelva a abrir</translation>
+    </message>
+    <message>
+        <source>As the phone</source>
+        <translation>Como el teléfono</translation>
+    </message>
+    <message>
+        <source>Show error details</source>
+        <translation>Mostrar detalles de los errores</translation>
+    </message>
+    <message>
+        <source>Puts the error itself under each error message</source>
+        <translation>Muestra el propio error bajo cada mensaje de error</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>Acerca de</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>Versión</translation>
+    </message>
+    <message>
+        <source>Core</source>
+        <translation>Núcleo</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>Sistema</translation>
+    </message>
+    <message>
+        <source>Key</source>
+        <translation>Clave</translation>
+    </message>
+    <message>
+        <source>Checking…</source>
+        <translation>Comprobando…</translation>
+    </message>
+    <message>
+        <source>In the secure element</source>
+        <translation>En el elemento seguro</translation>
+    </message>
+    <message>
+        <source>In a file on the phone</source>
+        <translation>En un archivo del teléfono</translation>
+    </message>
+    <message>
+        <source>None yet</source>
+        <translation>Todavía no</translation>
+    </message>
+    <message>
+        <source>Key fingerprint</source>
+        <translation>Huella de la clave</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Grupo</translation>
+    </message>
+    <message>
+        <source>Device</source>
+        <translation>Dispositivo</translation>
+    </message>
+</context>
+<context>
+    <name>devices</name>
+    <message>
+        <source>lite member</source>
+        <translation>miembro ligero</translation>
+    </message>
+    <message>
+        <source>device</source>
+        <translation>dispositivo</translation>
+    </message>
+    <message>
+        <source>Phone</source>
+        <translation>Teléfono</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation>Reloj</translation>
+    </message>
+    <message>
+        <source>Board</source>
+        <translation>Placa</translation>
+    </message>
+    <message>
+        <source>Lite member</source>
+        <translation>Miembro ligero</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>Ordenador</translation>
+    </message>
+    <message>
+        <source>this phone</source>
+        <translation>este teléfono</translation>
+    </message>
+    <message>
+        <source>frozen</source>
+        <translation>congelado</translation>
+    </message>
+    <message>
+        <source>root</source>
+        <translation>raíz</translation>
+    </message>
+    <message>
+        <source>admin</source>
+        <translation>admin</translation>
+    </message>
+    <message>
+        <source>Admin, frozen by another admin</source>
+        <translation>Admin, congelado por otro admin</translation>
+    </message>
+    <message>
+        <source>Root and admin</source>
+        <translation>Raíz y admin</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>Raíz</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>Admin</translation>
+    </message>
+    <message>
+        <source>Not in the records yet</source>
+        <translation>Aún no está en los registros</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>Miembro</translation>
+    </message>
+    <message>
+        <source>This phone</source>
+        <translation>Este teléfono</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>En línea</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>Sin conexión</translation>
     </message>
 </context>
 </TS>

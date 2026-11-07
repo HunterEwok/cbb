@@ -24,6 +24,11 @@ All notable changes to cbb are documented in this file. The format follows
 - The same switch at the top of the Aurora app's main page, with a long press for a time; the
   app takes an admin's `mute` and `unmute` (lite/ffi's `cbb_member_pause`, `cbb_member_muted`
   and the `mute` event) and says when an admin muted the phone.
+- The Aurora app shows the group's devices as tiles or as a list (its pull-down menu switches
+  them), each with a live dot, its system and its mark (this phone, root, admin, frozen), and a
+  tap opens the device's page. Its new Settings page picks the language for the next start,
+  holds what the main page showed about the app, the key and the group, and seven taps on the
+  version show the switch for error details. lite/ffi's `cbb_member_devices` lists the devices.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

@@ -132,44 +132,8 @@
         <translation>Проверить ключ снова</translation>
     </message>
     <message>
-        <source>Checking…</source>
-        <translation>Проверка…</translation>
-    </message>
-    <message>
-        <source>Connected to</source>
-        <translation>Подключён к</translation>
-    </message>
-    <message>
-        <source>Core</source>
-        <translation>Ядро</translation>
-    </message>
-    <message>
-        <source>Device</source>
-        <translation>Устройство</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>Группа</translation>
-    </message>
-    <message>
-        <source>In a file on the phone</source>
-        <translation>В файле на телефоне</translation>
-    </message>
-    <message>
-        <source>In the secure element</source>
-        <translation>В защищённом элементе</translation>
-    </message>
-    <message>
         <source>Join a group</source>
         <translation>Войти в группу</translation>
-    </message>
-    <message>
-        <source>Key</source>
-        <translation>Ключ</translation>
-    </message>
-    <message>
-        <source>Key fingerprint</source>
-        <translation>Отпечаток ключа</translation>
     </message>
     <message>
         <source>Last copy</source>
@@ -184,24 +148,8 @@
         <translation>Выход из группы</translation>
     </message>
     <message>
-        <source>No one yet</source>
-        <translation>Пока ни к кому</translation>
-    </message>
-    <message>
-        <source>None yet</source>
-        <translation>Пока нет</translation>
-    </message>
-    <message>
         <source>Send the clipboard</source>
         <translation>Отправить буфер обмена</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>Система</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation>Версия</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -258,6 +206,211 @@
     <message>
         <source>Member</source>
         <translation>Участник</translation>
+    </message>
+    <message>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>У телефона ещё нет ключа. Потяните вниз, чтобы проверить снова.</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one.</source>
+        <translation>Телефон пока не в группе. Потяните вниз, чтобы вступить.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>Устройства</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Show the devices as tiles</source>
+        <translation>Показывать устройства плитками</translation>
+    </message>
+    <message>
+        <source>Show the devices as a list</source>
+        <translation>Показывать устройства списком</translation>
+    </message>
+</context>
+<context>
+    <name>DevicePage</name>
+    <message>
+        <source>System</source>
+        <translation>Система</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>В группе</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>Тип</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Состояние</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>ID устройства</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPage</name>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>Язык</translation>
+    </message>
+    <message>
+        <source>Applies when the app starts again</source>
+        <translation>Применится при следующем запуске приложения</translation>
+    </message>
+    <message>
+        <source>As the phone</source>
+        <translation>Как на телефоне</translation>
+    </message>
+    <message>
+        <source>Show error details</source>
+        <translation>Показывать подробности ошибок</translation>
+    </message>
+    <message>
+        <source>Puts the error itself under each error message</source>
+        <translation>Показывает саму ошибку под каждым сообщением об ошибке</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>О приложении</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>Версия</translation>
+    </message>
+    <message>
+        <source>Core</source>
+        <translation>Ядро</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>Система</translation>
+    </message>
+    <message>
+        <source>Key</source>
+        <translation>Ключ</translation>
+    </message>
+    <message>
+        <source>Checking…</source>
+        <translation>Проверка…</translation>
+    </message>
+    <message>
+        <source>In the secure element</source>
+        <translation>В защищённом элементе</translation>
+    </message>
+    <message>
+        <source>In a file on the phone</source>
+        <translation>В файле на телефоне</translation>
+    </message>
+    <message>
+        <source>None yet</source>
+        <translation>Пока нет</translation>
+    </message>
+    <message>
+        <source>Key fingerprint</source>
+        <translation>Отпечаток ключа</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Группа</translation>
+    </message>
+    <message>
+        <source>Device</source>
+        <translation>Устройство</translation>
+    </message>
+</context>
+<context>
+    <name>devices</name>
+    <message>
+        <source>lite member</source>
+        <translation>лёгкий участник</translation>
+    </message>
+    <message>
+        <source>device</source>
+        <translation>устройство</translation>
+    </message>
+    <message>
+        <source>Phone</source>
+        <translation>Телефон</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation>Часы</translation>
+    </message>
+    <message>
+        <source>Board</source>
+        <translation>Плата</translation>
+    </message>
+    <message>
+        <source>Lite member</source>
+        <translation>Лёгкий участник</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>Компьютер</translation>
+    </message>
+    <message>
+        <source>this phone</source>
+        <translation>этот телефон</translation>
+    </message>
+    <message>
+        <source>frozen</source>
+        <translation>заморожен</translation>
+    </message>
+    <message>
+        <source>root</source>
+        <translation>корень</translation>
+    </message>
+    <message>
+        <source>admin</source>
+        <translation>админ</translation>
+    </message>
+    <message>
+        <source>Admin, frozen by another admin</source>
+        <translation>Админ, заморожен другим админом</translation>
+    </message>
+    <message>
+        <source>Root and admin</source>
+        <translation>Корень и админ</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>Корень</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>Админ</translation>
+    </message>
+    <message>
+        <source>Not in the records yet</source>
+        <translation>Пока нет в записях</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>This phone</source>
+        <translation>Этот телефон</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>В сети</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>Не в сети</translation>
     </message>
 </context>
 </TS>

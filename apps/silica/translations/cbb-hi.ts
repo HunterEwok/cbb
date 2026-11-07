@@ -132,44 +132,8 @@
         <translation>कुंजी फिर से जाँचें</translation>
     </message>
     <message>
-        <source>Checking…</source>
-        <translation>जाँच हो रही है…</translation>
-    </message>
-    <message>
-        <source>Connected to</source>
-        <translation>इससे जुड़ा है</translation>
-    </message>
-    <message>
-        <source>Core</source>
-        <translation>कोर</translation>
-    </message>
-    <message>
-        <source>Device</source>
-        <translation>डिवाइस</translation>
-    </message>
-    <message>
-        <source>Group</source>
-        <translation>समूह</translation>
-    </message>
-    <message>
-        <source>In a file on the phone</source>
-        <translation>फ़ोन पर एक फ़ाइल में</translation>
-    </message>
-    <message>
-        <source>In the secure element</source>
-        <translation>सुरक्षित तत्व में</translation>
-    </message>
-    <message>
         <source>Join a group</source>
         <translation>समूह में शामिल हों</translation>
-    </message>
-    <message>
-        <source>Key</source>
-        <translation>कुंजी</translation>
-    </message>
-    <message>
-        <source>Key fingerprint</source>
-        <translation>कुंजी फ़िंगरप्रिंट</translation>
     </message>
     <message>
         <source>Last copy</source>
@@ -184,24 +148,8 @@
         <translation>समूह छोड़ा जा रहा है</translation>
     </message>
     <message>
-        <source>No one yet</source>
-        <translation>अभी किसी से नहीं</translation>
-    </message>
-    <message>
-        <source>None yet</source>
-        <translation>अभी नहीं</translation>
-    </message>
-    <message>
         <source>Send the clipboard</source>
         <translation>क्लिपबोर्ड भेजें</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>सिस्टम</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation>संस्करण</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -258,6 +206,211 @@
     <message>
         <source>Member</source>
         <translation>सदस्य</translation>
+    </message>
+    <message>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>फ़ोन के पास अभी कोई कुंजी नहीं है। फिर से जाँचने के लिए नीचे खींचें।</translation>
+    </message>
+    <message>
+        <source>The phone is in no group yet. Pull down to join one.</source>
+        <translation>फ़ोन अभी किसी समूह में नहीं है। जुड़ने के लिए नीचे खींचें।</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>डिवाइस</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>सेटिंग्स</translation>
+    </message>
+    <message>
+        <source>Show the devices as tiles</source>
+        <translation>डिवाइस टाइल के रूप में दिखाएँ</translation>
+    </message>
+    <message>
+        <source>Show the devices as a list</source>
+        <translation>डिवाइस सूची के रूप में दिखाएँ</translation>
+    </message>
+</context>
+<context>
+    <name>DevicePage</name>
+    <message>
+        <source>System</source>
+        <translation>सिस्टम</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>समूह में</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>प्रकार</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>स्थिति</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>डिवाइस ID</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsPage</name>
+    <message>
+        <source>Settings</source>
+        <translation>सेटिंग्स</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>भाषा</translation>
+    </message>
+    <message>
+        <source>Applies when the app starts again</source>
+        <translation>ऐप के फिर से शुरू होने पर लागू होगा</translation>
+    </message>
+    <message>
+        <source>As the phone</source>
+        <translation>फ़ोन के अनुसार</translation>
+    </message>
+    <message>
+        <source>Show error details</source>
+        <translation>त्रुटि का विवरण दिखाएँ</translation>
+    </message>
+    <message>
+        <source>Puts the error itself under each error message</source>
+        <translation>हर त्रुटि संदेश के नीचे त्रुटि को खुद दिखाता है</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>परिचय</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>संस्करण</translation>
+    </message>
+    <message>
+        <source>Core</source>
+        <translation>कोर</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>सिस्टम</translation>
+    </message>
+    <message>
+        <source>Key</source>
+        <translation>कुंजी</translation>
+    </message>
+    <message>
+        <source>Checking…</source>
+        <translation>जाँच हो रही है…</translation>
+    </message>
+    <message>
+        <source>In the secure element</source>
+        <translation>सुरक्षित तत्व में</translation>
+    </message>
+    <message>
+        <source>In a file on the phone</source>
+        <translation>फ़ोन पर एक फ़ाइल में</translation>
+    </message>
+    <message>
+        <source>None yet</source>
+        <translation>अभी नहीं</translation>
+    </message>
+    <message>
+        <source>Key fingerprint</source>
+        <translation>कुंजी फ़िंगरप्रिंट</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>समूह</translation>
+    </message>
+    <message>
+        <source>Device</source>
+        <translation>डिवाइस</translation>
+    </message>
+</context>
+<context>
+    <name>devices</name>
+    <message>
+        <source>lite member</source>
+        <translation>लाइट सदस्य</translation>
+    </message>
+    <message>
+        <source>device</source>
+        <translation>डिवाइस</translation>
+    </message>
+    <message>
+        <source>Phone</source>
+        <translation>फ़ोन</translation>
+    </message>
+    <message>
+        <source>Watch</source>
+        <translation>घड़ी</translation>
+    </message>
+    <message>
+        <source>Board</source>
+        <translation>बोर्ड</translation>
+    </message>
+    <message>
+        <source>Lite member</source>
+        <translation>लाइट सदस्य</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>कंप्यूटर</translation>
+    </message>
+    <message>
+        <source>this phone</source>
+        <translation>यह फ़ोन</translation>
+    </message>
+    <message>
+        <source>frozen</source>
+        <translation>फ़्रीज़</translation>
+    </message>
+    <message>
+        <source>root</source>
+        <translation>रूट</translation>
+    </message>
+    <message>
+        <source>admin</source>
+        <translation>एडमिन</translation>
+    </message>
+    <message>
+        <source>Admin, frozen by another admin</source>
+        <translation>एडमिन, किसी दूसरे एडमिन ने फ़्रीज़ किया</translation>
+    </message>
+    <message>
+        <source>Root and admin</source>
+        <translation>रूट और एडमिन</translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation>रूट</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>एडमिन</translation>
+    </message>
+    <message>
+        <source>Not in the records yet</source>
+        <translation>अभी रिकॉर्ड में नहीं</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>सदस्य</translation>
+    </message>
+    <message>
+        <source>This phone</source>
+        <translation>यह फ़ोन</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>ऑनलाइन</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>ऑफ़लाइन</translation>
     </message>
 </context>
 </TS>
