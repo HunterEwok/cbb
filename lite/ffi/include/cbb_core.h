@@ -67,8 +67,11 @@ void cbb_join_free(cbb_join *j);
  * The member inside the app (src/member.rs), only in a library built with the
  * feature member (the Aurora app): the lite member's node on threads of its
  * own, with the app's key through sign. event gets each event as JSON,
- * {"type":"write","text","kind","ttl_ms"} or {"type":"log","line"}, on any
- * thread; ctx must stay valid for the rest of the process.
+ * {"type":"write","text","kind","ttl_ms"}, {"type":"log","line"},
+ * {"type":"identity","cert","issuer","roots"} or {"type":"mute","muted","for_ms","by"},
+ * on any thread; ctx must stay valid for the rest of the process.
+ * cbb_member_pause takes {"pause":true,"for_ms"} or {"pause":false}; it and
+ * cbb_member_muted answer {"paused","paused_ms","muted","muted_ms"}.
  */
 typedef void (*cbb_event_fn)(void *ctx, const uint8_t *event, size_t len);
 
@@ -78,6 +81,8 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
                              uint8_t **answer, size_t *answer_len);
 uint8_t *cbb_member_copy(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 uint8_t *cbb_member_peers(const cbb_member *m, size_t *answer_len);
+uint8_t *cbb_member_pause(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
+uint8_t *cbb_member_muted(const cbb_member *m, size_t *answer_len);
 void cbb_member_stop(cbb_member *m);
 
 #ifdef __cplusplus

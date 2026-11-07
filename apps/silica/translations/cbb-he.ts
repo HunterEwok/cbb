@@ -208,6 +208,46 @@
         <translation>הצטרפות לקבוצה כמנהל</translation>
     </message>
     <message>
+        <source>For 15 minutes</source>
+        <translation>ל־15 דקות</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>לשעה</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>ל־8 שעות</translation>
+    </message>
+    <message>
+        <source>Until I turn it on</source>
+        <translation>עד שאפעיל</translation>
+    </message>
+    <message>
+        <source>Taking copies</source>
+        <translation>מקבל עותקים</translation>
+    </message>
+    <message>
+        <source>Not taking copies until %1</source>
+        <translation>לא מקבל עותקים עד %1</translation>
+    </message>
+    <message>
+        <source>Not taking copies</source>
+        <translation>לא מקבל עותקים</translation>
+    </message>
+    <message>
+        <source>Tap to take no copies from the group, or again; hold it for a time</source>
+        <translation>הקש כדי לא לקבל עותקים מהקבוצה, או כדי לקבל שוב; החזק כדי לבחור זמן</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>מנהל השתיק את הטלפון הזה עד %1: העותקים שלו לא מגיעים לקבוצה.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>מנהל השתיק את הטלפון הזה: העותקים שלו לא מגיעים לקבוצה עד שמנהל יבטל את ההשתקה.</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>בקבוצה</translation>
     </message>

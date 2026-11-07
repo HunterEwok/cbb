@@ -208,6 +208,46 @@
         <translation>Jiunge na kikundi kama msimamizi</translation>
     </message>
     <message>
+        <source>For 15 minutes</source>
+        <translation>Kwa dakika 15</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>Kwa saa moja</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>Kwa saa 8</translation>
+    </message>
+    <message>
+        <source>Until I turn it on</source>
+        <translation>Hadi niiwashe</translation>
+    </message>
+    <message>
+        <source>Taking copies</source>
+        <translation>Inapokea nakala</translation>
+    </message>
+    <message>
+        <source>Not taking copies until %1</source>
+        <translation>Haipokei nakala hadi %1</translation>
+    </message>
+    <message>
+        <source>Not taking copies</source>
+        <translation>Haipokei nakala</translation>
+    </message>
+    <message>
+        <source>Tap to take no copies from the group, or again; hold it for a time</source>
+        <translation>Gusa ili usipokee nakala za kikundi, au upokee tena; shikilia ili kuchagua muda</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>Msimamizi amenyamazisha simu hii hadi %1: nakala zake hazifiki kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>Msimamizi amenyamazisha simu hii: nakala zake hazifiki kwenye kikundi hadi msimamizi aiondolee unyamazishaji.</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>Katika kikundi</translation>
     </message>

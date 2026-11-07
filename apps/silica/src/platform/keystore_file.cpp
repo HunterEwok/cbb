@@ -115,4 +115,18 @@ QByteArray sign(const QByteArray &digest, Failure *failure, Which which)
     return b64(ok.value(QStringLiteral("sig")));
 }
 
+bool forget(Failure *failure)
+{
+    for (const Which which : {Which::Member, Which::Admin}) {
+        QFile f(path(which));
+        if (f.exists() && !f.remove()) {
+            *failure = {QCoreApplication::translate("Errors", "The phone could not delete its key."), QStringLiteral("key: %1: %2").arg(f.fileName(), f.errorString())};
+            return false;
+        }
+        QMutexLocker l(&lock);
+        secretOf(which).clear();
+    }
+    return true;
+}
+
 } // namespace KeyStore
