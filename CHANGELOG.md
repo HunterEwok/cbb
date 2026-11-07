@@ -1504,6 +1504,8 @@ All notable changes to cbb are documented in this file. The format follows
 - The Mac's installer package keeps its files for the service in a folder that only root
   may change, `/Library/Application Support/cbb-package`, and its script checks that before
   it installs them.
+- `packaging/macos/pkg.sh` builds on macOS 27, whose `pkgbuild --analyze` leaves out
+  `BundleIsRelocatable`, and keeps the checkout's provenance attribute out of the payload.
 - `.cbb update` on the ZX Spectrum Next takes a newer `CBB` and its files only from a list
   signed with the release key (`zxnext.json`, which `release-sign publish` signs and the
   mirror serves as `zxnext/SIGNED`), checked by the Pi's `cbb` against its pinned roots

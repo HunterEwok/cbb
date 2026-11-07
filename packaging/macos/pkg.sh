@@ -101,10 +101,14 @@ EOF
 chmod 0755 "$work/scripts/postinstall"
 
 # The app stays in /Applications, even when a copy of it is elsewhere.
+# The checkout's provenance attribute would go into the payload as ._ files.
+xattr -rd com.apple.provenance "$root" 2>/dev/null || true
 pkgbuild --analyze --root "$root" "$work/component.plist" >/dev/null
 n=0
 while /usr/libexec/PlistBuddy -c "Print :$n" "$work/component.plist" >/dev/null 2>&1; do
-	/usr/libexec/PlistBuddy -c "Set :$n:BundleIsRelocatable false" "$work/component.plist"
+	# Newer pkgbuild leaves the key out.
+	/usr/libexec/PlistBuddy -c "Set :$n:BundleIsRelocatable false" "$work/component.plist" 2>/dev/null ||
+		/usr/libexec/PlistBuddy -c "Add :$n:BundleIsRelocatable bool false" "$work/component.plist"
 	n=$((n + 1))
 done
 pkgbuild --root "$root" --component-plist "$work/component.plist" --scripts "$work/scripts" \
