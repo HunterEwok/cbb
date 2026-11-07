@@ -34,6 +34,7 @@ go.work.sum
 /apps/ios/ShareExtension/Info.plist
 /apps/ios/Widgets/Info.plist
 /apps/ios/Watch/Info.plist
+/apps/ios/CbbCore/
 /apps/macos/*.xcodeproj/
 /apps/macos/CBBMac/Info.plist
 /interop-out/
