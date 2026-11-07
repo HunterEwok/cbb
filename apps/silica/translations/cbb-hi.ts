@@ -133,6 +133,10 @@
         <source>The device did not take the command.</source>
         <translation>डिवाइस ने आदेश स्वीकार नहीं किया।</translation>
     </message>
+    <message>
+        <source>The phone could not delete its key.</source>
+        <translation>फ़ोन अपनी कुंजी नहीं मिटा सका।</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -820,6 +824,10 @@
     <message>
         <source>%1 files in Downloads</source>
         <translation>डाउनलोड में %1 फ़ाइलें</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>एक रहस्य</translation>
     </message>
 </context>
 <context>

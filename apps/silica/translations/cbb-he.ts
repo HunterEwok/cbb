@@ -133,6 +133,10 @@
         <source>The device did not take the command.</source>
         <translation>המכשיר לא קיבל את הפקודה.</translation>
     </message>
+    <message>
+        <source>The phone could not delete its key.</source>
+        <translation>הטלפון לא הצליח למחוק את המפתח שלו.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -820,6 +824,10 @@
     <message>
         <source>%1 files in Downloads</source>
         <translation>%1 קבצים בהורדות</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>סוד</translation>
     </message>
 </context>
 <context>

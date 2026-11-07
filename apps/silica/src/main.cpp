@@ -26,6 +26,11 @@ int main(int argc, char *argv[])
     // it has none.
     const QString chosen = QSettings().value(QStringLiteral("ui/language")).toString();
     const QLocale locale = chosen.isEmpty() ? QLocale() : QLocale(chosen);
+    // Numbers and dates follow the chosen language too (Aurora's guide:
+    // QLocale::setDefault, QML has no way of its own), and Arabic and
+    // Hebrew lay the pages out from the right.
+    QLocale::setDefault(locale);
+    application->setLayoutDirection(locale.textDirection());
     QTranslator translator;
     const QString share = QStringLiteral("/usr/share/") + QFileInfo(QCoreApplication::applicationFilePath()).fileName();
     if (translator.load(locale, QStringLiteral("cbb"), QStringLiteral("-"), share + QStringLiteral("/translations")))

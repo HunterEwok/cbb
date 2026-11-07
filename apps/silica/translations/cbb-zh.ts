@@ -133,6 +133,10 @@
         <source>The device did not take the command.</source>
         <translation>设备未接受该命令。</translation>
     </message>
+    <message>
+        <source>The phone could not delete its key.</source>
+        <translation>手机无法删除它的密钥。</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -820,6 +824,10 @@
     <message>
         <source>%1 files in Downloads</source>
         <translation>“下载”中的 %1 个文件</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>一条秘密</translation>
     </message>
 </context>
 <context>
