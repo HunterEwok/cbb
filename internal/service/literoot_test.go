@@ -6,6 +6,7 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net"
 	"os"
@@ -390,22 +391,8 @@ func TestLiteTakeover(t *testing.T) {
 	if out, err := runCLI(cli, rust.socket, "", "takeover", "desk"); err != nil {
 		t.Fatalf("cbb takeover: %v\n%s", err, out)
 	}
-	rootIs := func(s *testService, name string) func() bool {
-		return func() bool {
-			m, err := s.do(t, control.Header{Op: control.OpDevices}, "")
-			if err != nil {
-				return false
-			}
-			for _, d := range m.Devices {
-				if d.Root {
-					return d.Name == name
-				}
-			}
-			return false
-		}
-	}
-	waitFor(t, "the Rust member the root", rootIs(rust, "rust"))
-	waitFor(t, "the laptop follows the new root", rootIs(laptop, "rust"))
+	waitFor(t, "the Rust member the root", rootIs(t, rust, "rust"))
+	waitFor(t, "the laptop follows the new root", rootIs(t, laptop, "rust"))
 	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
 	if err != nil || !strings.Contains(string(raw), `"root_key"`) || strings.Contains(string(raw), `"claim"`) {
 		t.Errorf("the identity file after the takeover: %v\n%s", err, raw)
@@ -452,4 +439,92 @@ func recordsHold(dir, text string) bool {
 		}
 	}
 	return false
+}
+
+// TestLiteRecovery: a Rust member that is no admin claims the group with
+// its recovery key when the root is lost (cbb recovery, with the text of
+// the sheet's QR code), becomes the root, and the Go computer follows.
+func TestLiteRecovery(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, desk, laptop)
+
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := free.Addr().(*net.TCPAddr).Port
+	free.Close()
+	rust := startLite(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", desk.addr(), "-peer", laptop.addr())
+	waitFor(t, "the Rust member connected to both", func() bool {
+		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 2
+	})
+	if out, err := runCLI(cli, desk.socket, "", "takeover", "-delay", "0s"); err != nil {
+		t.Fatalf("cbb takeover -delay on the desk: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust member has the delay", func() bool { return recordsHold(dir, "takeover_delay_ms") })
+
+	recover := func(text string) (string, error) { return runCLI(cli, rust.socket, text+"\n", "recovery") }
+	if out, err := recover("cbb://recover?g=0&k=AA&c=AA"); err == nil {
+		t.Errorf("a broken sheet: %s", out)
+	}
+	desk.stop()
+	sheet := addRecovery(t, desk)
+	desk = restartService(t, &h, desk)
+	waitFor(t, "the Rust member holds the recovery key's record", func() bool { return recordsHold(dir, `"recovery"`) })
+	qr := func(group string) string {
+		k := sheet.Key.D.FillBytes(make([]byte, 32))
+		enc := base64.RawURLEncoding.EncodeToString
+		return "cbb://recover?g=" + group + "&k=" + enc(k) + "&c=" + enc(sheet.Cert)
+	}
+	if out, err := recover(qr("0123456789abcdef")); err == nil || !strings.Contains(out, "another group") {
+		t.Errorf("a sheet of another group: %v\n%s", err, out)
+	}
+	desk.stop()
+	if out, err := recover(qr(sheet.Group)); err != nil {
+		t.Fatalf("cbb recovery: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust member the root", rootIs(t, rust, "rust"))
+	waitFor(t, "the laptop follows the new root", rootIs(t, laptop, "rust"))
+	if out, err := recover(qr(sheet.Group)); err == nil {
+		t.Errorf("the new root claimed the group again: %s", out)
+	}
+}
+
+// rootIs reports whether s lists name as the group's root.
+func rootIs(t *testing.T, s *testService, name string) func() bool {
+	return func() bool {
+		m, err := s.do(t, control.Header{Op: control.OpDevices}, "")
+		if err != nil {
+			return false
+		}
+		for _, d := range m.Devices {
+			if d.Root {
+				return d.Name == name
+			}
+		}
+		return false
+	}
 }

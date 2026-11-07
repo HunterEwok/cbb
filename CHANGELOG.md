@@ -28,7 +28,10 @@ All notable changes to cbb are documented in this file. The format follows
   `mute -on`, `unmute -on`). Started with `-full`, and joined with `cbb pair -full`, it is a
   computer's service in a Go computer's group: it offers an admin key, becomes an admin when
   the root makes it one, and takes the group over from a lost root with `cbb takeover`,
-  becoming the root once the claim takes effect (`TestLiteTakeover`).
+  becoming the root once the claim takes effect (`TestLiteTakeover`). Any of its members
+  claims the group with the recovery key (`cbb recovery`, the sheet's text or QR code, or
+  `-yubikey` with the key on a YubiKey through cbb-helper) when the root is lost
+  (`TestLiteRecovery`).
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

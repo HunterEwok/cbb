@@ -1622,6 +1622,15 @@ impl Service {
                 let name = self.admin(|a| a.take_over(&h.name))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
+            "recovery" => {
+                let text = String::from_utf8_lossy(&m.payload).to_string();
+                if h.name == "yubikey" {
+                    self.admin(|a| a.recover_with_card(&text))?;
+                } else {
+                    self.admin(|a| a.recover(&text))?;
+                }
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
             "handover" => {
                 let name = self.admin(|a| a.hand_over(&h.name))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))

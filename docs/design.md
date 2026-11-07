@@ -217,7 +217,10 @@ ends, the Go service described below is still the computers' member.
   admin with a member certificate from that CA. On such an admin `takeover` keeps the new
   root's key as `claim` and `claim_key` and signs the claim; a loop looks at the claims every
   two seconds, as Go's `claimLoop` does, and once the records lead to that root it becomes
-  the root (`root_key`) and signs a new root's first records (`TestLiteTakeover`).
+  the root (`root_key`) and signs a new root's first records (`TestLiteTakeover`). Any
+  member claims the group the same way with the recovery key (`recovery`): the sheet's key,
+  or with `yubikey` the card's, which cbb-helper's `card-sign` uses after the PIN, signs the
+  claim under the recovery key's admin CA from the records or the sheet (`TestLiteRecovery`).
 
 ### Linux components
 

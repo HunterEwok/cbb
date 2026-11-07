@@ -969,6 +969,105 @@ impl Admin<'_> {
                 "the root did not give this admin the power to take the group over; take it over on another admin",
             ));
         }
+        self.claim_with(s, &format!("from its root {} ({})", d.name, d.id))?;
+        Ok(d.name)
+    }
+
+    /// Claims the group with its recovery key, on a computer of the group
+    /// whose root is lost, as Go's recoverGroup: text is what the user
+    /// typed or scanned from the sheet. The claim takes effect after the
+    /// group's wait unless the root cancels it, and this computer is the
+    /// root then (finish_takeover). The recovery key is not kept.
+    pub fn recover(&self, text: &str) -> Result<()> {
+        self.can_recover()?;
+        let sheet = cbb_core::recovery::read(text).map_err(|r| Error::msg(r.message()))?;
+        let (pkcs8, admin) =
+            sheet.pkcs8().zip(sheet.admin()).ok_or_else(|| Error::msg("the recovery key cannot be encoded"))?;
+        if sheet.group.as_deref().is_some_and(|g| g != self.node.identity().tag()) {
+            return Err(Error::msg("this recovery key is of another group"));
+        }
+        let key: Arc<dyn ExternalKey> = Arc::new(FileKey::new(&pkcs8)?);
+        let ca = self.recovery_ca(admin, sheet.cert.as_deref())?;
+        if ca.public_key() != key.public().as_slice() {
+            return Err(Error::msg("the recovery key's admin CA is for another key"));
+        }
+        self.claim_with(Signing { ca, key, root: false }, "with its recovery key")
+    }
+
+    /// Claims the group as recover does, with the recovery key on a
+    /// YubiKey, which signs the claim through cbb-helper after pin and, as
+    /// the root phone set it, a touch: the key never leaves the card.
+    pub fn recover_with_card(&self, pin: &str) -> Result<()> {
+        self.can_recover()?;
+        let named = self.node.records().lock().unwrap().state().recovery.ok_or_else(|| Error::msg(NO_RECOVERY_KEY))?;
+        let ca = self.recovery_ca(named.0, None)?;
+        let key: Arc<dyn ExternalKey> = Arc::new(keys::CardKey::new(named.0, pin, ca.public_key().to_vec())?);
+        self.claim_with(Signing { ca, key, root: false }, "with its recovery key on a YubiKey")
+    }
+
+    /// Why this device cannot claim the group with its recovery key, if it
+    /// cannot.
+    fn can_recover(&self) -> Result<()> {
+        if crate::rootless::is() {
+            return Err(Error::msg(
+                "this device is installed without root, so every program of its user can read its keys; such a device never holds the group's keys (D-79)",
+            ));
+        }
+        if self.signing().is_ok_and(|s| s.root) {
+            return Err(Error::msg("this device is the group's root already"));
+        }
+        if admin_file(self.dir)?.claim.is_some() {
+            return Err(Error::msg(
+                "this device's claim to take the group over is waiting already; cbb status shows the time left",
+            ));
+        }
+        Ok(())
+    }
+
+    /// The admin CA of the group's recovery key, whose key hash is admin:
+    /// the sheet's when a root of the group issued it, else the newest a
+    /// recovery record carries under such a root, else the sheet's.
+    fn recovery_ca(&self, admin: [u8; 32], sheet: Option<&[u8]>) -> Result<Cert> {
+        let records = self.node.records();
+        let rs = records.lock().unwrap();
+        match rs.state().recovery {
+            None => return Err(Error::msg(NO_RECOVERY_KEY)),
+            Some(h) if h.0 != admin => {
+                return Err(Error::msg(
+                    "this is not the group's recovery key: the root phone made a new one since, which replaced it",
+                ));
+            }
+            Some(_) => {}
+        }
+        let roots = rs.roots();
+        let under = |der: &[u8]| {
+            Cert::parse(der).ok().filter(|c| c.key_hash() == admin && roots.iter().any(|r| c.signed_by(r)))
+        };
+        if let Some(c) = sheet.and_then(under) {
+            return Ok(c);
+        }
+        let kept = rs
+            .all()
+            .iter()
+            .filter_map(|r| Body::parse(&r.body).ok())
+            .filter(|b| b.kind == authority::TYPE_RECOVERY && b.admin == Some(Hash(admin)))
+            .filter_map(|b| under(&b.cert).map(|c| (b.time_ms, c)))
+            .max_by_key(|(t, _)| *t)
+            .map(|(_, c)| c);
+        // Else the sheet's, as Go's: the members check the claim's chain.
+        match (kept, sheet) {
+            (Some(c), _) => Ok(c),
+            (None, Some(der)) => Ok(Cert::parse(der)?),
+            (None, None) => {
+                Err(Error::msg("the group's records carry no admin CA for the recovery key from a root of the group"))
+            }
+        }
+    }
+
+    /// Makes a new root, keeps its key in the identity file first, and
+    /// claims the group for it with s; how says how, for the log.
+    fn claim_with(&self, s: Signing, how: &str) -> Result<()> {
+        let ident = self.node.identity();
         let pkcs8 = identity::new_key()?;
         let key = FileKey::new(&pkcs8)?;
         let now = uptime::wall_ms() / 1000;
@@ -989,10 +1088,9 @@ impl Admin<'_> {
             return Err(e);
         }
         self.node.logf(&format!(
-            "cbb: claimed the group from its root {} ({}); this device becomes the root when the waiting time ends, unless the root cancels the claim",
-            d.name, d.id
+            "cbb: claimed the group {how}; this device becomes the root when the waiting time ends, unless the root cancels the claim"
         ));
-        Ok(d.name)
+        Ok(())
     }
 
     /// The key level of the newest settings record of the root whose key
@@ -1138,6 +1236,8 @@ pub fn record_admitted(node: &Node, admitter: &admit::Admitter, a: &admit::Admit
     }
     Ok(())
 }
+
+const NO_RECOVERY_KEY: &str = "the group has no recovery key: the root phone has not made one, or removed it";
 
 const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";
 
