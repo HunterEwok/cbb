@@ -24,6 +24,7 @@ struct Membership
     QList<QByteArray> roots;
     QByteArray records; // the records file
     bool root = false; // the phone made the group and holds its root key
+    QByteArray claim; // the new root CA of the phone's claim to take the group over, while it waits
 
     bool isNull() const { return device.isEmpty(); }
     // An admin: through its admin CA, or as the group's root, which issues

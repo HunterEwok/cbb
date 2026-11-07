@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>La raíz del grupo canceló la solicitud; el teléfono sigue siendo administrador.</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>La solicitud para tomar el grupo dejó de ser válida; el teléfono sigue siendo administrador.</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>Conecta el teléfono al Wi-Fi de tu casa para unirte a un grupo.</translation>
     </message>
@@ -306,6 +314,30 @@
 </context>
 <context>
     <name>DevicePage</name>
+    <message>
+        <source>Take the group over</source>
+        <translation>Tomar el grupo</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>Tomando el grupo de %1</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>Tomar el grupo</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>Esperando, quedan %1 h</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>Esperando a que el grupo reciba la solicitud</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>En disputa: la raíz del grupo respondió a la solicitud</translation>
+    </message>
     <message>
         <source>System</source>
         <translation>Sistema</translation>

@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>समूह के रूट ने अनुरोध रद्द कर दिया; फ़ोन एडमिन बना रहेगा।</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>समूह अपने हाथ में लेने का अनुरोध अमान्य हो गया; फ़ोन एडमिन बना रहेगा।</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>समूह में शामिल होने के लिए फ़ोन को अपने घर के Wi-Fi से जोड़ें।</translation>
     </message>
@@ -306,6 +314,30 @@
 </context>
 <context>
     <name>DevicePage</name>
+    <message>
+        <source>Take the group over</source>
+        <translation>समूह अपने हाथ में लें</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>%1 से समूह अपने हाथ में लिया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>समूह अपने हाथ में लेना</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>प्रतीक्षा, %1 घंटे बाकी</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>समूह को अनुरोध मिलने की प्रतीक्षा</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>विवाद: समूह के रूट ने अनुरोध का जवाब दिया</translation>
+    </message>
     <message>
         <source>System</source>
         <translation>सिस्टम</translation>
