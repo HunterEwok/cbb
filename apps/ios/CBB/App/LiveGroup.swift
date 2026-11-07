@@ -1468,7 +1468,7 @@ final class LiveGroup: GroupController {
                               },
                               content: content, credentials: credentials, copies: copies, entries: entries)
         nodeRef.value = node
-        let relay = Relay(group: g.tag)
+        let relay = Relay(group: g.tag, device: g.device)
         relay.allowed = Self.allowed(g)
         // Through the tunnel the phone dials the hub's member port with the
         // same TLS as at home, and only while the hub is not found here.
@@ -2165,8 +2165,14 @@ final class LiveGroup: GroupController {
         private var foundAt: [String: TimeInterval] = [:]
         /// The group tag of the members at known addresses.
         let group: String
+        /// This phone's device ID, never dialed: as a hub it announces
+        /// itself, and its browser finds that announcement too.
+        let device: String
 
-        init(group: String) { self.group = group }
+        init(group: String, device: String) {
+            self.group = group
+            self.device = device
+        }
         var dialer: MemberDialer? {
             get { lock.withLock { _dialer } }
             set { lock.withLock { _dialer = newValue } }
@@ -2210,7 +2216,7 @@ final class LiveGroup: GroupController {
                 last = found
                 let now = ProcessInfo.processInfo.systemUptime
                 foundAt = Dictionary(uniqueKeysWithValues: Set(found.filter { $0.group == group }.map(\.device)).map { ($0, foundAt[$0] ?? now) })
-                let all = Discovery.withKnown(found, known: Set(_addresses.keys), group: group)
+                let all = Discovery.withKnown(found, known: Set(_addresses.keys), group: group).filter { $0.device != device }
                 return (_dialer, _allowed.map { a in all.filter { a.contains($0.device) } } ?? all)
             }
             guard let d else { return }
