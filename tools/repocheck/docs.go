@@ -216,7 +216,7 @@ func checkCommands(files map[string][]byte) []string {
 		re          *regexp.Regexp
 	}{
 		{"cmd/cbb/main.go", string(ref), goCommand},
-		{"lite/src/lib.rs", lite, rsCommand},
+		{"member/src/lib.rs", lite, rsCommand},
 	} {
 		src, ok := files[c.source]
 		if !ok {
@@ -503,7 +503,7 @@ func checkOps(files map[string][]byte) []string {
 // administrators, which the style rules cover.
 func styled(name string) bool {
 	return strings.HasPrefix(name, "docs/guide/") || strings.HasPrefix(name, "docs/admin/") ||
-		name == "README.md" || name == "lite/README.md" || name == "lite/esp32/README.md" ||
+		name == "README.md" || name == "member/README.md" || name == "esp32/README.md" ||
 		name == "packaging/docker/README.md"
 }
 

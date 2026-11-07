@@ -89,7 +89,7 @@ jobs:
         target: [record_body, command, credential, release, wire, api]
     defaults:
       run:
-        working-directory: lite/core
+        working-directory: core/
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -104,7 +104,7 @@ jobs:
           cargo +nightly install cargo-fuzz --locked
       - name: seeds from the interop vectors
         working-directory: .
-        run: go run ./tools/difffuzz seeds -o lite/core/fuzz/corpus
+        run: go run ./tools/difffuzz seeds -o core/fuzz/corpus
       - name: fuzz for ten minutes
         env:
           TARGET: ${{ matrix.target }}
@@ -114,7 +114,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-fuzz-${{ matrix.target }}
-          path: lite/core/fuzz/artifacts/
+          path: core/fuzz/artifacts/
           if-no-files-found: ignore
 
   # Mutation testing: change the records' code (drop a check, turn < into <=)
@@ -128,9 +128,6 @@ jobs:
       fail-fast: false
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7]
-    defaults:
-      run:
-        working-directory: lite
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -139,7 +136,7 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal && rustup default stable
           cargo install --locked cargo-mutants@27.1.0
-      # In place: the tests read testdata/ beside lite/, which a copy of the
+      # In place: the tests read testdata/ beside the crates, which a copy of the
       # workspace would leave behind. Each shard has its own checkout.
       - name: mutate the rules and the strict form
         env:
@@ -156,7 +153,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutants-rust-${{ matrix.shard }}
-          path: lite/mutants.out/
+          path: mutants.out/
           if-no-files-found: ignore
 
   mutants-go:

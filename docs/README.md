@@ -36,7 +36,7 @@ For administrators: your own server, a router, a NAS.
 | [Routers and FreeBSD](admin/routers.md) | OpenWrt, OPNsense and FreeBSD: what the installers set up, the networks it answers on, the firewall, the checks |
 | [Hardening](admin/hardening.md) | the settings that make a group harder to attack, beyond the defaults |
 | [Docker image](../packaging/docker/README.md) | the image for a NAS, a home server or a server on the internet |
-| [Lite member](../lite/README.md) | the lite member for small Linux devices: build, install, use |
+| [Lite member](../member/README.md) | the lite member for small Linux devices: build, install, use |
 
 ## Reference
 

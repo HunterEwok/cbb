@@ -126,7 +126,7 @@ func TestLeaveDamaged(t *testing.T) {
 // TestLiteLeave: a lite member the group removed leaves through its
 // service, which then stops to be started again; with the service stopped,
 // cbb leave looks at the files itself and finds no group. CBB_LITE names
-// the lite member's binary (cargo build in lite/).
+// the lite member's binary (cargo build at the top).
 func TestLiteLeave(t *testing.T) {
 	bin := os.Getenv("CBB_LITE")
 	if bin == "" {

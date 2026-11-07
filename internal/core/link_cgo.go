@@ -6,8 +6,8 @@
 package core
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../lite/ffi/include
-#cgo LDFLAGS: ${SRCDIR}/../../lite/target/release/libcbb_ffi.a -lm
+#cgo CFLAGS: -I${SRCDIR}/../../ffi/include
+#cgo LDFLAGS: ${SRCDIR}/../../target/release/libcbb_ffi.a -lm
 #cgo linux LDFLAGS: -ldl -lpthread
 #include "cbb_core.h"
 */

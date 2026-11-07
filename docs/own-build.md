@@ -37,7 +37,7 @@ hardware keys, or in files for a build only you use), and replace:
 - `internal/release/roots/roots.pem`, the pinned roots;
 - their copies, which `internal/release/roots_test.go` (`TestRootCopies`) compares with it:
   `release_roots` in `packaging/get.sh`, the roots in `packaging/windows/get.ps1`, `ROOTS`
-  in `lite/src/update.rs`, `Releases.kt` in the Android kit and `Releases.swift` in the
+  in `member/src/update.rs`, `Releases.kt` in the Android kit and `Releases.swift` in the
   Swift kit;
 - `internal/release/roots/attestation/` and `roots/release-keys.pem`, the proof that this
   project's keys live on YubiKeys: put your own keys' attestations there and change the
@@ -52,7 +52,7 @@ Then sign your releases with `tools/release-sign` and your keys as maintaining.m
 `ChannelFiles`, and the hosts `allowedHost` lets the updater reach. Their copies, which
 `internal/update/project_test.go` (`TestProjectAddresses`) compares with them:
 
-- `lite/src/update.rs`: `GITHUB`, `MIRROR`, `CHANNEL_FILES`, and the hosts in `allowed`;
+- `member/src/update.rs`: `GITHUB`, `MIRROR`, `CHANNEL_FILES`, and the hosts in `allowed`;
 - `apps/android/app/.../ApkUpdate.kt`: `GITHUB`, `MIRROR`, `CHANNEL_FILES`, and its hosts;
 - `packaging/get.sh` and `packaging/windows/get.ps1`: `repo`, `channel_files` and the
   `--repo` of `gh attestation verify`;

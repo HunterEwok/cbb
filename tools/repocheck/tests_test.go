@@ -13,9 +13,9 @@ import (
 
 func TestTestNames(t *testing.T) {
 	got := testNames(map[string][]byte{
-		"a/x_test.go":   []byte("func TestA(t *testing.T) {}\nfunc FuzzB(f *testing.F) {}\nfunc helper() {}\n"),
-		"b/x_test.go":   []byte("func TestA(t *testing.T) {}\n"),
-		"lite/src/x.rs": []byte("#[test]\nfn one() {}\n#[test]\n#[ignore]\npub fn two() {}\nfn three() {}\n"),
+		"a/x_test.go":     []byte("func TestA(t *testing.T) {}\nfunc FuzzB(f *testing.F) {}\nfunc helper() {}\n"),
+		"b/x_test.go":     []byte("func TestA(t *testing.T) {}\n"),
+		"member/src/x.rs": []byte("#[test]\nfn one() {}\n#[test]\n#[ignore]\npub fn two() {}\nfn three() {}\n"),
 		"k/Tests/T/X.swift": []byte("    func testOne() throws {\n    func helper() {\n    @Test func two() async {\n" +
 			"    func testArgs(_ x: Int) {\n"),
 		"kit/src/test/kotlin/X.kt": []byte("    @Test\n    fun one() {\n    fun helper() {\n    @Test fun `two words`() {\n"),
@@ -85,8 +85,8 @@ func TestSwiftTestFiles(t *testing.T) {
 // annotations before it.
 func TestTestSkips(t *testing.T) {
 	got := testSkips(map[string][]byte{
-		"a/x_test.go":   []byte("func TestA(t *testing.T) {\n\tt.Skip(\"x\")\n}\n\nfunc helper() {}\n\nfunc TestB(t *testing.T) {\n\tif x {\n\t\tt.Skipf(\"%d\", 1)\n\t}\n\tt.SkipNow()\n}\n"),
-		"lite/src/x.rs": []byte("#[test]\nfn one() {}\n\n#[ignore]\n#[test]\nfn two() {}\n\n#[test]\n#[ignore = \"slow\"]\nfn three() {}\n"),
+		"a/x_test.go":     []byte("func TestA(t *testing.T) {\n\tt.Skip(\"x\")\n}\n\nfunc helper() {}\n\nfunc TestB(t *testing.T) {\n\tif x {\n\t\tt.Skipf(\"%d\", 1)\n\t}\n\tt.SkipNow()\n}\n"),
+		"member/src/x.rs": []byte("#[test]\nfn one() {}\n\n#[ignore]\n#[test]\nfn two() {}\n\n#[test]\n#[ignore = \"slow\"]\nfn three() {}\n"),
 		"k/Tests/T/X.swift": []byte("    func testOne() throws {\n        throw XCTSkip(\"no\")\n    }\n" +
 			"    func testTwo() throws {\n        try XCTSkipIf(true)\n    }\n    func testThree() {\n    }\n"),
 		"kit/src/test/kotlin/X.kt": []byte("    @Ignore\n    @Test\n    fun one() {\n    }\n    @Test fun two() {\n        assumeTrue(false)\n    }\n    @Test fun three() {\n    }\n"),

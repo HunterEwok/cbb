@@ -18,7 +18,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 在 GNOME 和 KDE 上，管理员第一次远程粘贴要按下按键之前，会先在电脑上弹出一次对话框询问。要跳过这个对话框，请加上 `--uinput`（`... | sudo sh -s -- --uinput`）：之后由一个小型辅助程序为正在使用屏幕的人按下粘贴键（Shift+Insert 和 Enter），在登录界面或锁屏时绝不会按。
 
-只需要同步的小设备，比如路由器或 Raspberry Pi Zero，可以改用更轻量的[轻量成员](../../lite/README.md)：`... | sudo sh -s -- --lite`。
+只需要同步的小设备，比如路由器或 Raspberry Pi Zero，可以改用更轻量的[轻量成员](../../member/README.md)：`... | sudo sh -s -- --lite`。
 
 ### 不使用 sudo（无 root）
 
@@ -28,7 +28,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-它在你登录期间作为你自己的后台服务运行，并像其他成员一样同步。只有在无法进行常规安装时才使用它：你运行的每个程序都可能复制它的密钥，所以它永远不能成为群组的根、管理员或中枢（[工作原理](how-it-works.md#rootless-members)），而且它没有防火墙规则、没有 TPM，也不能用 `--console` 或 `--uinput`。要让它在你注销后继续运行，需要管理员执行一次 `sudo loginctl enable-linger YOUR-USER`。卸载它：`sh ~/.local/share/cbb/uninstall.sh`。轻量成员也可以这样安装，使用 `--lite --rootless`（[轻量成员](../../lite/README.md#without-sudo-rootless)）。
+它在你登录期间作为你自己的后台服务运行，并像其他成员一样同步。只有在无法进行常规安装时才使用它：你运行的每个程序都可能复制它的密钥，所以它永远不能成为群组的根、管理员或中枢（[工作原理](how-it-works.md#rootless-members)），而且它没有防火墙规则、没有 TPM，也不能用 `--console` 或 `--uinput`。要让它在你注销后继续运行，需要管理员执行一次 `sudo loginctl enable-linger YOUR-USER`。卸载它：`sh ~/.local/share/cbb/uninstall.sh`。轻量成员也可以这样安装，使用 `--lite --rootless`（[轻量成员](../../member/README.md#without-sudo-rootless)）。
 
 ### SteamOS（Steam Deck）
 

@@ -27,7 +27,7 @@ presses the paste keys (Shift+Insert and Enter) for whoever uses the screen, nev
 login or lock screen.
 
 Small devices that should only sync, such as a router or a Raspberry Pi Zero, can take the
-lighter [lite member](../../lite/README.md) instead: `... | sudo sh -s -- --lite`.
+lighter [lite member](../../member/README.md) instead: `... | sudo sh -s -- --lite`.
 
 ### Without sudo (rootless)
 
@@ -45,7 +45,7 @@ keys, so it can never be the group's root, an admin or the hub
 no `--console` or `--uinput`. To keep it running after you log out, an administrator runs
 `sudo loginctl enable-linger YOUR-USER` once. To remove it:
 `sh ~/.local/share/cbb/uninstall.sh`. The lite member installs this way too,
-with `--lite --rootless` ([lite member](../../lite/README.md#without-sudo-rootless)).
+with `--lite --rootless` ([lite member](../../member/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 

@@ -4,7 +4,7 @@
 //! cbb.drv's bank (drv/bank.asm, `make build/drv/bank.bin` first) in a Z80
 //! emulator, with the Next's two UARTs, its system variables and NextZXOS's
 //! clock call played here; the frames written out again from
-//! lite/README.md, "The network through the Next's ESP8266".
+//! member/README.md, "The network through the Next's ESP8266".
 
 use std::collections::VecDeque;
 

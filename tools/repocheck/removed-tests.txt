@@ -29,7 +29,7 @@ internal/service/service_test.go TestAloneHoldsTheName D-80: the election for cb
 internal/service/service_test.go TestHolderPriority D-80: the election for cbb.local is gone
 internal/service/service_test.go TestIPhone D-80: the shortcut's endpoints on the member port are gone
 internal/service/service_test.go TestShortcutTokenOnlySyncs D-80: the shortcut's tokens are gone
-apps/ios/CBBKit/Tests/CBBKitTests/MemberTests.swift testEngine D-86: the Swift sync engine is gone; the Rust member's engine keeps the rules (lite/core clip tests)
+apps/ios/CBBKit/Tests/CBBKitTests/MemberTests.swift testEngine D-86: the Swift sync engine is gone; the Rust member's engine keeps the rules (core clip tests)
 apps/ios/CBBKit/Tests/CBBKitTests/MemberTests.swift testNoSecretsSendsTheMark D-86: the Swift node is gone; the Rust member's node sends the mark of a secret
 apps/ios/CBBKit/Tests/CBBKitTests/ContentTests.swift testTooManyGets D-86: the Swift node is gone; the Rust member serves the content
 apps/ios/CBBKit/Tests/CBBKitTests/ContentTests.swift testCancelsOfOtherParts D-86: the Swift node is gone; the Rust member serves the content
@@ -38,7 +38,7 @@ apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testDialsAtMostMaxDialed 
 apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testDialFailuresBackOff D-86: MemberDialer is gone; the Rust member's dialers back off
 apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testHurry D-86: MemberDialer is gone; the Rust member dials again at once on resume and on a new address
 apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testHurryWhileDialing D-86: MemberDialer is gone; the Rust member dials again at once on resume and on a new address
-apps/ios/CBBTests/AppModelTests.swift testButtonKeepsWhatThePhoneSent D-86: the button's rule is the core's member's (lite/src/button.rs tests, TestFFIMember, CoreMemberTests.testSyncsTheButtonAndCommands)
+apps/ios/CBBTests/AppModelTests.swift testButtonKeepsWhatThePhoneSent D-86: the button's rule is the core's member's (member/src/button.rs tests, TestFFIMember, CoreMemberTests.testSyncsTheButtonAndCommands)
 apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt noSecretsSendsTheMark D-86: the Kotlin node is gone; the Rust member's node keeps the rule
 apps/android/kit/src/test/kotlin/tools/cbb/kit/ContentTest.kt tooManyGets D-86: the Kotlin node is gone; the Rust member serves the content
 apps/android/kit/src/test/kotlin/tools/cbb/kit/ContentTest.kt cancelsOfOtherParts D-86: the Kotlin node is gone; the Rust member serves the content

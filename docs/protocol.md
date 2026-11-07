@@ -9,7 +9,7 @@ repository stays under the GNU AGPL v3.0 only ([LICENSE](../LICENSE)).
 This document specifies protocol version 1 of Copy Beyond Borders as the code in this
 repository implements it, so that another implementation can interoperate with it. Four
 implementations follow it today: Go (`cbb`, the computers and the servers), Rust (the lite
-member, `lite/core`, whose member the phones' apps run too, through `lite/ffi`), Swift
+member, `core/`, whose member the phones' apps run too, through `ffi/`), Swift
 (`CBBKit`) and Kotlin (`apps/android/kit`), with shared test vectors in `testdata/interop`.
 The phones' kits keep pairing, restoring, the records they sign and the credentials; the
 member protocol of section 4 runs in the Rust core's member on every phone (docs/core-api.md,
@@ -227,7 +227,7 @@ publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The pho
 hub").
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
 [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns`; a lite
-member publishes and browses with the `mdns-sd` crate (`lite/src/discovery.rs`), which
+member publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=lite`), with the addresses of its interfaces except
 loopback. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
@@ -267,7 +267,7 @@ A member MUST NOT dial a peer whose `g` is not its group's tag.
 
 Note: browsers check only `g` (when dialing), `r` (when dialing, on full and lite members)
 and `p` (when joining); nothing checks `v` (`internal/service/members.go`,
-`internal/service/socket.go`, `lite/src/discovery.rs`).
+`internal/service/socket.go`, `member/src/discovery.rs`).
 
 NSEC (RFC 6762 section 6.1): owner the host name; RDATA is the host name itself in
 uncompressed wire format, then window 0 with a bitmap that has bit A (type 1, byte 0 mask
@@ -326,8 +326,8 @@ rescanned every 10 s.
 ## 4. Member protocol
 
 Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
-`internal/service/members.go`; the lite member's and the phones' `lite/src/node.rs` and
-`lite/src/phone.rs`.
+`internal/service/members.go`; the lite member's and the phones' `member/src/node.rs` and
+`member/src/phone.rs`.
 
 ### Who dials whom
 
@@ -499,7 +499,7 @@ depends on a version number.
 | `release_keys_seq` | integer or absent | with `release_seq`: the `seq` of that release's `keys.json`; absent when it holds none |
 | `entries_seq` | integer or absent | the `seq` of the newest signed `entries.json` the sender holds (section 16, "Entry points"); absent when it holds none |
 | `entries_keys_seq` | integer or absent | with `entries_seq`: the `seq` of the `keys.json` it came with; absent when it holds none |
-| `features` | array of strings or absent | what the sender supports beyond the protocol of its ALPN version, each name once: `media` from a member that serves the content of media events ("Content", below), so others may send it `get` (the lite member serves none). A receiver reads the first 32 names and ignores those it does not know, so a later release adds a feature without a new ALPN version |
+| `features` | array of strings or absent | what the sender supports beyond the protocol of its ALPN version, each name once: `media` from a member that serves the content of media events ("Content", below), so others may send it `get`. A receiver reads the first 32 names and ignores those it does not know, so a later release adds a feature without a new ALPN version |
 | `group_ca` | string or absent | from a full member on a connection that carries records only with a device no `device` record names ("Records only" in the exchange): the group's first root, DER in base64, so that a new phone restoring the group with the recovery key builds the group's path from the records (section 10, "The recovery key"). Every other hello leaves it out |
 | `seal` | string or absent | the sender's public key for sealed messages, 1216 bytes in base64 (an X-Wing key, `internal/seal`), which the group's root puts in the sender's device record (`seal`, section 10) so that commands for it can be sealed (section 15); a key of another size is ignored; absent from the phones for now |
 
@@ -692,7 +692,7 @@ on the wire the event shows only its `blob`:
 {"t":"event","event":{"id":"77aa...","origin":"3b1e...","time":"1761024002000.0","age_ms":5,"cert":"MIIB...","wraps":[{"to":"3b1e...","key":"..."},{"to":"9c40...","key":"..."}],"payload":"...","blob":{"size":65552,"sha256":"Zm9v..."},"sig":"MEUC..."}}
 ```
 
-A member that does not take images or files (the lite member) takes
+A member that does not take images or files takes
 the event like any other, so the group converges, forwards it, and writes only its text, as
 a text, to its clipboard; with no text it keeps its clipboard.
 
@@ -1379,7 +1379,7 @@ The wire side of "Admin phones, the devices list and revocation" in
 [design.md](design.md). The group's authority records are of version 2: one rule evaluates
 a set of them into the group's state ("The state"), and it is written twice, in Go
 (`internal/authority`, with the record set in `internal/group/records.go`) for the
-computers, and in Rust (`cbb_core::authority` and `cbb_core::group`, `lite/core`) for the
+computers, and in Rust (`cbb_core::authority` and `cbb_core::group`, `core/`) for the
 lite member and, through the core's entry point ([core-api.md](core-api.md)), for both
 phone apps, which sign records in their kits (`Records.swift`, `Records.kt`, with the
 Secure Enclave or the Keystore) but evaluate none themselves. Go's release builds evaluate
@@ -2118,8 +2118,8 @@ event, `send_tunnel`) and bind the tunnel itself from
 Go (`mobile/cbbtun`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
 the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
-(`lite/src/tunnel.rs`, `lite/src/away.rs`), with AmneziaWG (`lite/src/awg.rs`) and VLESS over
-XHTTP (`lite/src/vless.rs`); it refuses an offer whose `vless` is REALITY and then syncs at home only ("Through the tunnel" below).
+(`member/src/tunnel.rs`, `member/src/away.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over
+XHTTP (`member/src/vless.rs`); it refuses an offer whose `vless` is REALITY and then syncs at home only ("Through the tunnel" below).
 
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on
@@ -2342,7 +2342,7 @@ the hub's key. Implemented in Go (`tunnel.State.Rotate`, `internal/service/tunne
   that was away while the hub moved on still reaches it; the offer it gets then replaces the
   one it kept. Go tries both keys at once (`tryHub`, `internal/service/hubs.go`), so the key
   the hub no longer serves with, which gets no answer, costs no time; the lite member
-  (`lite/src/tunnel.rs`, `hubs_to_try`) and the phone kits (`TunnelOffer.withNextKey`) try
+  (`member/src/tunnel.rs`, `hubs_to_try`) and the phone kits (`TunnelOffer.withNextKey`) try
   them in turn, the old key first. A client that was away for the whole three days and
   never got `next` reaches the hub again at home.
 - A hub refuses a client or another hub's offer with any of its own keys.
@@ -3246,7 +3246,7 @@ sealed one. The vectors are `go-sealed-commands.json`.
 
 Every release is described by signed files, so that a program updates only to a release the
 project signed, whichever server it came from (design.md, "Secure updates"; D-69). The Go
-package `internal/release`, `lite/core` (`release.rs`) and the phone kits (`Releases`) check
+package `internal/release`, `core/` (`release.rs`) and the phone kits (`Releases`) check
 them alike, against `testdata/interop/go-release.json`.
 
 ### Keys
@@ -3654,7 +3654,7 @@ from one month to the next ([design.md](design.md), D-67 and D-75). Implemented 
 `internal/service/credentials.go`). The vectors in `testdata/interop/v2-credentials.json`
 (Go's `TestGoCredentialVectors`) give a group's records, the lists its credentials must hold,
 a period with its server credentials, its hubs' and members' credentials, and sets a server
-refuses. The lite member's core reads and checks them as Go does (`lite/core/src/credential.rs`:
+refuses. The lite member's core reads and checks them as Go does (`core/src/credential.rs`:
 the lists, the signatures and types, and a server's check), and passes the vectors; it
 registers with no server, so it signs none and keeps none. The phones' kits do what Go does
 (`Credentials.kt`, `Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
@@ -3662,7 +3662,7 @@ registers with no server, so it signs none and keeps none. The phones' kits do w
 and pass them on through the phone's member in the Rust core (`send_credentials`, its
 `message` events), and pass the same vectors. A phone registers with a relay
 by them once the members' credential lists its server key (`CredentialStore.registration`,
-cbbtun's `Relay.SetCredentials`, or in Rust `cbb_tunnel_relay_credentials`, lite/src/relay.rs,
+cbbtun's `Relay.SetCredentials`, or in Rust `cbb_tunnel_relay_credentials`, member/src/relay.rs,
 with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
 names back to device IDs by the server credentials.
 

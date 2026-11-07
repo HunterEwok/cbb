@@ -65,7 +65,7 @@ What the design cannot choose:
 - **No third-party servers.** Nothing may depend on a service the project does not run or
   the user cannot run (D-3, D-4).
 - **Licence.** The code is AGPL-3.0-only with one author (D-1); copied code keeps its own
-  licence under `internal/third_party` and `lite/core/src/third_party`.
+  licence under `internal/third_party` and `core/src/third_party`.
 - **Small devices.** The lite member's protocol core is `no_std` Rust with no I/O, so that it
   fits an ESP32.
 - **Signing.** Apple's and Microsoft's code signing need accounts the project is still
@@ -150,6 +150,120 @@ The parts of each implementation and what each does. The directory of each part 
 The containers (C4 level 2): the programs of a group and how they talk.
 
 ![The containers: the programs of a computer, a phone, a lite member and the hub, and how they talk](images/containers.svg)
+
+### The service and its helper
+
+The Rust program `cbb` (`member/`) becomes the one member on every device, a computer as
+much as a router: the group, sync, records, seals, admitting devices, commands and the
+control socket. What needs Go stays in Go, in `cbb-helper` (`cmd/cbb-helper`,
+`internal/helper`): keys in the TPM, the Secure Enclave and on a YubiKey, the hub's and the
+forwarder's tunnel with VLESS and REALITY, the relay, remote paste into desktop sessions and
+Windows, quick actions, TVs and the Bluetooth keyboard. The move happens in steps; until it
+ends, the Go service described below is still the computers' member.
+
+- **Started by `cbb` only.** `cbb` starts `cbb-helper` as its child, from beside its own
+  program or from `CBB_HELPER` (empty for none), and talks to it only over the child's
+  standard input and output, the pipes it inherits; the helper logs to its standard error,
+  which goes to `cbb`'s log. No socket or pipe has a name, so no other process can ask the
+  helper for anything, and above all for a signature with a device's key. Started by hand,
+  on a terminal or with arguments, the helper refuses to run.
+- **Messages.** The control socket's: a JSON header on one line, then `len` bytes of
+  payload (docs/protocol.md, section 8). A request carries a `seq` of `cbb`'s own; the
+  helper answers it with op `reply`, the same `seq` and `done`, or with `error` and, in
+  `detail`, the underlying causes, which `cbb` keeps as the error's details (shown in debug
+  mode, always logged). Requests may overlap: each runs on its own, and the answers come in
+  the order they end. A handler that panics fails only its own request.
+- **`hello`** is the first request: the helper answers with its build and the operations it
+  serves, which `cbb` logs. A `cbb` without a helper beside it, as on a router, runs
+  without what the helper does.
+- **Lifetime.** The end of its input tells the helper to exit, so it ends with `cbb`, also
+  when `cbb` is killed. If the helper stops, `cbb` starts it again at the next request, at
+  most once in two seconds.
+- **Keys in hardware.** `key-new` makes a device key in the TPM or a Mac's Secure Enclave
+  where the Go member would (not with `CBB_TPM=off`); its answer has no blob, and says why,
+  where the key would go into a file, which `cbb` then makes itself. `identity.json` keeps
+  the blob as the Go member's file does (`key_tpm`, `key_se`); `key-public` loads it by the
+  blob and `key-sign` signs a SHA-256 digest with it, so `cbb`'s handshakes, copies and
+  records are signed in the hardware and the key never leaves it. `card-sign` signs with a
+  key on a YubiKey, found by its certificate's key hash, after its PIN. `seal` and `unseal`
+  seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
+  the key for sealed messages (`seal.json`) and the tunnel's keys (`tunnel.json`, with the
+  hub's fields Go writes) sealed in the same fields as the Go member.
+- **The clients' operations.** The Rust service already takes what the command line and the
+  desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
+  copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,
+  `copied` and `write`, and images and files: `copy-media`, `copied-media` and `paste-media`
+  with their `part` and `data` messages. It keeps and serves the blobs of media copies
+  (`features: ["media"]`), fetches a copy whole before it writes it to a watcher that takes
+  it, and gives the other watchers its text. The Go `cbb` and agent work against it unchanged
+  (`TestLiteClients`).
+- **The group's root and its admins.** `cbb new` makes a group with the Rust service as its
+  root: the root CA's key stays in `identity.json` as `group_ca_key`, as the Go member keeps
+  it, and the member key goes into the hardware through the helper where it can. A member
+  whose own device record says `full` presents itself as a full member: its hello says so,
+  it publishes itself without `r=lite` and dials the full members with a higher device ID.
+  On the root or an admin it takes `revoke`, `rename`, `freeze`, `thaw`, `resolve`, `admin`,
+  `key-level`, `takeover-delay`, `incoming`, `handover`, `mute` and `unmute` of another
+  device (a command from the core's `manage::order`), and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
+  each a record signed with the root's key or the admin key under its admin CA, by Go's rules
+  and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
+  `cbb` saves it again. The Go command line runs against it, and a Go computer joins, syncs
+  and takes each record (`TestLiteRoot`). `cbb pair` opens a pairing window as Go's does: a
+  six-digit code, `p=1` in its mDNS record, one attempt at a time, closed by three failed
+  ones, after five minutes or once a device joined. Its member port then offers both ALPN
+  protocols, `cbb/3` and `cbb-pair/2`, and takes a joiner's single P-256 certificate; the
+  negotiated protocol decides after the handshake whether the member chain is checked again
+  or the core's admission plays the exchange with the joiner confirming first
+  (`Admission::accept`, `TestLiteRootWindow`). Run with `-full`, it is a computer's service
+  before its own device record arrives: its hellos offer an admin key (in the hardware where
+  cbb-helper can put it, else `admin_key`), and an `admin` message's admin CA makes it an
+  admin with a member certificate from that CA. On such an admin `takeover` keeps the new
+  root's key as `claim` and `claim_key` and signs the claim; a loop looks at the claims every
+  two seconds, as Go's `claimLoop` does, and once the records lead to that root it becomes
+  the root (`root_key`) and signs a new root's first records; as root the same loop gives
+  each connected admin whose admin CA is from an earlier root a new one for the same key, as
+  Go's `renewAdminCAs` (`TestLiteTakeover`). Any
+  member claims the group the same way with the recovery key (`recovery`): the sheet's key,
+  or with `yubikey` the card's, which cbb-helper's `card-sign` uses after the PIN, signs the
+  claim under the recovery key's admin CA from the records or the sheet (`TestLiteRecovery`).
+- **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the
+  group's hub as Go's `cbb global hub` does: the state in `tunnel.json` becomes a hub's
+  (`is_hub`, `endpoints`, `listen_port`, obfuscation kept or made), and its hellos offer the
+  hub's tunnel key. A member's hello with a tunnel key is admitted by Go's `Admit` rules
+  (`members`, at most 256) and answered with the hub's offer and the offers of the hubs
+  after it in the group's order. The hub serves while no hub above it has an offer: GotaTun
+  through `hub.rs` on the UDP port (8764 when none is set), each tunneled TCP connection to
+  the member port passed to a loopback listener of its own, where the node takes it only
+  from the device whose tunnel address it came from (`Node::accept_tunneled`). The claim
+  loop drops members the records refuse or no longer list. `hub off` passes the next hub's
+  offer to the clients as `moved`, waits up to ten seconds for them to leave, and keeps the
+  state as `retired` (`TestLiteHub`). With several hubs (`away/hubs.rs`, Go's `hubs.go`) it
+  sends each peer that may be a hub its `hubs` share after the hello, and again when it
+  starts or stops serving or admits a client; it takes the clients and the offer another hub
+  shares, and a device that stopped being a hub tells the computers and the possible hubs
+  so. The run loop serves only while no hub above answers: starting, it tries them once;
+  having lost the hub above, for a minute (`CBB_STANDBY_GRACE` in tests); while it serves,
+  every 15 minutes, and when a hub above shares that it serves, after passing that hub's
+  offer on to its clients and waiting for those in its tunnel to leave (`TestLiteHubs`). Hub
+  commands (`away/movehub.rs`, Go's `movehub.go` and `stophub.go`) go through the core's
+  `manage::Order::Hub`, signed by the admin and sealed to the receiver: `move` hands over the
+  clients and this device, passes the new hub's offer on as `moved` and keeps it as a
+  client; `hub -on` makes an admin computer a hub as well; `hub off -on` sends a stop order.
+  Received, a hub command makes this device a hub at the order's addresses, serving at once
+  and answering with its offer in the result's `tunnel`, or with a stop order stops it after
+  the result went back (`TestLiteHubCommands`). A hub with a forwarder (`tunnel.json`'s
+  `forwarder`, from a request or a hub command; `default` stands for the project's, by the
+  pins this release knows) registers while it serves through the phones' `forward.rs`: its
+  member certificate with the roots, the group's records as the proof that it is the root or
+  an admin, and hellos from its WireGuard port; status shows the registration as Go's
+  `forwarder` (`TestLiteHubForwarder`). An admin signs the `hubs` record of main hubs as Go's
+  `setHubs` and sends `away-off` (`manage::Order::AwayOff`) to another device. `hub -on
+  DEVICE -forward-only` on an admin that admitted the device signs its record with
+  `forward_only` first (`Admin::mark_forward_only`); such a Rust member takes the hub command
+  without being an admin once that record is in, seals no copies (`node::FORWARD_ONLY`) and
+  refuses paste and action commands (`TestLiteForwardOnly`). The pins of a newer
+  `keys.json`, the server credentials and the hub's key periods, VLESS, the relay and
+  invitations are still Go's.
 
 ### Linux components
 
@@ -335,7 +449,7 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
 - A group that a computer created stays for users without a phone app (["without the
   app"](guide/without-app.md)).
 - Every phone app syncs through the same member: the lite member's node in the Rust core,
-  which runs in the app's process (`lite/ffi`, docs/core-api.md, "The member"; D-86). The
+  which runs in the app's process (`ffi/`, docs/core-api.md, "The member"; D-86). The
   iPhone, Android and Aurora apps keep only what is theirs: their keys and the prompts that
   unlock them, pairing, the records they sign, finding the computers on the network (Bonjour,
   NSD) and handing their addresses in, the tunnel and the blind relay, and the answers to what
@@ -1467,8 +1581,8 @@ relay, or a hub.
      anything else; with AmneziaWG on as well, both apply.
    - Risks: WireGuard over TCP adds latency on a lossy network (TCP inside TCP), which a
      clipboard tolerates; XHTTP's packet-up costs a request per batch of packets.
-3. **The lite member, in 0.6.** AmneziaWG around GotaTun (`lite/src/awg.rs`), and VLESS over
-   XHTTP on Linux, a client of its own on rustls and HTTP/1.1 (`lite/src/vless.rs`, its bytes
+3. **The lite member, in 0.6.** AmneziaWG around GotaTun (`member/src/awg.rs`), and VLESS over
+   XHTTP on Linux, a client of its own on rustls and HTTP/1.1 (`member/src/vless.rs`, its bytes
    in `cbb_core::vless`), without Chrome's TLS fingerprint: a network sees rustls's
    ClientHello and HTTP/1.1 where Xray's client shows a browser's and HTTP/2. The site's
    certificate is checked against the system's roots with `cbb_core::tls::web`, which adds
@@ -1499,11 +1613,11 @@ sing-box is not used (GPL).
   in one thread of `cbb`, behind a port on the loopback address that its member TLS dials, so
   no TUN device, no root and no capability is needed. GotaTun takes its AEAD from ring, whose
   C and assembly would need a C cross compiler for each target; the lite member gives it a
-  stand-in with ring's API on RustCrypto's ChaCha20-Poly1305 (`lite/ring-shim`), the
+  stand-in with ring's API on RustCrypto's ChaCha20-Poly1305 (`ring-shim/`), the
   implementation its TLS uses too, so it stays all Rust and links with rust-lld. GotaTun
   speaks plain WireGuard; the lite member wraps its messages in AmneziaWG for a hub that
-  hides its tunnel (`lite/src/awg.rs`) and carries them over VLESS with XHTTP when the offer
-  has it (`lite/src/vless.rs`). A hub reached over VLESS with REALITY only keeps it at home.
+  hides its tunnel (`member/src/awg.rs`) and carries them over VLESS with XHTTP when the offer
+  has it (`member/src/vless.rs`). A hub reached over VLESS with REALITY only keeps it at home.
 - No push notifications: they go through Apple's and Google's servers. A phone gets the
   current text when the app opens, as at home.
 
@@ -1722,7 +1836,7 @@ in the pairing Info, in its hello and in its device record: `linux`, `windows`, 
 | Role     | Devices                                     | What it does                                                    |
 |----------|---------------------------------------------|-----------------------------------------------------------------|
 | `full`   | a computer with the service: Linux, Windows, macOS | listens on the member port, dials the other full members and the lite members, may create a group and be an admin |
-| `lite`   | the lite member (`lite/`)                   | dials the full members, listens for phones; never holds keys     |
+| `lite`   | the lite member (`member/`)                 | dials the full members, listens for phones; never holds keys     |
 | `phone`  | a phone with the app                        | dials every member, never listens for members                   |
 
 The Mac is a full member like the others. A phone with the app, an iPhone or an Android phone, has its own
@@ -1882,7 +1996,7 @@ pasted newline before the user sees it. The `enter` flag presses Enter afterward
 | Android | the app's accessibility service: the clipboard, then `ACTION_PASTE` on the focused input node (or `ACTION_SET_TEXT`) | views without an editable node (some terminals and games); not on the lock screen |
 | iPhone, iPad | not possible: iOS lets no app put text into another app | sender only |
 | the lite member on Linux | the console helper or tmux, as on Linux | as Linux |
-| Nano ESP32 | not yet: the firmware takes no commands; its USB keyboard (`lite/esp32`, `usb.rs`) types only what its console's `type` gives it, in a `console-type` build | only the characters of the layout set on the board, which must match the host's |
+| Nano ESP32 | not yet: the firmware takes no commands; its USB keyboard (`esp32/`, `usb.rs`) types only what its console's `type` gives it, in a `console-type` build | only the characters of the layout set on the board, which must match the host's |
 | ZX Spectrum Next | none: `.cbb` runs only when started | |
 
 **The lock check.** Synthetic input does not stop at a lock screen: XTEST events pass a
@@ -2027,7 +2141,7 @@ docs/protocol.md, section 16.
   stolen Mac is replaced by a new release key certified by a root, with no reinstall, and a
   thief of the Mac cannot rotate to a key of their own.
 - All signatures are P-256 in the envelope of the group's records (`body`, `sig` and the key's
-  hash), which Go, `lite/core` (no_std), CryptoKit, Kotlin, openssl and PowerShell verify
+  hash), which Go, `core/` (no_std), CryptoKit, Kotlin, openssl and PowerShell verify
   with what they already have. Each file has a `type`, so one kind is never taken for
   another.
 - Each release gets `release.json`: the version, the date, the channel, the lowest version
@@ -2121,7 +2235,7 @@ docs/protocol.md, section 16.
 
 1. **Built but for the keys:** the root keys on the hardware keys, the release key in the
    Mac's Secure Enclave, `keys.json`, `release.json` and `stable.json`, with verifiers in
-   Go, `lite/core`, the Swift kit and the Kotlin kit and shared vectors (valid, bad
+   Go, `core/`, the Swift kit and the Kotlin kit and shared vectors (valid, bad
    signature, expired, wrong type, older version, wrong key, the `keys.json` chain).
 2. **Built but for the keys:** the release flow: the draft, `tools/release-sign`, the
    publishing workflow, the mirror, and `get.sh` and `get.ps1` checking the manifest.
@@ -2154,8 +2268,8 @@ docs/protocol.md, section 16.
    "Check for updates" and "Update automatically", nothing for a copy from a store. Not
    yet run on a device; installs from 2027 need the owner's registration with Google's
    developer verification.
-7. **Built for Linux and OpenWrt:** the lite member's `cbb update` (`lite/src/update.rs`),
-   checked with `lite/core`'s verifier, downloading with the system's curl, wget or
+7. **Built for Linux and OpenWrt:** the lite member's `cbb update` (`member/src/update.rs`),
+   checked with `core/`'s verifier, downloading with the system's curl, wget or
    uclient-fetch, installing and rolling back as step 3 does, with the same timers. The
    Nano ESP32 follows with its sync (item 15): a partition table with two app slots and a
    bootloader with rollback, and OTA from a member, checked against the manifest.
@@ -2285,7 +2399,7 @@ One pull request each, smaller ones together:
 5. The lite member on OpenWrt. Done: the procd script runs `cbb service` for it, `get.sh
    --lite` installs it on aarch64, armv7, x86-64, mips and mipsle, and it takes
    `CBB_INTERFACES`. On mips and mipsle it is built with nightly Rust (`-Zbuild-std`,
-   `lite/packaging/mips.sh`) and without the tunnel in 0.6, since GotaTun needs 64-bit
+   `member/packaging/mips.sh`) and without the tunnel in 0.6, since GotaTun needs 64-bit
    atomics; CI runs its Go tests under qemu-mips; the tunnel there is planned for 0.7
    (roadmap item 37).
 
@@ -2374,7 +2488,7 @@ Desktop Mode.
 
 Built in 0.6 (D-79, roadmap item 39): `sh install.sh --rootless`
 (`packaging/linux/install-rootless.sh`), `internal/rootless` and the lite member's
-`lite/src/rootless.rs`; CI installs and removes a full member and a lite member this way.
+`member/src/rootless.rs`; CI installs and removes a full member and a lite member this way.
 Not yet run on a desktop session.
 
 Every install so far needs root once: for the service's own account, the system unit, its

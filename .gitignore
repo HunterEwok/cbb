@@ -52,3 +52,7 @@ go.work.sum
 /apps/ios/Cbbtun.xcframework/
 /site/out-lighthouse/
 /site/node_modules/
+
+# The Rust workspace and the ESP32 firmware
+/target/
+/esp32/target/

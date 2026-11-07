@@ -34,7 +34,7 @@ Builds:
     sudo:
       - apt-get update
       - apt-get install -y -t bookworm-backports golang-go
-    # Rust for the core's library (lite/ffi), the version of cbb.rust in
+    # Rust for the core's library (ffi/), the version of cbb.rust in
     # apps/android/gradle.properties, with cargo-ndk.
     srclibs:
       - rustup@1.28.2

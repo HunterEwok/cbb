@@ -257,7 +257,11 @@ func (s *Service) afterRevocation() {
 		case errors.Is(err, group.ErrStopped):
 			s.logf("cbb: the group's records stop the exchange until its root decides (cbb status says why); members exchange records only")
 		case errors.Is(err, group.ErrRecordsOnly):
-			s.logf("cbb: %s took the group over from this computer, its root; if this computer is not lost, cbb remove %s undoes it", s.takenOverBy(id), s.takenOverBy(id))
+			// Also a new group's root for a moment, before its own device
+			// record is in: no one took it over then.
+			if by := s.takenOverBy(id); by != "" {
+				s.logf("cbb: %s took the group over from this computer, its root; if this computer is not lost, cbb remove %s undoes it", by, by)
+			}
 		case err != nil && s.frozen(id):
 			s.logf("cbb: another admin froze this computer's admin key; the other members refuse it until the group's root or an admin phone unfreezes it")
 		case err != nil:

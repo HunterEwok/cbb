@@ -34,7 +34,7 @@ struct Membership
     // empty when the phone is in no group.
     QString groupTag() const;
 
-    // From the core's answer of a join (lite/ffi's cbb_join_feed, joined).
+    // From the core's answer of a join (ffi's cbb_join_feed, joined).
     static Membership fromJoined(const QJsonObject &joined);
 
     // The saved membership, or a null one when the phone is in no group.

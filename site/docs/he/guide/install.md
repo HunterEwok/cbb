@@ -18,7 +18,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 הדבקה מרחוק ב-GNOME וב-KDE שואלת פעם אחת, בחלון במחשב, לפני שההדבקה הראשונה של מנהל רשאית ללחוץ על המקשים. כדי לדלג על החלון, הוסיפו `--uinput` (‏`... | sudo sh -s -- --uinput`): אז עוזר קטן לוחץ על מקשי ההדבקה (Shift+Insert ו-Enter) עבור מי שמשתמש במסך, ואף פעם לא במסך כניסה או נעילה.
 
-מכשירים קטנים שצריכים רק לסנכרן, כמו נתב או Raspberry Pi Zero, יכולים להשתמש במקום זאת ב[חבר הקל](../../lite/README.md) הקל יותר: ‏`... | sudo sh -s -- --lite`.
+מכשירים קטנים שצריכים רק לסנכרן, כמו נתב או Raspberry Pi Zero, יכולים להשתמש במקום זאת ב[חבר הקל](../../member/README.md) הקל יותר: ‏`... | sudo sh -s -- --lite`.
 
 ### בלי sudo (ללא root)
 
@@ -28,7 +28,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-הוא רץ כשירות הרקע שלכם בזמן שאתם מחוברים, ומסתנכרן כמו כל חבר. השתמשו בו רק כשההתקנה הרגילה אינה אפשרית: כל תוכנית שאתם מריצים יכולה להעתיק את המפתחות שלו, ולכן הוא לעולם אינו יכול להיות שורש הקבוצה, מנהל או הרכזת ([איך זה עובד](how-it-works.md#rootless-members)), ואין לו כללי חומת אש, אין לו TPM ואין לו `--console` או `--uinput`. כדי שימשיך לרוץ גם אחרי שתתנתקו, מנהל המערכת מריץ פעם אחת `sudo loginctl enable-linger YOUR-USER`. להסרה: ‏`sh ~/.local/share/cbb/uninstall.sh`. גם החבר הקל מותקן כך, עם `--lite --rootless` ([חבר קל](../../lite/README.md#without-sudo-rootless)).
+הוא רץ כשירות הרקע שלכם בזמן שאתם מחוברים, ומסתנכרן כמו כל חבר. השתמשו בו רק כשההתקנה הרגילה אינה אפשרית: כל תוכנית שאתם מריצים יכולה להעתיק את המפתחות שלו, ולכן הוא לעולם אינו יכול להיות שורש הקבוצה, מנהל או הרכזת ([איך זה עובד](how-it-works.md#rootless-members)), ואין לו כללי חומת אש, אין לו TPM ואין לו `--console` או `--uinput`. כדי שימשיך לרוץ גם אחרי שתתנתקו, מנהל המערכת מריץ פעם אחת `sudo loginctl enable-linger YOUR-USER`. להסרה: ‏`sh ~/.local/share/cbb/uninstall.sh`. גם החבר הקל מותקן כך, עם `--lite --rootless` ([חבר קל](../../member/README.md#without-sudo-rootless)).
 
 ### SteamOS ‏(Steam Deck)
 

@@ -42,7 +42,7 @@ security audit, each time through one of these properties. Version 2 removes the
 
 The rules are evaluated by a pure function from the record set to the group's **state**
 (protocol.md, section 10, "The state"). It is written twice: in Go (`internal/group`) for the computers, and in
-Rust (`cbb_core`, `lite/core`) for the lite member and, through bindings, for both phone
+Rust (`cbb_core`, `core/`) for the lite member and, through bindings, for both phone
 apps, which no longer evaluate records themselves. The vectors and the differential run
 compare the whole state, not single answers.
 

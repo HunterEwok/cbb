@@ -52,7 +52,7 @@ La placa es un miembro ligero de tu grupo. En su consola:
 - `layout ru` o `layout us` y `rate N` fijan la distribución y la velocidad.
 - `type TEXT` escribe en el dispositivo Bluetooth conectado, o si no en el USB.
 
-Los pegados remotos del grupo hacia la placa se escriben del mismo modo. La guía de la propia placa está en [lite/esp32](../../lite/esp32/README.md).
+Los pegados remotos del grupo hacia la placa se escriben del mismo modo. La guía de la propia placa está en [esp32/](../../esp32/README.md).
 
 ## Un ordenador como mando del televisor
 

@@ -170,11 +170,11 @@ func TestRootCopies(t *testing.T) {
 			t.Errorf("%s: the roots are not roots/roots.pem", p)
 		}
 	}
-	rust := read("lite/src/update.rs")
+	rust := read("member/src/update.rs")
 	_, rest, ok := strings.Cut(rust, "pub const ROOTS: &[&[u8]] = &[")
 	body, _, ok2 := strings.Cut(rest, "\n];")
 	if !ok || !ok2 {
-		t.Fatal("lite/src/update.rs: no ROOTS")
+		t.Fatal("member/src/update.rs: no ROOTS")
 	}
 	var got [][]byte
 	for _, block := range strings.Split(body, "&[")[1:] {
@@ -186,7 +186,7 @@ func TestRootCopies(t *testing.T) {
 		got = append(got, der)
 	}
 	if !sameRoots(got) {
-		t.Error("lite/src/update.rs: ROOTS are not roots/roots.pem")
+		t.Error("member/src/update.rs: ROOTS are not roots/roots.pem")
 	}
 }
 

@@ -6,7 +6,7 @@
 # recorded as indirect requirements, which Dependabot skips by default, so they are allowed by
 # name (until https://github.com/dependabot/dependabot-core/issues/12050 is fixed).
 # cargo covers the lite member and the ESP32 firmware together: the firmware is its own
-# workspace with its own Cargo.lock but builds lite/core and lite/embassy by path, so every
+# workspace with its own Cargo.lock but builds core/ and embassy/ by path, so every
 # update of their dependencies must change both lock files in one pull request (group-by
 # dependency-name), or the firmware's `cargo build --locked` fails. esp-hal and its crates are
 # pinned to a git commit on purpose and are left alone. gradle covers the Android app and its kit.
@@ -58,7 +58,7 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: "cargo"
-    directories: ["/lite", "/lite/esp32"]
+    directories: ["/", "/esp32"]
     schedule:
       interval: "weekly"
       day: "monday"
@@ -68,7 +68,7 @@ updates:
     ignore:
       - dependency-name: "esp-*"
       - dependency-name: "xtensa-lx*"
-      # smoltcp follows embassy-net (lite/embassy): embassy-net 0.9 builds on smoltcp 0.13,
+      # smoltcp follows embassy-net (embassy/): embassy-net 0.9 builds on smoltcp 0.13,
       # and a second copy of smoltcp beside it fails to build (both turn on features of the
       # `managed` crate). Lift this when embassy-net moves to a newer smoltcp.
       - dependency-name: "smoltcp"
