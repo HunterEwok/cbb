@@ -596,17 +596,23 @@ impl Service {
         Ok(())
     }
 
-    /// The control operations mute and unmute: this device's user pauses
-    /// receiving or resumes it; the lite member is never an admin, so it
-    /// mutes no device and ends no mute.
+    /// The control operations mute and unmute: without a device, this
+    /// device's user pauses receiving or resumes it; with one, an admin
+    /// mutes that device or ends its mute (Go's muteOp).
     fn mute_op(&self, h: &Header) -> Result<()> {
-        if !h.device.is_empty() {
-            return Err(Error::msg(
-                "only an admin mutes a device or ends its mute; the lite member is never one: use the phone app or a full member",
-            ));
-        }
         let node = self.node()?;
-        if h.op == "mute" {
+        let on = h.op == "mute";
+        if !h.device.is_empty() {
+            // An admin mutes another device with a command, or this one at
+            // once.
+            let until = crate::mute::until(h.for_ms)?;
+            if self.admin(|a| a.mute(&h.device, on, h.for_ms))?.is_none() {
+                let me = node.identity().id.to_string();
+                self.set_muted(&node, on, until, &me)?;
+            }
+            return Ok(());
+        }
+        if on {
             node.engine.pause(crate::mute::until(h.for_ms)?);
             (self.log)("cbb: this device takes no copies from the group now");
         } else {
@@ -1447,6 +1453,13 @@ impl Service {
                         if l.is_empty() { "hardware".into() } else { l }
                     },
                     key_problem: String::new(),
+                    incoming_ms: node
+                        .records()
+                        .lock()
+                        .unwrap()
+                        .state()
+                        .incoming_ms
+                        .unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
             }
@@ -1539,6 +1552,18 @@ impl Service {
             "key-level" => {
                 let below = self.admin(|a| a.set_key_level(&h.value))?;
                 Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
+            }
+            "takeover-delay" => {
+                self.admin(|a| a.set_takeover_delay(&h.value))?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "incoming" => {
+                self.admin(|a| a.set_incoming(&h.value))?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "handover" => {
+                let name = self.admin(|a| a.hand_over(&h.name))?;
+                Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "pair" => {
                 let _slot = self.take_pairing(|| Ok(Pairing::Qr))?;

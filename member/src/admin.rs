@@ -168,6 +168,25 @@ fn b64_value(b: &[u8]) -> serde_json::Value {
     serde_json::to_value(V(b)).unwrap_or_default()
 }
 
+/// A duration in milliseconds as Go's time.Duration prints it: 72h0m0s,
+/// 1m0s, 5s, 0s.
+fn go_duration(ms: i64) -> String {
+    if ms == 0 {
+        return "0s".into();
+    }
+    let (h, m, sec, rest) = (ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000);
+    let secs =
+        if rest == 0 { format!("{sec}s") } else { format!("{sec}.{}s", format!("{rest:03}").trim_end_matches('0')) };
+    if ms < 1000 {
+        return format!("{ms}ms");
+    }
+    match (h, m) {
+        (0, 0) => secs,
+        (0, _) => format!("{m}m{secs}"),
+        _ => format!("{h}h{m}m{secs}"),
+    }
+}
+
 /// The device that target names in the group's records, by its device ID
 /// or its name, case-insensitive (Go's findDevice).
 pub fn find_device(node: &Node, target: &str) -> Result<Device> {
@@ -561,6 +580,108 @@ impl Admin<'_> {
             .collect())
     }
 
+    /// Sets, on the group's root, how long an admin's claim waits on each
+    /// member before it takes effect, as Go's setTakeoverDelay: value is a
+    /// duration from 0s to 168h (docs/protocol.md, section 10, "Handing
+    /// the group over"). The settings record keeps the key level.
+    pub fn set_takeover_delay(&self, value: &str) -> Result<()> {
+        let ms = crate::go_duration_ms(value.trim())
+            .filter(|ms| (0..=authority::MAX_DELAY).contains(ms))
+            .ok_or_else(|| Error::msg("the takeover delay is a duration from 0s to 168h, as 72h"))?;
+        let s = self.signing().ok().filter(|s| s.root);
+        let s = s.ok_or_else(|| Error::msg("only the group's root sets how long a claim waits"))?;
+        let level = self.current_level(&s.hash());
+        self.sign(
+            &s,
+            Body {
+                kind: authority::TYPE_SETTINGS.into(),
+                takeover_delay_ms: Some(ms),
+                key_level: level,
+                ..Default::default()
+            },
+        )?;
+        self.node.logf(&format!("cbb: a claim to take the group over now waits {} on each member", go_duration(ms)));
+        Ok(())
+    }
+
+    /// Sets, on the root or an admin, how long a copy from another device
+    /// stays live after it arrives, as Go's setIncoming: a duration from 5s
+    /// to 1h (docs/protocol.md, section 10, "The copies setting").
+    pub fn set_incoming(&self, value: &str) -> Result<()> {
+        let ms = crate::go_duration_ms(value.trim())
+            .filter(|ms| (authority::MIN_INCOMING..=authority::MAX_INCOMING).contains(ms))
+            .ok_or_else(|| Error::msg("how long an incoming copy stays live is a duration from 5s to 1h, as 1m"))?;
+        let s = self
+            .signing()
+            .map_err(|_| Error::msg("only the group's root or an admin sets how long an incoming copy stays live"))?;
+        self.sign(&s, Body { kind: authority::TYPE_COPIES.into(), incoming_ms: Some(ms), ..Default::default() })?;
+        self.node
+            .logf(&format!("cbb: a copy from another device now stays live for {} after it arrives", go_duration(ms)));
+        Ok(())
+    }
+
+    /// Hands the group, on the root, to the admin target names, as Go's
+    /// handOver: a handover record names its admin key, so that its claim
+    /// takes effect at once. It returns the admin's name.
+    pub fn hand_over(&self, target: &str) -> Result<String> {
+        let d = find_device(self.node, target)?;
+        let s = self.signing().ok().filter(|s| s.root);
+        let s = s.ok_or_else(|| Error::msg("only the group's root hands the group over"))?;
+        if d.id == self.me() {
+            return Err(Error::msg("this device is the group's root already"));
+        }
+        let Some(admin) = d.admin_key.filter(|_| !d.frozen) else {
+            return Err(Error::msg(format!(
+                "{} is no admin: make it one first (cbb admin), then hand the group over",
+                d.name
+            )));
+        };
+        self.sign(&s, Body { kind: authority::TYPE_HANDOVER.into(), admin: Some(Hash(admin)), ..Default::default() })?;
+        self.node.logf(&format!("cbb: handed the group over to {} ({}): its claim takes effect at once", d.name, d.id));
+        Ok(d.name)
+    }
+
+    /// Mutes the device target names for for_ms (0: until an unmute), or
+    /// ends its mute, as an admin, with a command it signs (Go's muteOp);
+    /// this device's own mute is set where the service asks (it returns
+    /// None then).
+    pub fn mute(&self, target: &str, on: bool, for_ms: i64) -> Result<Option<String>> {
+        let d = find_device(self.node, target)?;
+        let s = self.signing().map_err(|_| {
+            Error::msg(
+                "only an admin mutes a device or ends its mute: the group's root, an admin it made (cbb admin), or an admin phone; cbb mute without -on keeps the group's copies out of this device",
+            )
+        })?;
+        if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
+            return Err(Error::msg(FROZEN));
+        }
+        if d.id == self.me() {
+            return Ok(None);
+        }
+        let me = self.me();
+        let signer = cbb_core::manage::Signer { ca: &s.ca, key: &*s.key, me: &me };
+        let order = if on { cbb_core::manage::Order::Mute(for_ms) } else { cbb_core::manage::Order::Unmute };
+        let r =
+            cbb_core::manage::order(&self.node.records().lock().unwrap(), &signer, &d.id, &order, uptime::wall_ms())?;
+        let res = self.node.command(&r, Duration::from_secs(5)).map_err(|e| e.context(d.name.clone()))?;
+        if res.status != "done" {
+            return Err(Error::msg(format!("{} {} it: {}", d.name, res.status, res.reason)));
+        }
+        Ok(Some(d.name))
+    }
+
+    /// The key level of the newest settings record of the root whose key
+    /// hash is root, which a new one keeps.
+    fn current_level(&self, root: &Hash) -> String {
+        let all = self.node.records().lock().unwrap().all();
+        all.iter()
+            .filter_map(|r| Body::parse(&r.body).ok())
+            .filter(|b| b.kind == authority::TYPE_SETTINGS && b.signer == *root)
+            .max_by_key(|b| b.seq)
+            .map(|b| b.key_level)
+            .unwrap_or_default()
+    }
+
     /// The takeover delay of the newest settings record of the root whose
     /// key hash is root, which a new one keeps.
     fn current_delay(&self, root: &Hash) -> Option<i64> {
@@ -577,12 +698,6 @@ impl Admin<'_> {
 const PAIR_LIFETIME: Duration = Duration::from_secs(300);
 
 impl Admin<'_> {
-    /// Admits a device that shows a QR code and waits (docs/protocol.md,
-    /// section 6, "The joiner listens"), as Go's pairDial: it dials the
-    /// code's addresses on the home network in turn, runs the pairing in
-    /// the core (cbb_core::admit), and records the device once its Welcome
-    /// is out. With admins, on the root only, a phone that offers an admin
-    /// key becomes an admin. It returns the device's name.
     /// This member as the admitting side of a pairing: the group's root,
     /// or an admin that is not frozen. With admins, on the root only, it
     /// makes a phone that offers an admin key an admin.
@@ -602,6 +717,12 @@ impl Admin<'_> {
         })
     }
 
+    /// Admits a device that shows a QR code and waits (docs/protocol.md,
+    /// section 6, "The joiner listens"), as Go's pairDial: it dials the
+    /// code's addresses on the home network in turn, runs the pairing in
+    /// the core (cbb_core::admit), and records the device once its Welcome
+    /// is out. With admins, on the root only, a phone that offers an admin
+    /// key becomes an admin. It returns the device's name.
     pub fn admit_by_qr(&self, code: &str, addrs: &[String], fingerprint: &str, admins: bool) -> Result<String> {
         let code = cbb_core::pair::normalize_code(code)?;
         if fingerprint.is_empty() {
@@ -730,6 +851,15 @@ mod tests {
         assert!(level_allows("files", "file", "a", "", true).is_ok());
         assert!(level_allows("proven", "hardware", "a", "", true).is_err());
         assert!(level_allows("files", "rootless", "a", "", true).is_err());
+    }
+
+    #[test]
+    fn durations_as_go_prints_them() {
+        for (ms, want) in
+            [(0, "0s"), (500, "500ms"), (5000, "5s"), (1500, "1.5s"), (60_000, "1m0s"), (72 * 3_600_000, "72h0m0s")]
+        {
+            assert_eq!(go_duration(ms), want);
+        }
     }
 
     #[test]

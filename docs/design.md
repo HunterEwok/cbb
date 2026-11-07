@@ -200,7 +200,8 @@ ends, the Go service described below is still the computers' member.
   whose own device record says `full` presents itself as a full member: its hello says so,
   it publishes itself without `r=lite` and dials the full members with a higher device ID.
   On the root or an admin it takes `revoke`, `rename`, `freeze`, `thaw`, `resolve`, `admin`,
-  `key-level` and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
+  `key-level`, `takeover-delay`, `incoming`, `handover`, `mute` and `unmute` of another
+  device (a command from the core's `manage::order`), and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
   each a record signed with the root's key or the admin key under its admin CA, by Go's rules
   and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
   `cbb` saves it again. The Go command line runs against it, and a Go computer joins, syncs

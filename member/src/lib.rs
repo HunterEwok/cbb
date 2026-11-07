@@ -795,8 +795,14 @@ fn cmd_mute(g: &Global, args: &[String], unmute: bool) -> Result<()> {
 }
 
 /// Reads a duration as Go writes one, such as 90s, 15m, 1h or 1h30m, in
-/// milliseconds.
+/// milliseconds, for a mute.
 fn parse_duration_ms(s: &str) -> Option<i64> {
+    go_duration_ms(s).filter(|ms| *ms <= mute::MAX_MS)
+}
+
+/// Reads a duration as Go writes one, such as 0s, 90s, 15m, 72h or 1h30m,
+/// in milliseconds.
+pub(crate) fn go_duration_ms(s: &str) -> Option<i64> {
     let mut total: i64 = 0;
     let mut num = String::new();
     let mut rest = s;
@@ -819,7 +825,7 @@ fn parse_duration_ms(s: &str) -> Option<i64> {
         rest = &rest[unit_len..];
         total = total.checked_add(num.parse::<i64>().ok()?.checked_mul(unit)?)?;
     }
-    (total <= mute::MAX_MS).then_some(total)
+    Some(total)
 }
 
 /// What the sync mode mode does, as cbb mode on a full member says it.

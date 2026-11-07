@@ -22,7 +22,10 @@ All notable changes to cbb are documented in this file. The format follows
   `resolve`), each through the unchanged Go command line (`TestLiteRoot`). It presents itself
   as a full member when its device record says so. A member the records remove or freeze
   now gets those records before its connection closes. `cbb pair` on it opens a pairing
-  window with a code, which a computer joins as it joins a Go root (`TestLiteRootWindow`).
+  window with a code, which a computer joins as it joins a Go root (`TestLiteRootWindow`). It
+  also sets the takeover delay and how long an incoming copy stays live, hands the group to
+  an admin, and mutes and unmutes a device (`cbb takeover -delay`, `incoming`, `handover`,
+  `mute -on`, `unmute -on`).
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

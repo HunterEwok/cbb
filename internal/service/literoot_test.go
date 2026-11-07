@@ -181,6 +181,23 @@ func TestLiteRoot(t *testing.T) {
 	if out, err := cbb("", "remove", "nobody"); err == nil || !strings.Contains(out, `no device "nobody"`) {
 		t.Errorf("cbb remove of an unknown device: %v\n%s", err, out)
 	}
+	// The group's settings, a mute and a handover.
+	must("", "incoming", "2m")
+	waitFor(t, "the laptop takes the incoming time", func() bool { return laptop.status(t).IncomingMS == 120000 })
+	if out := must("", "takeover", "-delay", "0s"); !strings.Contains(out, "now waits 0s") {
+		t.Errorf("cbb takeover -delay:\n%s", out)
+	}
+	if out, err := cbb("", "takeover", "-delay", "200h"); err == nil || !strings.Contains(out, "from 0s to 168h") {
+		t.Errorf("a takeover delay too long: %v\n%s", err, out)
+	}
+	must("", "mute", "-on", "desk")
+	waitFor(t, "the laptop muted", func() bool { return laptop.status(t).Muted })
+	must("", "unmute", "-on", "desk")
+	waitFor(t, "the laptop unmuted", func() bool { return !laptop.status(t).Muted })
+	if out := must("", "handover", "desk"); !strings.Contains(out, "Handed the group over to desk") {
+		t.Errorf("cbb handover:\n%s", out)
+	}
+
 	must("", "remove", "desk")
 	waitFor(t, "the laptop removed", func() bool { return laptop.status(t).Removed })
 }

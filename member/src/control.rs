@@ -205,6 +205,9 @@ pub struct Status {
     /// TPM or a Secure Enclave.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub key_problem: String,
+    /// How long a copy from another device stays live after it arrives.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub incoming_ms: i64,
 }
 
 /// A quick action as the device's user set it, with the names of the Go
