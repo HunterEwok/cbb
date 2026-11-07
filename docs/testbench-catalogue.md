@@ -250,8 +250,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | M6 | A new device starts in `own`; a device without a mode file shares | fleet | |
 | M7 | The phones' automatic paths follow the mode: Android's service writes only in a receiving mode and its accessibility service sends only in a sending mode; the iPhone writes the last 45 s only in a receiving mode | ui | |
 | M8 | `cbb mute` keeps the group's copies out of this device while its own still go out; `cbb status` says so; it lasts across a restart; `cbb unmute` ends it; `-for` ends it by itself | fleet | |
-| M9 | An admin's `cbb mute -on DEVICE`: the device's copies reach no one, every devices list says it is muted, its own user (no admin) cannot end it, another admin can (the last command counts), `-for` ends it by itself; a device that is no admin mutes no one | fleet | |
-| M10 | `cbb incoming`: the root or an admin sets how long a copy from another device stays live, every member shows it; out of 5s to 1h, or from a device that is no admin, refused | fleet | |
+| M9 | An admin's `cbb mute -on DEVICE`: the device's copies reach no one, every devices list says it is muted, its own user (no admin) cannot end it, another admin can (the last command counts, even a shorter mute after a longer one), `-for` ends it by itself; a mute of a device that cannot be reached is refused with why; a device that is no admin mutes no one | fleet | |
+| M10 | `cbb incoming`: the root or an admin sets how long a copy from another device stays live, every member shows it; out of 5s to 1h, or from a device that is no admin, refused; a device cut off for 10 seconds writes the copy made meanwhile with a window of 1m, not with one of 5s | fleet | |
 
 ## 7. Images, files and formatted text (O)
 
@@ -357,9 +357,12 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W39 | A new credential period (30 days): new tag, period key and server keys; the servers cannot link two periods; the lists padded | time | |
 | W40 | The servers keep nothing: no file or log line with addresses, tags, IDs, names or markers, in either mode; the units' exposure score [S18] | real | |
 | W41 | The push sender: an encrypted push reaches the iPhone and wakes it; cbb.tools stores nothing | ui, real | Apple account |
-| W42 | Phones away: the tunnel in the app's process (`cbbtun`), the loopback port, the kits' member TLS to the hub; the Android foreground service away; the iPhone while the app runs | ui | |
+| W42 | Phones away: the tunnel in the app's process (`cbbtun`), the loopback port, the kits' member TLS to the hub; the Android foreground service away; the iPhone while the app runs; the devices list marks the hub, and a computer behind it shows online | ui | |
 | W44 | The ways out carry only cbb: a hostile client with a member's keys, sending everything to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback, TCP or UDP, IPv4 or IPv6, and nothing reaches the stand-in for the internet; VLESS, the relay, the phones' hub and the lite member's tunnel in unit tests (roadmap item 61) | fleet | |
 | W45 | A hub on a network that lets only HTTPS through: with UDP and the forwarder's TCP port blocked, it registers inside VLESS and its client away syncs both ways | fleet | |
+| W46 | A forwarder whose VLESS runs over XHTTP behind its site's web server (`cbb forward -vless-xhttp`): with UDP and the forwarder's TCP port blocked, the hub registers through the web server and its client away syncs both ways through it; anyone else gets the site; in the time-scaled build at the real times, whose VLESS alone trusts the web server's own CA (`CBB_TEST_XHTTP_CA`) | time | |
+| W47 | `cbb update` on a client away whose hub uses VLESS asks the mirror on the forwarder's server (`cbb forward -vless-mirror`) only inside VLESS, the mirror's certificate checked on the way; as W46 | time | |
+| W48 | The project's relay (`cbb global relay default`) followed from the signed lists: a group without a hub meets at it by its pin in `keys.json`; when it takes a new key, the newer lists bring every member back without the user; when it moves, the members find it at the `endpoints` of the newest `entries.json` and keep that address | fleet | |
 
 ## 11. The command line, the control socket and errors (U)
 
@@ -448,7 +451,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | S22 | Signed releases: the envelope checks against the shared vectors on the devices themselves (Go, the lite member, both kits) | fleet, ui | |
 | S23 | Commands passed on by a member cannot be changed or forged by it | fleet | |
 | S24 | A stolen admin computer (its state copied to a fresh container): it acts until frozen; after the freeze nothing it signs counts | fleet | |
-| S25 | Copies sealed end to end: through a hub that only passes them on, text and a file arrive whole both ways, and neither the hub's memory nor its disk ever holds them in the clear, while a member that reads them does; that hub takes no paste | fleet | |
+| S25 | Copies sealed end to end: through a hub that only passes them on, text and a 20 MB file arrive whole both ways, and neither the hub's memory nor its disk ever holds them in the clear, while a member that reads them does; that hub takes no paste | fleet | |
 | S26 | A paste command to a device behind a hub passes through it sealed: the receiver's answer comes back, and the hub never holds the text | fleet | |
 
 ## 15. Load, concurrency and faults (E)

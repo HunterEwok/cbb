@@ -110,7 +110,7 @@ func onlyCBB(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 // registration, and its client away still syncs both ways.
 func hubOverVLESS(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/W45-hub-vless/"
-	a := newAwayGroupWith(ctx, r, f, "fleet/W45-hub-vless", 1, true)
+	a := newAwayGroupWith(ctx, r, f, "fleet/W45-hub-vless", 1, realityVLESS)
 	if a == nil {
 		return
 	}
@@ -178,5 +178,154 @@ func hubOverVLESS(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 			return err
 		}
 		return syncs(ctx, a.benchGroup, hub, c, "back while the hub has only HTTPS", 2*timeout)
+	})
+}
+
+// webCA is where a member keeps the XHTTP web server's CA, which the
+// time-scaled build's VLESS trusts (CBB_TEST_XHTTP_CA).
+const webCA = "/etc/cbbbench-web-ca.pem"
+
+// xhttpEnv is the environment of the fleet's servers and members for
+// W46: the time-scaled build at the real times, its VLESS trusting the web
+// server's CA.
+var xhttpEnv = []string{"CBB_TEST_SCALE=1", "CBB_TEST_XHTTP_CA=" + webCA}
+
+// trustWeb puts the XHTTP forwarder's web server's CA on each of ds, for
+// its VLESS and among the system's for the mirror's TLS, and starts its
+// service again, which reads it when it starts.
+func (a *awayGroup) trustWeb(ctx context.Context, ds ...*Device) error {
+	ca, err := Run(ctx, a.fwd, "cat "+xhttpCA, "")
+	if err != nil {
+		return err
+	}
+	for _, d := range ds {
+		if _, err := Run(ctx, d, "cat >"+webCA+" && mkdir -p /etc/ssl/certs && cat "+webCA+" >>/etc/ssl/certs/ca-certificates.crt", ca); err != nil {
+			return err
+		}
+		if _, err := Run(ctx, d, fleetKill, ""); err != nil {
+			return err
+		}
+		time.Sleep(2 * time.Second)
+		if err := eventually(ctx, 20*time.Second, func() error {
+			_, err := Run(ctx, d, "cbb status", "")
+			return err
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// hubOverXHTTP (W46): a forwarder whose VLESS runs over XHTTP behind the
+// web server of its site, which ends the TLS and passes only its path:
+// with UDP and the forwarder's TCP port blocked for everyone, the hub
+// registers inside it and its client away syncs through it both ways; the
+// web server passed the requests, and gives anyone else the site. W47:
+// cbb update on that client asks the mirror on the forwarder's server
+// inside VLESS. It runs in the time suite at the real times: only the
+// time-scaled build's VLESS trusts a web server whose certificate no public
+// CA signs.
+func hubOverXHTTP(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
+	const p = "fleet/W46-xhttp/"
+	a := newAwayGroupWith(ctx, r, f, "fleet/W46-xhttp", 1, xhttpVLESS)
+	if a == nil {
+		return
+	}
+	hub := a.hub
+	c := a.join(ctx, r, p+"invited")
+	if c == nil {
+		return
+	}
+	wait := 3 * time.Minute
+	if r.Do(p+"vless", func() error {
+		if err := connected(ctx, c, wait); err != nil {
+			return fmt.Errorf("before the web server's CA: %w", err)
+		}
+		if err := a.trustWeb(ctx, hub, c); err != nil {
+			return err
+		}
+		if err := connected(ctx, c, wait); err != nil {
+			return fmt.Errorf("after the web server's CA: %w", err)
+		}
+		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
+			return err
+		}
+		if err := learnAtHome(ctx, f, a, c); err != nil {
+			return err
+		}
+		return globalShows(ctx, c, "VLESS", wait)
+	}) != nil {
+		return
+	}
+	rules := []string{
+		"-d " + fwdPublic + " -p udp -j DROP",
+		"-d " + fwdPublic + " -p tcp --dport 8764 -j DROP",
+		"-d " + hubPublic + " -p udp -j DROP",
+	}
+	defer func() {
+		for _, rule := range rules {
+			Run(context.WithoutCancel(ctx), a.in.router, "iptables -t mangle -D PREROUTING "+rule, "")
+		}
+	}()
+	r.Do("fleet/W46-xhttp", func() error {
+		for _, rule := range rules {
+			if _, err := Run(ctx, a.in.router, "iptables -t mangle -I PREROUTING "+rule, ""); err != nil {
+				return err
+			}
+		}
+		// The forwarder restarts, so the hub registers again, now only
+		// through the web server; the web server comes back with it.
+		if _, err := docker(ctx, "restart", "-t", "1", a.fwd.Container); err != nil {
+			return err
+		}
+		if err := a.startWeb(ctx); err != nil {
+			return err
+		}
+		want := "registered with the forwarder at " + fwdPublic + ":8764 over VLESS"
+		if err := eventually(ctx, wait, func() error {
+			out, err := docker(ctx, "logs", hub.Container)
+			if err == nil && !strings.Contains(out, want) {
+				err = fmt.Errorf("%s's log does not say %q", hub.Name, want)
+			}
+			return err
+		}); err != nil {
+			return err
+		}
+		if err := connected(ctx, c, wait); err != nil {
+			return err
+		}
+		if err := syncs(ctx, a.benchGroup, c, hub, "through the web server", 2*timeout); err != nil {
+			return err
+		}
+		if err := syncs(ctx, a.benchGroup, hub, c, "back through the web server", 2*timeout); err != nil {
+			return err
+		}
+		hits, err := Run(ctx, a.fwd, "cat "+xhttpHits, "")
+		if err != nil || strings.TrimSpace(hits) == "" || strings.TrimSpace(hits) == "0" {
+			return fmt.Errorf("the web server passed no request to the forwarder: %q, %v", strings.TrimSpace(hits), err)
+		}
+		out, err := Run(ctx, c, "curl -sk --max-time 10 --resolve "+xhttpName+":443:"+fwdPublic+" https://"+xhttpName+"/", "")
+		if err == nil && !strings.Contains(out, "cbb-bench borrowed site") {
+			err = fmt.Errorf("a visitor of the site got %q, not the site", firstLine(out))
+		}
+		return err
+	})
+	r.Do("fleet/W47-mirror", func() error {
+		// cbb update on the client away asks the mirror only inside VLESS,
+		// through the forwarder, whose server has the mirror; the
+		// stand-in's TLS is checked on the way, and it serves no release,
+		// so the check itself fails.
+		out, _ := runOut(ctx, c, "cbb update -check", 3*time.Minute)
+		hits, err := Run(ctx, a.fwd, "cat "+mirrorHits+" 2>/dev/null; true", "")
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(hits, ".json") {
+			return fmt.Errorf("the mirror on the forwarder's server was not asked for a release (%q); cbb update printed %q", strings.TrimSpace(hits), strings.TrimSpace(out))
+		}
+		if !strings.Contains(out, "over VLESS") {
+			return fmt.Errorf("cbb update does not say it asked the mirror over VLESS: %q", strings.TrimSpace(out))
+		}
+		return nil
 	})
 }

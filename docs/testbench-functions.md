@@ -412,7 +412,10 @@ line here with every new function, and a case for it in the catalogue.
 | W.46 | Away on Android in the background | W42 |
 | W.47 | A hub that only passes the copies on (`-forward-only`), and `cbb global hub off` | W43 |
 | W.48 | The ways out carry only cbb | W44 |
-| W.49 | A hub registers inside VLESS | W45 |
+| W.49 | A hub registers inside VLESS | W45, W46 |
+| W.50 | VLESS over XHTTP behind a web server | W46 |
+| W.51 | Updates through the forwarder's mirror over VLESS | W47 |
+| W.52 | The project's relay follows its key and address from the signed lists | W48 |
 
 ## U. The command line, the control socket and errors
 

@@ -60,7 +60,7 @@ var automated = map[string][]string{
 	"S17": {"fleet"}, "S23": {"fleet"}, "G31": {"fleet"}, "G32": {"fleet"}, "K14": {"fleet"}, "K11": {"fleet"}, "G41": {"fleet"}, "Y6": {"fleet"}, "I3": {"fleet"}, "I8": {"fleet"}, "I9": {"fleet"}, "I10": {"fleet"}, "I11": {"fleet"}, "I12": {"fleet"}, "I2": {"fleet"}, "I4": {"fleet"}, "I6": {"fleet"}, "I7": {"fleet"}, "O9": {"fleet"}, "U9": {"fleet"}, "O6": {"fleet"}, "O15": {"fleet"}, "G17": {"fleet"}, "G8": {"fleet"}, "S22": {"fleet"}, "I1": {"fleet"},
 	"I5": {"fleet"}, "I20": {"fleet"}, "S12": {"fleet"}, "G15": {"fleet"}, "S7": {"fleet"}, "S6": {"fleet"}, "H5": {"fleet"},
 	"M8": {"fleet"}, "M9": {"fleet"}, "M10": {"fleet"},
-	"W44": {"fleet"}, "W45": {"fleet"}, "S25": {"fleet"}, "S26": {"fleet"}, "W43": {"fleet"}, "Y36": {"fleet"},
+	"W44": {"fleet"}, "W45": {"fleet"}, "W46": {"time"}, "W47": {"time"}, "W48": {"fleet"}, "S25": {"fleet"}, "S26": {"fleet"}, "W43": {"fleet"}, "Y36": {"fleet"},
 	"W17": {"fleet"}, "D1": {"fleet"}, "S1": {"fleet"}, "S2": {"fleet"}, "S9": {"fleet"}, "S18": {"fleet"}, "O10": {"fleet"}, "Y34": {"fleet"}, "I25": {"fleet"}, "W2": {"fleet"}, "D10": {"fleet"},
 	// The desktops' own clipboards.
 	"Y24": {"desktop"}, "Y25": {"desktop"}, "Y31": {"desktop"}, "Y32": {"desktop"},
@@ -86,7 +86,7 @@ var automated = map[string][]string{
 	// Swift and Kotlin phones admit a Go joiner by its QR code (G10, the fleet's
 	// G17 the refusals), a takeover (G28), a computer made an admin (G36), the
 	// watch's shared vectors (G38), the attestation and EK chains (K10).
-	"G10": {"ci"}, "G28": {"ci"}, "G36": {"ci"}, "G38": {"ci"}, "K10": {"ci"},
+	"G10": {"ci"}, "G28": {"ci"}, "G36": {"ci", "phone"}, "G38": {"ci"}, "K10": {"ci"},
 	// The published workflow's check of every release (release-check).
 	"I22": {"ci"},
 	// The time-scaled build.

@@ -643,7 +643,7 @@ func hubLoad(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 // borrowed site.
 func vlessAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/W34-vless/"
-	a := newAwayGroupWith(ctx, r, f, "fleet/W34-vless", 1, true)
+	a := newAwayGroupWith(ctx, r, f, "fleet/W34-vless", 1, realityVLESS)
 	if a == nil {
 		return
 	}

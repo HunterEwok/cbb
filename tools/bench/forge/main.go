@@ -26,7 +26,8 @@
 // limits in fetch.go, the phone that scans a QR code in qr.go, a relay
 // between two pairing sessions in relay.go, looking for a text in the
 // services' memory in memscan.go, the stand-in for the internet in
-// outside.go. It is never part of a release.
+// outside.go, the web server in front of a forwarder's XHTTP in web.go. It
+// is never part of a release.
 package main
 
 import (
@@ -61,6 +62,11 @@ func main() {
 	if flag.NArg() > 0 && outsideCase(flag.Arg(0)) {
 		// It serves until it fails.
 		fmt.Fprintln(os.Stderr, "forge:", runOutside(*addr, flag.Arg(0)))
+		os.Exit(1)
+	}
+	if flag.NArg() > 0 && webCase(flag.Arg(0)) {
+		// It serves until it fails.
+		fmt.Fprintln(os.Stderr, "forge:", runWeb(*addr, flag.Arg(0)))
 		os.Exit(1)
 	}
 	if flag.Arg(0) == "memscan" {
