@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use cbb_core::admit::{self, Admitted, Admitter, GroupView};
 use cbb_core::clip::{Engine, Kind, Via};
 use cbb_core::identity::Identity;
 use cbb_core::wire::DeviceInfo;
@@ -208,6 +209,25 @@ impl Member {
             }
         }
         out
+    }
+
+    /// The member's identity, with the roots the records lead to.
+    pub fn identity(&self) -> Arc<Identity> {
+        self.node.identity()
+    }
+
+    /// What admitting a device takes from the group's records.
+    pub fn group_view(&self) -> GroupView {
+        GroupView::of(&self.node.records().lock().unwrap())
+    }
+
+    /// Adds the device record of a device this phone admitted, signed by
+    /// the admitter's CA key, and passes it to the group.
+    pub fn record_admitted(&self, admitter: &Admitter, a: &Admitted) -> Result<()> {
+        let records = self.node.records();
+        let r = admit::device_record(&records.lock().unwrap(), admitter, a, uptime::wall_ms())?;
+        self.node.publish_records(&[r]);
+        Ok(())
     }
 
     /// Stops the member and closes its connections.

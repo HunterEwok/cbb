@@ -88,6 +88,25 @@ uint8_t *cbb_member_pause(const cbb_member *m, const uint8_t *request, size_t le
 uint8_t *cbb_member_muted(const cbb_member *m, size_t *answer_len);
 void cbb_member_stop(cbb_member *m);
 
+/*
+ * Admitting a device by its QR code as an admin of the group (src/admit.rs),
+ * only with the feature member: request is {"qr","public","admin_ca","make_admin"},
+ * public the point of the key sign holds (the phone's admin key, or the root's
+ * key with no admin_ca), and the answer {"addrs"} to dial. For each address,
+ * cbb_admit_dial starts a connection and cbb_admit_feed takes what arrives;
+ * both answer {"send","state","wrong_code","device","confirmed","error"}, state
+ * pending, admitted (the device is in the group, its record sent; device is
+ * {"device","name","os","role","admin"}), done or failed. m stays running
+ * until cbb_admit_free.
+ */
+typedef struct cbb_admit cbb_admit;
+
+cbb_admit *cbb_admit_new(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
+                         uint8_t **answer, size_t *answer_len);
+uint8_t *cbb_admit_dial(cbb_admit *a, size_t *answer_len);
+uint8_t *cbb_admit_feed(cbb_admit *a, const uint8_t *data, size_t len, int64_t now_ms, size_t *answer_len);
+void cbb_admit_free(cbb_admit *a);
+
 #ifdef __cplusplus
 }
 #endif

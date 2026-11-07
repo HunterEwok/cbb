@@ -87,6 +87,8 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
 }
 
 #[cfg(feature = "join")]
+#[cfg(feature = "member")]
+pub mod admit;
 pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
@@ -364,6 +366,104 @@ pub unsafe extern "C" fn cbb_member_devices(m: *const member::Member, answer_len
     // SAFETY: as the function's contract says.
     let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
     to_c(m.devices(), answer_len)
+}
+
+/// Starts admitting a device by its QR code, as an admin of the group
+/// (src/admit.rs): `request` is `{"qr", "public", "admin_ca", "make_admin"}`
+/// and `sign` with `ctx` signs with the key `public` names, the phone's
+/// admin key or the root's, until `cbb_admit_free`. Writes the answer,
+/// `{"addrs"}` to dial, to `answer` and `answer_len` and returns the
+/// admission, or null when the answer is an error.
+///
+/// # Safety
+///
+/// `m` must be a running member of `cbb_member_start`, which stays running
+/// until `cbb_admit_free`; the rest as `cbb_join_new`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_admit_new(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer: *mut *mut u8,
+    answer_len: *mut usize,
+) -> *mut admit::Admit {
+    if request.is_null() || answer.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    let (a, ans) = m.admit(req, sign, ctx as usize);
+    // SAFETY: the caller gives a writable pointer at answer.
+    unsafe { answer.write(to_c(ans, answer_len)) };
+    a.map_or(core::ptr::null_mut(), |a| Box::into_raw(Box::new(a)))
+}
+
+/// Starts on a connection the app is dialing to one of the addresses,
+/// ending the one before: the answer is as `cbb_admit_feed` gives it, its
+/// `send` the first bytes to send.
+///
+/// # Safety
+///
+/// `a` must be an admission of `cbb_admit_new`, not freed, used by one
+/// thread at a time; `answer_len` writable.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_admit_dial(a: *mut admit::Admit, answer_len: *mut usize) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(a) = (unsafe { a.as_mut() }) else { return core::ptr::null_mut() };
+    to_c(a.dial(), answer_len)
+}
+
+/// Passes the `len` bytes at `data` that arrived on the connection; `now_ms`
+/// is the wall clock in Unix milliseconds, or 0 for the system's. The
+/// answer is `{"send", "state", "wrong_code", "device", "confirmed",
+/// "error"}`, state pending, admitted (the device is in the group now),
+/// done or failed.
+///
+/// # Safety
+///
+/// As `cbb_admit_dial`, and `data` must point to `len` readable bytes (or
+/// be null with `len` 0).
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_admit_feed(
+    a: *mut admit::Admit,
+    data: *const u8,
+    len: usize,
+    now_ms: i64,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(a) = (unsafe { a.as_mut() }) else { return core::ptr::null_mut() };
+    if data.is_null() && len != 0 {
+        return core::ptr::null_mut();
+    }
+    let input: &[u8] = if len == 0 {
+        &[]
+    } else {
+        // SAFETY: the caller gives len readable bytes at data.
+        unsafe { core::slice::from_raw_parts(data, len) }
+    };
+    to_c(a.feed(input, now_ms), answer_len)
+}
+
+/// Frees an admission; null does nothing.
+///
+/// # Safety
+///
+/// `a` must be null or an admission of `cbb_admit_new`, not freed before.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_admit_free(a: *mut admit::Admit) {
+    if !a.is_null() {
+        // SAFETY: a is a box cbb_admit_new let go of.
+        drop(unsafe { Box::from_raw(a) });
+    }
 }
 
 /// Stops the member and frees it; null does nothing. Its callbacks may still

@@ -74,9 +74,19 @@ device records with `admin`, `root`, `frozen`, whether it is `online` and whethe
 takes them again (design.md, "Muting a device"), `cbb_member_muted` says how long that pause and
 an admin's mute last, and `cbb_member_stop` stops it. The node carries out the `mute` and
 `unmute` commands an admin sends the phone, keeps both in `mute.json` as the lite member does,
-and refuses the other commands, which a phone has nothing to carry out for. `TestFFIJoiner` runs the join, sync both ways and a
+and refuses the other commands, which a phone has nothing to carry out for.
+
+An admin phone admits a device by the device's QR code with `cbb_admit_new`, `cbb_admit_dial`,
+`cbb_admit_feed` and `cbb_admit_free` (`src/admit.rs` over `cbb_core::admit`): the app dials one
+of the code's addresses and passes the connection's bytes; the core checks the joiner against the
+code's fingerprint, confirms the code first, issues the member certificate with the phone's admin
+CA (`cbb_core::issue`, the key signing through the callback), and an admin CA when the group's
+root admits a phone that asks to be an admin, sends the Welcome and adds the device record to the
+group (docs/protocol.md, section 6, "The joiner listens").
+
+`TestFFIJoiner` runs the join, sync both ways and a
 pause, an admin's mute, the devices list and a renewal against a Go member through the example `phone-on-linux`, and `TestFFIJoinerAdmin` the
-join as an admin.
+join as an admin, then that admin phone admitting a Go computer that listens.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its

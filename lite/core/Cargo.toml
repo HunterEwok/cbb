@@ -40,6 +40,7 @@ p256 = { version = "0.14", default-features = false, features = ["alloc", "arith
 rustls = { version = "0.23.46", default-features = false, optional = true }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
+sha1 = { version = "0.11", default-features = false }
 sha2 = { version = "0.11", default-features = false }
 spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex"] }
 x25519-dalek = { version = "3", default-features = false, features = ["static_secrets"] }

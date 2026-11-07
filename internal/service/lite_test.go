@@ -457,7 +457,7 @@ func TestFFIJoinerAdmin(t *testing.T) {
 	if _, err := admit(next, false); err == nil {
 		t.Fatal("a window that makes no admins admitted a phone that offers an admin key")
 	}
-	next, _ = phoneOnLinux(t, bin, "-name", "admin phone", "-admin")
+	next, in := phoneOnLinux(t, bin, "-name", "admin phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
 	if m, err := admit(next, true); err != nil || m.Name != "admin phone" {
 		t.Fatalf("admitting the phone as an admin: %v, %+v", err, m)
 	}
@@ -477,6 +477,66 @@ func TestFFIJoinerAdmin(t *testing.T) {
 			t.Errorf("the refused phone is listed: %+v", d)
 		}
 	}
+
+	// The admin phone admits a computer that listens, as the app does when
+	// it scans the computer's QR code: with a certificate from its admin
+	// CA, and a device record the root takes from it.
+	waitFor(t, "the admin phone connected", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+	j, err := pair.NewJoiner(pair.Info{Name: "laptop", OS: group.OSLinux})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fp, err := j.Fingerprint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	joined := make(chan *group.Identity, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			joined <- nil
+			return
+		}
+		id, err := j.Accept(context.Background(), conn, "135790", func(*group.Identity) error { return nil })
+		if err != nil {
+			t.Errorf("the computer's join: %v", err)
+		}
+		joined <- id
+	}()
+	fmt.Fprintln(in, "ADMIT "+phone.JoinQR(phone.JoinCode{Code: "135790", Addrs: []string{ln.Addr().String()}, Fingerprint: fp}))
+	if got := next("ADMITTED "); got != string(j.ID) {
+		t.Fatalf("the phone admitted %q, not the computer %s", got, j.ID)
+	}
+	t.Logf("the admin phone admitted the computer %s", j.ID)
+	if got := next("ADMIT DONE "); got != "true" {
+		t.Fatalf("the computer did not confirm its join: %q", got)
+	}
+	id := <-joined
+	if id == nil || id.Issuer == nil || !bytes.Equal(id.Issuer.Raw, ca.Raw) {
+		t.Fatalf("the computer's identity: %+v", id)
+	}
+	if err := id.Cert.CheckSignatureFrom(ca); err != nil {
+		t.Fatalf("the computer's certificate is not from the phone's admin CA: %v", err)
+	}
+	if got, err := group.DeviceOf(id.Cert); err != nil || got != j.ID {
+		t.Fatalf("the computer's certificate names %q: %v", got, err)
+	}
+	waitFor(t, "the root lists the computer the phone admitted", func() bool {
+		for _, d := range pi.devices(t) {
+			if d.Name == "laptop" {
+				return d.Role == group.RoleFull && d.OS == group.OSLinux && !d.Admin
+			}
+		}
+		return false
+	})
 }
 
 // dialJoiner plays the phone that scanned a listening joiner's QR code: it

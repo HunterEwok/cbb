@@ -157,7 +157,7 @@ impl Events {
 }
 
 pub struct Member {
-    node: Node,
+    node: Arc<Node>,
 }
 
 impl Member {
@@ -219,7 +219,7 @@ impl Member {
                 }),
                 log: Arc::new(move |line: &str| ev.send(&Event::Log { line })),
             })?;
-            Ok(Member { node })
+            Ok(Member { node: Arc::new(node) })
         })();
         match made {
             Ok(m) => (Some(m), answer(Ok(serde_json::json!({})))),
@@ -306,5 +306,11 @@ impl Member {
 
     pub fn stop(&self) {
         self.node.stop();
+    }
+
+    /// Starts admitting the device whose QR code the app scanned
+    /// (src/admit.rs), with the issuing key's callback.
+    pub fn admit(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::admit::Admit>, Vec<u8>) {
+        crate::admit::Admit::new(self.node.clone(), request, sign, ctx)
     }
 }

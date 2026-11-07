@@ -29,6 +29,11 @@ All notable changes to cbb are documented in this file. The format follows
   tap opens the device's page. Its new Settings page picks the language for the next start,
   holds what the main page showed about the app, the key and the group, and seven taps on the
   version show the switch for error details. lite/ffi's `cbb_member_devices` lists the devices.
+- The Rust core admits devices as the phone kits and Go do: `cbb_core::issue` makes member
+  certificates, admin CAs and a group's root with a key it never holds, `cbb_core::admit` is
+  the admitting side of pairing (dialing a joiner that shows its QR code, confirming the code
+  first, the Welcome and the device record), and lite/ffi's `cbb_admit_*` hand it to the Aurora
+  app; `TestFFIJoinerAdmin` has an admin phone admit a Go computer.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

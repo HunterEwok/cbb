@@ -64,6 +64,11 @@ impl TimeProvider for SystemClock {
     }
 }
 
+/// The system's clock, for the core's TLS.
+pub(crate) fn clock() -> Clock {
+    Arc::new(SystemClock)
+}
+
 pub(crate) fn wall_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| i64::try_from(d.as_millis()).unwrap_or(0)).unwrap_or(0)
 }
@@ -142,13 +147,13 @@ struct JoinedAnswer {
 }
 
 #[derive(Serialize)]
-struct ErrorAnswer {
+pub(crate) struct ErrorAnswer {
     message: String,
     details: String,
 }
 
 impl ErrorAnswer {
-    fn of(e: &Error) -> ErrorAnswer {
+    pub(crate) fn of(e: &Error) -> ErrorAnswer {
         ErrorAnswer { message: e.to_string(), details: e.details() }
     }
 }
@@ -191,7 +196,7 @@ impl Join {
                 qr,
                 modules,
             };
-            Ok((Join { joiner, code, clock: Arc::new(SystemClock), attempt: None }, ans))
+            Ok((Join { joiner, code, clock: clock(), attempt: None }, ans))
         })();
         match made {
             Ok((j, ans)) => (Some(j), answer(Ok(ans))),

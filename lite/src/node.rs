@@ -819,6 +819,13 @@ impl Node {
         }
     }
 
+    /// Adds records this member signed, such as the device record of a
+    /// device it admitted, keeps them and passes them to every peer.
+    pub fn publish_records(&self, rs: &[Record]) {
+        let own = self.identity().id.clone();
+        self.add_records(rs, &own);
+    }
+
     fn add_records(&self, rs: &[Record], from: &DeviceId) {
         let fresh = {
             let mut st = self.records.lock().unwrap();
