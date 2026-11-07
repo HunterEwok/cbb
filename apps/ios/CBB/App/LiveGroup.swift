@@ -1058,7 +1058,7 @@ final class LiveGroup: GroupController {
     func setMode(_ id: String, to mode: String) async throws {
         if id == state?.device {
             try modeBox.set(mode)
-            try? node?.setMode(mode)
+            try? node?.setSync(on: mode != "own")
             return
         }
         guard let node else { throw CoreMember.Failure.notConnected }
@@ -1411,7 +1411,7 @@ final class LiveGroup: GroupController {
                                         seal: try SealKey.secret(), cert: g.memberCert, issuer: g.memberIssuer, groupCA: g.groupCA,
                                         roots: g.trusted)) { try signer.signature(digest: $0) }
         try node.addRecords(g.records.records)
-        try node.setMode(modeBox.mode)
+        try node.setSync(on: modeBox.mode != "own")
         if let muted = modeBox.mutedUntilMS { try node.setMute(untilMS: muted) }
         let box = RecordBox(groupCA: g.groupCA, set: g.records)
         let credentials = CredentialBox(url: credentialsURL, group: g)
@@ -1637,7 +1637,7 @@ final class LiveGroup: GroupController {
             let (result, change) = modeBox.take(c, from: from, records: box, me: device)
             try? node.answer(token, result: result)
             switch change {
-            case let .mode(mode)?: try? node.setMode(mode)
+            case let .mode(mode)?: try? node.setSync(on: mode != "own")
             case .mute?:
                 // Connects again once the result has gone back, so that the
                 // hellos say whether it is muted.

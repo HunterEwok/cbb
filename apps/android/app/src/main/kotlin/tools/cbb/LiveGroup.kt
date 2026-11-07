@@ -1361,7 +1361,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (!tmp.renameTo(modeFile)) throw IOException("cannot save the sync mode")
         Log.i(TAG, "the sync mode is $mode now")
         // The hellos say it from the next connection, which the node makes at once.
-        if (tell) currentNode?.let { n -> runCatching { n.setMode(mode) } }
+        if (tell) currentNode?.let { n -> runCatching { n.setSync(mode != "own") } }
     }
 
     /**
@@ -1448,7 +1448,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Log.i(TAG, "${body.by} set the sync mode to $mode")
             onModeChanged?.invoke()
             // The hellos say it once the result has gone back on the connection that brought the command.
-            later { n -> n.setMode(mode) }
+            later { n -> n.setSync(mode != "own") }
             Member.CommandResult(body.id, "done")
         } catch (e: IOException) {
             Log.e(TAG, "cannot save the sync mode", e)
@@ -2151,7 +2151,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         runCatching {
             n.addRecords(g.records.records)
-            n.setMode(syncMode)
+            n.setSync(syncMode != "own")
             n.setMute(mutedUntilMS)
             n.setTunnelKey(if (isHub) null else a.keys)
             n.setEvidence(ownEvidence())

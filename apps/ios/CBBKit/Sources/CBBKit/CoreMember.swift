@@ -525,11 +525,12 @@ public final class CoreMember: @unchecked Sendable {
         return try await detached("wait", A(timeout_ms: ms), as: R.self).connected
     }
 
-    /// Turns sync off for the mode "own" and on for any other (design.md,
-    /// "Sync on and off"); the members see it at the next connection.
-    public func setMode(_ mode: String) throws {
+    /// Turns the phone's sync on, or off for forMS milliseconds, 0 for
+    /// until it is turned on (design.md, "Sync on and off"); the members see
+    /// it at the next connection. A time with sync on is refused.
+    public func setSync(on: Bool, forMS: Int64 = 0) throws {
         struct A: Encodable { var on: Bool; var for_ms: Int64 }
-        try run("sync", A(on: mode != "own", for_ms: 0))
+        try run("sync", A(on: on, for_ms: forMS))
     }
 
     /// Mutes the phone until untilMS (0: until an admin lifts it), or nil
