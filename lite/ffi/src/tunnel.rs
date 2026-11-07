@@ -24,18 +24,28 @@
 //!   `member_port` (the app's member listener on the loopback address):
 //!   `{"id", "udp_port"}`, the phone as the group's hub;
 //! - `hub_set_clients` with `id` and `clients`, `hub_status` with `id`
-//!   (`{"udp_port", "log"}`) and `hub_stop` with `id`.
+//!   (`{"udp_port", "log"}`) and `hub_stop` with `id`;
+//! - `hub_invite` with `id`, `group` (the group's tag), `endpoints` (the
+//!   hub's addresses away from home, "ip:port"), `lifetime` (seconds, at
+//!   most a day) and `guest_port` (the app's pairing window):
+//!   `{"guest", "text", "secret", "expires"}`, a remote invitation
+//!   (docs/protocol.md, section 12) whose guest tunnel leads to the window;
+//! - `guest_admitted` with `id` and `guest`: the window admitted the device,
+//!   whose connections now go to the member port for 2 minutes;
+//!   `guest_close` with `id` and `guest` drops the guest.
 //!
 //! The answer is `{"ok": ...}` or `{"error": {"message", "details"}}`.
 
 use std::collections::{HashMap, VecDeque};
-use std::net::SocketAddr;
+use std::net::{Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use cbb_core::certs::{self, DeviceId};
 use cbb_core::error::{Error, Result};
-use cbb_lite::hub::{Hub, Peer};
+use cbb_core::invite;
+use cbb_lite::hub::{self, Hub, Peer};
 use cbb_lite::tunnel::{self, Link, State};
 use cbb_lite::wire::TunnelOffer;
 use serde::Deserialize;
@@ -87,6 +97,23 @@ enum Request {
     HubStatus {
         id: u64,
     },
+    HubInvite {
+        id: u64,
+        group: String,
+        endpoints: Vec<String>,
+        /// How long the invitation is valid, seconds, at most a day.
+        lifetime: u64,
+        /// The loopback port of the app's pairing window for it.
+        guest_port: u16,
+    },
+    GuestAdmitted {
+        id: u64,
+        guest: u64,
+    },
+    GuestClose {
+        id: u64,
+        guest: u64,
+    },
     HubStop {
         id: u64,
     },
@@ -106,7 +133,109 @@ struct Client {
 struct RunningHub {
     hub: Hub,
     device: String,
+    /// The hub's public key and AmneziaWG settings, which its invitations
+    /// carry.
+    public: [u8; 32],
+    obfuscation: Option<Value>,
+    clients: Vec<Peer>,
+    guests: Arc<Mutex<HashMap<u64, Guest>>>,
     log: Arc<Mutex<VecDeque<String>>>,
+}
+
+/// The guest tunnel of a remote invitation (docs/protocol.md, section 12):
+/// its connections go to the app's pairing window, and once the window
+/// admitted the device, to the member port.
+struct Guest {
+    peer: Peer,
+    port: u16,
+    admitted: bool,
+}
+
+/// The longest an invitation is valid, and how long its guest stays after
+/// the window admitted the device, as on a computer's hub.
+const MAX_LIFETIME: u64 = 24 * 60 * 60;
+const GUEST_GRACE: Duration = Duration::from_secs(120);
+/// The pairing secret's length.
+const SECRET: usize = 16;
+
+impl RunningHub {
+    /// Gives the hub its clients and the guests whose time is not up.
+    fn set_peers(&self) -> Result<()> {
+        let now = Instant::now();
+        let mut peers = self.clients.clone();
+        if let Ok(mut g) = self.guests.lock() {
+            g.retain(|_, g| g.peer.until.is_none_or(|u| u > now));
+            peers.extend(g.values().map(|g| g.peer.clone()));
+        }
+        self.hub.set_peers(peers, &self.device)
+    }
+
+    fn invite(&self, group: &str, endpoints: &[String], lifetime: u64, guest_port: u16) -> Result<Value> {
+        if lifetime == 0 || lifetime > MAX_LIFETIME {
+            return Err(Error::msg("an invitation is valid for a day at most"));
+        }
+        if guest_port == 0 {
+            return Err(Error::msg("the pairing window's port is 0"));
+        }
+        let endpoints = endpoints
+            .iter()
+            .map(|e| invite::parse_endpoint(e).ok_or_else(|| Error::msg(format!("{e:?} is not an endpoint"))))
+            .collect::<Result<Vec<_>>>()?;
+        let guest_key: [u8; 32] = key32(&tunnel::new_key()?)?;
+        let guest_psk: [u8; 32] = key32(&tunnel::new_key()?)?;
+        let secret = tunnel::new_key()?.get(..SECRET).map(<[u8]>::to_vec).unwrap_or_default();
+        let unix = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| Error::msg("the clock is before 1970"))?;
+        let expires = i64::try_from(unix.as_secs().saturating_add(lifetime)).unwrap_or(i64::MAX);
+        let obfuscation = match &self.obfuscation {
+            Some(v) => Some(
+                invite::obfuscation_from_json(v)
+                    .ok_or_else(|| Error::msg("the hub's obfuscation settings are damaged"))?,
+            ),
+            None => None,
+        };
+        let inv = invite::Invitation {
+            group: group.to_string(),
+            hub: self.device.clone(),
+            hub_key: self.public,
+            endpoints,
+            guest_key,
+            guest_psk,
+            secret: secret.clone(),
+            expires,
+            obfuscation,
+        };
+        let text = inv.to_text();
+        // Read back as the joiner will: the group's tag, 1 to 8 endpoints.
+        invite::parse(&text).map_err(|r| Error::msg(format!("the invitation: {}", r.message())))?;
+        let public = key32(&State::with_key(&guest_key)?.public_key())?;
+        let peer = Peer {
+            key: public,
+            psk: guest_psk,
+            addr: hub::guest_addr(&public),
+            until: Instant::now().checked_add(Duration::from_secs(lifetime)),
+        };
+        let guest = NEXT.fetch_add(1, Ordering::SeqCst);
+        self.guests
+            .lock()
+            .map_err(|_| Error::msg("the hub's guests are broken"))?
+            .insert(guest, Guest { peer, port: guest_port, admitted: false });
+        self.set_peers()?;
+        Ok(json!({ "guest": guest, "text": text, "secret": b64(&secret), "expires": expires }))
+    }
+
+    /// Changes the guests, then gives the hub its peers again.
+    fn guests_then(&self, f: impl FnOnce(&mut HashMap<u64, Guest>)) -> Result<Value> {
+        {
+            let mut g = self.guests.lock().map_err(|_| Error::msg("the hub's guests are broken"))?;
+            f(&mut g);
+        }
+        self.set_peers()?;
+        Ok(json!({}))
+    }
+}
+
+fn key32(b: &[u8]) -> Result<[u8; 32]> {
+    b.try_into().map_err(|_| Error::msg("a key is not 32 bytes"))
 }
 
 static HUBS: Mutex<Option<HashMap<u64, RunningHub>>> = Mutex::new(None);
@@ -139,9 +268,29 @@ fn handle(request: &[u8]) -> Result<Value> {
             hub_start(&key, &device, obfuscation.as_ref(), &clients, member_port, listen.as_deref())
         }
         Request::HubSetClients { id, clients } => hubs(|t| {
-            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
-            r.hub.set_peers(peers(&clients)?, &r.device)?;
+            let r = t.get_mut(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            r.clients = peers(&clients)?;
+            r.set_peers()?;
             Ok(json!({}))
+        }),
+        Request::HubInvite { id, group, endpoints, lifetime, guest_port } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            r.invite(&group, &endpoints, lifetime, guest_port)
+        }),
+        Request::GuestAdmitted { id, guest } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            r.guests_then(|g| {
+                if let Some(g) = g.get_mut(&guest) {
+                    g.admitted = true;
+                    g.peer.until = Instant::now().checked_add(GUEST_GRACE);
+                }
+            })
+        }),
+        Request::GuestClose { id, guest } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            r.guests_then(|g| {
+                g.remove(&guest);
+            })
         }),
         Request::HubStatus { id } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
@@ -193,20 +342,36 @@ fn hub_start(
     let listen: SocketAddr =
         listen.unwrap_or("[::]:0").parse().map_err(|_| Error::msg("the hub's listening address is not ip:port"))?;
     let log = Arc::new(Mutex::new(VecDeque::new()));
-    let hub = Hub::start(
-        &key,
-        device,
-        obfuscation,
-        peers(clients)?,
-        listen,
-        // Every client's connection goes to the app's member listener.
-        Arc::new(move |_| Some(member_port)),
-        logger(log.clone()),
-    )?;
+    let guests: Arc<Mutex<HashMap<u64, Guest>>> = Arc::new(Mutex::new(HashMap::new()));
+    let seen = guests.clone();
+    // A client's connection goes to the app's member listener, a guest's to
+    // its pairing window until the window admitted the device.
+    let target = Arc::new(move |a: Ipv6Addr| -> Option<u16> {
+        if !hub::is_guest(&a) {
+            return Some(member_port);
+        }
+        let g = seen.lock().ok()?;
+        let g = g.values().find(|g| g.peer.addr == a && g.peer.until.is_none_or(|u| u > Instant::now()))?;
+        Some(if g.admitted { member_port } else { g.port })
+    });
+    let clients = peers(clients)?;
+    let hub = Hub::start(&key, device, obfuscation, clients.clone(), listen, target, logger(log.clone()))?;
     let port = hub.udp_port();
+    let public = key32(&State::with_key(&key)?.public_key())?;
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
     hubs(|t| {
-        t.insert(id, RunningHub { hub, device: device.to_string(), log });
+        t.insert(
+            id,
+            RunningHub {
+                hub,
+                device: device.to_string(),
+                public,
+                obfuscation: obfuscation.cloned(),
+                clients,
+                guests,
+                log,
+            },
+        );
         Ok(())
     })?;
     Ok(json!({ "id": id, "udp_port": port }))
@@ -220,7 +385,7 @@ fn peers(clients: &[Client]) -> Result<Vec<Peer>> {
             let psk =
                 c.psk.as_slice().try_into().map_err(|_| Error::msg("a client's preshared key is not 32 bytes"))?;
             let addr = tunnel::addr(&c.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", c.device)))?;
-            Ok(Peer { key, psk, addr })
+            Ok(Peer { key, psk, addr, until: None })
         })
         .collect()
 }

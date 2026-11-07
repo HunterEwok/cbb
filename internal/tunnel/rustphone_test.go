@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HunterEwok/cbb/internal/invite"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
@@ -322,4 +323,91 @@ func rustHub(t *testing.T, bin string, obf *tunnel.Obfuscation) {
 		t.Fatalf("the client left on the list: %v", err)
 	}
 	p.call(t, map[string]any{"op": "hub_stop", "id": id})
+}
+
+// TestRustPhoneHubInvite opens a remote invitation on the Rust hub: Go reads
+// its text, a Go client on the guest tunnel reaches the pairing window, then
+// the member port once the window admitted the device, and nothing after the
+// guest is closed.
+func TestRustPhoneHubInvite(t *testing.T) {
+	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
+	}
+	obf, err := tunnel.NewObfuscation()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Each loopback server answers with its name.
+	serve := func(name string) int {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { ln.Close() })
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				c.Write([]byte(name))
+				c.Close()
+			}
+		}()
+		return ln.Addr().(*net.TCPAddr).Port
+	}
+	memberPort, windowPort := serve("member"), serve("window")
+	hubKey, _ := tunnel.NewPrivateKey()
+	p := startRustPhone(t, bin)
+	started := p.call(t, map[string]any{"op": "hub_start", "key": hubKey[:], "device": rustHubID,
+		"obfuscation": obf, "member_port": memberPort, "listen": "127.0.0.1:0"})
+	id, port := started["id"], int(started["udp_port"].(float64))
+	ep := fmt.Sprintf("127.0.0.1:%d", port)
+	inv := p.call(t, map[string]any{"op": "hub_invite", "id": id, "group": "0f1e2d3c4b5a6978",
+		"endpoints": []string{ep}, "lifetime": 3600, "guest_port": windowPort})
+
+	in, err := invite.Parse(inv["text"].(string))
+	if err != nil {
+		t.Fatalf("Go reads the Rust hub's invitation: %v", err)
+	}
+	if in.Hub != rustHubID || in.HubKey != hubKey.Public() || in.Obfuscation == nil || len(in.Endpoints) != 1 ||
+		base64.StdEncoding.EncodeToString(in.Secret) != inv["secret"] || in.Expires.Unix() != int64(inv["expires"].(float64)) {
+		t.Fatalf("the invitation %+v, the answer %v", in, inv)
+	}
+	if d := time.Until(in.Expires); d < 59*time.Minute || d > time.Hour+time.Minute {
+		t.Fatalf("the invitation expires in %v", d)
+	}
+	hubAddr, _ := tunnel.Addr(rustHubID)
+	guestPub := in.GuestKey.Public()
+	cl, err := tunnel.StartClient(tunnel.ClientConfig{PrivateKey: in.GuestKey, PresharedKey: in.GuestPSK,
+		Addr: tunnel.GuestAddr(guestPub), HubPublicKey: in.HubKey, HubAddr: hubAddr, Obfuscation: in.Obfuscation,
+		Endpoint: in.Endpoints[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	reach := func(timeout time.Duration) (string, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		c, err := cl.Dial(ctx)
+		if err != nil {
+			return "", err
+		}
+		defer c.Close()
+		c.SetDeadline(time.Now().Add(timeout))
+		b, err := io.ReadAll(c)
+		return string(b), err
+	}
+	if got, err := reach(15 * time.Second); err != nil || got != "window" {
+		t.Fatalf("the guest reached %q, %v; want the window (status %v)", got, err, p.call(t, map[string]any{"op": "hub_status", "id": id}))
+	}
+	p.call(t, map[string]any{"op": "guest_admitted", "id": id, "guest": inv["guest"]})
+	if got, err := reach(15 * time.Second); err != nil || got != "member" {
+		t.Fatalf("the admitted guest reached %q, %v; want the member port", got, err)
+	}
+	p.call(t, map[string]any{"op": "guest_close", "id": id, "guest": inv["guest"]})
+	if got, err := reach(3 * time.Second); err == nil && got != "" {
+		t.Fatalf("a closed guest reached %q", got)
+	}
 }

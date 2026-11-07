@@ -15,7 +15,7 @@ use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bytes::BytesMut;
 use gotatun::noise::handshake::parse_handshake_anon;
@@ -42,12 +42,21 @@ const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
 const GUEST_PREFIX: [u8; 4] = [0xfd, 0x00, 0x0c, 0xbc];
 
 /// One client of the hub: its WireGuard public key, the preshared key the
-/// hub's offer gave it, and its one tunnel address.
+/// hub's offer gave it, its one tunnel address, and for a guest when it goes.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Peer {
     pub key: [u8; 32],
     pub psk: [u8; 32],
     pub addr: Ipv6Addr,
+    pub until: Option<Instant>,
+}
+
+impl Peer {
+    /// Whether two clients are one tunnel: the same keys and address, when
+    /// they go aside.
+    fn same_tunnel(&self, o: &Peer) -> bool {
+        self.key == o.key && self.psk == o.psk && self.addr == o.addr
+    }
 }
 
 /// The loopback port a connection through the tunnel from a client's address
@@ -219,6 +228,7 @@ impl Pump {
     fn run(&mut self, stop: &AtomicBool) {
         while !stop.load(Ordering::SeqCst) {
             self.take_peers();
+            self.expire();
             let busy = self.step();
             if !busy {
                 self.wait();
@@ -235,12 +245,11 @@ impl Pump {
         let Some(want) = self.wanted.lock().ok().and_then(|mut w| w.take()) else { return };
         let keep: HashMap<[u8; 32], Peer> = want.into_iter().map(|p| (p.key, p)).collect();
         let before = self.peers.len();
-        self.peers.retain(|k, s| keep.get(k) == Some(&s.peer));
+        self.peers.retain(|k, s| keep.get(k).is_some_and(|p| p.same_tunnel(&s.peer)));
         let gone = before.saturating_sub(self.peers.len());
-        let peers = &self.peers;
-        self.by_index.retain(|_, k| peers.contains_key(k));
         for (k, p) in keep {
-            if self.peers.contains_key(&k) {
+            if let Some(s) = self.peers.get_mut(&k) {
+                s.peer.until = p.until;
                 continue;
             }
             let tunn = Tunn::new(
@@ -255,18 +264,35 @@ impl Pump {
             self.peers.insert(k, PeerState { peer: p, tunn, endpoint: None, awg });
         }
         if gone > 0 {
-            // A client cut off loses its connections at once.
-            let addrs: HashSet<Ipv6Addr> = self.peers.values().map(|s| s.peer.addr).collect();
-            for b in &mut self.bridges {
-                let s = self.sockets.get::<tcp::Socket>(b.handle);
-                if let Some(ep) = s.remote_endpoint()
-                    && let IpAddress::Ipv6(a) = ep.addr
-                    && !addrs.contains(&a)
-                {
-                    b.done = true;
-                }
-            }
+            self.cut_off();
             (self.log)(&format!("cbb: the hub cut off {gone} client(s)"));
+        }
+    }
+
+    /// Drops the guests whose time is up.
+    fn expire(&mut self) {
+        let now = Instant::now();
+        let before = self.peers.len();
+        self.peers.retain(|_, s| s.peer.until.is_none_or(|u| u > now));
+        if self.peers.len() < before {
+            self.cut_off();
+        }
+    }
+
+    /// Ends the connections of the clients that are gone (a client cut off
+    /// loses its connections at once), and forgets their session indices.
+    fn cut_off(&mut self) {
+        let peers = &self.peers;
+        self.by_index.retain(|_, k| peers.contains_key(k));
+        let addrs: HashSet<Ipv6Addr> = self.peers.values().map(|s| s.peer.addr).collect();
+        for b in &mut self.bridges {
+            let s = self.sockets.get::<tcp::Socket>(b.handle);
+            if let Some(ep) = s.remote_endpoint()
+                && let IpAddress::Ipv6(a) = ep.addr
+                && !addrs.contains(&a)
+            {
+                b.done = true;
+            }
         }
     }
 
@@ -531,8 +557,12 @@ mod tests {
     #[test]
     fn refuses_clients_twice() {
         let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
-        let p =
-            Peer { key: [1; 32], psk: [2; 32], addr: crate::tunnel::addr("ffeeddccbbaa99887766554433221100").unwrap() };
+        let p = Peer {
+            key: [1; 32],
+            psk: [2; 32],
+            addr: crate::tunnel::addr("ffeeddccbbaa99887766554433221100").unwrap(),
+            until: None,
+        };
         assert!(check_peers(std::slice::from_ref(&p), own).is_ok());
         assert!(check_peers(&[p.clone(), p.clone()], own).is_err());
         assert!(check_peers(&[Peer { addr: own, ..p.clone() }], own).is_err());
