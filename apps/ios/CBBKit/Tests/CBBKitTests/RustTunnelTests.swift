@@ -26,7 +26,7 @@ final class RustTunnelTests: XCTestCase {
             ["device": phone, "key": try tunnels.publicKey(clientKey).base64EncodedString(), "psk": psk.base64EncodedString()],
         ]), as: UTF8.self)
 
-        let member = try XCTUnwrap(Self.listener())
+        let member = try XCTUnwrap(loopbackListener())
         defer { close(member.fd) }
         let hub = try hubs.start(privateKey: hubKey, device: hubID, memberPort: member.port, obfuscation: "", clients: client)
         defer { hub.close() }
@@ -80,29 +80,29 @@ final class RustTunnelTests: XCTestCase {
         XCTAssertNil(report["type"], "the kit gets the report as cbbtun gave it")
         XCTAssertNotNil(report["error"] as? String, first)
     }
+}
 
-    /// A TCP listener on the loopback address that takes nothing: the hub's
-    /// member port.
-    static func listener() -> (fd: Int32, port: UInt16)? {
-        #if os(Linux)
-        let fd = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
-        #else
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
-        #endif
-        guard fd >= 0 else { return nil }
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr)
-        let ok = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0 }
-        } && listen(fd, 8) == 0
-        var len = socklen_t(MemoryLayout<sockaddr_in>.size)
-        guard ok, withUnsafeMutablePointer(to: &addr, {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &len) == 0 }
-        }) else {
-            close(fd)
-            return nil
-        }
-        return (fd, UInt16(bigEndian: addr.sin_port))
+/// A TCP listener on the loopback address that takes nothing: the hub's
+/// member port. Outside the test case, where bind is the C function.
+private func loopbackListener() -> (fd: Int32, port: UInt16)? {
+    #if os(Linux)
+    let fd = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
+    #else
+    let fd = socket(AF_INET, SOCK_STREAM, 0)
+    #endif
+    guard fd >= 0 else { return nil }
+    var addr = sockaddr_in()
+    addr.sin_family = sa_family_t(AF_INET)
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr)
+    let ok = withUnsafePointer(to: &addr) {
+        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0 }
+    } && listen(fd, 8) == 0
+    var len = socklen_t(MemoryLayout<sockaddr_in>.size)
+    guard ok, withUnsafeMutablePointer(to: &addr, {
+        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &len) == 0 }
+    }) else {
+        close(fd)
+        return nil
     }
+    return (fd, UInt16(bigEndian: addr.sin_port))
 }
