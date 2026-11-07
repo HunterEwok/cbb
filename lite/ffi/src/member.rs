@@ -100,6 +100,20 @@ enum Event<'a> {
         #[serde(with = "certs::b64::list")]
         roots: Vec<Vec<u8>>,
     },
+    /// An admin muted the phone, or ended its mute: for_ms is how long it
+    /// lasts, 0 for until an admin unmutes it.
+    Mute {
+        muted: bool,
+        for_ms: i64,
+        by: &'a str,
+    },
+}
+
+#[derive(Deserialize)]
+struct PauseArgs {
+    pause: bool,
+    #[serde(default)]
+    for_ms: i64,
 }
 
 #[derive(Serialize)]
@@ -183,6 +197,11 @@ impl Member {
                     });
                     Ok(())
                 }),
+                on_mute: Box::new(move |until: Option<i64>, by: &str| {
+                    let for_ms = until
+                        .map_or(0, |u| if u == 0 { 0 } else { u.saturating_sub(cbb_lite::uptime::wall_ms()).max(1) });
+                    ev.send(&Event::Mute { muted: until.is_some(), for_ms, by });
+                }),
                 log: Arc::new(move |line: &str| ev.send(&Event::Log { line })),
             })?;
             Ok(Member { node })
@@ -212,6 +231,39 @@ impl Member {
             .map(|p| PeerAnswer { device: p.id.to_string(), name: p.name, role: p.role, os: p.os })
             .collect();
         answer(Ok(serde_json::json!({ "peers": peers })))
+    }
+
+    /// Pauses receiving (`{"pause": true, "for_ms"}`, 0 for until it is
+    /// turned on) or ends the pause (`{"pause": false}`); with the state
+    /// as [`Member::muted`] gives it.
+    pub fn pause(&self, request: &[u8]) -> Vec<u8> {
+        answer((|| -> Result<serde_json::Value> {
+            let a: PauseArgs =
+                serde_json::from_slice(request).map_err(|e| Error::msg(format!("the pause does not decode: {e}")))?;
+            if a.pause {
+                self.node.pause(a.for_ms)?;
+            } else {
+                self.node.resume()?;
+            }
+            Ok(self.state())
+        })())
+    }
+
+    /// Whether receiving is paused and whether an admin muted the phone:
+    /// `{"paused", "paused_ms", "muted", "muted_ms"}`, the times what is
+    /// left, 0 for until it is lifted.
+    pub fn muted(&self) -> Vec<u8> {
+        answer(Ok(self.state()))
+    }
+
+    fn state(&self) -> serde_json::Value {
+        let (paused, muted) = self.node.muted();
+        serde_json::json!({
+            "paused": paused.is_some(),
+            "paused_ms": paused.unwrap_or(0),
+            "muted": muted.is_some(),
+            "muted_ms": muted.unwrap_or(0),
+        })
     }
 
     pub fn stop(&self) {

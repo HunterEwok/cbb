@@ -10,8 +10,11 @@
 //! -dir, it then runs the member there,
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
 //! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
-//! its certificate, and "LOG <line>" for each log line, and takes "COPY
-//! <text>" and "PEERS" on standard input, answering "PEERS <count>".
+//! its certificate, "MUTE <true|false> <for_ms> <by>" when an admin muted
+//! it or ended the mute, and "LOG <line>" for each log line. It takes
+//! "COPY <text>" (printing "REFUSED <reason>" when the member does not send
+//! it), "PEERS", answered "PEERS <count>", and "PAUSE <ms>", "RESUME" and
+//! "MUTED", answered "MUTED <paused> <muted>", on standard input.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -23,7 +26,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_free, cbb_join_accept, cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin,
-    cbb_member_copy, cbb_member_peers, cbb_member_start,
+    cbb_member_copy, cbb_member_muted, cbb_member_pause, cbb_member_peers, cbb_member_start,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -162,6 +165,7 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
         Some("write") => println!("WRITE {} {}", s("kind"), s("text")),
         Some("log") => println!("LOG {}", s("line")),
         Some("identity") => println!("IDENTITY {}", s("cert")),
+        Some("mute") => println!("MUTE {} {} {}", v["muted"], v["for_ms"], s("by")),
         _ => {}
     }
 }
@@ -204,13 +208,24 @@ fn run_member(
             let req = serde_json::json!({ "text": text }).to_string();
             // SAFETY: m runs; req and n live for the call.
             let a = take(unsafe { cbb_member_copy(m, req.as_ptr(), req.len(), &mut n) }, n);
-            if a.get("error").is_some() {
-                eprintln!("phone-on-linux: {a}");
+            if let Some(e) = a.get("error") {
+                println!("REFUSED {}", e["message"].as_str().unwrap_or_default());
             }
         } else if line == "PEERS" {
             // SAFETY: m runs; n lives for the call.
             let a = take(unsafe { cbb_member_peers(m, &mut n) }, n);
             println!("PEERS {}", a["ok"]["peers"].as_array().map_or(0, Vec::len));
+        } else if line == "MUTED" || line == "RESUME" || line.starts_with("PAUSE ") {
+            let a = if line == "MUTED" {
+                // SAFETY: m runs; n lives for the call.
+                take(unsafe { cbb_member_muted(m, &mut n) }, n)
+            } else {
+                let ms: i64 = line.strip_prefix("PAUSE ").and_then(|v| v.parse().ok()).unwrap_or(0);
+                let req = serde_json::json!({ "pause": line != "RESUME", "for_ms": ms }).to_string();
+                // SAFETY: m runs; req and n live for the call.
+                take(unsafe { cbb_member_pause(m, req.as_ptr(), req.len(), &mut n) }, n)
+            };
+            println!("MUTED {} {}", a["ok"]["paused"], a["ok"]["muted"]);
         }
     }
     ExitCode::SUCCESS

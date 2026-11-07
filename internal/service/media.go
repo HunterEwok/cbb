@@ -434,10 +434,12 @@ func (s *Service) relayed(w node.Write) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Only the group's current copy: an older event is passed on too.
+	// Only the group's current copy: an older event is passed on too. A
+	// copy this hub does not read counts too, as every copy does on a hub
+	// that only passes them on.
 	if e := s.eng; e == nil {
 		return
-	} else if cur, ok := e.Current(); !ok || cur.ID != w.ID {
+	} else if cur, _ := e.CurrentCopy(); cur != w.ID {
 		return
 	}
 	if w.Blob == nil {

@@ -28,6 +28,29 @@ All notable changes to cbb are documented in this file. The format follows
   to it once their node runs in Rust.
 - CI's job "go test with the Rust core" runs the whole Go suite as the release builds are
   made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
+- The bench's fleet checks the copies sealed end to end: through a hub that only passes them
+  on, text and a 20 MB file arrive both ways and neither its memory nor its disk ever holds them in
+  the clear (S25), a paste command passes through it sealed (S26), making and stopping such a
+  hub (W43), and a device that joins never reads the copy made before it (Y36); the forge
+  looks for a text in a service's memory (`forge memscan`).
+- The bench's fleet checks muting: `cbb mute` and `cbb unmute` on the device, across a restart
+  and with `-for` (M8), an admin's `cbb mute -on` against the device's own user, a second
+  admin and its time, a device that cannot be reached and two admins one after the other
+  (M9), and `cbb incoming` with its bounds and rights, and a device cut off that writes a
+  late copy only within the live window (M10).
+- The bench's fleet checks that the ways out carry only cbb: a hostile client with a member's
+  keys reaches neither the internet nor the hub's home network nor its loopback, directly or
+  through the forwarder (W44), and a hub that has only HTTPS registers inside VLESS (W45).
+  The VLESS case (W34) brings its client home for the hub's new offer, as AmneziaWG, which
+  VLESS turns on, needs.
+- The bench's time suite checks a forwarder whose VLESS runs over XHTTP behind its site's web
+  server (W46) and `cbb update` asking the mirror on its server only inside VLESS (W47); in
+  the time-scaled build alone the clients of XHTTP trust the CA in `CBB_TEST_XHTTP_CA`. The
+  fleet checks the project's relay followed from the signed lists, through a new key and a
+  move (W48), and the phone suite a computer the phone made an admin admitting a computer,
+  the hub marked in the phone's list and a computer behind it online.
+- `testbench coverage` counts apart the cases the harness runs in full, where its suites
+  cover every kind of place the case names, and lists the others with what they lack.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
@@ -42,6 +65,9 @@ All notable changes to cbb are documented in this file. The format follows
   out of the phone or takes them again, a long press for a time; on an admin phone a device's
   page mutes it for the group or unmutes it. The phones take `mute` and `unmute` commands, and
   the phone kits sign them and read the hello's mute.
+- The same switch at the top of the Aurora app's main page, with a long press for a time; the
+  app takes an admin's `mute` and `unmute` (lite/ffi's `cbb_member_pause`, `cbb_member_muted`
+  and the `mute` event) and says when an admin muted the phone.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies
@@ -55,7 +81,8 @@ All notable changes to cbb are documented in this file. The format follows
   leaves it when its time is up) and sends what the user copied when the app comes to the
   front or from the pull-down menu, since Aurora lets no app read the clipboard in the
   background. The main page shows the members connected and the last copy; "Leave the group"
-  deletes the membership on the phone.
+  deletes the membership and the phone's keys (D-83), so the phone joins again as a new
+  device with a new key, and removing its old record does not take the new one along.
 - The same app as packages for Aurora OS 4 (armv7hl) and Sailfish OS (`harbour-cbb`,
   armv7hl and aarch64, not yet tested on a phone), which keep the phone's key in a file
   that only the app reads (level 3) and say so in their hello; CI builds all five packages.
@@ -1519,6 +1546,13 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A hub that only passes the copies on now passes images and files on too: it fetched no
+  blob, since it reads no copy, and the members fetched it from each other forever.
+- The devices take the offers and shares of a hub that only passes the copies on, as its
+  record allows (the core's `hub_peer`): computers and lite members ignored them, so a client
+  away kept only what the hub before it had passed on.
+- `cbb status` says which devices are hubs, and which of them only pass the copies on, as
+  the apps' device pages do.
 - A phone that is the hub while its app is open no longer dials itself: its browser found
   its own announcement and the phone kept a second connection to its own device ID.
 - The Android emulator check of files from a computer waits for the computer's files to

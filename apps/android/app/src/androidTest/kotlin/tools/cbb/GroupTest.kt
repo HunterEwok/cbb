@@ -502,11 +502,12 @@ class GroupTest {
     }
 
     /**
-     * W42 and W5: a computer the phone made an admin is the hub; with sync
-     * away from home on, the phone, which finds no hub on its network (the
-     * emulator sees no mDNS), reaches it through the tunnel in the app's
-     * process; the app and cbb global say where it stands, also while the
-     * hub does not answer.
+     * W42 and W5: a computer the phone made an admin is the hub; it admits a
+     * computer by itself, which the phone lists (G36); with sync away from
+     * home on, the phone, which finds no hub on its network (the emulator
+     * sees no mDNS), reaches it through the tunnel in the app's process,
+     * marks it as the hub in use and shows the computer behind it online; the app and cbb global say where it stands, also while the hub
+     * does not answer.
      */
     @Test
     fun c2_awayThroughHub() {
@@ -523,11 +524,35 @@ class GroupTest {
         }
         val global = Bench.run(hub, "cbb global")
         assertTrue("cbb global on $hub:\n$global", global.contains("this device is the hub, on UDP port $udp") && global.contains("${Bench.HOST}:$udp"))
+        // G36: the computer the phone made an admin admits a computer by
+        // itself, and the phone, the root, takes its record and lists it.
+        val guest = Bench.add()
+        val window = Bench.start(hub, "cbb pair </dev/null")
+        val code = window.line("Pairing code:").replace(" ", "")
+        val at = window.line("If it cannot find this one: cbb pair -code")
+        val joined = Bench.run(guest, "cbb pair -code $at", stdin = "$code\n", seconds = 90)
+        assertTrue("cbb pair -code on $guest did not join:\n$joined", joined.contains("Joined the group."))
+        val admitted = window.finish(60)
+        assertTrue("cbb pair on $hub did not admit $guest:\n$admitted", admitted.contains("joined the group."))
+        until(60, "$guest, admitted by $hub, in the phone's devices: ${model.group.devices.map { it.name }}") {
+            runBlocking { model.sync() }
+            model.group.devices.any { it.name == guest }
+        }
         assertEquals("off before it is turned on", AwayFromHome.Status.OFF, model.away?.status ?: AwayFromHome.Status.OFF)
         runBlocking { model.setAway(true) }
         assertEquals("turning it on says ${model.awayNote}", null, model.awayNote)
         val status = { runBlocking { model.refresh() }; model.away }
         until(120, "the phone connected through $hub's tunnel; the app says ${model.away}") { status()?.status == AwayFromHome.Status.CONNECTED }
+        // The phone's devices list marks the computer as the hub it reaches.
+        until(60, "$hub marked as the hub in use: ${model.group.devices.firstOrNull { it.name == hub }}") {
+            runBlocking { model.sync() }
+            model.group.devices.any { it.name == hub && it.hub == LiveGroup.HubMark.IN_USE }
+        }
+        // The computer behind the hub shows online on the phone too.
+        until(120, "$guest online on the phone: ${model.group.devices.firstOrNull { it.name == guest }}") {
+            runBlocking { model.sync() }
+            model.group.devices.any { it.name == guest && it.online }
+        }
         val text = "cbb-bench phone W42 through the tunnel ${System.currentTimeMillis()}"
         Bench.copy(hub, text)
         until(30, "$hub's copy on the phone; it has ${clip()}") {

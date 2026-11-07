@@ -208,6 +208,46 @@
         <translation>Unirse a un grupo como administrador</translation>
     </message>
     <message>
+        <source>For 15 minutes</source>
+        <translation>Durante 15 minutos</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>Durante una hora</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>Durante 8 horas</translation>
+    </message>
+    <message>
+        <source>Until I turn it on</source>
+        <translation>Hasta que lo active</translation>
+    </message>
+    <message>
+        <source>Taking copies</source>
+        <translation>Recibiendo copias</translation>
+    </message>
+    <message>
+        <source>Not taking copies until %1</source>
+        <translation>Sin recibir copias hasta las %1</translation>
+    </message>
+    <message>
+        <source>Not taking copies</source>
+        <translation>Sin recibir copias</translation>
+    </message>
+    <message>
+        <source>Tap to take no copies from the group, or again; hold it for a time</source>
+        <translation>Toca para no recibir copias del grupo, o para volver a recibirlas; mantén pulsado para elegir un tiempo</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>Un administrador silenció este teléfono hasta las %1: sus copias no llegan al grupo.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>Un administrador silenció este teléfono: sus copias no llegan al grupo hasta que un administrador lo reactive.</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>En el grupo</translation>
     </message>
