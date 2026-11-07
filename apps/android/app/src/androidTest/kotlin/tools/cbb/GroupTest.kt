@@ -79,6 +79,12 @@ class GroupTest {
         // The app's own model, which MainActivity, the tile, the widget and Share use.
         model = (context.applicationContext as CBBApp).model
         compose.waitForIdle()
+        // Android hands the clipboard only to the app whose window has the
+        // focus and gives the others nothing: until MainActivity's window
+        // takes it from the test's own empty activity, the button reads no
+        // clipboard and says "nothing new", which a person, who presses it
+        // in the window, never sees.
+        compose.waitUntil(10_000) { compose.runOnUiThread { compose.activity.hasWindowFocus() } }
     }
 
     /** Waits on the test's thread until ok holds, up to seconds. */
