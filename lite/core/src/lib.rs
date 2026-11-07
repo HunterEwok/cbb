@@ -61,6 +61,7 @@ pub mod pair;
 pub mod pair_session;
 pub mod recovery;
 pub mod release;
+pub mod rule;
 pub mod seal;
 pub mod store;
 pub mod strict;

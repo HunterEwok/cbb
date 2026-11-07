@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The lite member speaks AmneziaWG to a hub that hides its tunnel (lite/src/awg.rs, around
+  GotaTun's WireGuard): it keeps the group's settings from the hub's offer and syncs away from
+  home through the obfuscated hub instead of staying at home (`TestLiteMemberAwayObfuscated`
+  against the Go hub's amneziawg-go). A hub reached over VLESS is still refused.
+- CI's job "go test with the Rust core" runs the whole Go suite as the release builds are
+  made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
@@ -1115,6 +1121,15 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Go service seals and opens copies through the Rust core in the release builds
+  (`seal_copy_to` and `open_copy`, docs/core-api.md), as the phones and the lite member do,
+  so that every member reads and writes sealed copies with the same code; a build without
+  the core keeps Go's code, which the vectors and a cross test keep the same. The blob's
+  segments stay in Go.
+- The rule of incoming copies (whether the group's copy goes into the clipboard: the mode,
+  a pause, a secret's time, the live window) is one function of the core
+  (`cbb_core::rule`, `copy_verdict`), which the lite member's engine and the Go service ask,
+  pinned by `testdata/interop/copy-verdicts.json`.
 - Every device follows one clipboard rule (D-85): a copy from another device goes into the
   clipboard while it is live, counted from when it was copied in durations, never by the
   sender's clock; after that it is gone and the device keeps what it copied itself. A

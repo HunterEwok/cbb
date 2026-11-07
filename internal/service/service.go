@@ -511,7 +511,8 @@ func (s *Service) startGroup(id *group.Identity) error {
 	if err != nil {
 		s.logf("cbb: the sync mode: %v; using shared", err)
 	}
-	eng := clip.New(clip.Config{Self: string(id.ID), Clock: s.clock, Mode: mode, Wall: s.cfg.now, Seal: s.sealCopy})
+	eng := clip.New(clip.Config{Self: string(id.ID), Clock: s.clock, Mode: mode, Wall: s.cfg.now, Seal: s.sealCopy,
+		Log: func(err error) { s.logf("cbb: %v", err) }})
 	if err := loadMute(s.cfg.StateDir, eng); err != nil {
 		s.logf("cbb: the mute: %v; not muted", err)
 	}

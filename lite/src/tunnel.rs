@@ -87,6 +87,10 @@ pub struct Hub {
     /// tries after `key`; empty for none.
     #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     pub next: Vec<u8>,
+    /// The group's AmneziaWG settings when the hub hides its tunnel, as its
+    /// offer gave them (src/awg.rs reads them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obfuscation: Option<serde_json::Value>,
 }
 
 impl State {
@@ -172,13 +176,16 @@ fn random_key() -> Result<Vec<u8>> {
 }
 
 /// Checks the offer of the hub `from` and returns what this member keeps of
-/// it. An obfuscated hub or one reached over VLESS is refused: the lite
-/// member speaks plain WireGuard only.
+/// it. A hub that hides its tunnel with AmneziaWG is taken (src/awg.rs);
+/// one reached over VLESS is refused.
 pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
-    if o.obfuscation.is_some() || o.vless.is_some() {
+    if o.vless.is_some() {
         return Err(Error::msg(
-            "the group's hub hides its tunnel (AmneziaWG or VLESS), which the lite member cannot speak yet; it syncs at home only",
+            "the group's hub is reached over VLESS, which the lite member cannot speak yet; it syncs at home only",
         ));
+    }
+    if let Some(v) = &o.obfuscation {
+        crate::awg::Obfuscation::from_offer(v)?;
     }
     if o.hub_key.len() != 32 || o.psk.len() != 32 || !o.next_key.is_empty() && o.next_key.len() != 32 {
         return Err(Error::msg("the hub's offer does not have 32-byte keys"));
@@ -205,6 +212,7 @@ pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
         psk: o.psk.clone(),
         endpoints,
         next: o.next_key.clone(),
+        obfuscation: o.obfuscation.clone(),
     })
 }
 
@@ -248,6 +256,10 @@ impl Link {
         hub_key.copy_from_slice(&hub.key);
         let mut psk = [0u8; 32];
         psk.copy_from_slice(&hub.psk);
+        let awg = match &hub.obfuscation {
+            Some(v) => Some(crate::awg::Awg::new(crate::awg::Obfuscation::from_offer(v)?, &hub_key, public.as_bytes())),
+            None => None,
+        };
         let limiter = Arc::new(RateLimiter::new(&public, HANDSHAKE_RATE_LIMIT));
         let tunn = Tunn::new(
             secret,
@@ -260,6 +272,7 @@ impl Link {
         let stop = Arc::new(AtomicBool::new(false));
         let answered = Arc::new(AtomicBool::new(false));
         let mut pump = Pump::new(tunn, limiter, hub.endpoints.clone(), ln, own, peer, answered.clone(), log)?;
+        pump.awg = awg;
         let thread = {
             let stop = stop.clone();
             std::thread::spawn(move || pump.run(&stop))
@@ -362,6 +375,8 @@ struct Pump {
     answered: Arc<AtomicBool>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     said: bool,
+    /// AmneziaWG around the messages, for a hub that hides its tunnel.
+    awg: Option<crate::awg::Awg>,
 }
 
 /// A UDP socket of the endpoint's family.
@@ -412,6 +427,7 @@ impl Pump {
             answered,
             log,
             said: false,
+            awg: None,
         })
     }
 
@@ -448,6 +464,17 @@ impl Pump {
     }
 
     fn send(&mut self, data: &[u8]) {
+        match self.awg.as_mut().map(|a| a.outgoing(data)) {
+            Some(datagrams) => {
+                for d in datagrams {
+                    self.send_datagram(&d);
+                }
+            }
+            None => self.send_datagram(data),
+        }
+    }
+
+    fn send_datagram(&mut self, data: &[u8]) {
         let ep = self.endpoints[self.current];
         if let Err(e) = self.udp.send_to(data, ep)
             && !self.said
@@ -523,7 +550,13 @@ impl Pump {
                 Err(_) => return busy,
             };
             busy = true;
-            let packet = Packet::from_bytes(BytesMut::from(&buf[..n]));
+            let packet = match self.awg.as_mut() {
+                Some(a) => match a.incoming(&buf[..n]) {
+                    Some(wg) => Packet::from_bytes(BytesMut::from(&wg[..])),
+                    None => continue,
+                },
+                None => Packet::from_bytes(BytesMut::from(&buf[..n])),
+            };
             let wg = match self.limiter.verify_packet(from, packet) {
                 Ok(wg) => wg,
                 Err(TunnResult::WriteToNetwork(p)) => {
@@ -745,7 +778,12 @@ mod tests {
         assert_eq!(hub.endpoints, vec!["192.0.2.1:8764".parse().unwrap(), "[2001:db8::1]:51820".parse().unwrap()]);
         let hidden = r#"{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","obfuscation":{"jc":4}}"#;
         let o: TunnelOffer = serde_json::from_str(hidden).unwrap();
-        assert!(hub_from_offer(&id, &o).unwrap_err().message().contains("AmneziaWG"));
+        assert!(hub_from_offer(&id, &o).unwrap_err().message().contains("AmneziaWG"), "settings that do not read");
+        let awg = r#"{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","obfuscation":{"jc":5,"jmin":50,"jmax":300,"s1":20,"s2":33,"s3":17,"s4":25,"h1":"1000016-1065551","h2":"1073741840-1073807375","h3":"2147483664-2147549199","h4":"3221225488-3221291023","header_protection_key":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}}"#;
+        let hub = hub_from_offer(&id, &serde_json::from_str(awg).unwrap()).unwrap();
+        assert!(hub.obfuscation.is_some());
+        let vless = r#"{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","vless":{}}"#;
+        assert!(hub_from_offer(&id, &serde_json::from_str(vless).unwrap()).unwrap_err().message().contains("VLESS"));
         let short = r#"{"hub_key":"AQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="}"#;
         assert!(hub_from_offer(&id, &serde_json::from_str(short).unwrap()).is_err());
 

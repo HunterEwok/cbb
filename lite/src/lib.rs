@@ -16,6 +16,8 @@ mod away;
 #[cfg(not(feature = "tunnel"))]
 #[path = "away_off.rs"]
 mod away;
+#[cfg(feature = "tunnel")]
+mod awg;
 mod control;
 mod device;
 pub mod discovery;

@@ -920,6 +920,61 @@ func TestLiteMemberAway(t *testing.T) {
 	}
 }
 
+// TestLiteMemberAwayObfuscated syncs the lite member away from home with a
+// hub that hides its tunnel with AmneziaWG: the lite member keeps the
+// offer's settings and speaks AmneziaWG to the Go hub (lite/src/awg.rs
+// around GotaTun, amneziawg-go on the hub). CBB_LITE names the binary.
+func TestLiteMemberAwayObfuscated(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	dir := joinLite(t, bin, pi)
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	port := freeUDP(t)
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}, Obfuscate: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	piID := pi.status(t).Device
+	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	waitFor(t, "the lite member at home", func() bool {
+		st, err := home.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && len(st.Status.Peers) == 1
+	})
+	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the lite member keeps the obfuscated hub's offer", func() bool {
+		a := home.status(t).Away
+		return a != nil && a.HubDevice == piID
+	})
+	home.stop()
+	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+	if err != nil || !strings.Contains(string(raw), "header_protection_key") {
+		t.Fatalf("tunnel.json keeps no AmneziaWG settings (%v): %s", err, raw)
+	}
+
+	// The hub speaks AmneziaWG only: a lite member that reaches it speaks
+	// it too.
+	away := startLite(t, bin, dir, "-no-mdns", "-no-listen")
+	waitUpTo(t, 30*time.Second, "the lite member reaches the obfuscated hub through the tunnel", func() bool {
+		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
+	})
+	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the lite member, hidden"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the lite member, hidden" })
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the lite member, hidden"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the lite member has it", func() bool { return away.paste(t) == "to the lite member, hidden" })
+}
+
 // TestLiteRootless runs the lite member as a rootless install (D-79): its
 // hello says so, the root records it as rootless, and it refuses the
 // console and the reboot, which need root. CBB_LITE names the binary.
