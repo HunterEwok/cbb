@@ -340,11 +340,12 @@ func commandKinds() []genKind {
 	kind := genField{"kind", jString, false, []genValue{ok("empty", `""`), bad("of text", `"text"`)}}
 	text := genField{"text", jString, false, []genValue{ok("empty", `""`), bad("of a", `"a"`)}}
 	action := genField{"action", jString, false, []genValue{ok("empty", `""`), bad("of lock", `"lock"`)}}
+	forMS := genField{"for_ms", jInt, false, []genValue{ok("of 0", "0"), bad("of 1", "1")}}
 	fields := func(own ...genField) []genField {
 		f := append([]genField{}, commonFields...)
 		f = append(f, own...)
 	next:
-		for _, o := range []genField{mode, hub, enter, kind, text, action} {
+		for _, o := range []genField{mode, hub, enter, kind, text, action, forMS} {
 			for _, x := range own {
 				if x.name == o.name {
 					continue next
@@ -439,6 +440,12 @@ func commandKinds() []genKind {
 		{section: "commands", name: "away-off", max: 64 << 10, strict: true, base: with("away-off"), fields: fields()},
 		{section: "commands", name: "action", max: 64 << 10, strict: true, base: with("action", genMember{"action", `"lock"`}),
 			fields: fields(genField{"action", jString, true, actionName})},
+		{section: "commands", name: "mute", max: 64 << 10, strict: true, base: with("mute", genMember{"for_ms", "3600000"}),
+			fields: fields(genField{"for_ms", jInt, false, []genValue{
+				ok("of 0, until unmute", "0"), ok("of 1", "1"), ok("of 30 days", "2592000000"),
+				bad("of 30 days and 1 ms", "2592000001"), bad("of -1", "-1"),
+			}})},
+		{section: "commands", name: "unmute", max: 64 << 10, strict: true, base: with("unmute"), fields: fields()},
 	}
 }
 

@@ -119,7 +119,18 @@ final class AppModelTests: XCTestCase {
         func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { .sent(to: []) }
         var refreshed = 0
         func refresh() async { refreshed += 1 }
-        var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true)] }
+        var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true, paused: paused)] }
+        var paused: AppModel.Hold?
+        func pauseReceiving(forMS: Int64) throws {
+            paused = AppModel.Hold(ms: forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0)
+        }
+        func resumeReceiving() throws { paused = nil }
+        func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws {
+            guard isAdmin else { throw PhoneGroup.Failure.notAdmin }
+            if let i = computers.firstIndex(where: { $0.id == id }) {
+                computers[i].muted = on ? AppModel.Hold(ms: forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0) : nil
+            }
+        }
         func remove(_ id: String) async throws { computers.removeAll { $0.id == id } }
         func rename(_ id: String, to name: String) async throws {
             guard !name.isEmpty else { throw PhoneGroup.Failure.invalidName }
@@ -175,6 +186,35 @@ final class AppModelTests: XCTestCase {
         XCTAssertNotNil(m.message)
         await m.rename("a", to: "")
         XCTAssertEqual(m.devices.first { $0.id == "a" }?.name, "living room")
+    }
+
+    /// The quick switch pauses taking copies for a time or until it is
+    /// turned on again; an admin mutes a device and unmutes it; a mute or
+    /// pause that ended holds no more.
+    func testPauseAndMute() async {
+        let g = FakeGroup()
+        g.computers = [.init(id: "a", name: "pi", online: true)]
+        let m = AppModel(group: g)
+        XCTAssertNil(m.pause)
+        m.pauseReceiving(forMS: PauseTime.hour.ms)
+        XCTAssertEqual(m.pause?.until?.timeIntervalSinceNow ?? 0, 3600, accuracy: 60)
+        m.pauseReceiving(forMS: PauseTime.ever.ms)
+        XCTAssertNotNil(m.pause)
+        XCTAssertNil(m.pause?.until)
+        m.pauseReceiving(forMS: nil)
+        XCTAssertNil(m.pause)
+        await m.setMuted("a", true, forMS: PauseTime.quarter.ms)
+        XCTAssertNotNil(m.devices.first { $0.id == "a" }?.muted?.until)
+        await m.setMuted("a", false)
+        XCTAssertNil(m.devices.first { $0.id == "a" }?.muted)
+        g.isAdmin = false
+        await m.setMuted("a", true)
+        XCTAssertNil(m.devices.first { $0.id == "a" }?.muted)
+        XCTAssertNotNil(m.message)
+        XCTAssertNil(AppModel.Hold(ms: 1_000))
+        XCTAssertNil(AppModel.Hold(ms: nil))
+        XCTAssertEqual(AppModel.Hold(ms: 0), AppModel.Hold(until: nil))
+        XCTAssertEqual(AppModel.describe(MemberNode.Failure.muted, details: false, log: false), "An admin muted this phone, so its copies stay on it.")
     }
 
     func testMakeAdmin() async {

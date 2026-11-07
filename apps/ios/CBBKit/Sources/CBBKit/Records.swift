@@ -111,7 +111,7 @@ public enum Records {
     /// what the apps give an admin phone.
     public static let powers = ["admit", "freeze", "hub", "remove", "remove-admins", "renew", "takeover", "thaw"]
     /// The commands an admin may sign.
-    public static let commands = ["action", "actions-off", "away-off", "hub", "mode", "paste", "paste-off"]
+    public static let commands = ["action", "actions-off", "away-off", "hub", "mode", "mute", "paste", "paste-off", "unmute"]
     /// What the apps give an admin computer under a phone's root.
     public static let computerPowers = ["admit", "freeze", "hub", "remove", "renew"]
     /// What the apps give a watch.

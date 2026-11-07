@@ -307,6 +307,44 @@ final class MacModel: ObservableObject {
         await admin(["global", on ? "on" : "off"], answer: on, done: on ? String(localized: "Sync away from home is on.") : String(localized: "Sync away from home is off."))
     }
 
+    /// Whether this Mac takes no copies from the group now, and until
+    /// when, nil for until it is turned on again.
+    var paused: Bool { status?.paused == true }
+    var pausedUntil: Date? { Self.date(ms: status?.pausedUntilMS) }
+    /// Whether an admin muted this Mac, and until when.
+    var muted: Bool { status?.muted == true }
+    var mutedUntil: Date? { Self.date(ms: status?.mutedUntilMS) }
+
+    nonisolated static func date(ms: Int64?) -> Date? {
+        guard let ms, ms > 0 else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
+    }
+
+    /// Takes no copies from the group for forMS milliseconds, 0 for until
+    /// turned on again, or takes them again; this Mac's own copies still go
+    /// out. Any user of the Mac may, over the plain socket.
+    func pauseReceiving(_ on: Bool, forMS: Int64 = 0) async {
+        var h = Control.Header(op: on ? "mute" : "unmute")
+        if on, forMS > 0 { h.forMS = forMS }
+        await act {
+            _ = try await self.client.request(h)
+            return on ? String(localized: "This Mac takes no copies from the group now; its own still go out.") : String(localized: "This Mac takes the group's copies again.")
+        }
+    }
+
+    /// On an admin: mutes a device for the whole group, for forMS
+    /// milliseconds, 0 for until an admin unmutes it; its copies then stay
+    /// its own.
+    func mute(_ id: String, forMS: Int64 = 0) async {
+        var arguments = ["mute", "-on", id]
+        if forMS > 0 { arguments += ["-for", "\(forMS)ms"] }
+        await admin(arguments, done: String(localized: "Muted: its copies do not reach the group."))
+    }
+
+    func unmute(_ id: String) async {
+        await admin(["unmute", "-on", id], done: String(localized: "Unmuted: its copies reach the group again."))
+    }
+
     /// What cbb pair -app writes (cmd/cbb/joinapp.go), with when the wait
     /// ends.
     struct JoinCode: Decodable, Equatable {

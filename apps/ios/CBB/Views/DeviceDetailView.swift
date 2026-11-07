@@ -178,6 +178,10 @@ struct DeviceDetailView: View {
                 Divider().overlay(palette.line)
                 row(Text("Copies"), Text("Passes them on, reads none"))
             }
+            if let m = d.muted {
+                Divider().overlay(palette.line)
+                row(Text("Copies"), m.until.map { Text("Muted until \($0.formatted(date: .abbreviated, time: .shortened))") } ?? Text("Muted until an admin unmutes it"))
+            }
             if let standing = d.standing {
                 Divider().overlay(palette.line)
                 row(Text("In the group"), Text(standing))
@@ -256,6 +260,8 @@ struct DeviceDetailView: View {
                     Divider().overlay(palette.line)
                     actionMenu(d)
                 }
+                Divider().overlay(palette.line)
+                muteLine(d)
                 if !d.isSelf {
                     Divider().overlay(palette.line)
                     action(Text("Remove"), "trash", destructive: true) { removing = true }
@@ -264,6 +270,38 @@ struct DeviceDetailView: View {
             .glassTile(cornerRadius: Tokens.radiusCard)
         } else {
             Text("Only an admin phone can add or remove devices.").font(.footnote).foregroundStyle(palette.textDim)
+        }
+    }
+
+    /// An admin mutes any device for the whole group, for a time or until
+    /// an admin unmutes it, or ends its mute (docs/design.md, "Muting a
+    /// device"): its copies then reach no device of the group, and it still
+    /// takes theirs.
+    @ViewBuilder private func muteLine(_ d: AppModel.Computer) -> some View {
+        if d.muted != nil {
+            action(Text("Unmute"), "speaker.wave.2") { Task { await model.setMuted(id, false) } }
+        } else {
+            Menu {
+                Section {
+                    ForEach(PauseTime.allCases) { t in
+                        Button { Task { await model.setMuted(id, true, forMS: t.ms) } } label: {
+                            t == .ever ? Text("Until an admin unmutes it") : Text(t.title)
+                        }
+                    }
+                } header: {
+                    Text("Its copies then reach no device of the group; it still takes theirs.")
+                }
+            } label: {
+                HStack(spacing: Tokens.spacingMedium) {
+                    Image(systemName: "speaker.slash").frame(width: 24).accessibilityHidden(true)
+                    Text("Mute")
+                    Spacer()
+                }
+                .foregroundStyle(palette.danger)
+                .padding(.horizontal, Tokens.spacingMedium)
+                .frame(minHeight: 48)
+                .contentShape(Rectangle())
+            }
         }
     }
 

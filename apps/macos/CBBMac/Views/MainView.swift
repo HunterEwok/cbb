@@ -211,11 +211,59 @@ struct MainView: View {
                 Button { Task { await model.fetch() } } label: { Label("Fetch", systemImage: "arrow.down.circle") }
                     .buttonStyle(GlassButtonStyle())
                     .frame(maxWidth: 200)
+                listen
             }
             .disabled(model.busy)
             if let message = model.message {
                 Text(verbatim: message).font(.callout).foregroundStyle(palette.textDim).textSelection(.enabled)
             }
+        }
+    }
+
+    /// The quick switch for taking copies from the group: a click turns it
+    /// off or on again, its menu turns it off for a time. This Mac's own
+    /// copies still go out (docs/design.md, "Muting a device").
+    private var listen: some View {
+        Menu {
+            ForEach(PauseTime.allCases) { t in
+                Button { Task { await model.pauseReceiving(true, forMS: t.ms) } } label: { Text(t.title) }
+            }
+        } label: {
+            if model.paused {
+                Label(Self.pausedTitle(until: model.pausedUntil), systemImage: "speaker.slash")
+            } else {
+                Label("Taking copies", systemImage: "speaker.wave.2")
+            }
+        } primaryAction: {
+            Task { await model.pauseReceiving(!model.paused) }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .foregroundStyle(model.paused ? palette.danger : palette.text)
+        .help(Text("Click to take no copies from the group, or again; open the menu for a time"))
+    }
+
+    static func pausedTitle(until: Date?) -> String {
+        guard let until else { return String(localized: "Not taking copies") }
+        return String(localized: "Not taking copies until \(until.formatted(date: .omitted, time: .shortened))")
+    }
+}
+
+/// How long the quick switch keeps the group's copies out.
+enum PauseTime: Int64, CaseIterable, Identifiable {
+    case quarter = 900_000
+    case hour = 3_600_000
+    case eight = 28_800_000
+    case ever = 0
+
+    var id: Int64 { rawValue }
+    var ms: Int64 { rawValue }
+    var title: LocalizedStringKey {
+        switch self {
+        case .quarter: "For 15 minutes"
+        case .hour: "For an hour"
+        case .eight: "For 8 hours"
+        case .ever: "Until I turn it on"
         }
     }
 }
@@ -234,7 +282,11 @@ struct DeviceTile: View {
                 OnlineDot(online: device.online)
             }
             Text(verbatim: device.name).font(.system(.headline, design: .monospaced)).lineLimit(1)
-            Text(verbatim: device.system ?? "").font(.caption).foregroundStyle(palette.textDim)
+            if device.muted {
+                Label("muted", systemImage: "speaker.slash").font(.caption).foregroundStyle(palette.danger)
+            } else {
+                Text(verbatim: device.system ?? "").font(.caption).foregroundStyle(palette.textDim)
+            }
         }
         .padding(Tokens.spacingMedium)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -256,6 +308,9 @@ struct DeviceRow: View {
             DeviceIcon(device: device, size: 32)
             Text(verbatim: device.name).font(.system(.body, design: .monospaced))
             Spacer()
+            if device.muted {
+                Image(systemName: "speaker.slash").foregroundStyle(palette.danger).accessibilityLabel(Text("muted"))
+            }
             Text(verbatim: device.system ?? "").foregroundStyle(palette.textDim)
             OnlineDot(online: device.online)
         }

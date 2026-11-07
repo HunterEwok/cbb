@@ -228,6 +228,37 @@ object Commands {
         seal: ByteArray? = null,
     ): Member.Record = signed("actions-off", to, group, by, now, signer, adminCA, id, seal)
 
+    /**
+     * A mute command for the device to: its copies stop reaching the group for forMS milliseconds, 0 for until an
+     * unmute command (design.md, "Muting a device"). Signed as mode.
+     */
+    fun mute(
+        to: String,
+        forMS: Long,
+        group: String,
+        by: String,
+        now: Instant,
+        signer: CertificateSigner,
+        adminCA: ByteArray? = null,
+        id: String = newID(),
+        seal: ByteArray? = null,
+    ): Member.Record {
+        require(forMS in 0..MAX_MUTE_MS) { "a mute lasts from 0 to $MAX_MUTE_MS ms" }
+        return signed("mute", to, group, by, now, signer, adminCA, id, seal, "for_ms" to if (forMS > 0) Wire.num(forMS) else null)
+    }
+
+    /** An unmute command for the device to: it ends an admin's mute there. Signed as mode. */
+    fun unmute(
+        to: String,
+        group: String,
+        by: String,
+        now: Instant,
+        signer: CertificateSigner,
+        adminCA: ByteArray? = null,
+        id: String = newID(),
+        seal: ByteArray? = null,
+    ): Member.Record = signed("unmute", to, group, by, now, signer, adminCA, id, seal)
+
     /** An away-off command for the device to: it turns sync away from home off there, and its tunnel keys go. Signed as mode. */
     fun awayOff(
         to: String,
@@ -306,6 +337,8 @@ object Commands {
         val kind: String? = null,
         val text: String? = null,
         val action: String? = null,
+        /** mute: how long, up to [MAX_MUTE_MS]; 0 for until unmute. */
+        val forMS: Long = 0,
     )
 
     /** Why a command was refused, in words for the sender. */
@@ -339,6 +372,9 @@ object Commands {
     /** The version of a command whose orders are sealed to its receiver. */
     private const val SEALED_VERSION = 2L
 
+    /** The longest mute a command gives: 30 days (Go's group.MaxMute). */
+    const val MAX_MUTE_MS = 30L * 24 * 3_600_000
+
     /** Reads a command's body once the Rust core took it (parse_body), in the strict form of signed bodies, as Go's parseCommandBody. */
     internal fun parse(body: ByteArray): Body =
         try {
@@ -362,6 +398,7 @@ object Commands {
             kind = o.optString("kind"),
             text = o.optString("text"),
             action = o.optString("action"),
+            forMS = o.optLong("for_ms") ?: 0,
         )
 
     private fun parseBody(body: ByteArray): Body {
@@ -382,13 +419,18 @@ object Commands {
         // As in Go, an empty string is no paste and no action.
         if (type != "paste" && (b.enter || !b.kind.isNullOrEmpty() || !b.text.isNullOrEmpty())) throw Refused("a $type command carries a paste")
         if (type != "action" && !b.action.isNullOrEmpty()) throw Refused("a $type command names an action")
+        if (type != "mute" && b.forMS != 0L) throw Refused("a $type command gives a time")
         when (type) {
             "mode" -> if (b.mode.isNullOrEmpty() || o.opt("hub") != null) throw Refused("a mode command names no mode")
             "hub" -> {
                 if (o.opt("hub") == null || !b.mode.isNullOrEmpty()) throw Refused("a hub command has no order")
                 checkHub(o.optObject("hub")!!)
             }
-            "paste-off", "actions-off", "away-off" -> if (o.opt("hub") != null || !b.mode.isNullOrEmpty()) throw Refused("a $type command carries an order")
+            "mute" -> {
+                if (o.opt("hub") != null || !b.mode.isNullOrEmpty()) throw Refused("a mute command carries an order")
+                if (b.forMS !in 0..MAX_MUTE_MS) throw Refused("a mute command's time is not from 0 to $MAX_MUTE_MS ms")
+            }
+            "paste-off", "actions-off", "away-off", "unmute" -> if (o.opt("hub") != null || !b.mode.isNullOrEmpty()) throw Refused("a $type command carries an order")
             "action" -> {
                 if (o.opt("hub") != null || !b.mode.isNullOrEmpty()) throw Refused("an action command carries an order")
                 if (!validActionName(b.action ?: "")) throw Refused("an action command names no valid action")

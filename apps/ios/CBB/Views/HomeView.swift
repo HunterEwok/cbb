@@ -114,6 +114,7 @@ struct HomeView: View {
                 Text("Paste sends what you copied to the other devices. A copy from another device comes into this phone's clipboard by itself.")
                     .font(.footnote)
                     .foregroundStyle(palette.textDim)
+                ListenSwitch()
 
                 if let message = model.message {
                     Text(message).foregroundStyle(palette.textDim)
@@ -132,6 +133,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: Tokens.spacingMedium) {
                 summary
                 AlertsCard()
+                ListenSwitch()
                 if let message = model.message {
                     Text(message).foregroundStyle(palette.textDim)
                 }
@@ -190,6 +192,13 @@ struct HomeView: View {
                     .font(.footnote)
                     .foregroundStyle(palette.textDim)
             }
+            // An admin's mute of this phone, which an admin ends.
+            if let m = model.devices.first(where: \.isSelf)?.muted {
+                (m.until.map { Text("An admin muted this phone until \($0.formatted(date: .abbreviated, time: .shortened)): its copies stay on it.") }
+                    ?? Text("An admin muted this phone: its copies stay on it until an admin unmutes it."))
+                    .font(.footnote)
+                    .foregroundStyle(palette.danger)
+            }
         }
     }
 
@@ -231,6 +240,59 @@ struct HomeView: View {
         } else if model.devices.filter({ $0.admin }).count == 1 {
             Text("Lost a phone? Make a second phone an admin: on it, tap I already use CBB on another phone, then scan its code here with +.")
                 .font(.footnote).foregroundStyle(palette.textDim)
+        }
+    }
+}
+
+/// The quick switch for taking copies from the group: a tap turns it off or
+/// on again, a long press turns it off for a time. This phone's own copies
+/// still go out (docs/design.md, "Muting a device").
+struct ListenSwitch: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let pause = model.pause
+        Menu {
+            ForEach(PauseTime.allCases) { t in
+                Button { model.pauseReceiving(forMS: t.ms) } label: { Text(t.title) }
+            }
+        } label: {
+            Label {
+                if let pause { Text(verbatim: Self.pausedTitle(until: pause.until)) } else { Text("Taking copies from the group") }
+            } icon: {
+                Image(systemName: pause == nil ? "speaker.wave.2" : "speaker.slash")
+            }
+            .font(.subheadline)
+            .foregroundStyle(pause == nil ? palette.textDim : palette.danger)
+        } primaryAction: {
+            model.pauseReceiving(forMS: pause == nil ? 0 : nil)
+        }
+        .accessibilityHint(Text("Tap to take no copies from the group, or to take them again; touch and hold for a time"))
+    }
+
+    static func pausedTitle(until: Date?) -> String {
+        guard let until else { return String(localized: "Not taking copies from the group", bundle: .app) }
+        return String(localized: "Not taking copies until \(until.formatted(date: .omitted, time: .shortened))", bundle: .app)
+    }
+}
+
+/// How long the quick switch keeps the group's copies out, or an admin's
+/// mute lasts.
+enum PauseTime: Int64, CaseIterable, Identifiable {
+    case quarter = 900_000
+    case hour = 3_600_000
+    case eight = 28_800_000
+    case ever = 0
+
+    var id: Int64 { rawValue }
+    var ms: Int64 { rawValue }
+    var title: LocalizedStringKey {
+        switch self {
+        case .quarter: "For 15 minutes"
+        case .hour: "For an hour"
+        case .eight: "For 8 hours"
+        case .ever: "Until I turn it on"
         }
     }
 }
@@ -340,6 +402,11 @@ struct DeviceSubtitle: View {
                 Text(verbatim: "·")
                 Text(mark == .inUse ? "hub in use" : "hub")
                     .foregroundStyle(mark == .inUse ? palette.accent : palette.textDim)
+            }
+            if device.muted != nil {
+                Text(verbatim: "·")
+                Label { Text("muted") } icon: { Image(systemName: "speaker.slash") }
+                    .foregroundStyle(palette.danger)
             }
         }
         .font(.caption)

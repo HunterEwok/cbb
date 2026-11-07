@@ -4,6 +4,7 @@
 package clip
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -87,5 +88,60 @@ func TestParseMode(t *testing.T) {
 	}
 	if _, err := ParseMode("everything"); err == nil {
 		t.Fatal("ParseMode took an unknown mode")
+	}
+}
+
+// TestMute keeps a muted member's copies, deliberate ones too, from the
+// group until the mute ends, and the group's copies out of a member that
+// paused receiving.
+func TestMute(t *testing.T) {
+	w := newWorld()
+	e := w.member(idA)
+	e.SetMute(time.UnixMilli(w.wall).Add(time.Hour))
+	if _, ok, err := e.Copied("noise", Text, Copy); ok || err != nil {
+		t.Fatalf("a muted member made an event: %v, %v", ok, err)
+	}
+	if _, _, err := e.Send("deliberate", Text, Copy); !errors.Is(err, ErrMuted) {
+		t.Fatalf("Send on a muted member = %v", err)
+	}
+	if muted, left := e.MuteLeft(); !muted || left != time.Hour {
+		t.Fatalf("MuteLeft() = %v, %v", muted, left)
+	}
+	w.advance(time.Hour)
+	if muted, _ := e.Muted(); muted {
+		t.Fatal("the mute outlasted its end")
+	}
+	if _, ok, _ := e.Copied("heard", Text, Copy); !ok {
+		t.Fatal("no event after the mute ended")
+	}
+	e.SetMute(time.Time{})
+	w.advance(30 * 24 * time.Hour)
+	if muted, left := e.MuteLeft(); !muted || left != 0 {
+		t.Fatalf("a mute until Unmute: %v, %v", muted, left)
+	}
+	e.Unmute()
+	if muted, _ := e.Muted(); muted {
+		t.Fatal("Unmute left the mute")
+	}
+
+	e.PauseReceiving(time.UnixMilli(w.wall).Add(time.Minute))
+	w.advance(time.Second)
+	res := mustReceive(t, e, event(w, "theirs", 0, 0))
+	if res.Write || res.Forward == nil {
+		t.Fatalf("a copy while paused: Write %v, forwarded %v", res.Write, res.Forward != nil)
+	}
+	if cur, _ := e.Current(); cur.Text != "theirs" {
+		t.Fatal("a paused member does not keep the group's text at hand")
+	}
+	if _, ok, _ := e.Copied("mine while paused", Text, Copy); !ok {
+		t.Fatal("a paused member's own copy did not go out")
+	}
+	w.advance(time.Minute)
+	if paused, _ := e.ReceivingPaused(); paused {
+		t.Fatal("the pause outlasted its end")
+	}
+	w.advance(time.Second)
+	if res := mustReceive(t, e, event(w, "after the pause", 0, 0)); !res.Write {
+		t.Fatal("a copy after the pause ended was not taken")
 	}
 }

@@ -457,6 +457,9 @@ fn command(a: CommandArgs) -> Result<Vec<u8>, Refusal> {
             if body.enter {
                 f.insert("enter".into(), Value::from(true));
             }
+            if body.for_ms != 0 {
+                f.insert("for_ms".into(), Value::from(body.for_ms));
+            }
             if let Some(h) = body.hub.clone() {
                 f.insert("hub".into(), h);
             }

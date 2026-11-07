@@ -7,6 +7,20 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
+  group's copies out of this device for a while, its own still going out, and an admin's
+  `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
+  commands `mute` and `unmute` (docs/protocol.md, section 15) that computers and lite members
+  take; any admin ends it, the last command counts, and the hello says a device is muted so
+  the devices list shows it. Admin records may now name the commands `mute` and `unmute`; an
+  admin made earlier signs them once the root signs its record again.
+- The Mac and tray apps' quick switch beside "Fetch": a click keeps the group's copies out of
+  this computer or takes them again, its menu (holding it in the tray app) for a time; on an
+  admin a device's page mutes it for the group or unmutes it, and a muted device says so.
+- The same switch under the iPhone and Android apps' button: a tap keeps the group's copies
+  out of the phone or takes them again, a long press for a time; on an admin phone a device's
+  page mutes it for the group or unmutes it. The phones take `mute` and `unmute` commands, and
+  the phone kits sign them and read the hello's mute.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies
@@ -27,6 +41,8 @@ All notable changes to cbb are documented in this file. The format follows
   The app speaks Chinese, Spanish, Russian, Arabic, Swahili, Hebrew and Hindi besides English.
 - The core makes a P-256 device key and signs a digest with it (`new_device_key`,
   `sign_digest`, docs/core-api.md), for a phone that keeps its key in a file.
+- The Aurora app's launcher icon in the style of Aurora's own system icons: a dark teal tile
+  with the clipboard and the key with circuit traces (`apps/design/icon/aurora.svg`).
 - `aurora` and `sailfish` are systems of phones with the app in the pairing, the hello and
   the device records (docs/protocol.md): every member admits them as phones and shows
   "Aurora OS" and "Sailfish OS".
@@ -1473,6 +1489,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
+  clipboard off the main thread, for the remote paste sheet's empty field and for a sync
+  that reads the clipboard itself, so iOS stops reporting a hang of the app.
 - Away from home, the iPhone app no longer misses a hub's new offer, or sync away from home
   turned on or off, that comes while it connects or serves a connection instead of waiting:
   it tries again at once, as the Android app does since 0.6, instead of after its next wait,

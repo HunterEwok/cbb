@@ -1,6 +1,246 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Mute a device": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушить устройство"
+          }
+        }
+      }
+    },
+    "Unmute a device": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включить устройство"
+          }
+        }
+      }
+    },
+    "This phone takes copies from the group again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон снова принимает копии группы."
+          }
+        }
+      }
+    },
+    "This phone takes no copies from the group for now.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон пока не принимает копии группы."
+          }
+        }
+      }
+    },
+    "The device is muted: its copies stay its own.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство заглушено: его копии остаются на нём."
+          }
+        }
+      }
+    },
+    "The device is unmuted.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство включено: его копии снова доходят до группы."
+          }
+        }
+      }
+    },
+    "An admin muted this phone, so its copies stay on it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Админ заглушил этот телефон, поэтому его копии остаются на нём."
+          }
+        }
+      }
+    },
+    "Taking copies from the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии группы принимаются"
+          }
+        }
+      }
+    },
+    "Not taking copies from the group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии группы не принимаются"
+          }
+        }
+      }
+    },
+    "Not taking copies until %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии не принимаются до %@"
+          }
+        }
+      }
+    },
+    "Tap to take no copies from the group, or to take them again; touch and hold for a time": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите, чтобы не принимать копии группы или снова принимать их; удерживайте, чтобы выбрать время"
+          }
+        }
+      }
+    },
+    "For 15 minutes": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На 15 минут"
+          }
+        }
+      }
+    },
+    "For an hour": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На час"
+          }
+        }
+      }
+    },
+    "For 8 hours": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На 8 часов"
+          }
+        }
+      }
+    },
+    "Until I turn it on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока не включу"
+          }
+        }
+      }
+    },
+    "Muted until %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушено до %@"
+          }
+        }
+      }
+    },
+    "Muted until an admin unmutes it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушено, пока админ не включит"
+          }
+        }
+      }
+    },
+    "Until an admin unmutes it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока админ не включит"
+          }
+        }
+      }
+    },
+    "Mute": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушить"
+          }
+        }
+      }
+    },
+    "Unmute": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включить"
+          }
+        }
+      }
+    },
+    "muted": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заглушено"
+          }
+        }
+      }
+    },
+    "Its copies then reach no device of the group; it still takes theirs.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда его копии не дойдут ни до одного устройства группы; копии остальных оно по-прежнему принимает."
+          }
+        }
+      }
+    },
+    "An admin muted this phone until %@: its copies stay on it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Админ заглушил этот телефон до %@: его копии остаются на нём."
+          }
+        }
+      }
+    },
+    "An admin muted this phone: its copies stay on it until an admin unmutes it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Админ заглушил этот телефон: его копии остаются на нём, пока админ не включит его."
+          }
+        }
+      }
+    },
     "The list of the project's entry points is out of date, and the forwarder does not answer on the ways this phone knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on when this phone meets it.": {
       "localizations": {
         "ru": {
