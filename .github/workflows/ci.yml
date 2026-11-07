@@ -1839,13 +1839,26 @@ jobs:
           # goes off in the emulated modem and in Android; right after boot
           # telephony can drop the request, so it is asked again until the
           # Wi-Fi carries the default route, with the Wi-Fi turned off and
-          # on once halfway. A suite that would fail on that later stops
-          # here and says what the phone's networks are.
+          # on once halfway. With no network at all, the Wi-Fi is asked
+          # to join the emulator's access point. Every 10 tries it prints
+          # the route and the Wi-Fi's state, so a suite that stops here
+          # shows how the phone's networks went.
           wifi_default() { "$adb" shell ip route get 8.8.8.8 2>/dev/null | grep -q 'dev wlan0'; }
+          wifi_state() {
+            "$adb" shell ip route get 8.8.8.8 2>&1 || true
+            "$adb" shell cmd wifi status 2>&1 | head -5 || true
+          }
           for i in $(seq 60); do
             "$adb" emu gsm data off >/dev/null 2>&1 || true
             "$adb" shell svc data disable || true
             wifi_default && break
+            if ! "$adb" shell ip route get 8.8.8.8 >/dev/null 2>&1; then
+              "$adb" shell cmd wifi connect-network AndroidWifi open >/dev/null 2>&1 || true
+            fi
+            if [ $((i % 10)) = 0 ]; then
+              echo "try $i:"
+              wifi_state
+            fi
             if [ "$i" = 30 ]; then
               "$adb" shell svc wifi disable || true
               sleep 2
@@ -1856,8 +1869,11 @@ jobs:
           if wifi_default; then
             echo "the emulator's default network is its Wi-Fi after $i tries"
           else
-            "$adb" shell ip route get 8.8.8.8 || true
+            wifi_state
+            "$adb" shell ip addr 2>&1 | grep -E '^[0-9]+:|inet ' || true
+            "$adb" shell settings get global airplane_mode_on || true
             "$adb" shell dumpsys connectivity | grep -E 'Active default network|NetworkAgentInfo\{' | cut -c1-400 || true
+            "$adb" shell dumpsys wifi | grep -E 'Wi-Fi is|mWifiInfo|SupplicantState' | head -10 | cut -c1-400 || true
             echo "::error::the emulator's default network is not its Wi-Fi"
             exit 1
           fi
