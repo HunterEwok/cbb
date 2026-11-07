@@ -2087,7 +2087,7 @@ jobs:
           sh wasm/build.sh
           go test -race -overlay target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
       - name: the lite member joins by the phone, syncs with Go members, takes their remote pastes and serves the Go command line and agent
-        run: CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless|TestLiteHelper|TestLiteClients|TestLiteTPM|TestLiteRoot|TestLiteTakeover|TestLiteRecovery|TestLiteHub|TestLiteHubs|TestLiteHubCommands|TestLiteHubForwarder|TestLiteForwardOnly' -v
+        run: CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless|TestLiteHelper|TestLiteClients|TestLiteTPM|TestLiteRoot|TestLiteTakeover|TestLiteRecovery|TestLiteHub|TestLiteHubs|TestLiteHubCommands|TestLiteHubForwarder|TestLiteHubVLESS|TestLiteForwardOnly' -v
       - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         run: |
           rel="$RUNNER_TEMP/release"

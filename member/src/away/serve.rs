@@ -55,9 +55,6 @@ impl Away {
     /// awayLocked: sync away from home goes on first with consent. Returns
     /// whether the hellos must go again with the keys, which it returns.
     pub fn make_hub(&self, h: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
-        if h.vless {
-            return Err(Error::msg("VLESS for a hub's clients is not on the Rust service yet; leave -vless out"));
-        }
         let mut fw = forwarder_of(&h.forwarder, &h.forwarder_key)?;
         if !(0..=65535).contains(&h.port) {
             return Err(Error::msg(format!("a bad port {}", h.port)));
@@ -92,9 +89,16 @@ impl Away {
         if endpoints.is_empty() && fw.is_none() {
             return Err(Error::msg("the hub needs an address away from home or a forwarder"));
         }
-        // Kept as they are when the hub is set again, so its clients'
-        // offers stay good.
-        let obfuscation = match (h.obfuscate, st.obfuscation.take()) {
+        if let Some(f) = fw.as_mut() {
+            vless_for(f, h.vless, st.forwarder.as_ref());
+        } else if h.vless {
+            return Err(Error::msg("VLESS goes to a forwarder; give one with -forwarder and -forwarder-key"));
+        }
+        // VLESS comes with AmneziaWG: the clients try it over UDP first,
+        // and inside VLESS it hides WireGuard's sizes (docs/protocol.md,
+        // section 11, "VLESS"). Kept as they are when the hub is set again,
+        // so its clients' offers stay good.
+        let obfuscation = match (h.obfuscate || h.vless, st.obfuscation.take()) {
             (false, _) => None,
             (true, Some(o)) => Some(o),
             (true, None) => Some(crate::awg::Obfuscation::random()?.to_value()),
@@ -332,13 +336,42 @@ impl Away {
             key,
             wg_key: st.serving_key(),
             obfuscation: st.obfuscation.clone(),
-            vless_id: None,
+            vless_id: Some(f.vless_id.clone()).filter(|id| !id.is_empty()),
             records: Arc::new(Mutex::new(records)),
             send: hub.sender(),
         };
         let report = Arc::new(Mutex::new(Report::default()));
         let registration = Registration::start(cfg, report.clone(), self.log.clone());
         Ok(Forwarding { _registration: registration, report, endpoint: f.endpoint })
+    }
+
+    /// Keeps the forwarder's VLESS settings the hub learned as it
+    /// registered, as Go's vlessLearnedLocked, and has the members connect
+    /// again, so that each gets the offer with them.
+    pub(super) fn vless_learned(&self, node: &Node) {
+        let got = {
+            let serving = self.serving.lock().unwrap();
+            serving.as_ref().and_then(|s| s.forwarding.as_ref()).and_then(|f| f.report.lock().unwrap().vless.clone())
+        };
+        let Some(v) = got else { return };
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return };
+        if st.forwarder.as_ref().is_none_or(|f| f.vless_id.is_empty() || f.vless.as_ref() == Some(&v)) {
+            return;
+        }
+        let mut next = st.clone();
+        if let Some(f) = next.forwarder.as_mut() {
+            f.vless = Some(v.clone());
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return;
+        }
+        *st = next;
+        drop(cur);
+        let at = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or_default();
+        (self.log)(&format!("cbb: sync away from home: the hub's clients come over VLESS to the forwarder at {at}"));
+        node.reconnect();
     }
 
     /// Stops the hub, with every connection through it.
@@ -504,6 +537,25 @@ pub(super) fn forwarder_of(fwd: &str, key: &str) -> Result<Option<Forwarder>> {
         (key.to_string(), PROJECT_PINS.contains(&key))
     };
     Ok(Some(Forwarder { endpoint, pin, vless_id: String::new(), vless: None, project }))
+}
+
+/// Gives the forwarder f the group's VLESS user ID when the hub's clients
+/// come over VLESS, as Go's awayLocked: the one old had, with old's
+/// settings while the forwarder stays the same, else a new one.
+fn vless_for(f: &mut Forwarder, vless: bool, old: Option<&Forwarder>) {
+    (f.vless_id, f.vless) = (String::new(), None);
+    if !vless {
+        return;
+    }
+    match old.filter(|o| !o.vless_id.is_empty()) {
+        Some(o) => {
+            f.vless_id.clone_from(&o.vless_id);
+            if o.endpoint == f.endpoint && o.pin == f.pin {
+                f.vless.clone_from(&o.vless);
+            }
+        }
+        None => f.vless_id = crate::vless::session_id(),
+    }
 }
 
 /// A forwarder's pin: SHA-256 of its key, 44 characters of base64.

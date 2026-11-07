@@ -256,13 +256,16 @@ ends, the Go service described below is still the computers' member.
   pins this release knows) registers while it serves through the phones' `forward.rs`: its
   member certificate with the roots, the group's records as the proof that it is the root or
   an admin, and hellos from its WireGuard port; status shows the registration as Go's
-  `forwarder` (`TestLiteHubForwarder`). An admin signs the `hubs` record of main hubs as Go's
+  `forwarder` (`TestLiteHubForwarder`). With `-vless` it registers the group's VLESS user ID
+  (kept in `tunnel.json`'s forwarder, as Go's), keeps the forwarder's VLESS settings once the
+  registration returns them (`vless_learned`, Go's `vlessLearnedLocked`) and has the members
+  connect again for the offer with them; VLESS brings AmneziaWG (`TestLiteHubVLESS`). An admin signs the `hubs` record of main hubs as Go's
   `setHubs` and sends `away-off` (`manage::Order::AwayOff`) to another device. `hub -on
   DEVICE -forward-only` on an admin that admitted the device signs its record with
   `forward_only` first (`Admin::mark_forward_only`); such a Rust member takes the hub command
   without being an admin once that record is in, seals no copies (`node::FORWARD_ONLY`) and
   refuses paste and action commands (`TestLiteForwardOnly`). The pins of a newer
-  `keys.json`, the server credentials and the hub's key periods, VLESS, the relay and
+  `keys.json`, the server credentials and the hub's key periods, the relay and
   invitations are still Go's.
 
 ### Linux components

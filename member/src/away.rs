@@ -306,6 +306,7 @@ impl Away {
                                 lost = grace_over();
                             }
                             _ => {
+                                self.vless_learned(&node);
                                 std::thread::sleep(Duration::from_secs(1));
                                 continue;
                             }

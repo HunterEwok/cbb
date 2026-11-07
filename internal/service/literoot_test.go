@@ -27,6 +27,8 @@ import (
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/phone"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
 // goCLI builds the Go command line for the tests that run it against the
@@ -1061,4 +1063,165 @@ func TestLiteForwardOnly(t *testing.T) {
 	if _, err := board.do(t, control.Header{Op: control.OpCopy}, "from a hub that only passes copies on"); err == nil || !strings.Contains(err.Error(), "only passes the copies on") {
 		t.Errorf("a copy on the board: %v", err)
 	}
+}
+
+// TestLiteHubVLESS has a Rust hub's clients come over VLESS with XHTTP:
+// the admin Rust service is the hub with a forwarder and -vless, registers
+// the group's VLESS user ID, keeps the forwarder's VLESS settings, and the
+// lite member, whose offer's UDP address then leads nowhere, reaches it
+// through the forwarder's VLESS behind a TLS web server.
+func TestLiteHubVLESS(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vlessAddr := free.Addr().String()
+	free.Close()
+	web, ca := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+	roots := filepath.Join(t.TempDir(), "roots.pem")
+	if err := os.WriteFile(roots, ca, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json"),
+		VLESS: &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	c, code := openWindow(t, desk)
+	rustDir := t.TempDir()
+	join := exec.Command(bin, "-state", rustDir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair -full: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	free, err = net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rustAt := free.Addr().String()
+	free.Close()
+	rust := startLite(t, bin, rustDir, "-no-mdns", "-full", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
+	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
+		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
+	}
+	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(),
+		ForwarderKey: forward.Pin(cert.Leaf), VLESS: true, Consent: true}
+	waitFor(t, "the Rust member a hub", func() bool {
+		_, err := rust.do(t, req, "")
+		if err != nil && !strings.Contains(err.Error(), "admin") {
+			t.Fatalf("cbb global hub -vless on the Rust member: %v", err)
+		}
+		return err == nil
+	})
+	waitFor(t, "the Rust hub registers with the forwarder", func() bool {
+		a := rust.status(t).Away
+		return a != nil && a.Forwarder != nil && a.Forwarder.Registered
+	})
+	rustID := rust.status(t).Device
+	waitFor(t, "the Rust hub keeps the forwarder's VLESS settings", func() bool {
+		var st struct {
+			Forwarder *struct {
+				VLESSID string          `json:"vless_id"`
+				VLESS   json.RawMessage `json:"vless"`
+			} `json:"forwarder"`
+		}
+		raw, err := os.ReadFile(filepath.Join(rustDir, "tunnel.json"))
+		return err == nil && json.Unmarshal(raw, &st) == nil && st.Forwarder != nil && st.Forwarder.VLESSID != "" && len(st.Forwarder.VLESS) > 0
+	})
+
+	dir := joinLite(t, bin, desk)
+	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
+	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 30*time.Second, "the lite member keeps the Rust hub's offer with VLESS", func() bool {
+		type kept struct {
+			Device string          `json:"device"`
+			VLESS  json.RawMessage `json:"vless"`
+		}
+		var st struct {
+			Hubs []kept `json:"hubs"`
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+		return err == nil && json.Unmarshal(raw, &st) == nil &&
+			slices.ContainsFunc(st.Hubs, func(h kept) bool { return h.Device == rustID && len(h.VLESS) > 0 })
+	})
+	home.stop()
+
+	// No UDP gets through: the offer's address becomes one that nobody
+	// answers.
+	dead, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dead.Close()
+	file := filepath.Join(dir, "tunnel.json")
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st map[string]any
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	hubs, _ := st["hubs"].([]any)
+	if len(hubs) != 1 {
+		t.Fatalf("tunnel.json keeps %d hubs: %s", len(hubs), raw)
+	}
+	kept := hubs[0].(map[string]any)
+	if kept["vless"] == nil || kept["obfuscation"] == nil {
+		t.Fatalf("tunnel.json keeps no VLESS or AmneziaWG settings: %s", raw)
+	}
+	kept["endpoints"] = []string{dead.LocalAddr().String()}
+	if raw, err = json.Marshal(st); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	away := startLiteEnv(t, bin, dir, []string{"SSL_CERT_FILE=" + roots}, "-no-mdns", "-no-listen")
+	waitUpTo(t, 60*time.Second, "the lite member reaches the Rust hub over VLESS", func() bool {
+		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && m.Status.Away != nil && m.Status.Away.Through &&
+			slices.ContainsFunc(m.Status.Peers, func(p control.Device) bool { return p.ID == rustID })
+	})
+	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "to the Rust hub, over VLESS"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "to the Rust hub, over VLESS" })
 }

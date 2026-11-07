@@ -159,8 +159,9 @@ fn between(lo: u32, hi: u32) -> u32 {
     lo + u32::from_le_bytes(random()) % (hi - lo + 1)
 }
 
-/// A session's ID as Xray's client makes it: a random UUID.
-fn session_id() -> String {
+/// A session's ID as Xray's client makes it: a random UUID, which is also
+/// the form of a group's VLESS user ID (Go's tunnel.NewVLESSID).
+pub(crate) fn session_id() -> String {
     let mut b: [u8; 16] = random();
     b[6] = b[6] & 0x0f | 0x40;
     b[8] = b[8] & 0x3f | 0x80;
