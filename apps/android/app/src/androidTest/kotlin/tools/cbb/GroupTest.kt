@@ -357,6 +357,11 @@ class GroupTest {
         val back = "o11-back-$stamp.txt"
         val copied = Bench.run(Bench.PC, "mkdir -p /tmp/o11src && printf 'cbb-bench phone O11 from the computer $stamp' >/tmp/o11src/$back && cbb copy /tmp/o11src/$back 2>&1")
         try {
+            // The button waits until the computer's copy is here: pressed
+            // before it, it sends what the phone's clipboard holds (a9's
+            // text, which the phone's own files replaced), and that newer
+            // copy wins over the computer's (SyncRule.decide).
+            until(30, "${Bench.PC}'s files reach the phone") { model.group.recentCopy?.media?.isFiles == true }
             until(60, "the phone saves ${Bench.PC}'s file") {
                 runBlocking { model.sync() }
                 model.message?.text == R.string.files_saved
