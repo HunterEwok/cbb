@@ -21,6 +21,9 @@ All notable changes to cbb are documented in this file. The format follows
   out of the phone or takes them again, a long press for a time; on an admin phone a device's
   page mutes it for the group or unmutes it. The phones take `mute` and `unmute` commands, and
   the phone kits sign them and read the hello's mute.
+- The same switch at the top of the Aurora app's main page, with a long press for a time; the
+  app takes an admin's `mute` and `unmute` (lite/ffi's `cbb_member_pause`, `cbb_member_muted`
+  and the `mute` event) and says when an admin muted the phone.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

@@ -105,6 +105,7 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     m_error.clear();
     Errors::log(QStringLiteral("member: started in the group %1").arg(membership.groupTag()));
     m_peerTimer.start();
+    pollMuted();
     emit changed();
 }
 
@@ -117,6 +118,7 @@ void Member::stop()
     cbb_member_stop(m_member);
     m_member = nullptr;
     m_peers.clear();
+    m_paused = m_muted = false;
     Errors::log(QStringLiteral("member: stopped"));
     emit changed();
 }
@@ -126,7 +128,8 @@ void Member::sendClipboard()
     if (!m_member)
         return;
     const QString text = QGuiApplication::clipboard()->text();
-    if (text.isEmpty() || text == m_known)
+    // A muted phone's copies stay its own; the main page says so.
+    if (text.isEmpty() || text == m_known || m_muted)
         return;
     const QByteArray req = QJsonDocument(QJsonObject{{QStringLiteral("text"), text}}).toJson(QJsonDocument::Compact);
     size_t len = 0;
@@ -158,7 +161,85 @@ void Member::event(const QByteArray &json)
             roots.append(QByteArray::fromBase64(r.toString().toLatin1()));
         emit identityChanged(QByteArray::fromBase64(e.value(QStringLiteral("cert")).toString().toLatin1()),
                              QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
+    } else if (type == QStringLiteral("mute")) {
+        pollMuted();
     }
+}
+
+void Member::pause(int minutes)
+{
+    if (!m_member)
+        return;
+    const QByteArray req = QJsonDocument(QJsonObject{{QStringLiteral("pause"), true},
+                                                     {QStringLiteral("for_ms"), double(qint64(minutes) * 60 * 1000)}})
+                               .toJson(QJsonDocument::Compact);
+    size_t len = 0;
+    Failure failure;
+    const QJsonObject a = Core::take(cbb_member_pause(m_member, reinterpret_cast<const uint8_t *>(req.constData()),
+                                                      size_t(req.size()), &len),
+                                     len, QStringLiteral("member"), &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    Errors::log(minutes > 0 ? QStringLiteral("member: takes no copies from the group for %1 min").arg(minutes)
+                            : QStringLiteral("member: takes no copies from the group until turned on"));
+    readMuted(a);
+}
+
+void Member::resume()
+{
+    if (!m_member)
+        return;
+    const QByteArray req = QJsonDocument(QJsonObject{{QStringLiteral("pause"), false}}).toJson(QJsonDocument::Compact);
+    size_t len = 0;
+    Failure failure;
+    const QJsonObject a = Core::take(cbb_member_pause(m_member, reinterpret_cast<const uint8_t *>(req.constData()),
+                                                      size_t(req.size()), &len),
+                                     len, QStringLiteral("member"), &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    Errors::log(QStringLiteral("member: takes the group's copies again"));
+    readMuted(a);
+}
+
+void Member::pollMuted()
+{
+    if (!m_member)
+        return;
+    size_t len = 0;
+    Failure failure;
+    const QJsonObject a = Core::take(cbb_member_muted(m_member, &len), len, QStringLiteral("member"), &failure);
+    if (failure.isNull())
+        readMuted(a);
+}
+
+void Member::readMuted(const QJsonObject &a)
+{
+    // The core gives what is left, 0 for until it is lifted.
+    const auto until = [](const QJsonValue &ms) {
+        const qint64 left = qint64(ms.toDouble());
+        return left > 0 ? QDateTime::currentDateTime().addMSecs(left) : QDateTime();
+    };
+    const bool paused = a.value(QStringLiteral("paused")).toBool();
+    const bool muted = a.value(QStringLiteral("muted")).toBool();
+    const QDateTime pausedUntil = paused ? until(a.value(QStringLiteral("paused_ms"))) : QDateTime();
+    const QDateTime mutedUntil = muted ? until(a.value(QStringLiteral("muted_ms"))) : QDateTime();
+    // Within a few seconds the same end: the poll's own drift.
+    const auto same = [](const QDateTime &x, const QDateTime &y) {
+        return x.isValid() == y.isValid() && (!x.isValid() || qAbs(x.secsTo(y)) < 5);
+    };
+    if (paused == m_paused && muted == m_muted && same(pausedUntil, m_pausedUntil) && same(mutedUntil, m_mutedUntil))
+        return;
+    m_paused = paused;
+    m_muted = muted;
+    m_pausedUntil = pausedUntil;
+    m_mutedUntil = mutedUntil;
+    emit changed();
 }
 
 void Member::write(const QString &text, bool secret, qint64 ttlMs)
@@ -195,6 +276,8 @@ void Member::pollPeers()
         m_peers = names;
         emit changed();
     }
+    // A pause or a mute that ran out ends on its own.
+    pollMuted();
 }
 
 void Member::setLast(const QString &text, bool secret)
