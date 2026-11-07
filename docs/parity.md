@@ -56,18 +56,19 @@ on every platform of the class, on the roadmap).
 | Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE, no biometric prompt yet; not yet tried on the phone | StrongBox or TEE; Secure Enclave |
 | Add a computer or a lite device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | the Aurora app reads the code with the core's reader |
 | Join another phone's group | yes | yes | yes | |
-| Make an admin, remove, take over from a lost root, renew certificates | yes | yes | gap | |
-| Make a computer an admin | yes | yes | gap | |
+| Make an admin, remove, take over from a lost root, renew certificates | yes | yes | remove and renew, as the root or an admin; not yet tried on the phone. Gap: take over | the core signs, the app's admin key in the TEE |
+| Make a computer an admin | yes | yes | yes, as the root, for a computer connected; not yet tried on the phone | |
 | Sync away from home | yes, in the background | while the app runs | gap, with the core's tunnel | **OS**: iOS stops a background app's network |
 | Receive copies without a tap | yes (foreground service) | **OS** | yes | iOS lets an app read and write the clipboard only in the foreground; Aurora lets it write in the background |
 | Send without a tap | yes (accessibility service) | **OS** | **OS** | iOS: Back Tap or the Action button runs the app's shortcut, one gesture; Aurora reads the clipboard only in the foreground, so the app sends when it comes to the front |
 | Send from the share sheet and the text selection menu | yes | yes | yes, text, through the system's share menu; not yet tried on the phone | the iPhone's share extension; its menu's Share |
-| One-tap control outside the app | Quick Settings tile, notification button | Control Center control (iOS 18) | the cover's actions: send the clipboard, pause; not yet tried on the phone | the control opens the app for a moment: **OS**, iOS reads the clipboard only in the foreground |
+| One-tap control outside the app | Quick Settings tile, notification button | Control Center control (iOS 18) | the cover's actions: the one button, pause; not yet tried on the phone | the control opens the app for a moment: **OS**, iOS reads the clipboard only in the foreground |
 | Home-screen widget | yes | yes | **OS** (no widgets; the cover instead) | "Sync clipboard"; on the iPhone it opens the app for a moment, as the control does |
-| Rename a device | yes | yes | gap | Devices, Rename on an admin phone; `cbb rename` on an admin computer; a signed device record |
+| Rename a device | yes | yes | yes; not yet tried on the phone | Devices, Rename on an admin phone; `cbb rename` on an admin computer; a signed device record |
+| The group's alerts card, and the root's decision on it | yes | yes | yes; not yet tried on the phone | `GroupAlert` in the kits, the core's `alerts` op on Aurora |
 | Error details switch without developer tools | yes | yes | yes | seven taps on the version in Settings show it; `adb` and the Xcode launch argument still work |
 | Wallpaper colours theme | yes | **OS** | the ambience | Material You exists only on Android |
-| Remote paste, images and files | yes | yes | gap | the iPhone takes no remote paste (**OS**: no app may type into another) |
+| Remote paste, images and files | yes | yes | images and files both ways, through the share menu, the clipboard's image and Downloads; not yet tried on the phone. Gap: remote paste | the iPhone takes no remote paste (**OS**: no app may type into another) |
 | Remote invitations | planned | planned | planned | roadmap item 12; computers have them |
 | Arrange the tiles and collections | yes | yes | gap | kept on each installation; the watches show their phone's |
 | Act as a Bluetooth keyboard for a TV, tablet or computer | yes | **OS** | gap | iOS keeps the HID service to the system; some Android makers leave the profile out, which the app says |

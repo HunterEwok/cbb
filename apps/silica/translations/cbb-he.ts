@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>זה לא קוד של CBB. במכשיר השני, בחרו להצטרף לקבוצה וסרקו את הקוד שהוא מציג.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>רק מנהל של הקבוצה משנה את המכשירים שלה.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>המכשיר לא קיבל את הפקודה.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -182,10 +190,6 @@
     <message>
         <source>Leaving the group</source>
         <translation>יוצא מהקבוצה</translation>
-    </message>
-    <message>
-        <source>Send the clipboard</source>
-        <translation>שליחת הלוח</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -283,6 +287,18 @@
         <source>Root</source>
         <translation>שורש</translation>
     </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>סנכרון לוח ההעתקה</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>סנכרון</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>מביא…</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -305,6 +321,50 @@
     <message>
         <source>Device ID</source>
         <translation>מזהה מכשיר</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>הסרה</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>מסיר את %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>ביטול הקפאה</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>מבטל את הקפאת %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>ביטול השתקה</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>השתקה עד ביטול</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>השתקה לשעה</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>משתיק את %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>שינוי שם</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>הפיכה למנהל</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>הופך את %1 למנהל</translation>
     </message>
 </context>
 <context>
@@ -615,6 +675,134 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל ישתלט על הקבוצה.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>שינוי שם המכשיר</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>שינוי שם</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>שם</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>כל מכשירי הקבוצה מציגים את השם החדש.</translation>
+    </message>
+</context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>מכשירים שאינם מוכרים כאן</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>הקבוצה עצורה: המכשירים שלה מחליפים רק את הרשומות שלהם, בלי לוח העתקה, עד שהשורש של הקבוצה יחליט.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>הקבוצה לא שולחת סודות עד שהשורש שלה יחליט.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 חתם על שתי היסטוריות במפתח אחד, כמו שקורה במפתח גנוב או בשחזור מגיבוי.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>מנהלים הסירו או הקפיאו זה את זה בלי לראות זאת: %1. השורש מסיר אחד מהם.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>שתי תביעות להשתלט על הקבוצה: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 תובע את הקבוצה, כדי להשתלט עליה מהשורש שלה.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 תובע את הקבוצה, כדי להשתלט עליה מהשורש שלה: זה ייכנס לתוקף בעוד %2 שעות.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 תובע את הקבוצה, והקבוצה עצורה עד שהשורש שלה יחליט.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>בקבוצה יש רשומות מגרסה מאוחרת יותר (%1): עדכנו את האפליקציה כדי לקרוא אותן.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>ביטול שתי ההיסטוריות</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>מבטל את שתי ההיסטוריות</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>ביטול התביעה</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>מבטל את התביעה</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>הסרת %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>מסיר את %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>השורש של הקבוצה מחליט.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>תמונה</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>אין מה לשלוח: לא ניתן היה לקרוא אף קובץ.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>הקבצים גדולים מדי: עד 50MB יחד.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 קבצים</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>%1 קבצים בהורדות</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>נשמר %1 מהקבוצה בהורדות</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>קובץ</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 קבצים</translation>
     </message>
 </context>
 </TS>

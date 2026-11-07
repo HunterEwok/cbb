@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>这不是 CBB 二维码。请在另一台设备上选择加入群组，然后扫描它显示的二维码。</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>只有群组管理员可以更改其设备。</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>设备未接受该命令。</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -182,10 +190,6 @@
     <message>
         <source>Leaving the group</source>
         <translation>正在退出群组</translation>
-    </message>
-    <message>
-        <source>Send the clipboard</source>
-        <translation>发送剪贴板</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -283,6 +287,18 @@
         <source>Root</source>
         <translation>根</translation>
     </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>同步剪贴板</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>同步</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>正在获取…</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -305,6 +321,50 @@
     <message>
         <source>Device ID</source>
         <translation>设备 ID</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>移除</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>正在移除 %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>解冻</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>正在解冻 %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>取消静音</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>静音直到取消</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>静音一小时</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>正在静音 %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重命名</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>设为管理员</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>正在将 %1 设为管理员</translation>
     </message>
 </context>
 <context>
@@ -615,6 +675,134 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以接管群组。</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>重命名设备</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重命名</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>名称</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>群组中的每台设备都会显示新名称。</translation>
+    </message>
+</context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>此处未知的设备</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>群组已停止：在群组的根做出决定之前，其设备只交换记录，不交换剪贴板。</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>在其根做出决定之前，群组不发送任何机密。</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 用同一把密钥签署了两段历史，就像密钥被盗或从备份恢复时那样。</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>管理员在互不知情的情况下相互移除或冻结：%1。根会移除其中一个。</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>两项接管群组的声明：%1。</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 声明接管群组，要从其根接手。</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 声明接管群组，要从其根接手：将在 %2 小时后生效。</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 声明接管群组，在其根做出决定之前群组已停止。</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>群组包含更高版本的记录（%1）：请更新应用以读取它们。</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>作废两段历史</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>正在作废两段历史</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>取消声明</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>正在取消声明</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>移除 %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>正在移除 %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>由群组的根决定。</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>一张图片</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>没有可发送的内容：无法读取任何文件。</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>文件太大：一次最多发送 50 MB。</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 个文件</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>“下载”中的 %1 个文件</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>已将群组的 %1 保存到“下载”</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>一个文件</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 个文件</translation>
     </message>
 </context>
 </TS>

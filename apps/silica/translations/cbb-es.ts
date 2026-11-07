@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>Este no es un código de CBB. En el otro dispositivo, elige unirte a un grupo y escanea el código que muestre.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>Solo un admin del grupo cambia sus dispositivos.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>El dispositivo no aceptó la orden.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -182,10 +190,6 @@
     <message>
         <source>Leaving the group</source>
         <translation>Saliendo del grupo</translation>
-    </message>
-    <message>
-        <source>Send the clipboard</source>
-        <translation>Enviar el portapapeles</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -283,6 +287,18 @@
         <source>Root</source>
         <translation>Raíz</translation>
     </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>Sincronizar el portapapeles</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>Sincronizar</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>Obteniendo…</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -305,6 +321,50 @@
     <message>
         <source>Device ID</source>
         <translation>ID del dispositivo</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Quitar</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Quitando %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>Descongelar</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>Descongelando %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>Reactivar</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Silenciar hasta reactivar</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Silenciar una hora</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>Silenciando %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Renombrar</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Hacer admin</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>Haciendo admin a %1</translation>
     </message>
 </context>
 <context>
@@ -615,6 +675,134 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>Haz admin a otro teléfono pronto: si pierdes este, un teléfono admin toma el control del grupo.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>Renombrar el dispositivo</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Renombrar</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Nombre</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>Todos los dispositivos del grupo muestran el nuevo nombre.</translation>
+    </message>
+</context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>dispositivos desconocidos aquí</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>El grupo está detenido: sus dispositivos solo intercambian sus registros, sin portapapeles, hasta que decida la raíz del grupo.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>El grupo no envía secretos hasta que decida su raíz.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 firmó dos historiales con una sola clave, como haría una clave robada o una restauración desde una copia de seguridad.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>Los admins se quitaron o congelaron entre sí sin verlo: %1. La raíz quita a uno de ellos.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>Dos reclamaciones para tomar el grupo: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 reclama el grupo, para tomarlo de su raíz.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 reclama el grupo, para tomarlo de su raíz: surte efecto en %2 h.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 reclama el grupo, y el grupo queda detenido hasta que decida su raíz.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>El grupo tiene registros de una versión posterior (%1): actualiza la app para leerlos.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>Anular ambos historiales</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>Anulando ambos historiales</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>Cancelar la reclamación</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>Cancelando la reclamación</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>Quitar %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Quitando %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>Decide la raíz del grupo.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>Una imagen</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>No hay nada que enviar: no se pudo leer ningún archivo.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>Los archivos son demasiado grandes: van juntos hasta 50 MB.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 archivos</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>%1 archivos en Descargas</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>Se guardó %1 del grupo en Descargas</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>un archivo</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 archivos</translation>
     </message>
 </context>
 </TS>

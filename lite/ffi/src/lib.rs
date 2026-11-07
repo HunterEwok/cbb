@@ -355,6 +355,37 @@ pub unsafe extern "C" fn cbb_member_call(
     to_c(m.call(req), answer_len)
 }
 
+/// Signs an admin's change to a device of the group, or a command for it
+/// (src/member.rs, manage): `request` is `{"action", "device", "name",
+/// "for_ms", "public", "admin_ca", "timeout_ms"}` and `sign` with `ctx`
+/// signs with the key `public` names, during this call only. A command
+/// waits for its result, so the app calls it off its main thread.
+///
+/// # Safety
+///
+/// `m` must be a member of `cbb_member_start`, not stopped; `request` must
+/// point to `len` readable bytes, `answer_len` be writable, and `sign`
+/// work with `ctx` until the call returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_manage(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(m.manage(req, sign, ctx as usize), answer_len)
+}
+
 /// Starts admitting a device by its QR code, as an admin of the group
 /// (src/admit.rs): `request` is `{"qr", "public", "admin_ca", "make_admin"}`
 /// and `sign` with `ctx` signs with the key `public` names, the phone's

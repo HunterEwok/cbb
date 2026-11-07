@@ -11,6 +11,7 @@
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
@@ -19,6 +20,11 @@
 #include <QThread>
 
 namespace {
+
+// How often an admin looks for member certificates due for renewal, and
+// how long after the member starts it looks first.
+const int renewEveryMs = 6 * 3600 * 1000;
+const int renewFirstMs = 60 * 1000;
 
 // Runs KeyStore::ensure in a thread of its own and hands the key back.
 class KeyThread : public QThread
@@ -58,6 +64,42 @@ protected:
         group = Core::take(cbb_group_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
                                          Core::signAdminDigest, nullptr, &len),
                            len, QStringLiteral("group"), &failure);
+    }
+};
+
+// Signs an admin's change or command off the GUI thread: finds the admin
+// key, then has the member sign with it in the TEE; a command waits for the
+// device's answer.
+class ManageThread : public QThread
+{
+public:
+    cbb_member *member = nullptr;
+    QJsonObject request; // without public, which the key gives
+    QJsonObject answer;
+    Failure failure;
+
+protected:
+    void run() override
+    {
+        const KeyStore::Key key = KeyStore::ensure(KeyStore::Which::Admin);
+        if (key.state != KeyStore::State::Ready) {
+            failure = key.failure;
+            return;
+        }
+        request.insert(QStringLiteral("public"), QString::fromLatin1(key.publicKey.toBase64()));
+        const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+        size_t len = 0;
+        const QJsonObject a = answer =
+            Core::take(cbb_member_manage(member, reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
+                                         Core::signAdminDigest, nullptr, &len),
+                       len, QStringLiteral("manage"), &failure);
+        // A command the device refused answers with its reason.
+        const QJsonObject result = a.value(QStringLiteral("result")).toObject();
+        const QString status = result.value(QStringLiteral("status")).toString();
+        if (failure.isNull() && !result.isEmpty() && status != QStringLiteral("done")) {
+            failure = Failure{QCoreApplication::translate("Errors", "The device did not take the command."),
+                              QStringLiteral("manage: %1: %2").arg(status, result.value(QStringLiteral("reason")).toString())};
+        }
     }
 };
 
@@ -106,6 +148,18 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
                 m_member = next;
                 Errors::log(QStringLiteral("group: kept a new member certificate or root"));
             });
+    // Renewals are due months ahead, so a look every few hours, and one
+    // a minute after the member starts, once it reached its peers, is plenty.
+    m_renewTimer.setInterval(renewEveryMs);
+    connect(&m_renewTimer, &QTimer::timeout, this, &App::renew);
+    connect(&m_node, &Member::changed, this, [this]() {
+        if (m_node.running() && !m_renewTimer.isActive()) {
+            m_renewTimer.start();
+            QTimer::singleShot(renewFirstMs, this, &App::renew);
+        } else if (!m_node.running()) {
+            m_renewTimer.stop();
+        }
+    });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
         emit groupChanged();
@@ -207,6 +261,79 @@ void App::startAdmit(const QString &qr, bool makeAdmin)
             return;
         }
         m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, makeAdmin && m_member.root);
+    });
+    thread->start();
+}
+
+void App::resolve(const QStringList &records)
+{
+    manage(QStringLiteral("resolve"), QString(), records.join(QLatin1Char(',')));
+}
+
+void App::manage(const QString &action, const QString &device, const QString &name, int forMinutes)
+{
+    if (!m_member.isAdmin() || !m_node.handle()) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "Only an admin of the group changes its devices."),
+                            QStringLiteral("manage: not an admin or no member")}));
+        emit managed(action, device, false);
+        return;
+    }
+    if (m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->request = QJsonObject{
+        {QStringLiteral("action"), action},
+        {QStringLiteral("device"), device},
+        {QStringLiteral("name"), name},
+        {QStringLiteral("for_ms"), double(qint64(forMinutes) * 60 * 1000)},
+    };
+    // A resolve's records come joined in name, as QML hands them.
+    if (action == QStringLiteral("resolve"))
+        thread->request.insert(QStringLiteral("records"), QJsonArray::fromStringList(name.split(QLatin1Char(','), QString::SkipEmptyParts)));
+    if (!m_member.adminCa.isEmpty() && !m_member.root)
+        thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
+    connect(thread, &QThread::finished, this, [this, thread, action, device]() {
+        const Failure failure = thread->failure;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            emit managed(action, device, false);
+            return;
+        }
+        Errors::log(QStringLiteral("manage: %1 %2").arg(action, device));
+        show(QString());
+        m_node.pollDevices();
+        emit managed(action, device, true);
+    });
+    thread->start();
+}
+
+void App::renew()
+{
+    if (m_busy || !m_member.isAdmin() || !m_node.running())
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->request = QJsonObject{{QStringLiteral("action"), QStringLiteral("renew")}};
+    if (!m_member.adminCa.isEmpty() && !m_member.root)
+        thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const int renewed = thread->answer.value(QStringLiteral("renewed")).toInt();
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull())
+            Errors::log(QStringLiteral("renew: %1 (%2)").arg(failure.message, failure.details));
+        else if (renewed > 0)
+            Errors::log(QStringLiteral("renew: renewed %1 member certificates").arg(renewed));
     });
     thread->start();
 }

@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>هذا ليس رمز CBB. على الجهاز الآخر، اختر الانضمام إلى مجموعة، ثم امسح الرمز الذي يعرضه.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>لا يغيّر أجهزة المجموعة إلا مشرفها.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>لم يقبل الجهاز الأمر.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -182,10 +190,6 @@
     <message>
         <source>Leaving the group</source>
         <translation>جارٍ مغادرة المجموعة</translation>
-    </message>
-    <message>
-        <source>Send the clipboard</source>
-        <translation>إرسال الحافظة</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -283,6 +287,18 @@
         <source>Root</source>
         <translation>الجذر</translation>
     </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>مزامنة الحافظة</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>مزامنة</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>جارٍ الجلب…</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -305,6 +321,50 @@
     <message>
         <source>Device ID</source>
         <translation>معرّف الجهاز</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>إزالة</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>جارٍ إزالة %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>إلغاء التجميد</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>جارٍ إلغاء تجميد %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>إلغاء الكتم</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>كتم حتى الإلغاء</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>كتم لمدة ساعة</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>جارٍ كتم %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>إعادة تسمية</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>اجعله مشرفًا</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>جارٍ جعل %1 مشرفًا</translation>
     </message>
 </context>
 <context>
@@ -615,6 +675,134 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>اجعل هاتفًا آخر مشرفًا قريبًا: إذا فُقد هذا الهاتف، يستولي هاتف مشرف على المجموعة.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>إعادة تسمية الجهاز</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>إعادة تسمية</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>الاسم</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>تعرض كل أجهزة المجموعة الاسم الجديد.</translation>
+    </message>
+</context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>أجهزة غير معروفة هنا</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>المجموعة متوقفة: تتبادل أجهزتها سجلاتها فقط، دون الحافظة، حتى يقرر جذر المجموعة.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>لا ترسل المجموعة أي أسرار حتى يقرر جذرها.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>وقّع %1 تاريخين بمفتاح واحد، كما يحدث مع مفتاح مسروق أو استعادة من نسخة احتياطية.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>أزال المشرفون أو جمّدوا بعضهم دون أن يروا ذلك: %1. يزيل الجذر أحدهم.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>مطالبتان بالاستيلاء على المجموعة: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>يطالب %1 بالمجموعة للاستيلاء عليها من جذرها.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>يطالب %1 بالمجموعة للاستيلاء عليها من جذرها: يسري ذلك خلال %2 ساعة.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>يطالب %1 بالمجموعة، والمجموعة متوقفة حتى يقرر جذرها.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>تحتوي المجموعة على سجلات من إصدار أحدث (%1): حدّث التطبيق لقراءتها.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>إلغاء التاريخين</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>جارٍ إلغاء التاريخين</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>إلغاء المطالبة</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>جارٍ إلغاء المطالبة</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>إزالة %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>جارٍ إزالة %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>يقرر جذر المجموعة.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>صورة</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>لا يوجد ما يُرسل: تعذّرت قراءة أي ملف.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>الملفات كبيرة جدًا: يمكن إرسال ما يصل إلى 50 ميغابايت معًا.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>ملفات: %1</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>ملفات في التنزيلات: %1</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>حُفظ %1 من المجموعة في التنزيلات</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>ملف</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>ملفات: %1</translation>
     </message>
 </context>
 </TS>

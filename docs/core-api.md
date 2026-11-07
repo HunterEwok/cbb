@@ -98,6 +98,7 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features}]`, as their hellos and reach messages present them |
 | `records` | none | `{"records"}` |
 | `devices` | none | `{"devices"}`: every device of the group as the app shows it, `[{device, name, role, os, admin, root, frozen, online, self, listed}]`: the group's device records, whether it is connected and whether it is this phone, then the connected members no record lists yet (`listed` false) |
+| `alerts` | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
 | `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
 | `send_cert`, `send_admin_ca`, `send_tunnel` | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |
@@ -127,6 +128,18 @@ group (docs/protocol.md, section 6, "The joiner listens"). `cbb_group_new` (feat
 `PhoneGroup.create` does: a root CA for the app's root key, the phone's member certificate and its
 device record holding the root, all signed through the callback; its answer has a join's
 fields, so the app keeps it as it keeps a join, and admits with the root key and no admin CA.
+`cbb_member_manage` (feature `member`, `cbb_core::manage`) signs an admin's change to a device
+through the same callback, as the phone kits' `PhoneGroup` does: a removal (every key of the
+device, its admin key among them; not the phone itself, nor the root's phone, which is taken
+over instead), a new name (a device record like its newest; an admin renames only a device the
+root did not record, since a root's record beats an admin's), a thaw of a frozen admin, which
+the member adds to its records and sends to the group, or a mute or an unmute, a command sealed
+to the device's key when its record names one, which the member sends and whose result it
+answers. As the root it makes a connected computer an admin (`make_admin`: an admin CA for the
+admin key its hello offers, its device record again, and the admin message), and as any admin it
+renews (`renew`) every member certificate that is due, each connected member's, sent to it, and the
+phone's own, as the phone kits do when a peer connects. `TestFFIPhoneRoot` renames and removes a
+computer through it.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its

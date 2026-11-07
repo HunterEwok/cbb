@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>Это не код CBB. На другом устройстве выберите «Вступить в группу» и отсканируйте код, который оно покажет.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>Менять устройства группы может только её админ.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>Устройство не приняло команду.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -182,10 +190,6 @@
     <message>
         <source>Leaving the group</source>
         <translation>Выход из группы</translation>
-    </message>
-    <message>
-        <source>Send the clipboard</source>
-        <translation>Отправить буфер обмена</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -283,6 +287,18 @@
         <source>Root</source>
         <translation>Корень</translation>
     </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>Синхронизировать буфер обмена</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>Синхронизировать</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>Получение…</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -305,6 +321,50 @@
     <message>
         <source>Device ID</source>
         <translation>ID устройства</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Удаление: %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>Разморозить</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>Разморозка: %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>Включить</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Заглушить до отмены</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Заглушить на час</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>Заглушение: %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Сделать админом</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>%1 становится админом</translation>
     </message>
 </context>
 <context>
@@ -615,6 +675,134 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>Вскоре сделайте админом ещё один телефон: если этот телефон потеряется, телефон-админ заберёт группу.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>Переименовать устройство</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Имя</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>Все устройства группы покажут новое имя.</translation>
+    </message>
+</context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>устройства, неизвестные здесь</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>Группа остановлена: её устройства обмениваются только записями, без буфера обмена, пока корень группы не решит.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>Группа не отправляет секреты, пока её корень не решит.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 подписал две истории одним ключом, как бывает с украденным ключом или при восстановлении из резервной копии.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>Админы удалили или заморозили друг друга, не видя этого: %1. Корень удаляет одного из них.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>Две заявки на захват группы: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 заявляет права на группу, чтобы забрать её у корня.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 заявляет права на группу, чтобы забрать её у корня: это вступит в силу через %2 ч.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 заявляет права на группу, и группа остановлена, пока её корень не решит.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>В группе есть записи более новой версии (%1): обновите приложение, чтобы их прочитать.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>Аннулировать обе истории</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>Аннулирование обеих историй</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>Отменить заявку</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>Отмена заявки</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>Удалить %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Удаление: %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>Решает корень группы.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>Изображение</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>Нечего отправлять: ни один файл не удалось прочитать.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>Файлы слишком большие: вместе можно отправить до 50 МБ.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>Файлов: %1</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>Файлов в «Загрузках»: %1</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>Сохранено в «Загрузках» из группы: %1</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>файл</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>файлов: %1</translation>
     </message>
 </context>
 </TS>

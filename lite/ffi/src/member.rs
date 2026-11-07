@@ -19,6 +19,7 @@ use cbb_core::certs::{self, Cert, DeviceId};
 use cbb_core::clip::{Event as Copy, Kind, Mode};
 use cbb_core::error::{Error, Result};
 use cbb_core::identity::Identity;
+use cbb_core::manage::{Change, Order, Signer};
 use cbb_core::media::Part;
 use cbb_lite::content::Source;
 use cbb_lite::node::{Peer, WriteReq};
@@ -157,6 +158,40 @@ struct ToArgs {
 #[derive(Deserialize)]
 struct CommandArgs {
     command: Record,
+    #[serde(default = "ten_seconds")]
+    timeout_ms: u64,
+}
+
+/// What cbb_member_manage does: `action` is remove, rename, thaw,
+/// make_admin (as the root, for a computer connected), mute or unmute, for
+/// `device`; renew, which renews every certificate due; or resolve, the
+/// root's decision on an alert, which voids its `records`.
+#[derive(Deserialize)]
+struct ManageArgs {
+    action: String,
+    #[serde(default)]
+    device: String,
+    /// With make_admin: the user consented to a computer that keeps its
+    /// keys in a file, which the group's key level must allow too.
+    #[serde(default)]
+    allow_file_key: bool,
+    /// With resolve: the records an alert names, which the root voids.
+    #[serde(default)]
+    records: Vec<cbb_core::authority::Hash>,
+    /// With rename: the new name.
+    #[serde(default)]
+    name: String,
+    /// With mute: how long, 0 for until an unmute.
+    #[serde(default)]
+    for_ms: i64,
+    /// The public point of the key that signs, SEC1 uncompressed: the
+    /// phone's admin key, or the root's key when it holds the root.
+    #[serde(with = "certs::b64")]
+    public: Vec<u8>,
+    /// The phone's admin CA, DER; absent when it signs with the root.
+    #[serde(with = "certs::b64::opt", default)]
+    admin_ca: Option<Vec<u8>>,
+    /// How long a command waits for its result.
     #[serde(default = "ten_seconds")]
     timeout_ms: u64,
 }
@@ -509,6 +544,8 @@ impl Member {
                 Ok(json!({ "peers": ps.iter().map(peer_json).collect::<Vec<_>>() }))
             }
             "records" => Ok(json!({ "records": n.records() })),
+            // What the group's records stop, for the alerts card.
+            "alerts" => Ok(json!({ "alerts": n.alerts() })),
             // Every device of the group as the app shows it.
             "devices" => {
                 let ds: Vec<DeviceAnswer> = n
@@ -582,6 +619,44 @@ impl Member {
 
     pub fn stop(&self) {
         self.node.stop();
+    }
+
+    /// Signs a change to a device of the group, or a command for it, with
+    /// the key the request's `public` names, the phone's admin key or the
+    /// root's (ManageArgs), and answers `{}`, or `{"result"}` for a
+    /// command.
+    pub fn manage(&self, request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
+        answer((|| -> Result<Value> {
+            let a: ManageArgs = serde_json::from_slice(request)
+                .map_err(|e| Error::msg(format!("the manage request does not decode: {e}")))?;
+            let identity = self.node.identity();
+            let ca = match &a.admin_ca {
+                Some(der) => Cert::parse(der)?,
+                None => identity.root().clone(),
+            };
+            if ca.public_key() != a.public.as_slice() {
+                return Err(Error::msg("the key does not belong to the CA this phone signs with"));
+            }
+            let key = AppKey { public: a.public.clone(), sign, ctx };
+            let me = identity.id.to_string();
+            let s = Signer { ca: &ca, key: &key, me: &me };
+            let order = |o: Order| -> Result<Value> {
+                let res = self.node.order(&s, &a.device, &o, Duration::from_millis(a.timeout_ms.min(60_000)))?;
+                Ok(json!({ "result": res }))
+            };
+            match a.action.as_str() {
+                "remove" => self.node.change(&s, &a.device, &Change::Remove)?,
+                "rename" => self.node.change(&s, &a.device, &Change::Rename(&a.name))?,
+                "thaw" => self.node.change(&s, &a.device, &Change::Thaw)?,
+                "resolve" => self.node.change(&s, "", &Change::Resolve(a.records.clone()))?,
+                "make_admin" => self.node.make_admin(&s, &a.device, a.allow_file_key)?,
+                "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
+                "mute" => return order(Order::Mute(a.for_ms)),
+                "unmute" => return order(Order::Unmute),
+                other => return Err(Error::msg(format!("there is no action {other:?}"))),
+            }
+            Ok(json!({}))
+        })())
     }
 
     /// Starts admitting the device whose QR code the app scanned

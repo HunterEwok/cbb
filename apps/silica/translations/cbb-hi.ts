@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>यह CBB का कोड नहीं है। दूसरे डिवाइस पर समूह से जुड़ना चुनें और उसका दिखाया कोड स्कैन करें।</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>समूह के डिवाइस केवल उसका एडमिन बदलता है।</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>डिवाइस ने आदेश स्वीकार नहीं किया।</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -182,10 +190,6 @@
     <message>
         <source>Leaving the group</source>
         <translation>समूह छोड़ा जा रहा है</translation>
-    </message>
-    <message>
-        <source>Send the clipboard</source>
-        <translation>क्लिपबोर्ड भेजें</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -283,6 +287,18 @@
         <source>Root</source>
         <translation>रूट</translation>
     </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>क्लिपबोर्ड सिंक करें</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>सिंक करें</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>ला रहा है…</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -305,6 +321,50 @@
     <message>
         <source>Device ID</source>
         <translation>डिवाइस ID</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>हटाएँ</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>%1 हटाया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>अनफ़्रीज़ करें</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>%1 अनफ़्रीज़ किया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>म्यूट हटाएँ</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>म्यूट हटाने तक म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>एक घंटे के लिए म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>%1 म्यूट किया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>नाम बदलें</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>एडमिन बनाएँ</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>%1 को एडमिन बनाया जा रहा है</translation>
     </message>
 </context>
 <context>
@@ -615,6 +675,134 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह सँभाल लेगा।</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>डिवाइस का नाम बदलें</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>नाम बदलें</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>नाम</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>समूह का हर डिवाइस नया नाम दिखाता है।</translation>
+    </message>
+</context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>यहाँ अज्ञात डिवाइस</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>समूह रुका हुआ है: जब तक समूह का रूट तय नहीं करता, इसके डिवाइस केवल अपने रिकॉर्ड बदलते हैं, क्लिपबोर्ड नहीं।</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>जब तक इसका रूट तय नहीं करता, समूह कोई रहस्य नहीं भेजता।</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 ने एक ही कुंजी से दो इतिहासों पर हस्ताक्षर किए, जैसा चोरी हुई कुंजी या बैकअप से बहाली में होता है।</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>एडमिन ने बिना देखे एक-दूसरे को हटाया या फ़्रीज़ किया: %1। रूट उनमें से एक को हटाता है।</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>समूह सँभालने के दो दावे: %1।</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 समूह पर दावा करता है, ताकि उसे उसके रूट से सँभाल ले।</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 समूह पर दावा करता है, ताकि उसे उसके रूट से सँभाल ले: यह %2 घंटे में लागू होगा।</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 समूह पर दावा करता है, और जब तक इसका रूट तय नहीं करता, समूह रुका रहता है।</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>समूह में बाद के संस्करण के रिकॉर्ड हैं (%1): उन्हें पढ़ने के लिए ऐप अपडेट करें।</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>दोनों इतिहास रद्द करें</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>दोनों इतिहास रद्द किए जा रहे हैं</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>दावा रद्द करें</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>दावा रद्द किया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>%1 हटाएँ</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>%1 हटाया जा रहा है</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>समूह का रूट तय करता है।</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>एक छवि</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>भेजने को कुछ नहीं: कोई फ़ाइल पढ़ी नहीं जा सकी।</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>फ़ाइलें बहुत बड़ी हैं: एक साथ 50 MB तक भेजे जा सकते हैं।</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 फ़ाइलें</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>डाउनलोड में %1 फ़ाइलें</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>समूह से %1 डाउनलोड में सहेजा गया</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>एक फ़ाइल</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 फ़ाइलें</translation>
     </message>
 </context>
 </TS>

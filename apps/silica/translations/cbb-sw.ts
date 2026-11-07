@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>Huu si msimbo wa CBB. Kwenye kifaa kingine, chagua kujiunga na kikundi, kisha changanua msimbo unaoonyesha.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>Ni msimamizi wa kikundi pekee anayebadilisha vifaa vyake.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>Kifaa hakikukubali amri.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -182,10 +190,6 @@
     <message>
         <source>Leaving the group</source>
         <translation>Inaondoka kwenye kikundi</translation>
-    </message>
-    <message>
-        <source>Send the clipboard</source>
-        <translation>Tuma ubao wa kunakili</translation>
     </message>
     <message>
         <source>Join a group as an admin</source>
@@ -283,6 +287,18 @@
         <source>Root</source>
         <translation>Mzizi</translation>
     </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>Sawazisha ubao wa kunakili</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>Sawazisha</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>Inaleta…</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -305,6 +321,50 @@
     <message>
         <source>Device ID</source>
         <translation>Kitambulisho cha kifaa</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Ondoa</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Inaondoa %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>Fungua</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>Inafungua %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>Ondoa unyamazishaji</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Nyamazisha hadi uondoe</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Nyamazisha kwa saa moja</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>Inanyamazisha %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Badilisha jina</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Fanya msimamizi</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>Inamfanya %1 kuwa msimamizi</translation>
     </message>
 </context>
 <context>
@@ -615,6 +675,134 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>Ifanye simu nyingine kuwa msimamizi hivi karibuni: simu hii ikipotea, simu ya msimamizi itachukua kikundi.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>Badilisha jina la kifaa</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Badilisha jina</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Jina</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>Kila kifaa cha kikundi kinaonyesha jina jipya.</translation>
+    </message>
+</context>
+<context>
+    <name>AlertsCard</name>
+    <message>
+        <source>devices unknown here</source>
+        <translation>vifaa visivyojulikana hapa</translation>
+    </message>
+    <message>
+        <source>The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.</source>
+        <translation>Kikundi kimesimamishwa: vifaa vyake vinabadilishana rekodi zao tu, bila ubao wa kunakili, hadi mzizi wa kikundi uamue.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>Kikundi hakitumi siri hadi mzizi wake uamue.</translation>
+    </message>
+    <message>
+        <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
+        <translation>%1 ilitia sahihi historia mbili kwa ufunguo mmoja, kama ufunguo ulioibiwa au urejeshaji kutoka nakala rudufu ungefanya.</translation>
+    </message>
+    <message>
+        <source>Admins removed or froze each other without seeing it: %1. The root removes one of them.</source>
+        <translation>Wasimamizi waliondoana au kugandishana bila kuona: %1. Mzizi unaondoa mmoja wao.</translation>
+    </message>
+    <message>
+        <source>Two claims to take the group over: %1.</source>
+        <translation>Madai mawili ya kuchukua kikundi: %1.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root.</source>
+        <translation>%1 inadai kikundi, ili kukichukua kutoka kwa mzizi wake.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, to take it over from its root: it takes effect in %2 h.</source>
+        <translation>%1 inadai kikundi, ili kukichukua kutoka kwa mzizi wake: itaanza kutumika baada ya saa %2.</translation>
+    </message>
+    <message>
+        <source>%1 claims the group, and the group is stopped until its root decides.</source>
+        <translation>%1 inadai kikundi, na kikundi kimesimamishwa hadi mzizi wake uamue.</translation>
+    </message>
+    <message>
+        <source>The group holds records of a later version (%1): update the app to read them.</source>
+        <translation>Kikundi kina rekodi za toleo jipya zaidi (%1): sasisha programu ili uzisome.</translation>
+    </message>
+    <message>
+        <source>Void both histories</source>
+        <translation>Batilisha historia zote mbili</translation>
+    </message>
+    <message>
+        <source>Voiding both histories</source>
+        <translation>Inabatilisha historia zote mbili</translation>
+    </message>
+    <message>
+        <source>Cancel the claim</source>
+        <translation>Ghairi dai</translation>
+    </message>
+    <message>
+        <source>Cancelling the claim</source>
+        <translation>Inaghairi dai</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>Ondoa %1</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Inaondoa %1</translation>
+    </message>
+    <message>
+        <source>The group's root decides.</source>
+        <translation>Mzizi wa kikundi unaamua.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>Picha</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>Hakuna cha kutuma: hakuna faili iliyoweza kusomwa.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>Faili ni kubwa mno: hadi MB 50 zinaenda pamoja.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>Faili %1</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>Faili %1 kwenye Vipakuliwa</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>Imehifadhi %1 kutoka kikundi kwenye Vipakuliwa</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>faili moja</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>faili %1</translation>
     </message>
 </context>
 </TS>
