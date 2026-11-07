@@ -57,7 +57,7 @@ pub(super) struct Meeting {
     /// group's credentials list this device, and the credentials' changes
     /// it was made at.
     credentials: Arc<Mutex<Option<Arc<relay::Credentialed>>>>,
-    credentials_at: u64,
+    credentials_at: usize,
     /// The pins it started with, and for the project's relay the error it
     /// last looked for another address after, and when.
     pins: Vec<String>,

@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use cbb_core::certs::{Cert, KeyHash};
@@ -154,7 +154,7 @@ pub struct Credentials {
     /// Held while the credentials are brought up to date.
     refreshing: Mutex<()>,
     /// Counts the changes, so that a relay link registers again.
-    changes: AtomicU64,
+    changes: AtomicUsize,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -199,7 +199,7 @@ impl Credentials {
             store: Mutex::new(store),
             keys: Mutex::new(keys),
             refreshing: Mutex::new(()),
-            changes: AtomicU64::new(0),
+            changes: AtomicUsize::new(0),
             log,
         })
     }
@@ -215,7 +215,7 @@ impl Credentials {
     }
 
     /// How many times the credentials changed.
-    pub fn changes(&self) -> u64 {
+    pub fn changes(&self) -> usize {
         self.changes.load(Ordering::SeqCst)
     }
 

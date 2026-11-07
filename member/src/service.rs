@@ -423,7 +423,7 @@ pub fn run(cfg: Config) -> Result<()> {
             let renewed = std::sync::Mutex::new(std::collections::HashMap::new());
             // The server credentials are brought up to date when the records
             // or the credentials change, and twice a day for the period.
-            let (mut cred_seen, mut cred_at) = ((String::new(), u64::MAX), std::time::Instant::now());
+            let (mut cred_seen, mut cred_at) = ((String::new(), usize::MAX), std::time::Instant::now());
             while !node.is_closed() {
                 crate::admin::renew_admin_cas(&dir, &node, &renewed);
                 let seen = (node.records().lock().unwrap().digest(), creds.changes());
