@@ -736,7 +736,12 @@ QVariantList App::arranged(const QVariantList &devices, int)
             flat << QVariantMap{{QStringLiteral("kind"), QStringLiteral("device")}, {QStringLiteral("device"), d}};
         return flat;
     }
+    // This phone comes first and stays out of the arrangement (the core's
+    // view leaves it out).
     QVariantList view;
+    if (byId.contains(m_member.device))
+        view << QVariantMap{{QStringLiteral("kind"), QStringLiteral("device")},
+                            {QStringLiteral("device"), byId.value(m_member.device)}};
     for (const QJsonValue &item : answer.value(QStringLiteral("view")).toArray()) {
         const QJsonObject o = item.toObject();
         if (o.contains(QStringLiteral("device"))) {

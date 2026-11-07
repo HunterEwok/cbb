@@ -16,9 +16,14 @@ Column {
     property var view: []          // the whole view, for the collections
     property string inCollection: "" // the collection these devices are in
 
+    // This phone stays first, out of the arrangement: its level leaves it out.
     function arrange(level, index, inCollection) {
+        var item = level[index]
+        if (item.kind === "device" && item.device.self)
+            return
+        var others = level.filter(function(i) { return !(i.kind === "device" && i.device.self) })
         pageStack.push(Qt.resolvedUrl("ArrangePage.qml"), {
-            item: level[index], level: level, index: index, view: items.view, inCollection: inCollection
+            item: item, level: others, index: others.indexOf(item), view: items.view, inCollection: inCollection
         })
     }
 
@@ -29,7 +34,9 @@ Column {
         visible: !app.deviceList
         x: Theme.horizontalPageMargin - Theme.paddingSmall
         width: parent.width - 2 * x
-        property int perRow: Math.max(3, Math.floor(width / (Theme.itemSizeExtraLarge * 1.4)))
+        // Tiles at least as wide as on the other phones, two in a row on a
+        // phone held upright, so their words fit.
+        property int perRow: Math.max(2, Math.floor(width / (Theme.itemSizeExtraLarge * 2.2)))
         Repeater {
             model: tiles.visible ? items.level : []
             Loader {
