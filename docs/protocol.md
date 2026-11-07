@@ -3653,8 +3653,9 @@ registers with no server, so it signs none and keeps none. The phones' kits do w
 `CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
 and pass them on in `MemberNode`, and pass the same vectors. A phone registers with a relay
 by them once the members' credential lists its server key (`CredentialStore.registration`,
-cbbtun's `Relay.SetCredentials`); it maps the pseudonyms the relay names back to device IDs
-by the server credentials.
+cbbtun's `Relay.SetCredentials`, or in Rust `cbb_tunnel_relay_credentials`, lite/src/relay.rs,
+with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
+names back to device IDs by the server credentials.
 
 The group lives in **periods** of about 30 days. For each, its root signs, inside the group,
 a fresh **tag** for the servers and a fresh **period key**; each device signs with its member
