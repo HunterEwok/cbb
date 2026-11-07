@@ -865,6 +865,24 @@ func TestLiteHubCommands(t *testing.T) {
 		a := rust.status(t).Away
 		return a != nil && !a.Hub
 	})
+
+	// The Rust admin signs the table of main hubs, which puts it first.
+	if _, err := rust.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"rust", "rust"}}, ""); err == nil || !strings.Contains(err.Error(), "twice") {
+		t.Errorf("a hub named twice: %v", err)
+	}
+	if _, err := rust.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"rust", "desk"}}, ""); err != nil {
+		t.Fatalf("cbb global hubs on the Rust member: %v", err)
+	}
+	waitFor(t, "the desk puts the Rust member first", func() bool {
+		order := hubOrderIn(desk.dir)
+		return len(order) == 2 && string(order[0]) == rustID
+	})
+
+	// It turns sync away from home off on the laptop.
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "off", Device: "laptop"}, ""); err != nil {
+		t.Fatalf("cbb global off -on laptop on the Rust member: %v", err)
+	}
+	waitFor(t, "sync away from home is off on the laptop", func() bool { return laptop.status(t).Away == nil })
 }
 
 // TestLiteHubForwarder runs the Rust hub behind Go's forwarder only: it

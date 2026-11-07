@@ -138,6 +138,9 @@ pub struct Header {
     pub force: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub forward_only: bool,
+    /// In hubs: the table of main hubs, names or device IDs in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hubs: Vec<String>,
 }
 
 /// A part of a copy of images or files on the socket, as Go's

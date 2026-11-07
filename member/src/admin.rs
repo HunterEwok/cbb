@@ -1019,27 +1019,81 @@ impl Admin<'_> {
     /// returns its result once it carried the command out.
     #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
     pub fn hub_command(&self, d: &Device, hub: serde_json::Value) -> Result<crate::wire::CommandResult> {
-        let s = self.signing().map_err(|_| {
-            Error::msg(
-                "only an admin makes a device a hub, moves the hub or stops one: the group's root, an admin it made (cbb admin), or an admin phone",
-            )
-        })?;
+        self.order_command(
+            d,
+            cbb_core::manage::Order::Hub(hub),
+            "only an admin makes a device a hub, moves the hub or stops one: the group's root, an admin it made (cbb admin), or an admin phone",
+        )
+    }
+
+    /// Turns sync away from home off on the device target names with an
+    /// away-off command (Go's awayOffOn); only its own user turns it on
+    /// again (D-45).
+    pub fn away_off_on(&self, target: &str) -> Result<()> {
+        let d = find_device(self.node, target)?;
+        if d.id == self.me() {
+            return Err(Error::msg("-on names this device; cbb global off turns it off here"));
+        }
+        self.order_command(
+            &d,
+            cbb_core::manage::Order::AwayOff,
+            "only an admin turns sync away from home off on another device: the group's root, an admin it made (cbb admin), or an admin phone",
+        )
+        .map(|_| ())
+    }
+
+    /// Signs the table of main hubs, the devices targets name in order, as
+    /// Go's setHubs: the root, or an admin that may be a hub.
+    pub fn set_hubs(&self, targets: &[String]) -> Result<()> {
+        if targets.is_empty() || targets.len() > authority::MAX_HUBS {
+            return Err(Error::msg(format!("name 1 to {} hubs, in the order they serve", authority::MAX_HUBS)));
+        }
+        let s = self.signing().ok();
+        let may = s.as_ref().is_some_and(|s| s.root || self.node.records().lock().unwrap().may_host(&self.me()));
+        let Some(s) = s.filter(|_| may) else {
+            return Err(Error::msg("only the group's root or an admin that may be a hub sets the main hubs"));
+        };
+        let level = self.node.records().lock().unwrap().state().key_level;
+        let level = if level.is_empty() { "hardware".to_string() } else { level };
+        let mut ids: Vec<String> = Vec::new();
+        for t in targets {
+            let d = find_device(self.node, t)?;
+            if d.role != "full" && d.role != "phone" {
+                return Err(Error::msg(format!("{} cannot be a hub: only a computer or a phone can", d.name)));
+            }
+            // Naming it in the table is the user's consent to a key in a
+            // file, where the level allows one.
+            level_allows(&level, &d.store, &d.name, "", true)?;
+            if ids.contains(&d.id) {
+                return Err(Error::msg(format!("{} is named twice", d.name)));
+            }
+            ids.push(d.id);
+        }
+        self.sign(&s, Body { kind: authority::TYPE_HUBS.into(), hubs: ids, ..Default::default() })?;
+        self.node.logf(&format!("cbb: the group's main hubs are now {}", targets.join(", ")));
+        Ok(())
+    }
+
+    /// Sends the device d a command with the order o, signed as an admin,
+    /// and returns its result once it carried the command out; not_admin
+    /// says why a device that is no admin cannot.
+    fn order_command(
+        &self,
+        d: &Device,
+        o: cbb_core::manage::Order,
+        not_admin: &str,
+    ) -> Result<crate::wire::CommandResult> {
+        let s = self.signing().map_err(|_| Error::msg(not_admin))?;
         if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
             return Err(Error::msg(FROZEN));
         }
         let me = self.me();
         let signer = cbb_core::manage::Signer { ca: &s.ca, key: &*s.key, me: &me };
-        let r = cbb_core::manage::order(
-            &self.node.records().lock().unwrap(),
-            &signer,
-            &d.id,
-            &cbb_core::manage::Order::Hub(hub),
-            uptime::wall_ms(),
-        )?;
+        let r = cbb_core::manage::order(&self.node.records().lock().unwrap(), &signer, &d.id, &o, uptime::wall_ms())?;
         let res = self
             .node
             .command(&r, Duration::from_secs(20))
-            .map_err(|e| Error::msg(format!("the hub command to {}: {}", d.name, e.message())))?;
+            .map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
         if res.status != "done" {
             return Err(Error::msg(format!("{} {} it: {}", d.name, res.status, res.reason)));
         }

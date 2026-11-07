@@ -634,6 +634,7 @@ impl Service {
                 ));
             }
             "on" => node.set_tunnel_key(Some(away.turn_on()?)),
+            "off" if !h.device.is_empty() => self.admin(|a| a.away_off_on(&h.device))?,
             "off" => {
                 away.turn_off()?;
                 node.set_tunnel_key(None);
@@ -1670,6 +1671,10 @@ impl Service {
                 Ok(control::reply(Header { devices: out, ..Default::default() }, Vec::new()))
             }
             "away" => self.global(h),
+            "hubs" => {
+                self.admin(|a| a.set_hubs(&h.hubs))?;
+                Ok(control::reply(Header::default(), Vec::new()))
+            }
             "paste-receive" => self.set_receive(h),
             "action-set" => self.set_action(h),
             "actions-off" if h.device.is_empty() && !h.all => {
@@ -1725,11 +1730,11 @@ impl Service {
             }
             "takeover-delay" => {
                 self.admin(|a| a.set_takeover_delay(&h.value))?;
-                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+                Ok(control::reply(Header::default(), Vec::new()))
             }
             "incoming" => {
                 self.admin(|a| a.set_incoming(&h.value))?;
-                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+                Ok(control::reply(Header::default(), Vec::new()))
             }
             "takeover" => {
                 let name = self.admin(|a| a.take_over(&h.name))?;
@@ -1742,7 +1747,7 @@ impl Service {
                 } else {
                     self.admin(|a| a.recover(&text))?;
                 }
-                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+                Ok(control::reply(Header::default(), Vec::new()))
             }
             "handover" => {
                 let name = self.admin(|a| a.hand_over(&h.name))?;

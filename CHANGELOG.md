@@ -46,7 +46,9 @@ All notable changes to cbb are documented in this file. The format follows
   and stops one with signed hub commands (`cbb global move`, `hub -on`, `hub off -on`), and
   carries out the same commands from a Go admin or a phone (`TestLiteHubCommands`). A Rust
   hub registers with its forwarder (`-forwarder`, `-forwarder-key`, or `default` for the
-  project's) and its clients reach it through it (`TestLiteHubForwarder`). The hub's key
+  project's) and its clients reach it through it (`TestLiteHubForwarder`). It also signs the
+  table of main hubs (`cbb global hubs`) and turns sync away from home off on another device
+  (`cbb global off -on`). The hub's key
   periods, VLESS, the relay and invitations come next.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,

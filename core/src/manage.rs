@@ -47,6 +47,8 @@ pub enum Order {
     /// (docs/protocol.md, section 15): its forwarder, addresses and the
     /// clients handed over, or `stop`.
     Hub(serde_json::Value),
+    /// Turn sync away from home off; only its own user turns it on again.
+    AwayOff,
 }
 
 /// The signer: the CA whose key signs (an admin CA, or the group's root),
@@ -209,6 +211,7 @@ pub fn order(rs: &Records, s: &Signer, device: &str, o: &Order, now_ms: i64) -> 
             }
         }
         Order::Unmute => put("type", "unmute".into()),
+        Order::AwayOff => put("type", "away-off".into()),
         Order::Hub(h) => {
             put("type", "hub".into());
             put("hub", h.clone());
