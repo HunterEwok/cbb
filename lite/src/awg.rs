@@ -366,9 +366,8 @@ mod tests {
 
     /// A key of the test's own, new each time.
     fn key() -> [u8; 32] {
-        let mut k = [0u8; 32];
-        getrandom::fill(&mut k).unwrap();
-        k
+        let k: Vec<u8> = (0..4).flat_map(|_| getrandom::u64().unwrap().to_le_bytes()).collect();
+        k.try_into().unwrap()
     }
 
     static HEADER_KEY: std::sync::OnceLock<[u8; 32]> = std::sync::OnceLock::new();
