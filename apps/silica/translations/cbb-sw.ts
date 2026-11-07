@@ -192,10 +192,6 @@
         <translation>Inaondoka kwenye kikundi</translation>
     </message>
     <message>
-        <source>Send the clipboard</source>
-        <translation>Tuma ubao wa kunakili</translation>
-    </message>
-    <message>
         <source>Join a group as an admin</source>
         <translation>Jiunge na kikundi kama msimamizi</translation>
     </message>
@@ -290,6 +286,18 @@
     <message>
         <source>Root</source>
         <translation>Mzizi</translation>
+    </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>Sawazisha ubao wa kunakili</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>Sawazisha</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>Inaleta…</translation>
     </message>
 </context>
 <context>
@@ -757,6 +765,44 @@
     <message>
         <source>The group's root decides.</source>
         <translation>Mzizi wa kikundi unaamua.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>Picha</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>Hakuna cha kutuma: hakuna faili iliyoweza kusomwa.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>Faili ni kubwa mno: hadi MB 50 zinaenda pamoja.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>Faili %1</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>Faili %1 kwenye Vipakuliwa</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>Imehifadhi %1 kutoka kikundi kwenye Vipakuliwa</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>faili moja</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>faili %1</translation>
     </message>
 </context>
 </TS>

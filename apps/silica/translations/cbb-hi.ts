@@ -192,10 +192,6 @@
         <translation>समूह छोड़ा जा रहा है</translation>
     </message>
     <message>
-        <source>Send the clipboard</source>
-        <translation>क्लिपबोर्ड भेजें</translation>
-    </message>
-    <message>
         <source>Join a group as an admin</source>
         <translation>एडमिन के रूप में समूह से जुड़ें</translation>
     </message>
@@ -290,6 +286,18 @@
     <message>
         <source>Root</source>
         <translation>रूट</translation>
+    </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>क्लिपबोर्ड सिंक करें</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>सिंक करें</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>ला रहा है…</translation>
     </message>
 </context>
 <context>
@@ -757,6 +765,44 @@
     <message>
         <source>The group's root decides.</source>
         <translation>समूह का रूट तय करता है।</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>एक छवि</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>भेजने को कुछ नहीं: कोई फ़ाइल पढ़ी नहीं जा सकी।</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>फ़ाइलें बहुत बड़ी हैं: एक साथ 50 MB तक भेजे जा सकते हैं।</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 फ़ाइलें</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>डाउनलोड में %1 फ़ाइलें</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>समूह से %1 डाउनलोड में सहेजा गया</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>एक फ़ाइल</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 फ़ाइलें</translation>
     </message>
 </context>
 </TS>

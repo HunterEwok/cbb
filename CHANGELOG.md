@@ -85,6 +85,11 @@ All notable changes to cbb are documented in this file. The format follows
   the group's records stop and why), and on the group's root offers the decision, confirmed
   first: void both histories, cancel a claim or remove one of two admins; the Rust core gives
   the alerts (the member's `alerts` op) and signs the decision.
+- The Aurora app follows the one button's rule (a Sync button on its main page, its menu and
+  its cover): a copy from another device that waits comes to the phone, otherwise what the
+  phone copied goes to the group, by the core's rule. It sends and takes images and files: the
+  clipboard's image, images and files shared to it from the system's share menu, and what
+  other devices share, saved in Downloads/CBB (one image into the clipboard too).
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

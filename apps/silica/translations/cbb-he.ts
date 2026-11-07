@@ -192,10 +192,6 @@
         <translation>יוצא מהקבוצה</translation>
     </message>
     <message>
-        <source>Send the clipboard</source>
-        <translation>שליחת הלוח</translation>
-    </message>
-    <message>
         <source>Join a group as an admin</source>
         <translation>הצטרפות לקבוצה כמנהל</translation>
     </message>
@@ -290,6 +286,18 @@
     <message>
         <source>Root</source>
         <translation>שורש</translation>
+    </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>סנכרון לוח ההעתקה</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>סנכרון</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>מביא…</translation>
     </message>
 </context>
 <context>
@@ -757,6 +765,44 @@
     <message>
         <source>The group's root decides.</source>
         <translation>השורש של הקבוצה מחליט.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>תמונה</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>אין מה לשלוח: לא ניתן היה לקרוא אף קובץ.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>הקבצים גדולים מדי: עד 50MB יחד.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 קבצים</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>%1 קבצים בהורדות</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>נשמר %1 מהקבוצה בהורדות</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>קובץ</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 קבצים</translation>
     </message>
 </context>
 </TS>

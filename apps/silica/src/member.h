@@ -13,6 +13,8 @@
 
 #include <QByteArray>
 #include <QDateTime>
+#include <QImage>
+#include <QJsonObject>
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -21,6 +23,7 @@
 #include <QVariantList>
 
 struct cbb_member;
+class QThread;
 
 class Member : public QObject
 {
@@ -44,6 +47,8 @@ class Member : public QObject
     // or, when it is invalid, until an admin unmutes it.
     Q_PROPERTY(bool muted READ muted NOTIFY changed)
     Q_PROPERTY(QDateTime mutedUntil READ mutedUntil NOTIFY changed)
+    // Images or files of the group's copy are coming to the phone.
+    Q_PROPERTY(bool fetching READ fetching NOTIFY changed)
 
 public:
     explicit Member(QObject *parent = nullptr);
@@ -63,17 +68,25 @@ public:
     QDateTime pausedUntil() const { return m_pausedUntil; }
     bool muted() const { return m_muted; }
     QDateTime mutedUntil() const { return m_mutedUntil; }
+    bool fetching() const { return m_fetch != nullptr; }
 
     // Starts the member of membership as the phone named name.
     void start(const Membership &membership, const QString &name, const QByteArray &publicKey, const QString &os,
                const QString &osVersion);
     void stop();
 
-    // Sends the clipboard's text when it is new: neither what the group
-    // sent last nor what the phone sent last.
+    // The one button (docs/design.md, "The one button"): a copy from
+    // another device that waits for the phone comes to it; otherwise what
+    // the phone copied goes to the group (sendClipboard).
+    Q_INVOKABLE void button();
+    // Sends the clipboard's text or image when the core's rule says so:
+    // neither the group's copy nor what this phone sent or took last.
     Q_INVOKABLE void sendClipboard();
     // Sends a text shared to the app, as a copy of this phone.
     Q_INVOKABLE void sendText(const QString &text);
+    // Sends images or files shared to the app (absolute paths), up to
+    // maxSendBytes together.
+    Q_INVOKABLE void sendFiles(const QStringList &paths);
 
     // Keeps the group's copies out of the clipboard for minutes (0 for
     // until resume), or takes them again; the phone's own still go out.
@@ -86,6 +99,8 @@ signals:
     // An admin renewed the member certificate, or a takeover made a new
     // root: the phone keeps them in member.json.
     void identityChanged(const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots);
+    // The images or files of a copy are in folder, for a notification.
+    void saved(const QString &folder, int count);
 
 public:
     // Brings the devices up to date now, as after an admin's change.
@@ -96,6 +111,13 @@ private:
     void write(const QString &text, bool secret, qint64 ttlMs);
     void pollPeers();
     void setLast(const QString &text, bool secret);
+    // Takes the group's copy (as the core's copy JSON): a text into the
+    // clipboard, images or files fetched into Downloads, one image into the
+    // clipboard too; then tells the core it took it.
+    void take(const QJsonObject &copy);
+    void sendImage(const QImage &image);
+    // The key the core's rule compares an image by: its PNG's SHA-256.
+    static QString imageKey(const QByteArray &png);
     // Reads the pause and the mute from the core's answer, or asks for it.
     void readMuted(const QJsonObject &state);
     void pollMuted();
@@ -109,6 +131,10 @@ private:
     QString m_error;
     // The clipboard's text as the group last set it or the phone last sent it.
     QString m_known;
+    // The key of the image this phone put into the clipboard from the
+    // group: read back, it is encoded anew, so the core cannot tell it.
+    QString m_tookImage;
+    QThread *m_fetch = nullptr;
     bool m_paused = false;
     QDateTime m_pausedUntil;
     bool m_muted = false;

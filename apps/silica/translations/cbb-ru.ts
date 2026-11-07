@@ -192,10 +192,6 @@
         <translation>Выход из группы</translation>
     </message>
     <message>
-        <source>Send the clipboard</source>
-        <translation>Отправить буфер обмена</translation>
-    </message>
-    <message>
         <source>Join a group as an admin</source>
         <translation>Войти в группу как админ</translation>
     </message>
@@ -290,6 +286,18 @@
     <message>
         <source>Root</source>
         <translation>Корень</translation>
+    </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>Синхронизировать буфер обмена</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>Синхронизировать</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>Получение…</translation>
     </message>
 </context>
 <context>
@@ -757,6 +765,44 @@
     <message>
         <source>The group's root decides.</source>
         <translation>Решает корень группы.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>Изображение</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>Нечего отправлять: ни один файл не удалось прочитать.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>Файлы слишком большие: вместе можно отправить до 50 МБ.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>Файлов: %1</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>Файлов в «Загрузках»: %1</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>Сохранено в «Загрузках» из группы: %1</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>файл</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>файлов: %1</translation>
     </message>
 </context>
 </TS>

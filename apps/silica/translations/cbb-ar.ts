@@ -192,10 +192,6 @@
         <translation>جارٍ مغادرة المجموعة</translation>
     </message>
     <message>
-        <source>Send the clipboard</source>
-        <translation>إرسال الحافظة</translation>
-    </message>
-    <message>
         <source>Join a group as an admin</source>
         <translation>الانضمام إلى مجموعة كمشرف</translation>
     </message>
@@ -290,6 +286,18 @@
     <message>
         <source>Root</source>
         <translation>الجذر</translation>
+    </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>مزامنة الحافظة</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>مزامنة</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>جارٍ الجلب…</translation>
     </message>
 </context>
 <context>
@@ -757,6 +765,44 @@
     <message>
         <source>The group's root decides.</source>
         <translation>يقرر جذر المجموعة.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>صورة</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>لا يوجد ما يُرسل: تعذّرت قراءة أي ملف.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>الملفات كبيرة جدًا: يمكن إرسال ما يصل إلى 50 ميغابايت معًا.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>ملفات: %1</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>ملفات في التنزيلات: %1</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>حُفظ %1 من المجموعة في التنزيلات</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>ملف</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>ملفات: %1</translation>
     </message>
 </context>
 </TS>

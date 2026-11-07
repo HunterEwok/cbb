@@ -56,8 +56,8 @@ Page {
             }
             MenuItem {
                 visible: app.member.running
-                text: qsTr("Send the clipboard")
-                onClicked: app.member.sendClipboard()
+                text: qsTr("Sync the clipboard")
+                onClicked: app.member.button()
             }
             MenuItem {
                 visible: app.keyLevel === "none"
@@ -144,6 +144,17 @@ Page {
             }
 
             AlertsCard {}
+
+            // The one button (docs/design.md, "The one button"): a copy from
+            // another device that waits comes to the phone; otherwise what the
+            // phone copied goes to the group.
+            Button {
+                visible: app.member.running
+                anchors.horizontalCenter: parent.horizontalCenter
+                enabled: !app.member.fetching
+                text: app.member.fetching ? qsTr("Fetching…") : qsTr("Sync")
+                onClicked: app.member.button()
+            }
 
             Label {
                 visible: app.group === "" && !app.busy

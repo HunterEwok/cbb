@@ -250,9 +250,14 @@ The Aurora app (`apps/silica/src/events.cpp`, the same events and the same order
 hub's until it has the tunnel) looks whenever the core's list of devices changes, while the
 app runs, its cover included, and shows them through the system's notifications
 (`Nemo.Notifications`). Its cover shows whether the phone takes copies, the devices it
-reaches, the last copy and the latest event, with two actions: send the clipboard and pause
+reaches, the last copy and the latest event, with two actions: the one button and pause
 or resume. A text shared to CBB from the system's share menu (`ShareProvider`, the desktop
-entry's `X-Share Method text`) goes to the group as the phone's copy.
+entry's `X-Share Method text`) goes to the group as the phone's copy, and so do images and
+files (`X-Share Method files`, up to 50 MB together). The main page's Sync button, its
+pull-down menu and the cover follow the one button's rule (docs/design.md) through the core's
+`waiting`, `sends` and `took`; images and files from another device are fetched into
+Downloads/CBB by themselves while the phone takes the group's copies (one image goes into the
+clipboard too), with a notification, which is why the app asks for the user's folders.
 
 ## Apple Watch
 

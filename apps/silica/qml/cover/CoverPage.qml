@@ -59,7 +59,7 @@ CoverBackground {
         enabled: member
         CoverAction {
             iconSource: "image://theme/icon-cover-sync"
-            onTriggered: app.member.sendClipboard()
+            onTriggered: app.member.button()
         }
         CoverAction {
             iconSource: app.member.paused ? "image://theme/icon-cover-play" : "image://theme/icon-cover-pause"

@@ -192,10 +192,6 @@
         <translation>Saliendo del grupo</translation>
     </message>
     <message>
-        <source>Send the clipboard</source>
-        <translation>Enviar el portapapeles</translation>
-    </message>
-    <message>
         <source>Join a group as an admin</source>
         <translation>Unirse a un grupo como administrador</translation>
     </message>
@@ -290,6 +286,18 @@
     <message>
         <source>Root</source>
         <translation>Raíz</translation>
+    </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>Sincronizar el portapapeles</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>Sincronizar</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>Obteniendo…</translation>
     </message>
 </context>
 <context>
@@ -757,6 +765,44 @@
     <message>
         <source>The group's root decides.</source>
         <translation>Decide la raíz del grupo.</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>Una imagen</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>No hay nada que enviar: no se pudo leer ningún archivo.</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>Los archivos son demasiado grandes: van juntos hasta 50 MB.</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 archivos</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>%1 archivos en Descargas</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>Se guardó %1 del grupo en Descargas</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>un archivo</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 archivos</translation>
     </message>
 </context>
 </TS>

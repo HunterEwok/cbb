@@ -192,10 +192,6 @@
         <translation>正在退出群组</translation>
     </message>
     <message>
-        <source>Send the clipboard</source>
-        <translation>发送剪贴板</translation>
-    </message>
-    <message>
         <source>Join a group as an admin</source>
         <translation>以管理员身份加入群组</translation>
     </message>
@@ -290,6 +286,18 @@
     <message>
         <source>Root</source>
         <translation>根</translation>
+    </message>
+    <message>
+        <source>Sync the clipboard</source>
+        <translation>同步剪贴板</translation>
+    </message>
+    <message>
+        <source>Sync</source>
+        <translation>同步</translation>
+    </message>
+    <message>
+        <source>Fetching…</source>
+        <translation>正在获取…</translation>
     </message>
 </context>
 <context>
@@ -757,6 +765,44 @@
     <message>
         <source>The group's root decides.</source>
         <translation>由群组的根决定。</translation>
+    </message>
+</context>
+<context>
+    <name>Member</name>
+    <message>
+        <source>An image</source>
+        <translation>一张图片</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>没有可发送的内容：无法读取任何文件。</translation>
+    </message>
+    <message>
+        <source>The files are too large: up to 50 MB go together.</source>
+        <translation>文件太大：一次最多发送 50 MB。</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 个文件</translation>
+    </message>
+    <message>
+        <source>%1 files in Downloads</source>
+        <translation>“下载”中的 %1 个文件</translation>
+    </message>
+</context>
+<context>
+    <name>Notifier</name>
+    <message>
+        <source>Saved %1 from the group in Downloads</source>
+        <translation>已将群组的 %1 保存到“下载”</translation>
+    </message>
+    <message>
+        <source>a file</source>
+        <translation>一个文件</translation>
+    </message>
+    <message>
+        <source>%1 files</source>
+        <translation>%1 个文件</translation>
     </message>
 </context>
 </TS>

@@ -6,10 +6,10 @@ X-Nemo-Application-Type=silica-qt5
 Icon=harbour-cbb
 Exec=harbour-cbb
 Name=CBB
-X-Share-Methods=text
+X-Share-Methods=text;files
 
 [X-Sailjail]
-Permissions=Internet;Camera
+Permissions=Internet;Camera;UserDirs
 OrganizationName=tools.cbb
 ApplicationName=cbb
 
@@ -17,3 +17,8 @@ ApplicationName=cbb
 Description=Send to the group
 Capabilities=text/plain
 SupportsMultipleFiles=no
+
+[X-Share Method files]
+Description=Send to the group
+Capabilities=image/*;video/*;audio/*;application/*;text/*
+SupportsMultipleFiles=yes
