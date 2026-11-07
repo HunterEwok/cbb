@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>这不是 CBB 二维码。请在另一台设备上选择加入群组，然后扫描它显示的二维码。</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>只有群组管理员可以更改其设备。</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>设备未接受该命令。</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -305,6 +313,42 @@
     <message>
         <source>Device ID</source>
         <translation>设备 ID</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>移除</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>正在移除 %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>解冻</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>正在解冻 %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>取消静音</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>静音直到取消</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>静音一小时</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>正在静音 %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重命名</translation>
     </message>
 </context>
 <context>
@@ -615,6 +659,25 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以接管群组。</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>重命名设备</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重命名</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>名称</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>群组中的每台设备都会显示新名称。</translation>
     </message>
 </context>
 </TS>

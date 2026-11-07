@@ -20,7 +20,9 @@
 //! JSON>" (cbb_member_call), and, after it joined as an admin, "ADMIT <a
 //! device's QR code>", which admits that device with the admin key and
 //! prints "ADMITTED <device>" and then "ADMIT DONE <confirmed>", or "ADMIT
-//! FAILED <message>", on standard input. With -new-group it joins nothing:
+//! FAILED <message>", and "MANAGE <request as JSON>" (cbb_member_manage
+//! with the admin key), answered "MANAGED <answer as JSON>", on standard
+//! input. With -new-group it joins nothing:
 //! it makes a group of its own, the admin key standing for the root key,
 //! prints "Group <device> <group tag>", and runs the member as the group's
 //! root, which takes "ADMIT" too.
@@ -35,7 +37,8 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_join_accept,
-    cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_start,
+    cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call,
+    cbb_member_manage, cbb_member_start,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -267,6 +270,11 @@ fn run_member(
                 call(serde_json::json!({ "op": "pause_receiving", "args": args }).to_string())
             };
             println!("MUTED {} {}", a["ok"]["paused"], a["ok"]["muted"]);
+        } else if let Some(req) = line.strip_prefix("MANAGE ") {
+            match admin {
+                Some((k, public)) => println!("MANAGED {}", manage(m, k, public, &joined["admin_ca"], req)),
+                None => println!("MANAGED {{\"error\":{{\"message\":\"this phone is not an admin\"}}}}"),
+            }
         } else if let Some(qr) = line.strip_prefix("ADMIT ") {
             match admin {
                 Some((k, public)) => admit(m, k, public, &joined["admin_ca"], qr),
@@ -275,6 +283,27 @@ fn run_member(
         }
     }
     ExitCode::SUCCESS
+}
+
+/// Signs an admin's change or command (cbb_member_manage): req is the
+/// request without the key, which the admin key fills in.
+fn manage(
+    m: *const cbb_ffi::member::Member,
+    key: &SigningKey,
+    public: &str,
+    admin_ca: &serde_json::Value,
+    req: &str,
+) -> serde_json::Value {
+    let mut r: serde_json::Value = serde_json::from_str(req).unwrap_or_default();
+    r["public"] = public.into();
+    if !admin_ca.is_null() {
+        r["admin_ca"] = admin_ca.clone();
+    }
+    let req = r.to_string();
+    let mut n = 0usize;
+    let ctx = key as *const SigningKey as *mut core::ffi::c_void;
+    // SAFETY: m runs; req, n and the key live for the call.
+    take(unsafe { cbb_member_manage(m, req.as_ptr(), req.len(), sign, ctx, &mut n) }, n)
 }
 
 /// Admits the device whose QR code the user scanned, as the app does: the

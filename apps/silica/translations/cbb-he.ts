@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>זה לא קוד של CBB. במכשיר השני, בחרו להצטרף לקבוצה וסרקו את הקוד שהוא מציג.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>רק מנהל של הקבוצה משנה את המכשירים שלה.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>המכשיר לא קיבל את הפקודה.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -305,6 +313,42 @@
     <message>
         <source>Device ID</source>
         <translation>מזהה מכשיר</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>הסרה</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>מסיר את %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>ביטול הקפאה</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>מבטל את הקפאת %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>ביטול השתקה</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>השתקה עד ביטול</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>השתקה לשעה</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>משתיק את %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>שינוי שם</translation>
     </message>
 </context>
 <context>
@@ -615,6 +659,25 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל ישתלט על הקבוצה.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>שינוי שם המכשיר</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>שינוי שם</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>שם</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>כל מכשירי הקבוצה מציגים את השם החדש.</translation>
     </message>
 </context>
 </TS>

@@ -127,6 +127,14 @@ group (docs/protocol.md, section 6, "The joiner listens"). `cbb_group_new` (feat
 `PhoneGroup.create` does: a root CA for the app's root key, the phone's member certificate and its
 device record holding the root, all signed through the callback; its answer has a join's
 fields, so the app keeps it as it keeps a join, and admits with the root key and no admin CA.
+`cbb_member_manage` (feature `member`, `cbb_core::manage`) signs an admin's change to a device
+through the same callback, as the phone kits' `PhoneGroup` does: a removal (every key of the
+device, its admin key among them; not the phone itself, nor the root's phone, which is taken
+over instead), a new name (a device record like its newest; an admin renames only a device the
+root did not record, since a root's record beats an admin's), a thaw of a frozen admin, which
+the member adds to its records and sends to the group, or a mute or an unmute, a command sealed
+to the device's key when its record names one, which the member sends and whose result it
+answers. `TestFFIPhoneRoot` renames and removes a computer through it.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its

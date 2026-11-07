@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>Это не код CBB. На другом устройстве выберите «Вступить в группу» и отсканируйте код, который оно покажет.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>Менять устройства группы может только её админ.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>Устройство не приняло команду.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -305,6 +313,42 @@
     <message>
         <source>Device ID</source>
         <translation>ID устройства</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Удаление: %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>Разморозить</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>Разморозка: %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>Включить</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Заглушить до отмены</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Заглушить на час</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>Заглушение: %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
     </message>
 </context>
 <context>
@@ -615,6 +659,25 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>Вскоре сделайте админом ещё один телефон: если этот телефон потеряется, телефон-админ заберёт группу.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>Переименовать устройство</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Имя</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>Все устройства группы покажут новое имя.</translation>
     </message>
 </context>
 </TS>

@@ -717,6 +717,33 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if devices := next("DEVICES "); !strings.Contains(devices, `"laptop"`) {
 		t.Fatalf("the phone does not list the computer: %s", devices)
 	}
+
+	// The root's changes to the computer, signed through cbb_member_manage.
+	manage := func(req string) string {
+		fmt.Fprintln(in, "MANAGE "+req)
+		return next("MANAGED ")
+	}
+	if got := manage(`{"action":"rename","device":"` + string(j.ID) + `","name":"desk"}`); got != `{"ok":{}}` {
+		t.Fatalf("renaming the computer: %s", got)
+	}
+	fmt.Fprintln(in, "DEVICES")
+	if devices := next("DEVICES "); !strings.Contains(devices, `"desk"`) || strings.Contains(devices, `"laptop"`) {
+		t.Fatalf("the phone does not list the computer's new name: %s", devices)
+	}
+	// The computer is not running, so a command for it finds no way there.
+	if got := manage(`{"action":"mute","device":"` + string(j.ID) + `","for_ms":60000,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
+		t.Fatalf("muting a computer that is not running: %s", got)
+	}
+	if got := manage(`{"action":"remove","device":"` + made[0] + `"}`); !strings.Contains(got, "cannot remove itself") {
+		t.Fatalf("the phone removing itself: %s", got)
+	}
+	if got := manage(`{"action":"remove","device":"` + string(j.ID) + `"}`); got != `{"ok":{}}` {
+		t.Fatalf("removing the computer: %s", got)
+	}
+	fmt.Fprintln(in, "DEVICES")
+	if devices := next("DEVICES "); strings.Contains(devices, `"desk"`) {
+		t.Fatalf("the phone still lists the computer it removed: %s", devices)
+	}
 }
 
 // dialJoiner plays the phone that scanned a listening joiner's QR code: it

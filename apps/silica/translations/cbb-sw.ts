@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>Huu si msimbo wa CBB. Kwenye kifaa kingine, chagua kujiunga na kikundi, kisha changanua msimbo unaoonyesha.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>Ni msimamizi wa kikundi pekee anayebadilisha vifaa vyake.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>Kifaa hakikukubali amri.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -305,6 +313,42 @@
     <message>
         <source>Device ID</source>
         <translation>Kitambulisho cha kifaa</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Ondoa</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Inaondoa %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>Fungua</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>Inafungua %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>Ondoa unyamazishaji</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Nyamazisha hadi uondoe</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Nyamazisha kwa saa moja</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>Inanyamazisha %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Badilisha jina</translation>
     </message>
 </context>
 <context>
@@ -615,6 +659,25 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>Ifanye simu nyingine kuwa msimamizi hivi karibuni: simu hii ikipotea, simu ya msimamizi itachukua kikundi.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>Badilisha jina la kifaa</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Badilisha jina</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Jina</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>Kila kifaa cha kikundi kinaonyesha jina jipya.</translation>
     </message>
 </context>
 </TS>

@@ -76,6 +76,9 @@ All notable changes to cbb are documented in this file. The format follows
 - The Aurora app makes a group of its own ("Make a group" in the pull-down menu): the phone
   becomes the group's root, its root key in the TEE, adds devices as the root and makes a phone
   that joins as an admin one; the Rust core makes the group (`cbb_group_new`).
+- An admin Aurora phone acts on a device from its page: removes it, renames it, unfreezes a
+  frozen admin, mutes it for an hour or until unmuted and unmutes it, each confirmed first; the
+  Rust core signs the record or the command with the admin key (`cbb_member_manage`).
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

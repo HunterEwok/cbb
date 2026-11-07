@@ -6,7 +6,8 @@ import Sailfish.Silica 1.0
 import "devices.js" as Devices
 
 // A device's page (docs/apps.md, "Screens", Devices): its summary, brought
-// up to date while the page is open.
+// up to date while the page is open, and for an admin the device's actions,
+// each confirmed before the admin key signs it.
 Page {
     id: page
     property var device
@@ -25,9 +26,61 @@ Page {
         }
     }
 
+    // Whether this phone may act on the device: an admin, not on itself.
+    readonly property bool acts: app.admin && app.member.running && !page.device.self
+
+    RemorsePopup { id: remorse }
+
+    Connections {
+        target: app
+        onManaged: {
+            if (ok && action === "remove" && device === page.device.device)
+                pageStack.pop()
+        }
+    }
+
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: column.height
+
+        PullDownMenu {
+            visible: page.acts || (app.admin && app.member.running)
+            busy: app.busy
+            MenuItem {
+                visible: page.acts && !page.device.root
+                text: qsTr("Remove")
+                onClicked: remorse.execute(qsTr("Removing %1").arg(Devices.name(page.device)),
+                                           function() { app.manage("remove", page.device.device) })
+            }
+            MenuItem {
+                visible: page.acts && page.device.frozen
+                text: qsTr("Unfreeze")
+                onClicked: remorse.execute(qsTr("Unfreezing %1").arg(Devices.name(page.device)),
+                                           function() { app.manage("thaw", page.device.device) })
+            }
+            MenuItem {
+                visible: page.acts
+                text: qsTr("Unmute")
+                onClicked: app.manage("unmute", page.device.device)
+            }
+            MenuItem {
+                visible: page.acts
+                text: qsTr("Mute until unmuted")
+                onClicked: remorse.execute(qsTr("Muting %1").arg(Devices.name(page.device)),
+                                           function() { app.manage("mute", page.device.device, "", 0) })
+            }
+            MenuItem {
+                visible: page.acts
+                text: qsTr("Mute for an hour")
+                onClicked: remorse.execute(qsTr("Muting %1").arg(Devices.name(page.device)),
+                                           function() { app.manage("mute", page.device.device, "", 60) })
+            }
+            MenuItem {
+                visible: app.admin && app.member.running
+                text: qsTr("Rename")
+                onClicked: pageStack.push(Qt.resolvedUrl("RenameDevicePage.qml"), { device: page.device })
+            }
+        }
 
         Column {
             id: column

@@ -18,12 +18,13 @@ use cbb_core::admit::{self, Admitted, Admitter, GroupView};
 use cbb_core::certs::DeviceId;
 use cbb_core::clip::{Engine, Event, Kind, Mode, Via};
 use cbb_core::identity::Identity;
+use cbb_core::manage::{self, Change, Order, Signer};
 use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
 use crate::button::{self, Own};
 use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::node::{KeepIdentity, Node, OnMessage, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
 use crate::{discovery, mute, service, uptime};
@@ -455,6 +456,25 @@ impl Member {
         let r = admit::device_record(&records.lock().unwrap(), admitter, a, uptime::wall_ms())?;
         self.node.add_own_records(&[r]);
         Ok(())
+    }
+
+    /// Signs a change to a device of the group with the app's admin key or
+    /// the root's (cbb_core::manage), adds it and passes it to the group.
+    pub fn change(&self, s: &Signer, device: &str, c: &Change) -> Result<()> {
+        let records = self.node.records();
+        let r = manage::change(&records.lock().unwrap(), s, device, c, uptime::wall_ms())?;
+        self.node.add_own_records(std::slice::from_ref(&r));
+        if !records.lock().unwrap().has(&r) {
+            return Err(Error::msg("the group's records did not take the change; the log says why"));
+        }
+        Ok(())
+    }
+
+    /// Signs a command for a device of the group as change does, sends it
+    /// and waits up to timeout for its result.
+    pub fn order(&self, s: &Signer, device: &str, o: &Order, timeout: Duration) -> Result<CommandResult> {
+        let r = manage::order(&self.node.records().lock().unwrap(), s, device, o, uptime::wall_ms())?;
+        self.node.command(&r, timeout)
     }
 
     /// Stops the member and closes its connections.

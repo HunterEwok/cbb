@@ -89,6 +89,12 @@ public:
     // Makes a group of the phone's own, its root key the admin key in the
     // TEE (docs/protocol.md, section 3), and starts the member as its root.
     Q_INVOKABLE void makeGroup();
+    // An admin's change to a device of the group (remove, rename, thaw) or
+    // command for it (mute, unmute), signed with the admin key, or the
+    // root's, off the GUI thread; managed() tells when it is done.
+    // forMinutes: how long a mute lasts, 0 for until an unmute.
+    Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
+                            int forMinutes = 0);
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();
@@ -98,6 +104,8 @@ signals:
     void errorChanged();
     void groupChanged();
     void settingsChanged();
+    // ok: the change is in the group's records or the device took the command.
+    void managed(const QString &action, const QString &device, bool ok);
 
 private:
     void show(const QString &error);

@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>यह CBB का कोड नहीं है। दूसरे डिवाइस पर समूह से जुड़ना चुनें और उसका दिखाया कोड स्कैन करें।</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>समूह के डिवाइस केवल उसका एडमिन बदलता है।</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>डिवाइस ने आदेश स्वीकार नहीं किया।</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -305,6 +313,42 @@
     <message>
         <source>Device ID</source>
         <translation>डिवाइस ID</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>हटाएँ</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>%1 हटाया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>अनफ़्रीज़ करें</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>%1 अनफ़्रीज़ किया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>म्यूट हटाएँ</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>म्यूट हटाने तक म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>एक घंटे के लिए म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>%1 म्यूट किया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>नाम बदलें</translation>
     </message>
 </context>
 <context>
@@ -615,6 +659,25 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह सँभाल लेगा।</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>डिवाइस का नाम बदलें</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>नाम बदलें</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>नाम</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>समूह का हर डिवाइस नया नाम दिखाता है।</translation>
     </message>
 </context>
 </TS>

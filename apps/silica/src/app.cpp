@@ -61,6 +61,41 @@ protected:
     }
 };
 
+// Signs an admin's change or command off the GUI thread: finds the admin
+// key, then has the member sign with it in the TEE; a command waits for the
+// device's answer.
+class ManageThread : public QThread
+{
+public:
+    cbb_member *member = nullptr;
+    QJsonObject request; // without public, which the key gives
+    Failure failure;
+
+protected:
+    void run() override
+    {
+        const KeyStore::Key key = KeyStore::ensure(KeyStore::Which::Admin);
+        if (key.state != KeyStore::State::Ready) {
+            failure = key.failure;
+            return;
+        }
+        request.insert(QStringLiteral("public"), QString::fromLatin1(key.publicKey.toBase64()));
+        const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+        size_t len = 0;
+        const QJsonObject a =
+            Core::take(cbb_member_manage(member, reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
+                                         Core::signAdminDigest, nullptr, &len),
+                       len, QStringLiteral("manage"), &failure);
+        // A command the device refused answers with its reason.
+        const QJsonObject result = a.value(QStringLiteral("result")).toObject();
+        const QString status = result.value(QStringLiteral("status")).toString();
+        if (failure.isNull() && !result.isEmpty() && status != QStringLiteral("done")) {
+            failure = Failure{QCoreApplication::translate("Errors", "The device did not take the command."),
+                              QStringLiteral("manage: %1: %2").arg(status, result.value(QStringLiteral("reason")).toString())};
+        }
+    }
+};
+
 // Runs KeyStore::forget in a thread of its own.
 class ForgetThread : public QThread
 {
@@ -207,6 +242,46 @@ void App::startAdmit(const QString &qr, bool makeAdmin)
             return;
         }
         m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, makeAdmin && m_member.root);
+    });
+    thread->start();
+}
+
+void App::manage(const QString &action, const QString &device, const QString &name, int forMinutes)
+{
+    if (!m_member.isAdmin() || !m_node.handle()) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "Only an admin of the group changes its devices."),
+                            QStringLiteral("manage: not an admin or no member")}));
+        emit managed(action, device, false);
+        return;
+    }
+    if (m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->request = QJsonObject{
+        {QStringLiteral("action"), action},
+        {QStringLiteral("device"), device},
+        {QStringLiteral("name"), name},
+        {QStringLiteral("for_ms"), double(qint64(forMinutes) * 60 * 1000)},
+    };
+    if (!m_member.adminCa.isEmpty() && !m_member.root)
+        thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
+    connect(thread, &QThread::finished, this, [this, thread, action, device]() {
+        const Failure failure = thread->failure;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            emit managed(action, device, false);
+            return;
+        }
+        Errors::log(QStringLiteral("manage: %1 %2").arg(action, device));
+        show(QString());
+        m_node.pollDevices();
+        emit managed(action, device, true);
     });
     thread->start();
 }

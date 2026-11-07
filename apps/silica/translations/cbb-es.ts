@@ -125,6 +125,14 @@
         <source>This is not a CBB code. On the other device, choose to join a group, and scan the code it shows.</source>
         <translation>Este no es un código de CBB. En el otro dispositivo, elige unirte a un grupo y escanea el código que muestre.</translation>
     </message>
+    <message>
+        <source>Only an admin of the group changes its devices.</source>
+        <translation>Solo un admin del grupo cambia sus dispositivos.</translation>
+    </message>
+    <message>
+        <source>The device did not take the command.</source>
+        <translation>El dispositivo no aceptó la orden.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -305,6 +313,42 @@
     <message>
         <source>Device ID</source>
         <translation>ID del dispositivo</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Quitar</translation>
+    </message>
+    <message>
+        <source>Removing %1</source>
+        <translation>Quitando %1</translation>
+    </message>
+    <message>
+        <source>Unfreeze</source>
+        <translation>Descongelar</translation>
+    </message>
+    <message>
+        <source>Unfreezing %1</source>
+        <translation>Descongelando %1</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>Reactivar</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Silenciar hasta reactivar</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Silenciar una hora</translation>
+    </message>
+    <message>
+        <source>Muting %1</source>
+        <translation>Silenciando %1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Renombrar</translation>
     </message>
 </context>
 <context>
@@ -615,6 +659,25 @@
     <message>
         <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
         <translation>Haz admin a otro teléfono pronto: si pierdes este, un teléfono admin toma el control del grupo.</translation>
+    </message>
+</context>
+<context>
+    <name>RenameDevicePage</name>
+    <message>
+        <source>Rename the device</source>
+        <translation>Renombrar el dispositivo</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Renombrar</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Nombre</translation>
+    </message>
+    <message>
+        <source>Every device of the group shows the new name.</source>
+        <translation>Todos los dispositivos del grupo muestran el nuevo nombre.</translation>
     </message>
 </context>
 </TS>

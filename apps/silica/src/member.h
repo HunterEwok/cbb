@@ -83,11 +83,14 @@ signals:
     // root: the phone keeps them in member.json.
     void identityChanged(const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots);
 
+public:
+    // Brings the devices up to date now, as after an admin's change.
+    void pollDevices();
+
 private:
     Q_INVOKABLE void event(const QByteArray &json);
     void write(const QString &text, bool secret, qint64 ttlMs);
     void pollPeers();
-    void pollDevices();
     void setLast(const QString &text, bool secret);
     // Reads the pause and the mute from the core's answer, or asks for it.
     void readMuted(const QJsonObject &state);
