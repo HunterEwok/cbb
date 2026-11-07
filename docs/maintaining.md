@@ -338,6 +338,24 @@ passes; from v0.6.0 on the workflow runs it with `-require-files`. The steps to 
 server, where the backup of its configuration is and what to tell users are in the
 maintainer's private runbook, outside the repository.
 
+## Ways out carry only cbb
+
+The forwarder, VLESS, the relay and the mirror on cbb.tools must never take a user anywhere
+but cbb (docs/roadmap.md, item 61). The code holds this without any rule on the server;
+the server must not add a way around it. After each change on the server, run this check,
+reading only, and keep its result in the private runbook:
+
+- `sysctl net.ipv4.ip_forward net.ipv6.conf.all.forwarding` both 0; `iptables -S` and
+  `ip6tables -S` with `FORWARD DROP`, `iptables -t nat -S` and `ip6tables -t nat -S` with no
+  rules; `ip -br link` shows no `wg` or `tun` interface.
+- Every `proxy_pass` in `/etc/nginx` goes to the loopback address, and there is no `stream`
+  block.
+- `cbb forward` runs without `-vless-mirror`, or with the mirror at the loopback
+  `dl.cbb.tools` server, which serves only `/*.json` and `/vX.Y.Z/` files and 404 for the
+  rest.
+- No other proxy on the server listens on a public address beyond those `ufw status`
+  allows, and x-ui's subscription server is off.
+
 ## Homebrew
 
 The tap is the repository
@@ -463,14 +481,14 @@ A pre-release has no `stable.json`, so the timer does not take it; once, by hand
 Setting it up, once, on cbb.tools:
 
 - [x] The DNS record `dl.cbb.tools`, A to the server's address, DNS only.
-- [ ] `release-sign` built from this version (`GOOS=linux GOARCH=amd64 go build
+- [x] `release-sign` built from this version (`GOOS=linux GOARCH=amd64 go build
   ./tools/release-sign`) at `/usr/local/bin/release-sign`, the user and its directories:
   `useradd --system --no-create-home --shell /usr/sbin/nologin cbb-mirror`, then `install -d
   -o cbb-mirror -g cbb-mirror -m 755 /srv/dl.cbb.tools /srv/cbb.tools/zxnext`.
-- [ ] The two servers of `dl.cbb.tools` and the two `/zxnext` locations from
+- [x] The two servers of `dl.cbb.tools` and the two `/zxnext` locations from
   `site/deploy/nginx.conf`, merged into the live configuration by hand; `nginx -t`, then
   `systemctl reload nginx`, and nginx's ACME module gets the certificate.
-- [ ] `cbb-mirror.service` and `.timer` in `/etc/systemd/system`, `systemctl daemon-reload`,
+- [x] `cbb-mirror.service` and `.timer` in `/etc/systemd/system`, `systemctl daemon-reload`,
   `systemctl enable --now cbb-mirror.timer`. `systemctl start cbb-mirror` runs it at once,
   and `journalctl -u cbb-mirror` says what it took. Until the first signed release it fails,
   for want of a `keys.json`.
