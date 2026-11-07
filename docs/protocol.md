@@ -1358,11 +1358,11 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
   mDNS does not reach. TLS checks the peer as for a found member.
 - **Renewal and revocation.** The admin phones renew certificates with `cert` messages, as
   an admin computer does (CBBKit's
-  `GroupCertificates.renewal` and `MemberNode`'s `renew`; the app also renews its own
-  certificate at start). The Android app's root and admin keys sign only right after the
-  user's authentication, one signature each, so it notes a peer that is due and sends its
-  `cert` message on the peer's connection once the user confirms it, the next time the app
-  is open (`MemberNode.sendCert`). Revocation and the devices list are section 10, and a second admin
+  `GroupCertificates.renewal`, from the chain of the phone's member's `peer` event, sent
+  with its `send_cert`; the app also renews its own certificate at start). The Android
+  app's root and admin keys sign only right after the user's authentication, one signature
+  each, so it notes a peer that is due and sends its `cert` message on the peer's connection
+  once the user confirms it, the next time the app is open. Revocation and the devices list are section 10, and a second admin
   phone is the way back when a phone is lost.
 
 ## 10. Admin CAs, device records and revocation
@@ -2105,7 +2105,8 @@ The keys of the group's WireGuard tunnel for sync away from home ([design.md](de
 "Sync away from home"). Implemented in Go (`internal/tunnel`, `internal/node`,
 `internal/service/tunnel.go`); the tunnel carries the member protocol between Go members
 ("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
-`tunnel` message (Swift `MemberNode`, Kotlin `MemberNode`) and bind the tunnel itself from
+`tunnel` message (through the phones' member in the Rust core: `tunnel_key`, the `tunnel`
+event, `send_tunnel`) and bind the tunnel itself from
 Go (`mobile/cbbtun`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
 the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
@@ -2162,10 +2163,10 @@ and then syncs at home only ("Through the tunnel" below).
   offers. The tunnel addresses follow from the device IDs (fd00:cbb::/32 followed by the
   first 96 bits of the ID), so the offer does not carry them.
 - A phone can be the hub while its app is open ([design.md](design.md), "The phone as the
-  hub", D-64): its kit listens for member connections (`MemberListener`, on the loopback
-  address, where `mobile/cbbtun`'s `Hub` leads each connection through the tunnel) and
-  admits clients and answers with the offer by the rules above (`PhoneHub`, MemberNode's
-  `hub`); `cbbtun`'s `SetClients` takes the clients it keeps.
+  hub", D-64): its member in the Rust core listens for member connections (`listen`; the
+  tunnel's `mobile/cbbtun` `Hub` leads each connection through the tunnel to that port) and
+  the app admits clients and answers with the offer by the rules above (`PhoneHub`, from the
+  member's `peer` events); `cbbtun`'s `SetClients` takes the clients it keeps.
 - When records revoke a device (section 10, "Certificates", on the chain it presented), the hub
   MUST forget its key at once.
 - All of this happens inside member TLS, so a device gets into the tunnel only after it met
@@ -3637,7 +3638,8 @@ the lists, the signatures and types, and a server's check), and passes the vecto
 registers with no server, so it signs none and keeps none. The phones' kits do what Go does
 (`Credentials.kt`, `Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
 `CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
-and pass them on in `MemberNode`, and pass the same vectors. A phone registers with a relay
+and pass them on through the phone's member in the Rust core (`send_credentials`, its
+`message` events), and pass the same vectors. A phone registers with a relay
 by them once the members' credential lists its server key (`CredentialStore.registration`,
 cbbtun's `Relay.SetCredentials`); it maps the pseudonyms the relay names back to device IDs
 by the server credentials.

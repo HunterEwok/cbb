@@ -38,3 +38,4 @@ apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testDialsAtMostMaxDialed 
 apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testDialFailuresBackOff D-86: MemberDialer is gone; the Rust member's dialers back off
 apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testHurry D-86: MemberDialer is gone; the Rust member dials again at once on resume and on a new address
 apps/ios/CBBKit/Tests/CBBKitTests/DiscoveryTests.swift testHurryWhileDialing D-86: MemberDialer is gone; the Rust member dials again at once on resume and on a new address
+apps/ios/CBBTests/AppModelTests.swift testButtonKeepsWhatThePhoneSent D-86: the button's rule is the core's member's (lite/src/button.rs tests, TestFFIMember, CoreMemberTests.testSyncsTheButtonAndCommands)

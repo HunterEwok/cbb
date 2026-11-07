@@ -62,6 +62,14 @@ final class DiscoveryTests: XCTestCase {
         XCTAssertTrue(addrs.allSatisfy { $0.hasSuffix(":\(port)") }, "\(addrs)")
         let none = await browser.addresses(of: "none")
         XCTAssertEqual(none, [])
+        // A phone that is the hub publishes itself, and is found too.
+        let hubPhone = Member.newID()
+        let published = try BonjourPublisher(name: hubPhone, port: port, txt: ["v": "1", "g": "0011223344556677", "r": "phone"])
+        for _ in 0..<200 where !seen.has(hubPhone) {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertEqual(seen.get(hubPhone), FoundMember(device: hubPhone, group: "0011223344556677"))
+        published.stop()
         // Browsing again from the start finds it again.
         seen.set([])
         browser.restart()

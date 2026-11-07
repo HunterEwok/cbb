@@ -1090,11 +1090,11 @@ All built in 0.5, but for what each step names as still to do.
    forwarder and its hellos by the phone's member key, which the forwarder takes when the
    group's records make that key the root's or an admin's (docs/protocol.md, section 13);
    tested with the Go client through a forwarder.
-2. Done: the listening member in both kits (`MemberListener`, on the loopback address for
-   the tunnel or on every address for the home network) and the hub's part of the member
-   protocol (`PhoneHub`, MemberNode's `hub`): it admits a client by the tunnel key its hello
-   offers, by the rules of a computer's hub, and answers with its offer; tested over member
-   TLS in the Kotlin kit and over a pipe in the Swift kit.
+2. Done: the listening member (the phones' member in the Rust core, `listen`, its one port
+   for the tunnel, the relay and the home network) and the hub's part of the member protocol
+   (`PhoneHub`, from the member's `peer` events): it admits a client by the tunnel key its
+   hello offers, by the rules of a computer's hub, and answers with its offer; tested over
+   two members of the core in the Swift kit.
 3. Done: the phone hub in both apps: on by default in a group made on a phone, `StartHub`
    with the member listener's port, `Register` with the forwarder set in Settings and the
    group's authority records, its status on Home and in Settings, publishing of the member

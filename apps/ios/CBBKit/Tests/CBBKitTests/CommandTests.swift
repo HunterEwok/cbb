@@ -204,7 +204,7 @@ final class CommandTests: XCTestCase {
         do {
             _ = try await a.member.command(other)
             XCTFail("sent to a device that is not connected")
-        } catch is Core.Refusal {}
+        } catch CoreMember.Failure.notConnected {}
     }
 
     /// Writes commands this kit signed, with the root key and with an admin

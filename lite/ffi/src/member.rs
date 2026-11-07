@@ -488,6 +488,11 @@ impl Member {
                 let parts = n.fetch(&a.id, a.max, std::path::Path::new(&a.out))?;
                 Ok(json!({ "parts": parts.iter().map(|(p, at)| part_json(p, at)).collect::<Vec<_>>() }))
             }
+            "served" => {
+                let id = arg(&a, "id").as_str().ok_or_else(|| Error::msg("served needs the copy's id"))?;
+                let (served, size) = n.served(id).unwrap_or((0, 0));
+                Ok(json!({ "served": served, "size": size }))
+            }
             // Finding the members, listening, the app's life.
             "found" => {
                 let a: FoundArgs = args(a)?;

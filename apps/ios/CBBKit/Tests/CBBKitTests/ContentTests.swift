@@ -91,6 +91,11 @@ final class ContentTests: XCTestCase {
         let parts = try await b.member.fetch(sent.id, max: 64 << 20, into: out.appendingPathComponent("picture"))
         XCTAssertEqual(parts.count, 1)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: parts[0].file)), png)
+        // The phone that shared it sees it was read to the end.
+        let (served, size) = try a.member.served(sent.id)
+        XCTAssertEqual(served, size)
+        XCTAssertEqual(size, Media.blobSize(Int64(png.count)))
+        XCTAssertEqual(try a.member.served("no such copy").size, 0)
 
         // Files and a folder go the same way, with their paths.
         let src = out.appendingPathComponent("src")
@@ -113,7 +118,7 @@ final class ContentTests: XCTestCase {
         do {
             _ = try await b.member.fetch(files.id, max: 1 << 20, into: out.appendingPathComponent("gone"))
             XCTFail("fetched a copy that is no longer the group's")
-        } catch is Core.Refusal {}
+        } catch CoreMember.Failure.gone {}
     }
 
     func testCleanNames() {

@@ -779,6 +779,15 @@ impl Node {
         self.logf(&format!("cbb: passed a command from {from} on to {to}"));
     }
 
+    /// How far the peers read the sealed blob of the current copy id, and
+    /// its size; None when id is not the current copy or has no blob.
+    pub fn served(&self, id: &str) -> Option<(u64, u64)> {
+        let ev = self.engine.current().filter(|e| e.id == id)?;
+        let blob = ev.blob?;
+        let store = self.content.as_ref()?;
+        Some((store.served(&blob.sha256), u64::try_from(blob.size).unwrap_or(0)))
+    }
+
     /// The devices list from the records.
     pub fn devices(&self) -> Vec<crate::records::Device> {
         self.records.lock().unwrap().devices()

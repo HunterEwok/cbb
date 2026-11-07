@@ -151,6 +151,13 @@ impl Member {
         self.node.open_media(&ev, out)
     }
 
+    /// How far the peers read the images or files of the group's copy id,
+    /// and their sealed size, as a share waits for a computer to fetch
+    /// them; None when id is not the group's copy or holds no bytes.
+    pub fn served(&self, id: &str) -> Option<(u64, u64)> {
+        self.node.served(id)
+    }
+
     /// The members connected now.
     pub fn peers(&self) -> Vec<Peer> {
         self.node.peers()

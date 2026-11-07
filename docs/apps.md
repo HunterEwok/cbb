@@ -170,10 +170,11 @@ they look, so both apps are built to the same plan.
    While the phone is the hub, the switch for its own sync away from home is hidden: a hub
    is nobody's client. Home says "This phone is the hub: sync works while the app is open".
    The hub's WireGuard key, its forwarder, its home networks and its clients sit with the
-   away state (Android: a file sealed by a Keystore key; iPhone: the keychain). The kits'
-   `PhoneHub` and `MemberListener` do the work, the Android app's `HubOnPhone` and the Swift
-   kit's `HubOnPhone` drive cbbtun's hub, and the hub publishes itself on a home network
-   with `r=phone` (docs/protocol.md, section 3). While the hub is registered, "Invite a
+   away state (Android: a file sealed by a Keystore key; iPhone: the keychain). The phone's
+   member in the Rust core listens on the member port (`listen`), the kits' `PhoneHub`
+   answers the clients' tunnel keys from the member's `peer` events, the Android app's
+   `HubOnPhone` and the Swift kit's `HubOnPhone` drive cbbtun's hub, and the hub publishes
+   itself on a home network with `r=phone` (docs/protocol.md, section 3). While the hub is registered, "Invite a
    device from afar" makes a remote invitation for an hour (docs/protocol.md, section 12):
    the phone shares the file `cbb.cbbinvite`, the other side runs
    `cbb pair -invite` with it, and the phone asks "Admit …?" with the device's fingerprint,
@@ -880,8 +881,9 @@ the app on real devices.
   regenerates them), and CI runs it against the Go code: pairing over plain TCP on Linux,
   pairing and a member connection over real TLS on macOS.
 - The app finds the full members by browsing `_cbb._tcp` (CBBKit's
-  `BonjourBrowser` on iOS) and keeps one connection to each member of its group
-  (`MemberDialer`). iOS asks once for local network access: the Info.plist lists
+  `BonjourBrowser` on iOS) and hands their addresses to its member in the Rust core
+  (`CoreMember`, docs/core-api.md, "The member"), which keeps one connection to each member
+  of its group. iOS asks once for local network access: the Info.plist lists
   `_cbb._tcp` under `NSBonjourServices` and explains the use in
   `NSLocalNetworkUsageDescription`.
 - A phone joins another phone's group from its Start screen ("I already use Copy Beyond Borders on

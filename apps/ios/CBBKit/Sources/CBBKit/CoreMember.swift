@@ -218,6 +218,8 @@ public final class CoreMember: @unchecked Sendable {
         public static func data(_ data: Data, type: String) -> Part { Part(type: type, path: nil, dir: false, data: data, file: nil) }
         public static func file(_ url: URL, path: String) -> Part { Part(type: nil, path: path, dir: false, data: nil, file: url.path) }
         public static func folder(path: String) -> Part { Part(type: nil, path: path, dir: true, data: nil, file: nil) }
+        /// A file's bytes, at path in the copy.
+        public static func bytes(_ data: Data, path: String) -> Part { Part(type: nil, path: path, dir: false, data: data, file: nil) }
     }
 
     /// A part of a copy the core fetched and opened, where it is.
@@ -243,6 +245,29 @@ public final class CoreMember: @unchecked Sendable {
     /// The member was stopped.
     public struct Stopped: Error, CustomStringConvertible {
         public var description: String { "the member stopped" }
+    }
+
+    /// The refusals the app tells apart, read from the member's answer;
+    /// every other one comes as a Core.Refusal.
+    public enum Failure: Error, Equatable {
+        /// The receiver of a command is not connected, nor a hub that
+        /// passes it on.
+        case notConnected
+        /// The receiver did not answer in time.
+        case timedOut
+        /// An admin muted this phone: its copies do not reach the group.
+        case muted
+        /// The copy is no longer the group's current one.
+        case gone
+
+        static func of(_ r: Core.Refusal) -> Error {
+            let m = r.message
+            if m.contains("is not connected, nor is a hub") { return Failure.notConnected }
+            if m.contains("did not answer in time") { return Failure.timedOut }
+            if m.contains("this device is muted") { return Failure.muted }
+            if m.contains("no longer the group's") { return Failure.gone }
+            return r
+        }
     }
 
     /// The callbacks' context, which the core keeps for the rest of the
@@ -352,7 +377,7 @@ public final class CoreMember: @unchecked Sendable {
         } catch {
             throw Core.Mismatch(reason: "the member's answer to \(op) does not read: \(error)")
         }
-        if let e = reply.error { throw e.refusal }
+        if let e = reply.error { throw Failure.of(e.refusal) }
         guard let ok = reply.ok else { throw Core.Mismatch(reason: "the member's answer to \(op) has neither ok nor error") }
         return ok
     }
@@ -418,6 +443,16 @@ public final class CoreMember: @unchecked Sendable {
         struct A: Encodable, Sendable { var id: String, max: Int64, out: String }
         struct R: Decodable, Sendable { var parts: [Fetched] }
         return try await detached("fetch", A(id: id, max: max, out: out.path), as: R.self).parts
+    }
+
+    /// How far the peers read the sealed blob of the group's copy id that
+    /// this phone made, and its size; zeros for a copy that is no longer
+    /// the group's or holds no bytes.
+    public func served(_ id: String) throws -> (served: Int64, size: Int64) {
+        struct A: Encodable { var id: String }
+        struct R: Decodable { var served: Int64, size: Int64 }
+        let r = try run("served", A(id: id), as: R.self)
+        return (r.served, r.size)
     }
 
     /// Dials the member the app found as key at addrs (host:port); device

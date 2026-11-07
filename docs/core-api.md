@@ -56,8 +56,8 @@ moves the bytes.
 
 ### The member
 
-Built with the feature `member` too (`bind.sh aurora` today; the iPhone and Android apps move
-onto it next), the library runs the lite member's own node in the app's process once the phone
+Built with the feature `member` too (every library `bind.sh` builds: the iPhone, Android and
+Aurora apps run it), the library runs the lite member's own node in the app's process once the phone
 is in a group (`lite/ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
 app's data directory, the phone's name, system and versions, its identity (device,
 certificate, issuer, group CA, roots), its public key, its secret for sealed messages and the
@@ -93,6 +93,7 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `took` | `id` | `{}`: the app took that copy into the clipboard, or saved its files |
 | `sends` | `board`: the clipboard's key | `{"sends"}`: whether the button sends it: it is neither the group's copy nor what this phone itself sent from its clipboard or took into it last |
 | `fetch` | `id`, `max` (bytes of the sealed blob), `out` (a new folder) | `{"parts"}`: each part with `file`, where it is, each checked against its hash |
+| `served` | `id` | `{"served", "size"}`: how far the peers read the sealed blob of the group's copy `id` this phone made, and its size; 0 and 0 for a copy that is no longer the group's or holds no bytes, as the iPhone's share waits until a computer fetched what it shared |
 | `found`, `lost` | `key` (the app's name for the member), `addrs` (`host:port`, loopback too for the tunnel), `device` (optional) | `{}`: dial it again and again, or stop |
 | `listen`, `unlisten` | `port` (0 for any) | `{"port"}`: the member port for the members that dial this phone as the group's hub, which the app publishes with `r=phone` |
 | `pause`, `resume`, `wait` | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `waiting`, `pause` |
