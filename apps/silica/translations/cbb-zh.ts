@@ -461,6 +461,38 @@
         <source>Another phone takes the group over</source>
         <translation>另一台手机接管群组</translation>
     </message>
+    <message>
+        <source>Away from home</source>
+        <translation>离家在外</translation>
+    </message>
+    <message>
+        <source>Sync away from home</source>
+        <translation>离家时同步</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>手机不在家庭网络中时，它通过你自己的中枢的 WireGuard 隧道同步；中枢是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中枢会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>在家：直接同步。</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>正在通过隧道连接中枢…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>已通过隧道连接到中枢 %1。</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>已通过隧道连接到中枢。</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>正在等待中枢：在家里、在群组的一台电脑附近打开一次应用。</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>

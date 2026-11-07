@@ -461,6 +461,38 @@
         <source>Another phone takes the group over</source>
         <translation>Otro teléfono toma el control del grupo</translation>
     </message>
+    <message>
+        <source>Away from home</source>
+        <translation>Fuera de casa</translation>
+    </message>
+    <message>
+        <source>Sync away from home</source>
+        <translation>Sincronizar fuera de casa</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>Cuando el teléfono no está en la red de casa, se sincroniza por el túnel WireGuard de tu propio hub, un ordenador del grupo configurado con cbb global hub; su puerto es accesible desde internet, pero solo por WireGuard con las claves del grupo. El hub responde a este teléfono la próxima vez que se conecte en casa. Nada va a ningún otro sitio y, sin el túnel, no hay conexión. Al desactivarlo, este teléfono olvida su clave del túnel.</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>En casa: sincroniza directamente.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>Conectando con el hub por el túnel…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>Conectado al hub %1 por el túnel.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>Conectado al hub por el túnel.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>Esperando al hub: abre la app una vez en casa, cerca de un ordenador del grupo.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>

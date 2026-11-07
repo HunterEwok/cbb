@@ -546,6 +546,17 @@ impl Member {
             "records" => Ok(json!({ "records": n.records() })),
             // What the group's records stop, for the alerts card.
             "alerts" => Ok(json!({ "alerts": n.alerts() })),
+            // Sync away from home: on with new tunnel keys, or off; and its
+            // state, null while it is off.
+            "away" => {
+                if arg(&a, "on").as_bool().unwrap_or(false) {
+                    n.away_on()?
+                } else {
+                    n.away_off()?
+                }
+                Ok(json!({ "away": n.away_status() }))
+            }
+            "away_status" => Ok(json!({ "away": n.away_status() })),
             // Every device of the group as the app shows it.
             "devices" => {
                 let ds: Vec<DeviceAnswer> = n

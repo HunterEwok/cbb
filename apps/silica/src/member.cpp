@@ -166,6 +166,7 @@ void Member::stop()
     m_alerts.clear();
     emit devicesChanged();
     m_paused = m_muted = false;
+    readAway(QJsonValue());
     Errors::log(QStringLiteral("member: stopped"));
     emit changed();
 }
@@ -509,6 +510,77 @@ void Member::pollPeers()
     // A pause or a mute that ran out ends on its own.
     pollMuted();
     pollDevices();
+    pollAway();
+}
+
+void Member::setAway(bool on)
+{
+    if (!m_member)
+        return;
+    Failure failure;
+    const QJsonObject a = call(m_member, QStringLiteral("away"), QJsonObject{{QStringLiteral("on"), on}}, &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        pollAway();
+        return;
+    }
+    Errors::log(on ? QStringLiteral("member: sync away from home is on")
+                   : QStringLiteral("member: sync away from home is off"));
+    readAway(a.value(QStringLiteral("away")));
+}
+
+void Member::pollAway()
+{
+    if (!m_member)
+        return;
+    Failure failure;
+    const QJsonObject a = call(m_member, QStringLiteral("away_status"), QJsonObject(), &failure);
+    if (!failure.isNull()) {
+        Errors::log(QStringLiteral("member: sync away from home: %1 (%2)").arg(failure.message, failure.details));
+        return;
+    }
+    readAway(a.value(QStringLiteral("away")));
+}
+
+void Member::readAway(const QJsonValue &away)
+{
+    const QJsonObject o = away.toObject();
+    const bool on = away.isObject() && o.value(QStringLiteral("keys_in_file")).toBool();
+    const QString hub = o.value(QStringLiteral("hub_device")).toString();
+    QString status = QStringLiteral("off");
+    QString hubName;
+    if (on) {
+        bool online = false;
+        for (const QVariant &d : m_devices) {
+            const QVariantMap m = d.toMap();
+            if (m.value(QStringLiteral("device")).toString() == hub) {
+                hubName = m.value(QStringLiteral("name")).toString();
+                online = m.value(QStringLiteral("online")).toBool();
+            }
+        }
+        if (hub.isEmpty())
+            status = QStringLiteral("waiting");
+        else if (o.value(QStringLiteral("through")).toBool())
+            status = QStringLiteral("connected");
+        else if (online)
+            status = QStringLiteral("home");
+        else
+            status = QStringLiteral("connecting");
+    }
+    // The error of a state that could not be read shows even while off.
+    const Failure failure{o.value(QStringLiteral("error")).toString(), o.value(QStringLiteral("detail")).toString()};
+    bool changed = on != m_awayOn || status != m_awayStatus || hubName != m_awayHub;
+    if (failure.message != m_awayFailure) {
+        m_awayFailure = failure.message;
+        m_awayError = failure.isNull() ? QString() : Errors::shown(failure);
+        changed = true;
+    }
+    m_awayOn = on;
+    m_awayStatus = status;
+    m_awayHub = hubName;
+    if (changed)
+        emit awayChanged();
 }
 
 void Member::pollDevices()

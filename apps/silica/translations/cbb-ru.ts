@@ -461,6 +461,38 @@
         <source>Another phone takes the group over</source>
         <translation>Другой телефон забирает группу</translation>
     </message>
+    <message>
+        <source>Away from home</source>
+        <translation>Вне дома</translation>
+    </message>
+    <message>
+        <source>Sync away from home</source>
+        <translation>Синхронизировать вне дома</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>Дома: синхронизация напрямую.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>Подключение к хабу через туннель…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>Подключено к хабу %1 через туннель.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>Подключено к хабу через туннель.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>Ждём хаб: один раз откройте приложение дома, рядом с компьютером группы.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
