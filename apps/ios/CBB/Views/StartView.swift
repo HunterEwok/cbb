@@ -63,6 +63,8 @@ struct StartView: View {
             }
             Button("I already use CBB on another phone") { model.startJoining() }
                 .buttonStyle(GlassButtonStyle())
+            Button("Join as an admin") { model.startJoining(admin: true) }
+                .buttonStyle(GlassButtonStyle())
             Button("My group was made on a computer") { model.startJoiningComputer() }
                 .buttonStyle(GlassButtonStyle())
             Button("I have the group's recovery sheet") {

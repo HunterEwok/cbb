@@ -1,6 +1,66 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Join as an admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти как админ"
+          }
+        }
+      }
+    },
+    "On the group's root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На корневом телефоне группы нажмите + и отсканируйте этот код: добавить телефон админом может только корень. Не закрывайте этот экран."
+          }
+        }
+      }
+    },
+    "Join a group as an admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти в группу как админ"
+          }
+        }
+      }
+    },
+    "The code did not match. Scan the device's code again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код не совпал. Отсканируйте код устройства ещё раз."
+          }
+        }
+      }
+    },
+    "This phone asks to join as an admin, which only the group's root phone can grant. Scan it with the root phone, or join on it without asking to be an admin.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон просится в группу админом, а это может разрешить только корневой телефон группы. Отсканируйте код корневым телефоном или войдите на нём, не прося прав админа."
+          }
+        }
+      }
+    },
+    "The device refused to join. Try again on it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство отказалось войти. Попробуйте ещё раз на нём."
+          }
+        }
+      }
+    },
     "Mute a device": {
       "localizations": {
         "ru": {

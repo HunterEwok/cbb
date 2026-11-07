@@ -902,15 +902,16 @@ the app on real devices.
   `NSLocalNetworkUsageDescription`.
 - A phone joins another phone's group from its Start screen ("I already use Copy Beyond Borders on
   another phone"):
-  it listens on a port the system picks (`TLSListener` on the iPhone, the core's TLS on
-  Android), and shows the join QR code with
-  its home network addresses (`LocalAddresses`). An admin phone scans it in "Add a device".
-  On Android the screen has two buttons (docs/protocol.md, section 6): "Join", answered by
-  any admin of the group, which admits the phone as a plain member, and "Join as an admin",
-  which makes an admin key and offers it, answered only by the root phone, which makes the
-  phone an admin. Android makes the group, admits and joins through the Rust core's
-  admission (the kit's `CorePairing` over lite/ffi's `cbb_group_new`, `cbb_admit_*` and
-  `cbb_join_*`); the iPhone still makes its admin key at once and joins through its kit. An admin phone that removes the root
+  it listens on a port the system picks, the core running the TLS, and shows the join QR
+  code with its home network addresses (`LocalAddresses`). An admin phone scans it in "Add a
+  device". The screen has two buttons on both phones (docs/protocol.md, section 6): "Join"
+  ("I already use CBB on another phone" on the iPhone), answered by any admin of the group,
+  which admits the phone as a plain member, and "Join as an admin", which makes an admin key
+  and offers it, answered only by the root phone, which makes the phone an admin. Both
+  phones make the group, admit and join through the Rust core's admission (each kit's
+  `CorePairing` over lite/ffi's `cbb_group_new`, `cbb_admit_*` and `cbb_join_*`; the Swift
+  kit's `CorePairing.Listener` and `Connection` are the plain TCP sockets around it). An
+  admin phone that removes the root
   phone takes the group over (`PhoneGroup.takeOver`, docs/records-v2.md): it makes a new
   root key in the Secure Enclave behind Face ID and signs a claim with its admin key. The
   claim waits as long as the root decided (72 hours by default, `setTakeoverDelay`), and the

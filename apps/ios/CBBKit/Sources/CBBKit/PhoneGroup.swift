@@ -155,6 +155,30 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         return g
     }
 
+    /// The group the core made with this phone's root key
+    /// (CorePairing.newGroup), or the group a phone joined through the core
+    /// (CorePairing.Joining): a member of it, and an admin when the
+    /// admitting phone sent its admin CA.
+    public static func of(_ c: CorePairing.Group, root: Bool) -> PhoneGroup {
+        var g = PhoneGroup(device: c.device, groupCA: c.groupCA, memberCert: c.cert, computers: [])
+        (g.memberIssuer, g.isRoot, g.adminCA) = (c.issuer, root, root ? nil : c.adminCA)
+        g.records = RecordSet.fromFile(groupCA: c.groupCA, file: c.records)
+        // The records that lead to the roots stay with the group, so the
+        // roots are those its records name.
+        g.roots = g.records.roots.isEmpty ? c.roots : g.records.roots
+        return g
+    }
+
+    /// Notes a computer the core admitted for this phone (CorePairing): its
+    /// name, system and those of addrs that are on a home network, the one
+    /// that answered first, for dialing it where mDNS does not find it. One
+    /// admitted again replaces its entry. Its record reaches the group from
+    /// the member.
+    public mutating func noteComputer(device: String, name: String, os: String, addrs: [String], now: Date) {
+        computers.removeAll { $0.device == device }
+        computers.append(Computer(device: device, name: name, os: os, cert: Data(), admitted: now, addrs: addrs.filter(JoinCode.isHome)))
+    }
+
     /// fileKey: the computer keeps its keys in a file, which a thief with
     /// it can copy and then act as an admin; the user allows it after a
     /// warning (docs/protocol.md, section 17). rootless: the computer is a

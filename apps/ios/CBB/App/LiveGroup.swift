@@ -452,11 +452,46 @@ final class LiveGroup: GroupController {
 
     func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws {
         let ca = try await caSigner(reason: String(localized: "Add a computer to your group", bundle: .app))
-        let member = try memberSigner()
         let made = state == nil
-        var g = try state ?? PhoneGroup.create(caSigner: ca, memberKey: member.publicKeyDER, name: UIDevice.current.name,
-                                               seal: Self.sealKey(), now: Date())
-        let id = try identity(g, member)
+        if made {
+            // The core makes the group, and the phone's member runs before
+            // it admits: the device's record joins the member's records.
+            let member = try memberSigner()
+            let c = try CorePairing.newGroup(name: PhoneGroup.validName(UIDevice.current.name), store: Records.hardware,
+                                             rootPublic: ca.publicKeyDER, publicKey: member.publicKeyDER, seal: Self.sealKey()) {
+                try ca.signature(digest: $0)
+            }
+            let g = PhoneGroup.of(c, root: true)
+            try g.save(to: file)
+            try modeBox.newDevice()
+            forgetCredentials()
+            state = g
+            try startSync()
+            groupChanged()
+            // A group made on this phone has it as its hub from the start (D-64).
+            try? await setPhoneHub(true)
+        }
+        do {
+            try await admitWithCore(code, ca: ca, retrying: retrying)
+        } catch Failure.notConfirmed {
+            // The device may still hold its identity: the group stays.
+            throw Failure.notConfirmed
+        } catch {
+            // A first device that did not join leaves no group of one behind.
+            if made { try? await leave() }
+            throw error
+        }
+    }
+
+    /// Admits the device of code through the core's admission
+    /// (CorePairing.Admitting), dialing its addresses.
+    private func admitWithCore(_ code: JoinCode, ca: SecKeySigner, retrying: @escaping @MainActor () -> Void) async throws {
+        guard let g = state else { throw Failure.noGroup }
+        guard let node else { throw Failure.unreachable }
+        // The root makes a phone that asks to be an admin one (docs/protocol.md, section 6).
+        let admitting = try CorePairing.Admitting(member: node, qr: code.qrText, publicKey: ca.publicKeyDER, adminCA: g.adminCA,
+                                                  makeAdmin: g.isRoot) { try ca.signature(digest: $0) }
+        defer { admitting.close() }
         var failure: Error?
         let clock = ContinuousClock(), until = clock.now + Self.dialRetry
         while true {
@@ -464,20 +499,18 @@ final class LiveGroup: GroupController {
             for addr in Self.ordered(code.addrs) {
                 try Task.checkCancellation()
                 guard let (host, port) = Self.split(addr) else { continue }
-                let tls = TLSTransport(host: host, port: port, alpn: Pairing.alpn, identity: id, chain: Self.chain(g)) { leaf in
-                    Pairing.fingerprint(cert: leaf) == code.fingerprint
-                }
+                let connection = CorePairing.Connection(host: host, port: port, timeout: TLSTransport.connectTimeout)
                 // Closing the connection ends a pairing that takes too long or
                 // that the user cancelled: the pending read fails.
                 let deadline = Task {
                     try await Task.sleep(for: Self.pairingDeadline)
-                    tls.close()
+                    connection.close()
                 }
                 defer { deadline.cancel() }
                 do {
-                    try await tls.start()
+                    try await connection.start()
                 } catch {
-                    tls.close()
+                    connection.close()
                     if Task.isCancelled { throw CancellationError() }
                     failure = Self.telling(failure, error)
                     continue
@@ -485,29 +518,28 @@ final class LiveGroup: GroupController {
                 answered = true
                 do {
                     let admitted = try await withTaskCancellationHandler {
-                        defer { tls.close() }
-                        guard let leaf = tls.peerCertificate,
-                              let sid = tls.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else { throw Failure.unreachable }
-                        // The address that answered goes first, for dialing when mDNS does not find the computer.
-                        return try await g.admit(over: tls, code: code.code, joinerCert: leaf, sessionID: sid, caSigner: ca,
-                                                 addrs: [addr] + code.addrs.filter { $0 != addr }, now: Date())
+                        defer { connection.close() }
+                        return try await admitting.admit(connection)
                     } onCancel: {
-                        tls.close()
+                        connection.close()
                     }
-                    try g.save(to: file)
-                    if made { try modeBox.newDevice(); forgetCredentials() }
-                    state = g
-                    try startSync()
-                    groupChanged()
-                    // A group made on this phone has it as its hub from the start (D-64).
-                    if made { try? await setPhoneHub(true) }
-                    sendRecords(g.records.records)
+                    if admitted.role != "phone", var g = state {
+                        // The address that answered goes first, for dialing when mDNS does not find the computer.
+                        g.noteComputer(device: admitted.device, name: admitted.name, os: admitted.os,
+                                       addrs: [addr] + code.addrs.filter { $0 != addr }, now: Date())
+                        try g.save(to: file)
+                        state = g
+                        groupChanged()
+                    }
+                    pullRecords()
                     guard admitted.confirmed else { throw Failure.notConfirmed }
                     return
-                } catch let e as PairingMember.Failure {
-                    throw e // the computer answered: a wrong code is not worth another address
+                } catch let e as CorePairing.Failure {
+                    throw e // the device answered: a wrong code is not worth another address
+                } catch Failure.notConfirmed {
+                    throw Failure.notConfirmed
                 } catch {
-                    tls.close()
+                    connection.close()
                     if Task.isCancelled { throw CancellationError() }
                     failure = Self.telling(failure, error)
                 }
@@ -620,32 +652,37 @@ final class LiveGroup: GroupController {
     // MARK: Joining
 
     /// Joins another phone's group (docs/protocol.md, section 6, "The
-    /// joiner listens"): makes this phone's admin key, listens, hands show
-    /// the QR code to put on screen, and waits up to five minutes for an
-    /// admin phone to scan it and admit this one. Three wrong codes end it,
-    /// as does cancelling the task.
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
+    /// joiner listens") through the core (CorePairing.Joining): listens,
+    /// hands show the QR code to put on screen, and waits up to five
+    /// minutes for an admin phone to scan it and admit this one. With
+    /// asAdmin it makes this phone's admin key and asks to be an admin,
+    /// which only the group's root grants; without, any admin admits it as
+    /// a member. Three wrong codes end it, as does cancelling the task.
+    func join(asAdmin: Bool = false, show: @escaping @MainActor (JoinCode) -> Void) async throws {
         guard state == nil else { return }
         let member = try memberSigner()
         // The admin key, in the Secure Enclave behind Face ID like the root
-        // key; reading its public key asks for nothing.
-        let se = Self.secureEnclave
-        let admin = try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
-            ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
-        let device = Member.newID()
-        let cert = try GroupCertificates.selfSigned(device: device, signer: member)
-        let id = try identity(certificate: cert, member)
-        let listener = try TLSListener(alpn: Pairing.alpn, identity: id) { !$0.isEmpty }
+        // key; the core asks it once, for the proof on the admitting
+        // connection.
+        let admin = asAdmin ? try await signer(label: Self.adminLabel, reason: String(localized: "Join a group as an admin", bundle: .app)) : nil
+        let listener = try CorePairing.Listener()
         let port = try await listener.start()
         let addrs = LocalAddresses.current().map { JoinCode.address(host: $0, port: port) }
         guard !addrs.isEmpty else {
             listener.stop()
             throw Failure.noNetwork
         }
-        let code = JoinCode(code: JoinCode.newCode(), addrs: addrs, fingerprint: Pairing.fingerprint(cert: cert))
-        show(code)
-        let info = Pairing.Info(name: PhoneGroup.validName(UIDevice.current.name), os: "ios", adminKey: admin.publicKeyDER,
-                                seal: Self.sealKey())
+        let joining: CorePairing.Joining
+        do {
+            joining = try CorePairing.Joining(name: PhoneGroup.validName(UIDevice.current.name), publicKey: member.publicKeyDER,
+                                              seal: Self.sealKey(), addrs: addrs, sign: { try member.signature(digest: $0) },
+                                              adminPublic: admin?.publicKeyDER, signAdmin: admin.map { a in { try a.signature(digest: $0) } })
+        } catch {
+            listener.stop()
+            throw error
+        }
+        defer { joining.close() }
+        show(JoinCode(code: joining.code, addrs: JoinCode(qr: joining.qr)?.addrs ?? addrs, fingerprint: joining.fingerprint))
         let file = file
         let timer = Task {
             try await Task.sleep(for: .seconds(Self.joinWindow))
@@ -656,18 +693,24 @@ final class LiveGroup: GroupController {
             listener.stop()
         }
         var wrong = 0
-        let joined: PairingJoiner.Joined? = try await withTaskCancellationHandler {
-            while let t = await listener.next() {
+        let joined: PhoneGroup? = try await withTaskCancellationHandler {
+            while let c = await listener.next() {
+                defer { c.close() }
+                let deadline = Task {
+                    try await Task.sleep(for: Self.pairingDeadline)
+                    c.close()
+                }
+                defer { deadline.cancel() }
                 do {
-                    try await t.start()
-                    defer { t.close() }
-                    guard let leaf = t.peerCertificate, let sid = t.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else { continue }
-                    // The admin key proves itself for this connection
-                    // (Face ID, as for every use of the key).
-                    let proved = try info.proving(sessionID: sid, with: admin)
-                    return try await PairingJoiner.accept(over: t, code: code.code, info: proved, memberCert: leaf, joinerCert: cert,
-                                                          sessionID: sid, now: Date()) { try PhoneGroup.joined($0).save(to: file) }
-                } catch PairingJoiner.Failure.refused(.wrongCode) {
+                    var group: PhoneGroup?
+                    _ = try await joining.attempt(c) { j in
+                        let g = PhoneGroup.of(j, root: false)
+                        guard (try? g.save(to: file)) != nil else { return false }
+                        group = g
+                        return true
+                    }
+                    if let group { return group }
+                } catch let e as CorePairing.Failure where e.wrongCode {
                     wrong += 1
                     if wrong >= Self.joinAttempts { throw Failure.tooManyWrongCodes }
                 } catch {
@@ -684,7 +727,7 @@ final class LiveGroup: GroupController {
         }
         try modeBox.newDevice()
         forgetCredentials()
-        state = PhoneGroup.joined(joined)
+        state = joined
         try startSync()
     }
 

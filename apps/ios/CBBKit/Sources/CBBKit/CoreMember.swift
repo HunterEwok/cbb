@@ -299,7 +299,8 @@ public final class CoreMember: @unchecked Sendable {
         }
     }
 
-    private let handle: OpaquePointer
+    /// The member's handle, which an admission (CorePairing.Admitting) runs on.
+    let handle: OpaquePointer
     private let context: Context
     private let lock = NSLock()
     private var stopped = false

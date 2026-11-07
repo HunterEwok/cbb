@@ -1230,13 +1230,14 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
-- The Android app makes its group, admits a phone or a computer and joins another phone's
-  group through the Rust core's admission (lite/ffi's `cbb_group_new`, `cbb_admit_*` and
-  `cbb_join_*`, the kit's `CorePairing`), as the Aurora app does, in place of the kit's own
-  pairing code for these. Its Start screen has two buttons, as protocol.md section 6 says:
-  "Join", which any admin of the group can answer, and "Join as an admin", which offers an
-  admin key and only the root phone can answer. Joining a computer's group by dialing it and
-  the hub's remote invitations stay on the kit's pairing for now.
+- The Android and iPhone apps make their group, admit a phone or a computer and join another
+  phone's group through the Rust core's admission (lite/ffi's `cbb_group_new`, `cbb_admit_*`
+  and `cbb_join_*`, each kit's `CorePairing`), as the Aurora app does, in place of the kits'
+  own pairing code for these. Their Start screens have two buttons, as protocol.md section 6
+  says: "Join" ("I already use CBB on another phone" on the iPhone), which any admin of the
+  group can answer, and "Join as an admin", which offers an admin key and only the root phone
+  can answer. Joining a computer's group by dialing it and the hub's remote invitations stay
+  on the kits' pairing for now.
 - The iPhone and Android apps sync through the phones' member in the Rust core (D-86), as
   the Aurora app does, in place of their own Swift and Kotlin nodes: one implementation of
   the member protocol, the clipboard rule and the button for every phone. The apps still
