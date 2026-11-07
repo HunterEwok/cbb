@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -107,7 +108,7 @@ func scanProcess(pid int, text []byte) (int, int64, error) {
 		}
 		// Each chunk overlaps the next by the text's length less one, so a
 		// text across their border is found once.
-		for off := start; off < end; off += chunk {
+		for off := start; off < end && off <= math.MaxInt64; off += chunk {
 			n := min(uint64(len(buf)), end-off)
 			got, _ := mem.ReadAt(buf[:n], int64(off))
 			if got <= 0 {
