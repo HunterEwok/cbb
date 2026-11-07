@@ -26,12 +26,15 @@ path = "src/main.rs"
 default = ["tunnel"]
 # Sync away from home. GotaTun needs 64-bit atomics, which 32-bit MIPS lacks,
 # so the MIPS builds leave it out (docs/roadmap.md, item 37).
-tunnel = ["dep:gotatun", "dep:bytes", "dep:smoltcp"]
+tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305", "dep:base64", "dep:hmac"]
 
 [dependencies]
 cbb-core = { path = "core", features = ["std", "tls"] }
 if-addrs = "0.15.0"
-libc = "0.2.191"
+# libc 0.2.190 made SYSPROTO_CONTROL and UTUN_OPT_IFNAME macOS-only, which
+# nix 0.31.3 (under GotaTun) still uses on iOS: Cargo.lock keeps 0.2.189 until
+# a nix release follows.
+libc = "0.2.189"
 mdns-sd = "0.21.6"
 qrcode = { version = "0.14.1", default-features = false }
 serde = { version = "1", features = ["derive"] }
@@ -42,6 +45,16 @@ sha2 = "0.11"
 gotatun = { version = "0.10.2", default-features = false, features = ["ring"], optional = true }
 bytes = { version = "1", optional = true }
 getrandom = { version = "0.4", features = ["std"] }
+# AmneziaWG around GotaTun's messages (src/awg.rs), with the crates GotaTun
+# already brings.
+blake2 = { version = "0.10.6", optional = true }
+chacha20 = { version = "0.9.1", optional = true }
+hmac = { version = "0.13", optional = true }
+chacha20poly1305 = { version = "0.10.1", optional = true }
+base64 = { version = "0.22.1", optional = true }
+# The way over VLESS (src/vless.rs): rustls with the core's provider, and
+# its standard library's connections and system time.
+rustls = { version = "0.23.46", default-features = false, features = ["std"], optional = true }
 smoltcp = { version = "0.13.1", default-features = false, features = ["std", "medium-ip", "proto-ipv6", "socket-tcp"], optional = true }
 
 [dev-dependencies]

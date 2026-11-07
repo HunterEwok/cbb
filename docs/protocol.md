@@ -2118,8 +2118,8 @@ event, `send_tunnel`) and bind the tunnel itself from
 Go (`mobile/cbbtun`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
 the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
-(`lite/src/tunnel.rs`, `lite/src/away.rs`); it refuses an offer with `obfuscation` or `vless`
-and then syncs at home only ("Through the tunnel" below).
+(`lite/src/tunnel.rs`, `lite/src/away.rs`), with AmneziaWG (`lite/src/awg.rs`) and VLESS over
+XHTTP (`lite/src/vless.rs`); it refuses an offer whose `vless` is REALITY and then syncs at home only ("Through the tunnel" below).
 
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on

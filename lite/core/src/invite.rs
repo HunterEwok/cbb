@@ -158,6 +158,48 @@ impl Invitation {
     }
 }
 
+impl Invitation {
+    /// The invitation's text, `cbb://invite#` and its JSON in standard
+    /// base64, with the fields in the order Go's invite.String writes them,
+    /// so that both make the same text of one invitation.
+    pub fn to_text(&self) -> String {
+        let b64 = |b: &[u8]| STANDARD.encode(b);
+        let eps: Vec<String> = self.endpoints.iter().map(|e| alloc::format!("\"{e}\"")).collect();
+        let mut j = alloc::format!(
+            "{{\"v\":1,\"g\":\"{}\",\"h\":\"{}\",\"hk\":\"{}\",\"ep\":[{}],\"k\":\"{}\",\"psk\":\"{}\",\"s\":\"{}\",\"exp\":{}",
+            self.group,
+            self.hub,
+            b64(&self.hub_key),
+            eps.join(","),
+            b64(&self.guest_key),
+            b64(&self.guest_psk),
+            b64(&self.secret),
+            self.expires
+        );
+        if let Some(o) = &self.obfuscation {
+            let [s1, s2, s3, s4] = o.s;
+            let [h1, h2, h3, h4] = o.h;
+            j.push_str(&alloc::format!(
+                ",\"o\":{{\"jc\":{},\"jmin\":{},\"jmax\":{},\"s1\":{s1},\"s2\":{s2},\"s3\":{s3},\"s4\":{s4},\"h1\":\"{}-{}\",\"h2\":\"{}-{}\",\"h3\":\"{}-{}\",\"h4\":\"{}-{}\",\"header_protection_key\":\"{}\"}}",
+                o.jc,
+                o.jmin,
+                o.jmax,
+                h1.min,
+                h1.max,
+                h2.min,
+                h2.max,
+                h3.min,
+                h3.max,
+                h4.min,
+                h4.max,
+                b64(&o.header_protection_key)
+            ));
+        }
+        j.push('}');
+        alloc::format!("{PREFIX}{}", STANDARD.encode(j.as_bytes()))
+    }
+}
+
 impl Obfuscation {
     fn to_json(&self) -> Value {
         let r = |r: Range| Value::from(alloc::format!("{}-{}", r.min, r.max));
@@ -279,6 +321,12 @@ struct ObfFields {
 const OBF_INTS: [&str; 7] = ["jc", "jmin", "jmax", "s1", "s2", "s3", "s4"];
 const OBF_STRS: [&str; 5] = ["h1", "h2", "h3", "h4", "header_protection_key"];
 
+/// AmneziaWG's settings as a hub's offer carries them, checked as parse
+/// checks an invitation's.
+pub fn obfuscation_from_json(v: &Value) -> Option<Obfuscation> {
+    obfuscation_fields(v.as_object()?).ok()?.read()
+}
+
 fn obfuscation_fields(o: &Map<String, Value>) -> Result<ObfFields, Reason> {
     if o.keys().any(|k| !OBF_INTS.contains(&k.as_str()) && !OBF_STRS.contains(&k.as_str())) {
         return Err(Reason::Damaged);
@@ -383,6 +431,15 @@ mod tests {
             want["name"] = json!(name);
             want["text"] = c["text"].clone();
             assert_eq!(&want, c, "{name}");
+            // The core's text reads back the same; where Go wrote the text
+            // as it writes it, the core writes the same bytes.
+            assert_eq!(parse(&got.to_text()).as_ref(), Ok(&got), "{name}");
+            if name != "fields in another order" {
+                assert_eq!(got.to_text(), c["text"].as_str().unwrap().trim(), "{name}: the text the core writes");
+            }
+            if let Some(o) = &got.obfuscation {
+                assert_eq!(obfuscation_from_json(&o.to_json()).as_ref(), Some(o), "{name}");
+            }
         }
         for c in refused {
             let name = c["name"].as_str().unwrap();

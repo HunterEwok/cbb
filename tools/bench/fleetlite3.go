@@ -6,15 +6,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 )
 
 // liteAway (W17): the lite member as a client of the hub's tunnel. It meets
 // the hub at home, takes its plain WireGuard offer, and syncs through the
 // tunnel once it is away; when the hub hides its tunnel (AmneziaWG), the
-// lite member refuses the offer it gets at home, says why, and no longer
-// reaches the group away from home.
+// lite member takes the new offer at home and reaches the hub away from home
+// with AmneziaWG.
 func liteAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/W17-lite-client/"
 	a := newAwayGroup(ctx, r, f, "fleet/W17-lite-client", 1)
@@ -56,38 +55,32 @@ func liteAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	}) != nil {
 		return
 	}
-	if r.Do(p+"obfuscated-refused", func() error {
+	if r.Do(p+"obfuscated-at-home", func() error {
 		if _, err := Run(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-obfuscate"), ""); err != nil {
 			return err
 		}
-		// At home it gets the hub's new offer, refuses it and says why.
+		// At home it gets the hub's new offer, with AmneziaWG's settings.
 		if err := moveTo(ctx, lite, f.net); err != nil {
 			return err
 		}
-		if err := syncs(ctx, a.benchGroup, hub, lite, "lite at home", 2*time.Minute); err != nil {
-			return err
-		}
-		return globalShows(ctx, lite, "hides its tunnel", time.Minute)
+		return syncs(ctx, a.benchGroup, hub, lite, "lite at home", 2*time.Minute)
 	}) != nil {
 		return
 	}
-	r.Do(p+"stays-home", func() error {
+	r.Do(p+"obfuscated-away", func() error {
 		if err := moveTo(ctx, lite, a.away); err != nil {
 			return err
 		}
 		if err := a.in.reach(ctx, lite); err != nil {
 			return err
 		}
-		// It keeps the old offer's way, which the hub no longer answers.
-		time.Sleep(90 * time.Second)
-		out, err := Run(ctx, lite, "cbb global", "")
-		if err != nil {
+		if err := globalShows(ctx, lite, "connected to the hub", wait); err != nil {
 			return err
 		}
-		if strings.Contains(out, "connected to the hub") {
-			return fmt.Errorf("the lite member reached the obfuscated hub: %q", firstLine(out))
+		if err := syncs(ctx, a.benchGroup, hub, lite, "lite away, obfuscated", 2*timeout); err != nil {
+			return err
 		}
-		return refusedSync(ctx, a.benchGroup, hub, lite, "lite away from an obfuscated hub", 30*time.Second)
+		return syncs(ctx, a.benchGroup, lite, hub, "from the lite member away, obfuscated", 2*timeout)
 	})
 }
 

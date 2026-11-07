@@ -78,7 +78,10 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   sections 11 and 13).
 - `mobile/cbbtun`: the phones' tunnel to the hub, the same WireGuard in the app's process, bound
   by gomobile into an AAR and an xcframework (CI's `phone tunnel` jobs); a loopback port leads
-  to the hub's member port, and the kits dial it with their own member TLS.
+  to the hub's member port, and the kits dial it with their own member TLS. Its Rust
+  replacement is `lite/ffi/src/tunnel.rs` (`cbb_tunnel`, `cbb_tunnel_register`,
+  `cbb_tunnel_relay`, feature `tunnel`; `TestRustPhone*` run it through the example
+  `tunnel-on-linux`); the apps move to it, and cbbtun goes, once their node runs in Rust.
 - Windows: `cmd/cbb/platform_windows.go` (the Windows service, logs),
   `internal/service/control_windows.go` (the socket's access list),
   `internal/pasteboard/pasteboard_windows.go` (the Win32 clipboard), `internal/winpaste` (remote paste:
@@ -92,15 +95,19 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   home through `Cbbtun.xcframework`); `cbb-interop` plays the phone in Go tests.
 - `lite/`: the lite member in Rust (its command is `cbb` too): no CA keys, joins by the phone's QR code,
   dials the Linux members and listens for phones and Macs (mDNS TXT `r=lite`). Its protocol core is the crate `lite/core` (`cbb_core`: `certs`,
-  `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), CPace under `src/third_party`, the
+  `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for the lite member's tunnel), CPace under `src/third_party`, the
   interop vectors, and with the `tls` feature `tls`: rustls unbuffered with a RustCrypto
-  provider, the peer checks, a sans-I/O `Session`, the pairing exporter from the key log):
+  provider, the peer checks, a sans-I/O `Session`, the pairing exporter from the key log;
+  with `web` also `tls::web`, RSA and P-384 for a public site's certificate):
   no_std with alloc, RustCrypto, no I/O, for the ESP32; CI's `esp32` job builds it for the
   C6 (RISC-V) and the S3 (Xtensa); `lite/src` adds the files, the sockets around the
   core's TLS, mDNS, the control socket, remote paste (`remotepaste.rs`, the tmux and console
   helpers in `pastehelper.rs`) and the tunnel to the hub (`tunnel.rs`, `away.rs`:
   GotaTun's WireGuard and smoltcp's TCP behind a loopback port; GotaTun's AEAD comes from
-  `lite/ring-shim`, a stand-in for ring on RustCrypto, patched in by `lite/Cargo.toml`).
+  `lite/ring-shim`, a stand-in for ring on RustCrypto, patched in by `lite/Cargo.toml`;
+  `awg.rs` AmneziaWG around GotaTun's messages, `vless.rs` the way over VLESS with XHTTP;
+  for the phones: `hub.rs` a hub for several clients and guests, `forward.rs` its registration
+  with the forwarder, `relay.rs` the link to the blind relay).
 - `lite/ffi`: the core's one entry point (`cbb_core::api`, docs/core-api.md) as C functions (`include/cbb_core.h`)
   for Go and the phone kits (`Core.swift` through the module `CCbbCore`, `Core.kt` through JNA), and with the feature
   `member` the phones' member (`CoreMember.swift`, `CoreMember.kt`); `bind.sh` builds the iPhone's and Android's

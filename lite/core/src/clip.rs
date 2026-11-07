@@ -401,7 +401,7 @@ impl Engine {
 
     /// Whether the mute holds now; one that ended is forgotten.
     fn muted(&self, st: &mut Inner) -> bool {
-        if st.mute.is_some_and(|u| u != 0 && (self.wall)() >= u) {
+        if !crate::rule::holds(st.mute, (self.wall)()) {
             st.mute = None;
         }
         st.mute.is_some()
@@ -432,7 +432,7 @@ impl Engine {
 
     /// Whether the pause holds now; one that ended is forgotten.
     fn paused(&self, st: &mut Inner) -> bool {
-        if st.pause.is_some_and(|u| u != 0 && (self.wall)() >= u) {
+        if !crate::rule::holds(st.pause, (self.wall)()) {
             st.pause = None;
         }
         st.pause.is_some()
@@ -754,15 +754,23 @@ impl Engine {
     /// than the live window. An older one never does: the member's own text,
     /// however old, stays.
     fn decide_write(&self, st: &mut Inner, mut out: Outcome, now: Duration) -> Outcome {
-        if !st.mode.receives()
-            || self.paused(st)
-            || !self.live(st, now)
-            || st.current.text.is_empty()
-            || local_has(st, &st.current.text, now)
-            || now.saturating_sub(st.copied_at) >= st.window
-        {
-            // Images or files without a text leave this member's clipboard
-            // as it is: it never fetches their content.
+        // Images or files without a text leave this member's clipboard as
+        // it is: it never fetches their content (takes_media false).
+        let incoming = crate::rule::Incoming {
+            receives: st.mode.receives(),
+            paused: self.paused(st),
+            kind: st.current.kind,
+            mark: st.current.is_mark(),
+            unread: st.current.unread,
+            has_text: !st.current.text.is_empty(),
+            has_media: st.current.media.is_some(),
+            takes_media: false,
+            held: local_has(st, &st.current.text, now),
+            age_ms: ms(now.saturating_sub(st.copied_at)),
+            window_ms: ms(st.window),
+            secret_ttl_ms: ms(SECRET_TTL),
+        };
+        if crate::rule::incoming(&incoming) != crate::rule::Verdict::Write {
             return out;
         }
         st.seq = st.seq.saturating_add(1);
@@ -787,6 +795,11 @@ impl Engine {
         ev.age = (now.saturating_sub(st.copied_at).as_millis() as i64).min(MAX_AGE_MS);
         ev
     }
+}
+
+/// A duration in whole milliseconds, as the rule takes it.
+fn ms(d: Duration) -> i64 {
+    i64::try_from(d.as_millis()).unwrap_or(i64::MAX)
 }
 
 fn local_live(st: &Inner, now: Duration) -> bool {

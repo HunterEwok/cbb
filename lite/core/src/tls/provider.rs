@@ -298,7 +298,7 @@ impl ActiveKeyExchange for X25519Exchange {
 // ECDSA P-256 with SHA-256
 
 #[derive(Debug)]
-struct EcdsaP256Sha256;
+pub(super) struct EcdsaP256Sha256;
 
 impl SignatureVerificationAlgorithm for EcdsaP256Sha256 {
     fn verify_signature(&self, public_key: &[u8], message: &[u8], signature: &[u8]) -> Result<(), InvalidSignature> {

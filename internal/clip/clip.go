@@ -305,6 +305,9 @@ type Config struct {
 	// readers and signs it (docs/protocol.md, section 4, "Sealing"); an
 	// error leaves the copy unmade.
 	Seal func(Event) (*Sealed, error)
+	// Log, if set, takes the errors the engine meets but does not return,
+	// as a core that does not answer the rule of incoming copies.
+	Log func(error)
 }
 
 // Engine holds the state of one member. It is safe for concurrent use.
@@ -485,7 +488,7 @@ func (e *Engine) MuteLeft() (bool, time.Duration) {
 // muted reports whether the mute holds now, and forgets one that ended;
 // e.mu is held.
 func (e *Engine) muted() bool {
-	if e.mute != nil && !e.mute.IsZero() && !e.cfg.Wall().Before(*e.mute) {
+	if !holds(e.mute, e.cfg.Wall()) {
 		e.mute = nil
 	}
 	return e.mute != nil
@@ -521,7 +524,7 @@ func (e *Engine) ReceivingPaused() (bool, time.Time) {
 // paused reports whether the pause holds now, and forgets one that ended;
 // e.mu is held.
 func (e *Engine) paused() bool {
-	if e.pause != nil && !e.pause.IsZero() && !e.cfg.Wall().Before(*e.pause) {
+	if !holds(e.pause, e.cfg.Wall()) {
 		e.pause = nil
 	}
 	return e.pause != nil
@@ -949,7 +952,19 @@ func (e *Engine) receive(ev Event) Result {
 // younger than the live window. An older one never does: the member's own
 // text, however old, stays.
 func (e *Engine) decideWrite(res Result, now time.Duration) Result {
-	if !e.mode.Receives() || e.paused() || !e.live() || e.localHolds(e.current, now) || now-e.copiedAt >= e.window {
+	c := e.current
+	v, err := Decide(Incoming{
+		Receives: e.mode.Receives(), Paused: e.paused(),
+		Kind: c.Kind, Mark: c.IsMark(), Unread: c.Unread,
+		HasText: c.Text != "", HasMedia: c.Media != nil, TakesMedia: true,
+		Held:  e.localHolds(c, now),
+		AgeMS: (now - e.copiedAt).Milliseconds(), WindowMS: e.window.Milliseconds(),
+		SecretTTLMS: e.cfg.SecretTTL.Milliseconds(),
+	})
+	if err != nil && e.cfg.Log != nil {
+		e.cfg.Log(err)
+	}
+	if v != VerdictWrite {
 		return res
 	}
 	e.seq++

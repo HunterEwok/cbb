@@ -20,8 +20,7 @@ pub enum Verdict {
     Allowed,
 }
 
-/// The user of the process at the other end of s, from the kernel; Android's
-/// is Linux's.
+/// The user of the process at the other end of s, from the kernel.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub fn uid(s: &UnixStream) -> Option<u32> {
     let mut cred = libc::ucred { pid: 0, uid: 0, gid: 0 };

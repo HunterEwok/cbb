@@ -28,6 +28,9 @@ use serde::{Deserialize, Serialize};
 pub type SignFn =
     unsafe extern "C" fn(ctx: *mut core::ffi::c_void, digest: *const u8, sig: *mut u8, sig_len: *mut usize) -> i32;
 
+/// The app's events' callback: JSON at event, len bytes, on any thread.
+pub type EventFn = unsafe extern "C" fn(ctx: *mut core::ffi::c_void, event: *const u8, len: usize);
+
 /// The largest DER signature of P-256.
 const MAX_SIG: usize = 72;
 

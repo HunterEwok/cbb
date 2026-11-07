@@ -683,19 +683,22 @@ fn set_clock(secs: i64, log: &mut dyn FnMut(&str)) {
     if now.is_ok_and(|n| (n - secs).abs() <= CLOCK_SLACK) {
         return;
     }
-    // iOS has no clock_settime for an app: the phones' member, built from
-    // the same crate, never runs the Next's link anyway.
+    // A phone (the lite library inside its app) never sets the clock.
     #[cfg(target_os = "ios")]
-    log("cannot set the clock on this system");
+    let set = {
+        let _ = secs;
+        false
+    };
     #[cfg(not(target_os = "ios"))]
-    {
+    let set = {
         let ts = libc::timespec { tv_sec: secs as libc::time_t, tv_nsec: 0 };
         // SAFETY: clock_settime only reads the timespec passed to it.
-        if unsafe { libc::clock_settime(libc::CLOCK_REALTIME, &ts) } == 0 {
-            log(&format!("set the clock from the Next's: {}", crate::node::date(secs)));
-        } else {
-            log(&format!("cannot set the clock: {}", std::io::Error::last_os_error()));
-        }
+        unsafe { libc::clock_settime(libc::CLOCK_REALTIME, &ts) == 0 }
+    };
+    if set {
+        log(&format!("set the clock from the Next's: {}", crate::node::date(secs)));
+    } else {
+        log(&format!("cannot set the clock: {}", std::io::Error::last_os_error()));
     }
 }
 
