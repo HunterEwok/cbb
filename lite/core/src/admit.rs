@@ -551,5 +551,62 @@ pub fn device_record(rs: &Records, admitter: &Admitter, a: &Admitted, now_ms: i6
     Ok(Record::new(body, sig, admitter.issuer()))
 }
 
+/// A group a phone makes for itself, with its root key held outside the
+/// core (docs/protocol.md, section 3): the root CA, the phone's member
+/// certificate under it, and its records, the phone's own device record
+/// holding the root.
+pub struct NewGroup {
+    pub device: DeviceId,
+    pub root: Cert,
+    pub cert: Cert,
+    pub records: Records,
+}
+
+/// The phone's own device in a group it makes: its name, system, member
+/// key (a SEC1 point), where that key lives (`hardware` or `file`) and its
+/// key for sealed messages.
+pub struct OwnDevice<'a> {
+    pub name: &'a str,
+    pub os: &'a str,
+    pub member_point: &'a [u8],
+    pub store: &'a str,
+    pub seal: Vec<u8>,
+}
+
+/// Makes a group whose root key is root_key, as the iPhone's
+/// PhoneGroup.create does: a root CA, a member certificate for the
+/// phone's member key, and the phone's device record, signed by the root.
+pub fn new_group(root_key: &dyn ExternalKey, own: &OwnDevice, now_ms: i64) -> Result<NewGroup> {
+    let now = now_ms.div_euclid(1000);
+    let mut sign = |b: &[u8]| identity::sign_external(root_key, b);
+    let root = Cert::parse(&issue::root_ca(&root_key.public(), now, &mut sign)?)?;
+    let device = DeviceId::random();
+    let cert = Cert::parse(&issue::member(&device, own.member_point, &root, now, &mut sign)?)?;
+    let mut records = Records::new(&root);
+    records.set_clock(move || now_ms);
+    let b = Body {
+        v: 2,
+        alg: authority::ALG_ES256.into(),
+        kind: authority::TYPE_DEVICE.into(),
+        signer: Hash(root.key_hash()),
+        time_ms: now_ms,
+        device: device.to_string(),
+        name: own.name.into(),
+        role: "phone".into(),
+        os: own.os.into(),
+        key: Some(Hash(cert.key_hash())),
+        store: own.store.into(),
+        seal: own.seal.clone(),
+        holds_root: true,
+        ..Default::default()
+    };
+    let body = records.next_body(b)?;
+    let sig = identity::sign_external(root_key, &body)?;
+    if !records.add(&Record::new(body, sig, None)).map_err(|e| e.context("the phone's device record"))? {
+        return Err(Error::msg("the group's first record was not taken"));
+    }
+    Ok(NewGroup { device, root, cert, records })
+}
+
 #[cfg(test)]
 mod tests;

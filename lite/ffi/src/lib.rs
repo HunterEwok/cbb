@@ -134,6 +134,31 @@ pub unsafe extern "C" fn cbb_qr_read(
     to_c(qr::read(frame, width, height, stride), answer_len)
 }
 
+/// Makes a group with the app's root key (src/join.rs, new_group):
+/// `request` is its JSON, `sign` the root key's callback with `ctx`, called
+/// during this call only. The answer has a join's fields.
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes and `answer_len` to a
+/// writable `size_t`, for the time of the call.
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_group_new(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(join::new_group(req, sign, ctx as usize), answer_len)
+}
+
 /// A joiner that listens with the app's key (src/join.rs): `request` is
 /// its JSON, `sign` the key's callback with `ctx`, which must stay valid
 /// until `cbb_join_free`. Writes the answer to `answer` and `answer_len`

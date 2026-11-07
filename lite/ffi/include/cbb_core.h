@@ -96,6 +96,16 @@ void cbb_member_stop(cbb_member *m);
 uint8_t *cbb_qr_read(const uint8_t *gray, size_t width, size_t height, size_t stride, size_t *answer_len);
 
 /*
+ * A group the phone makes, its root key the app's (src/join.rs, new_group),
+ * only with the feature join: the request is
+ * {"name","os","store":"hardware"|"file","root_public","public","seal"?}, the
+ * keys' points base64, and sign the root key's callback, called during this
+ * call only; the answer has a join's fields (device, cert, group_ca, roots,
+ * records).
+ */
+uint8_t *cbb_group_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
+
+/*
  * Admitting a device by its QR code as an admin of the group (src/admit.rs),
  * only with the feature member: request is {"qr","public","admin_ca","make_admin"},
  * public the point of the key sign holds (the phone's admin key, or the root's

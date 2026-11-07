@@ -539,6 +539,81 @@ func TestFFIJoinerAdmin(t *testing.T) {
 	})
 }
 
+// TestFFIPhoneRoot: the Aurora app makes a group of its own, its root key
+// outside the core (cbb_group_new), and as the group's root admits a
+// computer that listens, as the app does when it scans the computer's QR
+// code: the computer takes the phone's group, a certificate from its root
+// and no issuer.
+func TestFFIPhoneRoot(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	made := strings.Fields(next("Group "))
+	if len(made) != 2 {
+		t.Fatalf("the phone's group: %q", made)
+	}
+	fmt.Fprintln(in, "DEVICES")
+	if devices := next("DEVICES "); !strings.Contains(devices, `"root phone"`) {
+		t.Fatalf("the phone does not list itself: %s", devices)
+	}
+
+	j, err := pair.NewJoiner(pair.Info{Name: "laptop", OS: group.OSLinux})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fp, err := j.Fingerprint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	joined := make(chan *group.Identity, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			joined <- nil
+			return
+		}
+		id, err := j.Accept(context.Background(), conn, "246801", func(*group.Identity) error { return nil })
+		if err != nil {
+			t.Errorf("the computer's join: %v", err)
+		}
+		joined <- id
+	}()
+	fmt.Fprintln(in, "ADMIT "+phone.JoinQR(phone.JoinCode{Code: "246801", Addrs: []string{ln.Addr().String()}, Fingerprint: fp}))
+	if got := next("ADMITTED "); got != string(j.ID) {
+		t.Fatalf("the phone admitted %q, not the computer %s", got, j.ID)
+	}
+	if got := next("ADMIT DONE "); got != "true" {
+		t.Fatalf("the computer did not confirm its join: %q", got)
+	}
+	id := <-joined
+	if id == nil || id.Issuer != nil {
+		t.Fatalf("the computer's identity: %+v", id)
+	}
+	if got := group.Tag(id.GroupCA.Cert); got != made[1] {
+		t.Fatalf("the computer joined group %s, not the phone's %s", got, made[1])
+	}
+	if !id.GroupCA.Cert.IsCA || !strings.HasPrefix(id.GroupCA.Cert.Subject.CommonName, "cbb group root ") {
+		t.Fatalf("the group's root: %+v", id.GroupCA.Cert.Subject)
+	}
+	if err := id.Cert.CheckSignatureFrom(id.GroupCA.Cert); err != nil {
+		t.Fatalf("the computer's certificate is not from the phone's root: %v", err)
+	}
+	if got, err := group.DeviceOf(id.Cert); err != nil || got != j.ID {
+		t.Fatalf("the computer's certificate names %q: %v", got, err)
+	}
+	fmt.Fprintln(in, "DEVICES")
+	if devices := next("DEVICES "); !strings.Contains(devices, `"laptop"`) {
+		t.Fatalf("the phone does not list the computer: %s", devices)
+	}
+}
+
 // dialJoiner plays the phone that scanned a listening joiner's QR code: it
 // opens a window with the identity in dir, dials the addresses in the QR
 // code and admits the device with the certificate it names, as the phone

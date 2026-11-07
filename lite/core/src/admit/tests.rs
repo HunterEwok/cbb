@@ -247,3 +247,47 @@ fn refusals() {
     assert!(admitted.is_none() && joined.is_none());
     assert!(text(member_err).contains("add it as an admin"));
 }
+
+#[test]
+fn a_phone_makes_its_group_and_admits() {
+    let root_key = soft();
+    let member_key = soft();
+    let own = OwnDevice {
+        name: "phone",
+        os: "aurora",
+        member_point: &member_key.public(),
+        store: "hardware",
+        seal: Vec::new(),
+    };
+    let g = new_group(&*root_key, &own, now_ms()).unwrap();
+    let id = certs::verify_member(&[g.cert.clone()], &[g.root.clone()], now_ms() / 1000, certs::Usage::Client).unwrap();
+    assert_eq!(id, g.device);
+    let d = g.records.devices().into_iter().find(|d| d.id == g.device.as_str()).unwrap();
+    assert_eq!((d.role.as_str(), d.os.as_str(), d.name.as_str()), ("phone", "aurora", "phone"));
+    assert_eq!(g.records.root_member().map(|(id, _)| id), Some(g.device.to_string()));
+
+    // The phone admits a device as the group's root.
+    let identity = Identity {
+        id: g.device.clone(),
+        key: Vec::new(),
+        external: Some(member_key),
+        cert: g.cert.clone(),
+        issuer: None,
+        group_ca: g.root.clone(),
+        roots: Vec::new(),
+    };
+    let admitter = Admitter { identity, ca: g.root.clone(), ca_key: root_key, make_admins: false };
+    assert!(admitter.is_root());
+    let mut rs = g.records;
+    let joiner = Joiner::new("router").unwrap();
+    let code = pair::new_code();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
+    let mut adm =
+        Admission::dial(admitter.clone(), GroupView::of(&rs), &code, &joiner.fingerprint(), &clock()).unwrap();
+    let (admitted, joined, member_err, joiner_err, _) = run(&mut adm, &mut joining);
+    assert!(member_err.is_none() && joiner_err.is_none(), "{member_err:?} {joiner_err:?}");
+    assert!(joined.is_some());
+    let r = device_record(&rs, &admitter, &admitted.unwrap(), now_ms()).unwrap();
+    assert!(rs.add(&r).unwrap());
+    assert_eq!(rs.devices().len(), 2);
+}

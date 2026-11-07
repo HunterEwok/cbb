@@ -83,11 +83,16 @@ of the code's addresses and passes the connection's bytes; the core checks the j
 code's fingerprint, confirms the code first, issues the member certificate with the phone's admin
 CA (`cbb_core::issue`, the key signing through the callback), and an admin CA when the group's
 root admits a phone that asks to be an admin, sends the Welcome and adds the device record to the
-group (docs/protocol.md, section 6, "The joiner listens").
+group (docs/protocol.md, section 6, "The joiner listens"). `cbb_group_new` (feature `join`,
+`cbb_core::admit::new_group`) makes a group of the phone's own, as the iPhone's
+`PhoneGroup.create` does: a root CA for the app's root key, the phone's member certificate and its
+device record holding the root, all signed through the callback; its answer has a join's
+fields, so the app keeps it as it keeps a join, and admits with the root key and no admin CA.
 
 `TestFFIJoiner` runs the join, sync both ways and a
-pause, an admin's mute, the devices list and a renewal against a Go member through the example `phone-on-linux`, and `TestFFIJoinerAdmin` the
-join as an admin, then that admin phone admitting a Go computer that listens.
+pause, an admin's mute, the devices list and a renewal against a Go member through the example `phone-on-linux`, `TestFFIJoinerAdmin` the
+join as an admin, then that admin phone admitting a Go computer that listens, and
+`TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its root.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its

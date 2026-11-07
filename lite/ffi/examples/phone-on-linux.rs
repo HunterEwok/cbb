@@ -18,7 +18,10 @@
 //! "DEVICES <the devices as a JSON array>", and, after it joined as an
 //! admin, "ADMIT <a device's QR code>", which admits that device with the
 //! admin key and prints "ADMITTED <device>" and then "ADMIT DONE
-//! <confirmed>", or "ADMIT FAILED <message>", on standard input.
+//! <confirmed>", or "ADMIT FAILED <message>", on standard input. With
+//! -new-group it joins nothing: it makes a group of its own, the admin key
+//! standing for the root key, prints "Group <device> <group tag>", and runs
+//! the member as the group's root, which takes "ADMIT" too.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -29,9 +32,9 @@ use std::process::ExitCode;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
-    cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_join_accept, cbb_join_feed,
-    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_copy, cbb_member_devices,
-    cbb_member_muted, cbb_member_pause, cbb_member_peers, cbb_member_start,
+    cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_join_accept,
+    cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_copy,
+    cbb_member_devices, cbb_member_muted, cbb_member_pause, cbb_member_peers, cbb_member_start,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -79,7 +82,6 @@ fn main() -> ExitCode {
     let admin = args.iter().any(|a| a == "-admin");
     let admin_key = SigningKey::from_slice(&[8u8; 32]).expect("a valid scalar");
     let admin_public = STANDARD.encode(admin_key.verifying_key().to_sec1_point(false).as_bytes());
-    let ln = TcpListener::bind(&addr).expect("listen");
     // The secret for sealed messages, and its public key for the device
     // record, as the app has them.
     let seal_req =
@@ -87,6 +89,33 @@ fn main() -> ExitCode {
     let seal = serde_json::from_slice::<serde_json::Value>(&cbb_ffi::call(seal_req.to_string().into_bytes()))
         .map(|v| v["ok"]["key"].clone())
         .unwrap_or_default();
+    let peers: Vec<String> =
+        args.windows(2).filter(|w| w.first().is_some_and(|a| a == "-peer")).filter_map(|w| w.get(1).cloned()).collect();
+    if args.iter().any(|a| a == "-new-group") {
+        // A group of its own, the admin key standing for the root key the
+        // Aurora app keeps in its TEE; the phone then admits as the root.
+        let req = serde_json::json!({
+            "name": name, "os": "aurora", "store": "hardware", "root_public": admin_public,
+            "public": public_b64, "seal": seal,
+        })
+        .to_string();
+        let mut n = 0usize;
+        let ctx = &admin_key as *const SigningKey as *mut _;
+        // SAFETY: req and n live for the call, the key too.
+        let made = take(unsafe { cbb_group_new(req.as_ptr(), req.len(), sign, ctx, &mut n) }, n);
+        let group = made["ok"].clone();
+        if group.is_null() {
+            eprintln!("phone-on-linux: {made}");
+            return ExitCode::FAILURE;
+        }
+        let tag = cbb_core::certs::Cert::parse(&b64(&group["group_ca"]))
+            .map(|ca| cbb_core::certs::tag(&ca))
+            .unwrap_or_default();
+        println!("Group {} {tag}", group["device"].as_str().unwrap_or_default());
+        let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
+        return run_member(&key, &public_b64, &name, &dir, peers, &group, Some((&admin_key, admin_public.as_str())));
+    }
+    let ln = TcpListener::bind(&addr).expect("listen");
     let mut req =
         serde_json::json!({"name": name, "os": "aurora", "public": public_b64, "seal": seal, "addrs": [addr]});
     if admin {
@@ -156,8 +185,6 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
-    let peers: Vec<String> =
-        args.windows(2).filter(|w| w.first().is_some_and(|a| a == "-peer")).filter_map(|w| w.get(1).cloned()).collect();
     let admin = admin.then_some((&admin_key, admin_public.as_str()));
     run_member(&key, &public_b64, &name, &dir, peers, &joined, admin)
 }
