@@ -461,6 +461,38 @@
         <source>Another phone takes the group over</source>
         <translation>هاتف آخر يستولي على المجموعة</translation>
     </message>
+    <message>
+        <source>Away from home</source>
+        <translation>بعيدًا عن المنزل</translation>
+    </message>
+    <message>
+        <source>Sync away from home</source>
+        <translation>المزامنة بعيدًا عن المنزل</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>عندما لا يكون الهاتف على الشبكة المنزلية، يُزامن عبر نفق WireGuard الخاص بالمحور الخاص بك، وهو حاسوب من المجموعة مُعدّ باستخدام cbb global hub؛ منفذه متاح من الإنترنت، ولكن فقط عبر WireGuard بمفاتيح المجموعة. يردّ المحور على هذا الهاتف في المرة التالية التي يتصل فيها في المنزل. لا يذهب شيء إلى أي مكان آخر، ومن دون النفق لا يوجد اتصال. إيقافه يجعل هذا الهاتف ينسى مفتاح النفق الخاص به.</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>في المنزل: تتم المزامنة مباشرة.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>جارٍ الاتصال بالمحور عبر النفق…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>متصل بالمحور %1 عبر النفق.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>متصل بالمحور عبر النفق.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>بانتظار المحور: افتح التطبيق مرة واحدة في المنزل، بالقرب من حاسوب من المجموعة.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>

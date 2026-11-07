@@ -126,6 +126,11 @@ All notable changes to cbb are documented in this file. The format follows
   phone copied goes to the group, by the core's rule. It sends and takes images and files: the
   clipboard's image, images and files shared to it from the system's share menu, and what
   other devices share, saved in Downloads/CBB (one image into the clipboard too).
+- The Aurora app syncs away from home as the other phones do (a switch in Settings, off until
+  turned on): its hellos offer the group's hubs a tunnel key, it keeps their offers, and when
+  no hub is at home it reaches the first that answers through the hub's WireGuard, AmneziaWG
+  or VLESS tunnel, the lite member's in the Rust core (the member's `away` and `away_status`
+  ops); `TestFFIPhoneAway` syncs it with a Go hub through the tunnel.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

@@ -15,6 +15,7 @@
 #include <QDateTime>
 #include <QImage>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -49,6 +50,14 @@ class Member : public QObject
     Q_PROPERTY(QDateTime mutedUntil READ mutedUntil NOTIFY changed)
     // Images or files of the group's copy are coming to the phone.
     Q_PROPERTY(bool fetching READ fetching NOTIFY changed)
+    // Sync away from home (docs/protocol.md, section 11): on or off; where it
+    // stands: "off", "waiting" (no hub's offer yet), "home", "connecting" or
+    // "connected"; the hub's name, and what went wrong last, shown as
+    // Errors::shown shows it.
+    Q_PROPERTY(bool awayOn READ awayOn NOTIFY awayChanged)
+    Q_PROPERTY(QString awayStatus READ awayStatus NOTIFY awayChanged)
+    Q_PROPERTY(QString awayHub READ awayHub NOTIFY awayChanged)
+    Q_PROPERTY(QString awayError READ awayError NOTIFY awayChanged)
 
 public:
     explicit Member(QObject *parent = nullptr);
@@ -69,6 +78,10 @@ public:
     bool muted() const { return m_muted; }
     QDateTime mutedUntil() const { return m_mutedUntil; }
     bool fetching() const { return m_fetch != nullptr; }
+    bool awayOn() const { return m_awayOn; }
+    QString awayStatus() const { return m_awayStatus; }
+    QString awayHub() const { return m_awayHub; }
+    QString awayError() const { return m_awayError; }
 
     // Starts the member of membership as the phone named name.
     void start(const Membership &membership, const QString &name, const QByteArray &publicKey, const QString &os,
@@ -93,9 +106,14 @@ public:
     Q_INVOKABLE void pause(int minutes);
     Q_INVOKABLE void resume();
 
+    // Turns sync away from home on, with new tunnel keys that the hellos
+    // offer the group's hubs, or off, forgetting them.
+    Q_INVOKABLE void setAway(bool on);
+
 signals:
     void changed();
     void devicesChanged();
+    void awayChanged();
     // An admin renewed the member certificate, or a takeover made a new
     // root: the phone keeps them in member.json.
     void identityChanged(const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots);
@@ -121,6 +139,9 @@ private:
     // Reads the pause and the mute from the core's answer, or asks for it.
     void readMuted(const QJsonObject &state);
     void pollMuted();
+    // Reads where sync away from home stands from the core's answer.
+    void readAway(const QJsonValue &away);
+    void pollAway();
 
     cbb_member *m_member = nullptr;
     QTimer m_peerTimer;
@@ -139,4 +160,10 @@ private:
     QDateTime m_pausedUntil;
     bool m_muted = false;
     QDateTime m_mutedUntil;
+    bool m_awayOn = false;
+    QString m_awayStatus = QStringLiteral("off");
+    QString m_awayHub;
+    QString m_awayError;
+    // The core's last error message, so that each is shown and logged once.
+    QString m_awayFailure;
 };

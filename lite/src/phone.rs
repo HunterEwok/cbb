@@ -6,7 +6,10 @@
 //! where the app keeps it and no control socket. A phone dials the members
 //! it finds (docs/protocol.md, section 3), by mDNS or as its app hands them
 //! in; while the app is in the front it may also listen as the group's hub
-//! at home (`listen`), and in the background it pauses.
+//! at home (`listen`), and in the background it pauses. Away from home it
+//! reaches the group's hub through the same tunnel as the lite member
+//! (`crate::away`, in a build with the feature `tunnel`), once the user
+//! turns sync away from home on.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -21,6 +24,7 @@ use cbb_core::identity::Identity;
 use cbb_core::manage::{self, Change, Order, Signer};
 use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
+use crate::away::Away;
 use crate::button::{self, Own};
 use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
@@ -102,6 +106,7 @@ pub struct Member {
     state_dir: PathBuf,
     /// What carries out the commands for the phone other than a mute.
     others: Arc<RwLock<Option<OnCommand>>>,
+    away: Arc<Away>,
 }
 
 /// What a member port a phone opens is for.
@@ -148,6 +153,7 @@ impl Member {
             Box::new(uptime::now),
         ));
         let tag = ident.tag();
+        let away = Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()));
         let device =
             DeviceInfo { form: "phone".into(), os_version: cfg.os_version, version: cfg.version, mac: String::new() }
                 .cleaned();
@@ -172,9 +178,23 @@ impl Member {
             log: log.clone(),
         };
         node.on_command(Arc::new(move |peer, c| commands.command(peer, c)));
+        node.set_tunnel_key(away.key());
+        {
+            let away = away.clone();
+            let n = Arc::downgrade(&node);
+            node.on_tunnel(Box::new(move |from, v, may_host| {
+                if let (Some(hub), Some(node)) = (away.offered(from, v, may_host), n.upgrade()) {
+                    away.retry(&node, &hub);
+                }
+            }));
+        }
         discovery::start(node.clone(), tag.clone(), cfg.peers, false, None, log.clone());
         if cfg.mdns {
             discovery::start_as_phone(node.clone(), tag, log.clone());
+        }
+        {
+            let (away, node) = (away.clone(), node.clone());
+            std::thread::spawn(move || away.run(node));
         }
         Ok(Member {
             node,
@@ -184,7 +204,37 @@ impl Member {
             log,
             state_dir,
             others,
+            away,
         })
+    }
+
+    /// Turns sync away from home on (docs/protocol.md, section 11): new
+    /// tunnel keys, which the hellos offer the group's hubs from now on, so
+    /// their offers come on the next connection at home. An error in a
+    /// build without the tunnel.
+    pub fn away_on(&self) -> Result<()> {
+        let keys = self.away.turn_on()?;
+        self.node.set_tunnel_key(Some(keys));
+        Ok(())
+    }
+
+    /// Turns sync away from home off, forgets its keys and the hubs'
+    /// offers, and ends the link through the tunnel.
+    pub fn away_off(&self) -> Result<()> {
+        self.away.turn_off()?;
+        self.node.set_tunnel_key(None);
+        for id in self.node.hub_order().iter().filter_map(|d| DeviceId::parse(d).ok()) {
+            if !self.node.at_home(&id) {
+                self.node.disconnect(&id);
+            }
+        }
+        Ok(())
+    }
+
+    /// Sync away from home as the app shows it, as `cbb global` shows it on
+    /// the lite member; None while it is off.
+    pub fn away_status(&self) -> Option<serde_json::Value> {
+        self.away.status(&self.node).and_then(|a| serde_json::to_value(a).ok())
     }
 
     /// Keeps the group's copies out of the phone's clipboard for ms

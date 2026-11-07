@@ -206,10 +206,14 @@ the maintainer approves ([docs/maintaining.md](docs/maintaining.md#signing-for-a
 The translations are `translations/cbb-<language>.ts`, English being the source: a new
 `qsTr` text, or a message passed to `QCoreApplication::translate("Errors", ...)`, gets an
 entry in each.
+Aurora's own interfaces (the sandbox's permissions, the authentication service's client,
+localization, packaging) are documented for 5.1.5, the version the app is built for, at
+[developer.auroraos.ru/doc/5.1.5](https://developer.auroraos.ru/doc/5.1.5/); the pages
+without the version describe newer releases.
 
 ```sh
 sudo apps/silica/psdk.sh /srv/psdk setup armv7hl   # the SDK, its tooling and a target
-apps/silica/build.sh prepare   # the core for armv7hl and aarch64, the icons (rustup, ImageMagick)
+apps/silica/build.sh prepare   # the core for armv7hl and aarch64, the icons (rustup, the GNU cross compilers, ImageMagick)
 sudo cp -a apps/silica /srv/psdk/root/home/builder/ && sudo chroot /srv/psdk/root chown -R builder /home/builder/silica
 sudo apps/silica/psdk.sh /srv/psdk run '~/silica/build.sh rpm AuroraOS-5.1.5.105-base-armv7hl.default'
 # Sailfish OS: the same with SYSTEM=sailfish and its own folder
