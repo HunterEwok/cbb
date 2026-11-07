@@ -12,19 +12,20 @@
 //! the TLS state under a lock; only the reader waits on the socket without
 //! it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
 use crate::certs::{Cert, DeviceId, Usage};
 use cbb_core::copy::{self, Content, Sealed};
 
 use crate::clip::{Engine, Event, Hello, Kind, Outcome, SealFn, Via};
+use crate::content::{Source, Store};
 use crate::entries::{self, Entries};
 use crate::error::{Context, Error, Result};
 use crate::identity::Identity;
@@ -35,6 +36,7 @@ use crate::records::{Record, Records, Refusal};
 use crate::tls;
 use crate::uptime;
 use crate::wire::{self, Message};
+use cbb_core::media::{Manifest, Part};
 
 /// How long a device that discovery finds counts as at home without a
 /// connection to it (docs/protocol.md, section 11).
@@ -51,11 +53,20 @@ const QUEUE_LEN: usize = 256;
 const RECORDS_CHUNK: usize = 1 << 20;
 /// The slowest transfer a frame is given time for.
 const MIN_RATE: usize = 16 << 10;
+/// The most gets a peer may have waiting on a connection.
+const MAX_GETS: usize = 64;
+/// How far ahead a fetch asks, and how long it waits for a chunk.
+const FETCH_AHEAD: u64 = 4 << 20;
+const FETCH_IDLE: Duration = Duration::from_secs(15);
 
 /// A text to put into the member's own clipboard.
 #[derive(Clone, Debug)]
 pub struct WriteReq {
+    /// The copy's ID, which a phone's app fetches images or files by.
+    pub id: String,
     pub text: String,
+    /// The manifest of a copy with images or files.
+    pub media: Option<Manifest>,
     pub kind: Kind,
     pub via: Via,
     pub seq: u64,
@@ -63,7 +74,8 @@ pub struct WriteReq {
     pub ttl: Option<Duration>,
 }
 
-/// A connected member.
+/// A connected member, as its hello and its reach messages present it:
+/// shown, never trusted.
 #[derive(Clone, Debug)]
 pub struct Peer {
     pub id: DeviceId,
@@ -71,7 +83,40 @@ pub struct Peer {
     pub name: String,
     /// Its operating system, from its hello; empty when it sent none.
     pub os: String,
+    /// Where its keys live: `file`, `hardware` or `rootless`; empty if unknown.
+    pub key_store: String,
+    /// Its sync mode: `own`, `shared`, `receive` or `send`; empty if unknown.
+    pub mode: String,
+    /// Whether it is muted, and for how many milliseconds more (0: until
+    /// the mute is lifted).
+    pub muted: bool,
+    pub muted_for_ms: i64,
+    /// The quick actions that are on there.
+    pub actions: Vec<String>,
+    pub device: cbb_core::wire::DeviceInfo,
+    /// The admin key a full member that is not an admin yet offers.
+    pub admin_key: Option<Vec<u8>>,
+    /// The tunnel key and preshared key it offers the group's hubs.
+    pub tunnel_key: Option<(Vec<u8>, Vec<u8>)>,
+    /// The members it says it is connected to (docs/protocol.md, section 4,
+    /// "Reach").
+    pub reach: Vec<DeviceId>,
+    /// Whether the connection carries records only: no device record lets
+    /// the peer in yet.
+    pub records_only: bool,
+    /// What it supports beyond its protocol version: `media` from one that
+    /// serves the content of media events.
+    pub features: Vec<String>,
 }
+
+/// The most device IDs a reach message is read for.
+const MAX_REACH: usize = 256;
+/// The most commands remembered as passed on, as Go's.
+const MAX_PASSED: usize = 4096;
+
+/// Gets the messages a peer sends that the node does not handle itself:
+/// `admin`, `hubs` and `credentials` for a phone's app, which keeps them.
+pub type OnMessage = Box<dyn Fn(&DeviceId, &Message) + Send + Sync>;
 
 /// Called with a tunnel offer and the device that sent it.
 /// Gets a tunnel offer from the group's root or an admin, and whether the
@@ -127,6 +172,38 @@ pub struct Node {
     /// root), where identity.json cannot: a phone's app whose key is
     /// outside the core keeps its own file.
     keep_identity: Option<KeepIdentity>,
+    /// Paused: the connections are closed and no new one is made, while a
+    /// phone's app is in the background.
+    paused: AtomicBool,
+    /// Wakes the dial loops early: the member resumed or found an address.
+    kick: (Mutex<u64>, Condvar),
+    /// The commands this member sent, by ID, waiting for their results.
+    waiting: Mutex<HashMap<String, Waiting>>,
+    /// The commands a phone passed on, by ID: where each came from, and
+    /// when it expires (docs/protocol.md, section 15).
+    passed: Mutex<HashMap<String, (DeviceId, i64)>>,
+    on_message: RwLock<Option<OnMessage>>,
+    /// The sealed blobs of copies with images or files, for a phone's app,
+    /// which makes, fetches and serves them; None on the lite member.
+    content: Option<Arc<Store>>,
+    /// Gets each copy that becomes the group's current one from a peer,
+    /// for a phone's app, which shows it and fetches images or files.
+    on_change: RwLock<Option<OnChange>>,
+}
+
+/// Gets a copy that became the group's current one.
+pub type OnChange = Box<dyn Fn(&Event) + Send + Sync>;
+
+/// A piece of a fetch a connection's reader hands on.
+enum Piece {
+    Chunk(wire::Chunk),
+    Missing,
+}
+
+/// A frame as it arrives: a message, or a chunk of a blob.
+enum Frame {
+    Message(Box<Message>),
+    Chunk(wire::Chunk),
 }
 
 /// Keeps a changed identity in place of identity.json.
@@ -138,7 +215,34 @@ enum Out {
     Records(Vec<Record>),
     Result(wire::CommandResult),
     Entries(serde_json::Value),
+    /// A message made before it was queued: a command, a cert, an offer.
+    Message(Message),
     Wake, // makes the writer look at the closed flag
+}
+
+/// A command this member sent, waiting for its result.
+struct Waiting {
+    to: DeviceId,
+    tx: SyncSender<wire::CommandResult>,
+}
+
+/// The header of a command's body, for sending and passing it on.
+#[derive(serde::Deserialize, Default)]
+struct CommandHead {
+    #[serde(rename = "type", default)]
+    kind: String,
+    #[serde(default)]
+    to: String,
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    expires_ms: i64,
+}
+
+impl CommandHead {
+    fn of(r: &Record) -> Option<CommandHead> {
+        serde_json::from_slice::<CommandHead>(&r.body).ok().filter(|h| !h.id.is_empty() && h.id.len() <= 64)
+    }
 }
 
 struct Conn {
@@ -146,7 +250,7 @@ struct Conn {
     sock: TcpStream,
     tls: Mutex<tls::Session>,
     tx: SyncSender<Out>,
-    peer: Mutex<Option<(String, String, String)>>, // role, name and system, from the hello
+    peer: Mutex<Option<Peer>>, // from the hello
     chain: Vec<Cert>,
     /// No device record that counts names the peer's key yet: the
     /// connection carries records and nothing else, until the records let
@@ -154,6 +258,10 @@ struct Conn {
     records_only: bool,
     closed: AtomicBool,
     bye: AtomicBool,
+    /// The gets the peer asked for, served in order a chunk at a time.
+    gets: Mutex<VecDeque<wire::Get>>,
+    /// The fetches waiting for the peer's chunks, by blob.
+    sinks: Mutex<HashMap<[u8; 32], SyncSender<Piece>>>,
 }
 
 impl Node {
@@ -191,7 +299,27 @@ impl Node {
             home: Mutex::new(HashMap::new()),
             entries,
             keep_identity: None,
+            paused: AtomicBool::new(false),
+            kick: (Mutex::new(0), Condvar::new()),
+            waiting: Mutex::new(HashMap::new()),
+            passed: Mutex::new(HashMap::new()),
+            on_message: RwLock::new(None),
+            content: None,
+            on_change: RwLock::new(None),
         }
+    }
+
+    /// Sets what gets each copy that becomes the group's current one from
+    /// a peer.
+    pub fn on_change(&self, f: OnChange) {
+        *self.on_change.write().unwrap() = Some(f);
+    }
+
+    /// The node keeping, fetching and serving the blobs of copies with
+    /// images or files in its state folder, as a phone's app does.
+    pub fn with_content(mut self) -> Node {
+        self.content = Some(Arc::new(Store::open(&self.state_dir)));
+        self
     }
 
     /// The node keeping its identity through f, not in identity.json.
@@ -219,7 +347,7 @@ impl Node {
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
         *self.tunnel_key.write().unwrap() = key;
         for c in self.conns.lock().unwrap().values() {
-            if c.peer.lock().unwrap().as_ref().is_some_and(|(role, _, _)| role == "full") {
+            if c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full") {
                 c.close(true);
             }
         }
@@ -295,16 +423,318 @@ impl Node {
 
     /// The connected members that sent their hello, sorted by device ID.
     pub fn peers(&self) -> Vec<Peer> {
-        let conns = self.conns.lock().unwrap();
-        let mut out: Vec<Peer> = conns
-            .values()
-            .filter(|c| !c.records_only)
-            .filter_map(|c| {
-                c.peer.lock().unwrap().clone().map(|(role, name, os)| Peer { id: c.id.clone(), role, name, os })
-            })
-            .collect();
+        let mut out: Vec<Peer> = self.all_peers().into_iter().filter(|p| !p.records_only).collect();
         out.sort_by(|a, b| a.id.cmp(&b.id));
         out
+    }
+
+    /// The connected members that sent their hello, those whose connection
+    /// carries records only among them, sorted by device ID.
+    pub fn all_peers(&self) -> Vec<Peer> {
+        let conns = self.conns.lock().unwrap();
+        let mut out: Vec<Peer> = conns.values().filter_map(|c| c.peer.lock().unwrap().clone()).collect();
+        out.sort_by(|a, b| a.id.cmp(&b.id));
+        out
+    }
+
+    /// Sets what gets the messages the node leaves to its app.
+    pub fn on_message(&self, f: OnMessage) {
+        *self.on_message.write().unwrap() = Some(f);
+    }
+
+    /// Closes every connection with a goodbye and makes no new one until
+    /// resume: a phone's app going to the background.
+    pub fn pause(&self) {
+        self.paused.store(true, Ordering::SeqCst);
+        for c in self.conns.lock().unwrap().values() {
+            c.close(true);
+        }
+    }
+
+    /// Lets the member connect again after pause, at once.
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::SeqCst);
+        self.kick();
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
+    }
+
+    /// Wakes whatever waits in nap.
+    pub fn kick(&self) {
+        let (m, cv) = &self.kick;
+        *m.lock().unwrap() += 1;
+        cv.notify_all();
+    }
+
+    /// Waits up to d, or until kick; reports whether it was kicked.
+    pub fn nap(&self, d: Duration) -> bool {
+        let (m, cv) = &self.kick;
+        let g = m.lock().unwrap();
+        let start = *g;
+        let (g, _) = cv.wait_timeout_while(g, d, |n| *n == start && !self.is_closed()).unwrap();
+        *g != start
+    }
+
+    /// Waits up to timeout for a member to connect and say its hello;
+    /// reports whether one did.
+    pub fn wait_connected(&self, timeout: Duration) -> bool {
+        let end = uptime::now() + timeout;
+        loop {
+            if !self.peers().is_empty() {
+                return true;
+            }
+            let now = uptime::now();
+            if now >= end || self.is_closed() {
+                return false;
+            }
+            std::thread::sleep((end - now).min(Duration::from_millis(100)));
+        }
+    }
+
+    /// Queues a message for the member id; reports whether it is
+    /// connected as a member.
+    pub fn send_to(&self, id: &DeviceId, m: Message) -> bool {
+        let c = self.conns.lock().unwrap().get(id).cloned();
+        match c {
+            Some(c) if !c.records_only => {
+                self.enqueue(&c, Out::Message(m));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Queues a message for every member connected; returns those it went
+    /// to.
+    pub fn broadcast(&self, m: &Message, only: impl Fn(&Peer) -> bool) -> Vec<DeviceId> {
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        let mut to = Vec::new();
+        for c in conns.iter().filter(|c| !c.records_only) {
+            let ok = c.peer.lock().unwrap().as_ref().is_some_and(&only);
+            if ok {
+                self.enqueue(c, Out::Message(m.clone()));
+                to.push(c.id.clone());
+            }
+        }
+        to
+    }
+
+    /// Makes a copy of images or files from the parts the app hands in:
+    /// seals their blob, keeps it to serve, and sends the copy.
+    pub fn send_media(&self, text: &str, parts: Vec<(Part, Source)>) -> Result<Event> {
+        let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
+        let key = copy::new_key();
+        let (manifest, blob) = store.seal(parts, &key)?;
+        let ev = self.engine.send_media(text, manifest, Via::Phone, key, blob)?;
+        self.forward(&ev, None);
+        Ok(ev)
+    }
+
+    /// Fetches the sealed blob of the media copy ev from the members that
+    /// serve content, its origin first, unless it is held already or larger
+    /// than max bytes (docs/protocol.md, section 4, "Content").
+    pub fn fetch(&self, ev: &Event, max: u64) -> Result<()> {
+        let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
+        let Some(blob) = ev.sealed.as_ref().and_then(|s| s.blob.clone()) else { return Ok(()) };
+        let sum: [u8; 32] = blob.sha256.clone().try_into().map_err(|_| Error::msg("the copy's blob has no hash"))?;
+        let size = u64::try_from(blob.size).map_err(|_| Error::msg("the copy's blob has no size"))?;
+        if size > max {
+            return Err(Error::msg(format!(
+                "the copy's images or files are {} MiB, more than the {} MiB this phone fetches",
+                size.div_ceil(1 << 20),
+                max >> 20
+            )));
+        }
+        if store.held(&sum) == Some(size) {
+            return Ok(());
+        }
+        let mut peers: Vec<Arc<Conn>> = self
+            .conns
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|c| !c.records_only)
+            .filter(|c| c.peer.lock().unwrap().as_ref().is_some_and(|p| p.features.iter().any(|f| f == "media")))
+            .cloned()
+            .collect();
+        peers.sort_by_key(|c| c.id.as_str() != ev.origin);
+        let mut last = Error::msg("no member that serves images or files is connected");
+        for c in peers {
+            match self.fetch_from(&c, store, &sum, size) {
+                Ok(()) => return store.finish(&sum, size),
+                Err(e) => {
+                    self.logf(&format!("cbb: fetching a copy's content from {}: {}", c.id, e.for_log()));
+                    last = e;
+                }
+            }
+        }
+        Err(last)
+    }
+
+    /// Fetches the blob sum from one peer into the store's partial file,
+    /// continuing from what it holds.
+    fn fetch_from(&self, c: &Arc<Conn>, store: &Store, sum: &[u8; 32], size: u64) -> Result<()> {
+        use std::io::{Seek, Write};
+        let path = store.partial(sum);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).context("make the folder of the copies' content")?;
+        }
+        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path).context("keep a fetch")?;
+        let mut have = f.metadata().map(|m| m.len()).unwrap_or(0);
+        if have > size {
+            f.set_len(0).context("keep a fetch")?;
+            f.seek(std::io::SeekFrom::Start(0)).context("keep a fetch")?;
+            have = 0;
+        }
+        let (tx, rx) = mpsc::sync_channel(16);
+        c.sinks.lock().unwrap().insert(*sum, tx);
+        let get = |offset: u64, length: u64| {
+            wire::get(wire::Get { sha256: sum.to_vec(), offset: offset as i64, length: length as i64 })
+        };
+        let mut asked = have;
+        let mut idle = Duration::ZERO;
+        let res = loop {
+            while asked < size && asked - have < FETCH_AHEAD {
+                let len = (size - asked).min(wire::MAX_GET as u64);
+                self.enqueue(c, Out::Message(get(asked, len)));
+                asked += len;
+            }
+            if have == size {
+                break Ok(());
+            }
+            if c.closed.load(Ordering::SeqCst) || self.is_closed() {
+                break Err(Error::msg("the connection ended"));
+            }
+            match rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(Piece::Chunk(ch)) if ch.offset == have && !ch.data.is_empty() => {
+                    let n = (ch.data.len() as u64).min(size - have) as usize;
+                    if let Err(e) = f.write_all(&ch.data[..n]) {
+                        break Err(Error::msg(format!("keep a fetch: {e}")));
+                    }
+                    have += n as u64;
+                    idle = Duration::ZERO;
+                }
+                Ok(Piece::Chunk(_)) => {}
+                Ok(Piece::Missing) => break Err(Error::msg("it does not hold the copy's content")),
+                Err(_) => {
+                    idle += Duration::from_secs(1);
+                    if idle >= FETCH_IDLE {
+                        break Err(Error::msg("no chunk came for 15 s"));
+                    }
+                }
+            }
+        };
+        c.sinks.lock().unwrap().remove(sum);
+        if res.is_err() {
+            self.enqueue(c, Out::Message(get(0, 0)));
+        }
+        res
+    }
+
+    /// Opens the media copy ev, fetched with fetch, into the new folder out;
+    /// each part with where it is.
+    pub fn open_media(&self, ev: &Event, out: &std::path::Path) -> Result<Vec<(Part, PathBuf)>> {
+        let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
+        let m = ev.media.as_ref().ok_or_else(|| Error::msg("the copy holds no images or files"))?;
+        let key = ev.key.as_ref().ok_or_else(|| Error::msg("the copy is not sealed to this phone"))?;
+        let sum = ev.sealed.as_ref().and_then(|s| s.blob.as_ref()).map(|b| b.sha256.as_slice());
+        store.open_into(sum, m, key, out)
+    }
+
+    /// Queues a message for the group's hubs connected: the full members
+    /// the records make the root or an admin, by the key they proved
+    /// (docs/protocol.md, section 11, "Several hubs"); returns those it
+    /// went to.
+    pub fn send_to_hubs(&self, m: &Message) -> Vec<DeviceId> {
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        let mut to = Vec::new();
+        for c in conns.iter().filter(|c| !c.records_only) {
+            let full = c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full");
+            if full && self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
+                self.enqueue(c, Out::Message(m.clone()));
+                to.push(c.id.clone());
+            }
+        }
+        to
+    }
+
+    /// Takes records this member's app signed (an admin's or the root's),
+    /// keeps them and sends them to every peer.
+    pub fn add_own_records(&self, rs: &[Record]) {
+        let me = self.identity().id.clone();
+        self.add_records(rs, &me);
+    }
+
+    /// Sends a command an admin signed and waits up to timeout for its
+    /// result (docs/protocol.md, section 15): straight to its receiver when
+    /// connected, else to the group's hubs connected, which pass it on; a
+    /// `hub` command only goes straight.
+    pub fn command(&self, r: &Record, timeout: Duration) -> Result<wire::CommandResult> {
+        let head = CommandHead::of(r).ok_or_else(|| Error::msg("the command does not decode"))?;
+        let to = DeviceId::parse(&head.to)?;
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.waiting.lock().unwrap().insert(head.id.clone(), Waiting { to: to.clone(), tx });
+        let m = wire::command(r);
+        let sent = if self.send_to(&to, m.clone()) {
+            true
+        } else if head.kind == "hub" {
+            false
+        } else {
+            !self.send_to_hubs(&m).is_empty()
+        };
+        let res = if sent {
+            rx.recv_timeout(timeout).map_err(|_| Error::msg(format!("{to} did not answer in time")))
+        } else {
+            Err(Error::msg(format!("{to} is not connected, nor is a hub of the group")))
+        };
+        self.waiting.lock().unwrap().remove(&head.id);
+        res
+    }
+
+    /// Takes a result: one for a command this member sent, from its
+    /// receiver; or one for a command it passed on, which goes back to
+    /// where the command came from, once.
+    fn take_result(&self, mut res: wire::CommandResult, from: &DeviceId) {
+        if let Some(w) = self.waiting.lock().unwrap().get(&res.id) {
+            if res.by == w.to.as_str() || (res.by.is_empty() && from == &w.to) {
+                let _ = w.tx.try_send(res);
+            }
+            return;
+        }
+        let back = self.passed.lock().unwrap().get_mut(&res.id).map(|(origin, exp)| {
+            *exp = i64::MIN; // passed back once
+            origin.clone()
+        });
+        if let Some(origin) = back {
+            if res.by.is_empty() {
+                res.by = from.to_string();
+            }
+            if let Some(c) = self.conns.lock().unwrap().get(&origin).cloned() {
+                self.enqueue(&c, Out::Result(res));
+            }
+        }
+    }
+
+    /// Passes on a command for another device, as a phone does: only when
+    /// connected to it and not passed before.
+    fn pass(&self, r: Record, head: &CommandHead, from: &DeviceId) {
+        let Ok(to) = DeviceId::parse(&head.to) else { return };
+        let now = uptime::wall_ms();
+        {
+            let mut passed = self.passed.lock().unwrap();
+            passed.retain(|_, (_, exp)| *exp > now);
+            if passed.contains_key(&head.id) || passed.len() >= MAX_PASSED {
+                return;
+            }
+            let c = self.conns.lock().unwrap().get(&to).cloned();
+            let Some(c) = c.filter(|c| !c.records_only && &c.id != from) else { return };
+            let exp = head.expires_ms.min(now + cbb_core::command::COMMAND_LIFETIME_MS + 1000);
+            passed.insert(head.id.clone(), (from.clone(), exp));
+            self.enqueue(&c, Out::Message(wire::command(&r)));
+        }
+        self.logf(&format!("cbb: passed a command from {from} on to {to}"));
     }
 
     /// The devices list from the records.
@@ -354,12 +784,23 @@ impl Node {
                     .map(|(_, _, age)| Duration::from_secs(60).saturating_sub(age).max(Duration::from_millis(1)))
             })
             .flatten();
-        (self.on_write)(WriteReq { text: ev.text.clone(), kind: ev.kind, via: ev.via, seq, ttl });
+        (self.on_write)(WriteReq {
+            id: ev.id.clone(),
+            text: ev.text.clone(),
+            media: ev.media.clone(),
+            kind: ev.kind,
+            via: ev.via,
+            seq,
+            ttl,
+        });
     }
 
     fn apply(&self, out: Outcome, from: &DeviceId) {
         let Some(ev) = out.forward else { return };
         self.forward(&ev, Some(from));
+        if let Some(f) = self.on_change.read().unwrap().as_ref() {
+            f(&ev);
+        }
         if out.write {
             self.write(&ev, out.seq);
         }
@@ -374,8 +815,10 @@ impl Node {
             let n = node.upgrade().ok_or_else(|| cbb_core::error::Error::msg("the member stopped"))?;
             let ident = n.identity();
             let readers = copy::readers(&n.records.lock().unwrap(), ev.kind == Kind::Secret);
-            let content = Content { kind: ev.kind, via: ev.via, text: ev.text.clone(), media: None };
+            let content = Content { kind: ev.kind, via: ev.via, text: ev.text.clone(), media: ev.media.clone() };
             let issuer = ident.issuer.as_ref().map(|c| c.der.clone()).unwrap_or_default();
+            // A media copy's key sealed its blob already.
+            let key = ev.key.unwrap_or_else(copy::new_key);
             let mut d = copy::seal(
                 &ev.id,
                 &ev.origin,
@@ -384,8 +827,8 @@ impl Node {
                 &issuer,
                 &readers,
                 &content,
-                None,
-                &copy::new_key(),
+                ev.blob.clone(),
+                &key,
             )?;
             d.sealed.sig = ident.sign(&d.to_sign)?;
             Ok(d.sealed)
@@ -466,6 +909,7 @@ impl Node {
 
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
+        self.kick();
         for c in self.conns.lock().unwrap().values() {
             c.close(true);
         }
@@ -482,6 +926,9 @@ impl Node {
     pub fn dial(&self, addr: SocketAddr, peer: Option<DeviceId>) -> Result<()> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
+        }
+        if self.is_paused() {
+            return Err(Error::msg("the member is paused"));
         }
         // Away from home the member protocol goes only through the group's
         // tunnel, whose port is on the loopback address.
@@ -512,6 +959,9 @@ impl Node {
     pub fn accept(&self, sock: TcpStream, addr: SocketAddr, handshaken: &mut dyn FnMut()) -> Result<()> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
+        }
+        if self.is_paused() {
+            return Err(Error::msg("the member is paused"));
         }
         let _ = sock.set_nodelay(true);
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
@@ -567,10 +1017,12 @@ impl Node {
             records_only,
             closed: AtomicBool::new(false),
             bye: AtomicBool::new(false),
+            gets: Mutex::new(VecDeque::new()),
+            sinks: Mutex::new(HashMap::new()),
         });
         {
             let mut conns = self.conns.lock().unwrap();
-            if self.is_closed() {
+            if self.is_closed() || self.is_paused() {
                 return Err(Error::msg("the service is stopping"));
             }
             if let Some(old) = conns.insert(id.clone(), c.clone()) {
@@ -613,7 +1065,8 @@ impl Node {
             let key = self.tunnel_key.clone();
             let log = self.log.clone();
             let entries = self.entries.clone();
-            std::thread::spawn(move || writer(&c, rx, &records, &who, &key, &entries, &*log))
+            let content = self.content.clone();
+            std::thread::spawn(move || writer(&c, rx, &records, &who, &key, &entries, content.as_deref(), &*log))
         };
         let res = self.reader(&c);
         c.close(false);
@@ -638,8 +1091,17 @@ impl Node {
         let mut r = TlsReader { c, buf: Vec::new() };
         let mut first = true;
         loop {
-            let m: Message = match wire::read_frame(&mut r, wire::MAX_FRAME).and_then(|b| wire::decode(&b)) {
-                Ok(m) => m,
+            let m: Message = match read_any(&mut r) {
+                Ok(Frame::Message(m)) => *m,
+                Ok(Frame::Chunk(ch)) if !first => {
+                    // A chunk nothing waits for is left from a cancelled fetch.
+                    let tx = c.sinks.lock().unwrap().get(&ch.sha256).cloned();
+                    if let Some(tx) = tx {
+                        let _ = tx.send(Piece::Chunk(ch));
+                    }
+                    continue;
+                }
+                Ok(Frame::Chunk(_)) => return Err(Error::msg(format!("{} did not start with a hello", c.id))),
                 Err(_) if c.closed.load(Ordering::SeqCst) => return Ok(()),
                 Err(e) => return Err(e),
             };
@@ -653,9 +1115,7 @@ impl Node {
                 }
                 let (mut h, body) = wire::decode_hello(m.hello.as_ref())?;
                 h.current = h.current.and_then(|e| e.sealed).and_then(|s| self.take(s, &c.id));
-                let name = if crate::records::valid_name(&body.name) { body.name.clone() } else { String::new() };
-                let os = if crate::records::valid_os(&body.os) { body.os.clone() } else { String::new() };
-                *c.peer.lock().unwrap() = Some((m.role.clone(), name, os));
+                *c.peer.lock().unwrap() = Some(peer_of(&c.id, &m.role, &body, c.records_only));
                 if !c.records_only {
                     let out = self
                         .engine
@@ -690,6 +1150,7 @@ impl Node {
                 }
                 continue;
             }
+            let me = self.identity().id.clone();
             match m.kind.as_str() {
                 "event" => {
                     let Some(s) = m.event.and_then(|v| serde_json::from_value::<Sealed>(v).ok()) else {
@@ -711,13 +1172,14 @@ impl Node {
                 }
                 "records" if !m.records.is_empty() => self.add_records(&m.records, &c.id),
                 "entries" if m.entries.is_some() => self.add_entries(m.entries.as_ref().unwrap(), &c.id),
-                // Only the group's root or an admin can be its hub, by the
-                // records and the key it proved, not by the role its hello
-                // claims (docs/protocol.md, section 11).
+                // Only the group's root, an admin or a device that only
+                // passes copies on can be its hub, by the records and the key
+                // it proved, not by the role its hello claims
+                // (docs/protocol.md, section 11).
                 "tunnel" if m.tunnel.is_some() => {
-                    if !self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
+                    if !self.records.lock().unwrap().hub_peer(c.id.as_str(), &c.chain) {
                         self.logf(&format!(
-                            "cbb: ignored a tunnel offer from {}: only the group's root or an admin can be its hub",
+                            "cbb: ignored a tunnel offer from {}: only the group's root, an admin or a hub its records name can be its hub",
                             c.id
                         ));
                     } else if let (Some(v), Some(f)) = (m.tunnel.as_ref(), self.on_tunnel.read().unwrap().as_ref()) {
@@ -726,6 +1188,16 @@ impl Node {
                 }
                 "command" if m.command.is_some() => {
                     let cmd = m.command.unwrap();
+                    // A phone passes a command for another device on
+                    // (docs/protocol.md, section 15); the lite member
+                    // refuses it for itself.
+                    if self.presence.role == "phone"
+                        && let Some(head) = CommandHead::of(&cmd)
+                        && head.to != me.as_str()
+                    {
+                        self.pass(cmd, &head, &c.id);
+                        continue;
+                    }
                     match self.on_command.read().unwrap().clone() {
                         Some(f) => {
                             // The reader goes on meanwhile, so the peer's
@@ -733,7 +1205,8 @@ impl Node {
                             // its target.
                             let c = c.clone();
                             std::thread::spawn(move || {
-                                let res = f(&c.id, &cmd);
+                                let mut res = f(&c.id, &cmd);
+                                res.by = me.to_string();
                                 if !c.closed.load(Ordering::SeqCst) {
                                     let _ = c.tx.try_send(Out::Result(res));
                                 }
@@ -742,11 +1215,45 @@ impl Node {
                         None => self.enqueue(
                             c,
                             Out::Result(wire::CommandResult {
-                                id: String::new(),
+                                id: CommandHead::of(&cmd).map(|h| h.id).unwrap_or_default(),
+                                by: me.to_string(),
                                 status: "refused".into(),
                                 reason: "this device takes no commands".into(),
                             }),
                         ),
+                    }
+                }
+                "result" if m.result.is_some() => self.take_result(m.result.unwrap(), &c.id),
+                "get" if self.content.is_some() => {
+                    let Some(g) = m.get.filter(wire::Get::valid) else { continue };
+                    let mut gets = c.gets.lock().unwrap();
+                    if g.length == 0 {
+                        gets.retain(|q| q.sha256 != g.sha256);
+                        continue;
+                    }
+                    if gets.len() >= MAX_GETS {
+                        return Err(Error::msg(format!("{} asked for more than {MAX_GETS} ranges at once", c.id)));
+                    }
+                    gets.push_back(g);
+                    drop(gets);
+                    let _ = c.tx.try_send(Out::Wake);
+                }
+                "missing" => {
+                    let sum: Option<[u8; 32]> = m.get.and_then(|g| g.sha256.try_into().ok());
+                    let tx = sum.and_then(|s| c.sinks.lock().unwrap().get(&s).cloned());
+                    if let Some(tx) = tx {
+                        let _ = tx.send(Piece::Missing);
+                    }
+                }
+                "reach" => {
+                    let reach = reach_of(m.reach.as_ref());
+                    if let Some(p) = c.peer.lock().unwrap().as_mut() {
+                        p.reach = reach;
+                    }
+                }
+                "admin" | "hubs" | "credentials" => {
+                    if let Some(f) = self.on_message.read().unwrap().as_ref() {
+                        f(&c.id, &m);
                     }
                 }
                 "bye" => return Ok(()),
@@ -817,13 +1324,6 @@ impl Node {
         {
             self.logf(&format!("cbb: the group's last copy no longer counts and is dropped: {}", e.for_log()));
         }
-    }
-
-    /// Adds records this member signed, such as the device record of a
-    /// device it admitted, keeps them and passes them to every peer.
-    pub fn publish_records(&self, rs: &[Record]) {
-        let own = self.identity().id.clone();
-        self.add_records(rs, &own);
     }
 
     fn add_records(&self, rs: &[Record], from: &DeviceId) {
@@ -947,6 +1447,7 @@ impl Read for TlsReader<'_> {
     }
 }
 
+#[allow(clippy::too_many_arguments, reason = "the connection's parts the writer reads")]
 fn writer(
     c: &Conn,
     rx: mpsc::Receiver<Out>,
@@ -954,6 +1455,7 @@ fn writer(
     who: &Presence,
     key: &RwLock<TunnelKeys>,
     entries: &Entries,
+    content: Option<&Store>,
     log: &(dyn Fn(&str) + Send + Sync),
 ) {
     let message = |o: Out| -> Option<Message> {
@@ -962,7 +1464,7 @@ fn writer(
                 if let Some(ev) = h.current.as_mut() {
                     ev.age = add_age(ev.age, uptime::now().saturating_sub(queued));
                 }
-                Some(wire::hello(
+                let m = wire::hello(
                     &h,
                     records.lock().unwrap().digest(),
                     &who.role,
@@ -976,7 +1478,8 @@ fn writer(
                     &who.key_store,
                     crate::sealkey::public(),
                     if c.records_only { (0, 0) } else { entries.order(uptime::wall_ms()) },
-                ))
+                );
+                Some(wire::with_features(m, if content.is_some() && !c.records_only { &["media"] } else { &[] }))
             }
             Out::Event(ev, queued) => {
                 let mut s = ev.sealed?;
@@ -986,21 +1489,15 @@ fn writer(
             Out::Records(rs) => Some(Message { kind: "records".into(), records: rs, ..Default::default() }),
             Out::Result(r) => Some(wire::result(r)),
             Out::Entries(set) => Some(wire::entries(&set)),
+            Out::Message(m) => Some(m),
             Out::Wake => None,
         }
     };
-    let write = |m: &Message| -> bool {
-        let f = match wire::frame(m) {
-            Ok(f) => f,
-            Err(e) => {
-                log(&format!("cbb: to {}: {}", c.id, e.for_log()));
-                return true; // drop this one message
-            }
-        };
+    let write_frame = |f: &[u8]| -> bool {
         if !c.bye.load(Ordering::SeqCst) {
             let _ = c.sock.set_write_timeout(Some(TIMEOUT + Duration::from_secs((f.len() / MIN_RATE) as u64)));
         }
-        if let Err(e) = c.send(&f) {
+        if let Err(e) = c.send(f) {
             if !c.closed.load(Ordering::SeqCst) {
                 log(&format!("cbb: writing to {}: {e}", c.id));
             }
@@ -1008,6 +1505,15 @@ fn writer(
             return false;
         }
         true
+    };
+    let write = |m: &Message| -> bool {
+        match wire::frame(m) {
+            Ok(f) => write_frame(&f),
+            Err(e) => {
+                log(&format!("cbb: to {}: {}", c.id, e.for_log()));
+                true // drop this one message
+            }
+        }
     };
     loop {
         if c.closed.load(Ordering::SeqCst) {
@@ -1025,6 +1531,27 @@ fn writer(
             }
             return;
         }
+        // Messages first; a chunk of a blob only while none waits.
+        match rx.try_recv() {
+            Ok(o) => {
+                if let Some(m) = message(o)
+                    && !write(&m)
+                {
+                    return;
+                }
+                continue;
+            }
+            Err(TryRecvError::Disconnected) => return,
+            Err(TryRecvError::Empty) => {}
+        }
+        if let Some(store) = content
+            && let Some(frame) = next_piece(c, store)
+        {
+            if !write_frame(&frame) {
+                return;
+            }
+            continue;
+        }
         match rx.recv_timeout(PING_EVERY) {
             Ok(o) => {
                 if let Some(m) = message(o)
@@ -1041,6 +1568,82 @@ fn writer(
             Err(RecvTimeoutError::Disconnected) => return,
         }
     }
+}
+
+/// The next chunk frame of the gets a connection's peer asked for, or the
+/// frame of the missing message for a blob this member does not hold;
+/// None when no get waits.
+fn next_piece(c: &Conn, store: &Store) -> Option<Vec<u8>> {
+    let mut gets = c.gets.lock().unwrap();
+    let g = gets.front_mut()?;
+    let want = usize::try_from(g.length).unwrap_or(0).min(wire::MAX_CHUNK_DATA);
+    match store.read(&g.sha256, g.offset as u64, want) {
+        Some(data) if !data.is_empty() => {
+            let sum: [u8; 32] = g.sha256.clone().try_into().ok()?;
+            let ch = wire::Chunk { sha256: sum, offset: g.offset as u64, data };
+            g.offset += ch.data.len() as i64;
+            g.length -= ch.data.len() as i64;
+            if g.length <= 0 {
+                gets.pop_front();
+            }
+            wire::chunk_frame(&ch).ok()
+        }
+        _ => gets.pop_front().and_then(|g| wire::frame(&wire::missing(g)).ok()),
+    }
+}
+
+/// Reads one frame: a message, or a chunk frame, whose length word has its
+/// top bit set ("Content" in docs/protocol.md, section 4).
+fn read_any(r: &mut impl Read) -> Result<Frame> {
+    let mut head = [0u8; 4];
+    r.read_exact(&mut head).context("the connection broke")?;
+    if head[0] & 0x80 != 0 {
+        let n = (u32::from_be_bytes(head) & 0x7fff_ffff) as usize;
+        if n > wire::MAX_CHUNK_FRAME {
+            return Err(Error::msg("a chunk frame is too large"));
+        }
+        let mut b = vec![0u8; n];
+        r.read_exact(&mut b).context("the connection broke in the middle of a chunk")?;
+        return Ok(Frame::Chunk(wire::decode_chunk(&b)?));
+    }
+    let size = wire::frame_len(head, wire::MAX_FRAME)?;
+    let mut data = Vec::new();
+    r.take(size as u64).read_to_end(&mut data).context("the connection broke")?;
+    if data.len() != size {
+        return Err(Error::msg("the connection broke in the middle of a frame"));
+    }
+    Ok(Frame::Message(Box::new(wire::decode(&data)?)))
+}
+
+/// A peer as its hello presents it, with what is not valid left out.
+fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool) -> Peer {
+    let valid = |s: &str, ok: &[&str]| if ok.contains(&s) { s.to_string() } else { String::new() };
+    Peer {
+        id: id.clone(),
+        role: role.to_string(),
+        name: if crate::records::valid_name(&body.name) { body.name.clone() } else { String::new() },
+        os: if crate::records::valid_os(&body.os) { body.os.clone() } else { String::new() },
+        key_store: valid(&body.key_store, &["file", "hardware", "rootless"]),
+        mode: valid(&body.mode, &["own", "shared", "receive", "send"]),
+        muted: body.muted,
+        muted_for_ms: body.muted_for_ms.max(0),
+        actions: body.actions.iter().filter(|a| cbb_core::command::valid_action_name(a)).take(64).cloned().collect(),
+        device: cbb_core::wire::DeviceInfo::of(body),
+        admin_key: body.admin_key.clone().filter(|k| !k.is_empty() && k.len() <= 1024),
+        tunnel_key: match (&body.tunnel_key, &body.tunnel_psk) {
+            (Some(k), Some(p)) if k.len() == 32 && p.len() == 32 => Some((k.clone(), p.clone())),
+            _ => None,
+        },
+        reach: Vec::new(),
+        records_only,
+        features: body.features.iter().take(32).filter(|f| f.len() <= 32).cloned().collect(),
+    }
+}
+
+/// The valid device IDs of a reach message, at most MAX_REACH.
+fn reach_of(v: Option<&serde_json::Value>) -> Vec<DeviceId> {
+    let Some(list) = v.and_then(|v| v.as_array()) else { return Vec::new() };
+    list.iter().take(MAX_REACH).filter_map(|x| x.as_str().and_then(|s| DeviceId::parse(s).ok())).collect()
 }
 
 /// Adds the time an event waited to its age, without overflowing.

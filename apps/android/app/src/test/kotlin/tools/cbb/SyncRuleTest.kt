@@ -39,14 +39,26 @@ class SyncRuleTest {
     @Test
     fun theButton() {
         // A copy that waits comes in, and the phone's clipboard is not even read.
-        assertEquals(Action.FETCH, SyncRule.decide(true, { throw AssertionError("read the clipboard") }, text))
+        assertEquals(Action.FETCH, SyncRule.decide(true, { throw AssertionError("read the clipboard") }, text, null))
         // Otherwise what the phone copied goes, however old.
-        assertEquals(Action.SEND, SyncRule.decide(false, { "on the phone" }, text))
-        assertEquals(Action.SEND, SyncRule.decide(false, { "first" }, null))
+        assertEquals(Action.SEND, SyncRule.decide(false, { "on the phone" }, text, null))
+        assertEquals(Action.SEND, SyncRule.decide(false, { "first" }, null, null))
         // Unless it is the group's text already, or there is nothing.
-        assertEquals(Action.NOTHING, SyncRule.decide(false, { "from the pc" }, text))
-        assertEquals(Action.NOTHING, SyncRule.decide(false, { null }, text))
-        assertEquals(Action.NOTHING, SyncRule.decide(false, { "" }, null))
+        assertEquals(Action.NOTHING, SyncRule.decide(false, { "from the pc" }, text, null))
+        assertEquals(Action.NOTHING, SyncRule.decide(false, { null }, text, null))
+        assertEquals(Action.NOTHING, SyncRule.decide(false, { "" }, null, null))
+    }
+
+    @Test
+    fun theButtonKeepsWhatThePhoneSent() {
+        // The phone sent a text, then shared files: the group's copy is the
+        // files, the clipboard still the text, which must not go over them.
+        val files = "\u0000files:f" to Member.Kind.MEDIA
+        assertEquals(Action.NOTHING, SyncRule.decide(false, { "sent before" }, files, "sent before"))
+        // Nor a text the phone took from another device and then saw replaced.
+        assertEquals(Action.NOTHING, SyncRule.decide(false, { "from the pc" }, "newer" to Member.Kind.TEXT, "from the pc"))
+        // A new copy on the phone still goes.
+        assertEquals(Action.SEND, SyncRule.decide(false, { "copied since" }, files, "sent before"))
     }
 
     @Test

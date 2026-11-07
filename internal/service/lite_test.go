@@ -373,6 +373,111 @@ func TestFFIJoiner(t *testing.T) {
 	}
 }
 
+// TestFFIMember runs the phones' member through lite/ffi's one call
+// (cbb_member_call) against a computer: the address the app hands in as
+// Bonjour or NSD would find it, the button's rule, images both ways, and
+// pausing in the background.
+func TestFFIMember(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
+	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", t.TempDir())
+	jc, ok := phone.ParseJoinQR(next("QR: "))
+	if !ok {
+		t.Fatal("not a join QR code")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
+		t.Fatalf("admitting the phone: %v", err)
+	}
+	next("Joined ")
+	call := func(op string, args any) map[string]any {
+		t.Helper()
+		req, err := json.Marshal(map[string]any{"op": op, "args": args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(in, "CALL %s\n", req)
+		var ans struct {
+			OK    map[string]any `json:"ok"`
+			Error map[string]any `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil || ans.Error != nil {
+			t.Fatalf("%s: %v %v", op, err, ans.Error)
+		}
+		return ans.OK
+	}
+	peers := func() int { return len(call("peers", nil)["peers"].([]any)) }
+	waiting := func() map[string]any {
+		c, _ := call("waiting", nil)["copy"].(map[string]any)
+		return c
+	}
+	sends := func(board string) bool { return call("sends", map[string]any{"board": board})["sends"].(bool) }
+
+	// The app hands in the computer's address, as Bonjour finds it.
+	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
+	waitFor(t, "the phone connected", func() bool { return peers() == 1 })
+
+	// The computer's copy waits for the phone until the app takes it; then
+	// the clipboard holds the group's text, and the button sends nothing.
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "for the button"); err != nil {
+		t.Fatal(err)
+	}
+	var c map[string]any
+	waitFor(t, "the copy waits", func() bool { c = waiting(); return c != nil && c["text"] == "for the button" })
+	call("took", map[string]any{"id": c["id"]})
+	if waiting() != nil || sends("for the button") {
+		t.Fatal("a copy the phone took still waits, or goes back")
+	}
+
+	// A text from the phone, then an image: the computer fetches the image
+	// from the phone, and the button keeps the older text from going over
+	// it (it did, comparing the clipboard with the group's copy only).
+	call("copy", map[string]any{"text": "from the phone"})
+	waitFor(t, "the computer has the phone's text", func() bool { return pi.paste(t) == "from the phone" })
+	png := randomBytes(200_000)
+	call("copy_media", map[string]any{"parts": []any{map[string]any{"type": "image/png", "data": png}}})
+	waitFor(t, "the computer has the phone's image", func() bool {
+		_, parts, err := pi.pasteMedia(t)
+		return err == nil && len(parts) == 1 && bytes.Equal(parts[0].data, png)
+	})
+	if sends("from the phone") {
+		t.Fatal("the button would send the text again over the phone's newer image")
+	}
+	if !sends("copied since") {
+		t.Fatal("the button would not send a new text")
+	}
+
+	// An image from the computer: the phone fetches it and opens it.
+	jpeg := randomBytes(300_000)
+	if err := pi.copyMedia(t, "", sentPart{Part: control.Part{Type: "image/jpeg", Size: int64(len(jpeg))}, data: jpeg}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the image waits", func() bool { c = waiting(); return c != nil && c["kind"] == "media" })
+	out := filepath.Join(t.TempDir(), "image")
+	got := call("fetch", map[string]any{"id": c["id"], "max": 100 << 20, "out": out})["parts"].([]any)
+	if len(got) != 1 {
+		t.Fatalf("fetched %v", got)
+	}
+	if b, err := os.ReadFile(got[0].(map[string]any)["file"].(string)); err != nil || !bytes.Equal(b, jpeg) {
+		t.Fatalf("the phone opened another image: %v", err)
+	}
+
+	// In the background the phone drops its connection and makes none; on
+	// resume it connects again at once.
+	call("pause", nil)
+	waitFor(t, "the phone let go", func() bool { return peers() == 0 && len(pi.status(t).Peers) == 0 })
+	call("resume", nil)
+	if !call("wait", map[string]any{"timeout_ms": 10_000})["connected"].(bool) {
+		t.Fatal("the phone did not connect again on resume")
+	}
+}
+
 // phoneOnLinux starts lite/ffi's example phone-on-linux, the Aurora app on
 // Linux, listening on a free port with the arguments, and returns what
 // reads its next line with a prefix and its standard input.

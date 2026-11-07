@@ -9,7 +9,8 @@ import tools.cbb.kit.Member
  * The one rule of every device (docs/design.md, "The one button"), as on
  * the iPhone (LiveGroup.sync): a copy from another device that waits for
  * the phone comes in; otherwise what the phone copied goes out, however
- * old, unless it is the group's text already.
+ * old, unless it is the group's text already or what this phone itself
+ * sent or took last.
  */
 object SyncRule {
     enum class Action { FETCH, SEND, NOTHING }
@@ -28,12 +29,15 @@ object SyncRule {
     /**
      * What the button does: fetch a copy that waits (waiting), else send
      * what the phone's clipboard holds (board, read only then) when it is
-     * not the group's text already.
+     * neither the group's text already nor what this phone itself sent or
+     * took last (own). Without own, a text the phone sent before it shared
+     * files would go out again over those newer files, as the group's copy
+     * is then the files and no longer the text.
      */
-    fun decide(waits: Boolean, board: () -> String?, usable: Pair<String, Member.Kind>?): Action {
+    fun decide(waits: Boolean, board: () -> String?, usable: Pair<String, Member.Kind>?, own: String?): Action {
         if (waits) return Action.FETCH
         val b = board()
-        return if (!b.isNullOrEmpty() && b != usable?.first) Action.SEND else Action.NOTHING
+        return if (!b.isNullOrEmpty() && b != usable?.first && b != own) Action.SEND else Action.NOTHING
     }
 
     /** The addresses to try, IPv4 first: a home network reaches those most surely, and each that fails costs its timeout. */

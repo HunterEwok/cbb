@@ -225,6 +225,32 @@ func (s *Service) adminPeer(dev group.DeviceID, chain []*x509.Certificate) bool 
 	return false
 }
 
+// hubPeer reports whether a peer with this verified chain may be a hub of
+// the group, whose offers and shares a member takes: adminPeer, or a device
+// whose record makes it a hub that only passes copies on, by the key of its
+// leaf (docs/protocol.md, section 11, "Two kinds of hub"); the core's
+// hub_peer.
+func (s *Service) hubPeer(dev group.DeviceID, chain []*x509.Certificate) bool {
+	if s.adminPeer(dev, chain) {
+		return true
+	}
+	if len(chain) == 0 {
+		return false
+	}
+	key := group.KeyHashOf(chain[0])
+	s.recMu.Lock()
+	defer s.recMu.Unlock()
+	if s.records == nil || s.records.Revoked(key) {
+		return false
+	}
+	for _, d := range s.records.Devices() {
+		if d.ID == dev && d.ForwardOnly && slices.Contains(d.Keys, key) {
+			return true
+		}
+	}
+	return false
+}
+
 // underRoot reports whether c is an admin CA that one of the roots of the
 // group of id certified.
 func underRoot(id *group.Identity, c *x509.Certificate) bool {

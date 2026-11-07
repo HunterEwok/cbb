@@ -173,9 +173,9 @@ func TestLiteEntries(t *testing.T) {
 		var e release.Entries
 		return err == nil && json.Unmarshal(data, &set) == nil && json.Unmarshal(set.Entries.Body, &e) == nil && e.Seq == 2
 	})
-	if !lite.logged("took newer entry points") {
-		t.Error("the lite member did not log the entry points it took")
-	}
+	// It writes the file before the line reaches its log, which can come
+	// later under emulation.
+	waitFor(t, "the lite member logs the entry points it took", func() bool { return lite.logged("took newer entry points") })
 	// Forged ones it drops.
 	other := newReleaseSigner(t)
 	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, other.signEntries(t, 3, "/forged-path-1")); err == nil {

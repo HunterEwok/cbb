@@ -7,6 +7,38 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The phones' member in the Rust core, for the iPhone and Android apps to move onto from
+  their own Swift and Kotlin nodes, as the Aurora app runs it (docs/core-api.md, "The
+  member"): `cbb_member_call` in `lite/ffi` takes addresses the app finds itself (Bonjour,
+  NSD, the tunnel's loopback port), listens as the group's hub while the app is in the front,
+  pauses in the background, sends images and files and fetches and opens them, sends the
+  commands, records, certificates, admin CAs, tunnel offers, hub shares and credentials an
+  admin's app signed, passes commands on to the devices behind it, and shows each peer as its
+  hello presents it; the button's rule is the core's too. `cbb_member_copy` and
+  `cbb_member_peers` gave way to it, and the Aurora app calls it.
+- The bench's fleet checks the copies sealed end to end: through a hub that only passes them
+  on, text and a 20 MB file arrive both ways and neither its memory nor its disk ever holds them in
+  the clear (S25), a paste command passes through it sealed (S26), making and stopping such a
+  hub (W43), and a device that joins never reads the copy made before it (Y36); the forge
+  looks for a text in a service's memory (`forge memscan`).
+- The bench's fleet checks muting: `cbb mute` and `cbb unmute` on the device, across a restart
+  and with `-for` (M8), an admin's `cbb mute -on` against the device's own user, a second
+  admin and its time, a device that cannot be reached and two admins one after the other
+  (M9), and `cbb incoming` with its bounds and rights, and a device cut off that writes a
+  late copy only within the live window (M10).
+- The bench's fleet checks that the ways out carry only cbb: a hostile client with a member's
+  keys reaches neither the internet nor the hub's home network nor its loopback, directly or
+  through the forwarder (W44), and a hub that has only HTTPS registers inside VLESS (W45).
+  The VLESS case (W34) brings its client home for the hub's new offer, as AmneziaWG, which
+  VLESS turns on, needs.
+- The bench's time suite checks a forwarder whose VLESS runs over XHTTP behind its site's web
+  server (W46) and `cbb update` asking the mirror on its server only inside VLESS (W47); in
+  the time-scaled build alone the clients of XHTTP trust the CA in `CBB_TEST_XHTTP_CA`. The
+  fleet checks the project's relay followed from the signed lists, through a new key and a
+  move (W48), and the phone suite a computer the phone made an admin admitting a computer,
+  the hub marked in the phone's list and a computer behind it online.
+- `testbench coverage` counts apart the cases the harness runs in full, where its suites
+  cover every kind of place the case names, and lists the others with what they lack.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed
@@ -22,7 +54,7 @@ All notable changes to cbb are documented in this file. The format follows
   page mutes it for the group or unmutes it. The phones take `mute` and `unmute` commands, and
   the phone kits sign them and read the hello's mute.
 - The same switch at the top of the Aurora app's main page, with a long press for a time; the
-  app takes an admin's `mute` and `unmute` (lite/ffi's `cbb_member_pause`, `cbb_member_muted`
+  app takes an admin's `mute` and `unmute` (lite/ffi's `pause_receiving` and `muted` operations
   and the `mute` event) and says when an admin muted the phone.
 - The Aurora app shows the group's devices as tiles or as a list (its pull-down menu switches
   them), each with a live dot, its system and its mark (this phone, root, admin, frozen), and a
@@ -1513,6 +1545,16 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPhone and Android apps' button no longer sends a text the phone sent before over the
+  image or files it shared since: it compares the clipboard with what the phone itself sent
+  or took last, besides the group's copy (design.md, "The one button").
+- A hub that only passes the copies on now passes images and files on too: it fetched no
+  blob, since it reads no copy, and the members fetched it from each other forever.
+- The devices take the offers and shares of a hub that only passes the copies on, as its
+  record allows (the core's `hub_peer`): computers and lite members ignored them, so a client
+  away kept only what the hub before it had passed on.
+- `cbb status` says which devices are hubs, and which of them only pass the copies on, as
+  the apps' device pages do.
 - A phone that is the hub while its app is open no longer dials itself: its browser found
   its own announcement and the phone kept a second connection to its own device ID.
 - The Android emulator check of files from a computer waits for the computer's files to

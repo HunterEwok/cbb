@@ -11,17 +11,19 @@
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
 //! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
 //! its certificate, "MUTE <true|false> <for_ms> <by>" when an admin muted
-//! it or ended the mute, and "LOG <line>" for each log line. It takes
-//! "COPY <text>" (printing "REFUSED <reason>" when the member does not send
-//! it), "PEERS", answered "PEERS <count>", and "PAUSE <ms>", "RESUME" and
-//! "MUTED", answered "MUTED <paused> <muted>", and "DEVICES", answered
-//! "DEVICES <the devices as a JSON array>", and, after it joined as an
-//! admin, "ADMIT <a device's QR code>", which admits that device with the
-//! admin key and prints "ADMITTED <device>" and then "ADMIT DONE
-//! <confirmed>", or "ADMIT FAILED <message>", on standard input. With
-//! -new-group it joins nothing: it makes a group of its own, the admin key
-//! standing for the root key, prints "Group <device> <group tag>", and runs
-//! the member as the group's root, which takes "ADMIT" too.
+//! it or ended the mute, "CHANGE <copy as JSON>" for each copy that became
+//! the group's, and "LOG <line>" for each log line. It takes "COPY <text>"
+//! (printing "REFUSED <reason>" when the member does not send it), "PEERS",
+//! answered "PEERS <count>", "PAUSE <ms>", "RESUME" and "MUTED", answered
+//! "MUTED <paused> <muted>", "DEVICES", answered "DEVICES <the devices as a
+//! JSON array>", and "CALL <request as JSON>", answered "ANSWER <answer as
+//! JSON>" (cbb_member_call), and, after it joined as an admin, "ADMIT <a
+//! device's QR code>", which admits that device with the admin key and
+//! prints "ADMITTED <device>" and then "ADMIT DONE <confirmed>", or "ADMIT
+//! FAILED <message>", on standard input. With -new-group it joins nothing:
+//! it makes a group of its own, the admin key standing for the root key,
+//! prints "Group <device> <group tag>", and runs the member as the group's
+//! root, which takes "ADMIT" too.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -33,8 +35,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_join_accept,
-    cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_copy,
-    cbb_member_devices, cbb_member_muted, cbb_member_pause, cbb_member_peers, cbb_member_start,
+    cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_start,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -198,6 +199,7 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
         Some("write") => println!("WRITE {} {}", s("kind"), s("text")),
         Some("log") => println!("LOG {}", s("line")),
         Some("identity") => println!("IDENTITY {}", s("cert")),
+        Some("copy") => println!("CHANGE {}", v["copy"]),
         Some("mute") => println!("MUTE {} {} {}", v["muted"], v["for_ms"], s("by")),
         _ => {}
     }
@@ -236,32 +238,33 @@ fn run_member(
         eprintln!("phone-on-linux: {started}");
         return ExitCode::FAILURE;
     }
+    let call = |req: String| -> serde_json::Value {
+        let mut n = 0usize;
+        // SAFETY: m runs; req and n live for the call.
+        take(unsafe { cbb_member_call(m, req.as_ptr(), req.len(), &mut n) }, n)
+    };
     for line in std::io::stdin().lines() {
         let Ok(line) = line else { break };
         if let Some(text) = line.strip_prefix("COPY ") {
-            let req = serde_json::json!({ "text": text }).to_string();
-            // SAFETY: m runs; req and n live for the call.
-            let a = take(unsafe { cbb_member_copy(m, req.as_ptr(), req.len(), &mut n) }, n);
+            let a = call(serde_json::json!({ "op": "copy", "args": { "text": text } }).to_string());
             if let Some(e) = a.get("error") {
                 println!("REFUSED {}", e["message"].as_str().unwrap_or_default());
             }
         } else if line == "PEERS" {
-            // SAFETY: m runs; n lives for the call.
-            let a = take(unsafe { cbb_member_peers(m, &mut n) }, n);
+            let a = call(serde_json::json!({ "op": "peers" }).to_string());
             println!("PEERS {}", a["ok"]["peers"].as_array().map_or(0, Vec::len));
         } else if line == "DEVICES" {
-            // SAFETY: m runs; n lives for the call.
-            let a = take(unsafe { cbb_member_devices(m, &mut n) }, n);
+            let a = call(serde_json::json!({ "op": "devices" }).to_string());
             println!("DEVICES {}", a["ok"]["devices"]);
+        } else if let Some(req) = line.strip_prefix("CALL ") {
+            println!("ANSWER {}", call(req.to_string()));
         } else if line == "MUTED" || line == "RESUME" || line.starts_with("PAUSE ") {
             let a = if line == "MUTED" {
-                // SAFETY: m runs; n lives for the call.
-                take(unsafe { cbb_member_muted(m, &mut n) }, n)
+                call(serde_json::json!({ "op": "muted" }).to_string())
             } else {
                 let ms: i64 = line.strip_prefix("PAUSE ").and_then(|v| v.parse().ok()).unwrap_or(0);
-                let req = serde_json::json!({ "pause": line != "RESUME", "for_ms": ms }).to_string();
-                // SAFETY: m runs; req and n live for the call.
-                take(unsafe { cbb_member_pause(m, req.as_ptr(), req.len(), &mut n) }, n)
+                let args = serde_json::json!({ "pause": line != "RESUME", "for_ms": ms });
+                call(serde_json::json!({ "op": "pause_receiving", "args": args }).to_string())
             };
             println!("MUTED {} {}", a["ok"]["paused"], a["ok"]["muted"]);
         } else if let Some(qr) = line.strip_prefix("ADMIT ") {

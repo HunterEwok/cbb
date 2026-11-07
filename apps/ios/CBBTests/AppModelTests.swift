@@ -51,6 +51,19 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(said, String(localized: "Sent to the computers.", bundle: .app))
     }
 
+    func testButtonKeepsWhatThePhoneSent() {
+        // What the phone copied goes, unless it is the group's text already.
+        XCTAssertTrue(LiveGroup.sends("on the phone", usable: "from the pc", own: nil))
+        XCTAssertFalse(LiveGroup.sends("from the pc", usable: "from the pc", own: nil))
+        XCTAssertFalse(LiveGroup.sends("", usable: nil, own: nil))
+        // The phone sent a text, then an image: the clipboard's text must not
+        // go over the newer image, nor a text the phone took and saw replaced.
+        let image = Images.key(Data(repeating: 1, count: 32))
+        XCTAssertFalse(LiveGroup.sends("sent before", usable: image, own: "sent before"))
+        XCTAssertFalse(LiveGroup.sends("from the pc", usable: "newer", own: "from the pc"))
+        XCTAssertTrue(LiveGroup.sends("copied since", usable: image, own: "sent before"))
+    }
+
     func testSaidNamesWhereAndWhat() {
         XCTAssertEqual(AppModel.said(.sent(to: ["Mac.lan"])), String(localized: "Sent to \("Mac.lan").", bundle: .app))
         XCTAssertEqual(AppModel.said(.fetched(from: "Mac.lan", preview: "hello")),

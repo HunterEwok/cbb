@@ -525,12 +525,13 @@ func (c *Client) Addr() netip.AddrPort { return c.addr }
 func (c *Client) Close() error { return c.inst.Close() }
 
 // extraRoots are CAs, in PEM, that the client of XHTTP trusts beside the
-// public ones: only tests set them (TrustForTests).
+// public ones: only tests set them (TrustForTests), and the bench's
+// time-scaled build (trust_benchtime.go).
 var extraRoots [][]byte
 
 // TrustForTests makes the clients of XHTTP trust the CA, in PEM, beside
 // the public ones, for tests whose web server has a certificate of its
-// own. Nothing else calls it.
+// own. Nothing else calls it but the bench's time-scaled build.
 func TrustForTests(pem []byte) { extraRoots = append(extraRoots, pem) }
 
 // xhttpClient is the client's XHTTP: packet-up on path to host, with the

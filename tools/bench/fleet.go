@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -43,8 +44,8 @@ type Fleet struct {
 	mu            sync.Mutex
 	n, nets       int
 	// serverEnv is the environment of the forwarders and relays started
-	// from then on.
-	serverEnv []string
+	// from then on, memberEnv that of the members, beside their own.
+	serverEnv, memberEnv []string
 }
 
 // NewFleet makes the run's network; members come with Add. cbb is a static
@@ -119,7 +120,7 @@ func (f *Fleet) AddOn(ctx context.Context, net string, env ...string) (*Device, 
 func (f *Fleet) AddWith(ctx context.Context, net string, run []string, env ...string) (*Device, error) {
 	// sh stands in for the service manager: it starts the service again
 	// a second after it dies, as systemd's Restart= does.
-	d, err := f.container(ctx, net, run, env, "mkdir -p /run/cbb /var/lib/cbb; while :; do cbb service; sleep 1; done")
+	d, err := f.container(ctx, net, run, append(slices.Clone(f.memberEnv), env...), "mkdir -p /run/cbb /var/lib/cbb; while :; do cbb service; sleep 1; done")
 	if err != nil {
 		return nil, err
 	}

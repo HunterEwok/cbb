@@ -23,7 +23,7 @@ pub const MAX_FRAME: usize = 7 << 20;
 /// One message of the member protocol. The hello and the event are decoded
 /// on their own, so an event this member cannot read, for example from a
 /// newer version, is dropped without ending the connection.
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Message {
     #[serde(rename = "t", default)]
     pub kind: String,
@@ -59,6 +59,67 @@ pub struct Message {
     /// 4, "Reach"), kept as it came: the lite member shows no devices.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reach: Option<Value>,
+    /// In a hubs message, what a hub shares with the group's other hubs
+    /// (section 11, "Several hubs"), kept as it came.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hubs: Option<Value>,
+    /// In a credentials message, the group's server credentials the sender
+    /// keeps (section 18), kept as they came.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials: Option<Value>,
+    /// In a get or missing message, a range of a copy's sealed blob
+    /// ("Content" in section 4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub get: Option<Get>,
+}
+
+/// A range of a copy's sealed blob, by its SHA-256 ("Content" in section
+/// 4): length 1 to [`MAX_GET`] asks for it, 0 cancels every get of the blob.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct Get {
+    #[serde(with = "b64")]
+    pub sha256: Vec<u8>,
+    #[serde(default)]
+    pub offset: i64,
+    #[serde(default)]
+    pub length: i64,
+}
+
+/// The most bytes a get asks for.
+pub const MAX_GET: i64 = 1 << 20;
+/// The most data a chunk carries.
+pub const MAX_CHUNK_DATA: usize = 256 << 10;
+/// A chunk frame's size with its padding at most, its length word apart.
+pub const MAX_CHUNK_FRAME: usize = 278_528;
+
+impl Get {
+    /// Whether it is a get a member may take: a hash of 32 bytes, an
+    /// offset that is not negative, and a length of 0 (a cancel) to MAX_GET.
+    pub fn valid(&self) -> bool {
+        self.sha256.len() == 32 && self.offset >= 0 && (0..=MAX_GET).contains(&self.length)
+    }
+}
+
+/// A get message, or with length 0 the cancel of every get of the blob.
+pub fn get(g: Get) -> Message {
+    Message { kind: "get".into(), get: Some(g), ..Default::default() }
+}
+
+/// A missing message: the answer to a get for a blob this member does not
+/// hold whole.
+pub fn missing(g: Get) -> Message {
+    Message { kind: "missing".into(), get: Some(g), ..Default::default() }
+}
+
+/// The hello m with the features the sender supports beyond its protocol
+/// version (`media`: it serves the content of media events).
+pub fn with_features(mut m: Message, features: &[&str]) -> Message {
+    if !features.is_empty()
+        && let Some(Value::Object(h)) = m.hello.as_mut()
+    {
+        h.insert("features".into(), to_value(features));
+    }
+    m
 }
 
 /// The answer to a command (section 15): `done`, `refused` or `failed`, and
@@ -67,6 +128,10 @@ pub struct Message {
 pub struct CommandResult {
     #[serde(default)]
     pub id: String,
+    /// The receiver of the command, which names itself, so that a sender
+    /// takes a result a member in between passed back only from it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub by: String,
     #[serde(default)]
     pub status: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -98,6 +163,10 @@ pub struct HelloBody {
     /// (section 11, "Several hubs").
     #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
     pub tunnel_psk: Option<Vec<u8>>,
+    /// From a full member that is not an admin yet: the SubjectPublicKeyInfo
+    /// of its admin key, which the root may certify (section 10, "Admins").
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub admin_key: Option<Vec<u8>>,
     /// The sender's sync mode: own, shared, receive or send; shown, never
     /// trusted.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -127,6 +196,10 @@ pub struct HelloBody {
     pub entries_seq: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub entries_keys_seq: u64,
+    /// What the sender supports beyond its protocol version: `media` from
+    /// one that serves the content of media events.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub features: Vec<String>,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -268,6 +341,7 @@ pub fn hello(
         device: if device.is_empty() { None } else { Some(to_value(&device)) },
         tunnel_key: tunnel_key.map(|(k, _)| k.to_vec()),
         tunnel_psk: tunnel_key.map(|(_, p)| p.to_vec()),
+        admin_key: None,
         mode: mode.to_string(),
         muted: mute.is_some(),
         muted_for_ms: mute.unwrap_or(0),
@@ -279,6 +353,7 @@ pub fn hello(
         seal: seal.map(<[u8]>::to_vec),
         entries_seq: entries.1,
         entries_keys_seq: if entries.1 == 0 { 0 } else { entries.0 },
+        features: Vec::new(),
     };
     Message { kind: "hello".into(), role: role.into(), hello: Some(to_value(&body)), ..Default::default() }
 }
@@ -304,6 +379,42 @@ pub fn event(s: &Sealed) -> Message {
 /// An entries message, which passes the signed entry points on.
 pub fn entries(set: &Value) -> Message {
     Message { kind: "entries".into(), entries: Some(set.clone()), ..Default::default() }
+}
+
+/// A command message: a command an admin signed for its receiver
+/// (section 15), which a member in between passes on unchanged.
+pub fn command(r: &Record) -> Message {
+    Message { kind: "command".into(), command: Some(r.clone()), ..Default::default() }
+}
+
+/// A cert message: a renewed member certificate for the receiver and the
+/// admin CA that issued it, None when a root did.
+pub fn cert(cert: &[u8], issuer: Option<&[u8]>) -> Message {
+    Message { kind: "cert".into(), cert: Some(cert.to_vec()), issuer: issuer.map(<[u8]>::to_vec), ..Default::default() }
+}
+
+/// An admin message: the receiver's admin CA, for the admin key its hello
+/// offered (section 10, "Admins").
+pub fn admin(ca: &[u8]) -> Message {
+    Message { kind: "admin".into(), admin_ca: Some(ca.to_vec()), ..Default::default() }
+}
+
+/// A tunnel message: the group's hub's offer for the receiver's tunnel key
+/// (section 11).
+pub fn tunnel(offer: &Value) -> Message {
+    Message { kind: "tunnel".into(), tunnel: Some(offer.clone()), ..Default::default() }
+}
+
+/// A hubs message: what a hub shares with the group's other hubs (section
+/// 11, "Several hubs").
+pub fn hubs(share: &Value) -> Message {
+    Message { kind: "hubs".into(), hubs: Some(share.clone()), ..Default::default() }
+}
+
+/// A credentials message: the group's server credentials the sender keeps
+/// (section 18).
+pub fn credentials(list: &Value) -> Message {
+    Message { kind: "credentials".into(), credentials: Some(list.clone()), ..Default::default() }
 }
 
 /// A message with only its type, such as a ping or a goodbye.

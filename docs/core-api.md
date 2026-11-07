@@ -54,27 +54,66 @@ section 6, ADa), and the joined answer carries `admin_ca`, the admin CA the grou
 issued for it. The pairing runs inside the core's TLS (`cbb_core::pair_session`); the app only
 moves the bytes.
 
-Built with the feature `member` too (again only `bind.sh aurora`), the library runs the lite
-member's own node in the app's process once the phone is in a group (`lite/ffi/src/member.rs`,
-over `cbb_lite::phone`): `cbb_member_start` takes the app's data directory, the phone's name,
-system and versions, its identity (device, certificate, issuer, group CA, roots), its public
-key, its secret for sealed messages and the same signing callback, and a callback that gets
-each event as JSON from the node's threads (`write`: a text for the phone's clipboard, with its
-kind and, for a secret, how long it may stay; `log`: a line for the app's log; `identity`: the
-certificate, issuer and roots after an admin renewed the certificate or a takeover made a new
-root, which the app keeps in its own file, as the core keeps no identity file for a key it does
-not hold; `mute`: an admin muted the phone or ended its mute, with how long it lasts and who).
-The node signs
-its TLS handshakes and its copies through the callback, presents itself as a phone (role
-`phone`, key store `hardware`, or `file` when the request's `key_store` says so), never listens and dials the members mDNS finds;
-`cbb_member_copy` sends a text the user handed to the app, `cbb_member_peers` lists the members
-connected, `cbb_member_devices` lists every device of the group as the app shows it (the group's
-device records with `admin`, `root`, `frozen`, whether it is `online` and whether it is this phone,
-`self`, then the connected members no record lists yet, `listed` false), `cbb_member_pause` keeps the group's copies out of the phone's clipboard for a while or
-takes them again (design.md, "Muting a device"), `cbb_member_muted` says how long that pause and
-an admin's mute last, and `cbb_member_stop` stops it. The node carries out the `mute` and
-`unmute` commands an admin sends the phone, keeps both in `mute.json` as the lite member does,
-and refuses the other commands, which a phone has nothing to carry out for.
+### The member
+
+Built with the feature `member` too (`bind.sh aurora` today; the iPhone and Android apps move
+onto it next), the library runs the lite member's own node in the app's process once the phone
+is in a group (`lite/ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
+app's data directory, the phone's name, system and versions, its identity (device,
+certificate, issuer, group CA, roots), its public key, its secret for sealed messages and the
+same signing callback, and a callback that gets each event as JSON from the node's threads:
+`write`, a text for the phone's clipboard, with its kind and, for a secret, how long it may
+stay; `copy`, a copy that became the group's current one from another member (below);
+`message`, an `admin`, `hubs` or `credentials` message a peer sent, for the app to keep;
+`log`, a line for the app's log; `identity`, the certificate, issuer and roots after an admin
+renewed the certificate or a takeover made a new root, which the app keeps in its own file, as
+the core keeps no identity file for a key it does not hold; `mute`, an admin muted the phone or
+ended its mute, with how long it lasts and who. The node signs its TLS handshakes
+and its copies through the callback and presents itself as a phone (role `phone`, key store
+`hardware`, or `file` when the request's `key_store` says so); it dials the members mDNS finds
+(`mdns`, on by default) and those the app hands in. `cbb_member_stop` stops it.
+
+`cbb_member_call` asks it everything else, a request `{"op", "args"}` and its answer `{"ok"}`
+or `{"error"}` as `cbb_call`'s. `fetch`, `command` and `wait` wait for the network, so the app
+calls them off its main thread. A copy is `{id, origin, age_ms, kind, via, text, media,
+unread, key}`: `media` is the manifest of images or files, and `key` what the button compares
+it by (a text by itself, an image by `"\u0000image:"` and the hex SHA-256 of its PNG or JPEG
+part, files by `"\u0000files:"` and the copy's ID).
+
+| `op` | `args` | `ok` |
+|---|---|---|
+| `copy` | `text`, `secret` (optional), `board` (optional, `true` by default: it came from the phone's clipboard) | `{}` |
+| `copy_media` | `text` (optional), `parts`: `[{type, path, dir, data, file}]`, clipboard data with its bytes in `data` (base64) or a file or folder with the file on the phone in `file`; `board` (optional, `false` by default) | `{"copy"}` |
+| `current` | none | `{"copy"}`: the group's current copy, or null |
+| `waiting` | none | `{"copy"}`: the copy from another device that waits for the phone (design.md, "The one button"), or null |
+| `took` | `id` | `{}`: the app took that copy into the clipboard, or saved its files |
+| `sends` | `board`: the clipboard's key | `{"sends"}`: whether the button sends it: it is neither the group's copy nor what this phone itself sent from its clipboard or took into it last |
+| `fetch` | `id`, `max` (bytes of the sealed blob), `out` (a new folder) | `{"parts"}`: each part with `file`, where it is, each checked against its hash |
+| `found`, `lost` | `key` (the app's name for the member), `addrs` (`host:port`, loopback too for the tunnel), `device` (optional) | `{}`: dial it again and again, or stop |
+| `listen`, `unlisten` | `port` (0 for any) | `{"port"}`: the member port for the members that dial this phone as the group's hub, which the app publishes with `r=phone` |
+| `pause`, `resume`, `wait` | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `waiting`, `pause` |
+| `mode`, `mute` | `mode`; `until_ms` (null unmutes) | `{}` |
+| `pause_receiving` | `pause`, `for_ms` (0 for until it is turned on) | the state, as `muted` gives it: keeps the group's copies out of the phone's clipboard for a while, or takes them again (`pause: false`; design.md, "Muting a device") |
+| `muted` | none | `{"paused", "paused_ms", "muted", "muted_ms"}`: how long that pause and an admin's mute last, 0 for until lifted |
+| `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features}]`, as their hellos and reach messages present them |
+| `records` | none | `{"records"}` |
+| `devices` | none | `{"devices"}`: every device of the group as the app shows it, `[{device, name, role, os, admin, root, frozen, online, self, listed}]`: the group's device records, whether it is connected and whether it is this phone, then the connected members no record lists yet (`listed` false) |
+| `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
+| `command` | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
+| `send_cert`, `send_admin_ca`, `send_tunnel` | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |
+| `send_hubs`, `send_credentials` | `share`, `credentials` | `{"to"}` |
+
+A phone's node passes on a command for another device when it is connected to it, as
+protocol.md section 15 says. For itself it carries out the `mute` and `unmute` commands an
+admin sends, keeps both in `mute.json` as the lite member does, and refuses the other commands,
+which a phone has nothing to carry out for. It keeps the sealed blobs
+of the copies with images or files it made or fetched in `content/` of its data directory,
+the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
+both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
+`TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
+listens, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
+root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
+and pausing.
 
 `cbb_qr_read` (feature `join`, `src/qr.rs`) reads the QR codes in a grey camera frame with the
 `rqrr` crate, since Aurora gives an app no reader of its own. An admin phone admits a device by the device's QR code with `cbb_admit_new`, `cbb_admit_dial`,
@@ -88,11 +127,6 @@ group (docs/protocol.md, section 6, "The joiner listens"). `cbb_group_new` (feat
 `PhoneGroup.create` does: a root CA for the app's root key, the phone's member certificate and its
 device record holding the root, all signed through the callback; its answer has a join's
 fields, so the app keeps it as it keeps a join, and admits with the root key and no admin CA.
-
-`TestFFIJoiner` runs the join, sync both ways and a
-pause, an admin's mute, the devices list and a renewal against a Go member through the example `phone-on-linux`, `TestFFIJoinerAdmin` the
-join as an admin, then that admin phone admitting a Go computer that listens, and
-`TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its root.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its
