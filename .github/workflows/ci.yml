@@ -1989,10 +1989,11 @@ jobs:
       # netlink message in the host's byte order when it is exactly 4 bytes
       # long, and the runner's kernel ends every link message with one (an
       # empty IFLA_DPLL_PIN); a big-endian guest's musl getifaddrs then walks
-      # past its buffer and hangs or crashes. qemu fixed it in 10.2.3 (commit
-      # 029f10e85278, issue 2485). The build (mips and mipsel only) is cached.
-      QEMU: "10.2.4"
-      QEMU_SHA256: 821b545b92f165e57dddccac5077d76d4d436a226595b8813ad59306bbfd0746
+      # past its buffer and hangs or crashes. qemu fixed it in commit
+      # 029f10e85278 (issue 2485; 10.2.3 and 11.1 carry it). The build (mips
+      # and mipsel only) is cached.
+      QEMU: "11.1.3"
+      QEMU_SHA256: 5a8289c7940dc77d3873c81a6c29ba3afe1446fc9d36e77fa1658cdbecb84b22
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
