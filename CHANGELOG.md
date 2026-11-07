@@ -1489,6 +1489,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPhone and Android apps' button no longer sends a text the phone sent before over the
+  image or files it shared since: it compares the clipboard with what the phone itself sent
+  or took last, besides the group's copy (design.md, "The one button").
 - The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
   clipboard off the main thread, for the remote paste sheet's empty field and for a sync
   that reads the clipboard itself, so iOS stops reporting a hang of the app.

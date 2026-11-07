@@ -855,7 +855,7 @@ when the records set none. A write increments the write sequence number (section
   itself and never takes an old copy of the group.
 - Once the window has passed the copy is gone for this member: its own clipboard stays as it
   is, and what it copies next, however old, goes to the group (a phone's button sends it,
-  unless it is the group's text already).
+  unless it is the group's text already or what the phone itself sent or took last).
 - When the records stop accepting the current event's origin (its device is removed, or a
   takeover took effect and the root that admitted it is no longer on the path), the member
   drops the event, written or not, and does not write it.
