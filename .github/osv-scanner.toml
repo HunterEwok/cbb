@@ -2,7 +2,7 @@
 # and a date to look again. Reference: https://google.github.io/osv-scanner/configuration/
 
 # Both come in with esp-hal, pinned to a git commit for the Nano ESP32 firmware
-# (lite/esp32), and run only at build time on the build machine: paste is a
+# (esp32/), and run only at build time on the build machine: paste is a
 # proc macro, unsafe-libyaml reads esp-config's YAML in build scripts. Both are
 # unmaintained, not vulnerable; they go when esp-hal drops them.
 [[IgnoredVulns]]
@@ -18,7 +18,7 @@ reason = "unsafe-libyaml is unmaintained; esp-config's build scripts read YAML w
 # block-buffer before 0.12.1 can be left with a bad cursor when the compression
 # callback panics and the caller catches the panic and uses the buffer again.
 # Nothing here can catch one: the lite member's release build aborts on a panic
-# (lite/Cargo.toml), and the firmware has no unwinding at all. The 0.10 line
+# (Cargo.toml), and the firmware has no unwinding at all. The 0.10 line
 # comes with digest 0.10, through GotaTun (blake2, hmac) and esp-hal; it goes
 # when they move to digest 0.11, which carries 0.12.
 [[IgnoredVulns]]
@@ -29,7 +29,7 @@ reason = "block-buffer 0.10 through GotaTun and esp-hal; panics abort, nothing c
 # crypto-bigint before 0.7.6 has branches that depend on secrets in operations
 # meant to be constant-time. The 0.5 line comes with p256 0.13 through
 # trouble-host (0.7 and 0.8 alike), which needs it for LE Secure Connections
-# when the Nano ESP32 pairs as a Bluetooth keyboard (lite/esp32/src/ble.rs);
+# when the Nano ESP32 pairs as a Bluetooth keyboard (esp32/src/ble.rs);
 # a HID host does not take a keyboard without pairing. The key is a fresh
 # ECDH key of one pairing, made on the board only while the user lets it pair
 # (ble pair), and a timing attack would have to measure the ESP32 from the

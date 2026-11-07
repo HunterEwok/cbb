@@ -39,11 +39,12 @@ dependencies {
 }
 
 // The Rust core for the tests and InteropMain: the host's libcbb_ffi, built
-// in lite/ (needs cargo), which decides itself whether it is up to date.
-val lite = rootDir.resolve("../../../lite").canonicalFile
-val coreDir = lite.resolve("target/release").path
+// in the Rust workspace at the top (needs cargo), which decides itself whether
+// it is up to date.
+val rust = rootDir.resolve("../../..").canonicalFile
+val coreDir = rust.resolve("target/release").path
 val buildCore by tasks.registering(Exec::class) {
-    workingDir = lite
+    workingDir = rust
     commandLine("cargo", "build", "--locked", "--release", "-p", "cbb-ffi", "--features", "member")
 }
 

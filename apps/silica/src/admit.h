@@ -3,7 +3,7 @@
 
 // Adding a device to the group by its QR code, as an admin phone
 // (docs/protocol.md, section 6, "The joiner listens"): the camera's frames
-// go to the core's QR reader (lite/ffi's cbb_qr_read), and once it finds a
+// go to the core's QR reader (ffi's cbb_qr_read), and once it finds a
 // join code the phone dials the device and the core (cbb_admit_*) runs the
 // pairing inside its own TLS, issuing the device's certificate with the
 // admin key in the key store and sending its record to the group. This

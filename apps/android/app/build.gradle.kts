@@ -95,7 +95,7 @@ android {
             // The kit calls the Rust core through JNA: on the host, the core
             // the kit's tests build and JNA's desktop library (below).
             it.dependsOn(gradle.includedBuild("kit").task(":buildCore"))
-            it.systemProperty("jna.library.path", rootDir.resolve("../../lite/target/release").canonicalPath)
+            it.systemProperty("jna.library.path", rootDir.resolve("../../target/release").canonicalPath)
             it.testLogging {
                 events("failed")
                 exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
@@ -139,19 +139,19 @@ val bindTunnel = tasks.register<Exec>("bindTunnel") {
     withPinnedNdk()
 }
 
-// The group's rules: the Rust core's entry point (lite/ffi, docs/core-api.md), which the
+// The group's rules: the Rust core's entry point (ffi/, docs/core-api.md), which the
 // kit calls through JNA, as libcbb_ffi.so for each ABI. It needs the Rust of cbb.rust in
-// ../gradle.properties with the Android targets, cargo-ndk and the pinned NDK (lite/ffi/bind.sh).
+// ../gradle.properties with the Android targets, cargo-ndk and the pinned NDK (ffi/bind.sh).
 val coreLibs = layout.buildDirectory.dir("cbbcore")
 val bindCore = tasks.register<Exec>("bindCore") {
     val repo = rootDir.resolve("../..")
-    inputs.files(repo.resolve("lite/Cargo.lock"), repo.resolve("lite/Cargo.toml"))
-    inputs.files(repo.resolve("lite/core/Cargo.toml"), repo.resolve("lite/ffi/Cargo.toml"), repo.resolve("lite/ffi/bind.sh"))
-    inputs.dir(repo.resolve("lite/core/src"))
-    inputs.dir(repo.resolve("lite/ffi/src"))
+    inputs.files(repo.resolve("Cargo.lock"), repo.resolve("Cargo.toml"))
+    inputs.files(repo.resolve("core/Cargo.toml"), repo.resolve("ffi/Cargo.toml"), repo.resolve("ffi/bind.sh"))
+    inputs.dir(repo.resolve("core/src"))
+    inputs.dir(repo.resolve("ffi/src"))
     outputs.dir(coreLibs)
     workingDir = repo
-    commandLine("sh", "lite/ffi/bind.sh", "android", coreLibs.get().asFile.path)
+    commandLine("sh", "ffi/bind.sh", "android", coreLibs.get().asFile.path)
     inputs.property("rust", rustPinned)
     environment("RUSTUP_TOOLCHAIN", rustPinned)
     withPinnedNdk()

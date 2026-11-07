@@ -18,7 +18,7 @@ func TestProjectAddresses(t *testing.T) {
 	repo := strings.TrimSuffix(GitHub, "/releases")
 	slug := strings.TrimPrefix(repo, "https://github.com/")
 	for file, want := range map[string][]string{
-		"lite/src/update.rs": {
+		"member/src/update.rs": {
 			`const GITHUB: &str = "` + GitHub + `";`,
 			`pub const MIRROR: &str = "` + Mirror + `";`,
 			`const CHANNEL_FILES: &str = "` + ChannelFiles + `";`,

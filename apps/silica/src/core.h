@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // The Rust core's one entry point (docs/core-api.md), the group's rules every
-// member shares, through the C functions of lite/ffi (cbb_core.h): the app
+// member shares, through the C functions of ffi/ (cbb_core.h): the app
 // asks the core instead of writing the rules again in C++.
 #pragma once
 
@@ -28,7 +28,7 @@ QJsonValue call(const QString &op, const QJsonValue &args, Failure *failure);
 // The linked core as `cbb version` names it: "core X, abi N, source S".
 QString versionLine(Failure *failure);
 
-// An answer of lite/ffi's join and member functions, which it frees: its ok,
+// An answer of ffi's join and member functions, which it frees: its ok,
 // or its error in failure, the details under what.
 QJsonObject take(uint8_t *answer, size_t len, const QString &what, Failure *failure);
 

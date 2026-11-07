@@ -18,7 +18,7 @@ Kwenye eneo-kazi lenye GTK 4 na WebKitGTK 6.0 (x86-64 na ARM64) pia husakinisha 
 
 Kubandika kwa mbali kwenye GNOME na KDE huuliza mara moja, kwenye kisanduku cha mazungumzo kwenye kompyuta, kabla ya kubandika kwa kwanza kwa msimamizi kuweza kubonyeza vitufe. Ili kuruka kisanduku hicho, ongeza `--uinput` (`... | sudo sh -s -- --uinput`): msaidizi mdogo kisha hubonyeza vitufe vya kubandika (Shift+Insert na Enter) kwa niaba ya anayetumia skrini, kamwe si kwenye skrini ya kuingia au ya kufunga.
 
-Vifaa vidogo vinavyopaswa kusawazisha tu, kama kipanga njia au Raspberry Pi Zero, vinaweza kutumia [mwanachama mwepesi](../../lite/README.md) mwepesi zaidi badala yake: `... | sudo sh -s -- --lite`.
+Vifaa vidogo vinavyopaswa kusawazisha tu, kama kipanga njia au Raspberry Pi Zero, vinaweza kutumia [mwanachama mwepesi](../../member/README.md) mwepesi zaidi badala yake: `... | sudo sh -s -- --lite`.
 
 ### Bila sudo (bila root)
 
@@ -28,7 +28,7 @@ Kwenye kompyuta ya Linux ambapo huwezi au hutaki kutumia `sudo`, isakinishe kwa 
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-Huendeshwa kama huduma yako ya chinichini wakati umeingia, na husawazisha kama mwanachama yeyote. Itumie tu pale usakinishaji wa kawaida hauwezekani: kila programu unayoendesha inaweza kunakili funguo zake, kwa hiyo kamwe haiwezi kuwa mzizi wa kikundi, msimamizi wala kitovu ([jinsi inavyofanya kazi](how-it-works.md#rootless-members)), na haina kanuni za ngome ya moto, wala TPM, wala `--console` au `--uinput`. Ili iendelee kufanya kazi baada ya kutoka, msimamizi wa mfumo huendesha `sudo loginctl enable-linger YOUR-USER` mara moja. Kuiondoa: `sh ~/.local/share/cbb/uninstall.sh`. Mwanachama mwepesi pia husakinishwa hivi, kwa `--lite --rootless` ([mwanachama mwepesi](../../lite/README.md#without-sudo-rootless)).
+Huendeshwa kama huduma yako ya chinichini wakati umeingia, na husawazisha kama mwanachama yeyote. Itumie tu pale usakinishaji wa kawaida hauwezekani: kila programu unayoendesha inaweza kunakili funguo zake, kwa hiyo kamwe haiwezi kuwa mzizi wa kikundi, msimamizi wala kitovu ([jinsi inavyofanya kazi](how-it-works.md#rootless-members)), na haina kanuni za ngome ya moto, wala TPM, wala `--console` au `--uinput`. Ili iendelee kufanya kazi baada ya kutoka, msimamizi wa mfumo huendesha `sudo loginctl enable-linger YOUR-USER` mara moja. Kuiondoa: `sh ~/.local/share/cbb/uninstall.sh`. Mwanachama mwepesi pia husakinishwa hivi, kwa `--lite --rootless` ([mwanachama mwepesi](../../member/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 

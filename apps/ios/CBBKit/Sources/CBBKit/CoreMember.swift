@@ -6,7 +6,7 @@ import Crypto
 import Foundation
 
 /// The phone as a member of its group, run by the Rust core inside the app
-/// (lite/ffi, docs/core-api.md, "The member"): the lite member's node on
+/// (ffi/, docs/core-api.md, "The member"): the lite member's node on
 /// threads of its own, with the phone's member key where the app keeps it,
 /// which signs through a callback. It dials the members the app hands in
 /// (Bonjour, the tunnel's and the relay's loopback ports), syncs with them,

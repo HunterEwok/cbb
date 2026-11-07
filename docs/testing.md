@@ -46,7 +46,7 @@ watch's state, content hashes, join QR codes and a CPace exchange.
 
 - The files named `go-*.json` and those without a prefix are written by Go tests with
   `-update` and read by the Swift kit, the Kotlin kit and, for what it implements, the lite
-  core (`lite/core/src/vectors.rs`).
+  core (`core/src/vectors.rs`).
 - Files named `swift-*.json` are written by the Swift kit (`CBB_INTEROP_OUT`) and read by
   Go; the Kotlin kit writes the same files, so Go checks both phones against one set.
 - A Go test fails when a committed vector is out of date, and names the command that
@@ -99,8 +99,8 @@ rise but not fall. When the table says "raise the floor", raise it in the same p
 |---|---|---|
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
-| `rust-core` | lines of `lite/core/src`, without `third_party` | `cargo llvm-cov` in the `lite` job |
-| `rust-lite` | lines of `lite/src` (much of it is tested by Go's tests of the lite member, which are not counted) | as `rust-core` |
+| `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `lite` job |
+| `rust-lite` | lines of `member/src/` (much of it is tested by Go's tests of the lite member, which are not counted) | as `rust-core` |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
 
@@ -120,7 +120,7 @@ go run ./tools/coverage -go cover.out -floor tools/coverage/floor.json
 Coverage says a line ran; mutation testing says whether a test would notice if it were wrong.
 The nightly workflow changes the records' code one place at a time (drops a check, turns `<`
 into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
-`lite/core/src/authority.rs` and `strict.rs`, in eight shards, and `gremlins` on
+`core/src/authority.rs` and `strict.rs`, in eight shards, and `gremlins` on
 `internal/authority`. A change that every test still passes is listed as missed, in the run's
 summary and its artifacts. The jobs report and do not fail yet; each missed change gets a
 test, or a note why it cannot matter, and then the jobs fail on a new one.
@@ -128,7 +128,7 @@ test, or a note why it cannot matter, and then the jobs fail on a new one.
 To run them locally:
 
 ```sh
-cd lite && cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
+cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
 go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/authority
 ```
 

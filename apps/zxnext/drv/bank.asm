@@ -12,7 +12,7 @@
 ; waits for NextPi's shell, types the line that starts the link and turns
 ; itself on once the link answers, so that BASIC need not wait for the
 ; Pi. The frames are those of
-; the lite member's `cbb next link` (lite/README.md, "The network through
+; the lite member's `cbb next link` (member/README.md, "The network through
 ; the Next's ESP8266"). It restores the UART selection it found, so the
 ; program in front is not disturbed.
 ;

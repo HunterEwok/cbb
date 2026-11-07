@@ -10,16 +10,16 @@ import (
 
 func TestCheckDocs(t *testing.T) {
 	files := map[string][]byte{
-		"README.md":        []byte("# Read me\n"),
-		"docs/design.md":   []byte("# Design\n\n## The iPhone button\n\n## Sync away from home (planned)\n\n## Notes\n\n## Notes\n\n```sh\n# not a heading\n```\n"),
-		"lite/src/main.rs": []byte("fn main() {}\n"),
+		"README.md":          []byte("# Read me\n"),
+		"docs/design.md":     []byte("# Design\n\n## The iPhone button\n\n## Sync away from home (planned)\n\n## Notes\n\n## Notes\n\n```sh\n# not a heading\n```\n"),
+		"member/src/main.rs": []byte("fn main() {}\n"),
 	}
 	tests := []struct {
 		name, file, content string
 		want                []string
 	}{
-		{name: "a file", file: "docs/a.md", content: "[d](design.md) [r](../README.md) [l](../lite/src/main.rs)\n"},
-		{name: "a directory", file: "README.md", content: "[core](lite/src)\n"},
+		{name: "a file", file: "docs/a.md", content: "[d](design.md) [r](../README.md) [l](../member/src/main.rs)\n"},
+		{name: "a directory", file: "README.md", content: "[core](member/src/)\n"},
 		{name: "web and mail links", file: "README.md", content: "[w](https://example.org/x.md) [m](mailto:a@example.org)\n"},
 		{name: "anchors", file: "docs/a.md", content: "[a](design.md#the-iphone-button) [b](design.md#sync-away-from-home-planned) [c](design.md#notes-1)\n"},
 		{name: "an anchor in the same file", file: "docs/design.md", content: "# Design\n\n## Build\n\nSee [build](#build).\n"},
@@ -105,7 +105,7 @@ func TestSlug(t *testing.T) {
 func TestCheckCommands(t *testing.T) {
 	files := map[string][]byte{
 		"cmd/cbb/main.go":       []byte("switch cmd {\n\tcase \"copy\":\n\tcase \"away\":\n}\n"),
-		"lite/src/lib.rs":       []byte("match c {\n    \"watch\" => cmd_watch(&g, rest),\n    \"run\" => cmd_run(&g, rest),\n}\n"),
+		"member/src/lib.rs":     []byte("match c {\n    \"watch\" => cmd_watch(&g, rest),\n    \"run\" => cmd_run(&g, rest),\n}\n"),
 		"docs/reference/cli.md": []byte("`cbb copy` sends. `cbb watch` is not lite.\n\n## The lite member\n\n`cbb run` runs.\n\n## Other\n"),
 	}
 	got := checkCommands(files)
@@ -190,7 +190,7 @@ func TestCheckPorts(t *testing.T) {
 		"internal/mdns/mdns.go":       []byte("const Port = 5353\n"),
 		"internal/service/service.go": []byte("const (\n\tMemberPort = 8764\n\tbacklog = 32\n)\n"),
 		"cmd/cbb/forward.go":          []byte(`v := fs.String("vless-listen", ":443", "")`),
-		"lite/src/tunnel.rs":          []byte("const MEMBER_PORT: u16 = 8765;\n"),
+		"member/src/tunnel.rs":        []byte("const MEMBER_PORT: u16 = 8765;\n"),
 		"internal/third_party/x/x.go": []byte("const Port = 9999\n"),
 		"internal/service/x_test.go":  []byte("const testPort = 1234\n"),
 		"docs/reference/devices.md":   []byte("# Devices\n\n## Ports\n\n| TCP 8764 | | UDP 5353 |\n\n## Files\n\n443\n"),

@@ -123,26 +123,26 @@ npx @informalsystems/quint@0.33.1 run --backend=typescript --invariant=promises 
 
 The lite member (Rust, the `lite` job in CI):
 
-The core and the phones' bindings deny panics outside their tests (`lite/core/src/lib.rs`,
-`lite/ffi/src/lib.rs`): read with `get`, add with `checked_` or `saturating_` operations, and
+The core and the phones' bindings deny panics outside their tests (`core/src/lib.rs`,
+`ffi/src/lib.rs`): read with `get`, add with `checked_` or `saturating_` operations, and
 return an error. Where something truly cannot fail, allow the lint on that item with a
 `reason`.
 
 ```sh
-cd lite && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
-cargo deny --locked check licenses bans sources   # the crates' licenses and sources (lite/deny.toml, CI's advisories job)
-cargo build --release && cd .. && CBB_LITE=$PWD/lite/target/release/cbb \
+cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
+cargo build --release && CBB_LITE=$PWD/target/release/cbb \
   go test ./internal/service -run TestLiteMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
 ```
 
-The Nano ESP32's network code on Linux (`lite/embassy`, root for the TAP interface):
+The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
 
 ```sh
 sudo ip tuntap add name tap0 mode tap user "$USER" && sudo ip addr add 192.168.69.1/24 dev tap0 \
   && sudo ip link set tap0 up
-cd lite && cargo build --release -p cbb-embassy --features host && cd .. && \
-  CBB_ESP32_ON_LINUX=$PWD/lite/target/release/esp32-on-linux go test ./internal/service -run TestEmbassyJoiner
+cargo build --release -p cbb-embassy --features host && \
+  CBB_ESP32_ON_LINUX=$PWD/target/release/esp32-on-linux go test ./internal/service -run TestEmbassyJoiner
 ```
 
 The Android app (`apps/android`, Gradle 9 with JDK 17 or later): the protocol core `kit` has
@@ -162,7 +162,7 @@ cd apps/android && ./gradlew :shared:testDebugUnitTest :wear:assembleDebug :wear
 The phone kit (Swift package, runs on Linux too), with the Rust core it links:
 
 ```sh
-sh lite/ffi/bind.sh host /tmp/cbb-core
+sh ffi/bind.sh host /tmp/cbb-core
 cd apps/ios/CBBKit && swift test -Xlinker -L/tmp/cbb-core
 ```
 
@@ -180,17 +180,17 @@ The Android app's build runs `bind.sh` itself (the `bindTunnel` task), so buildi
 needs Go besides the Android SDK and its NDK.
 
 The group rules of records `v:2` (docs/records-v2.md) reach the phones from the Rust core:
-`lite/ffi` exports the core's one entry point (`cbb_core::api`, docs/core-api.md) as the C
-functions of `lite/ffi/include/cbb_core.h`, which the Swift kit links as its module `CCbbCore`
+`ffi/` exports the core's one entry point (`cbb_core::api`, docs/core-api.md) as the C
+functions of `ffi/include/cbb_core.h`, which the Swift kit links as its module `CCbbCore`
 and the Kotlin kit calls through JNA (`Core.swift`, `Core.kt`). Its `bind.sh` builds the
 libraries; the Android app's `bindCore` task and the Kotlin kit's tests build them
 themselves, and the `phone core` jobs build them with the latest Rust:
 
 ```sh
-cd lite && cargo test -p cbb-ffi
-ANDROID_NDK_HOME=<ndk> lite/ffi/bind.sh android OUT   # needs cargo-ndk
-lite/ffi/bind.sh ios OUT                              # macOS with Xcode
-lite/ffi/bind.sh host OUT                             # the static library, for swift test
+cargo test -p cbb-ffi
+ANDROID_NDK_HOME=<ndk> ffi/bind.sh android OUT   # needs cargo-ndk
+ffi/bind.sh ios OUT                              # macOS with Xcode
+ffi/bind.sh host OUT                             # the static library, for swift test
 ```
 
 The app for Aurora OS and Sailfish OS (`apps/silica`, Qt 5.6 with Silica QML around the same
@@ -247,7 +247,7 @@ The app (macOS with Xcode):
 
 ```sh
 mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework   # the tunnel the app links; needs Go
-sh lite/ffi/bind.sh ios apps/ios/CbbCore                 # the Rust core the kit links; needs Rust
+sh ffi/bind.sh ios apps/ios/CbbCore                 # the Rust core the kit links; needs Rust
 brew install xcodegen
 cd apps/ios && xcodegen generate   # CBB.xcodeproj and Info.plist are not committed
 xcodebuild test -project CBB.xcodeproj -scheme CBB \

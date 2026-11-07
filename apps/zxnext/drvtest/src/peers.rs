@@ -563,7 +563,7 @@ impl Pi {
             self.received.clear();
             return;
         }
-        // The lite member's frames (lite/README.md): a text, and a copy
+        // The lite member's frames (member/README.md): a text, and a copy
         // that answers CBBGO, takes its bytes raw, then says CBBOK.
         let words: Vec<&str> = cmd.split_whitespace().filter(|w| *w != "-debug").collect();
         if words.len() >= 3 && words[0] == "cbb" && words[1] == "next" {
@@ -592,7 +592,7 @@ impl Pi {
                 _ => {}
             }
         }
-        // cbb next check-list (lite/src/next.rs) on the list that came
+        // cbb next check-list (member/src/next.rs) on the list that came
         // raw: here its signature is a first line that says so (SIGNED_OK),
         // which the tests leave out to stand for a list the release keys
         // did not sign.

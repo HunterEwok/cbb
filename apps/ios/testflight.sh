@@ -9,7 +9,7 @@
 #   KEYCHAIN=... PROFILES=... sh apps/ios/testflight.sh VERSION BUILD OUTDIR [upload]
 #
 # Run from the repository root, after xcodegen generate in apps/ios and the
-# libraries the app links (mobile/cbbtun/bind.sh ios, lite/ffi/bind.sh ios),
+# libraries the app links (mobile/cbbtun/bind.sh ios, ffi/bind.sh ios),
 # as the release workflow does. KEYCHAIN holds the Apple Distribution identity
 # (packaging/macos/keychain.sh); PROFILES is a base64 tar.gz of the four App
 # Store profiles, one for each App ID (tools.cbb, .share, .widgets,

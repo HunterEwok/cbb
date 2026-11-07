@@ -80,7 +80,7 @@ func TestLiteNotDialed(t *testing.T) {
 	}
 }
 
-// startLite runs the lite member (Rust, lite/) with the state in
+// startLite runs the lite member (Rust, member/) with the state in
 // dir; it is stopped by stop or at the end of the test.
 func startLite(t *testing.T, bin, dir string, args ...string) *testService {
 	t.Helper()
@@ -147,7 +147,7 @@ func (w testWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// TestEmbassyJoiner: the ESP32 firmware's pairing code (lite/embassy),
+// TestEmbassyJoiner: the ESP32 firmware's pairing code (embassy/),
 // built for Linux as esp32-on-linux, joins by the phone over embassy-net on a
 // TAP interface, as the board does over Wi-Fi. CBB_ESP32_ON_LINUX names the
 // binary; the interface tap0 must be up as 192.168.69.1/24, and the device
@@ -205,7 +205,7 @@ func TestEmbassyJoiner(t *testing.T) {
 	}
 }
 
-// TestFFIJoiner runs the Aurora app's core through lite/ffi's C functions
+// TestFFIJoiner runs the Aurora app's core through ffi's C functions
 // with a software key (the example phone-on-linux, CBB_PHONE_ON_LINUX): the
 // phone shows its QR code, the service admits it as cbb pair -qr does, and
 // then the phone's member dials the service and syncs with it both ways.
@@ -376,7 +376,7 @@ func TestFFIJoiner(t *testing.T) {
 	}
 }
 
-// TestFFIMember runs the phones' member through lite/ffi's one call
+// TestFFIMember runs the phones' member through ffi's one call
 // (cbb_member_call) against a computer: the address the app hands in as
 // Bonjour or NSD would find it, the button's rule, images both ways, and
 // pausing in the background.
@@ -510,7 +510,7 @@ func TestFFIMember(t *testing.T) {
 }
 
 // TestFFIPhoneAway syncs the phone's member away from home through a Go
-// hub's tunnel, as the Aurora app does (lite/src/away.rs inside the phone's
+// hub's tunnel, as the Aurora app does (member/src/away.rs inside the phone's
 // node): turned on at home, it keeps the hub's offer; with no address of
 // the hub but its tunnel's, it reaches the hub through the tunnel; off, it
 // forgets the keys. CBB_PHONE_ON_LINUX names phone-on-linux built with the
@@ -624,7 +624,7 @@ func TestFFIPhoneAway(t *testing.T) {
 	waitFor(t, "the phone syncs at home only", func() bool { return peers() == 0 })
 }
 
-// phoneOnLinux starts lite/ffi's example phone-on-linux, the Aurora app on
+// phoneOnLinux starts ffi's example phone-on-linux, the Aurora app on
 // Linux, listening on a free port with the arguments, and returns what
 // reads its next line with a prefix and its standard input.
 func phoneOnLinux(t *testing.T, bin string, args ...string) (next func(prefix string) string, in io.Writer) {
@@ -957,12 +957,21 @@ func dialJoiner(t *testing.T, dir, qr string) *pair.Result {
 // and joins at pi's address. It returns the lite member's state directory.
 func joinLite(t *testing.T, bin string, pi *testService) string {
 	t.Helper()
+	return joinLiteEnv(t, bin, pi, nil)
+}
+
+// joinLiteEnv is joinLite with env added to cbb pair's environment.
+func joinLiteEnv(t *testing.T, bin string, pi *testService, env []string) string {
+	t.Helper()
 	c, code := openWindow(t, pi)
 	defer c.Close()
 	pa := pi.addr()
 	dir := t.TempDir()
 	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "lite", "-code", pa)
 	join.Stdin = strings.NewReader(code + "\n")
+	if env != nil {
+		join.Env = append(os.Environ(), env...)
+	}
 	join.Stderr = testWriter{t, "lite join: ", nil}
 	out, err := join.Output()
 	if err != nil || !strings.Contains(string(out), "Joined the group") {
@@ -985,7 +994,7 @@ func joinLite(t *testing.T, bin string, pi *testService) string {
 // code of cbb pair, gets no CA keys, is listed as a lite device and syncs
 // both ways. (Joining by the phone's QR code, where the phone dials the
 // lite member, is covered by the phone kits' tests.) CBB_LITE names the
-// lite member's binary (cargo build in lite/).
+// lite member's binary (cargo build at the top).
 func TestLiteMember(t *testing.T) {
 	bin := os.Getenv("CBB_LITE")
 	if bin == "" {
@@ -1033,7 +1042,7 @@ func TestLiteMember(t *testing.T) {
 	waitFor(t, "the lite member has the laptop text", func() bool { return lite.paste(t) == "from the laptop" })
 
 	// The ZX Spectrum Next's front end: texts in the Spectrum character set,
-	// with their length and CRC-32 (lite/README.md, "ZX Spectrum Next").
+	// with their length and CRC-32 (member/README.md, "ZX Spectrum Next").
 	zx := []byte("ZX \x605\rnext")
 	next := exec.Command(bin, "-socket", lite.socket, "next", "copy", strconv.Itoa(len(zx)), fmt.Sprintf("%08x", crc32.ChecksumIEEE(zx)))
 	next.Stdin = bytes.NewReader(zx)
@@ -1445,7 +1454,7 @@ func TestLiteMemberAway(t *testing.T) {
 
 // TestLiteMemberAwayObfuscated syncs the lite member away from home with a
 // hub that hides its tunnel with AmneziaWG: the lite member keeps the
-// offer's settings and speaks AmneziaWG to the Go hub (lite/src/awg.rs
+// offer's settings and speaks AmneziaWG to the Go hub (member/src/awg.rs
 // around GotaTun, amneziawg-go on the hub). CBB_LITE names the binary.
 func TestLiteMemberAwayObfuscated(t *testing.T) {
 	bin := os.Getenv("CBB_LITE")

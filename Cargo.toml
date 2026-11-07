@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# The Rust workspace: the core (core/), the member's program cbb (member/), the
+# core's C functions (ffi/), the firmware's network code (embassy/), the ring
+# stand-in (ring-shim/) and the core as WebAssembly (wasm/). The ESP32 firmware
+# (esp32/) and the fuzz targets (core/fuzz/) are workspaces of their own.
+[workspace]
+members = ["core", "embassy", "ffi", "member", "ring-shim", "wasm"]
+exclude = ["esp32", "core/fuzz"]
+# A cargo build or run without -p or --workspace means the program cbb.
+default-members = ["member"]
+resolver = "3"
+
+# GotaTun's AEAD on RustCrypto instead of ring's C and assembly (ring-shim/src/lib.rs).
+[patch.crates-io]
+ring = { path = "ring-shim" }
+
+[profile.release]
+# Small devices: a small binary matters more than the last bit of speed.
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# The tests check signatures by the thousand (the record sets at the limits
+# in testdata/interop/v2-records.json); unoptimized elliptic curves make
+# that minutes instead of seconds. Only the dependencies: the crates of this
+# workspace still build as the tests want them, with overflow checks.
+[profile.dev.package."*"]
+opt-level = 2

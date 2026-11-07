@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// The frames cbb next on the lite member answers in (lite/README.md, "ZX Spectrum Next"),
+// The frames cbb next on the lite member answers in (member/README.md, "ZX Spectrum Next"),
 // without any I/O, so the host compiler tests them too.
 
 #ifndef CBB_FRAME_H

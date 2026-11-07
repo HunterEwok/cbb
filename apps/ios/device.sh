@@ -87,7 +87,7 @@ fi
 
 # The tunnel and the Rust core the app links, when not built yet.
 [ -d Cbbtun.xcframework ] || "$root/mobile/cbbtun/bind.sh" ios "$PWD/Cbbtun.xcframework"
-[ -d CbbCore/iphoneos ] || sh "$root/lite/ffi/bind.sh" ios "$PWD/CbbCore"
+[ -d CbbCore/iphoneos ] || sh "$root/ffi/bind.sh" ios "$PWD/CbbCore"
 
 if [ "$all" = 1 ]; then
 	xcodegen generate --spec project.yml

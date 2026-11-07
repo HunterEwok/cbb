@@ -44,7 +44,7 @@ func (f *Fleet) AddLite(ctx context.Context) (*Device, error) {
 }
 
 // joinLite joins the lite member d to hub's group with the code of cbb
-// pair, as lite/README.md tells, and shares its clipboard.
+// pair, as member/README.md tells, and shares its clipboard.
 func joinLite(ctx context.Context, hub, d *Device) error {
 	ip, err := fleetIP(ctx, hub)
 	if err != nil {
@@ -54,7 +54,7 @@ func joinLite(ctx context.Context, hub, d *Device) error {
 	if err != nil {
 		return err
 	}
-	// Under systemd the join runs as the service's user, as lite/README.md
+	// Under systemd the join runs as the service's user, as member/README.md
 	// tells, so that the service reads what it saves.
 	join := "cbb pair -name lite -code " + net.JoinHostPort(ip, "8764")
 	if out, _ := Run(ctx, d, "id -u cbb 2>/dev/null; true", ""); strings.TrimSpace(out) != "" {
@@ -154,7 +154,7 @@ func liteMember(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 
 	r.Do(p+"next", func() error {
 		// Texts in the Spectrum character set with their length and
-		// CRC-32 (lite/README.md, "ZX Spectrum Next").
+		// CRC-32 (member/README.md, "ZX Spectrum Next").
 		zx := "ZX \x605\rnext"
 		out, err := Run(ctx, lite, fmt.Sprintf("cbb next copy %d %08x", len(zx), crc32.ChecksumIEEE([]byte(zx))), zx)
 		if err != nil {
