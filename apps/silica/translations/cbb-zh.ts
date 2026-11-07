@@ -208,6 +208,46 @@
         <translation>以管理员身份加入群组</translation>
     </message>
     <message>
+        <source>For 15 minutes</source>
+        <translation>15 分钟</translation>
+    </message>
+    <message>
+        <source>For an hour</source>
+        <translation>1 小时</translation>
+    </message>
+    <message>
+        <source>For 8 hours</source>
+        <translation>8 小时</translation>
+    </message>
+    <message>
+        <source>Until I turn it on</source>
+        <translation>直到我打开</translation>
+    </message>
+    <message>
+        <source>Taking copies</source>
+        <translation>正在接收副本</translation>
+    </message>
+    <message>
+        <source>Not taking copies until %1</source>
+        <translation>在 %1 之前不接收副本</translation>
+    </message>
+    <message>
+        <source>Not taking copies</source>
+        <translation>不接收副本</translation>
+    </message>
+    <message>
+        <source>Tap to take no copies from the group, or again; hold it for a time</source>
+        <translation>轻点以不接收群组的副本或重新接收；长按可选择时长</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>管理员已将此手机静音至 %1：它的副本不会到达群组。</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>管理员已将此手机静音：在管理员取消静音之前，它的副本不会到达群组。</translation>
+    </message>
+    <message>
         <source>In the group</source>
         <translation>在群组中</translation>
     </message>

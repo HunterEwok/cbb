@@ -19,8 +19,9 @@ All notable changes to cbb are documented in this file. The format follows
 - The member's events and calls for what the phones' apps answer themselves: an event for
   each peer whose hello it took, with the certificate chain the handshake checked (to renew
   it, send it its admin CA, answer its tunnel key as the hub), one for the tunnel offers of
-  the root and the admins, and one for each command for the phone itself, which the app
-  answers with `answer` within ten seconds; `tunnel_key`, `evidence`, `disconnect` and
+  the root and the admins, and one for each command for the phone itself other than `mute`
+  and `unmute`, which the member carries out, that the app answers with `answer` within ten
+  seconds; `tunnel_key`, `evidence`, `disconnect` and
   `served` (how far the peers read a copy's images or files). A hub command's result keeps
   the new hub's offer through a phone that passes it back, and a phone sends a command for a
   device it is not connected to through an admin phone that is, as the hub. A phone's member
@@ -44,6 +45,9 @@ All notable changes to cbb are documented in this file. The format follows
   out of the phone or takes them again, a long press for a time; on an admin phone a device's
   page mutes it for the group or unmutes it. The phones take `mute` and `unmute` commands, and
   the phone kits sign them and read the hello's mute.
+- The same switch at the top of the Aurora app's main page, with a long press for a time; the
+  app takes an admin's `mute` and `unmute` (lite/ffi's `pause_receiving` and `muted` operations
+  and the `mute` event) and says when an admin muted the phone.
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies
@@ -57,7 +61,8 @@ All notable changes to cbb are documented in this file. The format follows
   leaves it when its time is up) and sends what the user copied when the app comes to the
   front or from the pull-down menu, since Aurora lets no app read the clipboard in the
   background. The main page shows the members connected and the last copy; "Leave the group"
-  deletes the membership on the phone.
+  deletes the membership and the phone's keys (D-83), so the phone joins again as a new
+  device with a new key, and removing its old record does not take the new one along.
 - The same app as packages for Aurora OS 4 (armv7hl) and Sailfish OS (`harbour-cbb`,
   armv7hl and aarch64, not yet tested on a phone), which keep the phone's key in a file
   that only the app reads (level 3) and say so in their hello; CI builds all five packages.

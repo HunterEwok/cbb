@@ -2206,6 +2206,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 val r = command(e.from, e.command)
                 runCatching { n.answer(e.token, r) }.onFailure { Log.w(TAG, "answering a command", it) }
             }, "command").start()
+            // The node carried out an admin's mute or unmute; the phone shows it.
+            is CoreMember.Event.Mute -> {
+                writeMute("mute", if (!e.muted) null else if (e.forMS > 0) System.currentTimeMillis() + e.forMS else 0)
+                Log.i(TAG, "${e.by} ${if (e.muted) "muted" else "unmuted"} this phone")
+            }
             // The device the relay said calls from that loopback port, once.
             is CoreMember.Event.Caller -> runCatching { n.caller(e.token, synchronized(lock) { relayLink }?.caller(e.port)) }
             is CoreMember.Event.Identity -> Log.i(TAG, "the node holds a renewed certificate or new roots; the group's file keeps its own")

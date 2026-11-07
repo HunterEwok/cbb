@@ -209,6 +209,10 @@ public final class CoreMember: @unchecked Sendable {
         /// announced from there with `caller(_:device:)` within five
         /// seconds, or the call is closed.
         case caller(token: UInt64, port: UInt16, device: String)
+        /// An admin muted this phone for forMS milliseconds (0 for until an
+        /// admin lifts it), or ended its mute (muted false): the member
+        /// carried the command out and keeps it.
+        case mute(muted: Bool, forMS: Int64, by: String)
     }
 
     /// A part of images or files the app hands in: clipboard data with its
@@ -665,6 +669,9 @@ public final class CoreMember: @unchecked Sendable {
         var command: Member.Record?
         var port: UInt16?
         var device: String?
+        var muted: Bool?
+        var for_ms: Int64?
+        var by: String?
     }
 
     struct WireMessage: Decodable {
@@ -696,6 +703,9 @@ public final class CoreMember: @unchecked Sendable {
         case "command":
             guard let token = w.token, let from = w.from, let command = w.command else { return nil }
             return .command(token: token, from: from, command: command)
+        case "mute":
+            guard let muted = w.muted else { return nil }
+            return .mute(muted: muted, forMS: w.for_ms ?? 0, by: w.by ?? "")
         case "caller":
             guard let token = w.token, let port = w.port, let device = w.device else { return nil }
             return .caller(token: token, port: port, device: device)

@@ -1679,6 +1679,11 @@ final class LiveGroup: GroupController {
                     modeLog.error("cannot turn sync away from home off: \(String(reflecting: error), privacy: .public)")
                 }
             }
+        case let .mute(muted, forMS, by):
+            // The member carried out an admin's mute or unmute; the phone
+            // shows it.
+            try? modeBox.setMute(muted ? (forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0) : nil)
+            modeLog.notice("\(by, privacy: .public) \(muted ? "muted" : "unmuted", privacy: .public) this phone")
         case let .log(line):
             syncLog.notice("\(line, privacy: .public)")
         case .identity:
