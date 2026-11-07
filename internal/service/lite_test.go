@@ -850,7 +850,7 @@ func TestFFIPhoneTakeover(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the phone holds the handover", func() bool {
-		return manage(`{"action":"take_handed_over","root_ca":"`+root+`"}`)["error"] == nil
+		return manage(`{"action":"take_handed_over","root_ca":"` + root + `"}`)["error"] == nil
 	})
 	done := ok2(manage(`{"action":"finish_takeover","root_ca":"` + root + `","name":"admin phone","os":"aurora"}`))
 	if done["state"] != "effective" || done["cert"] == nil {
