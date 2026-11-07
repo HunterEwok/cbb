@@ -7,6 +7,15 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The phones' member in the Rust core, for the iPhone and Android apps to move onto from
+  their own Swift and Kotlin nodes, as the Aurora app runs it (docs/core-api.md, "The
+  member"): `cbb_member_call` in `lite/ffi` takes addresses the app finds itself (Bonjour,
+  NSD, the tunnel's loopback port), listens as the group's hub while the app is in the front,
+  pauses in the background, sends images and files and fetches and opens them, sends the
+  commands, records, certificates, admin CAs, tunnel offers, hub shares and credentials an
+  admin's app signed, passes commands on to the devices behind it, and shows each peer as its
+  hello presents it; the button's rule is the core's too. `cbb_member_copy` and
+  `cbb_member_peers` gave way to it, and the Aurora app calls it.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed

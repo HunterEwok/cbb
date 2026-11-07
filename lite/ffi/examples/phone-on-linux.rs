@@ -10,8 +10,10 @@
 //! -dir, it then runs the member there,
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
 //! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
-//! its certificate, and "LOG <line>" for each log line, and takes "COPY
-//! <text>" and "PEERS" on standard input, answering "PEERS <count>".
+//! its certificate, "CHANGE <copy as JSON>" for each copy that became the
+//! group's, and "LOG <line>" for each log line, and takes "COPY <text>",
+//! "PEERS" and "CALL <request as JSON>" on standard input, answering
+//! "PEERS <count>" and "ANSWER <answer as JSON>" (cbb_member_call).
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -23,7 +25,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_free, cbb_join_accept, cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin,
-    cbb_member_copy, cbb_member_peers, cbb_member_start,
+    cbb_member_call, cbb_member_start,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -162,6 +164,7 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
         Some("write") => println!("WRITE {} {}", s("kind"), s("text")),
         Some("log") => println!("LOG {}", s("line")),
         Some("identity") => println!("IDENTITY {}", s("cert")),
+        Some("copy") => println!("CHANGE {}", v["copy"]),
         _ => {}
     }
 }
@@ -198,19 +201,23 @@ fn run_member(
         eprintln!("phone-on-linux: {started}");
         return ExitCode::FAILURE;
     }
+    let call = |req: String| -> serde_json::Value {
+        let mut n = 0usize;
+        // SAFETY: m runs; req and n live for the call.
+        take(unsafe { cbb_member_call(m, req.as_ptr(), req.len(), &mut n) }, n)
+    };
     for line in std::io::stdin().lines() {
         let Ok(line) = line else { break };
         if let Some(text) = line.strip_prefix("COPY ") {
-            let req = serde_json::json!({ "text": text }).to_string();
-            // SAFETY: m runs; req and n live for the call.
-            let a = take(unsafe { cbb_member_copy(m, req.as_ptr(), req.len(), &mut n) }, n);
+            let a = call(serde_json::json!({ "op": "copy", "args": { "text": text } }).to_string());
             if a.get("error").is_some() {
                 eprintln!("phone-on-linux: {a}");
             }
         } else if line == "PEERS" {
-            // SAFETY: m runs; n lives for the call.
-            let a = take(unsafe { cbb_member_peers(m, &mut n) }, n);
+            let a = call(serde_json::json!({ "op": "peers" }).to_string());
             println!("PEERS {}", a["ok"]["peers"].as_array().map_or(0, Vec::len));
+        } else if let Some(req) = line.strip_prefix("CALL ") {
+            println!("ANSWER {}", call(req.to_string()));
         }
     }
     ExitCode::SUCCESS

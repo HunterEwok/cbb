@@ -176,7 +176,10 @@ impl Dialers {
     /// Dials the member the app knows as key at addrs; peer is its device
     /// ID when the app knows it. A key found again takes the new addresses.
     pub fn found(&self, node: &Arc<Node>, key: &str, addrs: Vec<SocketAddr>, peer: Option<DeviceId>) {
-        let addrs = order(addrs.into_iter());
+        // The loopback address too: the tunnel's port to the hub is there.
+        let mut addrs: Vec<SocketAddr> = addrs.into_iter().filter(|a| home_address(a.ip())).collect();
+        addrs.sort_by_key(|a| (a.ip().is_ipv6(), a.ip().is_loopback()));
+        addrs.dedup();
         let mut found = self.found.lock().unwrap();
         if let Some(a) = found.get(key) {
             *a.lock().unwrap() = Some(addrs);

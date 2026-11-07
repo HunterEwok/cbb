@@ -33,11 +33,14 @@ struct OwnInner {
 }
 
 impl Own {
-    /// The phone took the copy ev into its clipboard, or saved its files.
+    /// The phone took the copy ev into its clipboard, or saved its files,
+    /// which leaves the clipboard as it was.
     pub fn took(&self, ev: &Event) {
         let mut st = self.inner.lock().unwrap();
         st.taken = Some(ev.id.clone());
-        st.key = key_of(ev);
+        if !ev.media.as_ref().is_some_and(|m| m.files()) {
+            st.key = key_of(ev);
+        }
     }
 
     /// The phone sent what its clipboard holds, by its key.
@@ -163,6 +166,9 @@ mod tests {
         assert_eq!(key_of(&f).as_deref(), Some("\0files:f"));
         assert!(!sends("sent before", Some(&f), &own));
         assert!(sends("copied since", Some(&f), &own));
+        // Saving files leaves the clipboard, and what it sent, as they were.
+        own.took(&files("g", PC));
+        assert!(!sends("sent before", Some(&files("g", PC)), &own));
         // Nor a text the phone took and then saw replaced.
         let own = Own::default();
         own.took(&text("e", PC, "from the pc", 1_000));

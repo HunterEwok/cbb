@@ -2501,7 +2501,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (n.connected.isEmpty()) throw Failure(Failure.Kind.NO_COMPUTERS)
         if (n.usable?.first == text) return SyncResult.NOTHING_NEW
         n.send(text, Member.Kind.TEXT)
-        own = text
         return SyncResult.SENT
     }
 

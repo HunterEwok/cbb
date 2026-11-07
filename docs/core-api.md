@@ -54,22 +54,58 @@ section 6, ADa), and the joined answer carries `admin_ca`, the admin CA the grou
 issued for it. The pairing runs inside the core's TLS (`cbb_core::pair_session`); the app only
 moves the bytes.
 
-Built with the feature `member` too (again only `bind.sh aurora`), the library runs the lite
-member's own node in the app's process once the phone is in a group (`lite/ffi/src/member.rs`,
-over `cbb_lite::phone`): `cbb_member_start` takes the app's data directory, the phone's name,
-system and versions, its identity (device, certificate, issuer, group CA, roots), its public
-key, its secret for sealed messages and the same signing callback, and a callback that gets
-each event as JSON from the node's threads (`write`: a text for the phone's clipboard, with its
-kind and, for a secret, how long it may stay; `log`: a line for the app's log; `identity`: the
-certificate, issuer and roots after an admin renewed the certificate or a takeover made a new
-root, which the app keeps in its own file, as the core keeps no identity file for a key it does
-not hold). The node signs
-its TLS handshakes and its copies through the callback, presents itself as a phone (role
-`phone`, key store `hardware`, or `file` when the request's `key_store` says so), never listens and dials the members mDNS finds;
-`cbb_member_copy` sends a text the user handed to the app, `cbb_member_peers` lists the members
-connected and `cbb_member_stop` stops it. `TestFFIJoiner` runs the join, sync both ways and a
-renewal against a Go member through the example `phone-on-linux`, and `TestFFIJoinerAdmin` the
-join as an admin.
+### The member
+
+Built with the feature `member` too (`bind.sh aurora` today; the iPhone and Android apps move
+onto it next), the library runs the lite member's own node in the app's process once the phone
+is in a group (`lite/ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
+app's data directory, the phone's name, system and versions, its identity (device,
+certificate, issuer, group CA, roots), its public key, its secret for sealed messages and the
+same signing callback, and a callback that gets each event as JSON from the node's threads:
+`write`, a text for the phone's clipboard, with its kind and, for a secret, how long it may
+stay; `copy`, a copy that became the group's current one from another member (below);
+`message`, an `admin`, `hubs` or `credentials` message a peer sent, for the app to keep;
+`log`, a line for the app's log; `identity`, the certificate, issuer and roots after an admin
+renewed the certificate or a takeover made a new root, which the app keeps in its own file, as
+the core keeps no identity file for a key it does not hold. The node signs its TLS handshakes
+and its copies through the callback and presents itself as a phone (role `phone`, key store
+`hardware`, or `file` when the request's `key_store` says so); it dials the members mDNS finds
+(`mdns`, on by default) and those the app hands in. `cbb_member_stop` stops it.
+
+`cbb_member_call` asks it everything else, a request `{"op", "args"}` and its answer `{"ok"}`
+or `{"error"}` as `cbb_call`'s. `fetch`, `command` and `wait` wait for the network, so the app
+calls them off its main thread. A copy is `{id, origin, age_ms, kind, via, text, media,
+unread, key}`: `media` is the manifest of images or files, and `key` what the button compares
+it by (a text by itself, an image by `"\u0000image:"` and the hex SHA-256 of its PNG or JPEG
+part, files by `"\u0000files:"` and the copy's ID).
+
+| `op` | `args` | `ok` |
+|---|---|---|
+| `copy` | `text`, `secret` (optional), `board` (optional, `true` by default: it came from the phone's clipboard) | `{}` |
+| `copy_media` | `text` (optional), `parts`: `[{type, path, dir, data, file}]`, clipboard data with its bytes in `data` (base64) or a file or folder with the file on the phone in `file`; `board` (optional, `false` by default) | `{"copy"}` |
+| `current` | none | `{"copy"}`: the group's current copy, or null |
+| `waiting` | none | `{"copy"}`: the copy from another device that waits for the phone (design.md, "The one button"), or null |
+| `took` | `id` | `{}`: the app took that copy into the clipboard, or saved its files |
+| `sends` | `board`: the clipboard's key | `{"sends"}`: whether the button sends it: it is neither the group's copy nor what this phone itself sent from its clipboard or took into it last |
+| `fetch` | `id`, `max` (bytes of the sealed blob), `out` (a new folder) | `{"parts"}`: each part with `file`, where it is, each checked against its hash |
+| `found`, `lost` | `key` (the app's name for the member), `addrs` (`host:port`, loopback too for the tunnel), `device` (optional) | `{}`: dial it again and again, or stop |
+| `listen`, `unlisten` | `port` (0 for any) | `{"port"}`: the member port for the members that dial this phone as the group's hub, which the app publishes with `r=phone` |
+| `pause`, `resume`, `wait` | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `waiting`, `pause` |
+| `mode`, `mute` | `mode`; `until_ms` (null unmutes) | `{}` |
+| `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features}]`, as their hellos and reach messages present them |
+| `records` | none | `{"records"}` |
+| `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
+| `command` | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
+| `send_cert`, `send_admin_ca`, `send_tunnel` | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |
+| `send_hubs`, `send_credentials` | `share`, `credentials` | `{"to"}` |
+
+A phone's node passes on a command for another device when it is connected to it, as
+protocol.md section 15 says; the lite member refuses it for itself. It keeps the sealed blobs
+of the copies with images or files it made or fetched in `content/` of its data directory,
+the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
+both ways and a renewal against a Go member through the example `phone-on-linux`,
+`TestFFIJoinerAdmin` the join as an admin, and `TestFFIMember` the calls: an address handed
+in, the button's rule, images both ways, and pausing.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its

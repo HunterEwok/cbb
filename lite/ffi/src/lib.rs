@@ -273,8 +273,10 @@ pub unsafe extern "C" fn cbb_member_start(
     m.map_or(core::ptr::null_mut(), |m| Box::into_raw(Box::new(m)))
 }
 
-/// Sends a text the user handed to the app: `request` is
-/// `{"text", "secret"}`.
+/// Asks the member: `request` is `{"op", "args"}` (src/member.rs,
+/// docs/core-api.md, "The member"), the answer `{"ok"}` or `{"error"}`.
+/// It may block: `fetch`, `command` and `wait` wait for the network, so the
+/// app calls them off its main thread.
 ///
 /// # Safety
 ///
@@ -282,7 +284,7 @@ pub unsafe extern "C" fn cbb_member_start(
 /// point to `len` readable bytes and `answer_len` be writable.
 #[cfg(feature = "member")]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_member_copy(
+pub unsafe extern "C" fn cbb_member_call(
     m: *const member::Member,
     request: *const u8,
     len: usize,
@@ -295,20 +297,7 @@ pub unsafe extern "C" fn cbb_member_copy(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(m.copy(req), answer_len)
-}
-
-/// The members connected now: `{"peers": [{device, name, role, os}]}`.
-///
-/// # Safety
-///
-/// As `cbb_member_copy`.
-#[cfg(feature = "member")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_member_peers(m: *const member::Member, answer_len: *mut usize) -> *mut u8 {
-    // SAFETY: as the function's contract says.
-    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
-    to_c(m.peers(), answer_len)
+    to_c(m.call(req), answer_len)
 }
 
 /// Stops the member and frees it; null does nothing. Its callbacks may still

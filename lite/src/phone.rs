@@ -110,22 +110,30 @@ impl Member {
         Ok(Member { node, dialers: Dialers::default(), listener: Mutex::new(None), own: Own::default(), log })
     }
 
-    /// Sends a text the user copied on the phone and handed to the app; the
-    /// button compares the clipboard with it from now on.
-    pub fn copy(&self, text: &str, secret: bool) -> Result<()> {
+    /// Sends a text the user handed to the app; board says it came from
+    /// the phone's clipboard, which the button then compares with it. A
+    /// text shared from another app leaves the clipboard as it was, so the
+    /// button goes on comparing with what the clipboard last sent.
+    pub fn copy(&self, text: &str, secret: bool, board: bool) -> Result<()> {
         self.node.send(text, if secret { Kind::Secret } else { Kind::Text }, Via::Phone)?;
-        self.own.sent(text);
+        if board {
+            self.own.sent(text);
+        }
         Ok(())
     }
 
     /// Sends images or files the user handed to the app: clipboard data
     /// such as an image (parts with a type), or files and folders (parts
-    /// with a path), with a plain-text alternative or "". The button
-    /// compares the clipboard with it from now on, by the key it returns.
-    pub fn copy_media(&self, text: &str, parts: Vec<(Part, Source)>) -> Result<Copy> {
+    /// with a path), with a plain-text alternative or "". board says it
+    /// came from the phone's clipboard, as copy does; images or files
+    /// shared from another app do not, and a text the clipboard sent before
+    /// them stays out of the button's sending (trace b1).
+    pub fn copy_media(&self, text: &str, parts: Vec<(Part, Source)>, board: bool) -> Result<Copy> {
         let event = self.node.send_media(text, parts)?;
         let key = button::key_of(&event).unwrap_or_default();
-        self.own.sent(&key);
+        if board {
+            self.own.sent(&key);
+        }
         Ok(Copy { event, key })
     }
 

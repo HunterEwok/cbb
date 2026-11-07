@@ -65,10 +65,12 @@ void cbb_join_free(cbb_join *j);
 
 /*
  * The member inside the app (src/member.rs), only in a library built with the
- * feature member (the Aurora app): the lite member's node on threads of its
- * own, with the app's key through sign. event gets each event as JSON,
- * {"type":"write","text","kind","ttl_ms"} or {"type":"log","line"}, on any
- * thread; ctx must stay valid for the rest of the process.
+ * feature member (the phones' apps): the lite member's node on threads of its
+ * own, with the app's key through sign. event gets each event as JSON on any
+ * thread: {"type":"write","text","kind","ttl_ms"}, {"type":"log","line"},
+ * {"type":"identity","cert","issuer","roots"}, {"type":"copy","copy"} or
+ * {"type":"message","from","message"}; ctx must stay valid for the rest of
+ * the process.
  */
 typedef void (*cbb_event_fn)(void *ctx, const uint8_t *event, size_t len);
 
@@ -76,8 +78,12 @@ typedef struct cbb_member cbb_member;
 
 cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sign, cbb_event_fn event, void *ctx,
                              uint8_t **answer, size_t *answer_len);
-uint8_t *cbb_member_copy(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
-uint8_t *cbb_member_peers(const cbb_member *m, size_t *answer_len);
+/*
+ * Asks the member: request is {"op","args"} (docs/core-api.md, "The
+ * member"), the answer {"ok"} or {"error"}, given back with cbb_free. fetch,
+ * command and wait block on the network: call them off the main thread.
+ */
+uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 void cbb_member_stop(cbb_member *m);
 
 #ifdef __cplusplus
