@@ -339,7 +339,7 @@ func cmdNew(args []string, stdout, stderr io.Writer) int {
 	if m.Status.KeyLevel == "files" {
 		fmt.Fprintln(stdout, "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).")
 	}
-	fmt.Fprintln(stdout, "Add a computer: cbb pair here, then cbb pair on the new computer.")
+	fmt.Fprintln(stdout, "Add a device: on it, join a group, which shows a code; then type that code here with cbb pair -qr.")
 	return 0
 }
 

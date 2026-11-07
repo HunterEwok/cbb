@@ -29,3 +29,7 @@ internal/service/service_test.go TestAloneHoldsTheName D-80: the election for cb
 internal/service/service_test.go TestHolderPriority D-80: the election for cbb.local is gone
 internal/service/service_test.go TestIPhone D-80: the shortcut's endpoints on the member port are gone
 internal/service/service_test.go TestShortcutTokenOnlySyncs D-80: the shortcut's tokens are gone
+cmd/cbb/admin_commands_test.go TestModeAndNetwork D-55: cbb mode went with the four modes; cbb sync and network are in TestSyncAndNetwork
+cmd/cbb/admin_commands_test.go TestModeLine D-55: the four modes' lines went with them; sync's line is in TestSyncLine
+internal/service/mode_test.go TestAdminSetsTheMode D-55: an admin turns sync on or off now, in sync_test.go's TestAdminTurnsSync
+internal/service/mode_test.go TestSyncModes D-55: the four modes are gone; sync on and off is in sync_test.go's TestSyncOnOff

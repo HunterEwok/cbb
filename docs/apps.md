@@ -406,19 +406,37 @@ the Mac app it speaks the control socket, with the service's own `internal/contr
 service and its clipboard agent keep syncing without it.
 
 - **The window** (`frontend/`, plain HTML, CSS and JavaScript, no build step): the group in a
-  line with the away-from-home switch, the devices as tiles, a list or orbits around this
-  computer, a device's details beside them, and "Send the clipboard" and "Fetch".
-- **Alerts**: the Mac app's card above the devices, with the same buttons on the root.
-- **The tray item**: how many devices are online, send, fetch, the window, Quit. Closing the
+  line with the two switches in its header, the house (sync on this computer, `cbb sync`: a
+  tap toggles it, holding it or its context menu picks 15 minutes, an hour, 8 hours or until
+  turned on) and the globe ("Everywhere", sync away from home, `cbb global`, which asks
+  first and waits while sync is off); the devices as tiles, a list or orbits around this
+  computer, and a device's card beside them. There is no Send or Fetch: the clipboard syncs
+  by itself. What an action says shows at the bottom for a while.
+- **Alerts**: the Mac app's card above the devices, with the same buttons on the root, and an
+  update the group passed around as a card on top.
+- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group" and
+  "Recovery key". It opens by itself when the app starts in no group, as after the install.
+- **The device card**: its name, online dot and badges (root, admin, hub), one line of its
+  system and CBB version, the house (an admin turns another computer's sync off there), mute,
+  and the rest (type, MAC address, role, ID) under More; then the hub's line and the menu.
+- **The tiles** move by a drag at any time; holding one without moving, or its context menu,
+  opens its menu (Move to a collection, Move earlier or later, Back to the group's order).
+- **The tray item**: how many devices are online, Sync (a check mark, with a submenu of times
+  to turn it off for), Everywhere (turning it on opens the window, which asks first), Open
+  CBB, Settings, the update when there is one, Quit. Closing the
   window keeps the tray item; starting the app again opens the window. Its glyph is the Mac's
   in the same three states, single-colour: on Windows a black and a white ICO, which the
   system switches with the taskbar's theme; on Linux a white PNG, black when the desktop
   portal says the user prefers a light look (`color-scheme`), read once at start.
-- **Settings**: the ten colours (`frontend/tokens.js`, which `go run ./tools/tokens` writes
-  with the Swift and Kotlin tokens), the appearance, sync on or off on this computer (`cbb sync`),
-  and error details (as cbb: on in a
-  build without a release version, `CBB_DEBUG=1` or `0`, or the switch). They are kept in
-  the user's configuration folder (`cbb/desktop.json`).
+- **Settings**: the appearance and the language as icons and a list, the ten colours
+  (`frontend/tokens.js`, which `go run ./tools/tokens` writes with the Swift and Kotlin
+  tokens), "Open at sign-in" (on Linux an entry `cbb-tray.desktop` with `Hidden=true` in the
+  user's autostart folder, on Windows the user's `StartupApproved\Run` value, as the Task
+  Manager writes it), and "Advanced settings", which shows the hub and its tunnel (this
+  computer's card) and the claim with the recovery key (`cbb recovery`). Seven taps on the
+  version show "Show error details" (as cbb: on in a build without a release version,
+  `CBB_DEBUG=1` or `0`, or the switch). They are kept in the user's configuration folder
+  (`cbb/desktop.json`).
 - What changes the group runs `cbb` as the administrator: through `pkexec` on Linux (the
   desktop's password dialog; each argument passed as it is, no shell), and through the UAC
   prompt on Windows (an elevated PowerShell started with `ShellExecuteEx`'s `runas`, each
@@ -426,15 +444,17 @@ service and its clipboard agent keep syncing without it.
   changes nothing and says nothing.
 - **The hub's line**: on every device's page, as in the Mac app (`hubLine` in `app.js`,
   `MakeHub` and `StopHub` in `desk.go`).
-- **Sync on and off, muting**: as in the Mac app; the switch is the third button of the
-  bottom bar, a tap toggles it and holding it (or its context menu) picks the time
-  (`SetSync`, `Mute` and `Unmute` in `desk.go`).
-- **Join a phone's group**: a computer in no group shows the button, which runs `cbb pair
-  -app FILE` as the administrator, as the Mac app does: the dialog shows the QR code cbb
-  writes into the file the app made, and Cancel removes the file. On Linux the file is
-  written over without being created, so root never makes a file in `/tmp`.
-- Languages: English and Russian (`frontend/l10n/ru.json`, keyed by the English text; the Go
-  side reads it for the tray), picked from the system's language.
+- **Muting**: as in the Mac app (`Mute` and `Unmute` in `desk.go`).
+- **Add a device** (+): on the root or an admin, one field for the six digits the new device
+  shows (or its QR code's text, or a picture of it), which runs `cbb pair -qr` as the
+  administrator with the code on its standard input; "Device far away? Send an invitation"
+  says how `cbb invite` does it on the hub.
+- **Join a group**: runs `cbb pair -app FILE` as the administrator, as the Mac app does: the
+  dialog shows the QR code cbb writes into the file the app made and its six digits, which a
+  computer of the group types, and Cancel removes the file. On Linux the file is written over
+  without being created, so root never makes a file in `/tmp`.
+- Languages: English and those of `frontend/l10n/` (keyed by the English text; the Go side
+  reads them for the tray), the system's language unless Settings picks one.
 
 CI's `tray app` jobs vet, test and build it on Linux and Windows. The release archives carry
 it: Windows' (`cbb-desktop.exe`, built without cgo beside `cbb.exe` and signed with it), whose

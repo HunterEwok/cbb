@@ -1219,6 +1219,14 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The tray app on Linux and Windows has the house (sync) and the globe (Everywhere, sync away
+  from home) in its window's header and as check marks in the tray menu, with a timer to turn
+  sync off for; the bottom bar with Send and Fetch is gone, and an update shows as a card.
+  In no group the window is the start window (Create a group, Join a group, Recovery key) and
+  opens by itself; + takes the six digits the new device shows; the device card shows one
+  line with More beside; tiles move by a drag and open their menu when held; Settings has the
+  language, "Open at sign-in" and "Advanced settings", and error details after seven taps on
+  the version.
 - One switch, sync, replaces the four sync modes and the device's own "not listening" switch
   (design.md, "Sync on and off"): on by default, so a device that joins syncs at once; off,
   for a time or until turned on, the clipboard is the device's own, both ways. `cbb sync [on
