@@ -311,7 +311,7 @@ mod tests {
             std::fs::write(
                 &script,
                 format!(
-                    "#!/bin/sh\n[ -n \"$CBB_PROBE\" ] && exit 0\nCBB_FAKE_HELPER=1 exec '{}' --exact helper::tests::fake_helper --nocapture --quiet --test-threads=1 3>&1 >/dev/null\n",
+                    "#!/bin/sh\n[ \"$1\" = probe ] && exit 0\nCBB_FAKE_HELPER=1 exec '{}' --exact helper::tests::fake_helper --nocapture --quiet --test-threads=1 3>&1 >/dev/null\n",
                     exe.display()
                 ),
             )
@@ -322,7 +322,7 @@ mod tests {
                 std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
             }
             for _ in 0..100 {
-                match Command::new(&script).env("CBB_PROBE", "1").status() {
+                match Command::new(&script).arg("probe").status() {
                     Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) => {
                         std::thread::sleep(Duration::from_millis(20))
                     }
