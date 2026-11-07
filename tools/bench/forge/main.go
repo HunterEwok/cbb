@@ -59,11 +59,9 @@ func main() {
 	flag.StringVar(&targetState, "target-state", "", "the renewals' cases: the target's state directory, for its key")
 	flag.Parse()
 	if flag.NArg() > 0 && outsideCase(flag.Arg(0)) {
-		if err := runOutside(*addr, flag.Arg(0)); err != nil {
-			fmt.Fprintln(os.Stderr, "forge:", err)
-			os.Exit(1)
-		}
-		return
+		// It serves until it fails.
+		fmt.Fprintln(os.Stderr, "forge:", runOutside(*addr, flag.Arg(0)))
+		os.Exit(1)
 	}
 	if flag.Arg(0) == "memscan" {
 		// forge memscan TEXT looks for TEXT in the services' memory.
