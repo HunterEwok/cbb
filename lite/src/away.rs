@@ -251,6 +251,11 @@ impl Away {
         while !node.is_closed() {
             let st = self.st.lock().unwrap().clone();
             let hubs = st.as_ref().map(|s| s.hubs_to_try(&node.hub_order())).unwrap_or_default();
+            // A phone's app in the background makes no connection.
+            if node.is_paused() {
+                std::thread::sleep(Duration::from_secs(1));
+                continue;
+            }
             let (Some(st), false) = (st, hubs.is_empty()) else {
                 std::thread::sleep(Duration::from_secs(1));
                 continue;
