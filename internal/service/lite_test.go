@@ -254,6 +254,37 @@ func TestFFIJoiner(t *testing.T) {
 			t.Fatalf("the connected phone is listed as %+v", d)
 		}
 	}
+	// The app's devices list: the group's root online, and this phone,
+	// both from the records.
+	type appDevice struct {
+		Device, Name, Role, OS            string
+		Admin, Root, Frozen, Online, Self bool
+		Listed                            bool
+	}
+	var devs []appDevice
+	waitFor(t, "the app lists the group's devices", func() bool {
+		fmt.Fprintln(in, "DEVICES")
+		devs = nil
+		if err := json.Unmarshal([]byte(next("DEVICES ")), &devs); err != nil {
+			t.Fatal(err)
+		}
+		return len(devs) == 2 && devs[0].Listed && devs[1].Listed
+	})
+	piID := pi.status(t).Device
+	for _, d := range devs {
+		switch {
+		case d.Device == piID:
+			if !d.Root || !d.Online || d.Self || d.OS == "" {
+				t.Fatalf("the app lists the root as %+v", d)
+			}
+		case d.Name == "aurora phone":
+			if !d.Self || d.Root || d.Admin || d.Role != group.RolePhone || d.OS != group.OSAurora {
+				t.Fatalf("the app lists itself as %+v", d)
+			}
+		default:
+			t.Fatalf("the app lists an unknown device %+v", d)
+		}
+	}
 	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the phone"); err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +565,7 @@ func TestFFIJoinerAdmin(t *testing.T) {
 	if _, err := admit(next, false); err == nil {
 		t.Fatal("a window that makes no admins admitted a phone that offers an admin key")
 	}
-	next, _ = phoneOnLinux(t, bin, "-name", "admin phone", "-admin")
+	next, in := phoneOnLinux(t, bin, "-name", "admin phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
 	if m, err := admit(next, true); err != nil || m.Name != "admin phone" {
 		t.Fatalf("admitting the phone as an admin: %v, %+v", err, m)
 	}
@@ -553,6 +584,184 @@ func TestFFIJoinerAdmin(t *testing.T) {
 		if d.Name == "refused phone" {
 			t.Errorf("the refused phone is listed: %+v", d)
 		}
+	}
+
+	// The admin phone admits a computer that listens, as the app does when
+	// it scans the computer's QR code: with a certificate from its admin
+	// CA, and a device record the root takes from it.
+	waitFor(t, "the admin phone connected", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+	j, err := pair.NewJoiner(pair.Info{Name: "laptop", OS: group.OSLinux})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fp, err := j.Fingerprint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	joined := make(chan *group.Identity, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			joined <- nil
+			return
+		}
+		id, err := j.Accept(context.Background(), conn, "135790", func(*group.Identity) error { return nil })
+		if err != nil {
+			t.Errorf("the computer's join: %v", err)
+		}
+		joined <- id
+	}()
+	fmt.Fprintln(in, "ADMIT "+phone.JoinQR(phone.JoinCode{Code: "135790", Addrs: []string{ln.Addr().String()}, Fingerprint: fp}))
+	if got := next("ADMITTED "); got != string(j.ID) {
+		t.Fatalf("the phone admitted %q, not the computer %s", got, j.ID)
+	}
+	t.Logf("the admin phone admitted the computer %s", j.ID)
+	if got := next("ADMIT DONE "); got != "true" {
+		t.Fatalf("the computer did not confirm its join: %q", got)
+	}
+	id := <-joined
+	if id == nil || id.Issuer == nil || !bytes.Equal(id.Issuer.Raw, ca.Raw) {
+		t.Fatalf("the computer's identity: %+v", id)
+	}
+	if err := id.Cert.CheckSignatureFrom(ca); err != nil {
+		t.Fatalf("the computer's certificate is not from the phone's admin CA: %v", err)
+	}
+	if got, err := group.DeviceOf(id.Cert); err != nil || got != j.ID {
+		t.Fatalf("the computer's certificate names %q: %v", got, err)
+	}
+	waitFor(t, "the root lists the computer the phone admitted", func() bool {
+		for _, d := range pi.devices(t) {
+			if d.Name == "laptop" {
+				return d.Role == group.RoleFull && d.OS == group.OSLinux && !d.Admin
+			}
+		}
+		return false
+	})
+}
+
+// TestFFIPhoneRoot: the Aurora app makes a group of its own, its root key
+// outside the core (cbb_group_new), and as the group's root admits a
+// computer that listens, as the app does when it scans the computer's QR
+// code: the computer takes the phone's group, a certificate from its root
+// and no issuer.
+func TestFFIPhoneRoot(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	made := strings.Fields(next("Group "))
+	if len(made) != 2 {
+		t.Fatalf("the phone's group: %q", made)
+	}
+	fmt.Fprintln(in, "DEVICES")
+	if devices := next("DEVICES "); !strings.Contains(devices, `"root phone"`) {
+		t.Fatalf("the phone does not list itself: %s", devices)
+	}
+
+	j, err := pair.NewJoiner(pair.Info{Name: "laptop", OS: group.OSLinux})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fp, err := j.Fingerprint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	joined := make(chan *group.Identity, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			joined <- nil
+			return
+		}
+		id, err := j.Accept(context.Background(), conn, "246801", func(*group.Identity) error { return nil })
+		if err != nil {
+			t.Errorf("the computer's join: %v", err)
+		}
+		joined <- id
+	}()
+	fmt.Fprintln(in, "ADMIT "+phone.JoinQR(phone.JoinCode{Code: "246801", Addrs: []string{ln.Addr().String()}, Fingerprint: fp}))
+	if got := next("ADMITTED "); got != string(j.ID) {
+		t.Fatalf("the phone admitted %q, not the computer %s", got, j.ID)
+	}
+	if got := next("ADMIT DONE "); got != "true" {
+		t.Fatalf("the computer did not confirm its join: %q", got)
+	}
+	id := <-joined
+	if id == nil || id.Issuer != nil {
+		t.Fatalf("the computer's identity: %+v", id)
+	}
+	if got := group.Tag(id.GroupCA.Cert); got != made[1] {
+		t.Fatalf("the computer joined group %s, not the phone's %s", got, made[1])
+	}
+	if !id.GroupCA.Cert.IsCA || !strings.HasPrefix(id.GroupCA.Cert.Subject.CommonName, "cbb group root ") {
+		t.Fatalf("the group's root: %+v", id.GroupCA.Cert.Subject)
+	}
+	if err := id.Cert.CheckSignatureFrom(id.GroupCA.Cert); err != nil {
+		t.Fatalf("the computer's certificate is not from the phone's root: %v", err)
+	}
+	if got, err := group.DeviceOf(id.Cert); err != nil || got != j.ID {
+		t.Fatalf("the computer's certificate names %q: %v", got, err)
+	}
+	fmt.Fprintln(in, "DEVICES")
+	if devices := next("DEVICES "); !strings.Contains(devices, `"laptop"`) {
+		t.Fatalf("the phone does not list the computer: %s", devices)
+	}
+
+	// The root's changes to the computer, signed through cbb_member_manage.
+	manage := func(req string) string {
+		fmt.Fprintln(in, "MANAGE "+req)
+		return next("MANAGED ")
+	}
+	if got := manage(`{"action":"rename","device":"` + string(j.ID) + `","name":"desk"}`); got != `{"ok":{}}` {
+		t.Fatalf("renaming the computer: %s", got)
+	}
+	fmt.Fprintln(in, "DEVICES")
+	if devices := next("DEVICES "); !strings.Contains(devices, `"desk"`) || strings.Contains(devices, `"laptop"`) {
+		t.Fatalf("the phone does not list the computer's new name: %s", devices)
+	}
+	// The computer is not running, so a command for it finds no way there.
+	if got := manage(`{"action":"mute","device":"` + string(j.ID) + `","for_ms":60000,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
+		t.Fatalf("muting a computer that is not running: %s", got)
+	}
+	// The admin key comes from the computer's hello, so it must be connected.
+	if got := manage(`{"action":"make_admin","device":"` + string(j.ID) + `"}`); !strings.Contains(got, "not connected") {
+		t.Fatalf("making a computer that is not running an admin: %s", got)
+	}
+	// A group made a moment ago stops nothing.
+	fmt.Fprintln(in, `CALL {"op":"alerts"}`)
+	if got := next("ANSWER "); got != `{"ok":{"alerts":[]}}` {
+		t.Fatalf("the alerts: %s", got)
+	}
+	if got := manage(`{"action":"resolve","records":[]}`); !strings.Contains(got, "names the records") {
+		t.Fatalf("resolving nothing: %s", got)
+	}
+	// Nothing is due in a group made a moment ago.
+	if got := manage(`{"action":"renew"}`); got != `{"ok":{"renewed":0}}` {
+		t.Fatalf("renewing: %s", got)
+	}
+	if got := manage(`{"action":"remove","device":"` + made[0] + `"}`); !strings.Contains(got, "cannot remove itself") {
+		t.Fatalf("the phone removing itself: %s", got)
+	}
+	if got := manage(`{"action":"remove","device":"` + string(j.ID) + `"}`); got != `{"ok":{}}` {
+		t.Fatalf("removing the computer: %s", got)
+	}
+	fmt.Fprintln(in, "DEVICES")
+	if devices := next("DEVICES "); strings.Contains(devices, `"desk"`) {
+		t.Fatalf("the phone still lists the computer it removed: %s", devices)
 	}
 }
 

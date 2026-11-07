@@ -67,6 +67,7 @@ Membership Membership::fromJoined(const QJsonObject &j)
     for (const QJsonValue &r : j.value(QStringLiteral("roots")).toArray())
         m.roots.append(b64(r));
     m.records = b64(j.value(QStringLiteral("records")));
+    m.root = j.value(QStringLiteral("root")).toBool();
     return m;
 }
 
@@ -114,6 +115,8 @@ bool Membership::saveIdentity(Failure *failure) const
         o.insert(QStringLiteral("issuer"), b64(issuer));
     if (!adminCa.isEmpty())
         o.insert(QStringLiteral("admin_ca"), b64(adminCa));
+    if (root)
+        o.insert(QStringLiteral("root"), true);
     return writeFile(QStringLiteral("member.json"), QJsonDocument(o).toJson(), failure);
 }
 

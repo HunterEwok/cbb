@@ -129,13 +129,13 @@ pub fn tag(group_ca: &Cert) -> String {
     hex(&sha256(&group_ca.der)[..8])
 }
 
-const OID_P256: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.3.1.7");
-const OID_EC_PUBLIC_KEY: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.2.1");
-const OID_ECDSA_SHA256: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.2");
-const OID_SERVER_AUTH: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.3.6.1.5.5.7.3.1");
-const OID_CLIENT_AUTH: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.3.6.1.5.5.7.3.2");
+pub(crate) const OID_P256: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.3.1.7");
+pub(crate) const OID_EC_PUBLIC_KEY: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.2.1");
+pub(crate) const OID_ECDSA_SHA256: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.2");
+pub(crate) const OID_SERVER_AUTH: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.3.6.1.5.5.7.3.1");
+pub(crate) const OID_CLIENT_AUTH: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.3.6.1.5.5.7.3.2");
 const OID_ANY_EKU: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.29.37.0");
-const OID_COMMON_NAME: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.4.3");
+pub(crate) const OID_COMMON_NAME: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.4.3");
 
 /// A parsed certificate: its DER and what the checks need from it.
 #[derive(Clone)]
@@ -157,7 +157,7 @@ pub struct Cert {
     ecdsa_sha256: bool,
     sig: Vec<u8>,
     issuer_name: Vec<u8>,
-    subject_name: Vec<u8>,
+    pub(crate) subject_name: Vec<u8>,
 }
 
 impl fmt::Debug for Cert {
@@ -372,7 +372,7 @@ fn self_signed_cert(
 }
 
 /// A DER element with the given tag.
-fn tagged(tag: u8, content: &[u8]) -> Vec<u8> {
+pub(crate) fn tagged(tag: u8, content: &[u8]) -> Vec<u8> {
     let mut out = vec![tag];
     let n = content.len();
     if n < 0x80 {
@@ -387,23 +387,23 @@ fn tagged(tag: u8, content: &[u8]) -> Vec<u8> {
     out
 }
 
-fn seq(parts: &[&[u8]]) -> Vec<u8> {
+pub(crate) fn seq(parts: &[&[u8]]) -> Vec<u8> {
     tagged(0x30, &parts.concat())
 }
 
-fn set(parts: &[&[u8]]) -> Vec<u8> {
+pub(crate) fn set(parts: &[&[u8]]) -> Vec<u8> {
     tagged(0x31, &parts.concat())
 }
 
-fn oid(o: &ObjectIdentifier) -> Vec<u8> {
+pub(crate) fn oid(o: &ObjectIdentifier) -> Vec<u8> {
     tagged(0x06, o.as_bytes())
 }
 
-fn bit_string(b: &[u8]) -> Vec<u8> {
+pub(crate) fn bit_string(b: &[u8]) -> Vec<u8> {
     tagged(0x03, &[&[0u8][..], b].concat())
 }
 
-fn bit_string_bits(bits: u8, unused: u8) -> Vec<u8> {
+pub(crate) fn bit_string_bits(bits: u8, unused: u8) -> Vec<u8> {
     tagged(0x03, &[unused, bits])
 }
 

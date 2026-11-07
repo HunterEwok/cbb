@@ -11,6 +11,8 @@ Source0:    %{name}-%{version}.tar.bz2
 # The Rust core comes in as a static library; nothing to strip apart.
 %global debug_package %{nil}
 
+# The camera page that reads a device's join code.
+Requires: qt5-qtdeclarative-import-multimedia
 BuildRequires: pkgconfig(auroraapp)
 BuildRequires: pkgconfig(Qt5Core)
 BuildRequires: pkgconfig(Qt5Qml)

@@ -398,7 +398,7 @@ impl Node {
         self.ident.read().unwrap().clone()
     }
 
-    fn logf(&self, s: &str) {
+    pub fn logf(&self, s: &str) {
         (self.log)(s)
     }
 
@@ -426,6 +426,13 @@ impl Node {
         let mut out: Vec<Peer> = self.all_peers().into_iter().filter(|p| !p.records_only).collect();
         out.sort_by(|a, b| a.id.cmp(&b.id));
         out
+    }
+
+    /// The certificate chains the members connected sent, leaf first, by
+    /// device: those an admin's app renews.
+    pub fn peer_chains(&self) -> Vec<(DeviceId, Vec<Cert>)> {
+        let conns = self.conns.lock().unwrap();
+        conns.values().filter(|c| !c.records_only).map(|c| (c.id.clone(), c.chain.clone())).collect()
     }
 
     /// The connected members that sent their hello, those whose connection
@@ -1278,8 +1285,9 @@ impl Node {
         }
     }
 
-    /// Keeps a certificate an admin renewed for this member.
-    fn renewed(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<()> {
+    /// Keeps a certificate an admin renewed for this member, or this
+    /// member's app for itself.
+    pub fn renewed(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<()> {
         let mut ident = self.ident.write().unwrap();
         let next = ident.with_cert_from(der, issuer)?;
         let chain: Vec<Cert> = std::iter::once(next.cert.clone()).chain(next.issuer.clone()).collect();

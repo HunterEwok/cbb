@@ -548,6 +548,25 @@ pub fn pair_client(cert: &[u8], key: &[u8], clock: &Clock) -> Result<(rustls::Cl
     Ok((cfg, exporter))
 }
 
+/// The client configuration of a member that dials a joiner which listens
+/// and showed its QR code, to admit it: this member's certificate with its
+/// issuer, wherever its key is, and any server certificate, which the
+/// program checks against the QR code's fingerprint once the handshake is
+/// done. Use a new one for each connection: its Exporter gives the
+/// pairing's sid.
+pub fn pair_admitter(id: &Identity, clock: &Clock) -> Result<(rustls::ClientConfig, Arc<Exporter>)> {
+    let certified = member_certified(id)?;
+    let mut cfg = client_builder(clock)?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(AnyPeer))
+        .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
+    cfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    cfg.resumption = rustls::client::Resumption::disabled();
+    let exporter = Arc::new(Exporter::default());
+    cfg.key_log = exporter.clone();
+    Ok((cfg, exporter))
+}
+
 /// A server name for the TLS client: the peer's host name, or a fixed one
 /// for an address given by hand (members do not look at it).
 #[allow(clippy::expect_used, reason = "a fixed, valid DNS name")]

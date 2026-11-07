@@ -32,17 +32,21 @@ LIBS += $$PWD/core/$$QT_ARCH/libcbb_ffi.a -ldl -lpthread -lm
 
 SOURCES += \
     src/main.cpp \
+    src/admit.cpp \
     src/app.cpp \
     src/core.cpp \
     src/errors.cpp \
+    src/events.cpp \
     src/join.cpp \
     src/member.cpp \
     src/membership.cpp \
     src/platform/osinfo.cpp
 HEADERS += \
+    src/admit.h \
     src/app.h \
     src/core.h \
     src/errors.h \
+    src/events.h \
     src/join.h \
     src/member.h \
     src/membership.h \
@@ -88,7 +92,17 @@ DISTFILES += \
     qml/tools.cbb.aurora.qml \
     qml/pages/MainPage.qml \
     qml/pages/JoinPage.qml \
+    qml/pages/NewGroupPage.qml \
+    qml/pages/AddDevicePage.qml \
+    qml/pages/DevicePage.qml \
+    qml/pages/AlertsCard.qml \
+    qml/pages/RenameDevicePage.qml \
+    qml/pages/DeviceTile.qml \
+    qml/pages/SettingsPage.qml \
+    qml/pages/devices.js \
     qml/cover/CoverPage.qml \
+    qml/system/Notifier.qml \
+    qml/system/ShareTarget.qml \
     packaging/$$CBB_TARGET/$${TARGET}.desktop \
     packaging/$$CBB_TARGET/$${TARGET}.spec
 

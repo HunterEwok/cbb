@@ -14,15 +14,17 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use cbb_core::admit::{self, Admitted, Admitter, GroupView};
 use cbb_core::certs::DeviceId;
 use cbb_core::clip::{Engine, Event, Kind, Mode, Via};
 use cbb_core::identity::Identity;
+use cbb_core::manage::{self, Change, Order, Signer};
 use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
 use crate::button::{self, Own};
 use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::node::{KeepIdentity, Node, OnMessage, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
 use crate::{discovery, mute, service, uptime};
@@ -63,6 +65,30 @@ pub struct Config {
     /// muted, and who.
     pub on_mute: OnMute,
     pub log: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+/// A device of the group as the phone's app shows it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DeviceView {
+    pub id: String,
+    pub name: String,
+    /// `full`, `phone`, `lite` or `watch`.
+    pub role: String,
+    /// Its system, from its hello when it is connected, else its record's;
+    /// empty when neither tells.
+    pub os: String,
+    pub admin: bool,
+    /// It holds the group's root.
+    pub root: bool,
+    /// Another admin froze it.
+    pub frozen: bool,
+    /// It is connected to this phone now.
+    pub online: bool,
+    /// It is this phone.
+    pub this: bool,
+    /// The group's records list it; a connected member they do not list
+    /// yet is shown too.
+    pub listed: bool,
 }
 
 /// A running member of a phone's app.
@@ -369,6 +395,154 @@ impl Member {
     /// Sets what gets the admin, hubs and credentials messages peers send.
     pub fn on_message(&self, f: OnMessage) {
         self.node.on_message(f);
+    }
+
+    /// Every device of the group as the app shows it: the group's device
+    /// records, the system a connected member's hello names over its
+    /// record's, and after them the connected members no record lists yet.
+    pub fn device_views(&self) -> Vec<DeviceView> {
+        let me = self.node.identity().id.to_string();
+        let peers = self.node.peers();
+        let root = self.node.records().lock().unwrap().root_member().map(|(id, _)| id);
+        let mut out: Vec<DeviceView> = self
+            .node
+            .devices()
+            .into_iter()
+            .map(|d| {
+                let peer = peers.iter().find(|p| p.id.as_str() == d.id);
+                DeviceView {
+                    os: peer.filter(|p| !p.os.is_empty()).map_or(d.os.clone(), |p| p.os.clone()),
+                    online: peer.is_some(),
+                    this: d.id == me,
+                    root: root.as_deref() == Some(d.id.as_str()),
+                    listed: true,
+                    admin: d.admin,
+                    frozen: d.frozen,
+                    id: d.id,
+                    name: d.name,
+                    role: d.role,
+                }
+            })
+            .collect();
+        for p in peers {
+            if !out.iter().any(|d| d.id == p.id.as_str()) {
+                out.push(DeviceView {
+                    id: p.id.to_string(),
+                    name: p.name,
+                    role: p.role,
+                    os: p.os,
+                    online: true,
+                    ..Default::default()
+                });
+            }
+        }
+        out
+    }
+
+    /// The member's identity, with the roots the records lead to.
+    pub fn identity(&self) -> Arc<Identity> {
+        self.node.identity()
+    }
+
+    /// What admitting a device takes from the group's records.
+    pub fn group_view(&self) -> GroupView {
+        GroupView::of(&self.node.records().lock().unwrap())
+    }
+
+    /// Adds the device record of a device this phone admitted, signed by
+    /// the admitter's CA key, and passes it to the group.
+    pub fn record_admitted(&self, admitter: &Admitter, a: &Admitted) -> Result<()> {
+        let records = self.node.records();
+        let r = admit::device_record(&records.lock().unwrap(), admitter, a, uptime::wall_ms())?;
+        self.node.add_own_records(&[r]);
+        Ok(())
+    }
+
+    /// What the group's records stop and what ends it, for the app's card.
+    pub fn alerts(&self) -> Vec<manage::Alert> {
+        manage::alerts(&self.node.records().lock().unwrap())
+    }
+
+    /// Signs a change to a device of the group with the app's admin key or
+    /// the root's (cbb_core::manage), adds it and passes it to the group.
+    pub fn change(&self, s: &Signer, device: &str, c: &Change) -> Result<()> {
+        let records = self.node.records();
+        let r = manage::change(&records.lock().unwrap(), s, device, c, uptime::wall_ms())?;
+        self.node.add_own_records(std::slice::from_ref(&r));
+        if !records.lock().unwrap().has(&r) {
+            return Err(Error::msg("the group's records did not take the change; the log says why"));
+        }
+        Ok(())
+    }
+
+    /// Signs a command for a device of the group as change does, sends it
+    /// and waits up to timeout for its result.
+    pub fn order(&self, s: &Signer, device: &str, o: &Order, timeout: Duration) -> Result<CommandResult> {
+        let r = manage::order(&self.node.records().lock().unwrap(), s, device, o, uptime::wall_ms())?;
+        self.node.command(&r, timeout)
+    }
+
+    /// Makes the computer device an admin as the group's root: the admin CA
+    /// for the admin key its hello offers, its device record again, added
+    /// and sent, and the admin message with the CA. The computer must be
+    /// connected, since the key comes from its hello.
+    pub fn make_admin(&self, s: &Signer, device: &str, allow_file_key: bool) -> Result<()> {
+        let p = self
+            .node
+            .peers()
+            .into_iter()
+            .find(|p| p.id.as_str() == device)
+            .ok_or_else(|| Error::msg("the computer is not connected; it offers its admin key when it is"))?;
+        let key = p.admin_key.ok_or_else(|| Error::msg("the computer offers no admin key"))?;
+        let records = self.node.records();
+        let made = manage::make_admin(
+            &records.lock().unwrap(),
+            s,
+            device,
+            &key,
+            &p.key_store,
+            allow_file_key,
+            uptime::wall_ms(),
+        )?;
+        self.node.add_own_records(std::slice::from_ref(&made.record));
+        if !records.lock().unwrap().devices().iter().any(|d| d.id == device && d.admin) {
+            return Err(Error::msg("the group's records did not take the computer as an admin; the log says why"));
+        }
+        if !self.node.send_to(&p.id, wire::admin(&made.admin_ca)) {
+            return Err(Error::msg("the computer is an admin now, but it went away before it got its admin CA"));
+        }
+        Ok(())
+    }
+
+    /// Renews the member certificates that are due, as an admin: each
+    /// connected member's, sent to it, and this phone's own, kept. It
+    /// returns how many it renewed.
+    pub fn renew(&self, s: &Signer) -> Result<usize> {
+        let now = uptime::wall_ms() / 1000;
+        let ident = self.node.identity();
+        let mut roots = self.node.records().lock().unwrap().roots();
+        if roots.is_empty() {
+            roots.push(ident.root().clone());
+        }
+        let issuer = (!roots.iter().any(|r| r == s.ca)).then(|| s.ca.der.clone());
+        let mut n = 0;
+        for (to, chain) in self.node.peer_chains() {
+            match manage::renewal(&chain, &roots, s, now) {
+                Ok(Some(cert)) => {
+                    if self.node.send_to(&to, wire::cert(&cert, issuer.as_deref())) {
+                        n += 1;
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => self.node.logf(&format!("cbb: renewing the certificate of {to}: {}", e.for_log())),
+            }
+        }
+        let own: Vec<_> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
+        if let Some(cert) = manage::renewal(&own, &roots, s, now)? {
+            self.node.renewed(&cert, issuer.as_deref())?;
+            n += 1;
+        }
+        Ok(n)
     }
 
     /// Stops the member and closes its connections.

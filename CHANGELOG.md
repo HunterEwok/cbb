@@ -79,6 +79,40 @@ All notable changes to cbb are documented in this file. The format follows
 - The same switch at the top of the Aurora app's main page, with a long press for a time; the
   app takes an admin's `mute` and `unmute` (lite/ffi's `pause_receiving` and `muted` operations
   and the `mute` event) and says when an admin muted the phone.
+- The Aurora app shows the group's devices as tiles or as a list (its pull-down menu switches
+  them), each with a live dot, its system and its mark (this phone, root, admin, frozen), and a
+  tap opens the device's page. Its new Settings page picks the language for the next start,
+  holds what the main page showed about the app, the key and the group, and seven taps on the
+  version show the switch for error details. lite/ffi's `cbb_member_devices` lists the devices.
+- The Rust core admits devices as the phone kits and Go do: `cbb_core::issue` makes member
+  certificates, admin CAs and a group's root with a key it never holds, `cbb_core::admit` is
+  the admitting side of pairing (dialing a joiner that shows its QR code, confirming the code
+  first, the Welcome and the device record), and lite/ffi's `cbb_admit_*` hand it to the Aurora
+  app; `TestFFIJoinerAdmin` has an admin phone admit a Go computer.
+- An admin Aurora phone adds a device to the group: "Add a device" in the pull-down menu opens
+  the camera, which reads the code the device shows when it joins (lite/ffi's `cbb_qr_read`),
+  or takes the code's pasted text, and the phone dials the device and admits it.
+- The Aurora app's cover shows whether the phone takes copies, the devices it reaches and the
+  last copy, and sends the clipboard or pauses from its actions; the app notifies of the
+  group's events as the other phones do, each kind with a switch in Settings, and takes a
+  text shared to it from the system's share menu as the phone's copy.
+- The Aurora app makes a group of its own ("Make a group" in the pull-down menu): the phone
+  becomes the group's root, its root key in the TEE, adds devices as the root and makes a phone
+  that joins as an admin one; the Rust core makes the group (`cbb_group_new`).
+- An admin Aurora phone acts on a device from its page: removes it, renames it, unfreezes a
+  frozen admin, mutes it for an hour or until unmuted and unmutes it, and as the root makes a
+  computer an admin, each confirmed first; the Rust core signs the record or the command with
+  the admin key (`cbb_member_manage`). An admin Aurora phone also renews the member
+  certificates that are due, the connected devices' and its own.
+- The Aurora app shows the group's alerts card on its main page, as the other phones do (what
+  the group's records stop and why), and on the group's root offers the decision, confirmed
+  first: void both histories, cancel a claim or remove one of two admins; the Rust core gives
+  the alerts (the member's `alerts` op) and signs the decision.
+- The Aurora app follows the one button's rule (a Sync button on its main page, its menu and
+  its cover): a copy from another device that waits comes to the phone, otherwise what the
+  phone copied goes to the group, by the core's rule. It sends and takes images and files: the
+  clipboard's image, images and files shared to it from the system's share menu, and what
+  other devices share, saved in Downloads/CBB (one image into the clipboard too).
 - The group sets how long a copy from another device stays live: one minute by default, from
   5 seconds to an hour, in a signed `copies` record that the root or any admin signs
   (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies

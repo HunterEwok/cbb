@@ -55,13 +55,13 @@ struct Info<'a> {
 }
 
 /// What a phone's admin key signs to prove it holds it, before the sid.
-const ADMIN_PROOF_LABEL: &[u8] = b"cbb pairing admin key\x00";
+pub(crate) const ADMIN_PROOF_LABEL: &[u8] = b"cbb pairing admin key\x00";
 
 /// The member's CPace associated data.
-#[derive(Deserialize)]
-struct MemberAd {
-    device: String,
-    group: String,
+#[derive(Serialize, Deserialize)]
+pub(crate) struct MemberAd {
+    pub(crate) device: String,
+    pub(crate) group: String,
 }
 
 /// What a new device receives after a successful exchange.
@@ -111,6 +111,7 @@ pub enum Refusal {
     Busy,
     Expired,
     TooMany,
+    Taken,
     Refused,
 }
 
@@ -123,6 +124,7 @@ impl Refusal {
             "busy" => Refusal::Busy,
             "expired" => Refusal::Expired,
             "too-many" => Refusal::TooMany,
+            "taken" => Refusal::Taken,
             _ => Refusal::Refused, // the peer's own words are never shown
         }
     }
@@ -135,6 +137,7 @@ impl Refusal {
             Refusal::Busy => "another device is pairing; try again in a minute",
             Refusal::Expired => "the pairing window expired",
             Refusal::TooMany => "three failed attempts; the pairing window is closed",
+            Refusal::Taken => "the joining device's ID is in the group already; start the join again",
             Refusal::Refused => "the other device refused the pairing",
         }
     }
@@ -521,6 +524,59 @@ pub fn join_qr(code: &str, addrs: &[String], fingerprint: &str) -> String {
     text
 }
 
+/// What a join QR code carries: the code, the joiner's addresses
+/// (host:port) and its certificate's fingerprint.
+#[derive(Debug, PartialEq, Clone)]
+pub struct JoinLink {
+    pub code: String,
+    pub addrs: Vec<String>,
+    pub fingerprint: String,
+}
+
+/// The most addresses a join QR code's reader takes.
+pub const MAX_ADDRS: usize = 4;
+
+/// Reads the text of a join QR code, as join_qr writes it: a cbb://join
+/// link with a six-digit code, up to MAX_ADDRS addresses and the
+/// fingerprint.
+pub fn parse_join_qr(text: &str) -> Result<JoinLink> {
+    let bad = || Error::msg("this is not a CBB join code");
+    let query = text.trim().strip_prefix("cbb://join?").ok_or_else(bad)?;
+    let mut link = JoinLink { code: String::new(), addrs: Vec::new(), fingerprint: String::new() };
+    for item in query.split('&') {
+        let (k, v) = item.split_once('=').unwrap_or((item, ""));
+        let v = query_unescape(v).ok_or_else(bad)?;
+        match k {
+            "code" => link.code = normalize_code(&v)?,
+            "addr" if link.addrs.len() < MAX_ADDRS && !v.is_empty() => link.addrs.push(v),
+            "fp" => link.fingerprint = v,
+            _ => {}
+        }
+    }
+    if link.code.is_empty() || link.addrs.is_empty() || link.fingerprint.is_empty() {
+        return Err(bad());
+    }
+    Ok(link)
+}
+
+/// Decodes the %XX escapes of a query value, as Go's ParseJoinQR and the
+/// phone kits do: never a '+' as a space, since a fingerprint's base64 may
+/// hold one. None for text that is not UTF-8 or a bad escape.
+fn query_unescape(s: &str) -> Option<String> {
+    let mut out = Vec::with_capacity(s.len());
+    let mut bytes = s.bytes();
+    while let Some(b) = bytes.next() {
+        match b {
+            b'%' => {
+                let hex = [bytes.next()?, bytes.next()?];
+                out.push(u8::from_str_radix(core::str::from_utf8(&hex).ok()?, 16).ok()?);
+            }
+            _ => out.push(b),
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
 /// Escapes s for a URL query as Go's url.QueryEscape does.
 fn query_escape(s: &str) -> String {
     let mut out = String::new();
@@ -581,6 +637,21 @@ mod tests {
             text,
             "cbb://join?code=246802&addr=192.168.1.20%3A8767&addr=%5Bfd00%3A%3A5%5D%3A8767&fp=qFnj7Uv%2BCE%2FWNnna2IEmMaLbkA6tHcKf0VijTRzekKA%3D"
         );
+    }
+
+    #[test]
+    fn qr_text_read_back() {
+        let addrs: Vec<String> = vec!["192.168.1.20:8767".into(), "[fd00::5]:8767".into()];
+        let text = join_qr("246802", &addrs, "qFnj7Uv+CE/WNnna2IEmMaLbkA6tHcKf0VijTRzekKA=");
+        let link = parse_join_qr(&text).unwrap();
+        assert_eq!(link.code, "246802");
+        assert_eq!(link.addrs, addrs);
+        assert_eq!(link.fingerprint, "qFnj7Uv+CE/WNnna2IEmMaLbkA6tHcKf0VijTRzekKA=");
+        // A '+' stays one, as Go's ParseJoinQR reads it.
+        assert_eq!(parse_join_qr("cbb://join?code=246802&addr=a:1&fp=ab+c").unwrap().fingerprint, "ab+c");
+        assert!(parse_join_qr("https://example.com/?code=246802").is_err());
+        assert!(parse_join_qr("cbb://join?code=246802&fp=x").is_err());
+        assert!(parse_join_qr("cbb://join?code=246802&addr=a:1&fp=%zz").is_err());
     }
 
     #[test]

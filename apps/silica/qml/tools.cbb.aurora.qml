@@ -10,4 +10,9 @@ ApplicationWindow {
     initialPage: Component { MainPage {} }
     cover: Component { CoverPage {} }
     allowedOrientations: defaultAllowedOrientations
+
+    // The notifications and the share menu, each through a module some
+    // systems lack; a missing one leaves the rest of the app working.
+    Loader { source: "system/Notifier.qml" }
+    Loader { source: "system/ShareTarget.qml" }
 }
