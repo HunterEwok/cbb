@@ -375,11 +375,14 @@ pub fn run(cfg: Config) -> Result<()> {
     {
         // The claims to take the group over: one takes effect when its
         // delay ends, without a new record, and this admin's own makes it
-        // the root then.
+        // the root then. A root also renews the admin CAs of the admins
+        // connected that have one from an earlier root.
         let (node, dir, name, log) = (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone());
         std::thread::spawn(move || {
             let (mut last, mut failed) = (String::new(), String::new());
+            let renewed = std::sync::Mutex::new(std::collections::HashMap::new());
             while !node.is_closed() {
+                crate::admin::renew_admin_cas(&dir, &node, &renewed);
                 let now = claim_states(&node);
                 if now != last {
                     last = now;

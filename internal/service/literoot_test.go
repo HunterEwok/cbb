@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/phone"
 )
@@ -378,6 +379,10 @@ func TestLiteTakeover(t *testing.T) {
 		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
 	}
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
+	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "laptop"); err != nil {
+		t.Fatalf("cbb admin laptop on the desk: %v\n%s", err, out)
+	}
+	waitFor(t, "the laptop an admin", func() bool { return laptop.isAdmin(t) })
 	if out, err := runCLI(cli, desk.socket, "", "takeover", "-delay", "0s"); err != nil {
 		t.Fatalf("cbb takeover -delay on the desk: %v\n%s", err, out)
 	}
@@ -393,6 +398,11 @@ func TestLiteTakeover(t *testing.T) {
 	}
 	waitFor(t, "the Rust member the root", rootIs(t, rust, "rust"))
 	waitFor(t, "the laptop follows the new root", rootIs(t, laptop, "rust"))
+	// The laptop's admin CA was the lost root's; the new root gives it one.
+	waitFor(t, "the laptop's admin CA from the new root", func() bool {
+		id, err := group.Load(laptop.dir)
+		return err == nil && id.AdminCA != nil && len(id.Roots) > 0 && !id.StaleAdminCA()
+	})
 	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
 	if err != nil || !strings.Contains(string(raw), `"root_key"`) || strings.Contains(string(raw), `"claim"`) {
 		t.Errorf("the identity file after the takeover: %v\n%s", err, raw)

@@ -28,7 +28,8 @@ All notable changes to cbb are documented in this file. The format follows
   `mute -on`, `unmute -on`). Started with `-full`, and joined with `cbb pair -full`, it is a
   computer's service in a Go computer's group: it offers an admin key, becomes an admin when
   the root makes it one, and takes the group over from a lost root with `cbb takeover`,
-  becoming the root once the claim takes effect (`TestLiteTakeover`). Any of its members
+  becoming the root once the claim takes effect and giving the other admins admin CAs from
+  the new root (`TestLiteTakeover`). Any of its members
   claims the group with the recovery key (`cbb recovery`, the sheet's text or QR code, or
   `-yubikey` with the key on a YubiKey through cbb-helper) when the root is lost
   (`TestLiteRecovery`).

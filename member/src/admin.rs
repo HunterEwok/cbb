@@ -13,10 +13,11 @@
 //! The rules and the messages are Go's (internal/service), which stays the
 //! reference.
 
+use std::collections::HashMap;
 use std::io::{Read as _, Write as _};
 use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use cbb_core::admit;
@@ -412,6 +413,103 @@ fn after_takeover(dir: &Path, node: &Node, old_root: Hash, name: &str) {
         }
     }
     node.logf("cbb: the claim took effect; this device is the group's root now");
+}
+
+/// On the group's root, gives each connected admin computer whose admin
+/// CA is from an earlier root, as after a takeover, a new admin CA for the
+/// same key from this root, as Go's renewAdminCAs: the records name the
+/// key, so they stay, and a takeover by that admin later hangs under this
+/// root. The key comes from the admin CA in its chain, or from its hello.
+/// sent remembers, by device, the root each got one from.
+pub fn renew_admin_cas(dir: &Path, node: &Node, sent: &Mutex<HashMap<String, [u8; 32]>>) {
+    let ident = node.identity();
+    let Ok(Some(s)) = signer(dir, &ident) else { return };
+    if !s.root {
+        return;
+    }
+    let root = s.ca.key_hash();
+    let chains: HashMap<String, Vec<Cert>> =
+        node.peer_chains().into_iter().map(|(id, c)| (id.to_string(), c)).collect();
+    let admin = Admin { node, dir };
+    for p in node.peers() {
+        let id = p.id.to_string();
+        let Some(d) = admin_device(node, &id) else { continue };
+        let Some(key) = d.admin_key else { continue };
+        let chain = chains.get(&id).map(Vec::as_slice).unwrap_or_default();
+        let point = match chain.get(1).filter(|c| c.is_ca && c.key_hash() == key) {
+            Some(c) if c.signed_by(&s.ca) => continue, // from this root already
+            Some(c) => Some(c.public_key().to_vec()),
+            None => p
+                .admin_key
+                .as_deref()
+                .filter(|k| cbb_core::certs::sha256(k) == key)
+                .and_then(cbb_core::certs::p256_spki)
+                .map(|k| k.to_sec1_point(false).as_bytes().to_vec()),
+        };
+        let gone = {
+            let records = node.records();
+            let rs = records.lock().unwrap();
+            rs.revoked(&key) || rs.frozen(&key)
+        };
+        let Some(point) = point else { continue };
+        if gone || sent.lock().unwrap().get(&id) == Some(&root) {
+            continue;
+        }
+        let Ok(dev) = cbb_core::certs::DeviceId::parse(&id) else { continue };
+        let ca = match cbb_core::issue::admin_ca(&dev, &point, &s.ca, uptime::wall_ms() / 1000, &mut |tbs| {
+            identity::sign_external(&*s.key, tbs)
+        }) {
+            Ok(ca) => ca,
+            Err(e) => {
+                node.logf(&format!("cbb: a new admin CA for {id}: {}", e.for_log()));
+                continue;
+            }
+        };
+        // This root's own record of the admin lets it take the group over
+        // from this root in turn.
+        let listed = {
+            let records = node.records();
+            let rs = records.lock().unwrap();
+            rs.all()
+                .iter()
+                .filter_map(|r| Body::parse(&r.body).ok())
+                .any(|b| b.kind == authority::TYPE_DEVICE && b.signer == Hash(root) && b.admin == Some(Hash(key)))
+        };
+        if !listed {
+            let b = Body {
+                kind: authority::TYPE_DEVICE.into(),
+                device: d.id.clone(),
+                name: d.name.clone(),
+                role: "full".into(),
+                os: d.os.clone(),
+                key: Some(Hash(d.key)),
+                admin: Some(Hash(key)),
+                powers: d.powers.clone(),
+                commands: d.commands.clone(),
+                store: d.store.clone(),
+                hardware: d.kind.clone(),
+                proof: d.proof.clone(),
+                seal: d.seal.clone(),
+                ..Default::default()
+            };
+            if let Err(e) = admin.sign(&s, b) {
+                node.logf(&format!("cbb: recording the admin {id} under this root: {}", e.for_log()));
+                continue;
+            }
+        }
+        if node.send_to(&p.id, cbb_core::wire::admin(&ca)) {
+            sent.lock().unwrap().insert(id.clone(), root);
+            node.logf(&format!(
+                "cbb: gave the admin {} ({id}) a new admin CA from this root, for the same key",
+                p.name
+            ));
+        }
+    }
+}
+
+/// The records' device dev, if they list it.
+fn admin_device(node: &Node, dev: &str) -> Option<Device> {
+    node.records().lock().unwrap().devices().into_iter().find(|d| d.id == dev)
 }
 
 /// A duration in milliseconds as Go's time.Duration prints it: 72h0m0s,
