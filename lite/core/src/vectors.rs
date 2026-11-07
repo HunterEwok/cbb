@@ -575,6 +575,34 @@ fn go_entries() {
     }
 }
 
+/// The ZX Spectrum Next's files (docs/protocol.md, section 16, "The ZX
+/// Spectrum Next's files"), as Go's TestZXNextVectors writes them: which
+/// lists the Pi's cbb takes.
+#[test]
+fn go_zxnext() {
+    use crate::release::{self, File};
+    let v = vectors("go-zxnext.json");
+    let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(bytes).collect();
+    let roots: Vec<&[u8]> = roots.iter().map(|r| r.as_slice()).collect();
+    let cases = v["vectors"].as_array().unwrap();
+    assert_eq!(cases.len(), 18);
+    for c in cases {
+        let file = |k: &str| -> File { serde_json::from_value(c[k].clone()).unwrap() };
+        let got = release::check_zxnext(
+            &file("keys"),
+            &file("list"),
+            &roots,
+            c["now_ms"].as_i64().unwrap(),
+            c["installed"].as_str().unwrap(),
+        );
+        let label = c["name"].as_str().unwrap();
+        assert_eq!(got.is_ok(), c["ok"].as_bool().unwrap(), "{label}: {:?}", got.as_ref().err().map(|e| e.message()));
+        if let Ok(z) = got {
+            assert_eq!(z.files.iter().find(|f| f.name == "cbb").map(|f| f.size), Some(4000), "{label}");
+        }
+    }
+}
+
 /// The server credentials (docs/protocol.md, section 18), as Go's
 /// TestGoCredentialVectors writes them: what the records say the
 /// credentials list, the signatures and types, and which sets a server

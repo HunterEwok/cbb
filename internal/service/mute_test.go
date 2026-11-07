@@ -4,6 +4,8 @@
 package service
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +77,11 @@ func TestMute(t *testing.T) {
 	}
 	// beta connects again after the unmute, so that its hello shows it.
 	waitFor(t, "alpha and gamma list beta as unmuted", func() bool { return betaMuted(a, false) && betaMuted(c, false) })
-	waitFor(t, "beta connected again", func() bool { return len(b.status(t).Peers) == 2 && len(c.status(t).Peers) == 2 })
+	// Without a connection a member lists beta as unmuted too, so the
+	// links themselves are waited for: beta's to both others by device ID.
+	waitFor(t, "beta connected again", func() bool {
+		return linked(t, b, a) && linked(t, b, c) && linked(t, a, b) && linked(t, c, b)
+	})
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "from beta"); err != nil {
 		t.Fatal(err)
 	}
@@ -107,10 +113,38 @@ func TestMute(t *testing.T) {
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "beta heard"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "gamma has beta's text again", func() bool { return c.paste(t) == "beta heard" })
+	waitUpTo(t, 10*time.Second, "gamma has beta's text again", func() bool { return c.paste(t) == "beta heard" },
+		func() string { return links(t, a, b, c) })
 
 	// A mute longer than 30 days is refused.
 	if _, err := a.do(t, control.Header{Op: control.OpMute, ForMS: 31 * 24 * time.Hour.Milliseconds()}, ""); err == nil {
 		t.Error("a mute of 31 days was taken")
 	}
+}
+
+// linked reports whether s has a connection to other, with its hello.
+func linked(t *testing.T, s, other *testService) bool {
+	t.Helper()
+	id := other.status(t).Device
+	return slices.ContainsFunc(s.status(t).Peers, func(p control.Device) bool { return p.ID == id })
+}
+
+// links describes each member's connections and current text, for a
+// failure's message.
+func links(t *testing.T, all ...*testService) string {
+	t.Helper()
+	names := map[string]string{}
+	for _, s := range all {
+		names[s.status(t).Device] = s.name
+	}
+	var out []string
+	for _, s := range all {
+		st := s.status(t)
+		var peers []string
+		for _, p := range st.Peers {
+			peers = append(peers, names[p.ID])
+		}
+		out = append(out, fmt.Sprintf("%s: peers %v, paused %v, text %q", s.name, peers, st.Paused, s.paste(t)))
+	}
+	return strings.Join(out, "; ")
 }

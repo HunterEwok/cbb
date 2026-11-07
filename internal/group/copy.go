@@ -17,7 +17,8 @@ import (
 // member must before it passes the copy on or keeps it (docs/protocol.md,
 // section 4, "Opening"): its certificate, through its issuer, verifies to a
 // root on the path, the records take that chain, its key is one of the
-// origin's device, and it signed the copy. The same is
+// origin's device, that device does not only pass copies on, and it signed
+// the copy. The same is
 // cbb_core::copy::Sealed::check.
 func (s *Records) CheckCopy(c *clip.Sealed, now time.Time) error {
 	if err := c.Validate(); err != nil {
@@ -56,8 +57,13 @@ func (s *Records) CheckCopy(c *clip.Sealed, now time.Time) error {
 		return fmt.Errorf("group: the copy's origin is refused: %w", err)
 	}
 	key := KeyHashOf(leaf)
-	if !slices.ContainsFunc(s.Devices(), func(d Device) bool { return string(d.ID) == c.Origin && slices.Contains(d.Keys, key) }) {
+	devices := s.Devices()
+	i := slices.IndexFunc(devices, func(d Device) bool { return string(d.ID) == c.Origin && slices.Contains(d.Keys, key) })
+	if i < 0 {
 		return errors.New("group: the copy's certificate is not one its origin's records name")
+	}
+	if devices[i].ForwardOnly {
+		return errors.New("group: the copy's origin only passes copies on")
 	}
 	if !c.Verifies(leaf) {
 		return errors.New("group: the copy's signature does not verify")

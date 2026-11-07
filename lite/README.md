@@ -277,6 +277,7 @@ do. These commands answer in frames a Z80 reads without a parser:
 | --- | --- |
 | `cbb next paste [-max bytes]` | `CBB1 <len> <crc32>`, then len bytes of the latest text (cut to bytes), then CR, then the status line. |
 | `cbb next copy [-secret] <len> <crc32>` | `CBBGO` once the service answers; the Next then sends exactly len bytes, which the lite member reads with the terminal in raw mode (no echo, no CR to LF; it gives up after 10 s without a byte), checks the CRC-32 and sends to the group, as a secret with `-secret` (as `cbb copy -secret`); then the status line. |
+| `cbb next check-list <file>` | For `.cbb update`: the file holds `keys.json` and the release's `zxnext.json`, a line each (at most 16 KiB). It checks them against the pinned roots, refuses a release older than this `cbb`, and writes `CBBL <name> <size> <crc32> <sha256>` for each of the Next's four files; then the status line. |
 | `cbb next pair [-name name] [-port port] [-addr host[:port]]...` | `CBBQ <size>`, then size rows of the QR code for the phone app, each of (size + 3) / 4 hex digits with the leftmost module in the high bit of the first digit and a set bit dark; the Next draws it, the phone scans it, and after the pairing the status line (up to 5 minutes). A join payload makes a code of about 41 modules, which fits the 192 lines of the screen at 4 pixels per module. |
 
 ### The network through the Next's ESP8266
@@ -308,7 +309,8 @@ cbb service -peer 127.0.0.1:8769
   starts after it has joined. `.cbb pair CODE` on the Next runs the link with it.
 - `-paste on|on-enter|off`: tells the service, once it answers, whether the group's admins
   may paste on the Next (`cbb paste-receive`), as `.cbb paste-receive` on the Next set it:
-  the Next's user is the Pi's.
+  the Next's user is the Pi's. The Next passes it once after each change of its user's and
+  then forgets it, so that an admin's `paste-off` stays until that user turns it on again.
 - `-zone`: the Next's clock (the DS1307) keeps local time without a zone; the link sets
   the Pi's clock, which NextPi only saves across a power cut, from it in UTC.
 - `-log`: standard error is the UART too, so the link writes its log to a file or

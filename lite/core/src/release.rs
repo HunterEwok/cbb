@@ -674,3 +674,76 @@ impl Release {
         Ok(())
     }
 }
+
+/// The files zxnext.json lists, each once: the ZX Spectrum Next's dot
+/// command, its overlay, its driver and the Pi's cbb.
+pub const ZXNEXT_NAMES: [&str; 4] = ["CBB", "CBB.OVL", "CBB.DRV", "cbb"];
+/// The largest file zxnext.json may list.
+pub const MAX_ZXNEXT_FILE: i64 = 64 << 20;
+
+/// One of the Next's files, as packaging/zxnext/site.sh lists it.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ZXNextFile {
+    pub name: String,
+    pub size: i64,
+    pub crc32: String,
+    pub sha256: String,
+}
+
+/// The body of zxnext.json, signed by a release key: the Next's files of a
+/// release, which the Pi's cbb checks before `.cbb update` takes a newer
+/// CBB (docs/protocol.md, section 16, "The ZX Spectrum Next's files").
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ZXNext {
+    pub version: String,
+    pub time_ms: i64,
+    pub files: Vec<ZXNextFile>,
+}
+
+pub(crate) fn decode_zxnext(body: &[u8]) -> Result<ZXNext> {
+    let z: ZXNext = decode(body, "zxnext")?;
+    if parse_version(&z.version).is_none() {
+        return Err(Error::msg(format!("{:?} is not a version", z.version)));
+    }
+    if z.time_ms < 0 {
+        return Err(Error::msg("zxnext.json has no signing time"));
+    }
+    if z.files.len() != ZXNEXT_NAMES.len() {
+        return Err(Error::msg("zxnext.json must list the Next's four files"));
+    }
+    let mut names = BTreeSet::new();
+    for f in &z.files {
+        if !ZXNEXT_NAMES.contains(&f.name.as_str()) || !names.insert(f.name.as_str()) {
+            return Err(Error::msg(format!("{:?} is not one of the Next's files, or twice", f.name)));
+        }
+        let crc = f.crc32.len() == 8 && f.crc32.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c));
+        if f.size <= 0 || f.size > MAX_ZXNEXT_FILE || !crc || !is_hex_sha256(&f.sha256) {
+            return Err(Error::msg(format!("the entry for {} is not valid", f.name)));
+        }
+    }
+    Ok(z)
+}
+
+/// Checks zxnext.json as Go's release.CheckZXNext does: keys.json under the
+/// pinned roots, the list under one of its release keys, not signed ahead
+/// of now_ms, and not of a release older than installed, the version of
+/// the cbb that checks it (none when empty).
+pub fn check_zxnext(keys: &File, list: &File, roots: &[&[u8]], now_ms: i64, installed: &str) -> Result<ZXNext> {
+    let k = verify_keys(keys, roots, now_ms, &Seen::default()).map_err(|e| e.context("keys.json is not valid"))?;
+    let spkis: Vec<&[u8]> = k
+        .keys
+        .iter()
+        .filter(|key| key.usage.is_empty() || key.usage == "release")
+        .map(|key| key.key.as_slice())
+        .collect();
+    let bad = |e: Error| e.context("zxnext.json is not valid");
+    list.verify(&spkis).map_err(bad)?;
+    let z = decode_zxnext(&list.body).map_err(bad)?;
+    if signed_ahead(z.time_ms, now_ms) {
+        return Err(Error::msg("zxnext.json was signed ahead of this device's clock"));
+    }
+    if !installed.is_empty() && compare(&z.version, installed).is_lt() {
+        return Err(Error::msg(format!("zxnext.json is of {}, older than this cbb, {installed}", z.version)));
+    }
+    Ok(z)
+}

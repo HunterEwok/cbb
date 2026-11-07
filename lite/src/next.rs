@@ -17,7 +17,7 @@ use cbb_core::clip;
 use crate::error::{Context, Error, Result};
 use crate::{Global, control, request};
 
-const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
+const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | check-list <file> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
 
 /// How long copy waits for the next byte from the Next.
 const READ_TIMEOUT_DECISECONDS: u8 = 100;
@@ -28,6 +28,7 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
     let res = match args.first().map(String::as_str) {
         Some("paste") => paste(g, &args[1..]),
         Some("copy") => copy(g, &args[1..]),
+        Some("check-list") => check_list(&args[1..], &mut std::io::stdout()),
         Some("pair") => crate::join(g, &args[1..], true),
         // The link answers in frames, not in a status line.
         Some("link") => {
@@ -49,6 +50,55 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
     out.write_all(line.as_bytes()).ok();
     out.flush().ok();
     if line.starts_with("CBBOK") { 0 } else { 1 }
+}
+
+/// The largest file check-list reads: keys.json and zxnext.json.
+const MAX_CHECK_LIST: u64 = 16 << 10;
+
+/// `.cbb update`'s check of the site's list for a newer CBB (apps/zxnext,
+/// docs/protocol.md section 16, "The ZX Spectrum Next's files"): the file
+/// holds keys.json and zxnext.json, a line each, as cbb.tools serves them
+/// in SIGNED. This cbb checks them under its pinned release roots and
+/// writes the Next's files, `CBBL <name> <size> <crc32> <sha256>` CR each,
+/// which the Next takes in place of the site's list. The release must not
+/// be older than this cbb.
+fn check_list(args: &[String], out: &mut dyn Write) -> Result<()> {
+    use cbb_core::release;
+    let [path] = args else { return Err(Error::msg(USAGE)) };
+    let mut data = Vec::new();
+    std::fs::File::open(path)
+        .and_then(|f| f.take(MAX_CHECK_LIST + 1).read_to_end(&mut data))
+        .context(format!("cannot read {path}"))?;
+    if data.len() as u64 > MAX_CHECK_LIST {
+        return Err(Error::msg("the signed list is too large"));
+    }
+    let roots = crate::update::release_roots();
+    let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
+    let installed =
+        if release::parse_version(crate::service::VERSION).is_some() { crate::service::VERSION } else { "" };
+    check_signed(&data, &roots, crate::uptime::wall_ms(), installed, out)
+}
+
+/// check_list's check of the file's data under roots at now_ms.
+fn check_signed(data: &[u8], roots: &[&[u8]], now_ms: i64, installed: &str, out: &mut dyn Write) -> Result<()> {
+    use cbb_core::release::{self, File};
+    let text = std::str::from_utf8(data).map_err(|_| Error::msg("the signed list is not text"))?;
+    let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+    let (Some(keys), Some(list), None) = (lines.next(), lines.next(), lines.next()) else {
+        return Err(Error::msg("the signed list is not keys.json and zxnext.json"));
+    };
+    let file = |s: &str, what: &str| -> Result<File> {
+        serde_json::from_str(s).map_err(|e| Error::with(format!("{what} is not a signed file"), e))
+    };
+    let (keys, list) = (file(keys, "keys.json")?, file(list, "zxnext.json")?);
+    if roots.is_empty() {
+        return Err(Error::msg("this cbb pins no release keys, so it cannot check the list"));
+    }
+    let z = release::check_zxnext(&keys, &list, roots, now_ms, installed).map_err(|e| Error::msg(e.message()))?;
+    for f in &z.files {
+        write!(out, "CBBL {} {} {} {}\r", f.name, f.size, f.crc32, f.sha256).context("cannot write the list")?;
+    }
+    Ok(())
 }
 
 /// An error message on one line of printable ASCII, so the Next can show it.
@@ -298,6 +348,42 @@ mod tests {
         assert!(rows.iter().all(|r| r.len() == size.div_ceil(4)));
         // The top-left finder pattern starts with seven dark modules.
         assert!(rows[0].starts_with("fe"));
+    }
+
+    /// check-list takes the lists the Go vectors take and writes their
+    /// files for the Next; it refuses the others and writes nothing.
+    #[test]
+    fn check_list_vectors() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/go-zxnext.json");
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        #[derive(serde::Deserialize)]
+        struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);
+        let b64 = |x: &serde_json::Value| -> Vec<u8> { serde_json::from_value::<Der>(x.clone()).unwrap().0 };
+        let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(b64).collect();
+        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
+        for c in v["vectors"].as_array().unwrap() {
+            let data = format!("{}\n{}\n", c["keys"], c["list"]);
+            let mut out = Vec::new();
+            let got = check_signed(
+                data.as_bytes(),
+                &roots,
+                c["now_ms"].as_i64().unwrap(),
+                c["installed"].as_str().unwrap(),
+                &mut out,
+            );
+            let name = c["name"].as_str().unwrap();
+            assert_eq!(got.is_ok(), c["ok"].as_bool().unwrap(), "{name}: {got:?}");
+            let out = String::from_utf8(out).unwrap();
+            if got.is_ok() {
+                assert_eq!(out.matches("CBBL ").count(), 4, "{name}: {out}");
+                assert!(out.contains(&format!("CBBL cbb 4000 0a0a0a0a {}\r", "d".repeat(64))), "{name}: {out}");
+            } else {
+                assert!(out.is_empty(), "{name}: {out}");
+            }
+        }
+        let mut out = Vec::new();
+        assert!(check_signed(b"{}\n", &roots, 0, "", &mut out).is_err());
+        assert!(check_signed(b"{}\n{}\n{}\n", &roots, 0, "", &mut out).is_err());
     }
 
     #[test]

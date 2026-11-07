@@ -95,7 +95,7 @@ func mirror(args []string) error {
 	}
 
 	if *zx != "" {
-		if err := takeZXNext(*out, *zx, done); err != nil {
+		if err := takeZXNext(*out, *zx, done, best.keys); err != nil {
 			return fmt.Errorf("the ZX Spectrum Next's files: %w", err)
 		}
 	}
@@ -236,6 +236,14 @@ func mirrorRelease(out, releases, v string, keys release.File) (release.Release,
 	if err := checkSums(tmp, r); err != nil {
 		return r, err
 	}
+	if _, ok := r.Asset(zxnextArchive); ok {
+		// The Next's list, which takeZXNext checks against the archive.
+		if zx, err := fetchFile(base + "/" + zxnextName); err != nil {
+			step("v%s has no %s: %v", v, zxnextName, err)
+		} else if err := writeFile(filepath.Join(tmp, zxnextName), zx); err != nil {
+			return r, err
+		}
+	}
 	if err := writeFile(filepath.Join(tmp, "release.json"), rel); err != nil {
 		return r, err
 	}
@@ -299,7 +307,7 @@ func download(src, path string, a release.Asset) error {
 // takeZXNext unpacks the Next's files of the newest mirrored release that
 // has them into dir, when that release is newer than the one they came
 // from last time.
-func takeZXNext(out, dir string, done map[string]release.Release) error {
+func takeZXNext(out, dir string, done map[string]release.Release, keys release.File) error {
 	newest := ""
 	for v, r := range done {
 		if _, ok := r.Asset(zxnextArchive); ok && (newest == "" || release.Compare(v, newest) > 0) {
@@ -309,13 +317,17 @@ func takeZXNext(out, dir string, done map[string]release.Release) error {
 	if newest == "" {
 		return nil
 	}
-	seen, _ := os.ReadFile(filepath.Join(out, zxnextSeen))
-	if _, err := os.Stat(filepath.Join(dir, "LIST")); err == nil && release.Compare(newest, strings.TrimSpace(string(seen))) <= 0 {
-		return nil
-	}
 	files, err := readZXNext(filepath.Join(out, "v"+newest, zxnextArchive))
 	if err != nil {
 		return err
+	}
+	// SIGNED each time, under the keys.json of now.
+	if err := writeZXNextSigned(out, dir, newest, keys, files); err != nil {
+		return err
+	}
+	seen, _ := os.ReadFile(filepath.Join(out, zxnextSeen))
+	if _, err := os.Stat(filepath.Join(dir, "LIST")); err == nil && release.Compare(newest, strings.TrimSpace(string(seen))) <= 0 {
+		return nil
 	}
 	if _, ok := files["LIST"]; !ok {
 		return errors.New("the archive has no LIST")
@@ -337,7 +349,7 @@ func takeZXNext(out, dir string, done map[string]release.Release) error {
 		return err
 	}
 	for _, e := range entries {
-		if _, ok := files[e.Name()]; !ok && !strings.HasPrefix(e.Name(), ".") {
+		if _, ok := files[e.Name()]; !ok && !strings.HasPrefix(e.Name(), ".") && e.Name() != zxnextSigned {
 			if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {
 				return err
 			}

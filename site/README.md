@@ -198,6 +198,7 @@ location $P {
     proxy_request_buffering off;
     proxy_redirect off;
     proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
     proxy_read_timeout 86400s;
     proxy_send_timeout 86400s;
 }
@@ -207,7 +208,8 @@ sudo nginx -t && sudo systemctl reload nginx
 
 The limits keep what a stranger makes the forwarder hold small (docs/relay-budget.md,
 "XHTTP"); `client_max_body_size` matches the forwarder's largest upload, 32 KiB. On a server
-set up before them, add the five `limit_` lines and `client_max_body_size` to the location in
+set up before them, add the five `limit_` lines, `client_max_body_size` and the `X-Real-IP` line
+(the client's address, which the forwarder charges) to the location in
 `/etc/nginx/cbb-vless-location.conf`, and the zones from `deploy/nginx.conf` to the site's
 configuration.
 
