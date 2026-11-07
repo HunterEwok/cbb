@@ -235,13 +235,18 @@ func (d *Desk) refresh() {
 // request sends one request on its own connection and returns the answer
 // and its payload.
 func (d *Desk) request(op string, payload []byte) (*control.Message, []byte, error) {
+	return d.requestHeader(control.Header{Op: op}, payload)
+}
+
+// requestHeader is request with a whole header.
+func (d *Desk) requestHeader(h control.Header, payload []byte) (*control.Message, []byte, error) {
 	c, err := control.Dial(d.socket)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(10 * time.Second))
-	m, err := c.Do(&control.Message{Header: control.Header{Op: op}, Payload: payload})
+	m, err := c.Do(&control.Message{Header: h, Payload: payload})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -377,6 +382,40 @@ func (d *Desk) SetMode(id, mode string) {
 		args = []string{"mode", "-on", id, mode}
 	}
 	d.admin(args, false, "The sync mode is set.")
+}
+
+// PauseReceiving keeps the group's copies out of this computer's clipboard
+// for forMS, 0 for until it is turned on again, or with on false takes them
+// again (design.md, "Muting a device"). It needs no administrator: the
+// service takes it on the control socket.
+func (d *Desk) PauseReceiving(on bool, forMS int64) {
+	d.act(func() (string, error) {
+		h := control.Header{Op: control.OpUnmute}
+		if on {
+			h = control.Header{Op: control.OpMute, ForMS: forMS}
+		}
+		if _, _, err := d.requestHeader(h, nil); err != nil {
+			return "", err
+		}
+		if on {
+			return d.T("This computer takes no copies from the group now; its own still go out."), nil
+		}
+		return d.T("This computer takes the group's copies again."), nil
+	})
+}
+
+// Mute, on an admin, keeps a device's copies from the group for forMS, 0
+// for until an admin unmutes it, with a signed command; Unmute ends it.
+func (d *Desk) Mute(id string, forMS int64) {
+	args := []string{"mute", "-on", id}
+	if forMS > 0 {
+		args = append(args, "-for", fmt.Sprintf("%dms", forMS))
+	}
+	d.admin(args, false, "It is muted: its copies do not reach the group.")
+}
+
+func (d *Desk) Unmute(id string) {
+	d.admin([]string{"unmute", "-on", id}, false, "It is no longer muted.")
 }
 
 func (d *Desk) admin(args []string, yes bool, done string) {

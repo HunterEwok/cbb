@@ -567,6 +567,21 @@ class PhoneGroup internal constructor(
     }
 
     /**
+     * A mute command that keeps the copies of the member to from the whole group for forMS milliseconds, 0 for
+     * until an unmute command (design.md, "Muting a device"); any admin phone signs one.
+     */
+    fun muteCommand(to: String, forMS: Long, caSigner: CertificateSigner, now: Instant): Member.Record {
+        if (!isAdmin) throw Failure("this phone is no admin")
+        return Commands.mute(to, forMS, tag, device, now, caSigner, adminCA, seal = sealKey(to))
+    }
+
+    /** An unmute command that ends an admin's mute of the member to. */
+    fun unmuteCommand(to: String, caSigner: CertificateSigner, now: Instant): Member.Record {
+        if (!isAdmin) throw Failure("this phone is no admin")
+        return Commands.unmute(to, tag, device, now, caSigner, adminCA, seal = sealKey(to))
+    }
+
+    /**
      * A hub command that makes the admin computer to the group's hub in
      * place of this phone (docs/protocol.md, section 11, "Moving the hub"),
      * signed with this phone's root or admin key, with the hub's clients

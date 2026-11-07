@@ -40,6 +40,7 @@
     <div class="buttons">
       <button class="accent" id="send" data-t>Send the clipboard</button>
       <button class="glass" id="fetch" data-t>Fetch</button>
+      <button class="glass" id="listen" aria-pressed="true" data-t-title="Tap to take no copies from the group, or again; hold it for a time"></button>
       <button class="glass" id="update" hidden></button>
     </div>
     <p id="message" class="dim"></p>
@@ -54,6 +55,20 @@
         <button value="cancel" class="glass" data-t>Cancel</button>
         <button value="ok" class="accent" id="confirm-ok"></button>
       </menu>
+    </form>
+  </dialog>
+
+  <dialog id="mute-dialog">
+    <form method="dialog">
+      <h2 id="mute-title"></h2>
+      <p id="mute-text" class="dim"></p>
+      <div class="menu-items">
+        <button value="900000" class="glass" data-t>For 15 minutes</button>
+        <button value="3600000" class="glass" data-t>For an hour</button>
+        <button value="28800000" class="glass" data-t>For 8 hours</button>
+        <button value="0" class="glass" id="mute-forever"></button>
+      </div>
+      <menu><button value="cancel" class="glass" data-t>Cancel</button></menu>
     </form>
   </dialog>
 

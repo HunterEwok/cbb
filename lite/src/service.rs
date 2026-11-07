@@ -248,6 +248,9 @@ pub fn run(cfg: Config) -> Result<()> {
     engine.set_seal(node.sealer());
     engine.set_mode(load_mode(&cfg.state_dir)?);
     log(&format!("cbb: the sync mode is {}", engine.mode().name()));
+    if let Err(e) = crate::mute::load(&cfg.state_dir, &engine) {
+        log(&format!("cbb: the mute: {}; not muted", e.for_log()));
+    }
     {
         let svc = svc.clone();
         node.on_command(Arc::new(move |peer, c| svc.command(peer, c)));
@@ -458,6 +461,51 @@ impl Service {
         Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
     }
 
+    /// Mutes this member at the admin `by`'s order until `until` (0 for
+    /// until an admin lifts it), or ends
+    /// its mute, saves it, and connects to the members again once a
+    /// command's result had a moment to go back, so that their hellos show
+    /// it.
+    fn set_muted(&self, node: &Arc<Node>, on: bool, until: i64, by: &str) -> Result<()> {
+        if on {
+            node.engine.set_mute(until);
+        } else {
+            node.engine.unmute();
+        }
+        crate::mute::save(&self.state_dir, &node.engine)?;
+        (self.log)(&match (on, until) {
+            (false, _) => format!("cbb: {by} ended the mute: this device's copies reach the group again"),
+            (true, 0) => format!("cbb: {by} muted this device until an admin unmutes it"),
+            (true, _) => format!("cbb: {by} muted this device for {} s", (until - uptime::wall_ms()) / 1000),
+        });
+        let node = node.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            node.reconnect();
+        });
+        Ok(())
+    }
+
+    /// The control operations mute and unmute: this device's user pauses
+    /// receiving or resumes it; the lite member is never an admin, so it
+    /// mutes no device and ends no mute.
+    fn mute_op(&self, h: &Header) -> Result<()> {
+        if !h.device.is_empty() {
+            return Err(Error::msg(
+                "only an admin mutes a device or ends its mute; the lite member is never one: use the phone app or a full member",
+            ));
+        }
+        let node = self.node()?;
+        if h.op == "mute" {
+            node.engine.pause(crate::mute::until(h.for_ms)?);
+            (self.log)("cbb: this device takes no copies from the group now");
+        } else {
+            node.engine.resume();
+            (self.log)("cbb: this device takes the group's copies again");
+        }
+        crate::mute::save(&self.state_dir, &node.engine)
+    }
+
     /// Changes the sync mode and saves it.
     fn set_mode(&self, name: &str) -> Result<()> {
         let m = Mode::parse(name)?;
@@ -569,6 +617,16 @@ impl Service {
                         res.status = "failed".into();
                         res.reason = e.message().to_string();
                     }
+                }
+                return res;
+            }
+            "mute" | "unmute" => {
+                let mut res = wire::CommandResult { id: body.id.clone(), status: "done".into(), reason: String::new() };
+                let until = if body.for_ms == 0 { 0 } else { uptime::wall_ms() + body.for_ms };
+                if let Err(e) = self.set_muted(&node, body.kind == "mute", until, &body.by) {
+                    (self.log)(&format!("cbb: a mute from {peer}: {}", e.for_log()));
+                    res.status = "failed".into();
+                    res.reason = e.message().to_string();
                 }
                 return res;
             }
@@ -1068,6 +1126,10 @@ impl Service {
                     peers,
                     version: VERSION.into(),
                     mode: node.engine.mode().name().into(),
+                    muted: node.engine.mute_left().is_some(),
+                    muted_until_ms: node.engine.mute_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
+                    paused: node.engine.pause_left().is_some(),
+                    paused_until_ms: node.engine.pause_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
                     away: self.away()?.status(&node),
                     paste: self.paste_status(),
                     actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
@@ -1128,6 +1190,10 @@ impl Service {
             "paste-on" => Err(Error::msg(
                 "only an admin pastes on another device; the lite member is never one: use the phone app or a full member",
             )),
+            "mute" | "unmute" => {
+                self.mute_op(h)?;
+                Ok(control::reply(Header::default(), Vec::new()))
+            }
             "mode" => {
                 if !h.device.is_empty() {
                     return Err(Error::msg(
