@@ -32,7 +32,8 @@ tools. Test them on the machine before relying on them.
 .cbb update           the same, for the files the site has newer
 .cbb paste-receive on [-enter] | off
                       whether the group's admins may type on the Next from the phone app;
-                      .cbb install turns it on with Enter, .cbb net on hands it to the Pi
+                      off until you turn it on; the next .cbb net on hands it to the Pi
+                      once, and an admin's off in the app then stays
 .cbb leave            after a Y: the Pi forgets its keys and its group; its cbb stays, and
                       .cbb pair joins the same group or another one
 .cbb uninstall        after a Y: stop the network, uninstall CBB.DRV, remove the Pi's cbb

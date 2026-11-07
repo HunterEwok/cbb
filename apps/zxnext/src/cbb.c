@@ -188,7 +188,9 @@ static int link_fail(uint8_t err)
 // CBB.DRV (drv/): its id, and where .cbb net keeps the link's settings.
 #define DRIVER_ID 124
 #define NET_CFG "/cbb/NET.CFG"
-// .cbb paste-receive's switch, which .cbb net on hands the link (-paste).
+// .cbb paste-receive's switch, which the next .cbb net on hands the link
+// (-paste) once and erases: after that the Pi's setting stands, which an
+// admin's paste-off changes too.
 #define PASTE_CFG "/cbb/PASTE.CFG"
 // The Pi's cbb: on the card, and where NextPi's shell finds it.
 #define PI_CARD "/cbb/CBBPI.BIN"
@@ -1096,6 +1098,7 @@ static int net_start(int argc, char **argv)
     if (paste_load()) {
         start_send(" -paste ");
         start_send(paste_set);
+        esx_f_unlink(PASTE_CFG);
     }
     start_send(" -log /ram/link.log\n");
     if (booting) {
@@ -2217,8 +2220,9 @@ static const char un_done[] = "Remove the Next in the app too.\n";
 
 // Not static: far_uninstall() (far.asm) calls it.
 // .cbb paste-receive on [-enter] | off: whether the group's admins may
-// type on the Next. .cbb install turns it on, with Enter, for BASIC's
-// lines; the Next's own user turns it off here, or an admin in the app.
+// type on the Next. It is off until the Next's own user turns it on here;
+// they turn it off here, or an admin in the app. The next .cbb net on
+// hands it to the Pi once.
 static const char pr_off[] = "off", pr_on[] = "on", pr_enter[] = "-enter", pr_on_enter[] = "on-enter";
 static const char pr_said[] = "Remote paste %s from the next\n.cbb net on%s\n";
 static const char pr_runs[] = " (net off first)";
@@ -2442,25 +2446,21 @@ int cbb_swap(void)
     return 1;
 }
 
-static const char paste_default[] = "on-enter";
 // Two lines, so that the messages above stay on the screen.
 static const char paste_is_on[] = "Remote paste on. Off: the app or .cbb paste-receive off";
 static const char paste_is_off[] = "Remote paste off; on: .cbb paste-receive on";
 static const char *const end_words[] = {"Done.", "No updates: everything is current.",
                                         "Done: CBB and its files are new. Start the network: .cbb net on, or restart the Next."};
 
-// The install's end, after its files: remote paste on with Enter after
-// the first install, as the user set it after that; then what was done.
+// The install's end, after its files: what the user set for remote paste
+// that the network has not taken yet; then what was done.
 // Not static: far_install_end() (far.asm) calls it, from the install's
 // page.
 int install_end(void)
 {
-    if (!paste_load()) {
-        strcpy(paste_set, paste_default);
-        if (paste_save()) return 1;
-    }
-    // Without the Pi, its message keeps the room.
-    if (end_pi) say(paste_set[1] == 'n' ? paste_is_on : paste_is_off);
+    // Without the Pi, its message keeps the room. Without a setting the
+    // Pi keeps its own: off after a first install.
+    if (end_pi && paste_load()) say(paste_set[1] == 'n' ? paste_is_on : paste_is_off);
     say(end_words[end_word]);
     return 0;
 }

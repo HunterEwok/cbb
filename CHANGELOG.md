@@ -1497,6 +1497,13 @@ All notable changes to cbb are documented in this file. The format follows
   client's network and to all sources together; the web server in front names the client's
   address in `X-Real-IP` (docs/relay-budget.md, "XHTTP"; add the line to an existing nginx
   location).
+- The ZX Spectrum Next hands the Pi its user's remote paste setting once after each
+  `.cbb paste-receive`, so that an admin's `paste-off` stays off when the network starts
+  again; `.cbb install` no longer turns remote paste on: it is off until the Next's user
+  turns it on.
+- The Mac's installer package keeps its files for the service in a folder that only root
+  may change, `/Library/Application Support/cbb-package`, and its script checks that before
+  it installs them.
 - The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
   clipboard off the main thread, for the remote paste sheet's empty field and for a sync
   that reads the clipboard itself, so iOS stops reporting a hang of the app.

@@ -11,8 +11,9 @@
 # IDENTITY, a Developer ID Installer identity in a keychain (its SHA-1 hash
 # or name), signs the package with a secure timestamp; without it the package
 # is unsigned, for CI's test of it. The package puts the app in /Applications
-# and cbb with install.sh and its files in /usr/local/share/cbb/package; its
-# postinstall script then runs install.sh, as get.sh does with sudo, for the
+# and cbb with install.sh and its files in /Library/Application
+# Support/cbb-package, a folder that only root may change; its postinstall
+# script checks that, then runs install.sh, as get.sh does with sudo, for the
 # user signed in at the screen, and opens the app in the menu bar.
 # uninstall.sh removes the app and the package's receipt with the rest.
 set -eu
@@ -43,7 +44,7 @@ done
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 root=$work/root
-share=$root/usr/local/share/cbb/package
+share="$root/Library/Application Support/cbb-package"
 mkdir -p "$root/Applications" "$share/macos" "$work/scripts"
 ditto "$app" "$root/Applications/CBB.app"
 ditto "$bin" "$share/cbb"
@@ -61,7 +62,33 @@ cat >"$work/scripts/postinstall" <<'EOF'
 # to /var/log/install.log. Without a terminal, install.sh keeps the answers
 # given before about the firewall and automatic updates, and asks nothing.
 set -eu
-pkg=/usr/local/share/cbb/package
+pkg="/Library/Application Support/cbb-package"
+# Only root may have changed what runs as root here: the folder, every
+# folder above it and the files run are root's, no symbolic link, and
+# nobody else may write to them.
+d=$pkg
+set --
+for f in "$pkg/cbb" "$pkg/update.sh" "$pkg/macos" "$pkg/macos/"*; do
+	set -- "$f" "$@"
+done
+while :; do
+	set -- "$d" "$@"
+	[ "$d" = / ] && break
+	d=$(dirname "$d")
+done
+for f in "$@"; do
+	if [ -L "$f" ] || [ ! -e "$f" ]; then
+		echo "cbb: $f is a symbolic link or missing; not installing" >&2
+		exit 1
+	fi
+	case $(stat -f '%u %Lp' "$f") in
+	'0 '?[0145][0145] | '0 '[0-7]?[0145][0145]) ;;
+	*)
+		echo "cbb: $f is not root's alone; not installing" >&2
+		exit 1
+		;;
+	esac
+done
 user=$(stat -f %Su /dev/console 2>/dev/null || true)
 case $user in root | loginwindow | _mbsetupuser) user= ;; esac
 SUDO_USER=$user sh "$pkg/macos/install.sh" "$pkg/cbb"
