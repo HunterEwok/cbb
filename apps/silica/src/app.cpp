@@ -20,6 +20,11 @@
 
 namespace {
 
+// How often an admin looks for member certificates due for renewal, and
+// how long after the member starts it looks first.
+const int renewEveryMs = 6 * 3600 * 1000;
+const int renewFirstMs = 60 * 1000;
+
 // Runs KeyStore::ensure in a thread of its own and hands the key back.
 class KeyThread : public QThread
 {
@@ -69,6 +74,7 @@ class ManageThread : public QThread
 public:
     cbb_member *member = nullptr;
     QJsonObject request; // without public, which the key gives
+    QJsonObject answer;
     Failure failure;
 
 protected:
@@ -82,7 +88,7 @@ protected:
         request.insert(QStringLiteral("public"), QString::fromLatin1(key.publicKey.toBase64()));
         const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
         size_t len = 0;
-        const QJsonObject a =
+        const QJsonObject a = answer =
             Core::take(cbb_member_manage(member, reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
                                          Core::signAdminDigest, nullptr, &len),
                        len, QStringLiteral("manage"), &failure);
@@ -141,6 +147,18 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
                 m_member = next;
                 Errors::log(QStringLiteral("group: kept a new member certificate or root"));
             });
+    // Renewals are due months ahead, so a look every few hours, and one
+    // a minute after the member starts, once it reached its peers, is plenty.
+    m_renewTimer.setInterval(renewEveryMs);
+    connect(&m_renewTimer, &QTimer::timeout, this, &App::renew);
+    connect(&m_node, &Member::changed, this, [this]() {
+        if (m_node.running() && !m_renewTimer.isActive()) {
+            m_renewTimer.start();
+            QTimer::singleShot(renewFirstMs, this, &App::renew);
+        } else if (!m_node.running()) {
+            m_renewTimer.stop();
+        }
+    });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
         emit groupChanged();
@@ -282,6 +300,31 @@ void App::manage(const QString &action, const QString &device, const QString &na
         show(QString());
         m_node.pollDevices();
         emit managed(action, device, true);
+    });
+    thread->start();
+}
+
+void App::renew()
+{
+    if (m_busy || !m_member.isAdmin() || !m_node.running())
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->request = QJsonObject{{QStringLiteral("action"), QStringLiteral("renew")}};
+    if (!m_member.adminCa.isEmpty() && !m_member.root)
+        thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const int renewed = thread->answer.value(QStringLiteral("renewed")).toInt();
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull())
+            Errors::log(QStringLiteral("renew: %1 (%2)").arg(failure.message, failure.details));
+        else if (renewed > 0)
+            Errors::log(QStringLiteral("renew: renewed %1 member certificates").arg(renewed));
     });
     thread->start();
 }

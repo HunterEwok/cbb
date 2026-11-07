@@ -350,6 +350,14 @@
         <source>Rename</source>
         <translation>नाम बदलें</translation>
     </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>एडमिन बनाएँ</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>%1 को एडमिन बनाया जा रहा है</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

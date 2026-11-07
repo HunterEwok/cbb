@@ -254,3 +254,60 @@ fn mute_and_unmute_are_sealed_to_the_receiver() {
     assert!(order(&g.rs, &s, &g.laptop, &Order::Mute(-1), now_ms()).is_err());
     assert!(order(&g.rs, &s, &g.root_phone, &Order::Unmute, now_ms()).is_err());
 }
+
+#[test]
+fn the_root_makes_a_computer_an_admin() {
+    let mut g = group();
+    let key = soft();
+    let spki = certs::p256_spki_of(&key.public());
+    let root = Signer { ca: &g.root, key: &*g.root_key, me: &g.root_phone };
+    let e = make_admin(&g.rs, &root, &g.laptop, &spki, "file", true, now_ms()).err().unwrap();
+    assert!(e.message().contains("in a file"));
+    assert!(make_admin(&g.rs, &root, &g.laptop, &spki, "rootless", false, now_ms()).is_err());
+    assert!(make_admin(&g.rs, &root, &g.admin_phone, &spki, "hardware", false, now_ms()).is_err());
+    assert!(make_admin(&g.rs, &root, &g.laptop, &[1, 2, 3], "hardware", false, now_ms()).is_err());
+    let admin = Signer { ca: &g.admin_ca, key: &*g.admin_key, me: &g.admin_phone };
+    let e = make_admin(&g.rs, &admin, &g.laptop, &spki, "hardware", false, now_ms()).err().unwrap();
+    assert!(e.message().contains("only the group's root"));
+
+    let made = make_admin(&g.rs, &root, &g.laptop, &spki, "hardware", false, now_ms()).unwrap();
+    let ca = Cert::parse(&made.admin_ca).unwrap();
+    certs::check_admin_ca(&ca, &g.root).unwrap();
+    assert_eq!(ca.public_key(), key.public().as_slice());
+    assert!(g.rs.add(&made.record).unwrap());
+    let d = g.rs.devices().into_iter().find(|d| d.id == g.laptop).unwrap();
+    assert!(d.admin && d.admin_key == Some(ca.key_hash()));
+    assert_eq!((d.store.as_str(), d.name.as_str()), ("hardware", "laptop"));
+    assert!(make_admin(&g.rs, &root, &g.laptop, &spki, "hardware", false, now_ms()).is_err());
+}
+
+#[test]
+fn a_due_certificate_is_renewed() {
+    let g = group();
+    let now = now_ms() / 1000;
+    let dev = DeviceId::random();
+    let key = soft();
+    let sign = |b: &[u8]| identity::sign_external(&*g.root_key, b);
+    let cert = Cert::parse(&issue::member(&dev, &key.public(), &g.root, now, &mut |b| sign(b)).unwrap()).unwrap();
+    let roots = [g.root.clone()];
+    let admin = Signer { ca: &g.admin_ca, key: &*g.admin_key, me: &g.admin_phone };
+    assert!(renewal(std::slice::from_ref(&cert), &roots, &admin, now).unwrap().is_none());
+    // 100 days before it ends, the admin renews it from its admin CA.
+    let later = cert.not_after - 100 * 24 * 3600;
+    let new = Cert::parse(&renewal(std::slice::from_ref(&cert), &roots, &admin, later).unwrap().unwrap()).unwrap();
+    assert_eq!(new.public_key(), cert.public_key());
+    assert!(new.not_after > cert.not_after);
+    let chain = [new, g.admin_ca.clone()];
+    assert_eq!(certs::verify_member(&chain, &roots, later, certs::Usage::Client).unwrap(), dev);
+    // A chain from another group is refused.
+    let other_key = soft();
+    let other = Cert::parse(
+        &issue::root_ca(&other_key.public(), now, &mut |b| identity::sign_external(&*other_key, b)).unwrap(),
+    )
+    .unwrap();
+    let stranger = Cert::parse(
+        &issue::member(&dev, &key.public(), &other, now, &mut |b| identity::sign_external(&*other_key, b)).unwrap(),
+    )
+    .unwrap();
+    assert!(renewal(&[stranger], &roots, &admin, later).is_err());
+}

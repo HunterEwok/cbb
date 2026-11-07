@@ -53,6 +53,14 @@ Page {
                                            function() { app.manage("remove", page.device.device) })
             }
             MenuItem {
+                // The admin key comes from the computer's hello.
+                visible: page.acts && app.root && page.device.role === "full" && !page.device.admin
+                         && page.device.online
+                text: qsTr("Make an admin")
+                onClicked: remorse.execute(qsTr("Making %1 an admin").arg(Devices.name(page.device)),
+                                           function() { app.manage("make_admin", page.device.device) })
+            }
+            MenuItem {
                 visible: page.acts && page.device.frozen
                 text: qsTr("Unfreeze")
                 onClicked: remorse.execute(qsTr("Unfreezing %1").arg(Devices.name(page.device)),

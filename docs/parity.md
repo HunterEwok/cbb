@@ -56,8 +56,8 @@ on every platform of the class, on the roadmap).
 | Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE, no biometric prompt yet; not yet tried on the phone | StrongBox or TEE; Secure Enclave |
 | Add a computer or a lite device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | the Aurora app reads the code with the core's reader |
 | Join another phone's group | yes | yes | yes | |
-| Make an admin, remove, take over from a lost root, renew certificates | yes | yes | remove, as the root or an admin; not yet tried on the phone. Gap: renew, take over | the core signs, the app's admin key in the TEE |
-| Make a computer an admin | yes | yes | gap | |
+| Make an admin, remove, take over from a lost root, renew certificates | yes | yes | remove and renew, as the root or an admin; not yet tried on the phone. Gap: take over | the core signs, the app's admin key in the TEE |
+| Make a computer an admin | yes | yes | yes, as the root, for a computer connected; not yet tried on the phone | |
 | Sync away from home | yes, in the background | while the app runs | gap, with the core's tunnel | **OS**: iOS stops a background app's network |
 | Receive copies without a tap | yes (foreground service) | **OS** | yes | iOS lets an app read and write the clipboard only in the foreground; Aurora lets it write in the background |
 | Send without a tap | yes (accessibility service) | **OS** | **OS** | iOS: Back Tap or the Action button runs the app's shortcut, one gesture; Aurora reads the clipboard only in the foreground, so the app sends when it comes to the front |

@@ -13,6 +13,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 
 class App : public QObject
 {
@@ -89,8 +90,8 @@ public:
     // Makes a group of the phone's own, its root key the admin key in the
     // TEE (docs/protocol.md, section 3), and starts the member as its root.
     Q_INVOKABLE void makeGroup();
-    // An admin's change to a device of the group (remove, rename, thaw) or
-    // command for it (mute, unmute), signed with the admin key, or the
+    // An admin's change to a device of the group (remove, rename, thaw,
+    // make_admin as the root, for a computer) or command for it (mute, unmute), signed with the admin key, or the
     // root's, off the GUI thread; managed() tells when it is done.
     // forMinutes: how long a mute lasts, 0 for until an unmute.
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
@@ -112,6 +113,9 @@ private:
     // Starts the member once the phone has both its key and a group.
     void startMember();
     QString phoneName() const;
+    // As an admin, renews the member certificates that are due, the
+    // devices' connected and the phone's own, quietly: only the log says.
+    void renew();
     QString phoneOs() const;
 
     OsInfo m_os;
@@ -125,6 +129,7 @@ private:
     Admit m_admit;
     Events m_events;
     bool m_busy = false;
+    QTimer m_renewTimer;
     QString m_error;
     QString m_startLanguage;
 };

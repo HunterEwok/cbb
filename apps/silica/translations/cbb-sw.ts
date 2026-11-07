@@ -350,6 +350,14 @@
         <source>Rename</source>
         <translation>Badilisha jina</translation>
     </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Fanya msimamizi</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>Inamfanya %1 kuwa msimamizi</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

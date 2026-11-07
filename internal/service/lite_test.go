@@ -734,6 +734,14 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if got := manage(`{"action":"mute","device":"` + string(j.ID) + `","for_ms":60000,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("muting a computer that is not running: %s", got)
 	}
+	// The admin key comes from the computer's hello, so it must be connected.
+	if got := manage(`{"action":"make_admin","device":"` + string(j.ID) + `"}`); !strings.Contains(got, "not connected") {
+		t.Fatalf("making a computer that is not running an admin: %s", got)
+	}
+	// Nothing is due in a group made a moment ago.
+	if got := manage(`{"action":"renew"}`); got != `{"ok":{"renewed":0}}` {
+		t.Fatalf("renewing: %s", got)
+	}
 	if got := manage(`{"action":"remove","device":"` + made[0] + `"}`); !strings.Contains(got, "cannot remove itself") {
 		t.Fatalf("the phone removing itself: %s", got)
 	}

@@ -5,7 +5,8 @@
 //! admin key or the root's key held outside the core (the Aurora app's key
 //! in OP-TEE): a removal, a new name or a thaw as a record
 //! (docs/protocol.md, section 10), and a mute or an unmute as a command
-//! (section 15). The rules are those of the phone kits' PhoneGroup: an
+//! (section 15), a computer made an admin, and a renewed member
+//! certificate. The rules are those of the phone kits' PhoneGroup: an
 //! admin removes any device but itself and the root's, renames one that
 //! the root did not record (a root's record beats an admin's), thaws a
 //! frozen admin; the record set checks the rest when the record is added.
@@ -20,6 +21,7 @@ use crate::command::{self, Command};
 use crate::error::{Error, Result};
 use crate::group::{Device, Records};
 use crate::identity::{self, ExternalKey};
+use crate::issue;
 
 /// A change to a device of the group, as a record.
 pub enum Change<'a> {
@@ -196,6 +198,125 @@ pub fn order(rs: &Records, s: &Signer, device: &str, o: &Order, now_ms: i64) -> 
     }
     let sig = identity::sign_external(s.key, &body)?;
     Ok(Record::new(body, sig, s.chain(rs)))
+}
+
+/// Whether a device whose keys live in store may hold an admin key at the
+/// group's key level, as the phone kits' Records.levelAllows: never a
+/// rootless install, always proven hardware, a file only at the level
+/// `files` and with the user's consent, other hardware unless the level
+/// asks for proven keys.
+fn level_allows(level: &str, store: &str, consent: bool) -> bool {
+    match store {
+        "rootless" => false,
+        "proven" => true,
+        "file" => level == "files" && consent,
+        _ => level != "proven",
+    }
+}
+
+/// What making a computer an admin gives: the admin CA for the admin key
+/// its hello offered, for the admin message, and its device record again
+/// naming that CA, to add and send.
+pub struct NewAdmin {
+    pub admin_ca: Vec<u8>,
+    pub record: Record,
+}
+
+/// Makes the computer device an admin, as the group's root
+/// (docs/protocol.md, section 10, "A computer as admin"): admin_key is the
+/// SubjectPublicKeyInfo its hello offered and key_store where its hello
+/// says its keys live; a computer that keeps them in a file becomes one
+/// only when the group's key level allows files and the user consented
+/// (allow_file_key).
+pub fn make_admin(
+    rs: &Records,
+    s: &Signer,
+    device: &str,
+    admin_key: &[u8],
+    key_store: &str,
+    allow_file_key: bool,
+    now_ms: i64,
+) -> Result<NewAdmin> {
+    if !rs.state().roots.contains(&s.hash()) {
+        return Err(Error::msg("only the group's root makes admins"));
+    }
+    let d = find(rs, device)?;
+    if d.role != "full" {
+        return Err(Error::msg("only a computer is made an admin this way"));
+    }
+    if d.frozen {
+        return Err(Error::msg("the computer is frozen: unfreeze it or remove it"));
+    }
+    if d.admin_key.is_some() {
+        return Err(Error::msg("the computer is an admin already"));
+    }
+    let point = certs::p256_spki(admin_key)
+        .ok_or_else(|| Error::msg("the computer offers no P-256 admin key"))?
+        .to_sec1_point(false)
+        .as_bytes()
+        .to_vec();
+    let proven = d.store == "proven";
+    let store = if proven { d.store.clone() } else { command::store_of(key_store, &d.role).to_string() };
+    if store == "rootless" || d.store == "rootless" {
+        return Err(Error::msg("a computer that runs without root keeps no admin key"));
+    }
+    let level = rs.state().key_level;
+    let level = if level.is_empty() { "hardware" } else { level.as_str() };
+    if !level_allows(level, &store, allow_file_key) {
+        return Err(Error::msg(if store == "file" {
+            "the computer keeps its keys in a file, which the group's key level does not allow for an admin"
+        } else {
+            "the computer's keys are below the group's key level"
+        }));
+    }
+    let id = certs::DeviceId::parse(device)?;
+    let ca = issue::admin_ca(&id, &point, s.ca, now_ms / 1000, &mut |tbs| identity::sign_external(s.key, tbs))?;
+    let admin = Hash(Cert::parse(&ca)?.key_hash());
+    let b = Body {
+        v: 2,
+        alg: authority::ALG_ES256.into(),
+        kind: authority::TYPE_DEVICE.into(),
+        signer: s.hash(),
+        time_ms: now_ms,
+        device: d.id.clone(),
+        name: d.name.clone(),
+        role: d.role.clone(),
+        os: d.os.clone(),
+        key: Some(Hash(d.key)),
+        admin: Some(admin),
+        powers: authority::POWERS.iter().map(|p| (*p).into()).collect(),
+        commands: authority::COMMANDS.iter().map(|c| (*c).into()).collect(),
+        store,
+        hardware: if proven { d.kind.clone() } else { String::new() },
+        proof: if proven { d.proof.clone() } else { String::new() },
+        seal: d.seal.clone(),
+        ..Default::default()
+    };
+    let body = rs.next_body(b)?;
+    let sig = identity::sign_external(s.key, &body)?;
+    Ok(NewAdmin { admin_ca: ca, record: Record::new(body, sig, None) })
+}
+
+/// A renewed member certificate for a peer's chain (leaf first), when the
+/// leaf is due and from one of the group's roots, directly or through an
+/// admin CA under one; None when it is not due. The signer issues it from
+/// its own CA, whoever issued the old one, as the phone kits' renewal.
+/// now is Unix seconds.
+pub fn renewal(chain: &[Cert], roots: &[Cert], s: &Signer, now: i64) -> Result<Option<Vec<u8>>> {
+    let Some(leaf) = chain.first() else { return Ok(None) };
+    let device = certs::verify_member(chain, roots, now, certs::Usage::Client)?;
+    if !due(leaf, s.ca, now) {
+        return Ok(None);
+    }
+    issue::member(&device, leaf.public_key(), s.ca, now, &mut |tbs| identity::sign_external(s.key, tbs)).map(Some)
+}
+
+/// Whether a member certificate is due for renewal, as Go's renewable: less
+/// than 240 days left, and its CA lasts longer than it. A clock before the
+/// CA's start is wrong, and nothing is due then.
+pub fn due(cert: &Cert, ca: &Cert, now: i64) -> bool {
+    const RENEW_BEFORE: i64 = 240 * 24 * 3600;
+    now >= ca.not_before && now > cert.not_after.saturating_sub(RENEW_BEFORE) && ca.not_after > cert.not_after
 }
 
 #[cfg(test)]

@@ -350,6 +350,14 @@
         <source>Rename</source>
         <translation>重命名</translation>
     </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>设为管理员</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>正在将 %1 设为管理员</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

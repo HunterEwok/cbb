@@ -162,12 +162,18 @@ struct CommandArgs {
     timeout_ms: u64,
 }
 
-/// What cbb_member_manage does: `action` is remove, rename, thaw, mute or
-/// unmute, for `device`.
+/// What cbb_member_manage does: `action` is remove, rename, thaw,
+/// make_admin (as the root, for a computer connected), mute or unmute, for
+/// `device`, or renew, which renews every certificate due.
 #[derive(Deserialize)]
 struct ManageArgs {
     action: String,
+    #[serde(default)]
     device: String,
+    /// With make_admin: the user consented to a computer that keeps its
+    /// keys in a file, which the group's key level must allow too.
+    #[serde(default)]
+    allow_file_key: bool,
     /// With rename: the new name.
     #[serde(default)]
     name: String,
@@ -636,6 +642,8 @@ impl Member {
                 "remove" => self.node.change(&s, &a.device, &Change::Remove)?,
                 "rename" => self.node.change(&s, &a.device, &Change::Rename(&a.name))?,
                 "thaw" => self.node.change(&s, &a.device, &Change::Thaw)?,
+                "make_admin" => self.node.make_admin(&s, &a.device, a.allow_file_key)?,
+                "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
                 "mute" => return order(Order::Mute(a.for_ms)),
                 "unmute" => return order(Order::Unmute),
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),

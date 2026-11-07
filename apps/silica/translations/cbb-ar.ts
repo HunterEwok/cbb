@@ -350,6 +350,14 @@
         <source>Rename</source>
         <translation>إعادة تسمية</translation>
     </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>اجعله مشرفًا</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>جارٍ جعل %1 مشرفًا</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

@@ -134,7 +134,11 @@ over instead), a new name (a device record like its newest; an admin renames onl
 root did not record, since a root's record beats an admin's), a thaw of a frozen admin, which
 the member adds to its records and sends to the group, or a mute or an unmute, a command sealed
 to the device's key when its record names one, which the member sends and whose result it
-answers. `TestFFIPhoneRoot` renames and removes a computer through it.
+answers. As the root it makes a connected computer an admin (`make_admin`: an admin CA for the
+admin key its hello offers, its device record again, and the admin message), and as any admin it
+renews (`renew`) every member certificate that is due, each connected member's, sent to it, and the
+phone's own, as the phone kits do when a peer connects. `TestFFIPhoneRoot` renames and removes a
+computer through it.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its

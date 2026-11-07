@@ -350,6 +350,14 @@
         <source>Rename</source>
         <translation>Renombrar</translation>
     </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Hacer admin</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>Haciendo admin a %1</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

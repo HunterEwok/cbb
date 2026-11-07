@@ -350,6 +350,14 @@
         <source>Rename</source>
         <translation>Переименовать</translation>
     </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Сделать админом</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>%1 становится админом</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>
