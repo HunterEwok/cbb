@@ -1637,6 +1637,21 @@ impl Node {
         }
     }
 
+    /// Takes entry points this device fetched or the user gave, as Go's
+    /// putEntries: kept when they check out and are newer than those held,
+    /// and passed on to the peers; reports whether they were newer.
+    pub fn put_entries(&self, set: &serde_json::Value) -> Result<bool> {
+        let newer =
+            self.entries.take(set, uptime::wall_ms()).map_err(|e| e.context("the entry points do not check out"))?;
+        if newer {
+            let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+            for c in conns.iter().filter(|c| !c.records_only) {
+                self.enqueue(c, Out::Entries(set.clone()));
+            }
+        }
+        Ok(newer)
+    }
+
     /// Keeps a certificate an admin renewed for this member, or this
     /// member's app for itself.
     pub fn renewed(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<()> {

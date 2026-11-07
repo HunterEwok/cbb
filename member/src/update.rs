@@ -228,30 +228,37 @@ impl std::fmt::Display for Source {
 /// tool writes to a pipe, so that no more than max bytes reach the disk
 /// (the RAM on OpenWrt), and it is stopped after FETCH_TIME.
 fn fetch(url: &str, path: &Path, max: u64) -> Result<()> {
+    fetch_via(url, path, max, None, FETCH_TIME)
+}
+
+/// As fetch, within time; with resolve (`host:443:address`) only curl,
+/// which can be told to reach the host at that address.
+fn fetch_via(url: &str, path: &Path, max: u64, resolve: Option<&str>, time: Duration) -> Result<()> {
     let max_s = max.to_string();
-    let time = FETCH_TIME.as_secs().to_string();
-    let tools: [(&str, Vec<&str>); 3] = [
-        (
-            "curl",
-            vec![
-                "-fsSL",
-                "-g",
-                "--proto",
-                "=https",
-                "--proto-redir",
-                "=https",
-                "--max-filesize",
-                &max_s,
-                "--max-time",
-                &time,
-                "-A",
-                "cbb",
-                url,
-            ],
-        ),
-        ("wget", vec!["-q", "-U", "cbb", "-O", "-", url]),
-        ("uclient-fetch", vec!["-q", "-O", "-", url]),
+    let time_s = time.as_secs().to_string();
+    let mut curl = vec![
+        "-fsSL",
+        "-g",
+        "--proto",
+        "=https",
+        "--proto-redir",
+        "=https",
+        "--max-filesize",
+        &max_s,
+        "--max-time",
+        &time_s,
+        "-A",
+        "cbb",
     ];
+    if let Some(r) = resolve {
+        curl.extend(["--resolve", r]);
+    }
+    curl.push(url);
+    let mut tools: Vec<(&str, Vec<&str>)> = vec![("curl", curl)];
+    if resolve.is_none() {
+        tools.push(("wget", vec!["-q", "-U", "cbb", "-O", "-", url]));
+        tools.push(("uclient-fetch", vec!["-q", "-O", "-", url]));
+    }
     for (tool, args) in tools {
         let child =
             Command::new(tool).args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
@@ -261,8 +268,40 @@ fn fetch(url: &str, path: &Path, max: u64) -> Result<()> {
             Ok(child) => return fetch_with(tool, url, child, path, max),
         }
     }
+    if resolve.is_some() {
+        return Err(Error::msg(
+            "fetching the signed lists from the relay's server needs curl, which this system has not",
+        ));
+    }
     Err(Error::msg("downloading needs curl, wget or uclient-fetch, and this system has none"))
 }
+
+/// Fetches keys.json and entries.json from the mirror reached at the
+/// address at, the project's relay's server, where the mirror is too, as
+/// Go's fetchProjectLists: `{keys, entries}`, which the node checks.
+#[cfg(feature = "tunnel")]
+pub fn fetch_lists_at(at: std::net::IpAddr, work: &Path) -> Result<serde_json::Value> {
+    let host = MIRROR.trim_start_matches("https://");
+    let ip = match at {
+        std::net::IpAddr::V6(v6) => format!("[{v6}]"),
+        v4 => v4.to_string(),
+    };
+    let resolve = format!("{host}:443:{ip}");
+    let mut set = serde_json::Map::new();
+    for (key, name) in [("keys", "keys.json"), ("entries", "entries.json")] {
+        let path = work.join(format!(".{name}.relay.part"));
+        let got = fetch_via(&format!("{MIRROR}/{name}"), &path, MAX_MANIFEST, Some(&resolve), LISTS_TIME)
+            .and_then(|()| fs::read(&path).context(format!("cannot read the downloaded {name}")));
+        let _ = fs::remove_file(&path);
+        let v: serde_json::Value = serde_json::from_slice(&got?).context(format!("{name} does not decode"))?;
+        set.insert(key.into(), v);
+    }
+    Ok(serde_json::Value::Object(set))
+}
+
+/// The longest fetching the signed lists from the relay's server may take.
+#[cfg(feature = "tunnel")]
+const LISTS_TIME: Duration = Duration::from_secs(60);
 
 /// The longest a download may take.
 const FETCH_TIME: Duration = Duration::from_secs(30 * 60);

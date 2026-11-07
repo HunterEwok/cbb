@@ -66,6 +66,10 @@ pub struct Away {
     /// The group's server credentials, which the relay link registers with
     /// once they list this device.
     credentials: Mutex<Option<Arc<crate::credentials::Credentials>>>,
+    /// When a failing link to the project's relay last fetched the signed
+    /// lists, and whether it is fetching them now.
+    refetched: Mutex<Option<Instant>>,
+    fetching: Arc<AtomicBool>,
     /// Why the hub, while it serves, is to try the hubs above it.
     standby: Mutex<Option<String>>,
     /// The hub passes a hub above's offer on before it gives way.
@@ -106,6 +110,8 @@ impl Away {
             serving: Mutex::new(None),
             meeting: Mutex::new(None),
             credentials: Mutex::new(None),
+            refetched: Mutex::new(None),
+            fetching: Arc::new(AtomicBool::new(false)),
             standby: Mutex::new(None),
             giving_way: AtomicBool::new(false),
             log,

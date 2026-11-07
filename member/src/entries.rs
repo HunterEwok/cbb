@@ -101,6 +101,18 @@ impl Entries {
         keys.keys.into_iter().filter(|k| k.usage == "relay" && k.name == name).map(|k| k.key).collect()
     }
 
+    /// Where the list held says the project's relay `name` is reached now,
+    /// host:port, while the list has not expired; none when it names none.
+    pub fn relay_endpoints(&self, name: &str, now_ms: i64) -> Vec<String> {
+        let Some(set) = self.current(now_ms) else { return Vec::new() };
+        let Ok(set) = serde_json::from_value::<Set>(set) else { return Vec::new() };
+        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
+        match release::check_entries(&set.keys, &set.entries, &roots, now_ms, &Seen::default()) {
+            Ok((e, _)) => e.relays.into_iter().find(|r| r.name == name).map(|r| r.endpoints).unwrap_or_default(),
+            Err(_) => Vec::new(),
+        }
+    }
+
     /// Takes a list a peer sent when it checks out and is newer than the one
     /// held, keeps it in the file and reports whether it did.
     pub fn take(&self, v: &Value, now_ms: i64) -> Result<bool> {

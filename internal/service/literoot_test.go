@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
@@ -1433,4 +1434,100 @@ func TestLiteRelayRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the laptop has it", func() bool { return laptop.paste(t) == "from the root" })
+}
+
+// TestLiteRelayProject sets the Rust service to the project's relay,
+// whose key the signed keys.json gives, then changes the relay's key: once
+// a newer keys.json names the new key, the device registers again by
+// itself. Then the relay moves, and entries.json says where to, as
+// TestProjectRelayNewKey does with a Go device.
+func TestLiteRelayProject(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	signer := newReleaseSigner(t)
+	var h hub
+	pi := startWith(t, &h, "pi", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	dir := joinLite(t, bin, pi)
+	pemFile := filepath.Join(t.TempDir(), "roots.pem")
+	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lite := startLiteEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1"}, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	group := pi.status(t).Group
+	serve := func(keys relay.Keys, at string) (*relay.Relay, func()) {
+		r, err := relay.Listen(relay.Config{Listen: at, Keys: keys, Groups: []string{group}, Logf: t.Logf})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		served := make(chan struct{})
+		go func() {
+			defer close(served)
+			r.Serve(ctx)
+		}()
+		return r, func() {
+			cancel()
+			<-served
+		}
+	}
+	oldKeys, err := relay.NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	newKeys, err := relay.NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, stop := serve(oldKeys, "127.0.0.1:0")
+	at := r.Addr().String()
+
+	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 1, oldKeys)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lite.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: relay.Project, Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	connected := func() bool {
+		a := lite.status(t).Away
+		return a != nil && a.Relay != nil && a.Relay.Connected
+	}
+	waitUpTo(t, 60*time.Second, "the Rust member registers with the relay's listed key", connected)
+
+	// The relay changes its key; the device refuses the new one until
+	// keys.json names it, then takes it without being set again.
+	stop()
+	_, stop = serve(newKeys, at)
+	waitUpTo(t, 60*time.Second, "the Rust member says the key is unknown", func() bool {
+		a := lite.status(t).Away
+		return a != nil && a.Relay != nil && !a.Relay.Connected && a.Relay.Error != "" && a.Relay.Detail != ""
+	})
+	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 2, oldKeys, newKeys)); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 90*time.Second, "the Rust member registers with the new key", connected)
+	if a := lite.status(t).Away; a.Relay.Error != "" {
+		t.Errorf("an error left in status: %q", a.Relay.Error)
+	}
+
+	// It moves to another port under a name of its own.
+	stop()
+	moved, stop := serve(newKeys, "127.0.0.1:0")
+	defer stop()
+	_, port, _ := net.SplitHostPort(moved.Addr().String())
+	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 3, []string{"relay.example.org:" + port}, newKeys)); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 90*time.Second, "the Rust member registers where the relay moved", func() bool {
+		a := lite.status(t).Away
+		return connected() && a.Relay.Endpoint == moved.Addr().String()
+	})
+	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+	if err != nil || !strings.Contains(string(raw), moved.Addr().String()) {
+		t.Errorf("tunnel.json after the move: %v\n%s", err, raw)
+	}
 }

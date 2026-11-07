@@ -1726,6 +1726,23 @@ impl Service {
                 res.header.done = true;
                 Ok(res)
             }
+            // Signed entry points the user gives (cbb update brings them on
+            // a Go member), kept and passed on as Go's putEntries.
+            "entries" => {
+                let set: serde_json::Value = serde_json::from_slice(&m.payload)
+                    .map_err(|e| Error::with("the request carries no entry points", e))?;
+                self.node()?.put_entries(&set)?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "entries-get" => {
+                let set = self
+                    .node()?
+                    .entries()
+                    .current(uptime::wall_ms())
+                    .ok_or_else(|| Error::msg("this device holds no signed entry points"))?;
+                let data = serde_json::to_vec(&set).context("cannot encode the entry points")?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+            }
             "hubs" => {
                 self.admin(|a| a.set_hubs(&h.hubs))?;
                 Ok(control::reply(Header::default(), Vec::new()))

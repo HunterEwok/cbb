@@ -286,9 +286,11 @@ ends, the Go service described below is still the computers' member.
   `relayCredentials`), and registers again when they change. A connection the relay brings
   to dial is dialed through its loopback port; a call comes to a loopback port of its own,
   where the node serves it only when the certificate names the device the relay said calls.
-  Status shows the link as Go's `relay` (`TestLiteRelay`, `TestLiteRelayRoot`). Fetching
-  newer signed lists and the next address when the project's relay fails, the hub's key
-  periods and invitations are still Go's.
+  Status shows the link as Go's `relay` (`TestLiteRelay`, `TestLiteRelayRoot`). When the
+  project's relay fails, the device fetches the newest `keys.json` and `entries.json` through
+  the mirror at the relay's address (at most every ten minutes) and, unless the relay showed
+  a key it does not know, moves to the next address `entries.json` or DNS gives, keeping it in
+  `tunnel.json` (`TestLiteRelayProject`). The hub's key periods and invitations are still Go's.
 
 ### Linux components
 
