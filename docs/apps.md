@@ -690,9 +690,10 @@ view setting like tiles, list or orbit:
   watch's sections and the remote paste device picker. Actions on a whole collection may
   come later; a remote paste to several devices never.
 
-The model is the same in the three places that hold it: `apps/desktop/arrange.go` (the
+The model is the same in the places that hold it: `apps/desktop/arrange.go` (the
 tray app), the Kotlin kit's `Arrangement.kt` (Android) and the Swift kit's
-`Arrangement.swift` (iPhone, iPad, Mac). All three pass
+`Arrangement.swift` (iPhone, iPad, Mac) and the Rust core's `cbb_core::arrange` (the Aurora
+app, through the core's `arrange` call). All of them pass
 `testdata/arrangement/vectors.json`. It is stored as JSON:
 
 ```json
