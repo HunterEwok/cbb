@@ -59,6 +59,7 @@ mod update;
 pub mod uptime;
 #[cfg(feature = "tunnel")]
 pub mod vless;
+mod window;
 pub mod wire;
 
 use std::io::{Read, Write};

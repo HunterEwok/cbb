@@ -4,13 +4,18 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/pair"
@@ -178,6 +183,118 @@ func TestLiteRoot(t *testing.T) {
 	}
 	must("", "remove", "desk")
 	waitFor(t, "the laptop removed", func() bool { return laptop.status(t).Removed })
+}
+
+// TestLiteRootWindow: the Rust root opens a pairing window with cbb pair,
+// as Go's root does, and a Go computer joins it with the code it shows:
+// a wrong code counts and leaves the window open, a second window waits
+// for the first, the right code admits the computer, which then connects
+// to the root on the same port, and a window that closed refuses.
+func TestLiteRootWindow(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := free.Addr().(*net.TCPAddr).Port
+	free.Close()
+	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	root := startLite(t, bin, t.TempDir(), "-no-mdns", "-port", strconv.Itoa(port))
+	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
+		t.Fatalf("cbb new: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust root in its group", func() bool {
+		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && st.Status.Group != ""
+	})
+
+	// cbb pair shows the code and waits.
+	cmd := exec.Command(cli, "pair")
+	cmd.Env = append(os.Environ(), "CBB_SOCKET="+root.socket)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
+	lines := make(chan string, 64)
+	go func() {
+		sc := bufio.NewScanner(stdout)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	codeLine := regexp.MustCompile(`^Pairing code: (\d{3}) (\d{3})$`)
+	var code string
+	timeout := time.After(20 * time.Second)
+	for code == "" {
+		select {
+		case l, ok := <-lines:
+			if !ok {
+				t.Fatalf("cbb pair ended without a code: %s", stderr.String())
+			}
+			if m := codeLine.FindStringSubmatch(l); m != nil {
+				code = m[1] + m[2]
+			}
+		case <-timeout:
+			t.Fatal("cbb pair showed no code")
+		}
+	}
+
+	// A second window waits for this one.
+	if out, err := runCLI(cli, root.socket, "", "pair"); err == nil || !strings.Contains(out, "already open") {
+		t.Errorf("a second cbb pair: %v\n%s", err, out)
+	}
+
+	var h hub
+	laptop := startService(t, &h, "laptop")
+	wrong := "000000"
+	if code == wrong {
+		wrong = "111111"
+	}
+	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: wrong, Address: address}, ""); err == nil || !strings.Contains(err.Error(), "wrong code") {
+		t.Fatalf("a join with a wrong code: %v", err)
+	}
+	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: code, Address: address}, ""); err != nil {
+		t.Fatalf("the join: %v", err)
+	}
+	joined := false
+	for l := range lines {
+		if strings.Contains(l, "laptop joined the group") {
+			joined = true
+			break
+		}
+	}
+	if !joined {
+		t.Fatalf("cbb pair did not say the laptop joined: %s", stderr.String())
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Errorf("cbb pair: %v\n%s", err, stderr.String())
+	}
+	// The laptop dials the root at the address it joined by, on the port
+	// that took the pairing.
+	waitFor(t, "the root and the laptop connected", func() bool {
+		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 1 && len(laptop.status(t).Peers) == 1
+	})
+
+	// No window is open now.
+	desk := startService(t, &h, "desk")
+	if _, err := desk.do(t, control.Header{Op: control.OpJoin, Code: code, Address: address}, ""); err == nil || !strings.Contains(err.Error(), "closed") {
+		t.Errorf("a join without a window: %v", err)
+	}
 }
 
 // isAdmin reports whether the service holds an admin CA by its status.

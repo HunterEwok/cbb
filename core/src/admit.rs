@@ -14,6 +14,10 @@
 //! step gives [`Outcome::Admitted`], the device counts as admitted: the
 //! program adds the device record that [`device_record`] makes, whether or
 //! not the joiner says it stored its identity.
+//!
+//! A member with an open pairing window plays the same exchange on a
+//! connection the joiner dialed ([`Admission::accept`]): the joiner then
+//! confirms the code first, and the member's tag travels with the Welcome.
 
 use alloc::boxed::Box;
 use alloc::collections::BTreeSet;
@@ -268,6 +272,13 @@ pub struct Admission {
     joiner_der: Vec<u8>,
     plain: Vec<u8>,
     state: State,
+    /// The member dialed the joiner, and confirms the code first.
+    member_first: bool,
+    /// The joiner got the member's CPace message: a failure from here on
+    /// counts against the window.
+    started: bool,
+    /// An error frame went to the joiner.
+    told: bool,
 }
 
 impl Admission {
@@ -299,7 +310,48 @@ impl Admission {
             joiner_der: Vec::new(),
             plain: Vec::new(),
             state: State::Handshake,
+            member_first: true,
+            started: false,
+            told: false,
         })
+    }
+
+    /// An admission for a connection a joiner dialed to this member's open
+    /// pairing window, with the window's code: session is the connection's
+    /// server side, whose configuration logged its secrets to exporter
+    /// (tls::member_or_pair_server). The joiner confirms first.
+    pub fn accept(
+        admitter: Admitter,
+        view: GroupView,
+        code: &str,
+        session: Session,
+        exporter: Arc<Exporter>,
+    ) -> Result<Admission> {
+        let code = pair::normalize_code(code)?;
+        if !admitter.ca.is_ca || !admitter.ca.cert_sign {
+            return Err(Error::msg("this device is not an admin of the group"));
+        }
+        Ok(Admission {
+            session,
+            exporter,
+            admitter,
+            view,
+            code,
+            fingerprint: String::new(),
+            sid: [0; 32],
+            joiner_der: Vec::new(),
+            plain: Vec::new(),
+            state: State::Handshake,
+            member_first: false,
+            started: false,
+            told: false,
+        })
+    }
+
+    /// Whether the joiner got the member's CPace message: a failure after
+    /// it counts toward pair::MAX_FAILURES, as it may have tried a guess.
+    pub fn started(&self) -> bool {
+        self.started
     }
 
     /// Takes what arrived on the connection (empty to get the TLS client
@@ -310,6 +362,10 @@ impl Admission {
         let outcome = match self.advance(data, now_ms) {
             Ok(o) => o,
             Err(error) => {
+                // The joiner learns that it failed, never the words.
+                if !self.told && !self.session.is_handshaking() {
+                    self.send(&Out { error: Refusal::Refused.code(), ..Default::default() });
+                }
                 self.state = State::Over;
                 Outcome::Failed { error, wrong_code: false }
             }
@@ -335,6 +391,7 @@ impl Admission {
             self.handshake_done()?;
             self.state = State::First;
         }
+
         let mut buf = [0u8; 4096];
         loop {
             let n = self.session.read(&mut buf);
@@ -377,7 +434,7 @@ impl Admission {
         let [der] = certs_in else {
             return Err(Error::msg("the joining device must send exactly one certificate"));
         };
-        if certs::fingerprint(der) != self.fingerprint {
+        if self.member_first && certs::fingerprint(der) != self.fingerprint {
             return Err(Error::msg("the device is not the one in the QR code"));
         }
         self.joiner_der = der.to_vec();
@@ -425,7 +482,11 @@ impl Admission {
         });
         let (mut st, reply) = started.map_err(|_| fail(Error::msg("cannot start the exchange")))?;
         st.finish(&msg, &ad).map_err(|_| fail(Error::msg("the pairing failed")))?;
-        self.send(&Out { msg: Some(reply), ad: Some(my_ad), tag: st.tag(), ..Default::default() });
+        // The side that was dialed waits for the other's tag before it
+        // shows its own, so a device that guessed wrong learns only that.
+        let tag = if self.member_first { st.tag() } else { None };
+        self.send(&Out { msg: Some(reply), ad: Some(my_ad), tag, ..Default::default() });
+        self.started = true;
         Ok(State::Confirm { st: Box::new(st), joiner: Joiner { device, point: cert.public_key().to_vec(), info } })
     }
 
@@ -488,12 +549,14 @@ impl Admission {
             w.records.clear();
             w.claim_times.clear();
         }
-        self.send(&Out { welcome: Some(w), ..Default::default() });
+        let tag = if self.member_first { None } else { st.tag() };
+        self.send(&Out { welcome: Some(w), tag, ..Default::default() });
         self.state = State::Done;
         Ok(Outcome::Admitted(Box::new(Admitted { device: joiner.device, info: joiner.info, cert, admin_ca })))
     }
 
     fn send(&mut self, f: &Out) {
+        self.told |= !f.error.is_empty();
         if let Ok(b) = wire::json_frame(f, MAX_FRAME) {
             let _ = self.session.write(&b);
         }
@@ -509,6 +572,12 @@ impl Admission {
         self.plain.drain(..end);
         Ok(Some(body))
     }
+}
+
+/// The frame that answers a joiner's first frame when no window takes its
+/// attempt: none is open, another device is pairing, or it expired.
+pub fn refusal_frame(why: Refusal) -> Vec<u8> {
+    wire::json_frame(&Out { error: why.code(), ..Default::default() }, MAX_FRAME).unwrap_or_default()
 }
 
 /// The device record for a device this member admitted, signed by the CA

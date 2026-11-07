@@ -30,6 +30,7 @@ use crate::records::Records;
 use crate::records::Stored as _;
 use crate::remotepaste;
 use crate::uptime;
+use crate::window::{self, Window};
 use crate::wire;
 use cbb_core::media::Manifest;
 
@@ -171,6 +172,23 @@ struct Service {
     name: String,
     /// One cbb new at a time, so two requests cannot make two groups.
     creating: Mutex<()>,
+    /// The pairing running here: a window for a code, or an admission by
+    /// a QR code; one at a time.
+    pairing: Mutex<Option<Pairing>>,
+    /// The member port, for the address a pairing window shows.
+    port: Mutex<Option<u16>>,
+}
+
+/// A pairing that runs on this device.
+enum Pairing {
+    Window(Arc<Window>),
+    Qr,
+}
+
+/// Frees the pairing slot when dropped.
+struct PairingSlot<'a> {
+    svc: &'a Service,
+    node: Arc<Node>,
 }
 
 static STOP: AtomicBool = AtomicBool::new(false);
@@ -227,6 +245,8 @@ pub fn run(cfg: Config) -> Result<()> {
         helper: crate::helper::shared(),
         name: cfg.name.clone(),
         creating: Mutex::new(()),
+        pairing: Mutex::new(None),
+        port: Mutex::new(None),
     });
     if let Some(h) = svc.helper.clone() {
         // Started at once, so that a helper that cannot run shows in the
@@ -317,6 +337,10 @@ pub fn run(cfg: Config) -> Result<()> {
         let svc = svc.clone();
         node.on_command(Arc::new(move |peer, c| svc.command(peer, c)));
     }
+    {
+        let svc = svc.clone();
+        node.on_pairing(Arc::new(move |sock, session, exporter, addr| svc.pair_conn(sock, session, exporter, addr)));
+    }
     node.set_actions(actions::load(&cfg.state_dir)?.on());
     node.set_tunnel_key(away.key());
     {
@@ -331,6 +355,7 @@ pub fn run(cfg: Config) -> Result<()> {
     *svc.node.write().unwrap() = Some(node.clone());
     *svc.away.write().unwrap() = Some(away.clone());
     let port = cfg.port.and_then(|p| discovery::listen(node.clone(), p, log.clone()));
+    *svc.port.lock().unwrap() = port;
     if let Some(p) = port {
         log(&format!("cbb: listening on port {p}"));
     }
@@ -1241,6 +1266,13 @@ impl Service {
             let _ = control::write(&mut out, &answer);
             return;
         }
+        if m.header.op == "pair" && m.header.addrs.is_empty() {
+            if let Err(e) = self.pair_window(&m, r, &mut out) {
+                (self.log)(&format!("cbb: pair: {}", e.for_log()));
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
+            return;
+        }
         if m.header.op == "paste-media" {
             if let Err(e) = self.paste_media(&mut out) {
                 let _ = control::write(&mut out, &control::failure(&e));
@@ -1508,13 +1540,11 @@ impl Service {
                 let below = self.admin(|a| a.set_key_level(&h.value))?;
                 Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
             }
-            "pair" if !h.addrs.is_empty() => {
+            "pair" => {
+                let _slot = self.take_pairing(|| Ok(Pairing::Qr))?;
                 let name = self.admin(|a| a.admit_by_qr(&h.code, &h.addrs, &h.fingerprint, h.admins))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "pair" | "pair-phone" => Err(Error::msg(
-                "this device admits a device only by the QR code it shows: run cbb pair there, then cbb pair -qr here",
-            )),
             "join" => Err(Error::msg("run cbb pair on this device, with the service stopped or running")),
             "leave" => {
                 // The node stops first, so nothing writes the group's files
@@ -1539,6 +1569,98 @@ impl Service {
     }
 
     /// Runs an admin's operation on the group (admin.rs).
+    /// Reserves the pairing slot for what make makes; the slot is free
+    /// again once the guard drops.
+    fn take_pairing(&self, make: impl FnOnce() -> Result<Pairing>) -> Result<PairingSlot<'_>> {
+        let node = self.node()?;
+        let mut slot = self.pairing.lock().unwrap();
+        if slot.is_some() {
+            return Err(Error::msg(
+                "a pairing window is already open: stop the cbb pair that opened it (Ctrl+C in its terminal), or wait until it closes, 5 minutes after it opened",
+            ));
+        }
+        let p = make()?;
+        if matches!(p, Pairing::Window(_)) {
+            node.set_window_open(true);
+        }
+        *slot = Some(p);
+        Ok(PairingSlot { svc: self, node })
+    }
+
+    /// Opens a pairing window for cbb pair: the answer gives its code, and
+    /// a second one the device it admitted, once it closes. A client that
+    /// hangs up closes the window.
+    fn pair_window(&self, m: &Message, mut r: control::Reader<UnixStream>, out: &mut UnixStream) -> Result<()> {
+        let mut win = None;
+        let _slot = self.take_pairing(|| {
+            let admitter = self.admin(|a| a.admitter(m.header.admins))?;
+            let w = Window::open(admitter, &cbb_core::pair::new_code())?;
+            win = Some(w.clone());
+            Ok(Pairing::Window(w))
+        })?;
+        let w = win.ok_or_else(|| Error::msg("no window"))?;
+        let port = *self.port.lock().unwrap();
+        let address = port.and_then(|p| crate::pair::qr_addresses(p).into_iter().next()).unwrap_or_default();
+        let opened = Header {
+            code: w.code().to_string(),
+            expires: window::LIFETIME.as_secs() as i64,
+            address,
+            ..Default::default()
+        };
+        control::write(out, &control::reply(opened, Vec::new()))?;
+        let hung = Arc::new(AtomicBool::new(false));
+        {
+            let (hung, w) = (hung.clone(), w.clone());
+            std::thread::spawn(move || {
+                // Returns when the client hangs up, or the answer is out
+                // and the connection closes.
+                while let Ok(Some(_)) = r.read() {}
+                hung.store(true, Ordering::SeqCst);
+                w.close();
+            });
+        }
+        let end = w.wait(&|| STOP.load(Ordering::SeqCst));
+        drop(_slot);
+        if hung.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        match end {
+            Ok(j) if j.confirmed => control::write(
+                out,
+                &control::reply(Header { name: j.name, done: true, ..Default::default() }, Vec::new()),
+            ),
+            Ok(j) => Err(Error::msg(format!(
+                "{} got its certificate but did not confirm that it stored it; check it with cbb status there, and pair it again if needed",
+                j.name
+            ))),
+            Err(why) => Err(Error::with("the pairing failed", why)),
+        }
+    }
+
+    /// Serves a pairing connection a joiner dialed to the member port:
+    /// the open window takes it, or it is refused.
+    fn pair_conn(
+        &self,
+        sock: std::net::TcpStream,
+        session: crate::tls::Session,
+        exporter: Arc<crate::tls::Exporter>,
+        addr: SocketAddr,
+    ) -> Result<()> {
+        use cbb_core::pair::Refusal;
+        let w = match &*self.pairing.lock().unwrap() {
+            Some(Pairing::Window(w)) => Ok(w.clone()),
+            Some(Pairing::Qr) => Err(Refusal::Busy),
+            None => Err(Refusal::Closed),
+        };
+        match w {
+            Ok(w) => w.serve(&*self.node()?, sock, session, exporter, addr),
+            Err(why) => {
+                window::refuse(sock, session, why);
+                Err(Error::with("a device asked to pair", why))
+            }
+        }
+    }
+
     fn admin<T>(&self, f: impl FnOnce(&crate::admin::Admin) -> Result<T>) -> Result<T> {
         let node = self.node()?;
         f(&crate::admin::Admin { node: &node, dir: &self.state_dir })
@@ -1790,6 +1912,15 @@ impl ControlUsers {
             if *c == 0 {
                 n.remove(&user);
             }
+        }
+    }
+}
+
+impl Drop for PairingSlot<'_> {
+    fn drop(&mut self) {
+        if let Some(Pairing::Window(w)) = self.svc.pairing.lock().unwrap().take() {
+            w.close();
+            self.node.set_window_open(false);
         }
     }
 }

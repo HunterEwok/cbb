@@ -192,10 +192,20 @@ pub struct Node {
     /// Gets each copy that becomes the group's current one from a peer,
     /// for a phone's app, which shows it and fetches images or files.
     on_change: RwLock<Option<OnChange>>,
+    /// Takes the pairing connections joiners dial to the member port, on
+    /// a computer that may open a pairing window; None elsewhere, where
+    /// the port speaks only the member protocol.
+    on_pairing: RwLock<Option<OnPairing>>,
+    /// A pairing window is open here, which mDNS announces (TXT p=1).
+    window_open: AtomicBool,
 }
 
 /// Gets a copy that became the group's current one.
 pub type OnChange = Box<dyn Fn(&Event) + Send + Sync>;
+
+/// Serves a pairing connection whose handshake is done: the socket, its
+/// TLS session, the exporter of its secrets and the joiner's address.
+pub type OnPairing = Arc<dyn Fn(TcpStream, tls::Session, Arc<tls::Exporter>, SocketAddr) -> Result<()> + Send + Sync>;
 
 /// A piece of a fetch a connection's reader hands on.
 enum Piece {
@@ -309,6 +319,8 @@ impl Node {
             on_message: RwLock::new(None),
             content: None,
             on_change: RwLock::new(None),
+            on_pairing: RwLock::new(None),
+            window_open: AtomicBool::new(false),
         }
     }
 
@@ -377,6 +389,21 @@ impl Node {
     /// change at its next connection.
     pub fn set_actions(&self, on: Vec<String>) {
         *self.actions.write().unwrap() = on;
+    }
+
+    /// Lets the member port take pairing connections, which f serves.
+    pub fn on_pairing(&self, f: OnPairing) {
+        *self.on_pairing.write().unwrap() = Some(f);
+    }
+
+    /// Says whether a pairing window is open here, for mDNS.
+    pub fn set_window_open(&self, open: bool) {
+        self.window_open.store(open, Ordering::SeqCst);
+    }
+
+    /// Whether a pairing window is open here.
+    pub fn window_open(&self) -> bool {
+        self.window_open.load(Ordering::SeqCst)
     }
 
     /// Sets what carries out the commands peers send.
@@ -1005,9 +1032,22 @@ impl Node {
         let _ = sock.set_nodelay(true);
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
         sock.set_write_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
-        let cfg = tls::member_server(&self.identity(), tls::refused(&self.records), &tls::clock())?;
-        let conn = tls::Session::server(Arc::new(cfg))?;
-        let res = self.handshake(&sock, conn, addr, Usage::Client);
+        let pairing = self.on_pairing.read().unwrap().clone();
+        let (ident, refused, clock) = (self.identity(), tls::refused(&self.records), tls::clock());
+        let (cfg, exporter) = match pairing {
+            Some(_) => tls::member_or_pair_server(&ident, refused, &clock)?,
+            None => (tls::member_server(&ident, refused, &clock)?, Arc::new(tls::Exporter::default())),
+        };
+        let mut conn = tls::Session::server(Arc::new(cfg))?;
+        let res = tls::handshake(&mut conn, &sock, &format!("the TLS handshake with {addr} failed"));
+        if res.is_ok()
+            && conn.alpn_protocol() == Some(tls::PAIR_PROTOCOL)
+            && let Some(serve) = pairing
+        {
+            handshaken();
+            return serve(sock, conn, exporter, addr);
+        }
+        let res = res.and_then(|()| self.check(conn, addr, Usage::Client));
         handshaken();
         let (conn, id, chain) = res?;
         self.run(sock, conn, id, chain, addr)
@@ -1023,6 +1063,12 @@ impl Node {
         usage: Usage,
     ) -> Result<(tls::Session, DeviceId, Vec<Cert>)> {
         tls::handshake(&mut conn, sock, &format!("the TLS handshake with {addr} failed"))?;
+        self.check(conn, addr, usage)
+    }
+
+    /// Checks the peer of a connection whose handshake is done: the member
+    /// protocol, and a member chain the records take.
+    fn check(&self, conn: tls::Session, addr: SocketAddr, usage: Usage) -> Result<(tls::Session, DeviceId, Vec<Cert>)> {
         if conn.alpn_protocol() != Some(tls::MEMBER_PROTOCOL)
             || conn.protocol_version() != Some(tls::rustls::ProtocolVersion::TLSv1_3)
         {

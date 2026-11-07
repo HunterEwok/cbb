@@ -403,6 +403,92 @@ pub fn member_server(id: &Identity, refused: Refused, clock: &Clock) -> Result<r
     Ok(cfg)
 }
 
+/// Checks a client of the member port while it may be a joiner: a member
+/// of the group, or one certificate with a P-256 key, which the pairing
+/// exchange authenticates. Which of the two it must be follows from the
+/// ALPN protocol, which the program checks after the handshake, with the
+/// member's chain checked again (check_member).
+struct MemberOrJoiner(MemberClientVerifier);
+
+impl fmt::Debug for MemberOrJoiner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("MemberOrJoiner")
+    }
+}
+
+impl ClientCertVerifier for MemberOrJoiner {
+    fn root_hint_subjects(&self) -> &[DistinguishedName] {
+        &[]
+    }
+
+    fn verify_client_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        intermediates: &[CertificateDer<'_>],
+        now: UnixTime,
+    ) -> Result<ClientCertVerified, rustls::Error> {
+        let member = self.0.verify_client_cert(end_entity, intermediates, now);
+        if member.is_ok() || !intermediates.is_empty() {
+            return member;
+        }
+        match Cert::parse(end_entity) {
+            Ok(c) if c.p256 => Ok(ClientCertVerified::assertion()),
+            _ => member,
+        }
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _: &[u8],
+        _: &CertificateDer<'_>,
+        _: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        no_tls12()
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        m: &[u8],
+        c: &CertificateDer<'_>,
+        d: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        verify_sig(m, c, d)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        vec![provider::SCHEME]
+    }
+}
+
+/// The server configuration of an admin's member port, which takes
+/// joiners too, as Go's member port does: member_server's, with the ALPN
+/// protocols cbb/3 and cbb-pair/2 and any single P-256 certificate taken
+/// as a joiner's. The program checks the negotiated protocol after the
+/// handshake: a member's chain again with check_member, a joiner through
+/// the pairing exchange (admit::Admission::accept), whose sid the Exporter
+/// gives. Use a new one for each connection.
+pub fn member_or_pair_server(
+    id: &Identity,
+    refused: Refused,
+    clock: &Clock,
+) -> Result<(rustls::ServerConfig, Arc<Exporter>)> {
+    let verifier = MemberOrJoiner(MemberClientVerifier {
+        self_id: id.id.clone(),
+        trusted: id.trusted(),
+        root_start: id.root().not_before,
+        refused,
+    });
+    let certified = member_certified(id)?;
+    let mut cfg = server_builder(clock)?
+        .with_client_cert_verifier(Arc::new(verifier))
+        .with_cert_resolver(Arc::new(OneCert(certified)));
+    cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec(), PAIR_PROTOCOL.to_vec()];
+    cfg.send_tls13_tickets = 0;
+    let exporter = Arc::new(Exporter::default());
+    cfg.key_log = exporter.clone();
+    Ok((cfg, exporter))
+}
+
 /// Takes any certificate of the peer that signed the handshake with its
 /// key: the joiner checks the member through the CPace exchange and the
 /// Welcome instead.

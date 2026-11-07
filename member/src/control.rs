@@ -113,6 +113,12 @@ pub struct Header {
     pub fingerprint: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub admins: bool,
+    /// In the answer to pair: the seconds the window stays open, and an
+    /// address of this member for a joiner whose network has no multicast.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub expires: i64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub address: String,
 }
 
 /// A part of a copy of images or files on the socket, as Go's

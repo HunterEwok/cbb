@@ -259,20 +259,43 @@ fn browse(
     // A computer with the service publishes itself as a full member does,
     // without a role.
     let full = node.role() == "full";
-    if let Some(port) = port {
-        // The protocol version, the group tag and the role.
-        let lite_txt = [("v", "1"), ("g", tag), ("r", "lite")];
-        let txt = if full { &lite_txt[..2] } else { &lite_txt[..] };
-        let info = mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &format!("{}.", me.host_name()), "", port, txt)?
-            .enable_addr_auto();
-        daemon.register(info)?;
-    }
+    // The protocol version, the group tag, the role, and p=1 while a
+    // pairing window is open, which a joiner looks for.
+    let publish = |window: bool| -> Result<(), mdns_sd::Error> {
+        let Some(port) = port else { return Ok(()) };
+        let mut txt = vec![("v", "1"), ("g", tag)];
+        if !full {
+            txt.push(("r", "lite"));
+        }
+        if window {
+            txt.push(("p", "1"));
+        }
+        let info =
+            mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &format!("{}.", me.host_name()), "", port, &txt[..])?
+                .enable_addr_auto();
+        daemon.register(info)
+    };
+    let mut window = node.window_open();
+    publish(window)?;
     let events = daemon.browse(SERVICE)?;
     let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
-    while let Ok(ev) = events.recv() {
+    loop {
+        let ev = events.recv_timeout(Duration::from_secs(1));
         if node.is_closed() {
             break;
         }
+        if node.window_open() != window {
+            window = !window;
+            if let Err(e) = publish(window) {
+                log(&format!("cbb: announcing the pairing window failed: {e}"));
+            }
+        }
+        let Ok(ev) = ev else {
+            if events.is_disconnected() {
+                break;
+            }
+            continue;
+        };
         match ev {
             mdns_sd::ServiceEvent::ServiceResolved(info) => {
                 let Some(id) = instance_id(&info.fullname) else { continue };

@@ -583,11 +583,10 @@ impl Admin<'_> {
     /// the core (cbb_core::admit), and records the device once its Welcome
     /// is out. With admins, on the root only, a phone that offers an admin
     /// key becomes an admin. It returns the device's name.
-    pub fn admit_by_qr(&self, code: &str, addrs: &[String], fingerprint: &str, admins: bool) -> Result<String> {
-        let code = cbb_core::pair::normalize_code(code)?;
-        if fingerprint.is_empty() {
-            return Err(Error::msg("the QR code names no certificate fingerprint"));
-        }
+    /// This member as the admitting side of a pairing: the group's root,
+    /// or an admin that is not frozen. With admins, on the root only, it
+    /// makes a phone that offers an admin key an admin.
+    pub fn admitter(&self, admins: bool) -> Result<admit::Admitter> {
         let s = self.signing().map_err(|_| Error::msg(NOT_ADMITTER))?;
         if admins && !s.root {
             return Err(Error::msg("only the group's root lets a phone join as an admin"));
@@ -595,12 +594,20 @@ impl Admin<'_> {
         if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
             return Err(Error::msg(FROZEN));
         }
-        let admitter = admit::Admitter {
+        Ok(admit::Admitter {
             identity: (*self.node.identity()).clone(),
             ca: s.ca.clone(),
             ca_key: s.key.clone(),
             make_admins: admins,
-        };
+        })
+    }
+
+    pub fn admit_by_qr(&self, code: &str, addrs: &[String], fingerprint: &str, admins: bool) -> Result<String> {
+        let code = cbb_core::pair::normalize_code(code)?;
+        if fingerprint.is_empty() {
+            return Err(Error::msg("the QR code names no certificate fingerprint"));
+        }
+        let admitter = self.admitter(admins)?;
         let end = Instant::now() + PAIR_LIFETIME;
         let mut tried = Vec::new();
         for addr in addrs {
@@ -640,11 +647,8 @@ impl Admin<'_> {
                 admit::Outcome::Admitted(a) => {
                     // The device counts as admitted from here; its record
                     // goes to the group whatever it answers.
-                    let r =
-                        admit::device_record(&self.node.records().lock().unwrap(), admitter, &a, uptime::wall_ms())?;
-                    self.node.add_own_records(&[r]);
+                    record_admitted(self.node, admitter, &a, "by its QR code")?;
                     name = a.info.name.clone();
-                    self.node.logf(&format!("cbb: admitted {} ({}) by its QR code", a.info.name, a.device));
                 }
                 admit::Outcome::Done { confirmed } => {
                     if !confirmed {
@@ -674,6 +678,19 @@ impl Admin<'_> {
             input = buf[..n].to_vec();
         }
     }
+}
+
+/// Adds the device record of a device this member admitted, and sends it
+/// to the group; how says how it joined, for the log.
+pub fn record_admitted(node: &Node, admitter: &admit::Admitter, a: &admit::Admitted, how: &str) -> Result<()> {
+    let r = admit::device_record(&node.records().lock().unwrap(), admitter, a, uptime::wall_ms())?;
+    node.add_own_records(&[r]);
+    if a.admin_ca.is_some() {
+        node.logf(&format!("cbb: {} ({}) joined the group {how} as an admin phone", a.info.name, a.device));
+    } else {
+        node.logf(&format!("cbb: {} ({}) joined the group {how}", a.info.name, a.device));
+    }
+    Ok(())
 }
 
 const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";

@@ -204,7 +204,13 @@ ends, the Go service described below is still the computers' member.
   each a record signed with the root's key or the admin key under its admin CA, by Go's rules
   and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
   `cbb` saves it again. The Go command line runs against it, and a Go computer joins, syncs
-  and takes each record (`TestLiteRoot`).
+  and takes each record (`TestLiteRoot`). `cbb pair` opens a pairing window as Go's does: a
+  six-digit code, `p=1` in its mDNS record, one attempt at a time, closed by three failed
+  ones, after five minutes or once a device joined. Its member port then offers both ALPN
+  protocols, `cbb/3` and `cbb-pair/2`, and takes a joiner's single P-256 certificate; the
+  negotiated protocol decides after the handshake whether the member chain is checked again
+  or the core's admission plays the exchange with the joiner confirming first
+  (`Admission::accept`, `TestLiteRootWindow`).
 
 ### Linux components
 

@@ -129,6 +129,19 @@ impl Refusal {
         }
     }
 
+    /// The code that travels in a frame.
+    pub fn code(self) -> &'static str {
+        match self {
+            Refusal::WrongCode => "wrong-code",
+            Refusal::Closed => "closed",
+            Refusal::Busy => "busy",
+            Refusal::Expired => "expired",
+            Refusal::TooMany => "too-many",
+            Refusal::Taken => "taken",
+            Refusal::Refused => "refused",
+        }
+    }
+
     /// The message for the user.
     pub fn message(self) -> &'static str {
         match self {

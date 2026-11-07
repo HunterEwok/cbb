@@ -298,3 +298,106 @@ fn a_phone_makes_its_group_and_admits() {
     assert!(rs.add(&r).unwrap());
     assert_eq!(rs.devices().len(), 2);
 }
+
+/// A joiner that dials a member's open window, as Go's Joiner.Join does:
+/// it confirms first. Returns what the member admitted, the joiner's
+/// identity or error, the member's last error, and whether the member
+/// counted the attempt as started.
+fn dial_window(
+    adm: &mut Admission,
+    joiner: &Joiner,
+    code: &str,
+) -> (Option<Admitted>, Result<Identity>, Option<Error>, bool) {
+    let (cfg, exporter) = tls::pair_client(&joiner.cert, &joiner.key, &clock()).unwrap();
+    let mut client = Session::client(Arc::new(cfg), tls::server_name(None)).unwrap();
+    let (mut admitted, mut member_err) = (None, None);
+    let mut ex: Option<pair::Exchange> = None;
+    let mut joined: Option<Result<Identity>> = None;
+    let mut plain = Vec::new();
+    let mut frames = 0;
+    let mut to_member = client.take_outgoing();
+    for _ in 0..32 {
+        let step = adm.feed(&to_member, now_ms());
+        match step.outcome {
+            Outcome::Admitted(a) => admitted = Some(*a),
+            Outcome::Failed { error, .. } => member_err = Some(error),
+            Outcome::Done { .. } | Outcome::Pending => {}
+        }
+        if !step.send.is_empty() {
+            client.feed(&step.send).unwrap();
+        }
+        if ex.is_none() && !client.is_handshaking() {
+            let mut sid = [0u8; 32];
+            exporter.export(EXPORTER_LABEL, &[], &mut sid).unwrap();
+            let member_der = client.peer_certificates().unwrap()[0].to_vec();
+            let (e, first) = joiner.start(code, &member_der, &sid, false).unwrap();
+            client.write(&first).unwrap();
+            ex = Some(e);
+        }
+        let mut buf = [0u8; 4096];
+        loop {
+            let n = client.read(&mut buf);
+            if n == 0 {
+                break;
+            }
+            plain.extend_from_slice(&buf[..n]);
+        }
+        while plain.len() >= 4 {
+            let n = u32::from_be_bytes(plain[..4].try_into().unwrap()) as usize;
+            if plain.len() < 4 + n {
+                break;
+            }
+            let body: Vec<u8> = plain.drain(..4 + n).skip(4).collect();
+            let e = ex.as_mut().unwrap();
+            frames += 1;
+            if frames == 1 {
+                match e.reply(&body) {
+                    Ok(f) => client.write(&f).unwrap(),
+                    Err(f) => joined = Some(Err(f.error)),
+                }
+            } else {
+                let r = e.welcome(&body, now_ms());
+                client.write(&pair::done(r.is_ok())).unwrap();
+                joined = Some(r);
+            }
+        }
+        to_member = client.take_outgoing();
+        if member_err.is_some() || (joined.is_some() && to_member.is_empty()) {
+            break;
+        }
+    }
+    let joined = joined.unwrap_or_else(|| Err(Error::msg("the joiner did not finish")));
+    (admitted, joined, member_err, adm.started())
+}
+
+fn window(admitter: &Admitter, rs: &Records, code: &str) -> Admission {
+    let (cfg, exporter) =
+        tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap();
+    let session = Session::server(Arc::new(cfg)).unwrap();
+    Admission::accept(admitter.clone(), GroupView::of(rs), code, session, exporter).unwrap()
+}
+
+#[test]
+fn a_joiner_dials_the_window() {
+    let (admitter, mut rs) = root_group();
+    let joiner = Joiner::new("laptop").unwrap();
+    let code = pair::new_code();
+    let mut adm = window(&admitter, &rs, &code);
+    let (admitted, joined, member_err, started) = dial_window(&mut adm, &joiner, &code);
+    assert!(member_err.is_none(), "{member_err:?}");
+    let (a, id) = (admitted.unwrap(), joined.unwrap());
+    assert!(started);
+    assert_eq!(id.id, joiner.id);
+    assert_eq!(id.cert.der, a.cert);
+    let r = device_record(&rs, &admitter, &a, now_ms()).unwrap();
+    assert!(rs.add(&r).unwrap());
+
+    // A wrong code: the joiner did not get the member's tag, and the
+    // attempt counts.
+    let other = Joiner::new("other").unwrap();
+    let mut adm = window(&admitter, &rs, "111111");
+    let (admitted, joined, member_err, started) = dial_window(&mut adm, &other, "222222");
+    assert!(admitted.is_none() && started);
+    assert!(text(member_err).contains(Refusal::WrongCode.message()));
+    assert!(text(joined.err()).contains(Refusal::WrongCode.message()));
+}
