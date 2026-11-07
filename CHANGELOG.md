@@ -1555,6 +1555,28 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Every member checks the role of a copy's origin when it takes the copy: one from a hub that
+  only passes copies on is dropped, as docs/protocol.md section 11 says, in Go and in the Rust
+  core that the lite member and the phones use.
+- The forwarder charges a hub's registration over VLESS to the hub's own address, as it does
+  a direct one, and the uploads that XHTTP holds before a client opens its session to the
+  client's network and to all sources together; the web server in front names the client's
+  address in `X-Real-IP` (docs/relay-budget.md, "XHTTP"; add the line to an existing nginx
+  location).
+- The ZX Spectrum Next hands the Pi its user's remote paste setting once after each
+  `.cbb paste-receive`, so that an admin's `paste-off` stays off when the network starts
+  again; `.cbb install` no longer turns remote paste on: it is off until the Next's user
+  turns it on.
+- The Mac's installer package keeps its files for the service in a folder that only root
+  may change, `/Library/Application Support/cbb-package`, and its script checks that before
+  it installs them.
+- `packaging/macos/pkg.sh` builds on macOS 27, whose `pkgbuild --analyze` leaves out
+  `BundleIsRelocatable`, and keeps the checkout's provenance attribute out of the payload.
+- `.cbb update` on the ZX Spectrum Next takes a newer `CBB` and its files only from a list
+  signed with the release key (`zxnext.json`, which `release-sign publish` signs and the
+  mirror serves as `zxnext/SIGNED`), checked by the Pi's `cbb` against its pinned roots
+  (`cbb next check-list`), and no longer from the site's plain list. It now needs the Pi to
+  answer. docs/threat-model.md says what the first `.http` download trusts.
 - The iPhone and Android apps' button no longer sends a text the phone sent before over the
   image or files it shared since: it compares the clipboard with what the phone itself sent
   or took last, besides the group's copy (design.md, "The one button").

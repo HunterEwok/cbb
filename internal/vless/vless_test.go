@@ -16,6 +16,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -220,6 +221,13 @@ func behindWebServer(t *testing.T, path, id string) (*Server, tunnel.VLESS) {
 
 func behindWebServerWith(t *testing.T, cfg ServerConfig, id string) (*Server, tunnel.VLESS) {
 	t.Helper()
+	return behindWebServerNaming(t, cfg, id, netip.Addr{})
+}
+
+// behindWebServerNaming is behindWebServerWith with a web server that
+// names client as the client's address (vlesstest.WebServerNaming).
+func behindWebServerNaming(t *testing.T, cfg ServerConfig, id string, client netip.Addr) (*Server, tunnel.VLESS) {
+	t.Helper()
 	path := cfg.Path
 	s, err := Listen(cfg)
 	if err != nil {
@@ -227,7 +235,7 @@ func behindWebServerWith(t *testing.T, cfg ServerConfig, id string) (*Server, tu
 	}
 	t.Cleanup(func() { s.Close() })
 	back := net.JoinHostPort("127.0.0.1", strconv.Itoa(int(s.Port())))
-	web, cert := vlesstest.WebServer(t, path, func() string { return back })
+	web, cert := vlesstest.WebServerNaming(t, path, func() string { return back }, client)
 	TrustForTests(cert)
 	// A group's packets come under its own path.
 	const group = "a-group-of-its-own"
@@ -448,8 +456,11 @@ func TestRegistrationStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	streams := make(chan net.Conn, 4)
+	client := netip.MustParseAddr("203.0.113.7")
+	var froms sync.Map
 	cfg := ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t), Mirror: tcpEcho(t),
-		Register: func(c net.Conn) {
+		Register: func(c net.Conn, from netip.Addr) {
+			froms.Store(from, true)
 			defer c.Close()
 			b := make([]byte, 5)
 			if _, err := io.ReadFull(c, b); err == nil && string(b) == "hello" {
@@ -457,7 +468,7 @@ func TestRegistrationStream(t *testing.T) {
 			}
 			streams <- c
 		}}
-	_, l := behindWebServerWith(t, cfg, RegistrationID)
+	_, l := behindWebServerNaming(t, cfg, RegistrationID, client)
 	way, err := DialRegistration(l)
 	if err != nil {
 		t.Fatal(err)
@@ -482,6 +493,13 @@ func TestRegistrationStream(t *testing.T) {
 	if got != "hub!!" {
 		t.Fatalf("the registrations answered %q", got)
 	}
+	// The registration is charged to the address the web server named.
+	froms.Range(func(k, _ any) bool {
+		if k.(netip.Addr) != client {
+			t.Errorf("a registration came from %v, not %v as the web server named it", k, client)
+		}
+		return true
+	})
 	if throughMirror(t, l) {
 		t.Error("the registrations' user ID reached the mirror")
 	}

@@ -210,7 +210,7 @@ func (f *Forwarder) acceptRegistrations() {
 				f.from.Remove(from, 1)
 				f.mu.Unlock()
 			}()
-			f.serveRegistration(conn)
+			f.serveRegistration(conn, false)
 		}()
 	}
 }
@@ -225,24 +225,44 @@ func (f *Forwarder) groupPath(tag string) string {
 }
 
 // registrationOverVLESS takes a hub's registration that came over VLESS,
-// from a hub that reaches the forwarder in no other way. All of them come
-// from the forwarder's own address, so they are bounded together
-// (Limits.OverVLESS) rather than by address.
-func (f *Forwarder) registrationOverVLESS(conn net.Conn) {
+// from a hub that reaches the forwarder in no other way. from is the
+// client's own address as the VLESS server knows it (vless.ServerConfig's
+// Register): it pays as a hub that registers directly does, from the same
+// setup slots and the same caps (docs/relay-budget.md, "The forwarder").
+// When the address is not known (a loopback address, from a web server in
+// front that does not name it), the registrations are bounded together
+// instead, and their setups take at most an eighth of the setup slots, so
+// that they never keep out a hub that registers directly. Limits.OverVLESS
+// bounds all of them.
+func (f *Forwarder) registrationOverVLESS(conn net.Conn, from netip.Addr) {
+	known := from.IsValid() && !from.IsLoopback() && !from.IsUnspecified()
 	f.mu.Lock()
 	limit := f.limits.OverVLESS
 	if limit == 0 {
 		limit = DefaultLimits.OverVLESS
 	}
 	busy := f.setting >= f.limits.Connections || f.overVLESS >= limit
+	if !busy {
+		if known {
+			busy = !f.from.Take(from, 1)
+		} else {
+			busy = f.vlessSet >= max(1, f.limits.Connections/8)
+		}
+	}
 	select {
 	case <-f.done:
+		if !busy && known {
+			f.from.Remove(from, 1)
+		}
 		busy = true
 	default:
 	}
 	if !busy {
 		f.setting++
 		f.overVLESS++
+		if !known {
+			f.vlessSet++
+		}
 		f.wg.Add(1)
 	}
 	f.mu.Unlock()
@@ -254,17 +274,24 @@ func (f *Forwarder) registrationOverVLESS(conn net.Conn) {
 	defer func() {
 		f.mu.Lock()
 		f.overVLESS--
+		if known {
+			f.from.Remove(from, 1)
+		}
 		f.mu.Unlock()
 	}()
-	f.serveRegistration(conn)
+	f.serveRegistration(conn, !known)
 }
 
 // serveRegistration registers one hub and holds its registration while the
-// connection lasts.
-func (f *Forwarder) serveRegistration(raw net.Conn) {
+// connection lasts; unknown is a registration over VLESS from an address
+// not known, counted in vlessSet while it is set up.
+func (f *Forwarder) serveRegistration(raw net.Conn, unknown bool) {
 	r, err := f.register(raw)
 	f.mu.Lock()
 	f.setting--
+	if unknown {
+		f.vlessSet--
+	}
 	f.mu.Unlock()
 	if err != nil {
 		raw.Close()

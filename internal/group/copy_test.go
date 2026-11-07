@@ -101,7 +101,7 @@ func writeCopyChecks(t *testing.T, path string) {
 		Copies: []copyCheck{
 			{"from a member", good, true},
 			{"from the root's computer", sealedFrom(t, admin, readers), true},
-			{"from a hub that only passes copies on", sealedFrom(t, pi, readers), true},
+			{"from a hub that only passes copies on", sealedFrom(t, pi, readers), false},
 			{"from a member no record names", sealedFrom(t, stranger, readers), false},
 			{"from a removed member", sealedFrom(t, gone, readers), false},
 			{"from another group", sealedFrom(t, other, readers), false},

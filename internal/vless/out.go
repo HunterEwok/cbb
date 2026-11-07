@@ -45,8 +45,8 @@ const (
 // the internet. RegistrationID reaches the registrations and nothing else.
 type toForwarder struct {
 	to       netip.AddrPort
-	mirror   string         // host:port, or ""
-	register func(net.Conn) // or nil
+	mirror   string                     // host:port, or ""
+	register func(net.Conn, netip.Addr) // or nil
 
 	mu      sync.Mutex
 	users   map[netip.AddrPort]string // by the address each flow is sent from
@@ -89,7 +89,7 @@ func (o *toForwarder) carry(ctx context.Context, link *transport.Link) error {
 	if target.Network == xnet.Network_TCP {
 		switch {
 		case target.Port == RegistrationPort && o.register != nil:
-			return o.toRegister(link)
+			return o.toRegister(link, sourceOf(in))
 		case user != RegistrationID && o.mirror != "":
 			return o.toMirror(ctx, link, user)
 		}
@@ -217,14 +217,26 @@ func (o *toForwarder) toMirror(ctx context.Context, link *transport.Link, user s
 	return err
 }
 
+// sourceOf returns the address the client's flow came from: over XHTTP
+// the one the front named, as Xray takes it from the front's header; the
+// loopback address when there is none.
+func sourceOf(in *session.Inbound) netip.Addr {
+	if in.Source.IsValid() && in.Source.Address.Family().IsIP() {
+		if a, ok := netip.AddrFromSlice(in.Source.Address.IP()); ok {
+			return a.Unmap()
+		}
+	}
+	return netip.IPv6Loopback()
+}
+
 // toRegister hands a hub's registration stream to the forwarder, which
-// bounds the registrations and their setup itself, and carries it while
-// the registration lasts: it has no idle limit, as a registration sends
-// little once it is set up.
-func (o *toForwarder) toRegister(link *transport.Link) error {
+// bounds the registrations and their setup itself and charges them to
+// from, and carries it while the registration lasts: it has no idle limit,
+// as a registration sends little once it is set up.
+func (o *toForwarder) toRegister(link *transport.Link, from netip.Addr) error {
 	ours, theirs := net.Pipe()
 	defer ours.Close()
-	go o.register(theirs)
+	go o.register(theirs, from)
 	up := make(chan error, 1)
 	go func() {
 		err := buf.Copy(link.Reader, buf.NewWriter(ours))

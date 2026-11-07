@@ -71,7 +71,16 @@ func Decoy(t testing.TB) string {
 // vless.TrustForTests.
 func WebServer(t testing.TB, path string, back func() string) (netip.AddrPort, []byte) {
 	t.Helper()
-	web := webServer(t, path, back, nil)
+	return WebServerNaming(t, path, back, netip.Addr{})
+}
+
+// WebServerNaming is WebServer naming client as every client's address in
+// X-Real-IP, as nginx's proxy_set_header X-Real-IP $remote_addr does with
+// the address the client connects from; that address if client is not
+// valid.
+func WebServerNaming(t testing.TB, path string, back func() string, client netip.Addr) (netip.AddrPort, []byte) {
+	t.Helper()
+	web := webServer(t, path, back, nil, client)
 	return netip.MustParseAddrPort(web.Listener.Addr().String()), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: web.Certificate().Raw})
 }
 
@@ -108,15 +117,24 @@ func WebServerCA(t testing.TB, path string, back func() string) (netip.AddrPort,
 	if err != nil {
 		t.Fatal(err)
 	}
-	web := webServer(t, path, back, &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key})
+	web := webServer(t, path, back, &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}, netip.Addr{})
 	return netip.MustParseAddrPort(web.Listener.Addr().String()), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 }
 
-// webServer runs WebServer's site with the certificate, or httptest's own.
-func webServer(t testing.TB, path string, back func() string, cert *tls.Certificate) *httptest.Server {
+// webServer runs WebServerNaming's site with the certificate, or httptest's
+// own.
+func webServer(t testing.TB, path string, back func() string, cert *tls.Certificate, client netip.Addr) *httptest.Server {
+	t.Helper()
 	proxy := &httputil.ReverseProxy{FlushInterval: -1, Rewrite: func(r *httputil.ProxyRequest) {
 		r.SetURL(&url.URL{Scheme: "http", Host: back()})
 		r.Out.Host = r.In.Host
+		from := client
+		if !from.IsValid() {
+			if ap, err := netip.ParseAddrPort(r.In.RemoteAddr); err == nil {
+				from = ap.Addr()
+			}
+		}
+		r.Out.Header.Set("X-Real-IP", from.String())
 	}}
 	site := http.NewServeMux()
 	site.Handle(path+"/", proxy)

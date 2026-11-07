@@ -13,6 +13,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	mrand "math/rand/v2"
+	"net"
 	"net/netip"
 	"runtime"
 	"slices"
@@ -669,4 +670,61 @@ func TestVersionsMemoryBounded(t *testing.T) {
 	if n != 0 || payers != 0 {
 		t.Errorf("after expiry the table holds %d entries and %d payers", n, payers)
 	}
+}
+
+// Registrations over VLESS pay as direct ones do when the VLESS server
+// knows their source: no source takes more setup slots than its caps, and
+// from a source not known (a web server in front that does not name it)
+// they take at most an eighth of the slots, so a hub that registers
+// directly still finds room (docs/relay-budget.md, "The forwarder").
+func TestRegistrationsOverVLESSPayBySource(t *testing.T) {
+	const slots = 24
+	f, _ := startForwarderWith(t, Config{Limits: Limits{Connections: slots, PerAddress: 2, PerNetwork: 2, PerWide: 2, PerProvider: 2}})
+	var conns []net.Conn
+	defer func() {
+		for _, c := range conns {
+			c.Close()
+		}
+	}()
+	stall := func(from netip.Addr) {
+		ours, theirs := net.Pipe()
+		conns = append(conns, ours)
+		go f.registrationOverVLESS(theirs, from)
+	}
+	counts := func() (setting, unknown, over int) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.setting, f.vlessSet, f.overVLESS
+	}
+	settle := func(want int) {
+		t.Helper()
+		for range 100 {
+			if s, _, _ := counts(); s == want {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		s, u, o := counts()
+		t.Fatalf("setting %d (from sources not known %d, over VLESS %d), want %d", s, u, o, want)
+	}
+	stranger := netip.MustParseAddr("198.51.100.9")
+	for range slots {
+		stall(stranger)
+	}
+	settle(2)
+	if f.from.Held(stranger, budget.Address) != 2 {
+		t.Errorf("the stranger holds %d, want 2", f.from.Held(stranger, budget.Address))
+	}
+	for range slots {
+		stall(netip.IPv6Loopback())
+		stall(netip.Addr{})
+	}
+	settle(2 + slots/8)
+	// A hub that registers directly is still let in to set up.
+	c, err := net.Dial("tcp", f.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	settle(2 + slots/8 + 1)
 }
