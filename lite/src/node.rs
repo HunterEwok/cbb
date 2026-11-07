@@ -16,7 +16,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
@@ -192,6 +192,9 @@ pub struct Node {
     passed: Mutex<HashMap<String, Passed>>,
     on_message: RwLock<Option<OnMessage>>,
     on_peer: RwLock<Option<OnPeer>>,
+    /// Counts the times this member closed its connections to connect again
+    /// (reconnect, a new tunnel key): the dial loops dial those at once.
+    reconnects: AtomicUsize,
     /// The attestations of this member's keys, which every peer gets after
     /// its hello (docs/protocol.md, section 17, "Evidence"): a phone's app
     /// sets them.
@@ -202,6 +205,15 @@ pub struct Node {
     /// Gets each copy that becomes the group's current one from a peer,
     /// for a phone's app, which shows it and fetches images or files.
     on_change: RwLock<Option<OnChange>>,
+}
+
+/// How a dial ended (Node::dial_ended).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Dialed {
+    /// The connection came up (or one to the peer was up already).
+    pub up: bool,
+    /// This member ended it to connect again: dial at once.
+    pub again: bool,
 }
 
 /// A command a phone passed on: where it came from, when it expires, and
@@ -274,6 +286,9 @@ impl CommandHead {
 
 struct Conn {
     id: DeviceId,
+    /// The peer's address: a loopback one for a tunnel's or relay's
+    /// connection.
+    addr: SocketAddr,
     sock: TcpStream,
     tls: Mutex<tls::Session>,
     tx: SyncSender<Out>,
@@ -332,6 +347,7 @@ impl Node {
             passed: Mutex::new(HashMap::new()),
             on_message: RwLock::new(None),
             on_peer: RwLock::new(None),
+            reconnects: AtomicUsize::new(0),
             evidence: RwLock::new(Vec::new()),
             content: None,
             on_change: RwLock::new(None),
@@ -375,6 +391,7 @@ impl Node {
     /// them.
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
         *self.tunnel_key.write().unwrap() = key;
+        self.reconnects.fetch_add(1, Ordering::SeqCst);
         for c in self.conns.lock().unwrap().values() {
             if c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full") {
                 c.close(true);
@@ -384,6 +401,7 @@ impl Node {
 
     /// Connects to every member again, so that the hellos say what changed.
     pub fn reconnect(&self) {
+        self.reconnects.fetch_add(1, Ordering::SeqCst);
         for c in self.conns.lock().unwrap().values() {
             c.close(true);
         }
@@ -434,6 +452,15 @@ impl Node {
     /// Reports whether a connection to the device is up.
     pub fn connected(&self, id: &DeviceId) -> bool {
         self.conns.lock().unwrap().contains_key(id)
+    }
+
+    /// Reports whether a connection to the device is up that a dial to
+    /// addr would not replace: any one for a home address; for a loopback
+    /// one (a tunnel's or relay's port), only one through a loopback port,
+    /// since a connection at home may have gone quiet once the peer took
+    /// the way through the tunnel, and the tunnel's then replaces it.
+    pub fn connected_for(&self, id: &DeviceId, addr: &SocketAddr) -> bool {
+        self.conns.lock().unwrap().get(id).is_some_and(|c| !replaces(addr, &c.addr))
     }
 
     /// How far the records stop the exchange: "secrets" or "full", empty
@@ -995,6 +1022,14 @@ impl Node {
     /// address given by hand; the device is then the one the certificate
     /// names. A device already connected is not connected twice.
     pub fn dial(&self, addr: SocketAddr, peer: Option<DeviceId>) -> Result<()> {
+        self.dial_ended(addr, peer).map(|_| ())
+    }
+
+    /// As dial, telling how the dial ended: whether the connection came up
+    /// (its end afterwards, a goodbye or a broken connection, is logged and
+    /// is no failure to dial), and whether this member ended it to connect
+    /// again (reconnect, a new tunnel key), so that it is dialed at once.
+    pub fn dial_ended(&self, addr: SocketAddr, peer: Option<DeviceId>) -> Result<Dialed> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
         }
@@ -1016,11 +1051,16 @@ impl Node {
         let cfg = tls::member_client(&ident, peer.clone(), tls::refused(&self.records), &tls::clock())?;
         let conn = tls::Session::client(Arc::new(cfg), tls::server_name(peer.as_ref()))?;
         let (conn, id, chain) = self.handshake(&sock, conn, addr, Usage::Server)?;
-        if self.connected(&id) {
+        if self.connected_for(&id, &addr) {
             let _ = sock.shutdown(Shutdown::Both);
-            return Ok(());
+            return Ok(Dialed { up: true, again: false });
         }
-        self.run(sock, conn, id, chain, addr)
+        let before = self.reconnects.load(Ordering::SeqCst);
+        // How it ended is logged; a connection that came up and ended is
+        // dialed again at once when this member ended it to connect again,
+        // else after a second.
+        let _ = self.run(sock, conn, id, chain, addr);
+        Ok(Dialed { up: true, again: self.reconnects.load(Ordering::SeqCst) != before })
     }
 
     /// Runs a connection that a member (a phone or a lite member)
@@ -1097,6 +1137,7 @@ impl Node {
         let (tx, rx) = mpsc::sync_channel(QUEUE_LEN);
         let c = Arc::new(Conn {
             id: id.clone(),
+            addr,
             sock,
             tls: Mutex::new(conn),
             tx,
@@ -1549,7 +1590,16 @@ impl Read for TlsReader<'_> {
                 }
             }
             self.buf.resize(16 << 10, 0);
-            let n = (&self.c.sock).read(&mut self.buf)?;
+            // The read timeout is EAGAIN (WouldBlock) on Linux and Android,
+            // ETIMEDOUT elsewhere: either means nothing came for TIMEOUT,
+            // although the peer pings every 5 s.
+            let n = (&self.c.sock).read(&mut self.buf).map_err(|e| match e.kind() {
+                io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut => io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("nothing came for {} s, not even a ping", TIMEOUT.as_secs()),
+                ),
+                _ => e,
+            })?;
             if n == 0 {
                 return Ok(0);
             }
@@ -1730,6 +1780,14 @@ fn read_any(r: &mut impl Read) -> Result<Frame> {
     Ok(Frame::Message(Box::new(wire::decode(&data)?)))
 }
 
+/// Whether a dial to addr replaces the connection up at up: a dial
+/// through a loopback port (a tunnel's, a relay's) replaces one at home,
+/// which may have gone quiet once the peer took the tunnel; nothing else
+/// replaces a connection that is up.
+fn replaces(addr: &SocketAddr, up: &SocketAddr) -> bool {
+    addr.ip().is_loopback() && !up.ip().is_loopback()
+}
+
 /// A peer as its hello presents it, with what is not valid left out.
 fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool) -> Peer {
     let valid = |s: &str, ok: &[&str]| if ok.contains(&s) { s.to_string() } else { String::new() };
@@ -1841,6 +1899,20 @@ mod tests {
         remember_found(&mut home, &id(0), false, || Duration::ZERO);
         remember_found(&mut home, &id(MAX_HOME), true, || Duration::ZERO);
         assert!(home.contains_key(&id(MAX_HOME)));
+    }
+
+    /// The tunnel's port replaces a connection at home to the same device,
+    /// which a peer that took the tunnel leaves quiet (the Android
+    /// emulator's c2_awayThroughHub waited 15 s for it); nothing else
+    /// replaces a connection that is up.
+    #[test]
+    fn a_tunnel_replaces_a_connection_at_home() {
+        let a = |s: &str| s.parse::<std::net::SocketAddr>().unwrap();
+        assert!(super::replaces(&a("127.0.0.1:4000"), &a("10.0.2.2:8764")));
+        assert!(super::replaces(&a("[::1]:4000"), &a("192.168.1.5:8764")));
+        assert!(!super::replaces(&a("127.0.0.1:4000"), &a("127.0.0.1:5000")));
+        assert!(!super::replaces(&a("10.0.2.2:8764"), &a("127.0.0.1:4000")));
+        assert!(!super::replaces(&a("10.0.2.2:8764"), &a("10.0.2.3:8764")));
     }
 
     #[test]

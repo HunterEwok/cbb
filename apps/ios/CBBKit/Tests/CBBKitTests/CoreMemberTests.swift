@@ -155,6 +155,22 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertTrue(c.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty, "C was not named")
     }
 
+    /// A mode change connects again so the hellos say it, and the member
+    /// dials its peer again at once, however many changes come in a row.
+    func testReconnectsAtOnceAfterAModeChange() async throws {
+        let t = try CoreGroup(test: self)
+        let (a, b) = (t.phones[0], t.phones[1])
+        try await t.connect(1, to: 0)
+        for (i, mode) in ["send", "shared", "receive", "shared", "send", "shared"].enumerated() {
+            try b.member.setMode(mode)
+            let start = Date()
+            try await b.until("the peer's hello with mode \(mode), change \(i + 1)") {
+                try a.member.peers().contains { $0.device == b.device && $0.mode == mode }
+            }
+            XCTAssertLessThan(Date().timeIntervalSince(start), 3, "change \(i + 1) took \(Date().timeIntervalSince(start)) s")
+        }
+    }
+
     func testRefusesWhatItDoesNotKnowAndStops() throws {
         let t = try CoreGroup(test: self)
         let a = t.phones[0]
