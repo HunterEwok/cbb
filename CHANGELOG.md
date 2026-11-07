@@ -20,6 +20,8 @@ All notable changes to cbb are documented in this file. The format follows
   through the forwarder (W44), and a hub that has only HTTPS registers inside VLESS (W45).
   The VLESS case (W34) brings its client home for the hub's new offer, as AmneziaWG, which
   VLESS turns on, needs.
+- `testbench coverage` counts apart the cases the harness runs in full, where its suites
+  cover every kind of place the case names, and lists the others with what they lack.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
   group's copies out of this device for a while, its own still going out, and an admin's
   `cbb mute -on DEVICE` keeps a device's copies from the whole group, with the signed

@@ -486,5 +486,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 `testbench all BUILD` runs everything the harness has, one suite after another, each after a
 reset, and writes one report with the coverage table and the list of what is skipped and
 why. `testbench coverage` prints the table alone, from these two documents and the harness's
-list of what it runs. Each suite runs alone too (`testbench faults BUILD`), and `-only`
+list of what it runs. A case the harness runs counts as run in full when its suites cover
+every kind of section 0.1 it names (either of "real" and "fleet" when it names both, and a
+person never); the table counts those apart and lists the others with what they lack. That
+compares where a case runs, not each step of its text. Each suite runs alone too (`testbench faults BUILD`), and `-only`
 limits the devices.
