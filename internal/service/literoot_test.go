@@ -6,6 +6,7 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"net"
 	"os"
 	"os/exec"
@@ -324,6 +325,130 @@ func (s *testService) isAdmin(t *testing.T) bool {
 	for _, d := range m.Devices {
 		if d.Self {
 			return d.Admin
+		}
+	}
+	return false
+}
+
+// TestLiteTakeover: the Rust service joins a Go computer's group as a
+// full member (cbb pair -full), offers an admin key, and the Go root makes
+// it an admin; with the root lost, it takes the group over (cbb takeover)
+// after the root's delay of 0s, becomes the root, and a Go computer of the
+// group follows it.
+func TestLiteTakeover(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, desk, laptop)
+
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair -full: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := free.Addr().(*net.TCPAddr).Port
+	free.Close()
+	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-port", strconv.Itoa(port), "-peer", desk.addr(), "-peer", laptop.addr())
+	waitFor(t, "the Rust member connected to both", func() bool {
+		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "full"
+	})
+
+	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
+		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
+	if out, err := runCLI(cli, desk.socket, "", "takeover", "-delay", "0s"); err != nil {
+		t.Fatalf("cbb takeover -delay on the desk: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust member has the delay", func() bool { return recordsHold(dir, "takeover_delay_ms") })
+
+	// The desk is lost; the Rust admin takes the group over.
+	desk.stop()
+	if out, err := runCLI(cli, rust.socket, "", "takeover", "laptop"); err == nil || !strings.Contains(out, "not the group's root") {
+		t.Errorf("a takeover from a device that is not the root: %v\n%s", err, out)
+	}
+	if out, err := runCLI(cli, rust.socket, "", "takeover", "desk"); err != nil {
+		t.Fatalf("cbb takeover: %v\n%s", err, out)
+	}
+	rootIs := func(s *testService, name string) func() bool {
+		return func() bool {
+			m, err := s.do(t, control.Header{Op: control.OpDevices}, "")
+			if err != nil {
+				return false
+			}
+			for _, d := range m.Devices {
+				if d.Root {
+					return d.Name == name
+				}
+			}
+			return false
+		}
+	}
+	waitFor(t, "the Rust member the root", rootIs(rust, "rust"))
+	waitFor(t, "the laptop follows the new root", rootIs(laptop, "rust"))
+	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
+	if err != nil || !strings.Contains(string(raw), `"root_key"`) || strings.Contains(string(raw), `"claim"`) {
+		t.Errorf("the identity file after the takeover: %v\n%s", err, raw)
+	}
+	must := func(args ...string) {
+		t.Helper()
+		if out, err := runCLI(cli, rust.socket, "", args...); err != nil {
+			t.Fatalf("cbb %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	// As the root it renames the laptop, which takes the record.
+	must("rename", "laptop", "notebook")
+	waitFor(t, "the laptop renamed under the new root", func() bool {
+		m, err := laptop.do(t, control.Header{Op: control.OpDevices}, "")
+		if err != nil {
+			return false
+		}
+		for _, d := range m.Devices {
+			if d.Self {
+				return d.Name == "notebook"
+			}
+		}
+		return false
+	})
+}
+
+// recordsHold reports whether a body of the records file in dir holds text.
+func recordsHold(dir, text string) bool {
+	raw, err := os.ReadFile(filepath.Join(dir, "records.json"))
+	if err != nil {
+		return false
+	}
+	var f struct {
+		Records []struct {
+			Body []byte `json:"body"`
+		} `json:"records"`
+	}
+	if json.Unmarshal(raw, &f) != nil {
+		return false
+	}
+	for _, r := range f.Records {
+		if bytes.Contains(r.Body, []byte(text)) {
+			return true
 		}
 	}
 	return false

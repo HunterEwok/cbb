@@ -80,14 +80,17 @@ Commands:
                        (-addr: where the phone reaches this device, when the
                        code would name the wrong addresses).
   pair -code host:port Join with the code from cbb pair on a full member.
+  pair -full ...       Join as a computer with the service, a full member
+                       that may become an admin, rather than a lite member.
   service [-name name] [-port port] [-peer host:port]... [-no-mdns]
-          [-no-listen] [-tunnel-via host:port]
+          [-no-listen] [-tunnel-via host:port] [-full]
                        Run the service (started by systemd or procd): it
                        dials the computers, and phones and other lite
                        members dial it on the member port (8764, CBB_PORT).
                        -tunnel-via: the tunnel to the hub sends its packets
                        there, a local UDP port that leads to the hub (cbb
                        next link -udp on the ZX Spectrum Next).
+                       -full: as a computer's service, a full member.
   copy [-secret]       Send standard input to the group.
   paste [-terminal [-lines] [-secret]]
                        Print this member's clipboard text; -terminal makes
@@ -292,10 +295,16 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut port = member_port();
     let mut addrs = Vec::new();
     let mut code_addr = None;
+    let mut full = false;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(format!("{} needs a value", args[i])));
         match flag(&args[i]) {
+            Some("full") if !for_next => {
+                full = true;
+                i += 1;
+                continue;
+            }
             Some("name") => name = next()?,
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
@@ -304,7 +313,10 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         }
         i += 2;
     }
-    let (joiner, save) = joiner(g, &name)?;
+    let (mut joiner, save) = joiner(g, &name)?;
+    if full {
+        joiner = joiner.as_computer(admin::os_name());
+    }
     let save = &*save;
     let id = match code_addr {
         Some(a) => {
@@ -477,6 +489,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         mdns: true,
         port: Some(member_port()),
         tunnel_via: None,
+        full: false,
     };
     let mut i = 0;
     while i < args.len() {
@@ -493,6 +506,11 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
             }
             Some("no-listen") => {
                 cfg.port = None;
+                i += 1;
+                continue;
+            }
+            Some("full") => {
+                cfg.full = true;
                 i += 1;
                 continue;
             }

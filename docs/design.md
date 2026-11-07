@@ -211,7 +211,13 @@ ends, the Go service described below is still the computers' member.
   protocols, `cbb/3` and `cbb-pair/2`, and takes a joiner's single P-256 certificate; the
   negotiated protocol decides after the handshake whether the member chain is checked again
   or the core's admission plays the exchange with the joiner confirming first
-  (`Admission::accept`, `TestLiteRootWindow`).
+  (`Admission::accept`, `TestLiteRootWindow`). Run with `-full`, it is a computer's service
+  before its own device record arrives: its hellos offer an admin key (in the hardware where
+  cbb-helper can put it, else `admin_key`), and an `admin` message's admin CA makes it an
+  admin with a member certificate from that CA. On such an admin `takeover` keeps the new
+  root's key as `claim` and `claim_key` and signs the claim; a loop looks at the claims every
+  two seconds, as Go's `claimLoop` does, and once the records lead to that root it becomes
+  the root (`root_key`) and signs a new root's first records (`TestLiteTakeover`).
 
 ### Linux components
 

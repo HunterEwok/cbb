@@ -61,6 +61,10 @@ struct AdminFile {
     admin_key_se: Option<Vec<u8>>,
     #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
     admin_ca: Option<Vec<u8>>,
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    claim: Option<Vec<u8>>,
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    claim_key: Option<Vec<u8>>,
 }
 
 /// The key this member signs records with, from the identity file in dir:
@@ -166,6 +170,248 @@ fn b64_value(b: &[u8]) -> serde_json::Value {
     #[derive(Serialize)]
     struct V<'a>(#[serde(with = "b64")] &'a [u8]);
     serde_json::to_value(V(b)).unwrap_or_default()
+}
+
+/// The admin key this member keeps beside its member key, opened.
+fn admin_key(f: &AdminFile) -> Result<Option<Arc<dyn ExternalKey>>> {
+    Ok(Some(match (&f.admin_key, &f.admin_key_tpm, &f.admin_key_se) {
+        (None, None, None) => return Ok(None),
+        (Some(k), None, None) => Arc::new(FileKey::new(k)?),
+        (None, Some(b), None) => keys::open(&HeldKey::Tpm(b.clone()))?,
+        (None, None, Some(b)) => keys::open(&HeldKey::SecureEnclave(b.clone()))?,
+        _ => return Err(Error::msg("the identity file keeps the admin key in more than one place")),
+    }))
+}
+
+fn admin_file(dir: &Path) -> Result<AdminFile> {
+    serde_json::from_value(serde_json::Value::Object(identity::admin_fields(dir)?))
+        .context("the identity file's admin keys are damaged")
+}
+
+/// Gives a computer that is not the group's root the admin key its hellos
+/// offer, so that the root can make it an admin, as Go's withAdminKey: in
+/// the hardware through cbb-helper where it can, else in the identity
+/// file. It returns the key's SubjectPublicKeyInfo while the member should
+/// offer it: it has no admin CA yet, or one from a root before the current
+/// one. A rootless install offers none.
+pub fn admin_key_offer(dir: &Path, ident: &Identity) -> Result<Option<Vec<u8>>> {
+    let f = admin_file(dir)?;
+    if f.group_ca_key.is_some() || f.root_key.is_some() {
+        return Ok(None);
+    }
+    let key = match admin_key(&f)? {
+        Some(k) => k,
+        None if crate::rootless::is() => {
+            service::log_line(
+                "cbb: this device is installed without root, so it offers no admin key and cannot be made an admin",
+            );
+            return Ok(None);
+        }
+        None => {
+            let mut fields = serde_json::Map::new();
+            let (hw, why) = keys::new_device_key();
+            let key: Arc<dyn ExternalKey> = match hw.as_ref().and_then(|k| k.held().map(|h| (k, h))) {
+                Some((k, HeldKey::Tpm(b))) => {
+                    fields.insert("admin_key_tpm".into(), b);
+                    k.clone()
+                }
+                Some((k, HeldKey::SecureEnclave(b))) => {
+                    fields.insert("admin_key_se".into(), b64_value(&b));
+                    k.clone()
+                }
+                None => {
+                    if !why.is_empty() {
+                        service::log_line(&format!("cbb: the admin key stays in a file: {why}"));
+                    }
+                    let pkcs8 = identity::new_key()?;
+                    fields.insert("admin_key".into(), b64_value(&pkcs8));
+                    Arc::new(FileKey::new(&pkcs8)?)
+                }
+            };
+            identity::save_with(ident, dir, fields)?;
+            key
+        }
+    };
+    let current = match &f.admin_ca {
+        Some(der) => Cert::parse(der).is_ok_and(|c| c.signed_by(ident.root())),
+        None => false,
+    };
+    Ok((!current).then(|| cbb_core::certs::p256_spki_of(&key.public())))
+}
+
+/// Keeps the admin CA the group's root sent for this member's admin key,
+/// as Go's becomeAdmin: a new member certificate from it, so that a device
+/// it admits checks both against the Welcome's one issuer. From then on it
+/// admits and removes devices with it.
+pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
+    let f = admin_file(dir)?;
+    if f.admin_ca.as_deref() == Some(der) {
+        return Ok(());
+    }
+    let key = admin_key(&f)?.ok_or_else(|| Error::msg("this device has no admin key to be an admin with"))?;
+    let ca = Cert::parse(der).map_err(|e| e.context("the admin CA"))?;
+    let ident = node.identity();
+    if ca.public_key() != key.public().as_slice() {
+        return Err(Error::msg("the admin CA is for another key"));
+    }
+    if !ca.is_ca || !ca.cert_sign || !ca.signed_by(ident.root()) {
+        return Err(Error::msg("the admin CA is not from the group's current root"));
+    }
+    let renewed = f.admin_ca.is_some();
+    let now = uptime::wall_ms() / 1000;
+    let cert = cbb_core::issue::member(&ident.id, ident.cert.public_key(), &ca, now, &mut |tbs| {
+        identity::sign_external(&*key, tbs)
+    })?;
+    ident.with_cert_from(&cert, Some(der))?;
+    let mut fields = serde_json::Map::new();
+    fields.insert("admin_ca".into(), b64_value(der));
+    identity::save_with(&ident, dir, fields)?;
+    node.renewed(&cert, Some(der))?;
+    node.offer_admin_key(None);
+    node.logf(if renewed {
+        "cbb: the group's root renewed this admin's CA, for the same key"
+    } else {
+        "cbb: this device is now an admin of the group: it can admit and remove devices"
+    });
+    Ok(())
+}
+
+/// Makes this admin the group's root once the records make the new root of
+/// its claim the current one, as Go's finishTakeoverLocked: the claim's key
+/// becomes the root key, a member certificate from the new root replaces
+/// the admin's, and the records a new root starts with follow
+/// (after_takeover). A claim that was cancelled or became void is dropped.
+/// It returns whether this device became the root.
+pub fn finish_takeover(dir: &Path, node: &Node, name: &str) -> Result<bool> {
+    let f = admin_file(dir)?;
+    let (Some(claim), Some(claim_key)) = (f.claim.as_deref(), f.claim_key.as_deref()) else { return Ok(false) };
+    let claim_cert = Cert::parse(claim)?;
+    let ident = node.identity();
+    if ident.roots.last().is_some_and(|r| r.der == claim_cert.der) {
+        let key = FileKey::new(claim_key)?;
+        let n = ident.roots.len();
+        let old = if n >= 2 { &ident.roots[n - 2] } else { &ident.group_ca };
+        let old_root = Hash(old.key_hash());
+        let now = uptime::wall_ms() / 1000;
+        let cert = cbb_core::issue::member(&ident.id, ident.cert.public_key(), &claim_cert, now, &mut |tbs| {
+            identity::sign_external(&key, tbs)
+        })?;
+        ident.with_cert_from(&cert, None)?;
+        let mut fields = serde_json::Map::new();
+        fields.insert("root_key".into(), b64_value(claim_key));
+        fields.insert("prev_cert".into(), b64_value(&ident.cert.der));
+        fields
+            .insert("prev_issuer".into(), ident.issuer.as_ref().map_or(serde_json::Value::Null, |c| b64_value(&c.der)));
+        for k in ["admin_key", "admin_key_tpm", "admin_key_se", "admin_ca", "claim", "claim_key"] {
+            fields.insert(k.into(), serde_json::Value::Null);
+        }
+        identity::save_with(&ident, dir, fields)?;
+        node.renewed(&cert, None)?;
+        node.offer_admin_key(None);
+        after_takeover(dir, node, old_root, name);
+        node.reconnect();
+        return Ok(true);
+    }
+    let h = claim_cert.key_hash();
+    let state = node.records().lock().unwrap().state().claims.iter().find(|c| c.root.0 == h).map(|c| c.state);
+    if let Some(state @ ("cancelled" | "void")) = state {
+        let mut fields = serde_json::Map::new();
+        fields.insert("claim".into(), serde_json::Value::Null);
+        fields.insert("claim_key".into(), serde_json::Value::Null);
+        identity::save_with(&ident, dir, fields)?;
+        node.logf(&format!("cbb: the claim to take the group over is {state}; this device stays an admin"));
+    }
+    Ok(false)
+}
+
+/// Signs, on the admin whose claim made it the group's root, the records a
+/// new root starts with, as Go's afterTakeover: its own device that holds
+/// the root, the admins it keeps under the new root, a removal of the old
+/// root's device, and the old root's settings again.
+fn after_takeover(dir: &Path, node: &Node, old_root: Hash, name: &str) {
+    let ident = node.identity();
+    let Ok(Some(s)) = signer(dir, &ident) else { return };
+    if !s.root {
+        return;
+    }
+    let (devs, all) = {
+        let records = node.records();
+        let rs = records.lock().unwrap();
+        (rs.devices(), rs.all())
+    };
+    let bodies: Vec<Body> = all.iter().filter_map(|r| Body::parse(&r.body).ok()).collect();
+    let lost = bodies
+        .iter()
+        .filter(|b| b.kind == authority::TYPE_DEVICE && b.holds_root && b.signer == old_root)
+        .max_by_key(|b| b.seq)
+        .map(|b| b.device.clone())
+        .unwrap_or_default();
+    let me = ident.id.to_string();
+    let mut own_name = name.to_string();
+    let mut revoke: Vec<Hash> = Vec::new();
+    let mut kept = Vec::new();
+    for d in &devs {
+        if d.id == me {
+            own_name = d.name.clone();
+        } else if d.id == lost {
+            revoke.extend(d.keys.iter().copied().map(Hash));
+        } else if let Some(a) = d.admin_key.filter(|_| !d.frozen) {
+            kept.push(Body {
+                kind: authority::TYPE_DEVICE.into(),
+                device: d.id.clone(),
+                name: d.name.clone(),
+                role: d.role.clone(),
+                os: d.os.clone(),
+                key: Some(Hash(d.key)),
+                admin: Some(Hash(a)),
+                powers: d.powers.clone(),
+                commands: d.commands.clone(),
+                store: d.store.clone(),
+                hardware: d.kind.clone(),
+                proof: d.proof.clone(),
+                seal: d.seal.clone(),
+                ..Default::default()
+            });
+        }
+    }
+    let store = if ident.external.is_some() { "hardware" } else { "file" };
+    let seal = sealkey::load(dir).ok().and_then(|k| cbb_core::seal::public_key(&k).ok()).unwrap_or_default();
+    let mut out = vec![Body {
+        kind: authority::TYPE_DEVICE.into(),
+        device: me.clone(),
+        name: own_name,
+        role: "full".into(),
+        os: os_name().into(),
+        key: Some(Hash(ident.cert.key_hash())),
+        store: store.into(),
+        seal,
+        ..Default::default()
+    }];
+    out.extend(kept);
+    if !revoke.is_empty() {
+        revoke.sort_by_key(|k| cbb_core::certs::hex(&k.0));
+        revoke.dedup();
+        out.push(Body { kind: authority::TYPE_REVOKE.into(), keys: revoke, ..Default::default() });
+    }
+    // The state counts only the current root's settings, so the new root
+    // signs the old root's again: the takeover delay and the key level.
+    if let Some(b) =
+        bodies.iter().filter(|b| b.kind == authority::TYPE_SETTINGS && b.signer == old_root).max_by_key(|b| b.seq)
+    {
+        out.push(Body {
+            kind: authority::TYPE_SETTINGS.into(),
+            takeover_delay_ms: b.takeover_delay_ms,
+            key_level: b.key_level.clone(),
+            ..Default::default()
+        });
+    }
+    let admin = Admin { node, dir };
+    for b in out {
+        if let Err(e) = admin.sign(&s, b) {
+            node.logf(&format!("cbb: a record of the new root: {}", e.for_log()));
+        }
+    }
+    node.logf("cbb: the claim took effect; this device is the group's root now");
 }
 
 /// A duration in milliseconds as Go's time.Duration prints it: 72h0m0s,
@@ -668,6 +914,85 @@ impl Admin<'_> {
             return Err(Error::msg(format!("{} {} it: {}", d.name, res.status, res.reason)));
         }
         Ok(Some(d.name))
+    }
+
+    /// Takes the group over from its lost root, on an admin of a group
+    /// whose root is a computer, as Go's takeOver (docs/protocol.md,
+    /// section 10): it makes a new root, keeps its key in the identity file
+    /// first, and claims the group for it in a record its admin key signs.
+    /// The claim takes effect after the group's delay unless the root
+    /// cancels it (finish_takeover). It returns the root's name.
+    pub fn take_over(&self, target: &str) -> Result<String> {
+        if crate::rootless::is() {
+            return Err(Error::msg(
+                "this device is installed without root, so every program of its user can read its keys; such a device never holds the group's keys (D-79)",
+            ));
+        }
+        let d = find_device(self.node, target)?;
+        let ident = self.node.identity();
+        let f = admin_file(self.dir)?;
+        let root = self.root_device();
+        let rooted_by_computer = self.node.devices().iter().any(|dev| dev.id == root && dev.role != "phone");
+        let s = self.signing().ok();
+        if s.as_ref().is_some_and(|s| s.root) {
+            return Err(Error::msg("this device is the group's root already"));
+        }
+        let Some(s) = s else {
+            return Err(Error::msg("only an admin takes the group over; this device is none"));
+        };
+        if !rooted_by_computer {
+            return Err(Error::msg(
+                "the group's root is a phone: an admin phone takes the group over, never a computer",
+            ));
+        }
+        if d.id != root {
+            return Err(Error::msg(format!("{} is not the group's root; cbb status shows which device is", d.name)));
+        }
+        if f.claim.is_some() {
+            return Err(Error::msg(
+                "this admin's claim to take the group over is waiting already; cbb status shows the time left",
+            ));
+        }
+        if !s.ca.signed_by(ident.root()) {
+            return Err(Error::msg(
+                "this admin's CA is from a root before the current one, so a new root from it would split the group; the current root renews it when they next meet, so take the group over on an admin that met it since",
+            ));
+        }
+        let me = self.me();
+        let may = self
+            .node
+            .devices()
+            .iter()
+            .any(|dev| dev.id == me && dev.powers.iter().any(|p| p == authority::POWER_TAKEOVER));
+        if !may {
+            return Err(Error::msg(
+                "the root did not give this admin the power to take the group over; take it over on another admin",
+            ));
+        }
+        let pkcs8 = identity::new_key()?;
+        let key = FileKey::new(&pkcs8)?;
+        let now = uptime::wall_ms() / 1000;
+        let new_root = cbb_core::issue::root_ca(&key.public(), now, &mut |tbs| identity::sign_external(&key, tbs))?;
+        // The identity file keeps the new root's key before the claim goes
+        // out, so that the claim never takes effect for a key this device
+        // lost.
+        let mut fields = serde_json::Map::new();
+        fields.insert("claim".into(), b64_value(&new_root));
+        fields.insert("claim_key".into(), b64_value(&pkcs8));
+        identity::save_with(&ident, self.dir, fields)?;
+        let claimed = self.sign(&s, Body { kind: authority::TYPE_CLAIM.into(), root: new_root, ..Default::default() });
+        if let Err(e) = claimed {
+            let mut fields = serde_json::Map::new();
+            fields.insert("claim".into(), serde_json::Value::Null);
+            fields.insert("claim_key".into(), serde_json::Value::Null);
+            let _ = identity::save_with(&ident, self.dir, fields);
+            return Err(e);
+        }
+        self.node.logf(&format!(
+            "cbb: claimed the group from its root {} ({}); this device becomes the root when the waiting time ends, unless the root cancels the claim",
+            d.name, d.id
+        ));
+        Ok(d.name)
     }
 
     /// The key level of the newest settings record of the root whose key

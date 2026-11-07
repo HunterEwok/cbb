@@ -147,7 +147,14 @@ impl Member {
         }
         let state_dir = cfg.state_dir.clone();
         let node = Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone())
-            .presenting(Presence { role: "phone".into(), name: cfg.name, os: cfg.os, key_store: cfg.key_store, device })
+            .presenting(Presence {
+                role: "phone".into(),
+                name: cfg.name,
+                os: cfg.os,
+                key_store: cfg.key_store,
+                device,
+                admin_key: Default::default(),
+            })
             .keeping_identity(cfg.keep_identity)
             .with_content();
         let node = Arc::new(node);

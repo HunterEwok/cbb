@@ -267,6 +267,14 @@ impl Joiner {
         Ok(self)
     }
 
+    /// The device joining as a computer with the service, a full member
+    /// that may become an admin: no role, and its system.
+    pub fn as_computer(mut self, os: &str) -> Joiner {
+        self.role = String::new();
+        self.os = os.into();
+        self
+    }
+
     /// The phone joining with an admin key too: only a window that may make
     /// admins, on the group's root or an admin phone, admits it, and its
     /// Welcome carries the admin CA for that key.

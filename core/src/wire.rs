@@ -322,6 +322,7 @@ pub fn hello(
     key_store: &str,
     seal: Option<&[u8]>,
     entries: (u64, u64),
+    admin_key: Option<&[u8]>,
 ) -> Message {
     let device = device.cleaned();
     let body = HelloBody {
@@ -341,7 +342,7 @@ pub fn hello(
         device: if device.is_empty() { None } else { Some(to_value(&device)) },
         tunnel_key: tunnel_key.map(|(k, _)| k.to_vec()),
         tunnel_psk: tunnel_key.map(|(_, p)| p.to_vec()),
-        admin_key: None,
+        admin_key: admin_key.map(<[u8]>::to_vec),
         mode: mode.to_string(),
         muted: mute.is_some(),
         muted_for_ms: mute.unwrap_or(0),

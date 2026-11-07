@@ -136,6 +136,9 @@ pub struct Config {
     /// Where the tunnel sends its packets instead of the hub's addresses: a
     /// local UDP port that leads to the hub, such as `cbb next link -udp`.
     pub tunnel_via: Option<SocketAddr>,
+    /// It runs as a computer's service, a full member that may become an
+    /// admin, even before its own device record arrives.
+    pub full: bool,
 }
 
 struct Service {
@@ -305,7 +308,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let tag = ident.tag();
     let away =
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
-    let presence = presence_of(&ident, &records, &cfg.name);
+    let presence = presence_of(&ident, &records, &cfg.name, cfg.full);
     let node = {
         let svc = svc.clone();
         Arc::new(
@@ -337,6 +340,22 @@ pub fn run(cfg: Config) -> Result<()> {
         let svc = svc.clone();
         node.on_command(Arc::new(move |peer, c| svc.command(peer, c)));
     }
+    // A computer that is no admin offers an admin key for the root to
+    // certify, and keeps the admin CA the root sends for it.
+    if node.role() == "full" {
+        match crate::admin::admin_key_offer(&cfg.state_dir, &node.identity()) {
+            Ok(offer) => node.offer_admin_key(offer),
+            Err(e) => log(&format!("cbb: making the admin key: {}", e.for_log())),
+        }
+        let (dir, n, log) = (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone());
+        node.on_message(Box::new(move |from, m| {
+            if let (Some(der), Some(node)) = (m.admin_ca.as_deref().filter(|_| m.kind == "admin"), n.upgrade())
+                && let Err(e) = crate::admin::become_admin(&dir, &node, der)
+            {
+                log(&format!("cbb: the admin CA from {from}: {}", e.for_log()));
+            }
+        }));
+    }
     {
         let svc = svc.clone();
         node.on_pairing(Arc::new(move |sock, session, exporter, addr| svc.pair_conn(sock, session, exporter, addr)));
@@ -353,6 +372,31 @@ pub fn run(cfg: Config) -> Result<()> {
         }));
     }
     *svc.node.write().unwrap() = Some(node.clone());
+    {
+        // The claims to take the group over: one takes effect when its
+        // delay ends, without a new record, and this admin's own makes it
+        // the root then.
+        let (node, dir, name, log) = (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone());
+        std::thread::spawn(move || {
+            let (mut last, mut failed) = (String::new(), String::new());
+            while !node.is_closed() {
+                let now = claim_states(&node);
+                if now != last {
+                    last = now;
+                    node.settle();
+                }
+                match crate::admin::finish_takeover(&dir, &node, &name) {
+                    Err(e) if e.for_log() != failed => {
+                        failed = e.for_log();
+                        log(&format!("cbb: taking the group over: {failed}"));
+                    }
+                    Err(_) => {}
+                    Ok(_) => failed.clear(),
+                }
+                std::thread::sleep(CLAIM_CHECK);
+            }
+        });
+    }
     *svc.away.write().unwrap() = Some(away.clone());
     let port = cfg.port.and_then(|p| discovery::listen(node.clone(), p, log.clone()));
     *svc.port.lock().unwrap() = port;
@@ -386,8 +430,18 @@ pub fn run(cfg: Config) -> Result<()> {
 /// service (`full`) when its own device record says so, as the group's
 /// root on a computer made it; as a lite member otherwise. Its keys are in
 /// the hardware when cbb-helper holds the device key.
-fn presence_of(ident: &Identity, records: &Records, name: &str) -> crate::node::Presence {
-    let full = records.devices().iter().any(|d| d.id == ident.id.as_str() && d.role == "full");
+/// How often the claims to take the group over are looked at again.
+const CLAIM_CHECK: Duration = Duration::from_secs(2);
+
+/// Every claim of the records with its state: what changes when a claim
+/// takes effect.
+fn claim_states(node: &Node) -> String {
+    let st = node.records().lock().unwrap().state();
+    st.claims.iter().map(|c| format!("{}={} ", cbb_core::certs::hex(&c.record.0), c.state)).collect()
+}
+
+fn presence_of(ident: &Identity, records: &Records, name: &str, computer: bool) -> crate::node::Presence {
+    let full = computer || records.devices().iter().any(|d| d.id == ident.id.as_str() && d.role == "full");
     crate::node::Presence {
         role: if full { "full" } else { "lite" }.into(),
         name: name.to_string(),
@@ -401,6 +455,7 @@ fn presence_of(ident: &Identity, records: &Records, name: &str) -> crate::node::
         }
         .into(),
         device: crate::device::own().clone(),
+        admin_key: Default::default(),
     }
 }
 
@@ -1467,6 +1522,7 @@ impl Service {
                 let node = self.node()?;
                 let me = node.identity().id.to_string();
                 let peers = node.peers();
+                let root = node.records().lock().unwrap().state().root_device;
                 let mut out: Vec<Device> = node
                     .devices()
                     .into_iter()
@@ -1477,6 +1533,7 @@ impl Service {
                             .map_or(d.os.clone(), |p| p.os.clone()),
                         online: peers.iter().any(|p| p.id.as_str() == d.id),
                         this: d.id == me,
+                        root: d.id == root,
                         listed: true,
                         id: d.id,
                         name: d.name,
@@ -1560,6 +1617,10 @@ impl Service {
             "incoming" => {
                 self.admin(|a| a.set_incoming(&h.value))?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "takeover" => {
+                let name = self.admin(|a| a.take_over(&h.name))?;
+                Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "handover" => {
                 let name = self.admin(|a| a.hand_over(&h.name))?;

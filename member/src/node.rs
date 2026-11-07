@@ -146,6 +146,9 @@ pub struct Presence {
     /// Where the device key is: "file", "rootless" or "hardware".
     pub key_store: String,
     pub device: cbb_core::wire::DeviceInfo,
+    /// The SubjectPublicKeyInfo of the admin key the hellos offer, for the
+    /// root to certify: a computer's that is no admin yet.
+    pub admin_key: Arc<RwLock<Option<Vec<u8>>>>,
 }
 
 pub struct Node {
@@ -297,6 +300,7 @@ impl Node {
                 os: "linux".into(),
                 key_store: if crate::rootless::is() { "rootless" } else { "file" }.into(),
                 device: crate::device::own().clone(),
+                admin_key: Default::default(),
             }),
             engine,
             records: Arc::new(Mutex::new(records)),
@@ -394,6 +398,11 @@ impl Node {
     /// Lets the member port take pairing connections, which f serves.
     pub fn on_pairing(&self, f: OnPairing) {
         *self.on_pairing.write().unwrap() = Some(f);
+    }
+
+    /// Sets the admin key the hellos offer, or stops offering one.
+    pub fn offer_admin_key(&self, spki: Option<Vec<u8>>) {
+        *self.presence.admin_key.write().unwrap() = spki;
     }
 
     /// Says whether a pairing window is open here, for mDNS.
@@ -1412,6 +1421,36 @@ impl Node {
         }
     }
 
+    /// Trusts the roots the records lead to now: a new root that took the
+    /// group over is trusted from now on.
+    fn adopt_roots(&self, st: &Records) {
+        let roots = st.roots();
+        let mut ident = self.ident.write().unwrap();
+        if roots.iter().map(|c| &c.der).ne(ident.roots.iter().map(|c| &c.der)) {
+            let mut next = (**ident).clone();
+            next.roots = roots;
+            match self.save_identity(&next) {
+                Ok(()) => *ident = Arc::new(next),
+                Err(e) => self.logf(&format!("cbb: keeping the group's new root: {}", e.for_log())),
+            }
+        }
+    }
+
+    /// Applies what the records say now without a new record, as Go's
+    /// settleClaims: a claim takes effect when its delay ends, so the new
+    /// root is trusted, and the connections the state refuses now close.
+    pub fn settle(&self) {
+        self.adopt_roots(&self.records.lock().unwrap());
+        self.apply_copy_rules();
+        let st = self.records.lock().unwrap();
+        for c in self.conns.lock().unwrap().values() {
+            if let Some(Refusal::Refused(why)) = st.refused(&c.chain) {
+                self.logf(&format!("cbb: closing the connection to {}: {why}", c.id));
+                c.close(true);
+            }
+        }
+    }
+
     fn add_records(&self, rs: &[Record], from: &DeviceId) {
         let fresh = {
             let mut st = self.records.lock().unwrap();
@@ -1425,17 +1464,8 @@ impl Node {
             if let Err(e) = st.save(&self.state_dir) {
                 self.logf(&format!("cbb: {}", e.for_log()));
             }
-            // A new root that took the group over is trusted from now on.
-            let roots = st.roots();
-            let mut ident = self.ident.write().unwrap();
-            if roots.iter().map(|c| &c.der).ne(ident.roots.iter().map(|c| &c.der)) {
-                let mut next = (**ident).clone();
-                next.roots = roots;
-                match self.save_identity(&next) {
-                    Ok(()) => *ident = Arc::new(next),
-                    Err(e) => self.logf(&format!("cbb: keeping the group's new root: {}", e.for_log())),
-                }
-            }
+            self.adopt_roots(&st);
+            let ident = self.ident.read().unwrap();
             let own: Vec<Cert> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
             if matches!(st.refused(&own), Some(Refusal::Refused(_))) {
                 self.logf("cbb: this device was removed from the group; to join again, run cbb leave, then cbb pair");
@@ -1571,6 +1601,7 @@ fn writer(
                     &who.key_store,
                     crate::sealkey::public(),
                     if c.records_only { (0, 0) } else { entries.order(uptime::wall_ms()) },
+                    who.admin_key.read().unwrap().as_deref(),
                 );
                 Some(wire::with_features(m, if content.is_some() && !c.records_only { &["media"] } else { &[] }))
             }

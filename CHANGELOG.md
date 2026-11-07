@@ -25,7 +25,10 @@ All notable changes to cbb are documented in this file. The format follows
   window with a code, which a computer joins as it joins a Go root (`TestLiteRootWindow`). It
   also sets the takeover delay and how long an incoming copy stays live, hands the group to
   an admin, and mutes and unmutes a device (`cbb takeover -delay`, `incoming`, `handover`,
-  `mute -on`, `unmute -on`).
+  `mute -on`, `unmute -on`). Started with `-full`, and joined with `cbb pair -full`, it is a
+  computer's service in a Go computer's group: it offers an admin key, becomes an admin when
+  the root makes it one, and takes the group over from a lost root with `cbb takeover`,
+  becoming the root once the claim takes effect (`TestLiteTakeover`).
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

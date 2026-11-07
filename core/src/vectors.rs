@@ -464,6 +464,7 @@ fn hello_actions() {
             "file",
             None,
             entries,
+            None,
         )
     };
     let on = ["reboot".to_string(), "restart".to_string()];

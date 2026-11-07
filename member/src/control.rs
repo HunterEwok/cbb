@@ -276,6 +276,9 @@ pub struct Device {
     pub skew_ms: i64,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub admin: bool,
+    /// It holds the group's root.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub root: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub online: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
