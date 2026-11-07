@@ -25,6 +25,9 @@ pub type Save = SaveRef<'static>;
 pub type SaveRef<'a> = dyn Fn(&Identity, &[crate::records::Record], &[crate::records::ClaimTime]) -> Result<()> + 'a;
 
 const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long a join waits for the member to close the connection after the
+/// last frame.
+const CLOSE_WAIT: Duration = Duration::from_secs(3);
 /// How long a listening join waits.
 pub const LIFETIME: Duration = Duration::from_secs(5 * 60);
 
@@ -101,6 +104,14 @@ fn run(
     exporter.export(EXPORTER_LABEL, &[], &mut sid).wrap("cannot bind the pairing to TLS")?;
     let id = exchange(j, &mut tc, password, &member_der, &sid, member_first, save)?;
     tc.close();
+    // The last frame reaches the member before this returns: through a
+    // tunnel whose link stops right after, it would be lost on the way. The
+    // member closes the connection once it has it.
+    let _ = tc.sock.shutdown(std::net::Shutdown::Write);
+    let _ = tc.sock.set_read_timeout(Some(CLOSE_WAIT));
+    let mut buf = [0u8; 512];
+    let until = Instant::now() + CLOSE_WAIT;
+    while Instant::now() < until && matches!(std::io::Read::read(&mut tc.sock, &mut buf), Ok(n) if n > 0) {}
     Ok(id)
 }
 
