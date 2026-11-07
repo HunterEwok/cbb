@@ -134,16 +134,37 @@ const fwdState = "/var/lib/cbbforward"
 // newAwayGroup forms a group of n members at home, the first its hub, the
 // internet, and a forwarder the hub registers with.
 func newAwayGroup(ctx context.Context, r *Report, f *Fleet, suite string, n int) *awayGroup {
-	return newAwayGroupWith(ctx, r, f, suite, n, false)
+	return newAwayGroupWith(ctx, r, f, suite, n, noVLESS)
 }
 
 // siteName is the well-known site whose TLS the fleet's forwarder borrows
 // for VLESS; the forge plays it on the servers' network.
 const siteName = "www.example.com"
 
+// The ways a fleet's forwarder takes VLESS: none, with REALITY borrowing
+// the site's TLS, or over XHTTP behind a web server of its own.
+const (
+	noVLESS = iota
+	realityVLESS
+	xhttpVLESS
+)
+
+// The XHTTP forwarder's site, the path its web server passes, and where
+// that web server keeps its CA, on the forwarder.
+const (
+	xhttpName = "xhttp.bench.example"
+	xhttpPath = "/cbbbenchxhttp01"
+	xhttpCA   = "/tmp/web-ca.pem"
+	// The mirror of the releases on the forwarder's server, which its
+	// VLESS clients reach for their updates, and its counts.
+	mirrorAddr = "127.0.0.1:8443"
+	mirrorHits = "/tmp/mirror.hits"
+	xhttpHits  = "/tmp/web.hits"
+)
+
 // newAwayGroupWith is newAwayGroup, with a forwarder that takes VLESS too
-// when vless is set.
-func newAwayGroupWith(ctx context.Context, r *Report, f *Fleet, suite string, n int, vless bool) *awayGroup {
+// in the way vless names.
+func newAwayGroupWith(ctx context.Context, r *Report, f *Fleet, suite string, n int, vless int) *awayGroup {
 	a := &awayGroup{f: f}
 	if r.Do(suite+"/internet", func() error {
 		var err error
@@ -159,7 +180,10 @@ func newAwayGroupWith(ctx context.Context, r *Report, f *Fleet, suite string, n 
 		}
 		var run []string
 		flags := ""
-		if vless {
+		switch vless {
+		case xhttpVLESS:
+			flags = "-vless-xhttp " + xhttpName + " -vless-path " + xhttpPath + " -vless-mirror " + mirrorAddr
+		case realityVLESS:
 			site, err := forgeServer(ctx, f, servers, "-addr :443 site:"+siteName)
 			if err != nil {
 				return err
@@ -173,11 +197,42 @@ func newAwayGroupWith(ctx context.Context, r *Report, f *Fleet, suite string, n 
 		if a.fwd, a.fwdKey, err = startForwarder(ctx, f, servers, run, flags); err != nil {
 			return err
 		}
+		if vless == xhttpVLESS {
+			if _, err := forgeOn(ctx, a.fwd); err != nil {
+				return err
+			}
+			if err := a.startWeb(ctx); err != nil {
+				return err
+			}
+		}
 		return a.in.publish(ctx, fwdPublic, a.fwd)
 	}) != nil {
 		return nil
 	}
 	return a.another(ctx, r, suite, n, hubPublic)
+}
+
+// startWeb starts the web server of the XHTTP forwarder, at its address,
+// which passes the path to it, and the stand-in for the mirror of the
+// releases (dl.cbb.tools) beside it, with the same CA; forgeOn must have
+// put forge there.
+func (a *awayGroup) startWeb(ctx context.Context) error {
+	for _, args := range [][]string{
+		{"-addr", ":443", "web:" + xhttpName + "," + xhttpPath + ",127.0.0.1:3276," + xhttpCA + "," + xhttpHits},
+		{"-addr", mirrorAddr, "web:dl.cbb.tools,/,-," + xhttpCA + "," + mirrorHits},
+	} {
+		if _, err := docker(ctx, append([]string{"exec", "-d", a.fwd.Container, "/usr/local/bin/cbbbench-forge"}, args...)...); err != nil {
+			return err
+		}
+		// The second takes the CA the first made.
+		if err := eventually(ctx, 20*time.Second, func() error {
+			_, err := Run(ctx, a.fwd, "test -s "+xhttpCA, "")
+			return err
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // another forms another group of n members at home whose hub is reached
