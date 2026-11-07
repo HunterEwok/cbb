@@ -183,6 +183,22 @@ fn an_admin_takes_the_group_from_its_lost_root() {
     let cert = Cert::parse(&f.cert).unwrap();
     assert!(cert.signed_by(&root));
     assert_eq!(cert.public_key(), point.as_slice());
+    // It replaces the admin's certificate even when both are of one second.
+    let id = DeviceId::parse(&g.admin_phone).unwrap();
+    let old = issue::member(&id, &point, &g.admin_ca, later / 1000, &mut |b| identity::sign_external(&*g.admin_key, b))
+        .unwrap();
+    let ident = identity::Identity {
+        id,
+        key: Vec::new(),
+        external: Some(g.admin_member.clone()),
+        cert: Cert::parse(&old).unwrap(),
+        issuer: Some(g.admin_ca.clone()),
+        group_ca: g.root.clone(),
+        roots: vec![root.clone()],
+    };
+    assert_eq!(ident.cert.not_after, cert.not_after);
+    let next = ident.with_cert_from(&f.cert, None).unwrap();
+    assert!(next.issuer.is_none());
     for r in &f.records {
         assert!(r.chain.is_empty());
         add(&mut g.rs, r);

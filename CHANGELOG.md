@@ -7,6 +7,13 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Taking the group over is in the Rust core (`cbb_core::takeover`), each signature through the
+  app's or the service's key: the claim from a lost root, as the admin the root handed the
+  group to, or with the recovery key; where it stands; the new root's certificate and records
+  once it took effect; and new admin CAs from the new root. The Rust `cbb` service takes the
+  group over through it, `cbb_member_manage` offers it to the phones' apps, and the Aurora app
+  takes a lost root's group over from the root's page, its admin key in the TEE becoming the
+  new root (`TestFFIPhoneTakeover`).
 - `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
   its hello and starts it again when it stops. It does nothing else yet; the steps that make

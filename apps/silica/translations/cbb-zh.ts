@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>群组的根设备取消了申请；手机仍是管理员。</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>接管群组的申请已失效；手机仍是管理员。</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>请将手机连接到家庭 Wi-Fi 以加入群组。</translation>
     </message>
@@ -306,6 +314,30 @@
 </context>
 <context>
     <name>DevicePage</name>
+    <message>
+        <source>Take the group over</source>
+        <translation>接管群组</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>正在从 %1 接管群组</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>接管群组</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>等待中，还剩 %1 小时</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>正在等待群组收到申请</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>有争议：群组的根设备回应了申请</translation>
+    </message>
     <message>
         <source>System</source>
         <translation>系统</translation>

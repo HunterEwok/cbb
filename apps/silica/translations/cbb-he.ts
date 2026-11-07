@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>השורש של הקבוצה ביטל את הבקשה; הטלפון נשאר מנהל.</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>הבקשה להשתלט על הקבוצה בוטלה; הטלפון נשאר מנהל.</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>חבר את הטלפון ל-Wi-Fi הביתי כדי להצטרף לקבוצה.</translation>
     </message>
@@ -306,6 +314,30 @@
 </context>
 <context>
     <name>DevicePage</name>
+    <message>
+        <source>Take the group over</source>
+        <translation>השתלטות על הקבוצה</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>משתלט על הקבוצה מ־%1</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>השתלטות על הקבוצה</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>ממתין, נותרו %1 שעות</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>ממתין שהקבוצה תקבל את הבקשה</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>במחלוקת: השורש של הקבוצה השיב לבקשה</translation>
+    </message>
     <message>
         <source>System</source>
         <translation>מערכת</translation>

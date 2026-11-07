@@ -36,7 +36,7 @@ pub fn claim(node: &Node, s: &Signer, how: How, new_root: &[u8]) -> Result<()> {
 pub fn finished(node: &Node, s: &Signer, own: &Own) -> Result<takeover::Finished> {
     let ident = node.identity();
     let point = ident.cert.public_key().to_vec();
-    Ok(takeover::finish(&node.records().lock().unwrap(), s, &point, own, uptime::wall_ms())?)
+    takeover::finish(&node.records().lock().unwrap(), s, &point, own, uptime::wall_ms())
 }
 
 /// Makes the member the group's root with what finished gave: its new
@@ -102,7 +102,7 @@ pub fn renew_admin_cas(node: &Node, s: &Signer, sent: &Mutex<HashMap<String, [u8
         let renewal = match renewal {
             Ok(r) => r,
             Err(e) => {
-                node.logf(&format!("cbb: a new admin CA for {id}: {}", Error::from(e).for_log()));
+                node.logf(&format!("cbb: a new admin CA for {id}: {}", e.for_log()));
                 continue;
             }
         };
