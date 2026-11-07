@@ -330,7 +330,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W14 | Several hubs: the root and each admin with a hub; failover within about a minute; back within 5 min; no copy lost [P36] | real, fleet | |
 | W15 | `cbb global move` to an admin computer; refused for a lite member and a container; clients follow without coming home [P37] | real, fleet | |
 | W16 | The phone as the hub while its app is open: registering, registered, refused with the reason; "This is my home network"; clients retry every 5 s; Android keeps it in the background; moving the hub from the phone to a computer | ui | |
-| W17 | The lite member as a client: plain WireGuard; with an obfuscated or VLESS hub it stays at home | real | |
+| W17 | The lite member as a client: plain WireGuard, then the hub obfuscated and reached with AmneziaWG (VLESS over XHTTP: `TestLiteMemberAwayXHTTP`) | real | |
 | W18 | A client that has not met the hub since its obfuscation changed cannot reach it away until it comes home | fleet | |
 | W19 | Client isolation: from a client's tunnel nothing but the hub's member port answers; the hub opens one port [S3, S4] | real, fleet | |
 | W20 | A WireGuard key the group does not know gets no answer from the hub or the forwarder [S5] | real, fleet | |

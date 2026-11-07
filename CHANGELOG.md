@@ -10,7 +10,13 @@ All notable changes to cbb are documented in this file. The format follows
 - The lite member speaks AmneziaWG to a hub that hides its tunnel (lite/src/awg.rs, around
   GotaTun's WireGuard): it keeps the group's settings from the hub's offer and syncs away from
   home through the obfuscated hub instead of staying at home (`TestLiteMemberAwayObfuscated`
-  against the Go hub's amneziawg-go). A hub reached over VLESS is still refused.
+  against the Go hub's amneziawg-go).
+- The lite member reaches a hub over VLESS with XHTTP (lite/src/vless.rs, cbb_core::vless):
+  HTTPS to the forwarder's site, its certificate checked against the system's CA certificates
+  or `SSL_CERT_FILE` (RSA and P-384 added to the core's TLS provider for that), HTTP/1.1
+  packet-up requests, its UDP addresses tried first only with AmneziaWG
+  (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server). REALITY stays
+  with the full member.
 - CI's job "go test with the Rust core" runs the whole Go suite as the release builds are
   made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
