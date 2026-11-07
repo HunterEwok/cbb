@@ -309,7 +309,7 @@ impl Away {
     /// registerForwarderLocked: with its member certificate, the roots and
     /// the group's records, which show the forwarder it is the root or an
     /// admin, and hellos from its WireGuard port.
-    fn register(&self, node: &Node, st: &State, f: &Forwarder, hub: &Hub) -> Result<Forwarding> {
+    fn register(&self, node: &Arc<Node>, st: &State, f: &Forwarder, hub: &Hub) -> Result<Forwarding> {
         let super::meet::Shown { key, chain } = super::meet::shown(node)?;
         let records = super::meet::node_records(node);
         let pins =
@@ -324,6 +324,11 @@ impl Away {
             vless_id: Some(f.vless_id.clone()).filter(|id| !id.is_empty()),
             records: Arc::new(Mutex::new(records)),
             send: hub.sender(),
+            credential: self.credentials.lock().unwrap().clone().map(|c| {
+                let n = Arc::downgrade(node);
+                let f: forward::CredentialFn = Arc::new(move || c.hub(&*n.upgrade()?));
+                f
+            }),
         };
         let report = Arc::new(Mutex::new(Report::default()));
         let registration = Registration::start(cfg, report.clone(), self.log.clone());
@@ -356,6 +361,46 @@ impl Away {
         drop(cur);
         let at = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or_default();
         (self.log)(&format!("cbb: sync away from home: the hub's clients come over VLESS to the forwarder at {at}"));
+        node.reconnect();
+    }
+
+    /// Gives the hub a new WireGuard key for its clients in each period of
+    /// the group's server credentials (docs/protocol.md, section 11, "The
+    /// hub's key"), as Go's rotateHubKey: when a period starts, the next
+    /// key, which its offers carry from then on, and hub_key_ahead later
+    /// that key in place of the old one, with which the hub starts again
+    /// and registers again on its forwarder.
+    pub(super) fn rotate_hub_key(&self, node: &Node) {
+        let creds = self.credentials.lock().unwrap().clone();
+        let period = creds.and_then(|c| c.period_tag(node)).unwrap_or_default();
+        let ahead = i64::try_from(hub_key_ahead().as_millis()).unwrap_or(i64::MAX);
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return };
+        let mut next = st.clone();
+        let (changed, switched) = match next.rotate(&period, crate::uptime::wall_ms(), ahead) {
+            Ok(r) => r,
+            Err(e) => {
+                (self.log)(&format!("cbb: {}", e.for_log()));
+                return;
+            }
+        };
+        if !changed {
+            return;
+        }
+        // The hub starts again with the new key before the state says so, so
+        // a state on disk never names a key the hub does not serve with yet;
+        // a hub that stops in between switches again at its next check.
+        if switched && self.serving.lock().unwrap().is_some() {
+            (self.log)("cbb: the hub serves with its key for the new period from now on");
+            self.stop_serving();
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return;
+        }
+        *st = next;
+        drop(cur);
+        // The clients take the new offer as they connect again.
         node.reconnect();
     }
 
@@ -575,4 +620,15 @@ fn forwarder_problem(detail: &str) -> String {
     } else {
         "the registration with the forwarder failed".to_string()
     }
+}
+
+/// How long before the hub serves with its key for a new period its offers
+/// give its clients that key, as Go's hubKeyAhead: three days, or
+/// CBB_HUB_KEY_AHEAD seconds, which tests set shorter.
+fn hub_key_ahead() -> Duration {
+    static AHEAD: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+    *AHEAD.get_or_init(|| {
+        let s = std::env::var("CBB_HUB_KEY_AHEAD").ok().and_then(|v| v.parse().ok()).unwrap_or(3 * 24 * 3600);
+        Duration::from_secs(s)
+    })
 }

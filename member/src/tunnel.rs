@@ -601,6 +601,38 @@ impl State {
         gone
     }
 
+    /// Brings the hub's key for its clients up to the period tagged period
+    /// (docs/protocol.md, section 11, "The hub's key"), as Go's
+    /// State.Rotate: a period it has no key for yet gets the next key, which
+    /// the hub serves with from now_ms + ahead_ms on, and once that time
+    /// came the next key is the one it serves with. It returns whether the
+    /// state must be saved and the offers given again, and whether the hub
+    /// must start again with the new key.
+    pub fn rotate(&mut self, period: &str, now_ms: i64, ahead_ms: i64) -> Result<(bool, bool)> {
+        if !self.is_hub {
+            return Ok((false, false));
+        }
+        let (mut changed, mut switched) = (false, false);
+        if !self.next.is_empty() && now_ms >= self.next_at_ms {
+            self.serving = std::mem::take(&mut self.next);
+            self.serving_tpm = self.next_tpm.take();
+            self.serving_se = self.next_se.take();
+            self.sealed_for[1] = std::mem::take(&mut self.sealed_for[2]);
+            self.serving_for = std::mem::take(&mut self.next_for);
+            self.next_at_ms = 0;
+            (changed, switched) = (true, true);
+        }
+        if period.is_empty() || period == self.serving_for || period == self.next_for {
+            return Ok((changed, switched));
+        }
+        self.next = random_key().map_err(|e| e.context("making the hub's key for the new period"))?;
+        (self.next_tpm, self.next_se) = (None, None);
+        self.sealed_for[2] = Vec::new();
+        self.next_for = period.to_string();
+        self.next_at_ms = now_ms.saturating_add(ahead_ms);
+        Ok((true, switched))
+    }
+
     /// Forgets the hub's keys for the server credentials' periods, once
     /// it is no hub.
     pub fn clear_periods(&mut self) {
@@ -1271,6 +1303,25 @@ mod tests {
         let got: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join(FILE_NAME)).unwrap()).unwrap();
         assert_eq!(got, want);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The hub's key for each period, as Go's TestRotate: the next key
+    /// comes with a new period and takes over once its time came.
+    #[test]
+    fn rotates_the_hubs_key() {
+        let mut st = State::new("g").unwrap();
+        assert_eq!(st.rotate("p1", 0, 10).unwrap(), (false, false), "no hub, no keys");
+        st.is_hub = true;
+        assert_eq!(st.rotate("", 0, 10).unwrap(), (false, false));
+        assert_eq!(st.rotate("p1", 0, 10).unwrap(), (true, false));
+        let next = st.next_public();
+        assert!(next.len() == 32 && st.next_for == "p1" && st.serving.is_empty());
+        assert_eq!(st.rotate("p1", 5, 10).unwrap(), (false, false), "not yet");
+        assert_eq!(st.rotate("p1", 10, 10).unwrap(), (true, true));
+        assert_eq!((public_of(&st.serving), st.serving_for.as_str(), st.next.is_empty()), (next, "p1", true));
+        assert_eq!(st.rotate("p1", 20, 10).unwrap(), (false, false));
+        assert_eq!(st.rotate("p2", 20, 10).unwrap(), (true, false));
+        assert_eq!((st.next_for.as_str(), st.next_at_ms, st.serving_for.as_str()), ("p2", 30, "p1"));
     }
 
     #[test]

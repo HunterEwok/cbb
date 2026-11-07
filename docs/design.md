@@ -290,7 +290,12 @@ ends, the Go service described below is still the computers' member.
   project's relay fails, the device fetches the newest `keys.json` and `entries.json` through
   the mirror at the relay's address (at most every ten minutes) and, unless the relay showed
   a key it does not know, moves to the next address `entries.json` or DNS gives, keeping it in
-  `tunnel.json` (`TestLiteRelayProject`). The hub's key periods and invitations are still Go's.
+  `tunnel.json` (`TestLiteRelayProject`). A Rust hub registers with its forwarder with the
+  period's hubs' credential once it lists the hub's server key (Go's `hubCredentials`),
+  showing the server key's certificate in place of its member certificate and the records,
+  and registers again at once when a newer one comes; it serves its clients with a key of
+  its own for each period, which its offers carry ahead of time (Go's `rotateHubKey`,
+  `TestLiteHubCredential`). Invitations are still Go's.
 
 ### Linux components
 

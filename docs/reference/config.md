@@ -43,6 +43,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
 | `CBB_STATE` | the lite member | Another state directory. |
 | `CBB_STANDBY_GRACE` | the lite member's `cbb service` | Seconds a hub that lost the hub above it tries the hubs above before it serves again, 60 by default; tests set it shorter. |
+| `CBB_HUB_KEY_AHEAD` | the lite member's `cbb service` | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, three days by default; tests set it shorter. |
 | `CBB_TEST_RESOLVE` | the lite member's `cbb service` | For tests only: `host=ip` pairs, separated by commas, that stand in for DNS when it looks up the project's relay by the names `entries.json` gives. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-site www.example.com`. |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |

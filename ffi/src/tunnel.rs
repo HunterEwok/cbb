@@ -682,6 +682,7 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
             vless_id: req.vless_id,
             records: records.clone(),
             send: r.hub.sender(),
+            credential: None,
         };
         let registration = Registration::start(cfg, report.clone(), logger(r.log.clone()));
         Ok(r.forwarding.replace(Forwarding { _registration: registration, report, records }))

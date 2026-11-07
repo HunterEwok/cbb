@@ -62,8 +62,10 @@ All notable changes to cbb are documented in this file. The format follows
   way (`TestLiteRelay`, and `TestLiteRelayRoot` as the group's root). It follows the
   project's relay as Go does: it takes the signed lists from its peers and its control socket, fetches
   newer ones through the relay's address when the relay refuses it, and moves to the next
-  address the lists or DNS give when the relay is gone (`TestLiteRelayProject`). The hub's key
-  periods and invitations come next.
+  address the lists or DNS give when the relay is gone (`TestLiteRelayProject`). A Rust hub
+  registers with its forwarder with the group's hubs' credential, and serves its clients
+  with a new key in each period of the credentials (`TestLiteHubCredential`). Invitations
+  come next.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and
