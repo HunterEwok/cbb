@@ -503,14 +503,14 @@ impl Commands {
             }
         };
         let Some(node) = self.node.upgrade() else {
-            return refused("", "the member stopped".into());
+            return refused(&crate::node::command_id(c), "the member stopped".into());
         };
         let now = uptime::wall_ms();
         let me = node.identity().id.to_string();
         let verified = node.records().lock().unwrap().verify_command(c, &me, now);
         let mut body = match verified {
             Ok(b) => b,
-            Err(e) => return refused("", e.message().to_string()),
+            Err(e) => return refused(&crate::node::command_id(c), e.message().to_string()),
         };
         if body.sealed() {
             let Some(secret) = crate::sealkey::secret() else {

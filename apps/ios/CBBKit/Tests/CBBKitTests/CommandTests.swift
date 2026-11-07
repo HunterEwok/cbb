@@ -191,7 +191,9 @@ final class CommandTests: XCTestCase {
         let t = try CoreGroup(test: self)
         let (a, b) = (t.phones[0], t.phones[1])
         try await t.connect(1, to: 0)
-        let c = try t.g.modeCommand(to: b.device, mode: "own", caSigner: t.ca, now: now)
+        // Signed as it is sent, as an admin's app signs it: the member checks
+        // a command before its app gets it, and `now` is as old as the suite.
+        let c = try t.g.modeCommand(to: b.device, mode: "own", caSigner: t.ca, now: Date())
         async let result = a.member.command(c)
         let token = try await b.next("the command") { if case let .command(token, _, _) = $0 { return token }; return nil }
         try b.member.answer(token, result: .init(id: "", status: "refused", reason: "not now"))
@@ -199,7 +201,12 @@ final class CommandTests: XCTestCase {
         XCTAssertEqual(r.id, Commands.id(of: c))
         XCTAssertEqual(r.status, "refused")
         XCTAssertEqual(r.reason, "not now")
-        let other = try t.g.modeCommand(to: Member.newID(), mode: "own", caSigner: t.ca, now: now)
+        // An expired one the member refuses itself; the app never sees it.
+        let expired = try t.g.modeCommand(to: b.device, mode: "own", caSigner: t.ca, now: Date().addingTimeInterval(-60))
+        let old = try await a.member.command(expired)
+        XCTAssertEqual(old.status, "refused")
+        XCTAssertEqual(b.all { if case .command = $0 { return true }; return nil }.count, 1)
+        let other = try t.g.modeCommand(to: Member.newID(), mode: "own", caSigner: t.ca, now: Date())
         do {
             _ = try await a.member.command(other)
             XCTFail("sent to a device that is not connected")

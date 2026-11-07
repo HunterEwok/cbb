@@ -101,16 +101,33 @@ class CoreMemberTest {
         a.took(got.id)
         assertNull(a.waiting())
 
-        // A command for the phone itself goes to its app, whose answer goes back.
-        val mute = g.muteCommand(idB, 60_000, root, Instant.now())
+        // A command for the phone itself other than a mute goes to its app,
+        // whose answer goes back.
+        val mode = g.modeCommand(idB, "receive", root, Instant.now())
+        var answered: Throwable? = null
         val answering = Thread {
-            val c = next<CoreMember.Event.Command>(eventsB)
-            b.answer(c.token, Member.CommandResult("", "done"))
+            try {
+                val c = next<CoreMember.Event.Command>(eventsB)
+                assertEquals(Commands.idOf(mode), Commands.idOf(c.command))
+                b.answer(c.token, Member.CommandResult("", "done"))
+            } catch (e: Throwable) {
+                answered = e
+            }
         }.apply { start() }
-        val r = a.command(mute, 10_000)
+        val r = a.command(mode, 10_000)
         answering.join()
+        answered?.let { throw it }
         assertTrue(r.done, "the command's result: ${r.status} ${r.reason}")
-        assertEquals(Commands.idOf(mute), r.id)
+        assertEquals(Commands.idOf(mode), r.id)
+
+        // A mute the node carries out itself and tells the app.
+        val mute = g.muteCommand(idB, 60_000, root, Instant.now())
+        val muted = a.command(mute, 10_000)
+        assertTrue(muted.done, "the mute's result: ${muted.status} ${muted.reason}")
+        val m = next<CoreMember.Event.Mute>(eventsB)
+        assertTrue(m.muted)
+        assertEquals(g.device, m.by)
+        assertTrue(eventsB.none { it is CoreMember.Event.Command && Commands.idOf(it.command) == Commands.idOf(mute) }, "the app got the mute")
 
         b.setTunnelKey(ByteArray(32) { 1 } to ByteArray(32) { 2 })
         assertFailsWith<Core.Refusal> { b.setTunnelKey(ByteArray(3) to ByteArray(32)) }

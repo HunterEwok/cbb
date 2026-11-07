@@ -534,7 +534,7 @@ impl Service {
         };
         let node = match self.node() {
             Ok(n) => n,
-            Err(e) => return refused("", e.message().to_string()),
+            Err(e) => return refused(&crate::node::command_id(c), e.message().to_string()),
         };
         let now = uptime::wall_ms();
         let me = node.identity().id.to_string();
@@ -546,7 +546,7 @@ impl Service {
         };
         let mut body = match verified {
             Ok(b) => b,
-            Err(e) => return refused("", e.message().to_string()),
+            Err(e) => return refused(&crate::node::command_id(c), e.message().to_string()),
         };
         if body.sealed() {
             let Some(secret) = crate::sealkey::secret() else {

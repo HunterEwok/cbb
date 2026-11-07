@@ -207,6 +207,14 @@ pub struct Node {
     on_change: RwLock<Option<OnChange>>,
 }
 
+/// The ID of a command as its body names it, for the result of one that
+/// is refused before it is verified: the sender takes a result by its
+/// command's ID, and one without it waits until it times out. Empty when
+/// the body names none.
+pub fn command_id(r: &Record) -> String {
+    CommandHead::of(r).map(|h| h.id).unwrap_or_default()
+}
+
 /// How a dial ended (Node::dial_ended).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Dialed {
@@ -1903,6 +1911,16 @@ mod tests {
         assert!(!super::replaces(&a("127.0.0.1:4000"), &a("127.0.0.1:5000")));
         assert!(!super::replaces(&a("10.0.2.2:8764"), &a("127.0.0.1:4000")));
         assert!(!super::replaces(&a("10.0.2.2:8764"), &a("10.0.2.3:8764")));
+    }
+
+    /// A command refused before it is verified (expired, or signed by no
+    /// admin) still answers with its ID, which the sender takes the result
+    /// by; it waited until it timed out.
+    #[test]
+    fn a_refused_command_keeps_its_id() {
+        let rec = |body: &[u8]| crate::records::Record { body: body.to_vec(), sig: Vec::new(), chain: Vec::new() };
+        assert_eq!(super::command_id(&rec(br#"{"type":"mode","to":"aa","id":"c1","expires_ms":5}"#)), "c1");
+        assert_eq!(super::command_id(&rec(b"not json")), "");
     }
 
     #[test]
