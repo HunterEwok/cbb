@@ -81,6 +81,8 @@ struct Listed {
     ifs: Vec<Interface>,
     at: Option<Instant>,
     listing: bool,
+    /// The first list was waited for once already.
+    waited: bool,
 }
 
 impl Networks {
@@ -188,10 +190,11 @@ impl Networks {
                 (l.ifs, l.at, l.listing) = (ifs, Some(Instant::now()), false);
             });
         }
-        if l.at.is_some() {
+        if l.at.is_some() || l.waited {
             return l.ifs.clone();
         }
-        // The first list, waited for a moment.
+        // The first list, waited for a moment, once.
+        l.waited = true;
         drop(l);
         let until = Instant::now() + FIRST_LIST;
         loop {
