@@ -1632,7 +1632,7 @@ fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool
         name: if crate::records::valid_name(&body.name) { body.name.clone() } else { String::new() },
         os: if crate::records::valid_os(&body.os) { body.os.clone() } else { String::new() },
         key_store: valid(&body.key_store, &["file", "hardware", "rootless"]),
-        mode: valid(&body.mode, &["own", "shared", "receive", "send"]),
+        mode: valid(&body.mode, &["own", "shared"]),
         muted: body.muted,
         muted_for_ms: body.muted_for_ms.max(0),
         actions: body.actions.iter().filter(|a| cbb_core::command::valid_action_name(a)).take(64).cloned().collect(),

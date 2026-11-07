@@ -49,7 +49,7 @@ func TestLeave(t *testing.T) {
 		t.Errorf("the root left a group with other devices: %v", err)
 	}
 
-	// The deck's settings: remote paste and an action on go off, the mode stays.
+	// The deck's settings: remote paste and an action on go off, sync off stays.
 	if err := remotepaste.Save(deck.dir, remotepaste.Settings{On: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestLeave(t *testing.T) {
 	if err := actions.Save(deck.dir, set); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := deck.do(t, control.Header{Op: control.OpMode, Name: "own"}, ""); err != nil {
+	if _, err := deck.do(t, control.Header{Op: control.OpSync, Name: "off"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
@@ -78,8 +78,8 @@ func TestLeave(t *testing.T) {
 	if s, _ := actions.Load(deck.dir); len(s.On()) != 0 {
 		t.Errorf("actions stayed on: %v", s.On())
 	}
-	if _, err := os.Stat(filepath.Join(deck.dir, modeFile)); err != nil {
-		t.Errorf("the mode went: %v", err)
+	if _, err := os.Stat(filepath.Join(deck.dir, syncFile)); err != nil {
+		t.Errorf("sync off went: %v", err)
 	}
 
 	deck = restartService(t, &h, deck)

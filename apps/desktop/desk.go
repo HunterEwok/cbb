@@ -283,7 +283,7 @@ func (d *Desk) Fetch() {
 	})
 }
 
-// Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, StopHub, SetAway and SetMode change the group:
+// Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, StopHub, SetAway and SetSync change the group:
 // cbb does them as the administrator (admin_*.go), after the system asks.
 // MakeAdmin's dialog warns that the computer's key is a file, which
 // -allow-file-key consents to.
@@ -374,33 +374,24 @@ func (d *Desk) SetAway(on bool) {
 	}
 }
 
-// SetMode sets the sync mode: this computer's with id empty, or on an admin
-// another device's, which cbb sends it as a signed command.
-func (d *Desk) SetMode(id, mode string) {
-	args := []string{"mode", mode}
+// SetSync turns sync on or off: this computer's with id empty, for forMS
+// (0 for until it is turned on again), which needs no administrator as the
+// service takes it on the control socket; or on an admin another device's,
+// which cbb sends it as a signed command (docs/design.md, "Sync on and off").
+func (d *Desk) SetSync(id string, on bool, forMS int64) {
+	name := map[bool]string{true: "on", false: "off"}[on]
 	if id != "" {
-		args = []string{"mode", "-on", id, mode}
+		d.admin([]string{"sync", "-on", id, name}, false, "Sync is set.")
+		return
 	}
-	d.admin(args, false, "The sync mode is set.")
-}
-
-// PauseReceiving keeps the group's copies out of this computer's clipboard
-// for forMS, 0 for until it is turned on again, or with on false takes them
-// again (design.md, "Muting a device"). It needs no administrator: the
-// service takes it on the control socket.
-func (d *Desk) PauseReceiving(on bool, forMS int64) {
 	d.act(func() (string, error) {
-		h := control.Header{Op: control.OpUnmute}
-		if on {
-			h = control.Header{Op: control.OpMute, ForMS: forMS}
-		}
-		if _, _, err := d.requestHeader(h, nil); err != nil {
+		if _, _, err := d.requestHeader(control.Header{Op: control.OpSync, Name: name, ForMS: forMS}, nil); err != nil {
 			return "", err
 		}
 		if on {
-			return d.T("This computer takes no copies from the group now; its own still go out."), nil
+			return d.T("Sync is on here: copies go to the group and come from it."), nil
 		}
-		return d.T("This computer takes the group's copies again."), nil
+		return d.T("Sync is off here: the clipboard is this computer's own."), nil
 	})
 }
 

@@ -105,20 +105,19 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub peers: Vec<Device>,
     pub version: String,
-    /// The sync mode: own, shared, receive or send; empty when in no group.
+    /// The sync mode: shared (sync on) or own (sync off); empty when in no
+    /// group. While sync is off, sync_until_ms is when it turns on again,
+    /// in Unix milliseconds, 0 for until cbb sync on.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub mode: String,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub sync_until_ms: i64,
     /// Whether an admin muted this device, until muted_until_ms in Unix
-    /// milliseconds, 0 for until an admin unmutes it; whether its user
-    /// paused receiving, until paused_until_ms, 0 for until cbb unmute.
+    /// milliseconds, 0 for until an admin unmutes it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub muted: bool,
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub muted_until_ms: i64,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub paused: bool,
-    #[serde(default, skip_serializing_if = "is_zero_i")]
-    pub paused_until_ms: i64,
     /// Sync away from home; None while it is off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub away: Option<Away>,

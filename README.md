@@ -27,10 +27,8 @@ accounts. Its short name is CBB and its command is `cbb`.
    irm https://github.com/HunterEwok/cbb/releases/latest/download/get.ps1 | iex
    ```
 
-3. Run `sudo cbb pair` on the computer and scan its QR code in the app.
-4. Run `sudo cbb mode shared` on the computer (on Windows `cbb mode shared` as
-   administrator). A new computer keeps its clipboard to itself until then; in shared mode
-   its copies go to the group and the group's come to it.
+3. Run `sudo cbb pair` on the computer and scan its QR code in the app. Its copies then go
+   to the group and the group's come to it; `cbb sync off` keeps its clipboard its own.
 
 To check the installer before running it, download it with the release's `SHA256SUMS`:
 

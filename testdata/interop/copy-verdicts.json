@@ -1,11 +1,10 @@
 {
- "comment": "The rule of incoming copies (lite/core/src/rule.rs, internal/clip/rule.go): each case's verdict, and whether a mute or a pause until until_ms (0: until lifted; missing: none) holds at now_ms.",
+ "comment": "The rule of incoming copies (lite/core/src/rule.rs, internal/clip/rule.go): each case's verdict, and whether a mute or sync turned off until until_ms (0: until lifted; missing: none) holds at now_ms.",
  "cases": [
   {
    "name": "a fresh text is written",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,
@@ -23,7 +22,6 @@
    "name": "a mode that does not receive keeps it out",
    "incoming": {
     "receives": false,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,
@@ -41,7 +39,6 @@
    "name": "the mode wins over every other reason",
    "incoming": {
     "receives": false,
-    "paused": true,
     "kind": "text",
     "mark": false,
     "unread": true,
@@ -56,28 +53,9 @@
    "verdict": "mode"
   },
   {
-   "name": "a pause keeps it out",
-   "incoming": {
-    "receives": true,
-    "paused": true,
-    "kind": "text",
-    "mark": false,
-    "unread": false,
-    "has_text": true,
-    "has_media": false,
-    "takes_media": true,
-    "held": false,
-    "age_ms": 1000,
-    "window_ms": 60000,
-    "secret_ttl_ms": 60000
-   },
-   "verdict": "paused"
-  },
-  {
    "name": "a mark is not written",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "secret",
     "mark": true,
     "unread": false,
@@ -95,7 +73,6 @@
    "name": "a copy not sealed to this member is not written",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": true,
@@ -113,7 +90,6 @@
    "name": "a fresh secret is written",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "secret",
     "mark": false,
     "unread": false,
@@ -131,7 +107,6 @@
    "name": "a secret at its time is gone",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "secret",
     "mark": false,
     "unread": false,
@@ -149,7 +124,6 @@
    "name": "a secret past its time is gone even in a long window",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "secret",
     "mark": false,
     "unread": false,
@@ -167,7 +141,6 @@
    "name": "images on a member that takes them are written",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "media",
     "mark": false,
     "unread": false,
@@ -185,7 +158,6 @@
    "name": "images without a text on a member that takes only text are not",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "media",
     "mark": false,
     "unread": false,
@@ -203,7 +175,6 @@
    "name": "images with a text on a member that takes only text: the text",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "media",
     "mark": false,
     "unread": false,
@@ -221,7 +192,6 @@
    "name": "what the clipboard holds is not written again",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,
@@ -239,7 +209,6 @@
    "name": "held is checked before age",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,
@@ -257,7 +226,6 @@
    "name": "a copy just inside the window is written",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,
@@ -275,7 +243,6 @@
    "name": "a copy at the window's end is old",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,
@@ -293,7 +260,6 @@
    "name": "the group's longer window lets an older copy in",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,
@@ -311,7 +277,6 @@
    "name": "the group's shorter window keeps a newer copy out",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,
@@ -329,7 +294,6 @@
    "name": "a copy from the future (age 0) is written",
    "incoming": {
     "receives": true,
-    "paused": false,
     "kind": "text",
     "mark": false,
     "unread": false,

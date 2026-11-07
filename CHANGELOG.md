@@ -1213,6 +1213,15 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- One switch, sync, replaces the four sync modes and the device's own "not listening" switch
+  (design.md, "Sync on and off"): on by default, so a device that joins syncs at once; off,
+  for a time or until turned on, the clipboard is the device's own, both ways. `cbb sync [on
+  | off [-for DURATION]]` on every computer and the lite member, on the control socket
+  without the administrator; `cbb sync -on DEVICE on|off` on an admin, with the signed `mode`
+  command. The state lives in `sync.json`; hellos and the `mode` command carry only `shared`
+  and `own`; `cbb mute` and `cbb unmute` are an admin's only, with `-on`. The Mac app, the
+  tray app and the Aurora app show the same switch; the core's copy rule and
+  `copy_verdict` lose the pause, and lite/ffi's `pause_receiving` and `mode` become `sync`.
 - The Go service seals and opens copies through the Rust core in the release builds
   (`seal_copy_to` and `open_copy`, docs/core-api.md), as the phones and the lite member do,
   so that every member reads and writes sealed copies with the same code; a build without

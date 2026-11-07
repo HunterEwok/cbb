@@ -36,19 +36,19 @@ final class CBBMacTests: XCTestCase {
     }
 
     /// A mute goes out with its time as the service reads it, and a muted
-    /// device, this Mac's mute and its pause read back; the mute shows an
+    /// device, this Mac's mute and its sync turned off read back; the mute shows an
     /// alert that an admin ends.
     func testMute() throws {
         var h = Control.Header(op: "mute")
         h.forMS = 900_000
         XCTAssertEqual(String(decoding: try Control.encode(h), as: UTF8.self), "{\"for_ms\":900000,\"len\":0,\"op\":\"mute\"}\n")
-        let line = #"{"op":"reply","status":{"device":"me","role":"full","version":"dev","group":"g","muted":true,"muted_until_ms":0,"paused":true,"paused_until_ms":1700000000000},"devices":[{"id":"ab12","muted":true,"muted_until_ms":1700000000000},{"id":"cd34"}]}"#
+        let line = #"{"op":"reply","status":{"device":"me","role":"full","version":"dev","group":"g","mode":"own","sync_until_ms":1700000000000,"muted":true,"muted_until_ms":0},"devices":[{"id":"ab12","muted":true,"muted_until_ms":1700000000000},{"id":"cd34"}]}"#
         let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
         let st = try XCTUnwrap(header.status)
         XCTAssertEqual(st.muted, true)
         XCTAssertNil(MacModel.date(ms: st.mutedUntilMS))
-        XCTAssertEqual(st.paused, true)
-        XCTAssertEqual(MacModel.date(ms: st.pausedUntilMS)?.timeIntervalSince1970, 1_700_000_000)
+        XCTAssertEqual(st.mode, "own")
+        XCTAssertEqual(MacModel.date(ms: st.syncUntilMS)?.timeIntervalSince1970, 1_700_000_000)
         let devices = try XCTUnwrap(header.devices)
         XCTAssertTrue(devices[0].muted)
         XCTAssertEqual(devices[0].mutedUntilMS, 1_700_000_000_000)

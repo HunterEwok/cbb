@@ -294,20 +294,20 @@ func TestFFIJoiner(t *testing.T) {
 	fmt.Fprintln(in, "COPY from the phone")
 	waitFor(t, "the service has the phone's text", func() bool { return pi.paste(t) == "from the phone" })
 
-	// The app's switch pauses receiving: the group's copies stay out of
-	// the phone's clipboard, its own still go out.
-	fmt.Fprintln(in, "PAUSE 3600000")
+	// The app's switch turns sync off: the group's copies stay out of the
+	// phone's clipboard, and a text the user hands to the app still goes.
+	fmt.Fprintln(in, "SYNC OFF 3600000")
 	if got := next("MUTED "); got != "true false" {
-		t.Fatalf("after the pause the phone says %q", got)
+		t.Fatalf("with sync off the phone says %q", got)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "kept out"); err != nil {
 		t.Fatal(err)
 	}
 	fmt.Fprintln(in, "COPY while paused")
 	waitFor(t, "the service has the paused phone's text", func() bool { return pi.paste(t) == "while paused" })
-	fmt.Fprintln(in, "RESUME")
+	fmt.Fprintln(in, "SYNC ON")
 	if got := next("MUTED "); got != "false false" {
-		t.Fatalf("after the resume the phone says %q", got)
+		t.Fatalf("with sync on again the phone says %q", got)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "after the pause"); err != nil {
 		t.Fatal(err)
@@ -1046,15 +1046,15 @@ func TestLiteMember(t *testing.T) {
 		})
 	}
 
-	// A new lite member keeps its clipboard to itself and says so in its
-	// hello; the root sets its mode with a command, and it keeps it.
-	if m := lite.status(t).Mode; m != "own" {
-		t.Errorf("a new lite member's mode is %q, want own", m)
+	// A new lite member syncs and says so in its hello; the root turns its
+	// sync off with a command, and it keeps it.
+	if m := lite.status(t).Mode; m != "shared" {
+		t.Errorf("a new lite member's mode is %q, want shared", m)
 	}
 	waitFor(t, "the laptop sees the lite member's mode", func() bool {
 		for _, d := range laptop.devices(t) {
 			if d.ID == st.Device {
-				return d.Mode == "own"
+				return d.Mode == "shared"
 			}
 		}
 		return false
@@ -1077,23 +1077,23 @@ func TestLiteMember(t *testing.T) {
 		}
 		return false
 	})
-	if _, err := pi.do(t, control.Header{Op: control.OpMode, Device: st.Device, Name: "receive"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: st.Device, Name: "off"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if m := lite.status(t).Mode; m != "receive" {
-		t.Errorf("after the root's command the lite member's mode is %q, want receive", m)
+	if m := lite.status(t).Mode; m != "own" {
+		t.Errorf("after the root's command the lite member's mode is %q, want own", m)
 	}
 	if !lite.logged("opened a sealed mode command") {
 		t.Error("the lite member did not open the command sealed to it")
 	}
-	if b, err := os.ReadFile(filepath.Join(dir, "mode")); err != nil || string(b) != "receive\n" {
-		t.Errorf("the lite member's mode file: %q, %v", b, err)
+	if b, err := os.ReadFile(filepath.Join(dir, syncFile)); err != nil || !strings.Contains(string(b), `"off":true`) {
+		t.Errorf("the lite member's %s: %q, %v", syncFile, b, err)
 	}
-	if _, err := laptop.do(t, control.Header{Op: control.OpMode, Device: st.Device, Name: "own"}, ""); err == nil {
-		t.Error("a device that is no admin set the lite member's mode")
+	if _, err := laptop.do(t, control.Header{Op: control.OpSync, Device: st.Device, Name: "on"}, ""); err == nil {
+		t.Error("a device that is no admin turned the lite member's sync on")
 	}
-	if _, err := lite.do(t, control.Header{Op: control.OpMode, Name: "shared"}, ""); err != nil || lite.status(t).Mode != "shared" {
-		t.Errorf("cbb mode shared on the lite member: %v", err)
+	if _, err := lite.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil || lite.status(t).Mode != "shared" {
+		t.Errorf("cbb sync on on the lite member: %v", err)
 	}
 
 	// The lite member dials a Mac as it dials every full member; with the

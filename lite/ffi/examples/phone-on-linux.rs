@@ -14,8 +14,8 @@
 //! it or ended the mute, "CHANGE <copy as JSON>" for each copy that became
 //! the group's, and "LOG <line>" for each log line. It takes "COPY <text>"
 //! (printing "REFUSED <reason>" when the member does not send it), "PEERS",
-//! answered "PEERS <count>", "PAUSE <ms>", "RESUME" and "MUTED", answered
-//! "MUTED <paused> <muted>", "DEVICES", answered "DEVICES <the devices as a
+//! answered "PEERS <count>", "SYNC OFF <ms>", "SYNC ON" and "MUTED", answered
+//! "MUTED <sync off> <muted>", "DEVICES", answered "DEVICES <the devices as a
 //! JSON array>", and "CALL <request as JSON>", answered "ANSWER <answer as
 //! JSON>" (cbb_member_call), and, after it joined as an admin, "ADMIT <a
 //! device's QR code>", which admits that device with the admin key and
@@ -261,15 +261,15 @@ fn run_member(
             println!("DEVICES {}", a["ok"]["devices"]);
         } else if let Some(req) = line.strip_prefix("CALL ") {
             println!("ANSWER {}", call(req.to_string()));
-        } else if line == "MUTED" || line == "RESUME" || line.starts_with("PAUSE ") {
+        } else if line == "MUTED" || line == "SYNC ON" || line.starts_with("SYNC OFF ") {
             let a = if line == "MUTED" {
                 call(serde_json::json!({ "op": "muted" }).to_string())
             } else {
-                let ms: i64 = line.strip_prefix("PAUSE ").and_then(|v| v.parse().ok()).unwrap_or(0);
-                let args = serde_json::json!({ "pause": line != "RESUME", "for_ms": ms });
-                call(serde_json::json!({ "op": "pause_receiving", "args": args }).to_string())
+                let ms: i64 = line.strip_prefix("SYNC OFF ").and_then(|v| v.parse().ok()).unwrap_or(0);
+                let args = serde_json::json!({ "on": line == "SYNC ON", "for_ms": ms });
+                call(serde_json::json!({ "op": "sync", "args": args }).to_string())
             };
-            println!("MUTED {} {}", a["ok"]["paused"], a["ok"]["muted"]);
+            println!("MUTED {} {}", a["ok"]["sync_off"], a["ok"]["muted"]);
         } else if let Some(req) = line.strip_prefix("MANAGE ") {
             match admin {
                 Some((k, public)) => println!("MANAGED {}", manage(m, k, public, &joined["admin_ca"], req)),

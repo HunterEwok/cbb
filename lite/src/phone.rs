@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use cbb_core::admit::{self, Admitted, Admitter, GroupView};
 use cbb_core::certs::DeviceId;
-use cbb_core::clip::{Engine, Event, Kind, Mode, Via};
+use cbb_core::clip::{Engine, Event, Kind, Via};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{self, Change, Order, Signer};
 use cbb_core::wire::{self, CommandResult, DeviceInfo};
@@ -145,6 +145,9 @@ impl Member {
         if let Err(e) = mute::load(&cfg.state_dir, &engine) {
             log(&format!("cbb: the mute: {}; not muted", e.for_log()));
         }
+        if let Err(e) = crate::sync::load(&cfg.state_dir, &engine) {
+            log(&format!("cbb: sync on or off: {}; sync is on", e.for_log()));
+        }
         let state_dir = cfg.state_dir.clone();
         let node = Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone())
             .presenting(Presence { role: "phone".into(), name: cfg.name, os: cfg.os, key_store: cfg.key_store, device })
@@ -219,24 +222,24 @@ impl Member {
         self.away.status(&self.node).and_then(|a| serde_json::to_value(a).ok())
     }
 
-    /// Keeps the group's copies out of the phone's clipboard for ms
-    /// milliseconds (0 for until [`Member::resume_receiving`]); its own copies still
-    /// go out (design.md, "Muting a device").
-    pub fn pause_receiving(&self, ms: i64) -> Result<()> {
-        self.node.engine.pause(mute::until(ms)?);
-        mute::save(&self.state_dir, &self.node.engine)
+    /// Turns the phone's sync on, or off for ms milliseconds (0 for until
+    /// it is turned on): the clipboard is then the phone's own (design.md,
+    /// "Sync on and off"). The members see it at the next connection.
+    pub fn set_sync(&self, on: bool, ms: i64) -> Result<()> {
+        crate::sync::set(&self.state_dir, &self.node.engine, on, ms)?;
+        self.node.reconnect();
+        Ok(())
     }
 
-    /// Takes the group's copies again.
-    pub fn resume_receiving(&self) -> Result<()> {
-        self.node.engine.resume();
-        mute::save(&self.state_dir, &self.node.engine)
-    }
-
-    /// How long receiving stays paused and how long an admin's mute lasts,
-    /// in milliseconds: 0 for until it is lifted, None for neither.
+    /// How long sync stays off and how long an admin's mute lasts, in
+    /// milliseconds: 0 for until it is lifted, None for neither.
     pub fn muted(&self) -> (Option<i64>, Option<i64>) {
-        (self.node.engine.pause_left(), self.node.engine.mute_left())
+        let off = match self.node.engine.sync() {
+            (true, _) => None,
+            (false, 0) => Some(0),
+            (false, u) => Some(u.saturating_sub(uptime::wall_ms()).max(1)),
+        };
+        (off, self.node.engine.mute_left())
     }
 
     /// Sends a text the user handed to the app; board says it came from
@@ -380,13 +383,6 @@ impl Member {
     /// iPhone's background refresh: resume, wait, take what waits, pause.
     pub fn wait_connected(&self, timeout: Duration) -> bool {
         self.node.wait_connected(timeout)
-    }
-
-    /// Sets the phone's sync mode, which its hellos say; the members see it
-    /// at the next connection.
-    pub fn set_mode(&self, mode: Mode) {
-        self.node.engine.set_mode(mode);
-        self.node.reconnect();
     }
 
     /// Mutes the phone until until_ms (0: until unmute): its copies stay on

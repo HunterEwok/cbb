@@ -175,16 +175,25 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			return
 		}
 		reply(c, control.Header{Kind: kindName(kind), Done: true}, []byte(text))
-	case control.OpMode:
+	case control.OpSync:
+		on, err := parseSync(m.Name)
+		if err != nil {
+			fail(c, err)
+			return
+		}
 		if m.Device != "" {
-			if err := s.setModeOn(ctx, m.Device, m.Name); err != nil {
+			if m.ForMS != 0 {
+				fail(c, errors.New("a time works only for this device's own sync; another device's sync stays as an admin sets it"))
+				return
+			}
+			if err := s.setSyncOn(ctx, m.Device, on); err != nil {
 				fail(c, err)
 				return
 			}
 			reply(c, control.Header{Done: true}, nil)
 			return
 		}
-		if err := s.setMode(m.Name); err != nil {
+		if err := s.setSync(on, m.ForMS); err != nil {
 			fail(c, err)
 			return
 		}
@@ -529,11 +538,11 @@ func (s *Service) status() *control.Status {
 		st.KeyProblem = group.WhyNotHardware()
 	}
 	st.Mode = s.eng.Mode().String()
+	if on, until := s.eng.Sync(); !on {
+		st.SyncUntilMS = unixMS(until)
+	}
 	if muted, until := s.eng.Muted(); muted {
 		st.Muted, st.MutedUntilMS = true, unixMS(until)
-	}
-	if paused, until := s.eng.ReceivingPaused(); paused {
-		st.Paused, st.PausedUntilMS = true, unixMS(until)
 	}
 	skews := s.eng.Skews()
 	for _, p := range s.nd.Peers() {
@@ -815,9 +824,6 @@ func (s *Service) createGroup() (*group.Identity, error) {
 		err = id.Save(s.cfg.StateDir)
 	}
 	if err == nil {
-		err = s.newDeviceMode()
-	}
-	if err == nil {
 		s.nets.learnAll() // a group is made where it is used
 		err = s.startGroup(id)
 	}
@@ -976,9 +982,6 @@ func (s *Service) join(ctx context.Context, c net.Conn, r *control.Reader, m *co
 		id, err = s.listenForMember(ctx, c, j, code)
 	default:
 		id, err = s.dialMember(ctx, j, code, m.Address)
-	}
-	if err == nil {
-		err = s.newDeviceMode()
 	}
 	if err == nil {
 		if m.Invite == "" {

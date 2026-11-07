@@ -48,6 +48,7 @@ mod remotepaste;
 mod rootless;
 pub mod sealkey;
 mod service;
+mod sync;
 pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
@@ -94,13 +95,10 @@ Commands:
                        group's files, keep the settings, turn remote paste
                        and the quick actions off; then cbb pair joins this
                        group or another one.
-  mode [own|shared|receive|send]
-                       Show or change the sync mode: what moves between this
-                       device's clipboard and the group (a new device keeps
-                       its own; cbb copy and cbb paste work in every mode).
-  mute [-for DURATION] Take no copies from the group for a while, or until
-                       cbb unmute; this device's own copies still go out.
-  unmute               Take the group's copies again.
+  sync [on | off [-for DURATION]]
+                       Show sync, or turn it on or off here: off, the
+                       clipboard is this device's own, for a while or until
+                       cbb sync on (cbb copy and cbb paste work either way).
   global [on|off]      Show sync away from home, or turn it on or off here:
                        through the group's own WireGuard tunnel to its hub.
   watch [-0]           Print every text the group sends here, one per line
@@ -208,8 +206,7 @@ pub fn main() {
                 "leave" => cmd_leave(&g, rest),
                 "global" => cmd_global(&g, rest),
                 "watch" => cmd_watch(&g, rest),
-                "mode" => cmd_mode(&g, rest),
-                "mute" | "unmute" => cmd_mute(&g, rest, cmd == "unmute"),
+                "sync" => cmd_sync(&g, rest),
                 "paste-receive" => cmd_paste_receive(&g, rest),
                 "action" => cmd_action(&g, rest),
                 "paste-helper" => pastehelper::run(&g.socket, rest),
@@ -360,11 +357,6 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         print!("CBB# joined the group {} as {}\r", id.tag(), id.id);
     } else {
         println!("Joined the group {} as {}.", id.tag(), id.id);
-        let mode = service::load_mode(&g.state).unwrap_or(clip::Mode::Own);
-        println!("{}", mode_line(mode.name()));
-        if mode != clip::Mode::Shared {
-            println!("To share this device's clipboard with the group: sudo cbb mode shared");
-        }
     }
     Ok(())
 }
@@ -399,8 +391,7 @@ fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
         let _ = set.add_all(rs);
         set.take_claim_times(ts);
         records::Stored::save(&set, &state)?;
-        id.save(&state)?;
-        service::new_device_mode(&state)
+        id.save(&state)
     };
     Ok((joiner, Box::new(save)))
 }
@@ -738,46 +729,35 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn cmd_mode(g: &Global, args: &[String]) -> Result<()> {
-    let h = match args {
-        [] => control::Header { op: "status".into(), ..Default::default() },
-        [m] if !m.starts_with('-') => control::Header { op: "mode".into(), name: m.clone(), ..Default::default() },
-        _ => return Err(Error::msg("usage: cbb mode [own|shared|receive|send]")),
-    };
-    request(g, &control::Message::new(h, Vec::new()))?;
-    let m =
-        request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
-    let mode = m.header.status.map(|s| s.mode).unwrap_or_default();
-    println!("{}", mode_line(&mode));
-    Ok(())
-}
-
-/// Takes no copies from the group for a while, as cbb mute on a full
-/// member; unmute takes them again.
-fn cmd_mute(g: &Global, args: &[String], unmute: bool) -> Result<()> {
-    let usage = || Error::msg(if unmute { "usage: cbb unmute" } else { "usage: cbb mute [-for DURATION]" });
-    let mut h = control::Header { op: if unmute { "unmute" } else { "mute" }.into(), ..Default::default() };
-    let mut until = "until cbb unmute".to_string();
+/// Shows sync, or turns it on or off here, as cbb sync on a full member.
+fn cmd_sync(g: &Global, args: &[String]) -> Result<()> {
+    let usage = || Error::msg("usage: cbb sync [on | off [-for DURATION]]");
+    let mut h = control::Header { op: "sync".into(), ..Default::default() };
     let mut it = args.iter();
+    match it.next().map(String::as_str) {
+        None => h.op = "status".into(),
+        Some(n @ ("on" | "off")) => h.name = n.into(),
+        Some(_) => return Err(usage()),
+    }
     while let Some(a) = it.next() {
         match flag(a) {
-            Some("for") if !unmute => {
+            Some("for") if h.name == "off" => {
                 let d = it.next().ok_or_else(usage)?;
                 h.for_ms = parse_duration_ms(d).ok_or_else(|| Error::msg(format!("-for: {d:?} is no duration")))?;
                 if h.for_ms == 0 {
                     return Err(Error::msg("-for is from 1ms to 720h"));
                 }
-                until = format!("for {d}");
             }
             _ => return Err(usage()),
         }
     }
-    request(g, &control::Message::new(h, Vec::new()))?;
-    if unmute {
-        println!("This device takes the group's copies again.");
-    } else {
-        println!("This device takes no copies from the group {until}; its own copies still go out.");
+    if h.op == "sync" {
+        request(g, &control::Message::new(h, Vec::new()))?;
     }
+    let m =
+        request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
+    let st = m.header.status.unwrap_or_default();
+    println!("{}", sync_line(&st.mode, st.sync_until_ms));
     Ok(())
 }
 
@@ -809,14 +789,16 @@ fn parse_duration_ms(s: &str) -> Option<i64> {
     (total <= mute::MAX_MS).then_some(total)
 }
 
-/// What the sync mode mode does, as cbb mode on a full member says it.
-fn mode_line(mode: &str) -> String {
+/// What sync on or off means, as cbb sync on a full member says it.
+fn sync_line(mode: &str, until_ms: i64) -> String {
     match mode {
-        "own" => "Sync mode own: this device keeps its clipboard to itself; cbb paste prints the group's text, and cbb copy sends to the group.".into(),
-        "shared" => "Sync mode shared: copies here go to the group, and the group's copies come here.".into(),
-        "receive" => "Sync mode receive: the group's copies come here, and copies here stay here.".into(),
-        "send" => "Sync mode send: copies here go to the group, and the group's copies do not come here.".into(),
-        "" => "This lite member's service does not know sync modes yet; update it.".into(),
+        "shared" => "Sync is on: copies here go to the group, and the group's copies come here.".into(),
+        "own" if until_ms > 0 => format!(
+            "Sync is off for {} min more: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.",
+            ((until_ms - uptime::wall_ms()).max(0) + 59_999) / 60_000
+        ),
+        "own" => "Sync is off until cbb sync on: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.".into(),
+        "" => "This lite member's service does not know sync on and off yet; update it.".into(),
         m => format!("Sync mode {m}."),
     }
 }

@@ -157,11 +157,12 @@ function glyph(d, size = 44) {
     `stroke-width="1.8" stroke-linecap="round">${shapes[kindOf(d)]}</svg></span>`;
 }
 
-// The sync modes (docs/design.md, "Sync modes"), in the order they show.
-const modes = ["own", "shared", "receive", "send"];
-const modeName = (m) => ({ own: t("Own clipboard"), shared: t("Shared"), receive: t("Receive only"), send: t("Send only") })[m] ?? m;
+// Sync on (mode shared) or off (mode own; docs/design.md, "Sync on and
+// off"), in the order they show.
+const modes = ["shared", "own"];
+const modeName = (m) => ({ shared: t("On"), own: t("Off") })[m] ?? m;
 
-// modeButtons is a row of the four modes; id names the device, "" this
+// modeButtons is a row of sync on and off; id names the device, "" this
 // computer.
 // How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
 const tunnels = ["plain", "obfuscate", "vless"];
@@ -236,13 +237,13 @@ function render() {
   for (const b of document.querySelectorAll("[data-layout]")) b.setAttribute("aria-checked", String(b.dataset.layout === s.settings.layout));
   $("bar").hidden = !inGroup;
   $("send").disabled = $("fetch").disabled = $("update").disabled = $("listen").disabled = s.busy;
-  // The quick switch: one tap pauses receiving or takes copies again,
-  // holding it picks a time (docs/design.md, "Muting a device").
-  const paused = !!s.status?.paused;
-  $("listen").setAttribute("aria-pressed", String(!paused));
-  $("listen").textContent = paused
-    ? (s.status.paused_until_ms ? t("Not taking copies until %s", clock(s.status.paused_until_ms)) : t("Not taking copies"))
-    : t("Taking copies");
+  // The quick switch: one tap turns sync off or on, holding it picks a
+  // time (docs/design.md, "Sync on and off").
+  const off = s.status?.mode === "own";
+  $("listen").setAttribute("aria-pressed", String(!off));
+  $("listen").textContent = off
+    ? (s.status.sync_until_ms ? t("Sync off until %s", clock(s.status.sync_until_ms)) : t("Sync off"))
+    : t("Sync on");
   // The newest release the group passed around, when this computer runs an older one.
   $("update").hidden = !s.status?.update;
   $("update").textContent = s.status?.update ? t("Update to %s", s.status.update) : "";
@@ -697,7 +698,7 @@ function renderDetail() {
   if (standing) lines.push([t("In the group"), standing]);
   if (d.forward_only) lines.push([t("Copies"), t("Passes them on, reads none")]);
   if (d.hub) lines.push([t("Away from home"), state.status?.away?.hub_device === d.id ? t("The group's hub, in use now") : t("The group's hub")]);
-  if (d.mode) lines.push([t("Sync mode"), modeName(d.mode)]);
+  if (d.mode) lines.push([t("Sync"), modeName(d.mode)]);
   if (d.muted) lines.push([t("Copies"), muteUntil(d.muted_until_ms)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
   lines.push([t("Device ID"), d.id, true]);
@@ -720,10 +721,10 @@ function renderDetail() {
     `<div>${dot(d.online)} <span class="${d.online ? "" : "dim"}">${esc(d.online ? t("online") : t("offline"))}</span></div></div>` +
     `<button class="icon close" id="close" title="${esc(t("Close"))}" aria-label="${esc(t("Close"))}">${icon("close")}</button></div>` +
     `<div class="card">${lines.map(([k, v, mono]) => `<div class="line"><span class="dim">${esc(k)}</span><span class="value${mono ? " mono" : ""}">${esc(v)}</span></div>`).join("")}</div>` +
-    // An admin sets the mode of a computer that is online; the phones and
-    // lite members have no modes yet and refuse.
+    // An admin turns sync on or off on a computer that is online; the
+    // phones and lite members refuse.
     (me?.admin && !d.self && d.online && d.role === "full"
-      ? `<div class="card"><div class="dim small">${esc(t("Sync mode"))}</div><div class="segmented">${modeButtons(d.mode, d.id)}</div></div>` : "") +
+      ? `<div class="card"><div class="dim small">${esc(t("Sync"))}</div><div class="segmented">${modeButtons(d.mode, d.id)}</div></div>` : "") +
     hubLine(d, me) +
     hubCard(d) +
     (actions.length
@@ -989,7 +990,7 @@ document.addEventListener("click", async (e) => {
     return render();
   }
   if (el.dataset.mode) {
-    await act("SetMode", el.dataset.modeFor, el.dataset.mode);
+    await act("SetSync", el.dataset.modeFor, el.dataset.mode === "shared", 0);
     return renderSettings();
   }
   if (el.dataset.tunnel) {
@@ -1034,12 +1035,12 @@ $("away").addEventListener("change", async (e) => {
 
 $("details").addEventListener("change", (e) => saveSettings({ details: e.target.checked }));
 
-// The quick switch: a tap turns receiving off until turned on again, or
-// on; holding it (or its context menu) picks a time first.
+// The quick switch: a tap turns sync off until turned on again, or on;
+// holding it (or its context menu) picks a time first.
 let holdTimer = null, held = false;
 async function pauseFor() {
-  const ms = await pickTime(t("Take no copies from the group?"), t("This computer's own copies still go out."), t("Until I turn it on"));
-  if (ms !== null) await act("PauseReceiving", true, ms);
+  const ms = await pickTime(t("Turn sync off?"), t("The clipboard is then this computer's own."), t("Until I turn it on"));
+  if (ms !== null) await act("SetSync", "", false, ms);
 }
 $("listen").addEventListener("pointerdown", () => {
   held = false;
@@ -1050,7 +1051,7 @@ $("listen").addEventListener("contextmenu", (e) => { e.preventDefault(); clearTi
 $("listen").addEventListener("click", (e) => {
   e.stopPropagation();
   if (held) { held = false; return; }
-  act("PauseReceiving", !state.status?.paused, 0);
+  act("SetSync", "", state.status?.mode === "own", 0);
 });
 document.addEventListener("keydown", (e) => {
   if (document.querySelector("dialog[open]")) return;

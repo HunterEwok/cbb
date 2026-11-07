@@ -41,7 +41,6 @@ const MARK_FILE: &str = "hlc.mark";
 /// The sync mode, in the state directory. A device that joined its group
 /// gets one at once, with own; without it, the device joined before sync
 /// modes existed and keeps sharing as it did.
-const MODE_FILE: &str = "mode";
 /// The most command IDs the replay cache keeps; a command lives at most 30
 /// seconds, so this many in that time is far more than any admin sends.
 const MAX_COMMANDS: usize = 4096;
@@ -246,8 +245,10 @@ pub fn run(cfg: Config) -> Result<()> {
     // The copies this member makes are sealed to the group's readers and
     // signed (docs/protocol.md, section 4).
     engine.set_seal(node.sealer());
-    engine.set_mode(load_mode(&cfg.state_dir)?);
-    log(&format!("cbb: the sync mode is {}", engine.mode().name()));
+    if let Err(e) = crate::sync::load(&cfg.state_dir, &engine) {
+        log(&format!("cbb: sync on or off: {}; sync is on", e.for_log()));
+    }
+    log(&crate::sync::line(&engine));
     if let Err(e) = crate::mute::load(&cfg.state_dir, &engine) {
         log(&format!("cbb: the mute: {}; not muted", e.for_log()));
     }
@@ -312,29 +313,6 @@ fn with_roots(ident: Identity, records: &Records, dir: &Path, log: &dyn Fn(&str)
             ident
         }
     }
-}
-
-/// Reads the sync mode from dir: shared when there is no mode file.
-pub fn load_mode(dir: &Path) -> Result<Mode> {
-    match std::fs::read_to_string(dir.join(MODE_FILE)) {
-        Ok(s) => Mode::parse(s.trim()).map_err(|e| e.context(MODE_FILE)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Mode::Shared),
-        Err(e) => Err(e).context(format!("cannot read {}", dir.join(MODE_FILE).display())),
-    }
-}
-
-fn save_mode(dir: &Path, m: Mode) -> Result<()> {
-    files::write_atomic(&dir.join(MODE_FILE), format!("{}\n", m.name()).as_bytes(), 0o600)
-        .map_err(|e| e.context("saving the sync mode"))
-}
-
-/// Gives a device that just joined a group the sync mode of a new device,
-/// own, unless it has a mode from an earlier group.
-pub fn new_device_mode(dir: &Path) -> Result<()> {
-    if dir.join(MODE_FILE).exists() {
-        return Ok(());
-    }
-    save_mode(dir, Mode::Own)
 }
 
 /// The hybrid clock, which never goes back before the mark it saved.
@@ -486,33 +464,12 @@ impl Service {
         Ok(())
     }
 
-    /// The control operations mute and unmute: this device's user pauses
-    /// receiving or resumes it; the lite member is never an admin, so it
-    /// mutes no device and ends no mute.
-    fn mute_op(&self, h: &Header) -> Result<()> {
-        if !h.device.is_empty() {
-            return Err(Error::msg(
-                "only an admin mutes a device or ends its mute; the lite member is never one: use the phone app or a full member",
-            ));
-        }
+    /// Turns sync on, or off for ms milliseconds (0 for until it is
+    /// turned on), and saves it.
+    fn set_sync(&self, on: bool, ms: i64) -> Result<()> {
         let node = self.node()?;
-        if h.op == "mute" {
-            node.engine.pause(crate::mute::until(h.for_ms)?);
-            (self.log)("cbb: this device takes no copies from the group now");
-        } else {
-            node.engine.resume();
-            (self.log)("cbb: this device takes the group's copies again");
-        }
-        crate::mute::save(&self.state_dir, &node.engine)
-    }
-
-    /// Changes the sync mode and saves it.
-    fn set_mode(&self, name: &str) -> Result<()> {
-        let m = Mode::parse(name)?;
-        let node = self.node()?;
-        save_mode(&self.state_dir, m)?;
-        node.engine.set_mode(m);
-        (self.log)(&format!("cbb: the sync mode is {} now", m.name()));
+        crate::sync::set(&self.state_dir, &node.engine, on, ms)?;
+        (self.log)(&crate::sync::line(&node.engine));
         Ok(())
     }
 
@@ -667,7 +624,7 @@ impl Service {
         if let Err(e) = Mode::parse(&body.mode) {
             return refused(&body.id, e.message().to_string());
         }
-        if let Err(e) = self.set_mode(&body.mode) {
+        if let Err(e) = Mode::parse(&body.mode).and_then(|m| self.set_sync(m == Mode::Shared, 0)) {
             (self.log)(&format!("cbb: a command from {peer}: {}", e.for_log()));
             return wire::CommandResult {
                 id: body.id,
@@ -676,7 +633,7 @@ impl Service {
                 reason: e.message().to_string(),
             };
         }
-        (self.log)(&format!("cbb: {} set the sync mode to {}", body.by, body.mode));
+        (self.log)(&format!("cbb: {} turned sync {} here", body.by, if body.mode == "own" { "off" } else { "on" }));
         wire::CommandResult { id: body.id, by: String::new(), status: "done".into(), reason: String::new() }
     }
 
@@ -1173,8 +1130,7 @@ impl Service {
                     mode: node.engine.mode().name().into(),
                     muted: node.engine.mute_left().is_some(),
                     muted_until_ms: node.engine.mute_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
-                    paused: node.engine.pause_left().is_some(),
-                    paused_until_ms: node.engine.pause_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
+                    sync_until_ms: node.engine.sync().1,
                     away: self.away()?.status(&node),
                     paste: self.paste_status(),
                     actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
@@ -1235,17 +1191,20 @@ impl Service {
             "paste-on" => Err(Error::msg(
                 "only an admin pastes on another device; the lite member is never one: use the phone app or a full member",
             )),
-            "mute" | "unmute" => {
-                self.mute_op(h)?;
-                Ok(control::reply(Header::default(), Vec::new()))
-            }
-            "mode" => {
+            "mute" | "unmute" => Err(Error::msg(
+                "only an admin mutes a device or ends its mute; the lite member is never one: use the phone app or a full member; cbb sync off turns this device's own sync off",
+            )),
+            "sync" => {
                 if !h.device.is_empty() {
                     return Err(Error::msg(
-                        "only an admin sets the sync mode of another device; the lite member is never one: use the phone app or a Linux member",
+                        "only an admin turns another device's sync on or off; the lite member is never one: use the phone app or a full member",
                     ));
                 }
-                self.set_mode(&h.name)?;
+                let on = crate::sync::parse(&h.name)?;
+                if on && h.for_ms != 0 {
+                    return Err(Error::msg("a time goes only with cbb sync off"));
+                }
+                self.set_sync(on, h.for_ms)?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
             "pair" | "pair-phone" | "revoke" => {

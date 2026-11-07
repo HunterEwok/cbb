@@ -214,44 +214,39 @@ pub fn check_text(s: &str) -> Result<()> {
     Ok(())
 }
 
-/// A member's sync mode: what moves between its own clipboard and the group
-/// (docs/design.md, "Sync modes"), as Go's clip.Mode. It changes nothing
-/// else: the member stays connected, keeps the group's current event and
-/// forwards events in every mode, and deliberate actions (send) work in
-/// every mode.
+/// A member's sync, on or off (docs/design.md, "Sync on and off"), as Go's
+/// clip.Mode. It changes nothing else: the member stays connected, keeps
+/// the group's current event and forwards events either way, and
+/// deliberate actions (send) work either way.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Mode {
-    /// Its copies go to the group, and the group's copies reach its clipboard.
+    /// Sync on: its copies go to the group, and the group's copies reach
+    /// its clipboard.
     #[default]
     Shared,
-    /// Neither; the group's text is at hand on request (current).
+    /// Sync off: neither; the clipboard is the device's own, and the
+    /// group's text is at hand on request (current).
     Own,
-    /// Only the group's copies reach its clipboard.
-    Receive,
-    /// Only its copies go to the group.
-    Send,
 }
 
 impl Mode {
-    pub const ALL: [Mode; 4] = [Mode::Shared, Mode::Own, Mode::Receive, Mode::Send];
+    pub const ALL: [Mode; 2] = [Mode::Shared, Mode::Own];
 
     /// Whether the copies a clipboard watcher reports go to the group.
     pub fn sends(self) -> bool {
-        matches!(self, Mode::Shared | Mode::Send)
+        self == Mode::Shared
     }
 
     /// Whether the group's copies are written to the clipboard.
     pub fn receives(self) -> bool {
-        matches!(self, Mode::Shared | Mode::Receive)
+        self == Mode::Shared
     }
 
-    /// The mode's name, as cbb mode takes it.
+    /// The mode's name, as hellos and the admin's mode command carry it.
     pub fn name(self) -> &'static str {
         match self {
             Mode::Shared => "shared",
             Mode::Own => "own",
-            Mode::Receive => "receive",
-            Mode::Send => "send",
         }
     }
 
@@ -260,7 +255,7 @@ impl Mode {
         Mode::ALL
             .into_iter()
             .find(|m| m.name() == s)
-            .ok_or_else(|| Error::msg(format!("the sync mode is own, shared, receive or send, not {s:?}")))
+            .ok_or_else(|| Error::msg(format!("the sync mode is shared (sync on) or own (sync off), not {s:?}")))
     }
 }
 
@@ -304,12 +299,13 @@ struct Inner {
     peers: BTreeMap<String, usize>,
     window: Duration,
     mode: Mode,
-    /// An admin's mute, which keeps this member's copies from the group,
-    /// and its user's pause, which keeps the group's copies out of its
-    /// clipboard (design.md, "Muting a device"): each until a wall time in
-    /// milliseconds, 0 for until it is lifted.
+    /// While sync is off: the wall time in milliseconds it turns back on
+    /// at, 0 for until it is turned on.
+    off_until: i64,
+    /// An admin's mute, which keeps this member's copies from the group
+    /// (design.md, "Muting a device"), until a wall time in milliseconds,
+    /// 0 for until it is lifted.
     mute: Option<i64>,
-    pause: Option<i64>,
 }
 
 /// The state of one member. It is safe for concurrent use.
@@ -354,8 +350,8 @@ impl Engine {
                 peers: BTreeMap::new(),
                 window: LIVE_WINDOW,
                 mode: Mode::Shared,
+                off_until: 0,
                 mute: None,
-                pause: None,
             }),
         }
     }
@@ -368,13 +364,39 @@ impl Engine {
 
     /// The sync mode.
     pub fn mode(&self) -> Mode {
-        self.inner.lock().mode
+        let mut st = self.inner.lock();
+        self.mode_now(&mut st)
     }
 
-    /// Changes the sync mode; it applies to the copies and events that come
-    /// after.
+    /// Changes the sync mode for good, as an admin's mode command does; it
+    /// applies to the copies and events that come after.
     pub fn set_mode(&self, m: Mode) {
-        self.inner.lock().mode = m;
+        self.set_sync(m == Mode::Shared, 0);
+    }
+
+    /// Turns sync on, or off until `until_ms` on the wall clock (0 for
+    /// until it is turned on).
+    pub fn set_sync(&self, on: bool, until_ms: i64) {
+        let mut st = self.inner.lock();
+        st.mode = if on { Mode::Shared } else { Mode::Own };
+        st.off_until = if on { 0 } else { until_ms };
+    }
+
+    /// Whether sync is on, and while it is off, the wall time it turns
+    /// back on at (0 for until it is turned on).
+    pub fn sync(&self) -> (bool, i64) {
+        let mut st = self.inner.lock();
+        (self.mode_now(&mut st) == Mode::Shared, st.off_until)
+    }
+
+    /// The mode now: sync turned off for a while is on again once its time
+    /// has passed.
+    fn mode_now(&self, st: &mut Inner) -> Mode {
+        if st.mode == Mode::Own && st.off_until != 0 && (self.wall)() >= st.off_until {
+            st.mode = Mode::Shared;
+            st.off_until = 0;
+        }
+        st.mode
     }
 
     /// Mutes this member until `until_ms` on the wall clock, 0 for until
@@ -405,37 +427,6 @@ impl Engine {
             st.mute = None;
         }
         st.mute.is_some()
-    }
-
-    /// Keeps the group's copies out of this member's clipboard until
-    /// `until_ms` on the wall clock, 0 for until [`Engine::resume`], as a
-    /// mode that does not receive does; its own copies still go out.
-    pub fn pause(&self, until_ms: i64) {
-        self.inner.lock().pause = Some(until_ms);
-    }
-
-    /// Ends the pause.
-    pub fn resume(&self) {
-        self.inner.lock().pause = None;
-    }
-
-    /// Whether receiving is paused, and for how many milliseconds more: 0
-    /// for until [`Engine::resume`], at least 1 otherwise.
-    pub fn pause_left(&self) -> Option<i64> {
-        let mut st = self.inner.lock();
-        let now = (self.wall)();
-        match self.paused(&mut st) {
-            false => None,
-            true => Some(st.pause.filter(|u| *u != 0).map_or(0, |u| u.saturating_sub(now).max(1))),
-        }
-    }
-
-    /// Whether the pause holds now; one that ended is forgotten.
-    fn paused(&self, st: &mut Inner) -> bool {
-        if !crate::rule::holds(st.pause, (self.wall)()) {
-            st.pause = None;
-        }
-        st.pause.is_some()
     }
 
     /// Changes how long after the copy an event from another member is
@@ -534,7 +525,7 @@ impl Engine {
             st.local = Local::default();
             return Ok(None);
         }
-        if !st.mode.sends() || self.muted(&mut st) {
+        if !self.mode_now(&mut st).sends() || self.muted(&mut st) {
             st.local = Local { text: text.to_string(), kind, at: now };
             if kind == Kind::Secret {
                 add_secret(&mut st, sum, now);
@@ -757,8 +748,7 @@ impl Engine {
         // Images or files without a text leave this member's clipboard as
         // it is: it never fetches their content (takes_media false).
         let incoming = crate::rule::Incoming {
-            receives: st.mode.receives(),
-            paused: self.paused(st),
+            receives: self.mode_now(st).receives(),
             kind: st.current.kind,
             mark: st.current.is_mark(),
             unread: st.current.unread,
@@ -1044,19 +1034,34 @@ mod tests {
         assert_eq!(b.local().unwrap().0, "mine");
         assert!(b.send("sent", Kind::Text, Via::Copy).is_ok());
 
-        // Receive: the group's copies come in, its own stay.
-        b.set_mode(Mode::Receive);
+        // Sync on again: both ways.
+        b.set_mode(Mode::Shared);
         t.fetch_add(1000, Ordering::SeqCst);
         let ev = a.copied("next", Kind::Text, Via::Copy).unwrap().unwrap();
         assert!(b.received(ev).unwrap().write);
-        assert!(b.copied("local", Kind::Text, Via::Copy).unwrap().is_none());
+        assert!(b.copied("local", Kind::Text, Via::Copy).unwrap().is_some());
+        assert_eq!(b.sync(), (true, 0));
+    }
 
-        // Send: its copies go, the group's do not come in.
-        b.set_mode(Mode::Send);
-        assert!(b.copied("out", Kind::Text, Via::Copy).unwrap().is_some());
-        t.fetch_add(1000, Ordering::SeqCst);
-        let ev = a.copied("in", Kind::Text, Via::Copy).unwrap().unwrap();
-        assert!(!b.received(ev).unwrap().write);
+    #[test]
+    fn sync_off_for_a_while() {
+        let t = Arc::new(AtomicU64::new(100_000));
+        let w = t.clone();
+        let e = Engine::new(
+            A,
+            Clock::new(Box::new(|| 1_761_024_000_000), Timestamp::default(), None),
+            Box::new(move || w.load(Ordering::SeqCst) as i64),
+            Box::new(|| Duration::from_secs(100)),
+        );
+        e.set_sync(false, 160_000);
+        assert_eq!(e.sync(), (false, 160_000));
+        assert!(e.copied("mine", Kind::Text, Via::Copy).unwrap().is_none());
+        t.store(160_000, Ordering::SeqCst);
+        assert_eq!(e.mode(), Mode::Shared);
+        assert_eq!(e.sync(), (true, 0));
+        e.set_sync(false, 0);
+        t.store(10_000_000, Ordering::SeqCst);
+        assert_eq!(e.sync(), (false, 0));
     }
 
     #[test]

@@ -353,10 +353,10 @@ func stolenAdmin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 	}
 	r.Do(p+"acts", func() error {
 		return eventually(ctx, 2*timeout, func() error {
-			if _, err := Run(ctx, thief, "cbb mode -on "+m1.Name+" receive", ""); err != nil {
+			if _, err := Run(ctx, thief, "cbb sync -on "+m1.Name+" off", ""); err != nil {
 				return err
 			}
-			return succeeds(ctx, m1, "cbb mode", "", "receive")
+			return succeeds(ctx, m1, "cbb sync", "", "Sync is off")
 		})
 	})
 	r.Do(p+"frozen", func() error {
@@ -368,16 +368,16 @@ func stolenAdmin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 	r.Do(p+"counts-for-nothing", func() error {
 		// What it signs now is refused: a removal and a mode.
 		Run(ctx, thief, "cbb remove "+m2.Name, "")
-		Run(ctx, thief, "cbb mode -on "+m1.Name+" send", "")
+		Run(ctx, thief, "cbb sync -on "+m1.Name+" on", "")
 		time.Sleep(quiet)
 		if err := listsAs(ctx, []*Device{root, m1}, m2.Name, "", false, timeout); err != nil {
 			return err
 		}
-		return succeeds(ctx, m1, "cbb mode", "", "receive")
+		return succeeds(ctx, m1, "cbb sync", "", "Sync is off")
 	})
 }
 
-// modeKept (M4): the sync mode survives a restart of the service and of the
+// modeKept (M4): sync off survives a restart of the service and of the
 // machine, and every devices list shows it.
 func modeKept(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/M4-mode-kept/"
@@ -386,14 +386,14 @@ func modeKept(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		return
 	}
 	d := g.members[2]
-	if r.Do(p+"set", func() error { return setMode(ctx, d, "receive") }) != nil {
+	if r.Do(p+"set", func() error { return setMode(ctx, d, "own") }) != nil {
 		return
 	}
 	r.Do(p+"service-restart", func() error {
 		if _, err := Run(ctx, d, fleetKill, ""); err != nil {
 			return err
 		}
-		return eventually(ctx, 20*time.Second, func() error { return succeeds(ctx, d, "cbb mode", "", "receive") })
+		return eventually(ctx, 20*time.Second, func() error { return succeeds(ctx, d, "cbb sync", "", "Sync is off") })
 	})
 	r.Do(p+"reboot", func() error {
 		if err := f.stop(ctx, d); err != nil {
@@ -402,7 +402,7 @@ func modeKept(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if err := f.start(ctx, d); err != nil {
 			return err
 		}
-		return succeeds(ctx, d, "cbb mode", "", "receive")
+		return succeeds(ctx, d, "cbb sync", "", "Sync is off")
 	})
-	r.Do(p+"lists", func() error { return listsAs(ctx, g.members, d.Name, "receive", false, timeout) })
+	r.Do(p+"lists", func() error { return listsAs(ctx, g.members, d.Name, " off ", false, timeout) })
 }

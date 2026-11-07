@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3f404cb443bd -->
+<!-- source: f88bc63a357c -->
 # 不用应用
 
 由电脑组成的群组不需要手机应用：可以由一台电脑来持有群组。
@@ -26,7 +26,7 @@ sudo cbb pair
 
 它会显示一个六位数字码并等待。在新电脑上同样运行 `sudo cbb pair`：它会先显示一个给手机应用用的二维码，不用理会，然后要求输入数字码；在那里输入这六位数字。新电脑几秒钟内就会加入。
 
-然后在每台电脑上开启共享，方法见[快速入门](quickstart.md#4-share-the-computers-clipboard)：`sudo cbb mode shared`。
+然后每台电脑都会同步，方法见[快速入门](quickstart.md#4-copy-on-one-paste-on-another)。
 
 ## 3. 不要依赖一台电脑
 

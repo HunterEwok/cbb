@@ -118,10 +118,6 @@ type Config struct {
 	// KeyboardBus connects to the bus BlueZ is on, for the Bluetooth
 	// keyboard; the system bus on Linux if nil. Tests replace it.
 	KeyboardBus keyboardDialer
-
-	// newMode is the sync mode of a device that makes or joins a group;
-	// clip.Own if nil. Tests that sync take clip.Shared.
-	newMode *clip.Mode
 }
 
 // MemberPort is the member port by default (CBB_PORT moves it, see
@@ -507,12 +503,11 @@ func (s *Service) startGroup(id *group.Identity) error {
 	}
 	id = s.withAdminKey(id)
 	gctx, cancel := context.WithCancel(context.Background())
-	mode, err := loadMode(s.cfg.StateDir)
-	if err != nil {
-		s.logf("cbb: the sync mode: %v; using shared", err)
-	}
-	eng := clip.New(clip.Config{Self: string(id.ID), Clock: s.clock, Mode: mode, Wall: s.cfg.now, Seal: s.sealCopy,
+	eng := clip.New(clip.Config{Self: string(id.ID), Clock: s.clock, Wall: s.cfg.now, Seal: s.sealCopy,
 		Log: func(err error) { s.logf("cbb: %v", err) }})
+	if err := loadSync(s.cfg.StateDir, eng); err != nil {
+		s.logf("cbb: sync on or off: %v; sync is on", err)
+	}
 	if err := loadMute(s.cfg.StateDir, eng); err != nil {
 		s.logf("cbb: the mute: %v; not muted", err)
 	}

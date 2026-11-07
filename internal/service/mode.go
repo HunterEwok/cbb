@@ -5,11 +5,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/atomicfile"
@@ -18,71 +18,93 @@ import (
 	"github.com/HunterEwok/cbb/internal/node"
 )
 
-// modeFile holds the sync mode, in the state directory. A device that made
-// or joined its group gets one at once, with own; without one, the device
-// shares.
-const modeFile = "mode"
+// syncFile says that sync is off, and until when, in the state directory
+// (design.md, "Sync on or off"); without it, sync is on.
+const syncFile = "sync.json"
 
-// loadMode reads the sync mode from dir.
-func loadMode(dir string) (clip.Mode, error) {
-	b, err := os.ReadFile(filepath.Join(dir, modeFile))
+// syncState is what sync.json holds.
+type syncState struct {
+	Off     bool  `json:"off"`
+	UntilMS int64 `json:"until_ms,omitempty"` // when it turns on again; 0 for until turned on
+}
+
+// loadSync gives e the sync state saved in dir.
+func loadSync(dir string, e *clip.Engine) error {
+	data, err := os.ReadFile(filepath.Join(dir, syncFile))
 	if errors.Is(err, os.ErrNotExist) {
-		return clip.Shared, nil
+		return nil
 	}
 	if err != nil {
-		return clip.Shared, err
-	}
-	m, err := clip.ParseMode(strings.TrimSpace(string(b)))
-	if err != nil {
-		return clip.Shared, fmt.Errorf("%s: %w", modeFile, err)
-	}
-	return m, nil
-}
-
-// saveMode writes the sync mode to dir.
-func saveMode(dir string, m clip.Mode) error {
-	return atomicfile.Write(filepath.Join(dir, modeFile), []byte(m.String()+"\n"), 0o600)
-}
-
-// newDeviceMode gives a device that just made or joined a group the sync
-// mode of a new device, own, unless it has a mode from an earlier group.
-func (s *Service) newDeviceMode() error {
-	_, err := os.Stat(filepath.Join(s.cfg.StateDir, modeFile))
-	if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	m := clip.Own
-	if s.cfg.newMode != nil {
-		m = *s.cfg.newMode
+	var st syncState
+	if err := json.Unmarshal(data, &st); err != nil {
+		return fmt.Errorf("%s: %w", syncFile, err)
 	}
-	if err := saveMode(s.cfg.StateDir, m); err != nil {
-		return fmt.Errorf("saving the sync mode: %w", err)
-	}
+	e.SetSync(!st.Off, fromUnixMS(st.UntilMS))
 	return nil
 }
 
-// setMode changes the sync mode and saves it.
-func (s *Service) setMode(name string) error {
-	m, err := clip.ParseMode(name)
+// saveSync writes e's sync state to dir; sync on removes the file.
+func saveSync(dir string, e *clip.Engine) error {
+	on, until := e.Sync()
+	path := filepath.Join(dir, syncFile)
+	if on {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	data, err := json.Marshal(syncState{Off: true, UntilMS: unixMS(until)})
 	if err != nil {
 		return err
 	}
+	return atomicfile.Write(path, data, 0o600)
+}
+
+// parseSync reads "on" or "off", as cbb sync takes them.
+func parseSync(name string) (bool, error) {
+	switch name {
+	case "on":
+		return true, nil
+	case "off":
+		return false, nil
+	}
+	return false, fmt.Errorf("sync is on or off, not %q", name)
+}
+
+// setSync turns sync on, or off for forMS milliseconds (0 for until it is
+// turned on), and saves it.
+func (s *Service) setSync(on bool, forMS int64) error {
 	e := s.engine()
 	if e == nil {
 		return s.errNoGroup()
 	}
-	if err := saveMode(s.cfg.StateDir, m); err != nil {
-		return fmt.Errorf("saving the sync mode: %w", err)
+	if forMS < 0 || forMS > group.MaxMute.Milliseconds() {
+		return fmt.Errorf("sync turns off for at most %v; leave the time out to turn it off until cbb sync on", group.MaxMute)
 	}
-	e.SetMode(m)
-	s.logf("cbb: the sync mode is %s now", m)
+	var until time.Time
+	if !on && forMS > 0 {
+		until = s.cfg.now().Add(time.Duration(forMS) * time.Millisecond)
+	}
+	e.SetSync(on, until)
+	if err := saveSync(s.cfg.StateDir, e); err != nil {
+		return fmt.Errorf("saving sync on or off: %w", err)
+	}
+	switch {
+	case on:
+		s.logf("cbb: sync is on: copies go to the group and come from it")
+	case until.IsZero():
+		s.logf("cbb: sync is off until it is turned on: the clipboard is this device's own")
+	default:
+		s.logf("cbb: sync is off until %s: the clipboard is this device's own", until.Format(time.DateTime))
+	}
 	return nil
 }
 
-// pasteText is what cbb paste prints: the local clipboard's text in a mode
-// that takes the group's copies, and the group's current text in one that
-// keeps its clipboard to itself, so that the group's text is at hand there
-// on request.
+// pasteText is what cbb paste prints: the local clipboard's text while
+// sync is on, and the group's current text while it is off, so that the
+// group's text is at hand there on request.
 func pasteText(e *clip.Engine) (string, clip.Kind, bool) {
 	if e.Mode().Receives() {
 		text, kind, _, ok := e.Local()
@@ -209,24 +231,26 @@ func (s *Service) command(peer group.DeviceID, c group.Record) node.Result {
 	case group.CommandMute, group.CommandUnmute:
 		return s.muteCommand(body)
 	}
-	if _, err := clip.ParseMode(body.Mode); err != nil {
+	m, err := clip.ParseMode(body.Mode)
+	if err != nil {
 		res.Status, res.Reason = node.ResultRefused, err.Error()
 		return res
 	}
-	if err := s.setMode(body.Mode); err != nil {
+	if err := s.setSync(m == clip.Shared, 0); err != nil {
 		res.Status, res.Reason = node.ResultFailed, err.Error()
 		return res
 	}
-	s.logf("cbb: %s set the sync mode to %s", body.By, body.Mode)
+	s.logf("cbb: %s turned sync %s here", body.By, onOff(m == clip.Shared))
 	res.Status = node.ResultDone
 	return res
 }
 
-// setModeOn has the member target, by name or device ID, take the sync
-// mode name, with a command this device signs as an admin.
-func (s *Service) setModeOn(ctx context.Context, target, name string) error {
-	if _, err := clip.ParseMode(name); err != nil {
-		return err
+// setSyncOn turns sync on or off on the member target, by name or device
+// ID, with a mode command this device signs as an admin.
+func (s *Service) setSyncOn(ctx context.Context, target string, on bool) error {
+	name := clip.Own.String()
+	if on {
+		name = clip.Shared.String()
 	}
 	s.mu.Lock()
 	id, nd := s.id, s.nd
@@ -239,11 +263,11 @@ func (s *Service) setModeOn(ctx context.Context, target, name string) error {
 		return err
 	}
 	if d.Self {
-		return s.setMode(name)
+		return s.setSync(on, 0)
 	}
 	ca, chain := id.Signer()
 	if ca == nil {
-		return errors.New("only an admin sets the sync mode of another device: the group's root, an admin it made (cbb admin), or an admin phone")
+		return errors.New("only an admin turns sync on or off on another device: the group's root, an admin it made (cbb admin), or an admin phone")
 	}
 	if s.frozen(id) {
 		return errFrozen
@@ -259,11 +283,11 @@ func (s *Service) setModeOn(ctx context.Context, target, name string) error {
 	defer cancel()
 	res, err := nd.SendCommand(ctx, group.DeviceID(d.ID), cmd, body.ID, s.hubOrder())
 	if err != nil {
-		return fmt.Errorf("setting the sync mode of %s: %w", d.Name, err)
+		return fmt.Errorf("turning sync %s on %s: %w", onOff(on), d.Name, err)
 	}
 	if res.Status != node.ResultDone {
-		return fmt.Errorf("%s did not take the sync mode: %s", d.Name, res.Reason)
+		return fmt.Errorf("%s did not turn sync %s: %s", d.Name, onOff(on), res.Reason)
 	}
-	s.logf("cbb: set the sync mode of %s to %s", d.Name, name)
+	s.logf("cbb: turned sync %s on %s", onOff(on), d.Name)
 	return nil
 }

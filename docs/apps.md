@@ -351,13 +351,13 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   black for the menu bar. The app makes itself a login item on its first run
   (`SMAppService`); Settings, "Open at login", turns that off.
 - **Settings**: the colour and the appearance of the phones (`Theme.swift` and `Tokens.swift`
-  of the iPhone app, shared), this Mac's sync mode (`cbb mode`), whether the app may press keys for remote paste, and error details (on in debug builds, off in release ones, and
+  of the iPhone app, shared), sync on or off on this Mac (`cbb sync`), whether the app may press keys for remote paste, and error details (on in debug builds, off in release ones, and
   the `ShowErrorDetails` default either way).
 - What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from
   home, "Make it a hub" for this Mac or, on an admin, for another admin computer (`cbb global
   hub -on`), "Stop being the hub" (`cbb global hub off`, with `-on` for another device), and on this Mac while it is a hub how its tunnel hides (WireGuard, AmneziaWG,
   VLESS) and its forwarder (`cbb global hub -keep`, the tray app's page of this computer
-  the same), the sync mode of this Mac or, on an admin, of another computer: `cbb mode -on`) goes only through the admin socket, which only root reaches, so the app runs
+  the same), sync on or off on another computer, on an admin: `cbb sync -on`) goes only through the admin socket, which only root reaches, so the app runs
   `cbb` with administrator privileges (`Admin`, `do shell script … with administrator
   privileges`): macOS asks for the password, as `sudo cbb` does in Terminal. With error
   details on, `CBB_DEBUG=1` makes cbb name the error underneath.
@@ -378,10 +378,10 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   second the pasteboard gets its items back, unless the user copied meanwhile. Typing posts
   Unicode key events, which no layout changes. It refuses without the permission, on the lock
   screen, in a session not on the screen, and under Secure Event Input.
-- **Muting** (docs/design.md, "Muting a device"): beside "Fetch" a quick switch keeps the
-  group's copies out of this Mac (`mute` over the control socket, no password): a click turns
-  it off or on again, its menu turns it off for 15 minutes, an hour, 8 hours or until it is
-  turned on. On an admin, a device's page has "Mute" with the same times (`cbb mute -on`,
+- **Sync on and off** (docs/design.md, "Sync on and off"): beside "Fetch" a quick switch
+  turns sync on this Mac off or on (`sync` over the control socket, no password): a click
+  turns it off or on again, its menu turns it off for 15 minutes, an hour, 8 hours or until
+  it is turned on. **Muting** (docs/design.md, "Muting a device"): on an admin, a device's page has "Mute" with the same times (`cbb mute -on`,
   "Until an admin unmutes it" for the last) and "Unmute"; a muted device says so on its tile,
   its row and its summary, and this Mac's own mute is an alert, with "Unmute" on an admin.
 - **Join a phone's group**: on a Mac in no group, the button runs `cbb pair -app FILE` as the
@@ -415,7 +415,7 @@ service and its clipboard agent keep syncing without it.
   system switches with the taskbar's theme; on Linux a white PNG, black when the desktop
   portal says the user prefers a light look (`color-scheme`), read once at start.
 - **Settings**: the ten colours (`frontend/tokens.js`, which `go run ./tools/tokens` writes
-  with the Swift and Kotlin tokens), the appearance, this computer's sync mode (`cbb mode`),
+  with the Swift and Kotlin tokens), the appearance, sync on or off on this computer (`cbb sync`),
   and error details (as cbb: on in a
   build without a release version, `CBB_DEBUG=1` or `0`, or the switch). They are kept in
   the user's configuration folder (`cbb/desktop.json`).
@@ -426,9 +426,9 @@ service and its clipboard agent keep syncing without it.
   changes nothing and says nothing.
 - **The hub's line**: on every device's page, as in the Mac app (`hubLine` in `app.js`,
   `MakeHub` and `StopHub` in `desk.go`).
-- **Muting**: as in the Mac app; the switch is the third button of the bottom bar, a tap
-  toggles it and holding it (or its context menu) picks the time (`PauseReceiving`, `Mute`
-  and `Unmute` in `desk.go`).
+- **Sync on and off, muting**: as in the Mac app; the switch is the third button of the
+  bottom bar, a tap toggles it and holding it (or its context menu) picks the time
+  (`SetSync`, `Mute` and `Unmute` in `desk.go`).
 - **Join a phone's group**: a computer in no group shows the button, which runs `cbb pair
   -app FILE` as the administrator, as the Mac app does: the dialog shows the QR code cbb
   writes into the file the app made, and Cancel removes the file. On Linux the file is

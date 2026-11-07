@@ -482,7 +482,7 @@ depends on a version number.
 | `admin_key` | string or absent | from a full member that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
-| `mode` | string or absent | the sender's sync mode: `own`, `shared`, `receive` or `send` (design.md, "Sync modes"); shown, never trusted; a receiver ignores an unknown one. It changes only what the sender itself does with its clipboard, so a receiver handles the sender's events the same in every mode |
+| `mode` | string or absent | the sender's sync: `shared` (on) or `own` (off; design.md, "Sync on and off"); shown, never trusted; a receiver ignores an unknown one. It changes only what the sender itself does with its clipboard, so a receiver handles the sender's events the same either way |
 | `muted` | bool or absent | `true` from a sender an admin muted, whose copies stay its own (design.md, "Muting a device"); shown, never trusted. A receiver handles the sender's events the same either way |
 | `muted_for_ms` | integer or absent | with `muted`: how many milliseconds the mute still lasts, at most 2 592 000 000 (30 days); absent or 0 for until it is lifted. A receiver keeps the end on its own clock, so the clocks need not agree; a larger value counts as 30 days |
 | `device` | object or absent | what the sender says about its device: Device (below); shown, never trusted |
@@ -818,7 +818,7 @@ or the `current` of a hello), after validation:
    forwarded); otherwise nothing happens.
 2. Otherwise: check it (section 4, "Opening") and drop it when that fails; observe its timestamp, record the ID, and forward it to every other connection
    (also when it is older than the current event, and also a mark). A member MUST forward
-   every new event so, whatever its sync mode: the mode decides only what it does with its
+   every new event so, with sync on or off: sync decides only what it does with its
    own clipboard. If it is later than the
    current event, it becomes the current event, also on a member that cannot read it.
 
@@ -843,8 +843,7 @@ frames like any other event.
 ### Writing the member's own clipboard (local policy)
 
 When an event becomes current (or a mark gets its text) it is written to the local clipboard
-when all of these hold: the member's sync mode takes the group's copies (`shared` or
-`receive`); this member opened the current event (section 4, "Opening") and it is live (it has
+when all of these hold: the member's sync is on (mode `shared`); this member opened the current event (section 4, "Opening") and it is live (it has
 a text, and a secret is younger than the secret TTL); the local clipboard does not already
 hold the text; and it was copied less than the group's live window ago. The live window is
 the `incoming_ms` of the group's copies setting (section 10, "The copies setting"), 60 s
@@ -1212,7 +1211,7 @@ A connection carries one request: the service reads the first message and dispat
 | `paste` | none | `{kind, done}` + payload = the member's own clipboard text; error `the clipboard is empty` when unknown or an expired secret, and one that names `cbb paste -o` for images or files without a text |
 | `copy-media` | payload = the plain-text alternative, or none; then for each part `{"op":"part", part}`, followed for a file or clipboard data by `{"op":"data"}` messages whose payloads, at most 1 MiB each, are exactly its `size` bytes; last `{"op":"part", done}` | `{done}`: the parts are in the cache and the copy went to the group as a `media` event (section 4, "Media"), also written to the member's own clipboard. An error when the copy is over this device's limit, its manifest is not valid or the bytes do not come as said. `cbb copy FILE...` reads the files as the user and sends them |
 | `copied-media` | as `copy-media` | as `copy-media`, but a watcher's report that its clipboard changed: the copy goes to the group as an event when the engine decides so (section 5) and is not written back to the member's own clipboard |
-| `paste-media` | none | once every part of the member's own images or files (in mode `own` the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
+| `paste-media` | none | once every part of the member's own images or files (with sync off the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
 | `config` | `{name?, value?}`: `max-copy` or `max-copy-away` and a size such as `200MiB` | `{status, done}`, with the setting saved first when `name` is given; `status.media` = `{max_copy, max_copy_away, fetching?, fetched?, from?, failed?}`, in bytes, also in `status` |
 | `status` | none | `{status, done}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, incoming_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `incoming_ms` is the group's live window (section 5, "Writing the member's own clipboard"); `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
 | `leave` | none | `{done}`: the device leaves its group (D-83): the service deletes the keys and the group's files, turns remote paste and the quick actions off, and restarts in no group. Refused on the group's root while the group has other devices; taken while the group file is damaged |
@@ -1220,9 +1219,9 @@ A connection carries one request: the service reads the first message and dispat
 | `pair` | none | first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
 | `join` | `{code, address?}`, `{code, listen, expires}` or `{invite, consent}` | `{done}` or an error. Without `address` it browses for `p=1`. With `listen` it first answers `{addrs, fingerprint}` for the QR code, then `{done}` or an error when a member admitted it, or after `expires` seconds. With `invite`, the text of a remote invitation (section 12), it needs `consent` (sync away from home is turned on, and the device keeps its keys in files), first answers `{fingerprint}` (of this device's key, for the admin to compare), then `{done}` or an error. Hanging up cancels |
 | `invite` | `{expires?}`: seconds, 3600 if absent, at most 86 400 | Only on the group's hub, when it can admit devices. First `{invite, expires}`: the invitation's text. Then, for each device that used it and proved it knows the secret, `{joining: {id, name, os, fingerprint}}`, which the client answers with `{"op": "answer", consent}` (`true` admits it); last `{name, done}` or an error. Hanging up cancels the invitation |
-| `mode` | `{name, device?}`: `name` the sync mode, `own`, `shared`, `receive` or `send`; `device`, a name or device ID, for another device (on an admin) | without `device`: `{status, done}`, the mode saved and in effect; with it: `{done}` once that device answered `done` to the command (section 15), or an error with its reason. Only on the admin socket |
-| `mute` | `{device?, for_ms?}`: `device` a name or device ID; `for_ms` from 1 to 2 592 000 000 (30 days), absent for until `unmute` | `{status, done}` or an error. Without `device`, this device's user pauses receiving: the group's copies stay out of its clipboard, as in a mode that does not receive, and its own copies still go out (design.md, "Muting a device"). With `device`, on an admin that is not frozen, mutes that device: sends it a `mute` command (section 15), or mutes this device at once when it names this one. The mute and the pause last across restarts, in `mute.json`. Without `device` on either socket, so that the apps switch it without the administrator; with it only on the admin socket |
-| `unmute` | `{device?}` | `{status, done}` or an error: without `device`, ends the pause; with it, on an admin that is not frozen, sends that device an `unmute` command, or ends this device's own mute at once. So a muted device that is no admin waits for an admin, and a muted admin or root ends its own mute. Without `device` on either socket; with it only on the admin socket |
+| `sync` | `{name, device?, for_ms?}`: `name` `on` or `off`; `device`, a name or device ID, for another device (on an admin); `for_ms`, only with `off` and no `device`, from 1 to 2 592 000 000 (30 days), absent for until turned on | without `device`: `{status, done}`, saved in `sync.json` and in effect, `status.mode` `shared` or `own` and, while off for a time, `status.sync_until_ms` when it turns on again, in Unix milliseconds (design.md, "Sync on and off"); with it: `{done}` once that device answered `done` to the `mode` command (section 15), or an error with its reason. Without `device` on either socket, so that the apps switch it without the administrator; with it only on the admin socket |
+| `mute` | `{device, for_ms?}`: `device` a name or device ID; `for_ms` from 1 to 2 592 000 000 (30 days), absent for until `unmute` | `{status, done}` or an error. On an admin that is not frozen, mutes that device: sends it a `mute` command (section 15), or mutes this device at once when it names this one (design.md, "Muting a device"). The mute lasts across restarts, in `mute.json`. Only on the admin socket |
+| `unmute` | `{device}` | `{status, done}` or an error: on an admin that is not frozen, sends that device an `unmute` command, or ends this device's own mute at once. So a muted device that is no admin waits for an admin, and a muted admin or root ends its own mute. Only on the admin socket |
 | `paste-on` | `{device, method?, enter?, kind?}` + payload = the text | `{done}` once that device answered `done` to the `paste` command this admin signed (section 15), or an error with its reason. The text is cleaned first (design.md, "Remote paste"). Only on the admin socket |
 | `paste-receive` | `{name, enter?, console?, device?, all?}`: `name` `on` or `off` | `{status, done}`: `on` saves the switches of remote paste here, only for this device; `off` turns it off here, or with `device` or `all` on another or every device through `paste-off` commands. Only on the admin socket |
 | `keyboard` | `{name?, keyboard?}` + payload for `type`: `name` `on`, `off`, `pair`, `type` or none | `{status, done}`: `on` saves the Bluetooth keyboard's settings and registers it with BlueZ (Linux only), `off` takes it off, `pair` makes it discoverable for two minutes, `type` types the payload on the connected device and answers once it is typed, none only answers the status. Only on the admin socket |
@@ -3029,7 +3028,7 @@ its authority records.
 ## 15. Commands
 
 An admin orders one member to do something with a **command**: signed like a record (section
-10) and never stored. `mode` sets the receiver's sync mode (design.md, "Sync modes"); `hub`
+10) and never stored. `mode` turns the receiver's sync on (`shared`) or off (`own`; design.md, "Sync on and off"); `hub`
 makes the receiver the group's hub, or a hub of the group as well, or with a stop order makes
 the receiver stop being one (section 11, "Moving the hub", "Several hubs", "Stopping a hub"); `paste` puts a text where
 the receiver's focus is, and `paste-off` turns remote paste off on the receiver (design.md,
@@ -3054,7 +3053,7 @@ signed bodies (Conventions):
 | `id` | string | 128 random bits as 32 lowercase hex characters; IDs compare as byte strings |
 | `time_ms` | integer | when it was signed, milliseconds since the Unix epoch, not negative |
 | `expires_ms` | integer | after `time_ms`, at most 30 000 ms later: from `time_ms` + 1 to `time_ms` + 30 000 |
-| `mode` | string | in a `mode` command: `own`, `shared`, `receive` or `send`; in a `paste` command: `paste` (the clipboard and the paste keys) or `type` (key by key) |
+| `mode` | string | in a `mode` command: `shared` (sync on) or `own` (sync off); in a `paste` command: `paste` (the clipboard and the paste keys) or `type` (key by key) |
 | `enter` | bool | in a `paste` command: press Enter after the text |
 | `kind` | string | in a `paste` command: `text` or `secret` |
 | `text` | string | in a `paste` command: the text, not empty, at most 1 MiB of UTF-8 for `paste` and 4 KiB for `type` |
@@ -3841,7 +3840,7 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | Event `kind` | `text`, `secret`, `media` | 4 |
 | Event `via` | `copy`, `phone`, `universal-clipboard` | 4 |
 | Media part `type` | `image/png`, `image/jpeg`, `text/html` | 4 |
-| Sync mode | `own`, `shared`, `receive`, `send` | 4, 15 |
+| Sync mode | `shared` (sync on), `own` (sync off) | 4, 15 |
 | Key store | `file`, `hardware`, `rootless`, `proven` (records only); proof kinds `android-tee`, `android-strongbox`, `tpm` | 17 |
 | mDNS TXT keys | `v`, `g`, `p`, `r` (`lite`, `phone`) | 3 |
 | Record `type` | `device`, `revoke`, `root`, `freeze`, `thaw` | 10 |

@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use cbb_core::authority::Record;
 use cbb_core::certs::{self, Cert, DeviceId};
-use cbb_core::clip::{Event as Copy, Kind, Mode};
+use cbb_core::clip::{Event as Copy, Kind};
 use cbb_core::error::{Error, Result};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{Change, Order, Signer};
@@ -243,8 +243,8 @@ enum Event<'a> {
 }
 
 #[derive(Deserialize)]
-struct PauseArgs {
-    pause: bool,
+struct SyncArgs {
+    on: bool,
     #[serde(default)]
     for_ms: i64,
 }
@@ -517,23 +517,18 @@ impl Member {
                 let ms = arg(&a, "timeout_ms").as_u64().unwrap_or(5_000).min(60_000);
                 Ok(json!({ "connected": n.wait_connected(Duration::from_millis(ms)) }))
             }
-            "mode" => {
-                n.set_mode(Mode::parse(arg(&a, "mode").as_str().unwrap_or_default())?);
-                done()
-            }
             "mute" => {
                 n.set_mute(arg(&a, "until_ms").as_i64());
                 done()
             }
             // The user's pause of the group's copies: `{"pause": true,
             // "for_ms"}` (0 for until it is turned on) or `{"pause": false}`.
-            "pause_receiving" => {
-                let a: PauseArgs = args(a)?;
-                if a.pause {
-                    n.pause_receiving(a.for_ms)?;
-                } else {
-                    n.resume_receiving()?;
+            "sync" => {
+                let a: SyncArgs = args(a)?;
+                if a.on && a.for_ms != 0 {
+                    return Err(Error::msg("a time goes only with sync off"));
                 }
+                n.set_sync(a.on, a.for_ms)?;
                 Ok(self.state())
             }
             "muted" => Ok(self.state()),
@@ -615,14 +610,14 @@ impl Member {
         }
     }
 
-    /// Whether receiving is paused and whether an admin muted the phone:
-    /// `{"paused", "paused_ms", "muted", "muted_ms"}`, the times what is
-    /// left, 0 for until it is lifted.
+    /// Whether sync is off and whether an admin muted the phone:
+    /// `{"sync_off", "sync_off_ms", "muted", "muted_ms"}`, the times what
+    /// is left, 0 for until it is lifted.
     fn state(&self) -> serde_json::Value {
-        let (paused, muted) = self.node.muted();
+        let (off, muted) = self.node.muted();
         serde_json::json!({
-            "paused": paused.is_some(),
-            "paused_ms": paused.unwrap_or(0),
+            "sync_off": off.is_some(),
+            "sync_off_ms": off.unwrap_or(0),
             "muted": muted.is_some(),
             "muted_ms": muted.unwrap_or(0),
         })

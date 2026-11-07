@@ -294,11 +294,11 @@ final class MacModel: ObservableObject {
     }
     func unfreeze(_ id: String) async { await admin(["unfreeze", id], done: String(localized: "Unfrozen.")) }
 
-    /// Sets the sync mode: this Mac's with id nil, or on an admin another
+    /// Turns sync on or off: this Mac's with id nil, or on an admin another
     /// device's, which cbb sends it as a signed command.
     func setMode(_ mode: SyncMode, on id: String? = nil) async {
-        let arguments = id.map { ["mode", "-on", $0, mode.rawValue] } ?? ["mode", mode.rawValue]
-        await admin(arguments, done: String(localized: "The sync mode is set."))
+        guard let id else { return await turnSync(mode == .shared) }
+        await admin(["sync", "-on", id, mode == .shared ? "on" : "off"], done: String(localized: "Sync is set."))
     }
 
     /// Turns sync away from home on or off; on needs the user's yes to the
@@ -307,10 +307,10 @@ final class MacModel: ObservableObject {
         await admin(["global", on ? "on" : "off"], answer: on, done: on ? String(localized: "Sync away from home is on.") : String(localized: "Sync away from home is off."))
     }
 
-    /// Whether this Mac takes no copies from the group now, and until
-    /// when, nil for until it is turned on again.
-    var paused: Bool { status?.paused == true }
-    var pausedUntil: Date? { Self.date(ms: status?.pausedUntilMS) }
+    /// Whether sync is off on this Mac now, and until when, nil for until
+    /// it is turned on again.
+    var syncOff: Bool { status?.mode == SyncMode.own.rawValue }
+    var syncOffUntil: Date? { Self.date(ms: status?.syncUntilMS) }
     /// Whether an admin muted this Mac, and until when.
     var muted: Bool { status?.muted == true }
     var mutedUntil: Date? { Self.date(ms: status?.mutedUntilMS) }
@@ -320,15 +320,15 @@ final class MacModel: ObservableObject {
         return Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
     }
 
-    /// Takes no copies from the group for forMS milliseconds, 0 for until
-    /// turned on again, or takes them again; this Mac's own copies still go
-    /// out. Any user of the Mac may, over the plain socket.
-    func pauseReceiving(_ on: Bool, forMS: Int64 = 0) async {
-        var h = Control.Header(op: on ? "mute" : "unmute")
-        if on, forMS > 0 { h.forMS = forMS }
+    /// Turns this Mac's sync on, or off for forMS milliseconds, 0 for until
+    /// turned on again: the clipboard is then this Mac's own. Any user of
+    /// the Mac may, over the plain socket.
+    func turnSync(_ on: Bool, forMS: Int64 = 0) async {
+        var h = Control.Header(op: "sync", name: on ? "on" : "off")
+        if !on, forMS > 0 { h.forMS = forMS }
         await act {
             _ = try await self.client.request(h)
-            return on ? String(localized: "This Mac takes no copies from the group now; its own still go out.") : String(localized: "This Mac takes the group's copies again.")
+            return on ? String(localized: "Sync is on here: copies go to the group and come from it.") : String(localized: "Sync is off here: the clipboard is this Mac's own.")
         }
     }
 

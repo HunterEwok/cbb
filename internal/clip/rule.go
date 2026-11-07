@@ -20,7 +20,6 @@ import (
 // decides whether the copy goes into its clipboard.
 type Incoming struct {
 	Receives    bool  `json:"receives"`
-	Paused      bool  `json:"paused"`
 	Kind        Kind  `json:"kind"`
 	Mark        bool  `json:"mark"`
 	Unread      bool  `json:"unread"`
@@ -40,7 +39,6 @@ type Verdict string
 const (
 	VerdictWrite      Verdict = "write"
 	VerdictMode       Verdict = "mode"
-	VerdictPaused     Verdict = "paused"
 	VerdictUnread     Verdict = "unread"
 	VerdictSecretGone Verdict = "secret_gone"
 	VerdictNoText     Verdict = "no_text"
@@ -69,8 +67,6 @@ func decide(i Incoming) Verdict {
 	switch {
 	case !i.Receives:
 		return VerdictMode
-	case i.Paused:
-		return VerdictPaused
 	case i.Mark || i.Unread:
 		return VerdictUnread
 	case i.Kind == Secret && i.AgeMS >= i.SecretTTLMS:
@@ -85,7 +81,7 @@ func decide(i Incoming) Verdict {
 	return VerdictWrite
 }
 
-// holds reports whether a mute or a pause until until (the zero time for
+// holds reports whether a mute or sync turned off until until (the zero time for
 // until it is lifted, nil for none) holds at now: cbb_core::rule::holds.
 func holds(until *time.Time, now time.Time) bool {
 	switch {

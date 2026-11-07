@@ -39,9 +39,9 @@ class Member : public QObject
     Q_PROPERTY(QVariantList alerts READ alerts NOTIFY devicesChanged)
     Q_PROPERTY(QString last READ last NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
-    // The quick switch (design.md, "Muting a device"): the group's copies
-    // stay out of the clipboard, until pausedUntil or, when it is invalid,
-    // until the user turns them on again.
+    // Sync turned off (design.md, "Sync on and off"): the clipboard is the
+    // phone's own, until pausedUntil or, when it is invalid, until the user
+    // turns sync on again.
     Q_PROPERTY(bool paused READ paused NOTIFY changed)
     Q_PROPERTY(QDateTime pausedUntil READ pausedUntil NOTIFY changed)
     // An admin muted the phone: its copies stay its own, until mutedUntil

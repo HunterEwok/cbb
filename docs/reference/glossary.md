@@ -16,7 +16,7 @@ page that explains it.
 | **device record** | A signed note about one device (its name, system, keys, where it keeps them) that every member keeps and passes on. A **revocation record** removes a device. |
 | **freeze** | What an admin does to another admin computer that may be stolen: from then on nothing that computer signs counts, until the root decides. |
 | **takeover** | How an admin becomes the root when the root is lost: `cbb takeover` on a computer, or the takeover in an admin phone's app. |
-| **sync mode** | What moves between a device's clipboard and the group: `own`, `shared`, `receive` or `send` (`cbb mode`). |
+| **sync** | Whether a device's clipboard moves with the group's: on, the default, or off, the clipboard its own (`cbb sync`). |
 | **secret** | A copy that a password manager marked as secret, or sent with `cbb copy -secret`: kept only in memory and gone after 60 seconds. |
 | **home network** | The local networks where the group's devices find each other by mDNS, without a server. |
 | **member port** | The TCP port the members talk on at home, 8764 by default. See [ports](devices.md#ports). |

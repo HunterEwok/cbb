@@ -34,9 +34,9 @@ func staysAway(ctx context.Context, d *Device, text string) error {
 	return nil
 }
 
-// syncModes (P34): the hub's sync mode decides what moves between its
-// clipboard and the group; the mode survives a restart, and the root sets
-// another device's mode with cbb mode -on.
+// syncModes (P34): sync on or off on the hub decides what moves between
+// its clipboard and the group; it survives a restart, and the root turns
+// another device's sync off with cbb sync -on.
 func syncModes(ctx context.Context, r *Report, g *benchGroup, timeout time.Duration) {
 	const prefix = "full/P34-modes/"
 	if len(g.members) < 2 {
@@ -68,8 +68,6 @@ func syncModes(ctx context.Context, r *Report, g *benchGroup, timeout time.Durat
 		steps []step
 	}{
 		{"own", []step{{"own-out", hub, other, false}, {"own-in", other, hub, false}}},
-		{"receive", []step{{"receive-out", hub, other, false}, {"receive-in", other, hub, true}}},
-		{"send", []step{{"send-out", hub, other, true}, {"send-in", other, hub, false}}},
 		{"shared", []step{{"shared-out", hub, other, true}, {"shared-in", other, hub, true}}},
 	} {
 		if r.Do(prefix+m.mode+"/set", func() error {
@@ -102,36 +100,28 @@ func syncModes(ctx context.Context, r *Report, g *benchGroup, timeout time.Durat
 				return err
 			})
 		}
-		if m.mode == "send" {
-			r.Do(prefix+"send/restart", func() error {
+		if m.mode == "own" {
+			r.Do(prefix+"own/restart", func() error {
 				if err := restartService(ctx, hub); err != nil {
 					return err
 				}
-				return eventually(ctx, 30*time.Second, func() error { return modeIs(ctx, hub, "send") })
+				return eventually(ctx, 30*time.Second, func() error { return modeIs(ctx, hub, "own") })
 			})
-			r.Do(prefix+"send/listed", func() error {
-				id, err := deviceOf(ctx, hub)
-				if err != nil {
-					return err
-				}
+			r.Do(prefix+"own/listed", func() error {
 				return eventually(ctx, timeout, func() error {
-					out, err := Run(ctx, other, cbbCmd(other)+" status", "")
-					if err != nil {
-						return err
+					row, err := statusRow(ctx, other, hub.Name)
+					if err == nil && !strings.Contains(row, " off ") {
+						err = fmt.Errorf("cbb status on %s does not list %s with sync off: %s", other.Name, hub.Name, row)
 					}
-					for _, line := range strings.Split(out, "\n") {
-						if strings.Contains(line, id) && strings.Contains(line, "send") {
-							return nil
-						}
-					}
-					return fmt.Errorf("cbb status on %s does not list %s in mode send", other.Name, hub.Name)
+					return err
 				})
 			})
 		}
 	}
 
-	// Each other member in own: cbb paste there prints the group's text,
-	// and a mode the root sets with -on shows in the member's cbb mode.
+	// Each other member with sync off: cbb paste there prints the group's
+	// text, and sync the root turns off with -on shows in the member's cbb
+	// sync.
 	for _, d := range g.members[1:] {
 		p := prefix + d.Name + "/"
 		if d.Clipboard == "none" {
@@ -142,33 +132,33 @@ func syncModes(ctx context.Context, r *Report, g *benchGroup, timeout time.Durat
 				}
 			}
 		}
-		r.Do(p+"on-receive", func() error {
+		r.Do(p+"on-off", func() error {
 			id, err := deviceOf(ctx, d)
 			if err != nil {
 				return err
 			}
-			if _, err := Run(ctx, hub, adminCmd(hub)+" mode -on "+id+" receive", ""); err != nil {
+			if _, err := Run(ctx, hub, adminCmd(hub)+" sync -on "+id+" off", ""); err != nil {
 				return noSudo(hub, err)
 			}
-			return eventually(ctx, timeout, func() error { return modeIs(ctx, d, "receive") })
+			return eventually(ctx, timeout, func() error { return modeIs(ctx, d, "own") })
 		})
 		r.Do(p+"shared", func() error { return setMode(ctx, d, "shared") })
 	}
 }
 
-// modeIs checks the device's cbb mode, which a full member shows to any
-// member of the service's group; the lite member's cbb mode asks as root.
+// modeIs checks the device's cbb sync, which a full member shows to any
+// member of the service's group; the lite member's cbb sync asks as root.
 func modeIs(ctx context.Context, d *Device, mode string) error {
 	cmd := cbbCmd(d)
 	if d.OS == "linux-lite" {
 		cmd = adminCmd(d)
 	}
-	out, err := Run(ctx, d, cmd+" mode", "")
+	out, err := Run(ctx, d, cmd+" sync", "")
 	if err != nil {
 		return noSudo(d, err)
 	}
-	if !strings.HasPrefix(out, "Sync mode "+mode+":") {
-		return fmt.Errorf("%s says %q, not mode %s", d.Name, firstLine(out), mode)
+	if !strings.HasPrefix(out, "Sync is "+syncWord(mode)) {
+		return fmt.Errorf("%s says %q, not sync %s", d.Name, firstLine(out), syncWord(mode))
 	}
 	return nil
 }
