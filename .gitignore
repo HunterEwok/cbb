@@ -46,10 +46,6 @@ go.work.sum
 /apps/android/**/.gradle/
 /apps/android/**/.kotlin/
 /apps/android/local.properties
-/cbbtun.aar
-/cbbtun-sources.jar
-/Cbbtun.xcframework/
-/apps/ios/Cbbtun.xcframework/
 /site/out-lighthouse/
 /site/node_modules/
 

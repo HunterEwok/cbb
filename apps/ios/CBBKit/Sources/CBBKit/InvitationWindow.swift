@@ -7,7 +7,7 @@ import Security
 
 /// The pairing window of a remote invitation on the phone that is the
 /// group's hub (docs/protocol.md, section 12): it listens on the loopback
-/// address, where cbbtun's hub joins the connections of the invitation's
+/// address, where the phone's hub joins the connections of the invitation's
 /// guest tunnel, and runs each attempt with admit, one at a time. It admits
 /// one device once, until expires, and ends after three failed attempts;
 /// onEnd gets the admitted device, or why it ended without one.
@@ -45,7 +45,7 @@ public final class InvitationWindow: @unchecked Sendable {
         listener = try TLSListener(alpn: Pairing.alpn, identity: identity, loopback: true) { !$0.isEmpty }
     }
 
-    /// Starts listening and returns the port, which cbbtun's Hub.Invite
+    /// Starts listening and returns the port, which the hub's invite
     /// takes.
     public func start() async throws -> UInt16 {
         let port = try await listener.start()

@@ -77,7 +77,7 @@ final class RustTunnelTests: XCTestCase {
         while Date() < until, events.lock.withLock({ events.states.isEmpty }) { Thread.sleep(forTimeInterval: 0.05) }
         let first = try XCTUnwrap(events.lock.withLock { events.states.first })
         let report = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(first.utf8)) as? [String: Any])
-        XCTAssertNil(report["type"], "the kit gets the report as cbbtun gave it")
+        XCTAssertNil(report["type"], "the kit gets the report as the hub gave it")
         XCTAssertNotNil(report["error"] as? String, first)
     }
 }

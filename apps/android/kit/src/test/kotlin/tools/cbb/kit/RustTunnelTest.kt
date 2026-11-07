@@ -99,7 +99,7 @@ class RustTunnelTest {
             val deadline = System.nanoTime() + 10_000_000_000L
             while (states.isEmpty() && System.nanoTime() < deadline) Thread.sleep(50)
             val report = Json.parseToJsonElement(assertNotNull(states.firstOrNull(), "no report")) as JsonObject
-            assertNull(report["type"], "the app gets the report as cbbtun gave it")
+            assertNull(report["type"], "the app gets the report as the hub gave it")
             assertNotNull(report["error"], report.toString())
         } finally {
             link.close()

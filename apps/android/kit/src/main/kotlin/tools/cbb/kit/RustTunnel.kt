@@ -22,10 +22,9 @@ import kotlin.concurrent.fixedRateTimer
 
 /**
  * The phones' tunnel in Rust (ffi/src/tunnel.rs, the library's feature
- * `tunnel`), in place of mobile/cbbtun: the tunnel to the hub, the phone as
- * the group's hub with its remote invitations and its registration with
- * the forwarder, and the link to the blind relay. The app's Tunnels,
- * HubTunnels and RelayLinks wrap it as they wrapped cbbtun.
+ * `tunnel`): the tunnel to the hub, the phone as the group's hub with its
+ * remote invitations and its registration with the forwarder, and the link
+ * to the blind relay. The app's Tunnels, HubTunnels and RelayLinks wrap it.
  */
 object RustTunnel {
     /** A request the tunnel refused, or an answer it could not give. */
@@ -111,7 +110,7 @@ object RustTunnel {
         return CoreMember.point(c.publicKey.encoded)
     }
 
-    /** The certificates of a JSON array of base64 DER, as cbbtun took a chain. */
+    /** The certificates of a JSON array of base64 DER, as the app hands a chain. */
     private fun chain(json: String): List<ByteArray> =
         (json(json) as? JsonArray)?.map { Base64.getDecoder().decode(it.jsonPrimitive.content) } ?: throw Failure("the chain is not a JSON array")
 
@@ -187,7 +186,7 @@ object RustTunnel {
             op("hub_set_project_ways", "ways" to (json(ways) ?: JsonArray(emptyList())))
         }
 
-        /** The forwarder's report as cbbtun's Status gave it: {} before the registration. */
+        /** The forwarder's report: {} before the registration. */
         fun status(): String = runCatching { (op("hub_status")["forwarder"] as? JsonObject)?.toString() }.getOrNull() ?: "{}"
 
         /** Opens a remote invitation; endpoints is a JSON array of "ip:port". */
@@ -219,7 +218,7 @@ object RustTunnel {
         return Hub(long(ok, "id"))
     }
 
-    /** What a relay link asks of the app, as cbbtun's RelayEvents. */
+    /** What a relay link asks of the app. */
     interface RelayEvents {
         fun dial(peer: String, port: Int)
         fun calling(peer: String, localPort: Int)
@@ -229,9 +228,9 @@ object RustTunnel {
     }
 
     /**
-     * A running link to a blind relay. The library asks which devices are connected another way, where cbbtun asked
-     * whether each one is wanted: the link asks the app about each device on the relay whenever the relay's list
-     * changes and every few seconds, and tells the library.
+     * A running link to a blind relay. The library asks which devices are connected another way: the link asks the
+     * app whether it wants each device on the relay whenever the relay's list changes and every few seconds, and
+     * tells the library.
      */
     class Relay internal constructor(private val events: RelayEvents) {
         private val lock = Any()

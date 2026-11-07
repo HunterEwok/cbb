@@ -5,8 +5,8 @@ import Foundation
 /// The phone as the group's hub while its app is open (docs/design.md, "The
 /// phone as the hub", D-64): the clients it admits by the tunnel keys their
 /// hellos offer, and the offers it answers with (docs/protocol.md, section
-/// 11), by the same rules as a computer's hub. The tunnel itself is
-/// cbbtun's Hub, which takes clientsJSON. It is thread-safe.
+/// 11), by the same rules as a computer's hub. The tunnel itself is the
+/// Rust core's hub, which takes clientsJSON. It is thread-safe.
 public final class PhoneHub: @unchecked Sendable {
     /// A client: its device ID, the tunnel key it offered and its
     /// preshared key, and whether this hub met it itself (by its hello)
@@ -19,7 +19,7 @@ public final class PhoneHub: @unchecked Sendable {
 
         public init(device: String, key: Data, psk: Data, met: Bool = false) { (self.device, self.key, self.psk, self.met) = (device, key, psk, met) }
 
-        /// The same without met, as cbbtun and the other hubs take it.
+        /// The same without met, as the tunnel and the other hubs take it.
         public var shared: Client { Client(device: device, key: key, psk: psk) }
 
         enum CodingKeys: String, CodingKey { case device, key, psk, met }
@@ -84,8 +84,8 @@ public final class PhoneHub: @unchecked Sendable {
     }
 
     /// Whether the clients may come over VLESS: the offers then wait
-    /// for vless, the way to the forwarder that its answer gives (cbbtun's
-    /// Status).
+    /// for vless, the way to the forwarder that its answer gives (the hub's
+    /// status).
     public var vlessOnly: Bool {
         get { lock.withLock { link.vlessOnly } }
         set { lock.withLock { link.vlessOnly = newValue } }
@@ -241,7 +241,7 @@ public final class PhoneHub: @unchecked Sendable {
         }
     }
 
-    /// The clients as cbbtun's StartHub and SetClients take them.
+    /// The clients as the tunnel's hub_start and hub_set_clients take them.
     public func clientsJSON() throws -> String {
         String(decoding: try JSONEncoder().encode(clients.map(\.shared)), as: UTF8.self)
     }

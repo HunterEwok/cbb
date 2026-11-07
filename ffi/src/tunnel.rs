@@ -716,6 +716,9 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
     if req.chain.is_empty() {
         return Err(Error::msg("the hub has no member certificate"));
     }
+    if let Some(id) = &req.vless_id {
+        cbb_core::vless::parse_id(id).map_err(|_| Error::msg("the hub's VLESS user ID is not a UUID"))?;
+    }
     let records = Arc::new(Mutex::new(req.records.unwrap_or_default()));
     let report = Arc::new(Mutex::new(Report::default()));
     // The old registration, if any, stops outside the table's lock: it may
@@ -841,5 +844,141 @@ mod tests {
             !refused(json!({"op": "start", "key": key, "device": device, "hub": hub, "offer": reality})).is_empty()
         );
         assert!(!refused(json!({"op": "start", "key": key, "device": "x", "hub": hub, "offer": offer})).is_empty());
+    }
+
+    unsafe extern "C" fn no_sign(_: *mut core::ffi::c_void, _: *const u8, _: *mut u8, _: *mut usize) -> i32 {
+        -1
+    }
+
+    unsafe extern "C" fn no_event(_: *mut core::ffi::c_void, _: *const u8, _: usize) {}
+
+    fn refused_with(a: Vec<u8>) -> bool {
+        let a: Value = serde_json::from_slice(&a).unwrap();
+        a.get("error").is_some()
+    }
+
+    #[test]
+    fn bad_arguments() {
+        let key = ok(json!({"op": "new_key"}))["key"].clone();
+        let device = DeviceId::random().to_string();
+        let hub = DeviceId::random().to_string();
+        let offer = json!({"hub_key": b64(&[1; 32]), "psk": b64(&[2; 32]), "endpoints": ["127.0.0.1:9"]});
+        let start = |key: &Value, device: &str, hub: &str, offer: &Value| json!({"op": "start", "key": key, "device": device, "hub": hub, "offer": offer});
+        let with = |k: &str, v: Value| {
+            let mut o = offer.clone();
+            o[k] = v;
+            o
+        };
+        for (name, req) in [
+            ("a short key", start(&json!(b64(&[1; 31])), &device, &hub, &offer)),
+            ("a short preshared key", start(&key, &device, &hub, &with("psk", json!(b64(&[2; 31]))))),
+            ("a short hub key", start(&key, &device, &hub, &with("hub_key", json!(b64(&[1; 31]))))),
+            ("a bad device", start(&key, "phone", &hub, &offer)),
+            ("a bad hub", start(&key, &device, "HUB", &offer)),
+            ("a name for an endpoint", start(&key, &device, &hub, &with("endpoints", json!(["example.org:1"])))),
+            ("bad obfuscation", start(&key, &device, &hub, &with("obfuscation", json!({"jc": 1})))),
+            (
+                "a bad VLESS ID",
+                start(
+                    &key,
+                    &device,
+                    &hub,
+                    &with(
+                        "vless",
+                        json!({"transport": "xhttp", "endpoint": "127.0.0.1:443", "server_name": "cbb.tools",
+                               "path": "/aWayInOfItsOwn", "id": "x"}),
+                    ),
+                ),
+            ),
+        ] {
+            let a: Value = serde_json::from_slice(&call(&serde_json::to_vec(&req).unwrap())).unwrap();
+            if let Some(id) = a["ok"]["id"].as_u64() {
+                ok(json!({"op": "stop", "id": id}));
+            }
+            assert!(a.get("error").is_some(), "{name}: {a}");
+        }
+
+        let hub_start = |key: &Value, device: &str, port: u16, clients: Value| {
+            json!({"op": "hub_start", "key": key, "device": device, "member_port": port, "clients": clients,
+                   "listen": "127.0.0.1:0"})
+        };
+        for (name, req) in [
+            ("a short key", hub_start(&json!(b64(&[1; 31])), &device, 1, json!([]))),
+            ("a bad device", hub_start(&key, "HUB", 1, json!([]))),
+            ("no member port", hub_start(&key, &device, 0, json!([]))),
+            (
+                "a bad client",
+                hub_start(&key, &device, 1, json!([{"device": "x", "key": b64(&[1; 32]), "psk": b64(&[2; 32])}])),
+            ),
+        ] {
+            let a: Value = serde_json::from_slice(&call(&serde_json::to_vec(&req).unwrap())).unwrap();
+            if let Some(id) = a["ok"]["id"].as_u64() {
+                ok(json!({"op": "hub_stop", "id": id}));
+            }
+            assert!(a.get("error").is_some(), "{name}: {a}");
+        }
+
+        let id = ok(hub_start(&key, &device, 1, json!([])))["id"].as_u64().unwrap();
+        assert!(!refused(json!({"op": "hub_set_records", "id": id, "records": "{"})).is_empty());
+        assert!(!refused(json!({"op": "hub_set_project_ways", "id": id, "ways": "{"})).is_empty());
+        let reg = |endpoint: &str, pins: Value, chain: Value, vless: Option<&str>| {
+            let mut r = json!({"id": id, "endpoint": endpoint, "pins": pins, "chain": chain, "public": b64(&[4; 65])});
+            if let Some(v) = vless {
+                r["vless_id"] = json!(v);
+            }
+            serde_json::to_vec(&r).unwrap()
+        };
+        let pin = json!([b64(&[3; 32])]);
+        let chain = json!([b64(&[5; 40])]);
+        for (name, req) in [
+            ("a name for an endpoint", reg("cbb.tools:8764", pin.clone(), chain.clone(), None)),
+            ("a bad pin", reg("127.0.0.1:1", json!([b64(b"pin")]), chain.clone(), None)),
+            ("no pin", reg("127.0.0.1:1", json!([]), chain.clone(), None)),
+            ("no chain", reg("127.0.0.1:1", pin.clone(), json!([]), None)),
+            ("a bad VLESS ID", reg("127.0.0.1:1", pin.clone(), chain.clone(), Some("x"))),
+        ] {
+            assert!(refused_with(register(&req, no_sign, 0)), "{name}");
+        }
+        ok(json!({"op": "hub_stop", "id": id}));
+
+        let relay = |key: &Value, device: &str, endpoint: &str, pins: Value, port: u16| {
+            serde_json::to_vec(&json!({"key": key, "device": device, "endpoint": endpoint, "pins": pins,
+                "chain": [b64(&[5; 40])], "public": b64(&[4; 65]), "member_port": port}))
+            .unwrap()
+        };
+        for (name, req) in [
+            ("a short key", relay(&json!(b64(&[1])), &device, "127.0.0.1:8764", pin.clone(), 1)),
+            ("no port", relay(&key, &device, "127.0.0.1", pin.clone(), 1)),
+            ("a bad pin", relay(&key, &device, "127.0.0.1:8764", json!([b64(b"nope")]), 1)),
+            ("a bad device", relay(&key, "phone", "127.0.0.1:8764", pin.clone(), 1)),
+            ("no member port", relay(&key, &device, "127.0.0.1:8764", pin.clone(), 0)),
+        ] {
+            assert!(refused_with(relay_start(&req, no_sign, no_event, 0)), "{name}");
+        }
+    }
+
+    /// Stopping a tunnel ends a connection in use and closes its port.
+    #[test]
+    fn stop_ends_connections() {
+        use std::io::Read;
+        let key = ok(json!({"op": "new_key"}))["key"].clone();
+        // No hub answers: the connection waits in the dial until the stop.
+        let offer = json!({"hub_key": b64(&[1; 32]), "psk": b64(&[2; 32]), "endpoints": ["127.0.0.1:9"]});
+        let t = ok(json!({"op": "start", "key": key, "device": DeviceId::random().to_string(),
+                          "hub": DeviceId::random().to_string(), "offer": offer}));
+        let (id, port) = (t["id"].as_u64().unwrap(), t["port"].as_u64().unwrap() as u16);
+        let mut c = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        c.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let reader = std::thread::spawn(move || c.read(&mut [0; 1]));
+        std::thread::sleep(Duration::from_millis(100));
+        let start = Instant::now();
+        ok(json!({"op": "stop", "id": id}));
+        assert!(start.elapsed() < Duration::from_secs(5), "the stop took {:?}", start.elapsed());
+        match reader.join().unwrap() {
+            Ok(0) | Err(_) => {}
+            Ok(n) => panic!("the connection read {n} bytes after the stop"),
+        }
+        assert!(start.elapsed() < Duration::from_secs(5), "the connection stayed open after the stop");
+        assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err(), "the port still accepts after the stop");
     }
 }

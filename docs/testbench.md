@@ -311,7 +311,7 @@ users get.
 
 **Code coverage**: the fleet and time suites can tell which code of the service their cases
 run. Build the fleet's `cbb` with `-cover` (`CGO_ENABLED=0 go build -cover
--coverpkg=./cmd/...,./internal/...,./mobile/... -o cbb ./cmd/cbb`, and with `-tags benchtime`
+-coverpkg=./cmd/...,./internal/... -o cbb ./cmd/cbb`, and with `-tags benchtime`
 for `-cbb-time`) and pass `-coverdir DIR`: every container writes its counters there, the
 services stopped first so that theirs are written too. Then `go tool covdata textfmt -i DIR -o
 fleet.out` and `go run ./tools/coverage -go fleet.out` give the table, by package, as CI's

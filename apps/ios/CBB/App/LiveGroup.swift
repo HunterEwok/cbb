@@ -1917,7 +1917,7 @@ final class LiveGroup: GroupController {
     }
 
     /// The project's forwarder at the address its name has now, IPv4 first,
-    /// as cbbtun takes it; nil when the name cannot be looked up.
+    /// as the hub takes it; nil when the name cannot be looked up.
     nonisolated static func projectForwarder() async -> HubState.Forwarder? {
         let hostPort = HubState.Forwarder.projectHost
         return await Task.detached { () -> HubState.Forwarder? in

@@ -111,7 +111,7 @@ raises it and proves nothing.
 To see Go's numbers locally:
 
 ```sh
-go test -coverpkg=./cmd/...,./internal/...,./mobile/... -coverprofile=cover.out ./cmd/... ./internal/... ./mobile/...
+go test -coverpkg=./cmd/...,./internal/... -coverprofile=cover.out ./cmd/... ./internal/...
 go run ./tools/coverage -go cover.out -floor tools/coverage/floor.json
 ```
 

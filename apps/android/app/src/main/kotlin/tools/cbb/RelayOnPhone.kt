@@ -46,7 +46,7 @@ data class RelaySettings(val key: ByteArray, val relay: HubState.Forwarder) {
     }
 }
 
-/** What mobile/cbbtun's relay link asks of the app (cbbtun's RelayEvents). */
+/** What the relay link asks of the app. */
 interface RelayLinkEvents {
     /** The relay joined a connection to peer: the app dials 127.0.0.1:port, which takes one connection, as the TLS client expecting peer. */
     fun dial(peer: String, port: Int)
@@ -58,15 +58,15 @@ interface RelayLinkEvents {
     fun changed(state: String)
 }
 
-/** A running link of mobile/cbbtun to a blind relay. */
+/** A running link to a blind relay. */
 interface RelayLink {
     fun setRecords(records: String)
-    /** cbbtun's Relay.SetCredentials: an empty creds goes back to the member certificate. */
+    /** Registers with the group's server credentials: an empty creds goes back to the member certificate. */
     fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String, roots: String, names: String)
     fun close()
 }
 
-/** Starts links to relays; the app's come from mobile/cbbtun, the tests' from a fake. */
+/** Starts links to relays; the app's come from the Rust core, the tests' from a fake. */
 interface RelayLinks {
     fun newKey(): ByteArray
     fun start(
@@ -136,7 +136,7 @@ class RelayOnPhone(
         val shown: String get() = listOf(Base64.getEncoder().encodeToString(serverKey), creds, roots, names).joinToString("\n")
     }
 
-    /** How the link stands, as cbbtun reports it: registered, the other devices of the group at the relay, the connections through it, why it is not connected. */
+    /** How the link stands, as the link reports it: registered, the other devices of the group at the relay, the connections through it, why it is not connected. */
     data class Report(val connected: Boolean = false, val online: List<String> = emptyList(), val through: Int = 0, val error: String? = null)
 
     private val lock = Any()

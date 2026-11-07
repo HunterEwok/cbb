@@ -89,7 +89,7 @@ pub struct Config {
 
 /// Whether the hub's forwarder is the project's, and the ways in over VLESS
 /// that the newest signed entry points name for it (docs/protocol.md,
-/// section 16, "Entry points"), as cbbtun's SetProjectWays takes them.
+/// section 16, "Entry points"), as the phones' hub_set_project_ways takes them.
 #[derive(Clone, Default, Debug)]
 pub struct Ways {
     pub project: bool,

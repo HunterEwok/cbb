@@ -408,7 +408,7 @@ line here with every new function, and a case for it in the catalogue.
 | W.42 | Padded lists | W39 |
 | W.43 | The servers keep nothing | W40, S18 |
 | W.44 | The push sender | W41 |
-| W.45 | Phones away: cbbtun and the loopback port | W42 |
+| W.45 | Phones away: the Rust tunnel and the loopback port | W42 |
 | W.46 | Away on Android in the background | W42 |
 | W.47 | A hub that only passes the copies on (`-forward-only`), and `cbb global hub off` | W43 |
 | W.48 | The ways out carry only cbb | W44 |

@@ -97,7 +97,7 @@ data class HubState(
         }.getOrDefault(false)
 
         /**
-         * The forwarder's address as cbbtun takes it, "ip:port", from what
+         * The forwarder's address as the hub takes it, "ip:port", from what
          * the user typed: an address or a name with its port. A name is
          * looked up now, IPv4 first; on the caller's IO thread.
          */
@@ -115,22 +115,22 @@ data class HubState(
     }
 }
 
-/** A running hub of mobile/cbbtun. */
+/** A running hub of the phone's tunnel. */
 interface HubTunnel {
     fun setClients(json: String)
     /** Registers with the forwarder; vlessID is the group's VLESS user ID, "" without VLESS. */
     fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String)
     fun setRecords(records: String)
-    /** Tells the hub that its forwarder is the project's, with the ways in over VLESS of the signed entry points as JSON, "" for none (cbbtun's Hub.SetProjectWays). */
+    /** Tells the hub that its forwarder is the project's, with the ways in over VLESS of the signed entry points as JSON, "" for none. */
     fun setProjectWays(ways: String)
-    /** cbbtun's Status JSON. */
+    /** The forwarder's report as JSON. */
     fun status(): String
-    /** Opens a remote invitation's guest tunnel (cbbtun's Hub.Invite). */
+    /** Opens a remote invitation's guest tunnel. */
     fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int): HubGuest
     fun close()
 }
 
-/** The guest tunnel of a remote invitation, cbbtun's Guest. */
+/** The guest tunnel of a remote invitation. */
 interface HubGuest {
     /** The invitation's text, cbb://invite#…. */
     val text: String
@@ -142,15 +142,15 @@ interface HubGuest {
     fun close()
 }
 
-/** Starts hubs; the app's come from mobile/cbbtun, the tests' from a fake. */
+/** Starts hubs; the app's come from the Rust core, the tests' from a fake. */
 interface HubTunnels {
     fun newKey(): ByteArray
     fun publicKey(private: ByteArray): ByteArray
     /** Starts the hub; obfuscation is its AmneziaWG settings as JSON, "" for plain WireGuard. */
     fun start(private: ByteArray, device: String, memberPort: Int, obfuscation: String, clients: String): HubTunnel
-    /** New AmneziaWG settings for the group as JSON (cbbtun's NewObfuscation). */
+    /** New AmneziaWG settings for the group as JSON. */
     fun newObfuscation(): String
-    /** A new VLESS user ID for the group (cbbtun's NewVLESSID). */
+    /** A new VLESS user ID for the group. */
     fun newVLESSID(): String
 }
 

@@ -2114,8 +2114,8 @@ The keys of the group's WireGuard tunnel for sync away from home ([design.md](de
 `internal/service/tunnel.go`); the tunnel carries the member protocol between Go members
 ("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
 `tunnel` message (through the phones' member in the Rust core: `tunnel_key`, the `tunnel`
-event, `send_tunnel`) and bind the tunnel itself from
-Go (`mobile/cbbtun`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
+event, `send_tunnel`) and run the tunnel itself in
+the Rust core (`ffi/src/tunnel.rs`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
 the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
 (`member/src/tunnel.rs`, `member/src/away.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over
@@ -2172,9 +2172,9 @@ XHTTP (`member/src/vless.rs`); it refuses an offer whose `vless` is REALITY and 
   first 96 bits of the ID), so the offer does not carry them.
 - A phone can be the hub while its app is open ([design.md](design.md), "The phone as the
   hub", D-64): its member in the Rust core listens for member connections (`listen`; the
-  tunnel's `mobile/cbbtun` `Hub` leads each connection through the tunnel to that port) and
+  tunnel's hub in the Rust core leads each connection through the tunnel to that port) and
   the app admits clients and answers with the offer by the rules above (`PhoneHub`, from the
-  member's `peer` events); `cbbtun`'s `SetClients` takes the clients it keeps.
+  member's `peer` events); the tunnel's `hub_set_clients` takes the clients it keeps.
 - When records revoke a device (section 10, "Certificates", on the chain it presented), the hub
   MUST forget its key at once.
 - All of this happens inside member TLS, so a device gets into the tunnel only after it met
@@ -2430,10 +2430,10 @@ carries:
 - After the member TLS handshake the hub MUST check that the device ID of the client
   certificate gives the tunnel address the connection came from, and close it otherwise,
   so a device cannot use another device's tunnel key.
-  Note: a phone that is a hub does not check this yet. Its tunnel (`mobile/cbbtun`) hands
+  Note: a phone that is a hub does not check this yet. Its tunnel (`ffi/src/tunnel.rs`) hands
   each connection to the app through a loopback port, which does not say from which tunnel
   peer it came, so such a hub knows the client by its member certificate alone. This is
-  planned for 0.7, with a call in `cbbtun` that names the peer of a loopback connection.
+  planned for 0.7, with a call in the phones' tunnel that names the peer of a loopback connection.
 - A member that keeps hubs' offers runs the other end, with the hub it tries as its only
   peer and a keepalive every 25 s. It dials the hub's tunnel address, TCP 8764, with member
   TLS whenever no hub is connected on the home network, trying the hubs in order and each
@@ -2454,8 +2454,8 @@ carries:
 A device that shares no network with the group joins through the hub's tunnel with a remote
 invitation ([design.md](design.md), "Joining from another network"). Implemented in Go
 (`internal/invite`, `internal/service/invite.go`, `cbb invite`, `cbb pair -invite`) for
-computers, and made and served on a phone that is the group's hub (mobile/cbbtun's
-`Hub.Invite`, the kits' `InvitationWindow`); the phones do not use invitations yet.
+computers, and made and served on a phone that is the group's hub (the Rust tunnel's
+`hub_invite`, the kits' `InvitationWindow`); the phones do not use invitations yet.
 
 ### The invitation
 
@@ -2546,7 +2546,7 @@ the admin cancels it.
 ### On a phone that is the hub
 
 The phone makes the invitation in its app while it is registered with its forwarder; its
-`ep` is the forwarder's endpoint. cbbtun's hub adds the guest peer and joins each
+`ep` is the forwarder's endpoint. The phone's hub adds the guest peer and joins each
 connection through the guest tunnel to a loopback port of the kit's pairing window
 (`InvitationWindow`), and once the window admitted the device, to the member listener, for
 the device's first hello. The window runs the exchange of section 6 as the server, with the
@@ -2661,7 +2661,7 @@ together, and close the connection beyond that; a sender MUST stay below it.
      that the current root signed), an admin that is not frozen (the devices list, section
      10, names it an admin with that key), or a device whose newest record has
      `forward_only`. Go hubs (`internal/forward`) and
-     the phones' hub (`mobile/cbbtun`) do this; any other hub is refused as before.
+     the phones' hub (`ffi/src/tunnel.rs`) do this; any other hub is refused as before.
    - `records` are the group's authority records: the path records (section 6, the Welcome; section 10, "The state"), every record
      that is not a `device` record, and of the `device` records a root signed with its own key
      those of a root's own device, every record of each device a root made an admin, so
@@ -2866,7 +2866,7 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 The meeting point, on the user's own server or the project's open relay, for a group that has
 no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Go (`internal/relay`,
 `cbb relay`, and on the devices `internal/service/relay.go`), and on the phones through
-`mobile/cbbtun` (`StartRelay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
+the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.
 
@@ -2989,7 +2989,7 @@ ID, and a device's pseudonym changes with each period.
    (section 4); the answering one as the server, and it MUST close the connection unless the
    client certificate names the device the call came from. So the relay can join two devices,
    but cannot pose as either.
-   On a phone, cbbtun joins the answered connection to the app's member listener on the
+   On a phone, the relay link joins the answered connection to the app's member listener on the
    loopback address and first tells the app the call's device and the connection's source
    port; the listener serves a connection only when the client certificate names the
    device told for its port, and closes any other.
@@ -3662,7 +3662,7 @@ registers with no server, so it signs none and keeps none. The phones' kits do w
 and pass them on through the phone's member in the Rust core (`send_credentials`, its
 `message` events), and pass the same vectors. A phone registers with a relay
 by them once the members' credential lists its server key (`CredentialStore.registration`,
-cbbtun's `Relay.SetCredentials`, or in Rust `cbb_tunnel_relay_credentials`, member/src/relay.rs,
+`cbb_tunnel_relay_credentials`, member/src/relay.rs,
 with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
 names back to device IDs by the server credentials.
 

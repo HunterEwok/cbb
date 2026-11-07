@@ -8,8 +8,8 @@ import Foundation
 /// The phones' tunnel in Rust (ffi/src/tunnel.rs, the library's
 /// feature `tunnel`): the tunnel to the hub, the phone as the group's hub
 /// with its remote invitations and its registration with the forwarder, and
-/// the link to the blind relay, under the same protocols as mobile/cbbtun's,
-/// which they replace (Tunnels, HubTunnels, RelayLinks).
+/// the link to the blind relay, for the kit's Tunnels, HubTunnels and
+/// RelayLinks.
 public enum RustTunnel {
     /// A request the tunnel refused, or an answer it could not give.
     public struct Failure: Error, Equatable, CustomStringConvertible {
@@ -263,8 +263,7 @@ final class RustHub: HubTunnel, @unchecked Sendable {
         _ = try RustTunnel.call(["op": "hub_set_project_ways", "id": id, "ways": try RustTunnel.json(ways) ?? [Any]()])
     }
 
-    /// The forwarder's report as cbbtun's Status gave it: {} before the
-    /// registration.
+    /// The forwarder's report: {} before the registration.
     func status() -> String {
         guard let ok = try? RustTunnel.call(["op": "hub_status", "id": id]),
               let f = ok["forwarder"] as? [String: Any],
@@ -343,9 +342,9 @@ public struct RustRelayLinks: RelayLinks {
 }
 
 /// A running link to a blind relay. The library asks which devices are
-/// connected another way, where cbbtun asked whether each one is wanted:
-/// the link asks the kit about each device on the relay whenever the
-/// relay's list changes and every few seconds, and tells the library.
+/// connected another way: the link asks the kit whether it wants each
+/// device on the relay whenever the relay's list changes and every few
+/// seconds, and tells the library.
 final class RustRelay: RelayLink, @unchecked Sendable {
     private let events: RelayLinkEvents
     private let lock = NSLock()

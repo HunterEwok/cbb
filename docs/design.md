@@ -482,7 +482,7 @@ the iPhone's key already sits in the Secure Enclave behind Face ID, so the group
    taken over, a certificate close to expiry that did not renew, the hub unreachable while
    away from home, a remote paste received or refused. Each is a setting.
 2. **Sync away from home.** A switch on the watch turns the phone's own away mode on and off,
-   as the app's switch does (`AwayFromHome`, `cbbtun`).
+   as the app's switch does (`AwayFromHome`, `RustTunnel`).
 3. **Emergency actions** with the watch's own admin key: freeze an admin computer, remove an
    ordinary device, turn remote paste off on a member, turn sync away from home **off** on a
    member. The watch shows what it signs and asks for a tap; the phone only carries the
@@ -998,7 +998,7 @@ Away from home, and between subnets that mDNS does not reach (for example a Pi o
 192.168.20.x and the rest of the group on 192.168.0.x), members reach each other through the
 group's own WireGuard tunnel in a star around one member, the hub. Built: the tunnel
 (`internal/tunnel`: the hub and the Go client, with tests that clients cannot reach each
-other; `mobile/cbbtun` on the phones; GotaTun in the lite member on Linux), the exchange of
+other; GotaTun in the lite member on Linux and, through `ffi/`, on the phones), the exchange of
 its keys in the member protocol, and `cbb global`, which turns it on with the consent below
 and makes a computer the hub; the phones as clients and, while their app is open, as the
 hub; remote invitations for computers; the forwarder (`cbb forward`, routing by `mac1`),
@@ -1146,8 +1146,8 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   forwarder over an outgoing connection, as a hub behind carrier-grade NAT does, and keeps
   the registration and its hellos while the app is open. The forwarder finds a hub by its
   key, not its address, so a phone that moves from Wi-Fi to a mobile network stays the same
-  hub. The hub's WireGuard runs in the app's process, in `mobile/cbbtun`, beside the client
-  side.
+  hub. The hub's WireGuard runs in the app's process, in the Rust core's tunnel
+  (`ffi/src/tunnel.rs`), beside the client side.
 - **The clients come quickly.** A phone hub is there for minutes at a time, so its clients
   keep trying it every few seconds while their own app or service runs, instead of backing
   off to 30 s and more; a handshake initiation to the forwarder costs one small packet, and
@@ -1208,7 +1208,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 
 All built in 0.5, but for what each step names as still to do.
 
-1. Done: the hub's side in `mobile/cbbtun` (`StartHub`, `Register`): the clients' tunnels,
+1. Done: the hub's side in the Rust core's tunnel (`hub_start`, `cbb_tunnel_register`): the clients' tunnels,
    the member port leading to the kit's member listener, and the registration with the
    forwarder and its hellos by the phone's member key, which the forwarder takes when the
    group's records make that key the root's or an admin's (docs/protocol.md, section 13);
@@ -1228,7 +1228,7 @@ All built in 0.5, but for what each step names as still to do.
    tried at least every 5 s instead of up to 30 s, in `cbb`, the lite member and both apps.
    Still to measure on real phones: the battery cost and the forwarder's load.
 5. Done: remote invitations made and served on the phone (step 7 of the order of work in
-   [design.md](design.md#order-of-work)): cbbtun's guest tunnel (`Hub.Invite`), the kits'
+   [design.md](design.md#order-of-work)): the hub's guest tunnel (`hub_invite`), the kits'
    `InvitationWindow`, and in both apps "Invite a device from afar", which shares the file
    and asks the user to confirm the device; tested against `cbb`'s joiner. Still to do:
    using an invitation on a phone or a TV, so that a parent's TV joins.
@@ -1532,12 +1532,11 @@ relay, or a hub.
      headers, never a key that decrypts anything. The hub's hellos to the forwarder are
      masked with a key the forwarder gives every hub, so they show no constant either.
    - The phones keep the settings with the hub's offer and start their tunnel with them
-     (`mobile/cbbtun` takes them as JSON). The lite member's Rust WireGuard does not speak
-     AmneziaWG, so in an obfuscated group it reaches the hub at home only.
+     (`ffi/src/tunnel.rs` takes them as JSON), as the lite member does (`member/src/awg.rs`).
 2. **WireGuard inside VLESS**, between a client and the forwarder, with
-   Xray-core (MPL-2.0) as a Go module in `cbb`, and in the phones' Go tunnel
-   (`mobile/cbbtun`) rather than libXray, so that one framework carries both; VLESS carries
-   the UDP packets itself. The forwarder then has one path for everything, the hub does not
+   Xray-core (MPL-2.0) as a Go module in `cbb`, and in the phones' and the lite member's
+   Rust tunnel (`member/src/vless.rs`, XHTTP only: REALITY stays on the Go servers); VLESS
+   carries the UDP packets itself. The forwarder then has one path for everything, the hub does not
    change, and traffic is always inside our own tunnel. VLESS adds no security of its own and
    the design does not rely on it: the boundary stays the member TLS, then WireGuard.
    - The forwarder's operator picks the transport, and the forwarder tells each registering
@@ -1674,8 +1673,8 @@ only adds to it.
    computed port as a fallback if AmneziaWG needs it; the project's own server.
 6. The blind relay, the user's own or the project's open one (done for computers).
 7. The phones: the in-app tunnel in both kits and apps, interop tests against the Go hub,
-   making and opening remote invitations. Done: the tunnel, `mobile/cbbtun`, bound by
-   gomobile into an AAR and an xcframework; the tunnel offer in both kits; both apps'
+   making and opening remote invitations. Done: the tunnel, in the Rust core's library
+   (`ffi/src/tunnel.rs`) that both apps link; the tunnel offer in both kits; both apps'
    switch, which keeps the hub's offer and reaches the hub through the tunnel while it is not
    found at home; remote invitations made and served on a phone that is the hub. Using an
    invitation on a phone follows.

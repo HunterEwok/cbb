@@ -403,7 +403,7 @@ final class AppModel: ObservableObject {
     struct Hub: Equatable {
         var on: Bool
         var status: HubOnPhone.Status
-        /// Why the forwarder does not take it, as cbbtun says.
+        /// Why the forwarder does not take it, as the hub says.
         var error: String?
         var forwarder: HubState.Forwarder?
         /// The project's forwarder does not take it and the phone holds no

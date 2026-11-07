@@ -779,8 +779,8 @@ impl Link {
     }
 
     /// Points the link at another of the hub's endpoints, for example when
-    /// the one in use does not answer, as cbbtun's SetEndpoint; one the
-    /// offer did not name is tried with them. Over VLESS alone there is only
+    /// the one in use does not answer; one the offer did not name is tried
+    /// with them. Over VLESS alone there is only
     /// the one way, and it does nothing.
     pub fn set_endpoint(&self, at: SocketAddr) {
         if !self.vless_only {

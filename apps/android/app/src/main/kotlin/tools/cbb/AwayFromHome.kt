@@ -110,7 +110,7 @@ interface OpenTunnel {
     fun close()
 }
 
-/** Makes keys and tunnels; the app's comes from mobile/cbbtun, the tests' from a fake. */
+/** Makes keys and tunnels; the app's come from the Rust core, the tests' from a fake. */
 interface Tunnels {
     fun newKey(): ByteArray
     fun publicKey(private: ByteArray): ByteArray
