@@ -2175,7 +2175,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private fun relay() {
         val (d, members) = synchronized(lock) {
             val g = state ?: return
-            val all = Discovery.withKnown(found, g.addresses.keys, g.tag)
+            // Never this phone itself: as a hub it announces itself, and its
+            // browser finds that announcement too.
+            val all = Discovery.withKnown(found, g.addresses.keys, g.tag).filter { it.device != g.device }.toSet()
             val allowed = if (g.records.records.isEmpty()) null else g.devices.map { it.id }.toSet()
             dialer to (allowed?.let { a -> all.filter { it.device in a }.toSet() } ?: all)
         }
