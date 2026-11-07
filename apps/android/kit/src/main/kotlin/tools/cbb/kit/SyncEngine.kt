@@ -73,7 +73,7 @@ class HybridClock(
  * The phone's sync engine: the group's current event, the IDs seen, and
  * the forwarding rules of docs/protocol.md, section 5 ("wire" parts). What
  * it keeps is simply the current event while it is live. Not safe for
- * concurrent use; MemberNode serializes it.
+ * concurrent use.
  */
 class SyncEngine(
     val device: String,

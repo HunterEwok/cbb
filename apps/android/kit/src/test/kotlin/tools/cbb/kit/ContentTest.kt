@@ -73,88 +73,6 @@ class ContentTest {
     }
 
     @Test
-    fun nodesFetch() {
-        val store = MemoryContent()
-        val changes = Collections.synchronizedList(mutableListOf<Member.Event>())
-        // The copies are sealed: b fetches a's blob and opens it.
-        val keys = TestCopies()
-        val idA = keys.idA
-        val idB = keys.idB
-        val a = MemberNode(SyncEngine(idA, HybridClock()), "Pixel", content = store, copies = keys.a)
-        val b = MemberNode(SyncEngine(idB, HybridClock()), "pi", Member.Role.FULL, onChange = { changes.add(it) }, copies = keys.b)
-        val (pa, pb) = Pipe.pair()
-        val ta = Background { a.serve(pa, idB) }
-        val tb = Background { b.serve(pb, idA) }
-        waitUntil { a.peers == 1 && b.peers == 1 }
-        assertEquals(listOf(idA), b.mediaPeers)
-        assertEquals(emptyList(), a.mediaPeers) // b serves nothing
-
-        // A picture of 5 MiB and a bit, more than the fetch asks for ahead.
-        val png = Random(1).nextBytes((5 shl 20) + 1234)
-        val e = a.send("", Member.Kind.TEXT, media = Content.manifest(store, listOf("image/png" to png)))
-        assertEquals(Member.Kind.MEDIA, e.kind)
-        waitUntil { changes.any { it.id == e.id } }
-        val got = changes.first { it.id == e.id }
-        val part = got.media!!.parts.single()
-        val blob = got.sealed!!.blob!!
-        assertEquals(Blob.sizeOf(part.size), blob.size)
-        // Events keep flowing while the content does.
-        val fetch = Background { Content.bytes(b, got, part) }
-        b.send("meanwhile", Member.Kind.TEXT)
-        waitUntil { a.usable?.first == "meanwhile" }
-        assertContentEquals(png, fetch.join())
-
-        // The phone serves the sealed blob only, never the part in the open.
-        assertFailsWith<MemberNode.MissingException> { b.fetch(idA, part.sha256!!, part.size) { _, _ -> } }
-        // A part the phone does not hold is missing; one over the limit is not fetched.
-        assertFailsWith<MemberNode.MissingException> { b.fetch(idA, ByteArray(32) { 1 }, 10) { _, _ -> } }
-        assertFailsWith<Content.TooLarge> { Content.bytes(b, got, part, limit = 1 shl 20) }
-        // b serves nothing.
-        assertFailsWith<MemberNode.ProtocolException> { a.fetch(idB, blob.sha256, blob.size) { _, _ -> } }
-
-        // An interrupted fetch cancels, and the next one gets it all.
-        val slow = Thread {
-            runCatching { b.fetch(idA, blob.sha256, blob.size) { _, _ -> Thread.sleep(50) } }
-        }.apply { start() }
-        Thread.sleep(100)
-        slow.interrupt()
-        slow.join(5_000)
-        assertContentEquals(png, Content.bytes(b, got, part))
-
-        // A sink that fails ends the fetch with its error.
-        assertFailsWith<IllegalStateException> {
-            b.fetch(idA, blob.sha256, blob.size) { _, _ -> error("disk full") }
-        }
-        assertContentEquals(png, Content.bytes(b, got, part))
-
-        a.closeAll()
-        ta.join()
-        tb.join()
-    }
-
-    @Test
-    fun tooManyGets() {
-        // A store that reads slowly, so the gets wait.
-        val sum = ByteArray(32) { 3 }
-        val store = object : ContentStore {
-            override fun open(sum: ByteArray) = object : ContentSource {
-                override val size = 1L shl 20
-                override fun read(offset: Long, length: Int): ByteArray {
-                    Thread.sleep(2_000)
-                    return ByteArray(length)
-                }
-            }
-        }
-        val a = MemberNode(SyncEngine("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", HybridClock()), "Pixel", content = store)
-        val (pa, pb) = Pipe.pair()
-        val ta = Background { runCatching { a.serve(pa) } }
-        // A peer that asks for more than 64 ranges at once, and reads nothing, is closed.
-        pb.write(Member.encode(Member.Message.Hello(Member.Role.FULL, Member.Hello(0))))
-        runCatching { for (i in 0 until 80) pb.write(Member.encode(Member.Message.Get(Member.Get(sum, i.toLong() * 1000, 1000)))) }
-        assertIs<MemberNode.ProtocolException>(ta.join().exceptionOrNull())
-    }
-
-    @Test
     fun cleanNames() {
         for ((given, want) in listOf(
             "report.pdf" to "report.pdf",
@@ -215,19 +133,4 @@ class ContentTest {
         assertEquals(40L, store.open(big)!!.size)
     }
 
-    /** While a part is served, a cancel of a part that is neither queued nor served is not kept, as in Go, so the peer's cancels hold at most one count for each part it asked for. */
-    @Test
-    fun cancelsOfOtherParts() {
-        val node = MemberNode(SyncEngine("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", HybridClock()), "Pixel")
-        val c = MemberNode.Conn(Pipe.pair().first, null)
-        val part = ByteArray(32) { 7 }
-        synchronized(c.gets) {
-            c.serving = true
-            c.current = part.toHex()
-        }
-        for (i in 0 until 1000) node.get(c, Member.Get(ByteArray(32).also { it[0] = i.toByte(); it[1] = (i shr 8).toByte() }, 0, 0))
-        assertEquals(0, synchronized(c.gets) { c.cancels.size })
-        node.get(c, Member.Get(part, 0, 0))
-        assertEquals(mapOf(part.toHex() to 1), synchronized(c.gets) { c.cancels.toMap() })
-    }
 }

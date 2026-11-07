@@ -262,7 +262,7 @@ object ServerCredentials {
  * A member's server credentials (Go's group.Credentials): the newest
  * period that the group's current root signed, and for it each member's
  * newest server credential and the newest hubs' and members' credentials.
- * Not safe for concurrent use; MemberNode keeps it under its lock.
+ * Not safe for concurrent use: the app keeps it under its lock.
  */
 class CredentialStore(private val groupCA: ByteArray) {
     private var period: ServerCredentials.Credential? = null

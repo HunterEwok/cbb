@@ -74,37 +74,4 @@ class TLSTest {
         }
     }
 
-    @Test
-    fun membersSyncOverTLS() {
-        val caKey = SoftwareSigner()
-        val ca = GroupCertificates.groupCA(caKey, now, pathLength = 1)
-        fun member(): Triple<String, SoftwareSigner, ByteArray> {
-            val id = SyncEngine.newID()
-            val k = SoftwareSigner()
-            return Triple(id, k, GroupCertificates.member(id, k.publicKeyDER, ca, caKey, now))
-        }
-        val (aID, aKey, aCert) = member()
-        val (bID, bKey, bCert) = member()
-        val listener = TLSListener(0, Member.ALPN, bKey.keyPair.private, listOf(bCert)) {
-            runCatching { GroupCertificates.verifyMember(it, ca, now) }.getOrNull() == aID
-        }
-        val got = java.util.concurrent.LinkedBlockingQueue<String>()
-        val b = MemberNode(SyncEngine(bID, HybridClock()), "B", onChange = { got.add(it.text) })
-        val a = MemberNode(SyncEngine(aID, HybridClock()), "A")
-        try {
-            val serving = Background { b.serve(listener.accept()) }
-            val t = TLSTransport.dial("127.0.0.1", listener.port, Member.ALPN, aKey.keyPair.private, listOf(aCert)) {
-                runCatching { GroupCertificates.verifyMember(it, ca, now) }.getOrNull() == bID
-            }
-            val dialled = Background { a.serve(t) }
-            waitUntil { a.peers == 1 }
-            a.send("over TLS", Member.Kind.TEXT)
-            assertEquals("over TLS", got.poll(10, java.util.concurrent.TimeUnit.SECONDS))
-            a.closeAll()
-            dialled.join()
-            serving.join()
-        } finally {
-            listener.stop()
-        }
-    }
 }

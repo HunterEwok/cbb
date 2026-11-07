@@ -144,59 +144,6 @@ class CommandsTest {
         assertFailsWith<Core.Refusal> { Commands.paste(pc, "x", group = "tag", by = pc, now = now, signer = SoftwareSigner(), seal = byteArrayOf(1, 2, 3)) }
     }
 
-    /** A command for a member this one is not connected to goes through one that is, and the result comes back. */
-    @Test
-    fun commandPassedOn() {
-        val (ia, ib, ih) = listOf("a", "b", "c").map { it.repeat(32) }
-        val got = mutableListOf<String>()
-        val a = MemberNode(SyncEngine(ia, HybridClock()), "Pixel")
-        val hub = MemberNode(SyncEngine(ih, HybridClock()), "Hub", onCommand = { _, _ -> synchronized(got) { got += "hub" }; Member.CommandResult("", "done") })
-        val b = MemberNode(SyncEngine(ib, HybridClock()), "Phone two", onCommand = { _, c -> synchronized(got) { got += "b" }; Member.CommandResult(Commands.idOf(c)!!, "done") })
-        val (p1, p2) = Pipe.pair()
-        val (p3, p4) = Pipe.pair()
-        val ts = listOf(
-            Background { a.serve(p1, ih) },
-            Background { hub.serve(p2, ia) },
-            Background { b.serve(p3, ih) },
-            Background { hub.serve(p4, ib) },
-        )
-        waitUntil { a.peers == 1 && b.peers == 1 && hub.peers == 2 }
-        val c = Commands.mode(ib, "own", "tag", ia, Instant.now(), SoftwareSigner())
-        assertFailsWith<MemberNode.ProtocolException> { a.command(ib, c) }
-        // Only through the hubs.
-        assertFailsWith<MemberNode.ProtocolException> { a.command(ib, c, via = listOf("d")) }
-        val r = a.command(ib, c, via = listOf("d", ih))
-        assertEquals("done", r.status)
-        assertEquals(ib, r.by)
-        assertEquals(listOf("b"), synchronized(got) { got.toList() })
-        // The hub passes the same command on once only.
-        assertFailsWith<MemberNode.ProtocolException> { a.command(ib, c, timeoutMS = 300, via = listOf(ih)) }
-        assertEquals(listOf("b"), synchronized(got) { got.toList() })
-        a.closeAll()
-        b.closeAll()
-        hub.closeAll()
-        ts.forEach { it.join() }
-    }
-
-    /** A command goes to the named peer, and its result comes back; a phone refuses commands. */
-    @Test
-    fun commandRoundTrip() {
-        val (pa, pb) = Pipe.pair()
-        val a = MemberNode(SyncEngine("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", HybridClock()), "Pixel")
-        val b = MemberNode(SyncEngine("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", HybridClock()), "Phone two")
-        val ta = Background { a.serve(pa, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") }
-        val tb = Background { b.serve(pb, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") }
-        waitUntil { a.peers == 1 }
-        val c = Commands.mode("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "own", "tag", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", now, SoftwareSigner())
-        val r = a.command("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", c)
-        assertEquals(Commands.idOf(c), r.id)
-        assertEquals("refused", r.status)
-        assertFailsWith<MemberNode.ProtocolException> { a.command("cccccccccccccccccccccccccccccccc", c) }
-        a.closeAll()
-        ta.join()
-        tb.join()
-    }
-
     /**
      * Writes commands this kit signed, with the root key and with an admin
      * CA's, and the records that name both, for internal/group's

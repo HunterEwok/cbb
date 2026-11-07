@@ -170,7 +170,7 @@ class PhoneHub(val publicKey: ByteArray, clients: List<Client> = emptyList()) {
     }
 
     /**
-     * Admits a peer and returns its offer, for MemberNode's hub: null when
+     * Admits a peer and returns its offer, for the phone as the hub: null when
      * it is refused (refused tells why) or the offers wait. changed gets
      * the clients when they changed.
      */
@@ -179,7 +179,7 @@ class PhoneHub(val publicKey: ByteArray, clients: List<Client> = emptyList()) {
 
     /**
      * Admits a peer with the keys its hello offers and returns its offers,
-     * this hub's own first, for MemberNode's hub: empty when it is refused
+     * this hub's own first, for the phone as the hub: empty when it is refused
      * (refused tells why) or the offers wait. changed gets the clients when
      * they changed.
      */
