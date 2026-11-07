@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -43,8 +43,8 @@ fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
             return;
         }
         let Some(list) = addrs.lock().unwrap().clone() else { return };
-        if peer.as_ref().is_some_and(|p| node.connected(p)) {
-            std::thread::sleep(Duration::from_secs(1));
+        if node.is_paused() || peer.as_ref().is_some_and(|p| node.connected(p)) {
+            node.nap(Duration::from_secs(1));
             continue;
         }
         let mut steady = false;
@@ -61,8 +61,13 @@ fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
         if steady {
             wait = Duration::from_secs(1);
         }
-        std::thread::sleep(wait);
-        wait = (wait * 2).min(MAX_WAIT);
+        // A kick (the app resumed, or handed in new addresses) tries again
+        // at once.
+        if node.nap(wait) {
+            wait = Duration::from_secs(1);
+        } else {
+            wait = (wait * 2).min(MAX_WAIT);
+        }
     }
 }
 
@@ -70,6 +75,17 @@ fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
 /// this one; only home network addresses may connect. It returns the port,
 /// or None when it cannot listen: the lite member then only dials.
 pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<u16> {
+    listen_until(node, port, Arc::new(AtomicBool::new(false)), log)
+}
+
+/// As listen, until stop is set and a connection wakes the listener
+/// (Listener::stop).
+pub fn listen_until(
+    node: Arc<Node>,
+    port: u16,
+    stop: Arc<AtomicBool>,
+    log: Arc<dyn Fn(&str) + Send + Sync>,
+) -> Option<u16> {
     let ln = match TcpListener::bind(("::", port)).or_else(|_| TcpListener::bind(("0.0.0.0", port))) {
         Ok(ln) => ln,
         Err(e) => {
@@ -84,7 +100,7 @@ pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) 
     let busy = Arc::new(AtomicUsize::new(0));
     std::thread::spawn(move || {
         for conn in ln.incoming() {
-            if node.is_closed() {
+            if node.is_closed() || stop.load(Ordering::SeqCst) {
                 return;
             }
             let Ok(sock) = conn else { continue };
@@ -111,6 +127,76 @@ pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) 
         }
     });
     Some(port)
+}
+
+/// A member port a phone's app opened while it is in the front, so that
+/// members reach it as the group's hub at home or through its tunnel; it
+/// closes on stop or drop.
+pub struct Listener {
+    pub port: u16,
+    stop: Arc<AtomicBool>,
+}
+
+impl Listener {
+    /// Listens on port (0: any free one), or None when it cannot.
+    pub fn open(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<Listener> {
+        let stop = Arc::new(AtomicBool::new(false));
+        listen_until(node, port, stop.clone(), log).map(|port| Listener { port, stop })
+    }
+
+    /// Closes the port: the listener's thread sees the flag at the
+    /// connection this makes to it.
+    pub fn stop(&self) {
+        if self.stop.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        for host in [IpAddr::from([127, 0, 0, 1]), IpAddr::from(std::net::Ipv6Addr::LOCALHOST)] {
+            if std::net::TcpStream::connect_timeout(&SocketAddr::new(host, self.port), Duration::from_secs(1)).is_ok() {
+                return;
+            }
+        }
+    }
+}
+
+impl Drop for Listener {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+/// The members a phone's app finds itself (Bonjour, NSD, its tunnel's
+/// loopback port) and hands in by address, each dialed again and again
+/// until it is lost.
+#[derive(Default)]
+pub struct Dialers {
+    found: Mutex<HashMap<String, Addrs>>,
+}
+
+impl Dialers {
+    /// Dials the member the app knows as key at addrs; peer is its device
+    /// ID when the app knows it. A key found again takes the new addresses.
+    pub fn found(&self, node: &Arc<Node>, key: &str, addrs: Vec<SocketAddr>, peer: Option<DeviceId>) {
+        let addrs = order(addrs.into_iter());
+        let mut found = self.found.lock().unwrap();
+        if let Some(a) = found.get(key) {
+            *a.lock().unwrap() = Some(addrs);
+        } else if found.len() < MAX_FOUND {
+            let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
+            found.insert(key.to_string(), a.clone());
+            let node = node.clone();
+            std::thread::spawn(move || dial_loop(node, a, peer));
+        }
+        drop(found);
+        node.kick();
+    }
+
+    /// Stops dialing the member the app lost.
+    pub fn lost(&self, node: &Node, key: &str) {
+        if let Some(a) = self.found.lock().unwrap().remove(key) {
+            *a.lock().unwrap() = None;
+            node.kick();
+        }
+    }
 }
 
 /// Starts dialing: the members at the given addresses, and, with mdns, the

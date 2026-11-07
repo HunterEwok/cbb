@@ -23,7 +23,7 @@ pub const MAX_FRAME: usize = 7 << 20;
 /// One message of the member protocol. The hello and the event are decoded
 /// on their own, so an event this member cannot read, for example from a
 /// newer version, is dropped without ending the connection.
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Message {
     #[serde(rename = "t", default)]
     pub kind: String,
@@ -59,6 +59,14 @@ pub struct Message {
     /// 4, "Reach"), kept as it came: the lite member shows no devices.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reach: Option<Value>,
+    /// In a hubs message, what a hub shares with the group's other hubs
+    /// (section 11, "Several hubs"), kept as it came.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hubs: Option<Value>,
+    /// In a credentials message, the group's server credentials the sender
+    /// keeps (section 18), kept as they came.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials: Option<Value>,
 }
 
 /// The answer to a command (section 15): `done`, `refused` or `failed`, and
@@ -67,6 +75,10 @@ pub struct Message {
 pub struct CommandResult {
     #[serde(default)]
     pub id: String,
+    /// The receiver of the command, which names itself, so that a sender
+    /// takes a result a member in between passed back only from it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub by: String,
     #[serde(default)]
     pub status: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -98,6 +110,10 @@ pub struct HelloBody {
     /// (section 11, "Several hubs").
     #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
     pub tunnel_psk: Option<Vec<u8>>,
+    /// From a full member that is not an admin yet: the SubjectPublicKeyInfo
+    /// of its admin key, which the root may certify (section 10, "Admins").
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub admin_key: Option<Vec<u8>>,
     /// The sender's sync mode: own, shared, receive or send; shown, never
     /// trusted.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -268,6 +284,7 @@ pub fn hello(
         device: if device.is_empty() { None } else { Some(to_value(&device)) },
         tunnel_key: tunnel_key.map(|(k, _)| k.to_vec()),
         tunnel_psk: tunnel_key.map(|(_, p)| p.to_vec()),
+        admin_key: None,
         mode: mode.to_string(),
         muted: mute.is_some(),
         muted_for_ms: mute.unwrap_or(0),
@@ -304,6 +321,42 @@ pub fn event(s: &Sealed) -> Message {
 /// An entries message, which passes the signed entry points on.
 pub fn entries(set: &Value) -> Message {
     Message { kind: "entries".into(), entries: Some(set.clone()), ..Default::default() }
+}
+
+/// A command message: a command an admin signed for its receiver
+/// (section 15), which a member in between passes on unchanged.
+pub fn command(r: &Record) -> Message {
+    Message { kind: "command".into(), command: Some(r.clone()), ..Default::default() }
+}
+
+/// A cert message: a renewed member certificate for the receiver and the
+/// admin CA that issued it, None when a root did.
+pub fn cert(cert: &[u8], issuer: Option<&[u8]>) -> Message {
+    Message { kind: "cert".into(), cert: Some(cert.to_vec()), issuer: issuer.map(<[u8]>::to_vec), ..Default::default() }
+}
+
+/// An admin message: the receiver's admin CA, for the admin key its hello
+/// offered (section 10, "Admins").
+pub fn admin(ca: &[u8]) -> Message {
+    Message { kind: "admin".into(), admin_ca: Some(ca.to_vec()), ..Default::default() }
+}
+
+/// A tunnel message: the group's hub's offer for the receiver's tunnel key
+/// (section 11).
+pub fn tunnel(offer: &Value) -> Message {
+    Message { kind: "tunnel".into(), tunnel: Some(offer.clone()), ..Default::default() }
+}
+
+/// A hubs message: what a hub shares with the group's other hubs (section
+/// 11, "Several hubs").
+pub fn hubs(share: &Value) -> Message {
+    Message { kind: "hubs".into(), hubs: Some(share.clone()), ..Default::default() }
+}
+
+/// A credentials message: the group's server credentials the sender keeps
+/// (section 18).
+pub fn credentials(list: &Value) -> Message {
+    Message { kind: "credentials".into(), credentials: Some(list.clone()), ..Default::default() }
 }
 
 /// A message with only its type, such as a ping or a goodbye.

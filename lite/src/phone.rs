@@ -3,19 +3,26 @@
 
 //! The member as a phone's app runs it in its own process (the Aurora app,
 //! through lite/ffi): the same node as the service, with the device key
-//! where the app keeps it, no control socket and no listening port. A
-//! phone dials the members it finds (docs/protocol.md, section 3).
+//! where the app keeps it and no control socket. A phone dials the members
+//! it finds (docs/protocol.md, section 3), by mDNS or as its app hands them
+//! in; while the app is in the front it may also listen as the group's hub
+//! at home (`listen`), and in the background it pauses.
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use cbb_core::clip::{Engine, Kind, Via};
+use cbb_core::certs::DeviceId;
+use cbb_core::clip::{Engine, Event, Kind, Mode, Via};
 use cbb_core::identity::Identity;
-use cbb_core::wire::DeviceInfo;
+use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
+use crate::button::{self, Own};
+use crate::discovery::{Dialers, Listener};
 use crate::error::Result;
-use crate::node::{KeepIdentity, Node, Peer, Presence, WriteReq};
-use crate::records::{Records, Stored as _};
+use crate::node::{KeepIdentity, Node, OnMessage, Peer, Presence, WriteReq};
+use crate::records::{Record, Records, Stored as _};
 use crate::{discovery, service, uptime};
 
 /// What the phone's member starts from.
@@ -50,6 +57,18 @@ pub struct Config {
 /// A running member of a phone's app.
 pub struct Member {
     node: Arc<Node>,
+    dialers: Dialers,
+    listener: Mutex<Option<Listener>>,
+    own: Own,
+    log: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+/// The group's copy as the app shows it and the button fetches it.
+#[derive(Clone, Debug)]
+pub struct Copy {
+    pub event: Event,
+    /// The key the button compares it by (crate::button).
+    pub key: String,
 }
 
 impl Member {
@@ -83,14 +102,17 @@ impl Member {
         engine.set_seal(node.sealer());
         discovery::start(node.clone(), tag.clone(), cfg.peers, false, None, log.clone());
         if cfg.mdns {
-            discovery::start_as_phone(node.clone(), tag, log);
+            discovery::start_as_phone(node.clone(), tag, log.clone());
         }
-        Ok(Member { node })
+        Ok(Member { node, dialers: Dialers::default(), listener: Mutex::new(None), own: Own::default(), log })
     }
 
-    /// Sends a text the user copied on the phone and handed to the app.
+    /// Sends a text the user copied on the phone and handed to the app; the
+    /// button compares the clipboard with it from now on.
     pub fn copy(&self, text: &str, secret: bool) -> Result<()> {
-        self.node.send(text, if secret { Kind::Secret } else { Kind::Text }, Via::Phone)
+        self.node.send(text, if secret { Kind::Secret } else { Kind::Text }, Via::Phone)?;
+        self.own.sent(text);
+        Ok(())
     }
 
     /// The members connected now.
@@ -98,8 +120,164 @@ impl Member {
         self.node.peers()
     }
 
+    /// The members connected now, those that carry records only among them.
+    pub fn all_peers(&self) -> Vec<Peer> {
+        self.node.all_peers()
+    }
+
+    /// The device IDs of the group's devices the records list.
+    pub fn devices(&self) -> Vec<crate::records::Device> {
+        self.node.devices()
+    }
+
+    /// The group's records, to show and to sign new ones over.
+    pub fn records(&self) -> Vec<Record> {
+        self.node.records().lock().unwrap().all()
+    }
+
+    /// The group's current copy, live or not, unless there is none or it is
+    /// an expired secret.
+    pub fn current(&self) -> Option<Copy> {
+        let event = self.node.engine.current()?;
+        let key = button::key_of(&event).unwrap_or_default();
+        Some(Copy { event, key })
+    }
+
+    /// The copy from another device that waits for the phone (the button's
+    /// first case), which the app then takes and reports with took.
+    pub fn waiting(&self) -> Option<Copy> {
+        let me = self.node.identity().id.to_string();
+        let event = button::waiting(self.node.engine.current(), &me, self.node.engine.live_window(), &self.own)?;
+        let key = button::key_of(&event).unwrap_or_default();
+        Some(Copy { event, key })
+    }
+
+    /// The app took the copy id into the phone's clipboard, or saved its
+    /// files, so that it waits no more.
+    pub fn took(&self, id: &str) {
+        if let Some(ev) = self.node.engine.current().filter(|e| e.id == id) {
+            self.own.took(&ev);
+        }
+    }
+
+    /// Whether the button sends what the phone's clipboard holds, by its
+    /// key (the button's second case); the app sends it then, with copy.
+    pub fn sends(&self, board: &str) -> bool {
+        button::sends(board, self.node.engine.current().as_ref(), &self.own)
+    }
+
+    /// Dials the member the app found as key (a Bonjour or NSD name, the
+    /// tunnel) at addrs; device is its device ID when known.
+    pub fn found(&self, key: &str, addrs: Vec<SocketAddr>, device: Option<DeviceId>) {
+        self.dialers.found(&self.node, key, addrs, device);
+    }
+
+    /// Stops dialing the member the app lost.
+    pub fn lost(&self, key: &str) {
+        self.dialers.lost(&self.node, key);
+    }
+
+    /// Listens on port (0: a free one) for the members that dial this phone
+    /// as the group's hub; returns the port, which the app publishes with
+    /// `r=phone`. A port already open stays.
+    pub fn listen(&self, port: u16) -> Result<u16> {
+        let mut l = self.listener.lock().unwrap();
+        if let Some(l) = l.as_ref() {
+            return Ok(l.port);
+        }
+        let opened = Listener::open(self.node.clone(), port, self.log.clone())
+            .ok_or_else(|| crate::error::Error::msg(format!("cannot listen on port {port}")))?;
+        let p = opened.port;
+        *l = Some(opened);
+        Ok(p)
+    }
+
+    /// Closes the port listen opened.
+    pub fn unlisten(&self) {
+        if let Some(l) = self.listener.lock().unwrap().take() {
+            l.stop();
+        }
+    }
+
+    /// Closes every connection with a goodbye and the port, and makes no
+    /// new connection until resume: the app went to the background.
+    pub fn pause(&self) {
+        self.unlisten();
+        self.node.pause();
+    }
+
+    /// Connects again at once after pause.
+    pub fn resume(&self) {
+        self.node.resume();
+    }
+
+    /// Waits up to timeout for a member to connect; for one pass of the
+    /// iPhone's background refresh: resume, wait, take what waits, pause.
+    pub fn wait_connected(&self, timeout: Duration) -> bool {
+        self.node.wait_connected(timeout)
+    }
+
+    /// Sets the phone's sync mode, which its hellos say; the members see it
+    /// at the next connection.
+    pub fn set_mode(&self, mode: Mode) {
+        self.node.engine.set_mode(mode);
+        self.node.reconnect();
+    }
+
+    /// Mutes the phone until until_ms (0: until unmute): its copies stay on
+    /// it.
+    pub fn set_mute(&self, until_ms: Option<i64>) {
+        match until_ms {
+            Some(t) => self.node.engine.set_mute(t),
+            None => self.node.engine.unmute(),
+        }
+        self.node.reconnect();
+    }
+
+    /// Sends a command the app's admin key signed and waits for its result.
+    pub fn command(&self, r: &Record, timeout: Duration) -> Result<CommandResult> {
+        self.node.command(r, timeout)
+    }
+
+    /// Takes records the app signed and sends them to the members.
+    pub fn add_records(&self, rs: &[Record]) {
+        self.node.add_own_records(rs);
+    }
+
+    /// Sends a renewed member certificate to the member to.
+    pub fn send_cert(&self, to: &DeviceId, cert: &[u8], issuer: Option<&[u8]>) -> bool {
+        self.node.send_to(to, wire::cert(cert, issuer))
+    }
+
+    /// Sends a full member the admin CA for the admin key its hello offered.
+    pub fn send_admin_ca(&self, to: &DeviceId, ca: &[u8]) -> bool {
+        self.node.send_to(to, wire::admin(ca))
+    }
+
+    /// Sends the member to this hub's offer for its tunnel key.
+    pub fn send_tunnel(&self, to: &DeviceId, offer: &serde_json::Value) -> bool {
+        self.node.send_to(to, wire::tunnel(offer))
+    }
+
+    /// Sends what this hub shares to the group's other hubs connected, the
+    /// full members among the root and the admins; returns those it went to.
+    pub fn send_hubs(&self, share: &serde_json::Value) -> Vec<DeviceId> {
+        self.node.send_to_hubs(&wire::hubs(share))
+    }
+
+    /// Sends the group's server credentials the app keeps to every member.
+    pub fn send_credentials(&self, list: &serde_json::Value) -> Vec<DeviceId> {
+        self.node.broadcast(&wire::credentials(list), |_| true)
+    }
+
+    /// Sets what gets the admin, hubs and credentials messages peers send.
+    pub fn on_message(&self, f: OnMessage) {
+        self.node.on_message(f);
+    }
+
     /// Stops the member and closes its connections.
     pub fn stop(&self) {
+        self.unlisten();
         self.node.close();
     }
 }

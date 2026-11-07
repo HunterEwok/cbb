@@ -18,7 +18,7 @@ use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
 use crate::certs::{Cert, DeviceId, Usage};
@@ -63,7 +63,8 @@ pub struct WriteReq {
     pub ttl: Option<Duration>,
 }
 
-/// A connected member.
+/// A connected member, as its hello and its reach messages present it:
+/// shown, never trusted.
 #[derive(Clone, Debug)]
 pub struct Peer {
     pub id: DeviceId,
@@ -71,7 +72,37 @@ pub struct Peer {
     pub name: String,
     /// Its operating system, from its hello; empty when it sent none.
     pub os: String,
+    /// Where its keys live: `file`, `hardware` or `rootless`; empty if unknown.
+    pub key_store: String,
+    /// Its sync mode: `own`, `shared`, `receive` or `send`; empty if unknown.
+    pub mode: String,
+    /// Whether it is muted, and for how many milliseconds more (0: until
+    /// the mute is lifted).
+    pub muted: bool,
+    pub muted_for_ms: i64,
+    /// The quick actions that are on there.
+    pub actions: Vec<String>,
+    pub device: cbb_core::wire::DeviceInfo,
+    /// The admin key a full member that is not an admin yet offers.
+    pub admin_key: Option<Vec<u8>>,
+    /// The tunnel key and preshared key it offers the group's hubs.
+    pub tunnel_key: Option<(Vec<u8>, Vec<u8>)>,
+    /// The members it says it is connected to (docs/protocol.md, section 4,
+    /// "Reach").
+    pub reach: Vec<DeviceId>,
+    /// Whether the connection carries records only: no device record lets
+    /// the peer in yet.
+    pub records_only: bool,
 }
+
+/// The most device IDs a reach message is read for.
+const MAX_REACH: usize = 256;
+/// The most commands remembered as passed on, as Go's.
+const MAX_PASSED: usize = 4096;
+
+/// Gets the messages a peer sends that the node does not handle itself:
+/// `admin`, `hubs` and `credentials` for a phone's app, which keeps them.
+pub type OnMessage = Box<dyn Fn(&DeviceId, &Message) + Send + Sync>;
 
 /// Called with a tunnel offer and the device that sent it.
 /// Gets a tunnel offer from the group's root or an admin, and whether the
@@ -127,6 +158,17 @@ pub struct Node {
     /// root), where identity.json cannot: a phone's app whose key is
     /// outside the core keeps its own file.
     keep_identity: Option<KeepIdentity>,
+    /// Paused: the connections are closed and no new one is made, while a
+    /// phone's app is in the background.
+    paused: AtomicBool,
+    /// Wakes the dial loops early: the member resumed or found an address.
+    kick: (Mutex<u64>, Condvar),
+    /// The commands this member sent, by ID, waiting for their results.
+    waiting: Mutex<HashMap<String, Waiting>>,
+    /// The commands a phone passed on, by ID: where each came from, and
+    /// when it expires (docs/protocol.md, section 15).
+    passed: Mutex<HashMap<String, (DeviceId, i64)>>,
+    on_message: RwLock<Option<OnMessage>>,
 }
 
 /// Keeps a changed identity in place of identity.json.
@@ -138,7 +180,34 @@ enum Out {
     Records(Vec<Record>),
     Result(wire::CommandResult),
     Entries(serde_json::Value),
+    /// A message made before it was queued: a command, a cert, an offer.
+    Message(Message),
     Wake, // makes the writer look at the closed flag
+}
+
+/// A command this member sent, waiting for its result.
+struct Waiting {
+    to: DeviceId,
+    tx: SyncSender<wire::CommandResult>,
+}
+
+/// The header of a command's body, for sending and passing it on.
+#[derive(serde::Deserialize, Default)]
+struct CommandHead {
+    #[serde(rename = "type", default)]
+    kind: String,
+    #[serde(default)]
+    to: String,
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    expires_ms: i64,
+}
+
+impl CommandHead {
+    fn of(r: &Record) -> Option<CommandHead> {
+        serde_json::from_slice::<CommandHead>(&r.body).ok().filter(|h| !h.id.is_empty() && h.id.len() <= 64)
+    }
 }
 
 struct Conn {
@@ -146,7 +215,7 @@ struct Conn {
     sock: TcpStream,
     tls: Mutex<tls::Session>,
     tx: SyncSender<Out>,
-    peer: Mutex<Option<(String, String, String)>>, // role, name and system, from the hello
+    peer: Mutex<Option<Peer>>, // from the hello
     chain: Vec<Cert>,
     /// No device record that counts names the peer's key yet: the
     /// connection carries records and nothing else, until the records let
@@ -191,6 +260,11 @@ impl Node {
             home: Mutex::new(HashMap::new()),
             entries,
             keep_identity: None,
+            paused: AtomicBool::new(false),
+            kick: (Mutex::new(0), Condvar::new()),
+            waiting: Mutex::new(HashMap::new()),
+            passed: Mutex::new(HashMap::new()),
+            on_message: RwLock::new(None),
         }
     }
 
@@ -219,7 +293,7 @@ impl Node {
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
         *self.tunnel_key.write().unwrap() = key;
         for c in self.conns.lock().unwrap().values() {
-            if c.peer.lock().unwrap().as_ref().is_some_and(|(role, _, _)| role == "full") {
+            if c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full") {
                 c.close(true);
             }
         }
@@ -295,16 +369,196 @@ impl Node {
 
     /// The connected members that sent their hello, sorted by device ID.
     pub fn peers(&self) -> Vec<Peer> {
-        let conns = self.conns.lock().unwrap();
-        let mut out: Vec<Peer> = conns
-            .values()
-            .filter(|c| !c.records_only)
-            .filter_map(|c| {
-                c.peer.lock().unwrap().clone().map(|(role, name, os)| Peer { id: c.id.clone(), role, name, os })
-            })
-            .collect();
+        let mut out: Vec<Peer> = self.all_peers().into_iter().filter(|p| !p.records_only).collect();
         out.sort_by(|a, b| a.id.cmp(&b.id));
         out
+    }
+
+    /// The connected members that sent their hello, those whose connection
+    /// carries records only among them, sorted by device ID.
+    pub fn all_peers(&self) -> Vec<Peer> {
+        let conns = self.conns.lock().unwrap();
+        let mut out: Vec<Peer> = conns.values().filter_map(|c| c.peer.lock().unwrap().clone()).collect();
+        out.sort_by(|a, b| a.id.cmp(&b.id));
+        out
+    }
+
+    /// Sets what gets the messages the node leaves to its app.
+    pub fn on_message(&self, f: OnMessage) {
+        *self.on_message.write().unwrap() = Some(f);
+    }
+
+    /// Closes every connection with a goodbye and makes no new one until
+    /// resume: a phone's app going to the background.
+    pub fn pause(&self) {
+        self.paused.store(true, Ordering::SeqCst);
+        for c in self.conns.lock().unwrap().values() {
+            c.close(true);
+        }
+    }
+
+    /// Lets the member connect again after pause, at once.
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::SeqCst);
+        self.kick();
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
+    }
+
+    /// Wakes whatever waits in nap.
+    pub fn kick(&self) {
+        let (m, cv) = &self.kick;
+        *m.lock().unwrap() += 1;
+        cv.notify_all();
+    }
+
+    /// Waits up to d, or until kick; reports whether it was kicked.
+    pub fn nap(&self, d: Duration) -> bool {
+        let (m, cv) = &self.kick;
+        let g = m.lock().unwrap();
+        let start = *g;
+        let (g, _) = cv.wait_timeout_while(g, d, |n| *n == start && !self.is_closed()).unwrap();
+        *g != start
+    }
+
+    /// Waits up to timeout for a member to connect and say its hello;
+    /// reports whether one did.
+    pub fn wait_connected(&self, timeout: Duration) -> bool {
+        let end = uptime::now() + timeout;
+        loop {
+            if !self.peers().is_empty() {
+                return true;
+            }
+            let now = uptime::now();
+            if now >= end || self.is_closed() {
+                return false;
+            }
+            std::thread::sleep((end - now).min(Duration::from_millis(100)));
+        }
+    }
+
+    /// Queues a message for the member id; reports whether it is
+    /// connected as a member.
+    pub fn send_to(&self, id: &DeviceId, m: Message) -> bool {
+        let c = self.conns.lock().unwrap().get(id).cloned();
+        match c {
+            Some(c) if !c.records_only => {
+                self.enqueue(&c, Out::Message(m));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Queues a message for every member connected; returns those it went
+    /// to.
+    pub fn broadcast(&self, m: &Message, only: impl Fn(&Peer) -> bool) -> Vec<DeviceId> {
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        let mut to = Vec::new();
+        for c in conns.iter().filter(|c| !c.records_only) {
+            let ok = c.peer.lock().unwrap().as_ref().is_some_and(&only);
+            if ok {
+                self.enqueue(c, Out::Message(m.clone()));
+                to.push(c.id.clone());
+            }
+        }
+        to
+    }
+
+    /// Queues a message for the group's hubs connected: the full members
+    /// the records make the root or an admin, by the key they proved
+    /// (docs/protocol.md, section 11, "Several hubs"); returns those it
+    /// went to.
+    pub fn send_to_hubs(&self, m: &Message) -> Vec<DeviceId> {
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        let mut to = Vec::new();
+        for c in conns.iter().filter(|c| !c.records_only) {
+            let full = c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full");
+            if full && self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
+                self.enqueue(c, Out::Message(m.clone()));
+                to.push(c.id.clone());
+            }
+        }
+        to
+    }
+
+    /// Takes records this member's app signed (an admin's or the root's),
+    /// keeps them and sends them to every peer.
+    pub fn add_own_records(&self, rs: &[Record]) {
+        let me = self.identity().id.clone();
+        self.add_records(rs, &me);
+    }
+
+    /// Sends a command an admin signed and waits up to timeout for its
+    /// result (docs/protocol.md, section 15): straight to its receiver when
+    /// connected, else to the group's hubs connected, which pass it on; a
+    /// `hub` command only goes straight.
+    pub fn command(&self, r: &Record, timeout: Duration) -> Result<wire::CommandResult> {
+        let head = CommandHead::of(r).ok_or_else(|| Error::msg("the command does not decode"))?;
+        let to = DeviceId::parse(&head.to)?;
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.waiting.lock().unwrap().insert(head.id.clone(), Waiting { to: to.clone(), tx });
+        let m = wire::command(r);
+        let sent = if self.send_to(&to, m.clone()) {
+            true
+        } else if head.kind == "hub" {
+            false
+        } else {
+            !self.send_to_hubs(&m).is_empty()
+        };
+        let res = if sent {
+            rx.recv_timeout(timeout).map_err(|_| Error::msg(format!("{to} did not answer in time")))
+        } else {
+            Err(Error::msg(format!("{to} is not connected, nor is a hub of the group")))
+        };
+        self.waiting.lock().unwrap().remove(&head.id);
+        res
+    }
+
+    /// Takes a result: one for a command this member sent, from its
+    /// receiver; or one for a command it passed on, which goes back to
+    /// where the command came from, once.
+    fn take_result(&self, mut res: wire::CommandResult, from: &DeviceId) {
+        if let Some(w) = self.waiting.lock().unwrap().get(&res.id) {
+            if res.by == w.to.as_str() || (res.by.is_empty() && from == &w.to) {
+                let _ = w.tx.try_send(res);
+            }
+            return;
+        }
+        let back = self.passed.lock().unwrap().get_mut(&res.id).map(|(origin, exp)| {
+            *exp = i64::MIN; // passed back once
+            origin.clone()
+        });
+        if let Some(origin) = back {
+            if res.by.is_empty() {
+                res.by = from.to_string();
+            }
+            if let Some(c) = self.conns.lock().unwrap().get(&origin).cloned() {
+                self.enqueue(&c, Out::Result(res));
+            }
+        }
+    }
+
+    /// Passes on a command for another device, as a phone does: only when
+    /// connected to it and not passed before.
+    fn pass(&self, r: Record, head: &CommandHead, from: &DeviceId) {
+        let Ok(to) = DeviceId::parse(&head.to) else { return };
+        let now = uptime::wall_ms();
+        {
+            let mut passed = self.passed.lock().unwrap();
+            passed.retain(|_, (_, exp)| *exp > now);
+            if passed.contains_key(&head.id) || passed.len() >= MAX_PASSED {
+                return;
+            }
+            let c = self.conns.lock().unwrap().get(&to).cloned();
+            let Some(c) = c.filter(|c| !c.records_only && &c.id != from) else { return };
+            let exp = head.expires_ms.min(now + cbb_core::command::COMMAND_LIFETIME_MS + 1000);
+            passed.insert(head.id.clone(), (from.clone(), exp));
+            self.enqueue(&c, Out::Message(wire::command(&r)));
+        }
+        self.logf(&format!("cbb: passed a command from {from} on to {to}"));
     }
 
     /// The devices list from the records.
@@ -466,6 +720,7 @@ impl Node {
 
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
+        self.kick();
         for c in self.conns.lock().unwrap().values() {
             c.close(true);
         }
@@ -482,6 +737,9 @@ impl Node {
     pub fn dial(&self, addr: SocketAddr, peer: Option<DeviceId>) -> Result<()> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
+        }
+        if self.is_paused() {
+            return Err(Error::msg("the member is paused"));
         }
         // Away from home the member protocol goes only through the group's
         // tunnel, whose port is on the loopback address.
@@ -512,6 +770,9 @@ impl Node {
     pub fn accept(&self, sock: TcpStream, addr: SocketAddr, handshaken: &mut dyn FnMut()) -> Result<()> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
+        }
+        if self.is_paused() {
+            return Err(Error::msg("the member is paused"));
         }
         let _ = sock.set_nodelay(true);
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
@@ -570,7 +831,7 @@ impl Node {
         });
         {
             let mut conns = self.conns.lock().unwrap();
-            if self.is_closed() {
+            if self.is_closed() || self.is_paused() {
                 return Err(Error::msg("the service is stopping"));
             }
             if let Some(old) = conns.insert(id.clone(), c.clone()) {
@@ -653,9 +914,7 @@ impl Node {
                 }
                 let (mut h, body) = wire::decode_hello(m.hello.as_ref())?;
                 h.current = h.current.and_then(|e| e.sealed).and_then(|s| self.take(s, &c.id));
-                let name = if crate::records::valid_name(&body.name) { body.name.clone() } else { String::new() };
-                let os = if crate::records::valid_os(&body.os) { body.os.clone() } else { String::new() };
-                *c.peer.lock().unwrap() = Some((m.role.clone(), name, os));
+                *c.peer.lock().unwrap() = Some(peer_of(&c.id, &m.role, &body, c.records_only));
                 if !c.records_only {
                     let out = self
                         .engine
@@ -690,6 +949,7 @@ impl Node {
                 }
                 continue;
             }
+            let me = self.identity().id.clone();
             match m.kind.as_str() {
                 "event" => {
                     let Some(s) = m.event.and_then(|v| serde_json::from_value::<Sealed>(v).ok()) else {
@@ -726,6 +986,16 @@ impl Node {
                 }
                 "command" if m.command.is_some() => {
                     let cmd = m.command.unwrap();
+                    // A phone passes a command for another device on
+                    // (docs/protocol.md, section 15); the lite member
+                    // refuses it for itself.
+                    if self.presence.role == "phone"
+                        && let Some(head) = CommandHead::of(&cmd)
+                        && head.to != me.as_str()
+                    {
+                        self.pass(cmd, &head, &c.id);
+                        continue;
+                    }
                     match self.on_command.read().unwrap().clone() {
                         Some(f) => {
                             // The reader goes on meanwhile, so the peer's
@@ -733,7 +1003,8 @@ impl Node {
                             // its target.
                             let c = c.clone();
                             std::thread::spawn(move || {
-                                let res = f(&c.id, &cmd);
+                                let mut res = f(&c.id, &cmd);
+                                res.by = me.to_string();
                                 if !c.closed.load(Ordering::SeqCst) {
                                     let _ = c.tx.try_send(Out::Result(res));
                                 }
@@ -742,11 +1013,24 @@ impl Node {
                         None => self.enqueue(
                             c,
                             Out::Result(wire::CommandResult {
-                                id: String::new(),
+                                id: CommandHead::of(&cmd).map(|h| h.id).unwrap_or_default(),
+                                by: me.to_string(),
                                 status: "refused".into(),
                                 reason: "this device takes no commands".into(),
                             }),
                         ),
+                    }
+                }
+                "result" if m.result.is_some() => self.take_result(m.result.unwrap(), &c.id),
+                "reach" => {
+                    let reach = reach_of(m.reach.as_ref());
+                    if let Some(p) = c.peer.lock().unwrap().as_mut() {
+                        p.reach = reach;
+                    }
+                }
+                "admin" | "hubs" | "credentials" => {
+                    if let Some(f) = self.on_message.read().unwrap().as_ref() {
+                        f(&c.id, &m);
                     }
                 }
                 "bye" => return Ok(()),
@@ -979,6 +1263,7 @@ fn writer(
             Out::Records(rs) => Some(Message { kind: "records".into(), records: rs, ..Default::default() }),
             Out::Result(r) => Some(wire::result(r)),
             Out::Entries(set) => Some(wire::entries(&set)),
+            Out::Message(m) => Some(m),
             Out::Wake => None,
         }
     };
@@ -1034,6 +1319,36 @@ fn writer(
             Err(RecvTimeoutError::Disconnected) => return,
         }
     }
+}
+
+/// A peer as its hello presents it, with what is not valid left out.
+fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool) -> Peer {
+    let valid = |s: &str, ok: &[&str]| if ok.contains(&s) { s.to_string() } else { String::new() };
+    Peer {
+        id: id.clone(),
+        role: role.to_string(),
+        name: if crate::records::valid_name(&body.name) { body.name.clone() } else { String::new() },
+        os: if crate::records::valid_os(&body.os) { body.os.clone() } else { String::new() },
+        key_store: valid(&body.key_store, &["file", "hardware", "rootless"]),
+        mode: valid(&body.mode, &["own", "shared", "receive", "send"]),
+        muted: body.muted,
+        muted_for_ms: body.muted_for_ms.max(0),
+        actions: body.actions.iter().filter(|a| cbb_core::command::valid_action_name(a)).take(64).cloned().collect(),
+        device: cbb_core::wire::DeviceInfo::of(body),
+        admin_key: body.admin_key.clone().filter(|k| !k.is_empty() && k.len() <= 1024),
+        tunnel_key: match (&body.tunnel_key, &body.tunnel_psk) {
+            (Some(k), Some(p)) if k.len() == 32 && p.len() == 32 => Some((k.clone(), p.clone())),
+            _ => None,
+        },
+        reach: Vec::new(),
+        records_only,
+    }
+}
+
+/// The valid device IDs of a reach message, at most MAX_REACH.
+fn reach_of(v: Option<&serde_json::Value>) -> Vec<DeviceId> {
+    let Some(list) = v.and_then(|v| v.as_array()) else { return Vec::new() };
+    list.iter().take(MAX_REACH).filter_map(|x| x.as_str().and_then(|s| DeviceId::parse(s).ok())).collect()
 }
 
 /// Adds the time an event waited to its age, without overflowing.
