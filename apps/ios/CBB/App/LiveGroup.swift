@@ -783,11 +783,12 @@ final class LiveGroup: GroupController {
     /// from the QR code of the sheet (docs/protocol.md, section 10, "The
     /// recovery key"): finds the group's computers by Bonjour (the sheet's
     /// tag), takes and checks the records from one on a connection that
-    /// carries records only, makes a new root key in the Secure Enclave and
-    /// claims the group with the recovery key, and sends the claim. The
-    /// phone is then a member of the group whose claim waits the group's
-    /// delay, unless the root phone cancels it; finishTakeOverIfDue then
-    /// makes it the root. The recovery key is not kept.
+    /// carries records only, starts its member in the Rust core, makes a new
+    /// root key in the Secure Enclave, and the member claims the group with
+    /// the recovery key and sends the claim. The phone is then a member of
+    /// the group whose claim waits the group's delay, unless the root phone
+    /// cancels it; finishTakeOverIfDue then makes it the root. The recovery
+    /// key is not kept.
     func restore(sheet: Core.RecoveredKey) async throws {
         guard state == nil else { return }
         guard let tag = sheet.group else { throw Restore.Failure(kind: .needsQR, message: Restore.needsQRMessage) }
@@ -815,24 +816,26 @@ final class LiveGroup: GroupController {
                 last = error
                 continue
             }
-            // A root key left from a group this phone made before goes.
-            KeychainIdentity.removeKey(label: Self.caLabel)
-            let se = Self.secureEnclave
-            _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
-            let root = try await signer(label: Self.caLabel, reason: String(localized: "Restore the group with its recovery key", bundle: .app))
-            let newRoot = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
-            let claim = try r.claim(&g, newRoot: newRoot, now: Date())
             try g.save(to: file)
             try modeBox.newDevice()
             forgetCredentials()
             state = g
-            // Sync sends the claim too, as the records differ; this way it is out at once.
-            do {
-                _ = try await Restore.exchange(try await dial(endpoint), name: name, os: "ios", now: Date(), send: [claim])
-            } catch {
-                keysLog.notice("sending the claim; sync sends it later: \(String(describing: error), privacy: .public)")
-            }
+            // The core's member, as this new phone, signs the claim with the recovery key.
             try startSync()
+            guard let n = node else { throw Failure.unreachable }
+            let root = try await newRootKey(reason: String(localized: "Restore the group with its recovery key", bundle: .app))
+            let newRoot = try n.rootCA(public: root.publicKeyDER) { try root.signature(digest: $0) }
+            guard var claimed = state else { return }
+            try r.claim(&claimed, member: n, newRoot: newRoot)
+            try keepTakeover(&claimed, n)
+            // The member sends the claim once it connects; a records-only connection takes it out at once.
+            if let claim = claimed.claimRecord(in: try n.records()) {
+                do {
+                    _ = try await Restore.exchange(try await dial(endpoint), name: name, os: "ios", now: Date(), send: [claim])
+                } catch {
+                    keysLog.notice("sending the claim; sync sends it later: \(String(describing: error), privacy: .public)")
+                }
+            }
             return
         }
         throw last
@@ -843,8 +846,8 @@ final class LiveGroup: GroupController {
     /// card, held once, issues this phone's member certificate from each
     /// slot whose certificate is an admin CA; the phone finds the computers
     /// by Bonjour, takes and checks the records from one, makes a new root
-    /// key, and the card, held again, signs the claim. A YubiKey carries no
-    /// group tag, so the records say which group it is.
+    /// key, and the card, held again, signs the claim through the member. A
+    /// YubiKey carries no group tag, so the records say which group it is.
     func restoreWithCard(pin: String) async throws {
         guard state == nil else { return }
         guard !LocalAddresses.current().isEmpty else { throw Failure.noNetwork }
@@ -883,35 +886,35 @@ final class LiveGroup: GroupController {
                     last = error
                     continue
                 }
-                KeychainIdentity.removeKey(label: Self.caLabel)
-                let se = Self.secureEnclave
-                _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
-                let root = try await signer(label: Self.caLabel, reason: String(localized: "Restore the group with its recovery key", bundle: .app))
-                let newRoot = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
-                let adminKey = try CertificateInfo(der: r.adminCA).publicKey
-                let found = g
-                let (claim, claimed) = try await YubiKeyNfc.withCard(
-                    prompt: String(localized: "Hold the YubiKey again to sign the claim.", bundle: .app),
-                    done: String(localized: "The claim is signed.", bundle: .app)
-                ) { (card: SmartCard) throws -> (Member.Record, PhoneGroup) in
-                    var g = found
-                    try Piv.select(card)
-                    let claim = try r.claim(&g, newRoot: newRoot, now: Date(),
-                                            with: Piv.Signer(card: card, slot: slot, publicKeyDER: adminKey, pin: pin))
-                    return (claim, g)
-                }
-                g = claimed
                 try g.save(to: file)
                 try modeBox.newDevice()
                 forgetCredentials()
                 state = g
-                // Sync sends the claim too, as the records differ; this way it is out at once.
-                do {
-                    _ = try await Restore.exchange(try await dial(endpoint, r), name: name, os: "ios", now: Date(), send: [claim])
-                } catch {
-                    keysLog.notice("sending the claim; sync sends it later: \(String(describing: error), privacy: .public)")
-                }
+                // The core's member, as this new phone, signs the claim with the key on the card.
                 try startSync()
+                guard let n = node else { throw Failure.unreachable }
+                let root = try await newRootKey(reason: String(localized: "Restore the group with its recovery key", bundle: .app))
+                let newRoot = try n.rootCA(public: root.publicKeyDER) { try root.signature(digest: $0) }
+                let adminKey = try CertificateInfo(der: r.adminCA).publicKey
+                guard let found = state else { return }
+                var claimed = try await YubiKeyNfc.withCard(
+                    prompt: String(localized: "Hold the YubiKey again to sign the claim.", bundle: .app),
+                    done: String(localized: "The claim is signed.", bundle: .app)
+                ) { (card: SmartCard) throws -> PhoneGroup in
+                    var g = found
+                    try Piv.select(card)
+                    try r.claim(&g, member: n, newRoot: newRoot, with: Piv.Signer(card: card, slot: slot, publicKeyDER: adminKey, pin: pin))
+                    return g
+                }
+                try keepTakeover(&claimed, n)
+                // The member sends the claim once it connects; a records-only connection takes it out at once.
+                if let claim = claimed.claimRecord(in: try n.records()) {
+                    do {
+                        _ = try await Restore.exchange(try await dial(endpoint, r), name: name, os: "ios", now: Date(), send: [claim])
+                    } catch {
+                        keysLog.notice("sending the claim; sync sends it later: \(String(describing: error), privacy: .public)")
+                    }
+                }
                 return
             }
         }
@@ -1269,74 +1272,104 @@ final class LiveGroup: GroupController {
 
     /// Removes the phone that holds the group's root, when it is lost: this
     /// admin phone makes a new root key in the Secure Enclave, behind Face
-    /// ID, and claims the group for it (docs/protocol.md, section 10, "Handing the
-    /// group over"). The claim waits the group's delay, in which the root,
-    /// if it is still in use, cancels it; finishTakeOverIfDue then makes
-    /// this phone the root.
+    /// ID, and its member in the Rust core makes the new root's CA and
+    /// claims the group for it with the admin key (docs/protocol.md, section
+    /// 10, "Handing the group over"). The claim waits the group's delay, in
+    /// which the root, if it is still in use, cancels it;
+    /// finishTakeOverIfDue then makes this phone the root.
     private func takeOver(from id: String) async throws {
+        guard let n = node else { throw Failure.unreachable }
+        try state?.checkTakeOver(from: id)
         let reason = String(localized: "Take the group over from the lost phone", bundle: .app)
         let admin = try await signer(label: Self.adminLabel, reason: reason)
-        // A root key left from a group this phone made before goes.
-        KeychainIdentity.removeKey(label: Self.caLabel)
-        let se = Self.secureEnclave
-        _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
-        let root = try await signer(label: Self.caLabel, reason: reason)
-        guard var g = state else { return }
-        let newRoot = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
-        let r = try g.takeOver(from: id, adminSigner: admin, newRoot: newRoot, now: Date())
-        try g.save(to: file)
-        state = g
-        groupChanged()
-        sendRecords([r])
+        let root = try await newRootKey(reason: reason)
+        guard var g = state, let ca = g.adminCA else { return }
+        let newRoot = try n.rootCA(public: root.publicKeyDER) { try root.signature(digest: $0) }
+        try n.claim(.takeOver, rootCA: newRoot, public: admin.publicKeyDER, ca: ca, sign: { try admin.signature(digest: $0) }, lost: id)
+        g.claimed(newRoot: newRoot, lost: id)
+        try keepTakeover(&g, n)
     }
 
     /// Takes the group the root handed to this phone (`cbb handover`,
     /// docs/protocol.md, section 10, "Handing the group over"): makes a new
-    /// root key and claims the group with this phone's admin key; the claim
-    /// takes effect at once, so this phone becomes the root right after.
-    /// The computer that was the root stays in the group.
+    /// root key, and the member claims the group with this phone's admin
+    /// key; the claim takes effect at once, so this phone becomes the root
+    /// right after. The computer that was the root stays in the group.
     func takeHandedGroup() async throws {
+        guard let n = node else { throw Failure.unreachable }
+        try state?.checkHandedOver()
         let reason = String(localized: "Take the group the computer handed to this phone", bundle: .app)
         let admin = try await signer(label: Self.adminLabel, reason: reason)
-        KeychainIdentity.removeKey(label: Self.caLabel)
-        let se = Self.secureEnclave
-        _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
-        let root = try await signer(label: Self.caLabel, reason: reason)
-        guard var g = state else { return }
-        let newRoot = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
-        let r = try g.takeHandedOver(adminSigner: admin, newRoot: newRoot, now: Date())
-        try g.save(to: file)
-        state = g
-        groupChanged()
-        sendRecords([r])
+        let root = try await newRootKey(reason: reason)
+        guard var g = state, let ca = g.adminCA else { return }
+        let newRoot = try n.rootCA(public: root.publicKeyDER) { try root.signature(digest: $0) }
+        try n.claim(.takeHandedOver, rootCA: newRoot, public: admin.publicKeyDER, ca: ca, sign: { try admin.signature(digest: $0) })
+        g.claimed(newRoot: newRoot, lost: nil)
+        try keepTakeover(&g, n)
         await finishTakeOverIfDue()
     }
 
-    /// Makes this phone the group's root once its claim took effect: it
-    /// signs, with the new root key, what a new root starts with, and
+    /// A new root key in the Secure Enclave, behind Face ID, for a claim;
+    /// a root key left from a group this phone made before goes.
+    private func newRootKey(reason: String) async throws -> SecKeySigner {
+        KeychainIdentity.removeKey(label: Self.caLabel)
+        let se = Self.secureEnclave
+        _ = try KeychainIdentity.makeKey(label: Self.caLabel, secureEnclave: se, userPresence: se)
+        return try await signer(label: Self.caLabel, reason: reason)
+    }
+
+    /// Keeps g, this phone's group after a step of a takeover, with the
+    /// records the member holds now, its claim or the new root's among them.
+    private func keepTakeover(_ g: inout PhoneGroup, _ n: CoreMember) throws {
+        g.add(try n.records())
+        try g.save(to: file)
+        state = g
+        groupChanged()
+    }
+
+    /// What the member's signing callback answers while a claim waits: it
+    /// asks for no signature then.
+    private struct ClaimWaits: Error {}
+
+    /// Makes this phone the group's root once its claim took effect: the
+    /// core's member signs, with the new root key, this phone's certificate
+    /// from the new root and what a new root starts with, and the phone
     /// becomes the hub when the lost phone was (docs/design.md, "Losing the
-    /// phone"). A claim that was cancelled is dropped.
+    /// phone"). The member says where the claim stands without Face ID,
+    /// since it signs nothing while the claim waits; a claim that was
+    /// cancelled or became void is dropped, one that still waits stays.
     private func finishTakeOverIfDue() async {
-        guard var g = state, g.claim != nil else { return }
-        g.records.refresh()
-        g.adoptRoots()
+        guard let n = node, let g = state, let claim = g.claim else { return }
         let lost = g.claimedFrom
-        if g.currentRoot != g.claim {
-            guard g.dropEndedClaim() else { return }
-            keysLog.notice("the claim to take the group over ended; this phone stays an admin")
-            try? g.save(to: file)
-            state = g
-            return
-        }
         do {
+            guard let k = try KeychainIdentity.loadKey(label: Self.caLabel) else { throw KeychainIdentity.Failure.noIdentity }
+            let rootKey = try SecKeySigner(k).publicKeyDER
+            let name = PhoneGroup.validName(UIDevice.current.name), seal = Self.sealKey()
+            func ask(_ sign: @escaping (Data) throws -> Data) throws -> CoreMember.Takeover {
+                try n.finishTakeover(rootCA: claim, public: rootKey, name: name, store: Records.hardware, seal: seal, sign: sign)
+            }
+            var t = try ask { _ in throw ClaimWaits() }
+            switch t.state {
+            case "cancelled", "void":
+                keysLog.notice("the claim to take the group over ended (\(t.state, privacy: .public)); this phone stays an admin")
+                guard var g = state else { return }
+                g.dropClaim()
+                try keepTakeover(&g, n)
+                return
+            case "effective":
+                break
+            default:
+                keysLog.info("the claim to take the group over is \(t.state, privacy: .public), \(t.leftMS) ms left")
+                return
+            }
             let root = try await signer(label: Self.caLabel, reason: String(localized: "Take the group over from the lost phone", bundle: .app))
-            guard var g = state else { return }
-            let rs = try g.finishTakeOver(rootSigner: root, now: Date(), name: PhoneGroup.validName(UIDevice.current.name), seal: Self.sealKey())
+            t = try ask { try root.signature(digest: $0) }
+            guard let cert = t.cert, var g = state else { return }
+            g.becameRoot(cert: cert, records: try n.records())
             try g.save(to: file)
             state = g
             groupChanged()
-            sendRecords(rs)
-            if let lost { try? node?.disconnect(lost) }
+            if let lost { try? n.disconnect(lost) }
             if let lost, await away?.hub == lost {
                 try await setPhoneHub(true)
             } else {
