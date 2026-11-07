@@ -147,8 +147,8 @@ final class CBBMacTests: XCTestCase {
         XCTAssertTrue(Injector.strokes(for: "").isEmpty)
     }
 
-    /// The window's arrangement: the group's order until the user changes
-    /// it, kept for the group's tag, pruned once the list is whole, and a
+    /// The window's arrangement: the group's order, this Mac first, until
+    /// the user changes it, kept for the group's tag, pruned once the list is whole, and a
     /// change that does not fit says so.
     @MainActor
     func testArrangement() throws {
@@ -163,10 +163,10 @@ final class CBBMacTests: XCTestCase {
         }
         let status = Control.Status(device: "me", group: "g1", role: "full", version: "dev")
         model.show(status: status, devices: [device("me", me: true), device("a"), device("b"), device("c")])
-        XCTAssertEqual(model.arranged.map(\.id), ["d:a", "d:b", "d:c"])
+        XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a", "d:b", "d:c"])
         XCTAssertNil(defaults.data(forKey: MacModel.arrangementKey))
         XCTAssertTrue(model.arrange(.new(name: "Office", devices: ["b", "c"])))
-        XCTAssertEqual(model.arranged.map(\.id), ["d:a", "c:c1"])
+        XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a", "c:c1"])
         XCTAssertEqual(model.collection(holding: "c")?.name, "Office")
         XCTAssertFalse(model.arrange(.rename(collection: "c1", name: String(repeating: "x", count: 65))))
         XCTAssertNotNil(model.message)
@@ -174,10 +174,10 @@ final class CBBMacTests: XCTestCase {
         model.show(status: status, devices: [device("me", me: true), device("a"), device("c")])
         XCTAssertEqual(model.collection("c1")?.0.devices, ["c"])
         let stored = Arrangement.decode(defaults.data(forKey: MacModel.arrangementKey), group: "g1")
-        XCTAssertEqual(stored.items.count, 2)
+        XCTAssertEqual(stored.items.count, 3)
         // Another group starts afresh.
         model.show(status: Control.Status(device: "me", group: "g2", role: "full", version: "dev"), devices: [device("me", me: true), device("a")])
-        XCTAssertEqual(model.arranged.map(\.id), ["d:a"])
+        XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a"])
         defaults.removePersistentDomain(forName: "cbb-mac-arrange-test")
     }
 }
