@@ -2372,7 +2372,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val (n, want, before) = synchronized(lock) {
             val g = state ?: return
             val n = node ?: return
-            val all = Discovery.withKnown(found, g.addresses.keys, g.tag).filter { it.group == null || it.group == g.tag }
+            // Never this phone itself: as a hub it announces itself, and its
+            // browser finds that announcement too.
+            val all = Discovery.withKnown(found, g.addresses.keys, g.tag).filter { (it.group == null || it.group == g.tag) && it.device != g.device }
             val allowed = if (g.records.records.isEmpty()) null else g.devices.map { it.id }.toSet()
             val b = browser
             val want = all.filter { allowed == null || it.device in allowed }.associate { m ->

@@ -203,7 +203,8 @@ enum OneShot {
         try node.addRecords(g.records.records)
         // The members browsing finds, and those at the addresses they had
         // when admitted, only the group's devices.
-        let devices = Set(g.devices.map(\.id)), known = g.addresses, tag = g.tag
+        // Never this phone itself, which as a hub announces itself.
+        let devices = Set(g.devices.map(\.id)).subtracting([g.device]), known = g.addresses, tag = g.tag
         let ref = BrowserRef()
         let browser = BonjourBrowser { found in
             Task {

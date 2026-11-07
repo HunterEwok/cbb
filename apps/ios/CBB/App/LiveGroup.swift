@@ -1429,7 +1429,7 @@ final class LiveGroup: GroupController {
                              log: { what, error in hubLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
         let isHub = g.isAdmin && hub.isOn
         if !isHub, let s = awayState, let key = try? GoTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
-        let relay = Relay(group: g.tag)
+        let relay = Relay(group: g.tag, device: g.device)
         relay.allowed = Self.allowed(g)
         // Through the tunnel the phone dials the hub's member port at its
         // loopback port, with the same TLS as at home, and only while the
@@ -2360,8 +2360,14 @@ final class LiveGroup: GroupController {
         private var handed: [String: [String]] = [:]
         /// The group tag of the members at known addresses.
         let group: String
+        /// This phone's device ID, never dialed: as a hub it announces
+        /// itself, and its browser finds that announcement too.
+        let device: String
 
-        init(group: String) { self.group = group }
+        init(group: String, device: String) {
+            self.group = group
+            self.device = device
+        }
 
         /// The member that dials what browsing finds, and the browser that
         /// resolves the addresses.
@@ -2415,7 +2421,7 @@ final class LiveGroup: GroupController {
                 last = found
                 let now = ProcessInfo.processInfo.systemUptime
                 foundAt = Dictionary(uniqueKeysWithValues: Set(found.filter { $0.group == group }.map(\.device)).map { ($0, foundAt[$0] ?? now) })
-                let all = Discovery.withKnown(found, known: Set(_addresses.keys), group: group).filter { $0.group == group }
+                let all = Discovery.withKnown(found, known: Set(_addresses.keys), group: group).filter { $0.group == group && $0.device != device }
                 return (node, browser, _allowed.map { a in all.filter { a.contains($0.device) } } ?? all, _addresses)
             }
             guard let n else { return }
