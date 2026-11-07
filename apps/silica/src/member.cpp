@@ -152,6 +152,12 @@ void Member::event(const QByteArray &json)
     } else if (type == QStringLiteral("write")) {
         write(e.value(QStringLiteral("text")).toString(), e.value(QStringLiteral("kind")).toString() == QStringLiteral("secret"),
               qint64(e.value(QStringLiteral("ttl_ms")).toDouble()));
+    } else if (type == QStringLiteral("identity")) {
+        QList<QByteArray> roots;
+        for (const QJsonValue &r : e.value(QStringLiteral("roots")).toArray())
+            roots.append(QByteArray::fromBase64(r.toString().toLatin1()));
+        emit identityChanged(QByteArray::fromBase64(e.value(QStringLiteral("cert")).toString().toLatin1()),
+                             QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
     }
 }
 

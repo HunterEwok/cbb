@@ -85,6 +85,10 @@
         <source>This phone keeps no keys for apps.</source>
         <translation>此手机不为应用保存密钥。</translation>
     </message>
+    <message>
+        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
+        <translation>另一台设备没有以管理员身份接纳此手机。只有群组的根设备可以设立管理员：请在根设备上以管理员身份接纳它（cbb pair -qr -admin），或者以非管理员身份加入。</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -107,6 +111,18 @@
     <message>
         <source>Try again</source>
         <translation>重试</translation>
+    </message>
+    <message>
+        <source>Join as an admin</source>
+        <translation>以管理员身份加入</translation>
+    </message>
+    <message>
+        <source>Making the admin key…</source>
+        <translation>正在生成管理员密钥…</translation>
+    </message>
+    <message>
+        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
+        <translation>在群组的根电脑上用此代码以管理员身份接纳此手机：在 CBB 应用中添加设备并选择以管理员身份接纳，或运行 cbb pair -qr -admin。请保持此屏幕打开。</translation>
     </message>
 </context>
 <context>
@@ -186,6 +202,22 @@
     <message>
         <source>Version</source>
         <translation>版本</translation>
+    </message>
+    <message>
+        <source>Join a group as an admin</source>
+        <translation>以管理员身份加入群组</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>在群组中</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>管理员</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>成员</translation>
     </message>
 </context>
 </TS>

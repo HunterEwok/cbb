@@ -73,7 +73,14 @@ All notable changes to cbb are documented in this file. The format follows
   (docs/protocol.md, section 10, "Who signs what"); only the root makes a phone an admin.
 - `cbb pair -qr` on the group's root or an admin, on Linux, Windows and macOS alike, admits a
   device that shows a QR code and waits, such as the Aurora phone: it reads the code's text
-  and dials the device.
+  and dials the device. With `-admin`, on the root, a phone that asks to be an admin becomes
+  one. The Mac app and the tray app do it from "Add a device" ("Admit by QR code"): paste the
+  code's text or open a picture of it, and on the root choose to admit it as an admin.
+- The Aurora app joins as an admin when the user asks ("Join a group as an admin"): it makes a
+  second key, the admin key, in its OP-TEE token (in a file on Sailfish OS and Aurora 4),
+  offers it with its proof, and keeps the admin CA the root issues for it; the main page says
+  whether the phone is an admin. The app keeps a certificate an admin renewed, and a new root,
+  in its own file.
 - The Rust core joins a phone by its QR code with a key it does not hold, such as the Aurora
   app's key in OP-TEE: lite/ffi's `cbb_join_*` functions run the pairing inside the core's TLS
   and ask the app to sign; a test joins them to a computer's group.
@@ -1512,6 +1519,11 @@ All notable changes to cbb are documented in this file. The format follows
   away kept only what the hub before it had passed on.
 - `cbb status` says which devices are hubs, and which of them only pass the copies on, as
   the apps' device pages do.
+- A phone that is the hub while its app is open no longer dials itself: its browser found
+  its own announcement and the phone kept a second connection to its own device ID.
+- The Android emulator check of files from a computer waits for the computer's files to
+  reach the phone before it presses the button; pressed earlier, the button sent the
+  phone's older clipboard text, which then won over the files.
 - The iPhone app no longer freezes while iOS asks whether it may paste: it reads the
   clipboard off the main thread, for the remote paste sheet's empty field and for a sync
   that reads the clipboard itself, so iOS stops reporting a hang of the app.

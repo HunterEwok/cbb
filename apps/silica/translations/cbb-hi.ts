@@ -85,6 +85,10 @@
         <source>This phone keeps no keys for apps.</source>
         <translation>यह फ़ोन ऐप्स के लिए कुंजियाँ नहीं रखता।</translation>
     </message>
+    <message>
+        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
+        <translation>दूसरे डिवाइस ने इस फ़ोन को एडमिन के रूप में स्वीकार नहीं किया। केवल समूह का रूट एडमिन बनाता है: वहाँ इसे एडमिन के रूप में स्वीकार करें (cbb pair -qr -admin), या एडमिन बने बिना जुड़ें।</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -107,6 +111,18 @@
     <message>
         <source>Try again</source>
         <translation>फिर से कोशिश करें</translation>
+    </message>
+    <message>
+        <source>Join as an admin</source>
+        <translation>एडमिन के रूप में जुड़ें</translation>
+    </message>
+    <message>
+        <source>Making the admin key…</source>
+        <translation>एडमिन कुंजी बन रही है…</translation>
+    </message>
+    <message>
+        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
+        <translation>समूह के रूट कंप्यूटर पर इस कोड से इस फ़ोन को एडमिन के रूप में स्वीकार करें: CBB ऐप में डिवाइस जोड़ें और इसे एडमिन के रूप में स्वीकार करना चुनें, या cbb pair -qr -admin चलाएँ। यह स्क्रीन खुली रखें।</translation>
     </message>
 </context>
 <context>
@@ -186,6 +202,22 @@
     <message>
         <source>Version</source>
         <translation>संस्करण</translation>
+    </message>
+    <message>
+        <source>Join a group as an admin</source>
+        <translation>एडमिन के रूप में समूह से जुड़ें</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>समूह में</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>एडमिन</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>सदस्य</translation>
     </message>
 </context>
 </TS>

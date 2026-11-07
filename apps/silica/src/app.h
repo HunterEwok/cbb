@@ -24,6 +24,7 @@ class App : public QObject
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
     Q_PROPERTY(QString group READ group NOTIFY groupChanged)
     Q_PROPERTY(QString device READ device NOTIFY groupChanged)
+    Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
 
@@ -44,13 +45,17 @@ public:
     // The group's tag and this phone's device ID once it joined, else empty.
     QString group() const { return m_member.groupTag(); }
     QString device() const { return m_member.device; }
+    // Whether the group's root made this phone an admin when it joined.
+    bool admin() const { return m_member.isAdmin(); }
     Join *join() { return &m_join; }
     Member *member() { return &m_node; }
 
     // Finds or makes the phone's key, off the GUI thread.
     Q_INVOKABLE void setUpKey();
-    // Listens for the device that scans this phone's QR code.
-    Q_INVOKABLE void startJoin();
+    // Listens for the device that scans this phone's QR code; with admin,
+    // the phone asks to be an admin and offers its admin key, made now the
+    // first time, off the GUI thread.
+    Q_INVOKABLE void startJoin(bool admin = false);
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();
@@ -65,6 +70,7 @@ private:
     // Starts the member once the phone has both its key and a group.
     void startMember();
     QString phoneName() const;
+    QString phoneOs() const;
 
     OsInfo m_os;
     QString m_core;

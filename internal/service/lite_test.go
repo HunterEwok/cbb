@@ -7,8 +7,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"net"
 	"net/netip"
 	"os"
@@ -212,59 +215,7 @@ func TestFFIJoiner(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	addr := ln.Addr().String()
-	ln.Close()
-	app := exec.Command(bin, "-addr", addr, "-name", "aurora phone", "-dir", t.TempDir(), "-peer", pi.addr())
-	app.Stderr = testWriter{t, "phone-on-linux: ", nil}
-	out, err := app.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	in, err := app.StdinPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := app.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		in.Close()
-		app.Process.Kill()
-		app.Wait()
-	}()
-	lines := make(chan string, 64)
-	go func() {
-		sc := bufio.NewScanner(out)
-		for sc.Scan() {
-			if l, ok := strings.CutPrefix(sc.Text(), "LOG "); ok {
-				t.Logf("phone-on-linux: %s", l)
-				continue
-			}
-			lines <- sc.Text()
-		}
-		close(lines)
-	}()
-	next := func(prefix string) string {
-		t.Helper()
-		deadline := time.After(joinTimeout)
-		for {
-			select {
-			case l, ok := <-lines:
-				if !ok {
-					t.Fatalf("phone-on-linux ended before %q", prefix)
-				}
-				if rest, ok := strings.CutPrefix(l, prefix); ok {
-					return rest
-				}
-			case <-deadline:
-				t.Fatalf("phone-on-linux printed no %q", prefix)
-			}
-		}
-	}
+	next, in := phoneOnLinux(t, bin, "-name", "aurora phone", "-dir", t.TempDir(), "-peer", pi.addr())
 	qr := next("QR: ")
 	// The service admits it as cbb pair -qr does.
 	jc, ok := phone.ParseJoinQR(qr)
@@ -307,6 +258,131 @@ func TestFFIJoiner(t *testing.T) {
 	}
 	fmt.Fprintln(in, "COPY from the phone")
 	waitFor(t, "the service has the phone's text", func() bool { return pi.paste(t) == "from the phone" })
+
+	// Eighteen months later the service renews the phone's certificate,
+	// and the app gets it to keep in its own file: the core has no
+	// identity file for a key outside it.
+	piAddr := pi.addr()
+	pi.stop()
+	pi.cfg = func(c *Config) {
+		c.now = func() time.Time { return time.Now().AddDate(1, 6, 0) }
+		c.listen = func() (net.Listener, error) { return net.Listen("tcp", piAddr) }
+	}
+	pi = restartService(t, &h, pi)
+	der, err := base64.StdEncoding.DecodeString(next("IDENTITY "))
+	if err != nil {
+		t.Fatal(err)
+	}
+	renewed, err := x509.ParseCertificate(der)
+	if err != nil || renewed.NotAfter.Before(time.Now().AddDate(1, 6, 0)) {
+		t.Fatalf("the phone kept no renewed certificate: %v", err)
+	}
+}
+
+// phoneOnLinux starts lite/ffi's example phone-on-linux, the Aurora app on
+// Linux, listening on a free port with the arguments, and returns what
+// reads its next line with a prefix and its standard input.
+func phoneOnLinux(t *testing.T, bin string, args ...string) (next func(prefix string) string, in io.Writer) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+	app := exec.Command(bin, append([]string{"-addr", addr}, args...)...)
+	app.Stderr = testWriter{t, "phone-on-linux: ", nil}
+	out, err := app.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdin, err := app.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		stdin.Close()
+		app.Process.Kill()
+		app.Wait()
+	})
+	lines := make(chan string, 64)
+	go func() {
+		sc := bufio.NewScanner(out)
+		for sc.Scan() {
+			if l, ok := strings.CutPrefix(sc.Text(), "LOG "); ok {
+				t.Logf("phone-on-linux: %s", l)
+				continue
+			}
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	return func(prefix string) string {
+		t.Helper()
+		deadline := time.After(joinTimeout)
+		for {
+			select {
+			case l, ok := <-lines:
+				if !ok {
+					t.Fatalf("phone-on-linux ended before %q", prefix)
+				}
+				if rest, ok := strings.CutPrefix(l, prefix); ok {
+					return rest
+				}
+			case <-deadline:
+				t.Fatalf("phone-on-linux printed no %q", prefix)
+			}
+		}
+	}, stdin
+}
+
+// TestFFIJoinerAdmin: the Aurora app that offers an admin key joins as an
+// admin through the root's window that may make admins (cbb pair -qr
+// -admin), its admin CA for that key, and any other window refuses it.
+func TestFFIJoinerAdmin(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
+	admit := func(next func(string) string, admins bool) (*control.Message, error) {
+		jc, ok := phone.ParseJoinQR(next("QR: "))
+		if !ok {
+			t.Fatal("not a join QR code")
+		}
+		return pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint, Admins: admins}, "")
+	}
+	next, _ := phoneOnLinux(t, bin, "-name", "refused phone", "-admin")
+	if _, err := admit(next, false); err == nil {
+		t.Fatal("a window that makes no admins admitted a phone that offers an admin key")
+	}
+	next, _ = phoneOnLinux(t, bin, "-name", "admin phone", "-admin")
+	if m, err := admit(next, true); err != nil || m.Name != "admin phone" {
+		t.Fatalf("admitting the phone as an admin: %v, %+v", err, m)
+	}
+	der, err := base64.StdEncoding.DecodeString(next("Admin CA "))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := x509.ParseCertificate(der)
+	if err != nil || !ca.IsCA || !strings.HasPrefix(ca.Subject.CommonName, "cbb admin ") {
+		t.Fatalf("the admin CA: %v, %+v", err, ca)
+	}
+	for _, d := range pi.devices(t) {
+		if d.Name == "admin phone" && (!d.Admin || d.Role != group.RolePhone) {
+			t.Errorf("the phone is listed as %+v", d)
+		}
+		if d.Name == "refused phone" {
+			t.Errorf("the refused phone is listed: %+v", d)
+		}
+	}
 }
 
 // dialJoiner plays the phone that scanned a listening joiner's QR code: it

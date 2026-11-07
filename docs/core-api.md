@@ -47,8 +47,12 @@ code's text and modules and the code; for each connection a member dials, `cbb_j
 starts an attempt and `cbb_join_feed` takes the bytes that arrive and answers those to send
 and whether the member admitted the phone (with its certificate, the group CA, the roots and
 the records file); `cbb_join_finish` tells the member whether the app stored it, and
-`cbb_join_free` ends the joiner. The pairing runs inside the core's TLS
-(`cbb_core::pair_session`); the app only moves the bytes.
+`cbb_join_free` ends the joiner. `cbb_join_new_admin` does the same for a phone that asks to be
+an admin: the request names `admin_public`, the admin key's public point, and a second callback
+signs with that key; the phone's info offers the key with its proof (docs/protocol.md,
+section 6, ADa), and the joined answer carries `admin_ca`, the admin CA the group's root
+issued for it. The pairing runs inside the core's TLS (`cbb_core::pair_session`); the app only
+moves the bytes.
 
 Built with the feature `member` too (again only `bind.sh aurora`), the library runs the lite
 member's own node in the app's process once the phone is in a group (`lite/ffi/src/member.rs`,
@@ -56,12 +60,16 @@ over `cbb_lite::phone`): `cbb_member_start` takes the app's data directory, the 
 system and versions, its identity (device, certificate, issuer, group CA, roots), its public
 key, its secret for sealed messages and the same signing callback, and a callback that gets
 each event as JSON from the node's threads (`write`: a text for the phone's clipboard, with its
-kind and, for a secret, how long it may stay; `log`: a line for the app's log). The node signs
+kind and, for a secret, how long it may stay; `log`: a line for the app's log; `identity`: the
+certificate, issuer and roots after an admin renewed the certificate or a takeover made a new
+root, which the app keeps in its own file, as the core keeps no identity file for a key it does
+not hold). The node signs
 its TLS handshakes and its copies through the callback, presents itself as a phone (role
 `phone`, key store `hardware`, or `file` when the request's `key_store` says so), never listens and dials the members mDNS finds;
 `cbb_member_copy` sends a text the user handed to the app, `cbb_member_peers` lists the members
-connected and `cbb_member_stop` stops it. `TestFFIJoiner` runs the join and then sync both ways
-against a Go member through the example `phone-on-linux`.
+connected and `cbb_member_stop` stops it. `TestFFIJoiner` runs the join, sync both ways and a
+renewal against a Go member through the example `phone-on-linux`, and `TestFFIJoinerAdmin` the
+join as an admin.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
 `libcbb_ffi`, or through the same core built as WebAssembly (`lite/wasm`, `cbb_call` and its

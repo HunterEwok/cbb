@@ -30,6 +30,11 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
             }
             MenuItem {
+                visible: app.group === "" && app.keyLevel !== "none"
+                text: qsTr("Join a group as an admin")
+                onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"), { admin: true })
+            }
+            MenuItem {
                 visible: app.group !== ""
                 text: qsTr("Leave the group")
                 onClicked: remorse.execute(qsTr("Leaving the group"), function() { app.leave() })
@@ -71,6 +76,11 @@ Page {
                 visible: app.device !== ""
                 label: qsTr("Device")
                 value: app.device
+            }
+            DetailItem {
+                visible: app.group !== ""
+                label: qsTr("In the group")
+                value: app.admin ? qsTr("Admin") : qsTr("Member")
             }
             DetailItem {
                 visible: app.group !== ""

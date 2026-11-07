@@ -419,9 +419,18 @@ func (d *Desk) Unmute(id string) {
 }
 
 func (d *Desk) admin(args []string, yes bool, done string) {
+	input := ""
+	if yes {
+		input = "yes\n"
+	}
+	d.adminWith(args, input, done)
+}
+
+// adminWith runs cbb as the administrator with input as its standard input.
+func (d *Desk) adminWith(args []string, input, done string) {
 	details := d.showDetails()
 	d.act(func() (string, error) {
-		if err := adminRun(args, yes, details); err != nil {
+		if err := adminRun(args, input, details); err != nil {
 			return "", err
 		}
 		return d.T(done), nil

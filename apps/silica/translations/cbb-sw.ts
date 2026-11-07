@@ -85,6 +85,10 @@
         <source>This phone keeps no keys for apps.</source>
         <translation>Simu hii haihifadhi funguo za programu.</translation>
     </message>
+    <message>
+        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
+        <translation>Kifaa kingine hakikukubali simu hii kama msimamizi. Ni mzizi wa kikundi pekee unaoteua wasimamizi: huko, ikubali kama msimamizi (cbb pair -qr -admin), au jiunge bila kuwa msimamizi.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -107,6 +111,18 @@
     <message>
         <source>Try again</source>
         <translation>Jaribu tena</translation>
+    </message>
+    <message>
+        <source>Join as an admin</source>
+        <translation>Jiunge kama msimamizi</translation>
+    </message>
+    <message>
+        <source>Making the admin key…</source>
+        <translation>Inatengeneza ufunguo wa msimamizi…</translation>
+    </message>
+    <message>
+        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
+        <translation>Kwenye kompyuta ya mzizi wa kikundi, ikubali simu hii kama msimamizi kwa msimbo huu: katika programu ya CBB ongeza kifaa na uchague kukikubali kama msimamizi, au endesha cbb pair -qr -admin. Acha skrini hii wazi.</translation>
     </message>
 </context>
 <context>
@@ -186,6 +202,22 @@
     <message>
         <source>Version</source>
         <translation>Toleo</translation>
+    </message>
+    <message>
+        <source>Join a group as an admin</source>
+        <translation>Jiunge na kikundi kama msimamizi</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>Katika kikundi</translation>
+    </message>
+    <message>
+        <source>Admin</source>
+        <translation>Msimamizi</translation>
+    </message>
+    <message>
+        <source>Member</source>
+        <translation>Mwanachama</translation>
     </message>
 </context>
 </TS>

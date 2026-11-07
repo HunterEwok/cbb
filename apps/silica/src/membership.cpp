@@ -62,6 +62,7 @@ Membership Membership::fromJoined(const QJsonObject &j)
     m.device = j.value(QStringLiteral("device")).toString();
     m.cert = b64(j.value(QStringLiteral("cert")));
     m.issuer = b64(j.value(QStringLiteral("issuer")));
+    m.adminCa = b64(j.value(QStringLiteral("admin_ca")));
     m.groupCa = b64(j.value(QStringLiteral("group_ca")));
     for (const QJsonValue &r : j.value(QStringLiteral("roots")).toArray())
         m.roots.append(b64(r));
@@ -94,8 +95,11 @@ Membership Membership::load(Failure *failure)
 
 bool Membership::save(Failure *failure) const
 {
-    if (!writeFile(QStringLiteral("records.json"), records, failure))
-        return false;
+    return writeFile(QStringLiteral("records.json"), records, failure) && saveIdentity(failure);
+}
+
+bool Membership::saveIdentity(Failure *failure) const
+{
     QJsonArray rs;
     for (const QByteArray &r : roots)
         rs.append(b64(r));
@@ -108,6 +112,8 @@ bool Membership::save(Failure *failure) const
     };
     if (!issuer.isEmpty())
         o.insert(QStringLiteral("issuer"), b64(issuer));
+    if (!adminCa.isEmpty())
+        o.insert(QStringLiteral("admin_ca"), b64(adminCa));
     return writeFile(QStringLiteral("member.json"), QJsonDocument(o).toJson(), failure);
 }
 

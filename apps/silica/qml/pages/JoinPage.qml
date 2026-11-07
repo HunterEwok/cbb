@@ -5,11 +5,13 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // The phone's QR code, which the group's phone or computer scans to admit
-// it (docs/protocol.md, section 6, "The joiner listens").
+// it (docs/protocol.md, section 6, "The joiner listens"). With admin, the
+// phone asks to be an admin, which only the group's root admits.
 Page {
     id: page
+    property bool admin: false
 
-    Component.onCompleted: app.startJoin()
+    Component.onCompleted: app.startJoin(admin)
     Component.onDestruction: if (app.join.state !== "joined") app.join.stop()
 
     SilicaFlickable {
@@ -21,7 +23,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: qsTr("Join a group") }
+            PageHeader { title: page.admin ? qsTr("Join as an admin") : qsTr("Join a group") }
 
             Label {
                 x: Theme.horizontalPageMargin
@@ -31,6 +33,8 @@ Page {
                 text: app.join.state === "joined" ? qsTr("The phone is in the group now.")
                     : app.join.state === "joining" ? qsTr("Joining…")
                     : app.join.state === "failed" ? ""
+                    : app.busy ? qsTr("Making the admin key…")
+                    : page.admin ? qsTr("On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.")
                     : qsTr("On a phone or a computer of your group, add a device and scan this code. Keep this screen open.")
             }
 
@@ -71,13 +75,13 @@ Page {
 
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
-                running: app.join.state === "joining"
+                running: app.join.state === "joining" || app.busy
                 visible: running
                 size: BusyIndicatorSize.Medium
             }
 
             Label {
-                visible: app.join.state === "failed"
+                visible: app.join.error !== "" && app.join.state !== "joined"
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 text: app.join.error
@@ -89,7 +93,7 @@ Page {
                 visible: app.join.state === "failed"
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Try again")
-                onClicked: app.startJoin()
+                onClicked: app.startJoin(page.admin)
             }
         }
         VerticalScrollDecorator {}

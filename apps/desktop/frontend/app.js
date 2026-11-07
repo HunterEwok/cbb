@@ -870,6 +870,48 @@ function renderSettings() {
   $("version").textContent = state.version;
 }
 
+// The add dialog; on the root or an admin it admits a device that shows a
+// QR code and waits (cbb pair -qr), from the code's text or a picture.
+function openAdd() {
+  const me = state.devices.find((x) => x.self);
+  $("admit-box").hidden = !me?.admin;
+  // Only the group's root makes admins.
+  $("admit-admin-row").hidden = !me?.root;
+  $("admit-admin").checked = false;
+  $("admit-text").value = "";
+  admitError("");
+  $("add-dialog").showModal();
+}
+
+function admitError(text) {
+  $("admit-error").textContent = text;
+  $("admit-error").hidden = !text;
+}
+
+$("admit-file").addEventListener("change", () => {
+  const file = $("admit-file").files[0];
+  $("admit-file").value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      $("admit-text").value = await call("ReadQR", String(reader.result).replace(/^data:[^,]*,/, ""));
+      admitError("");
+    } catch (e) {
+      admitError(String(e?.message ?? e));
+    }
+  };
+  reader.readAsDataURL(file);
+});
+
+async function admitByQR() {
+  const text = $("admit-text").value.trim();
+  if (!text.startsWith("cbb://join?")) return admitError(t("This QR code is not of a device that waits to join."));
+  const admin = !$("admit-admin-row").hidden && $("admit-admin").checked;
+  $("add-dialog").close();
+  await act("AdmitByQR", text, admin);
+}
+
 // Joining a phone's group: JoinPhone runs until the join ends, while the
 // dialog asks JoinState for the QR code cbb writes once it runs as the
 // administrator (join.go). Closing the dialog cancels.
@@ -971,7 +1013,9 @@ document.addEventListener("click", async (e) => {
     case "send": case "orbit-send": return act("Send");
     case "fetch": return act("Fetch");
     case "update": return act("Update");
-    case "add": return $("add-dialog").showModal();
+    case "add": return openAdd();
+    case "admit-picture": return $("admit-file").click();
+    case "admit": return admitByQR();
     case "join": return joinPhone();
     case "leave": return leave();
     case "settings": renderSettings(); return $("settings-dialog").showModal();
