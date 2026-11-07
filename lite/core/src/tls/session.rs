@@ -186,7 +186,7 @@ fn pump<D>(
             Err(e) => {
                 incoming.drain(..discard);
                 // The alert that tells the peer why, if rustls queued one.
-                flush_alert(conn, &mut bufs.outgoing, process);
+                flush_alert(conn, &mut incoming[..], &mut bufs.outgoing, process);
                 return Err(e);
             }
         };
@@ -241,15 +241,26 @@ fn pump<D>(
     }
 }
 
-/// Moves the records that rustls queued after a failure, its alert, to
-/// outgoing.
+/// Moves the records that rustls queued after a failure, its alert among
+/// them, to outgoing. rustls hands out queued records before it reads
+/// anything, and still points into what it kept of incoming (part of a
+/// handshake message, for one), so it gets incoming as it is, never an empty
+/// buffer: with one it panicked, and a peer that sent a certificate the
+/// member refuses brought the process down. It is asked only while it has
+/// records queued: once it has none, a call reads incoming again and fails a
+/// second time.
 fn flush_alert<D>(
     conn: &mut UnbufferedConnectionCommon<D>,
+    incoming: &mut [u8],
     out: &mut Vec<u8>,
     process: for<'c, 'i> fn(&'c mut UnbufferedConnectionCommon<D>, &'i mut [u8]) -> UnbufferedStatus<'c, 'i, D>,
 ) {
-    for _ in 0..4 {
-        match process(conn, &mut []).state {
+    // At most a few records: the server's flight and the alert.
+    for _ in 0..8 {
+        if !conn.wants_write() {
+            return;
+        }
+        match process(conn, incoming).state {
             Ok(ConnectionState::EncodeTlsData(mut e)) => {
                 let _ = append(out, |o| match e.encode(o) {
                     Ok(n) => Ok(Ok(n)),

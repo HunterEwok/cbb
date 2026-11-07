@@ -1551,6 +1551,11 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A peer that sent a certificate the member refuses, as a device of another group dialing a
+  lite member or a phone's member, brought its process down: after the handshake failed, the
+  core's TLS session asked rustls for its alert with an empty buffer while rustls still
+  pointed into the bytes it had kept, and rustls panicked. The session now hands it the bytes
+  it kept, only while it has records queued.
 - The iPhone and Android apps' button no longer sends a text the phone sent before over the
   image or files it shared since: it compares the clipboard with what the phone itself sent
   or took last, besides the group's copy (design.md, "The one button").
