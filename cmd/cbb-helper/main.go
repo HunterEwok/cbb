@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/helper"
 	"github.com/HunterEwok/cbb/internal/version"
 )
@@ -31,7 +32,10 @@ func run(args []string, in io.Reader, out, errw io.Writer, terminal bool) int {
 		fmt.Fprintln(errw, "cbb-helper: the service cbb starts this program itself; run cbb instead")
 		return 2
 	}
-	if err := newServer().Serve(in, out); err != nil {
+	err := newServer().Serve(in, out)
+	// The keys it loaded leave the TPM with it.
+	group.CloseTPM()
+	if err != nil {
 		fmt.Fprintln(errw, "cbb-helper:", err)
 		return 1
 	}
@@ -40,5 +44,7 @@ func run(args []string, in io.Reader, out, errw io.Writer, terminal bool) int {
 
 // newServer is the helper with every operation this build serves.
 func newServer() *helper.Server {
-	return helper.New(version.String())
+	s := helper.New(version.String())
+	s.HandleKeys()
+	return s
 }

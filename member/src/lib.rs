@@ -34,6 +34,7 @@ pub mod helper;
 pub mod hub;
 pub mod identity;
 mod interfaces;
+mod keys;
 mod leave;
 mod mute;
 mod next;
@@ -387,6 +388,14 @@ fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
         g.state.display()
     ))?;
     let mut joiner = pair::Joiner::new(name)?;
+    // The device key goes into the TPM or the Secure Enclave where cbb-helper
+    // can put it there, as on a Go member, and into the identity file
+    // otherwise.
+    match keys::new_device_key() {
+        (Some(key), _) => joiner = joiner.holding_key(key)?,
+        (None, why) if !why.is_empty() => eprintln!("cbb: the device key stays in a file: {why}"),
+        (None, _) => {}
+    }
     // The key for sealed messages the service will offer in its hello goes
     // with the info, so that a phone records it as it admits this member.
     match sealkey::load(&g.state)

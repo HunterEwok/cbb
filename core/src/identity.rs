@@ -82,7 +82,26 @@ pub trait ExternalKey: Send + Sync {
     fn public(&self) -> Vec<u8>;
     /// ECDSA P-256 over a SHA-256 digest, DER.
     fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>>;
+    /// Where the identity file keeps the key, for a key that the machine's
+    /// hardware holds; None for a key the file cannot name, such as a
+    /// phone app's.
+    fn held(&self) -> Option<HeldKey> {
+        None
+    }
 }
+
+/// A device key that the identity file keeps as a blob only the machine's
+/// hardware loads, as the Go member's identity.json does: a TPM's
+/// (`key_tpm`, kept as its JSON) or a Mac's Secure Enclave's (`key_se`).
+/// cbb-helper opens it (docs/design.md, "The service and its helper").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HeldKey {
+    Tpm(serde_json::Value),
+    SecureEnclave(Vec<u8>),
+}
+
+/// Opens a key the identity file keeps as a [`HeldKey`].
+pub type OpenHeld<'a> = &'a dyn Fn(&HeldKey) -> Result<Arc<dyn ExternalKey>>;
 
 /// Signs data with an external key: SHA-256, then the key, and checks the
 /// signature it gave, so that a broken key fails here and not in the peer.
@@ -215,14 +234,26 @@ impl Identity {
 
     /// The identity file's contents, in the format of Go's identity.json.
     pub fn to_file(&self) -> Result<Vec<u8>> {
-        if self.external.is_some() {
-            return Err(Error::msg("an identity whose key is kept outside the core has no identity file"));
-        }
+        let held = match &self.external {
+            None => None,
+            Some(k) => Some(
+                k.held()
+                    .ok_or_else(|| Error::msg("an identity whose key is kept outside the core has no identity file"))?,
+            ),
+        };
         self.check()?;
         let f = File {
             v: FILE_VERSION,
             device: self.id.to_string(),
             key: self.key.clone(),
+            key_tpm: match &held {
+                Some(HeldKey::Tpm(b)) => Some(b.clone()),
+                _ => None,
+            },
+            key_se: match &held {
+                Some(HeldKey::SecureEnclave(b)) => Some(b.clone()),
+                _ => None,
+            },
             cert: self.cert.der.clone(),
             issuer: self.issuer.as_ref().map(|c| c.der.clone()),
             group_ca: self.group_ca.der.clone(),
@@ -235,19 +266,36 @@ impl Identity {
 
     /// Reads and checks an identity file's contents.
     pub fn from_file(data: &[u8]) -> Result<Identity> {
-        parse(data)
+        Identity::from_file_with(data, &|_| {
+            Err(Error::msg(
+                "this device's key is in the TPM or the Secure Enclave, which only cbb-helper opens, and there is no cbb-helper beside cbb",
+            ))
+        })
+    }
+
+    /// Reads and checks an identity file's contents, opening a key that
+    /// the machine's hardware holds with open.
+    pub fn from_file_with(data: &[u8], open: OpenHeld) -> Result<Identity> {
+        parse(data, open)
     }
 }
 
-fn parse(data: &[u8]) -> Result<Identity> {
+fn parse(data: &[u8], open: OpenHeld) -> Result<Identity> {
     let f: File = serde_json::from_slice(data).context("not an identity file")?;
     if f.v != FILE_VERSION {
         return Err(Error::msg(format!("unknown identity file version {}", f.v)));
     }
+    let held = match (f.key_tpm, f.key_se) {
+        (Some(b), None) if f.key.is_empty() => Some(HeldKey::Tpm(b)),
+        (None, Some(b)) if f.key.is_empty() => Some(HeldKey::SecureEnclave(b)),
+        (None, None) => None,
+        _ => return Err(Error::msg("the identity file keeps its device key in more than one place")),
+    };
+    let external = held.as_ref().map(open).transpose()?;
     let id = Identity {
         id: DeviceId::parse(&f.device)?,
         key: f.key,
-        external: None,
+        external,
         cert: Cert::parse(&f.cert)?,
         issuer: f.issuer.as_deref().map(Cert::parse).transpose()?,
         group_ca: Cert::parse(&f.group_ca)?,
@@ -261,8 +309,12 @@ fn parse(data: &[u8]) -> Result<Identity> {
 struct File {
     v: u32,
     device: String,
-    #[serde(with = "b64")]
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     key: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_tpm: Option<serde_json::Value>,
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    key_se: Option<Vec<u8>>,
     #[serde(with = "b64")]
     cert: Vec<u8>,
     #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]

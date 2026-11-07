@@ -4,12 +4,17 @@
 package service
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
 )
 
 // TestLiteHelper: the Rust member starts cbb-helper as its child, which
@@ -58,4 +63,53 @@ func running(path string) bool {
 		}
 	}
 	return false
+}
+
+// TestLiteTPM: with cbb-helper beside it, the Rust member joins with its
+// device key in the TPM, swtpm here, as a Go member does: identity.json
+// keeps the TPM's blob and no key, and the member's handshakes and copies
+// are signed through the helper.
+func TestLiteTPM(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	// swtpm takes one client at a time: only the Rust member's helper uses
+	// it, so the test's own Go member finds no TPM.
+	tpmtest.Start(t)
+	sim := "CBB_TPM_SIMULATOR=" + os.Getenv("CBB_TPM_SIMULATOR")
+	t.Setenv("CBB_TPM_SIMULATOR", "")
+	group.ReopenTPM()
+	t.Cleanup(group.ReopenTPM)
+	helper := filepath.Join(t.TempDir(), "cbb-helper")
+	if out, err := exec.Command("go", "build", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
+		t.Fatalf("go build cbb-helper: %v\n%s", err, out)
+	}
+	t.Setenv("CBB_HELPER", helper)
+	var h hub
+	pi := startService(t, &h, "pi")
+	dir := joinLiteEnv(t, bin, pi, []string{sim})
+	var f struct {
+		Key    []byte          `json:"key"`
+		KeyTPM json.RawMessage `json:"key_tpm"`
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &f); err != nil || len(f.Key) != 0 || len(f.KeyTPM) == 0 {
+		t.Fatalf("identity.json keeps the key %d bytes, the TPM blob %q (%v)", len(f.Key), f.KeyTPM, err)
+	}
+	lite := startLiteEnv(t, bin, dir, []string{sim}, "-no-mdns", "-peer", pi.addr())
+	waitFor(t, "the Rust member connected", func() bool {
+		st, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
+	})
+	if _, err := lite.do(t, control.Header{Op: control.OpCopy}, "signed in the TPM"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "pi has the copy", func() bool { return pi.paste(t) == "signed in the TPM" })
 }

@@ -95,6 +95,13 @@ pub fn locate() -> Option<PathBuf> {
     p.is_file().then_some(p)
 }
 
+/// This process's helper, made at its first use from [`locate`] and logging
+/// to standard error; None without one. It starts when first asked.
+pub fn shared() -> Option<Arc<Helper>> {
+    static SHARED: std::sync::OnceLock<Option<Arc<Helper>>> = std::sync::OnceLock::new();
+    SHARED.get_or_init(|| locate().map(|p| Arc::new(Helper::new(&p, Arc::new(crate::service::log_line))))).clone()
+}
+
 impl Helper {
     /// A helper at path, not yet started; log takes its stops and starts.
     pub fn new(path: &Path, log: Arc<dyn Fn(&str) + Send + Sync>) -> Helper {

@@ -179,6 +179,13 @@ ends, the Go service described below is still the computers' member.
 - **Lifetime.** The end of its input tells the helper to exit, so it ends with `cbb`, also
   when `cbb` is killed. If the helper stops, `cbb` starts it again at the next request, at
   most once in two seconds.
+- **Keys in hardware.** `key-new` makes a device key in the TPM or a Mac's Secure Enclave
+  where the Go member would (not with `CBB_TPM=off`); its answer has no blob, and says why,
+  where the key would go into a file, which `cbb` then makes itself. `identity.json` keeps
+  the blob as the Go member's file does (`key_tpm`, `key_se`); `key-public` loads it by the
+  blob and `key-sign` signs a SHA-256 digest with it, so `cbb`'s handshakes, copies and
+  records are signed in the hardware and the key never leaves it. `card-sign` signs with a
+  key on a YubiKey, found by its certificate's key hash, after its PIN.
 - **The clients' operations.** The Rust service already takes what the command line and the
   desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
   copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,

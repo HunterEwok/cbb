@@ -929,12 +929,21 @@ func dialJoiner(t *testing.T, dir, qr string) *pair.Result {
 // and joins at pi's address. It returns the lite member's state directory.
 func joinLite(t *testing.T, bin string, pi *testService) string {
 	t.Helper()
+	return joinLiteEnv(t, bin, pi, nil)
+}
+
+// joinLiteEnv is joinLite with env added to cbb pair's environment.
+func joinLiteEnv(t *testing.T, bin string, pi *testService, env []string) string {
+	t.Helper()
 	c, code := openWindow(t, pi)
 	defer c.Close()
 	pa := pi.addr()
 	dir := t.TempDir()
 	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "lite", "-code", pa)
 	join.Stdin = strings.NewReader(code + "\n")
+	if env != nil {
+		join.Env = append(os.Environ(), env...)
+	}
 	join.Stderr = testWriter{t, "lite join: ", nil}
 	out, err := join.Output()
 	if err != nil || !strings.Contains(string(out), "Joined the group") {

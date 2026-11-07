@@ -2,7 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The identity in the state directory, in identity.json (the format of the
-//! Go member's file, see cbb_core::identity).
+//! Go member's file, see cbb_core::identity). A device key in the TPM or the
+//! Secure Enclave opens through cbb-helper (keys.rs).
 
 use std::path::Path;
 
@@ -35,7 +36,7 @@ impl Stored for Identity {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(Error::with(format!("cannot read {}", path.display()), e)),
         };
-        let id = Identity::from_file(&data).wrap(format!("{} is damaged", path.display()))?;
+        let id = Identity::from_file_with(&data, &crate::keys::open).wrap(format!("{} is damaged", path.display()))?;
         Ok(Some(id))
     }
 }

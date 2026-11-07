@@ -243,6 +243,17 @@ impl Joiner {
         })
     }
 
+    /// The joiner keeping its device key in the machine's hardware, as a
+    /// computer's TPM: its pairing certificate and its handshakes are signed
+    /// through key, and its identity holds key instead of a key of its own.
+    pub fn holding_key(mut self, key: Arc<dyn ExternalKey>) -> Result<Joiner> {
+        self.cert = certs::self_signed_by(&self.id, &key.public(), &mut |tbs| identity::sign_external(&*key, tbs))
+            .wrap("cannot make the pairing certificate")?;
+        self.key = Vec::new();
+        self.external = Some(key);
+        Ok(self)
+    }
+
     /// The phone joining with an admin key too: only a window that may make
     /// admins, on the group's root or an admin phone, admits it, and its
     /// Welcome carries the admin CA for that key.

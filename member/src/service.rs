@@ -220,7 +220,7 @@ pub fn run(cfg: Config) -> Result<()> {
         commands: Mutex::new(HashMap::new()),
         started_ms: uptime::wall_ms(),
         log: log.clone(),
-        helper: crate::helper::locate().map(|p| Arc::new(crate::helper::Helper::new(&p, log.clone()))),
+        helper: crate::helper::shared(),
     });
     if let Some(h) = svc.helper.clone() {
         // Started at once, so that a helper that cannot run shows in the

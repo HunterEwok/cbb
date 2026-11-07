@@ -11,6 +11,10 @@ All notable changes to cbb are documented in this file. The format follows
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
   its hello and starts it again when it stops. It does nothing else yet; the steps that make
   the Rust `cbb` every computer's service hand it what needs Go.
+- The Rust `cbb` keeps its device key in the TPM, or a Mac's Secure Enclave, through
+  `cbb-helper`, as the Go member does: `cbb pair` makes it there, `identity.json` keeps the
+  hardware's blob, and every signature goes through the helper (`TestLiteTPM`, on swtpm).
+  The helper also signs with a key on a YubiKey after its PIN (`card-sign`).
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

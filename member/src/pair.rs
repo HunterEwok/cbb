@@ -30,7 +30,10 @@ pub const LIFETIME: Duration = Duration::from_secs(5 * 60);
 /// which showed its QR code. The member confirms first, so a device that
 /// does not know the code learns nothing.
 pub fn accept(j: &Joiner, sock: TcpStream, code: &str, save: &Save) -> Result<Identity> {
-    let (cfg, exporter) = tls::pair_server(&j.cert, &j.key, &tls::clock())?;
+    let (cfg, exporter) = match j.external_key() {
+        Some(k) => tls::pair_server_external(&j.cert, k.clone(), &tls::clock())?,
+        None => tls::pair_server(&j.cert, &j.key, &tls::clock())?,
+    };
     let session = tls::Session::server(Arc::new(cfg))?;
     run(j, tls::Stream::new(session, sock), &exporter, code, true, save)
 }
@@ -38,7 +41,10 @@ pub fn accept(j: &Joiner, sock: TcpStream, code: &str, save: &Save) -> Result<Id
 /// Runs the joining side over a connection to a member's open pairing
 /// window, with the code the user typed.
 pub fn join(j: &Joiner, sock: TcpStream, code: &str, save: &Save) -> Result<Identity> {
-    let (cfg, exporter) = tls::pair_client(&j.cert, &j.key, &tls::clock())?;
+    let (cfg, exporter) = match j.external_key() {
+        Some(k) => tls::pair_client_external(&j.cert, k.clone(), &tls::clock())?,
+        None => tls::pair_client(&j.cert, &j.key, &tls::clock())?,
+    };
     let session = tls::Session::client(Arc::new(cfg), tls::server_name(None))?;
     run(j, tls::Stream::new(session, sock), &exporter, code, false, save)
 }

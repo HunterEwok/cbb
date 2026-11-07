@@ -548,6 +548,26 @@ pub fn pair_client(cert: &[u8], key: &[u8], clock: &Clock) -> Result<(rustls::Cl
     Ok((cfg, exporter))
 }
 
+/// The joiner's client configuration of pair_client for a device key the
+/// core does not hold: key signs the handshake.
+pub fn pair_client_external(
+    cert: &[u8],
+    key: Arc<dyn crate::identity::ExternalKey>,
+    clock: &Clock,
+) -> Result<(rustls::ClientConfig, Arc<Exporter>)> {
+    let signer: Arc<dyn rustls::sign::SigningKey> = Arc::new(provider::ExternalSigningKey(key));
+    let certified = Arc::new(rustls::sign::CertifiedKey::new(vec![CertificateDer::from(cert.to_vec())], signer));
+    let mut cfg = client_builder(clock)?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(AnyPeer))
+        .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
+    cfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    cfg.resumption = rustls::client::Resumption::disabled();
+    let exporter = Arc::new(Exporter::default());
+    cfg.key_log = exporter.clone();
+    Ok((cfg, exporter))
+}
+
 /// The client configuration of a member that dials a joiner which listens
 /// and showed its QR code, to admit it: this member's certificate with its
 /// issuer, wherever its key is, and any server certificate, which the
