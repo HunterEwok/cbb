@@ -147,6 +147,10 @@ struct DeviceDetail: View {
                 line
                 row(Text("Copies"), Text("Passes them on, reads none"))
             }
+            if d.muted {
+                line
+                row(Text("Copies"), MacModel.date(ms: d.mutedUntilMS).map { Text("Muted until \($0.formatted(date: .abbreviated, time: .shortened))") } ?? Text("Muted until an admin unmutes it"))
+            }
             if let standing = d.standing {
                 line
                 row(Text("In the group"), Text(standing))
@@ -295,6 +299,8 @@ struct DeviceDetail: View {
                     .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                     .padding(.horizontal, Tokens.spacingMedium)
                 }
+                line
+                muteLine(d)
                 if !d.isSelf {
                     line
                     action("xmark.circle", "Remove", danger: true) { removing = true }
@@ -308,6 +314,28 @@ struct DeviceDetail: View {
             if let message = model.message {
                 Text(verbatim: message).font(.callout).foregroundStyle(palette.textDim).textSelection(.enabled)
             }
+        }
+    }
+
+    /// An admin mutes any device for the whole group, for a time or until
+    /// an admin unmutes it, or ends its mute (docs/design.md, "Muting a
+    /// device").
+    @ViewBuilder private func muteLine(_ d: Control.Device) -> some View {
+        if d.muted {
+            action("speaker.wave.2", "Unmute") { Task { await model.unmute(d.id) } }
+        } else {
+            Menu {
+                ForEach(PauseTime.allCases) { t in
+                    Button { Task { await model.mute(d.id, forMS: t.ms) } } label: { t == .ever ? Text("Until an admin unmutes it") : Text(t.title) }
+                }
+            } label: {
+                Label { Text("Mute") } icon: { Image(systemName: "speaker.slash") }
+                    .foregroundStyle(palette.danger)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+            .padding(.horizontal, Tokens.spacingMedium)
+            .help(Text("Its copies then reach no device of the group; it still takes theirs."))
         }
     }
 

@@ -127,6 +127,9 @@ final class LiveGroup: GroupController {
     private var infos: [String: Member.DeviceInfo] = [:]
     /// The sync modes the connected members' hellos report.
     private var modes: [String: String] = [:]
+    /// The mutes the connected members' hellos report: until when, 0 for
+    /// until an admin lifts it.
+    private var mutes: [String: Int64] = [:]
     /// The quick actions the connected members' hellos say are on.
     private var actions: [String: [String]] = [:]
     /// This phone's own sync mode and the commands it took.
@@ -339,7 +342,9 @@ final class LiveGroup: GroupController {
                   keysInFile: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.file,
                   rootless: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.rootless, frozen: $0.frozen,
                   device: $0.id == g.device ? Self.ownDevice : infos[$0.id], mode: $0.id == g.device ? modeBox.mode : modes[$0.id],
-                  actions: actions[$0.id] ?? [], mayHub: g.records.mayHost($0.id), forwardOnly: $0.forwardOnly)
+                  actions: actions[$0.id] ?? [], mayHub: g.records.mayHost($0.id), forwardOnly: $0.forwardOnly,
+                  muted: AppModel.Hold(ms: $0.id == g.device ? modeBox.mutedUntilMS : mutes[$0.id]),
+                  paused: $0.id == g.device ? AppModel.Hold(ms: modeBox.pausedUntilMS) : nil)
         }
     }
 
@@ -348,6 +353,7 @@ final class LiveGroup: GroupController {
         reached = await node?.reached ?? []
         infos = await node?.devices ?? [:]
         modes = await node?.modes ?? [:]
+        mutes = await node?.muted ?? [:]
         actions = await node?.actions ?? [:]
         offers = await node?.offeredAdminKeys ?? [:]
         keyStores = await node?.keyStores ?? [:]
@@ -945,7 +951,7 @@ final class LiveGroup: GroupController {
         for url in [file, credentialsURL, dir.appendingPathComponent("attest-status")] {
             try? FileManager.default.removeItem(at: url)
         }
-        (online, offers, keyStores, infos, modes, actions) = ([], [:], [:], [:], [:], [:])
+        (online, offers, keyStores, infos, modes, actions, mutes) = ([], [:], [:], [:], [:], [:], [:])
         authorized = nil
         state = nil
         keysLog.notice("this phone left its group: its keys and the group's files are deleted")
@@ -1028,6 +1034,40 @@ final class LiveGroup: GroupController {
         guard let g = state else { return }
         let c = try g.modeCommand(to: id, mode: mode, caSigner: ca, now: Date())
         let r = try await node.command(c, to: id)
+        if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
+    }
+
+    /// Keeps the group's copies out of this phone's clipboard for forMS
+    /// milliseconds, 0 for until it takes them again (design.md, "Muting a
+    /// device"); its own copies still go out. Needs no rights.
+    func pauseReceiving(forMS: Int64) throws {
+        try modeBox.setPause(forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0)
+        groupChanged()
+    }
+
+    /// Takes the group's copies again.
+    func resumeReceiving() throws {
+        try modeBox.setPause(nil)
+        groupChanged()
+    }
+
+    /// Mutes a device for the whole group for forMS milliseconds, 0 for
+    /// until an admin unmutes it, or with on false ends its mute: a command
+    /// signed with this phone's root or admin key after Face ID, passed on
+    /// by a hub when this phone is not connected to it. This phone's own
+    /// mute changes at once.
+    func setMuted(_ id: String, _ on: Bool, forMS: Int64 = 0) async throws {
+        guard state?.isAdmin == true else { throw PhoneGroup.Failure.notAdmin }
+        if id == state?.device {
+            try modeBox.setMute(on ? (forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0) : nil)
+            await restartSync()
+            return
+        }
+        guard let node else { throw MemberNode.Failure.notConnected }
+        let ca = try await caSigner(reason: on ? String(localized: "Mute a device", bundle: .app) : String(localized: "Unmute a device", bundle: .app))
+        guard let g = state else { return }
+        let c = on ? try g.muteCommand(to: id, forMS: forMS, caSigner: ca, now: Date()) : try g.unmuteCommand(to: id, caSigner: ca, now: Date())
+        let r = try await node.command(c, to: id, via: g.records.hubOrder)
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
@@ -1373,7 +1413,7 @@ final class LiveGroup: GroupController {
                               // takes the group's copies, while the app runs
                               // (docs/design.md, "The one button").
                               onChange: { [weak self] e in
-                                  guard Member.receives(modeBox.mode), !e.isMark, !e.unread, e.origin != device, e.ageMS < box.incomingMS,
+                                  guard Member.receives(modeBox.mode), modeBox.pausedUntilMS == nil, !e.isMark, !e.unread, e.origin != device, e.ageMS < box.incomingMS,
                                         Images.part(of: e.media) != nil || e.media?.isFiles != true && !e.text.isEmpty else { return }
                                   Task { @MainActor in
                                       do {
@@ -1398,10 +1438,18 @@ final class LiveGroup: GroupController {
                                   Task { await nodeRef.value?.sendTunnels { hub.offers(for: $0, order: box.hubOrder) } }
                               },
                               mode: modeBox.mode,
+                              mutedUntilMS: modeBox.mutedUntilMS,
                               onCommand: { [weak self] peer, c in
                                   let (result, change) = modeBox.take(c, from: peer, records: box, me: device)
                                   switch change {
                                   case let .mode(mode)?: Task { await nodeRef.value?.set(mode: mode) }
+                                  case .mute?:
+                                      // Connects again once the result has gone back, so
+                                      // that the hellos say whether it is muted.
+                                      Task { @MainActor in
+                                          try? await Task.sleep(for: .milliseconds(500))
+                                          await self?.restartSync()
+                                      }
                                   case .awayOff?:
                                       // Connects again once the result has gone back on the
                                       // connection that brought the command.
@@ -1936,6 +1984,40 @@ final class LiveGroup: GroupController {
             try lock.withLock { try Data((mode + "\n").utf8).write(to: url, options: .atomic) }
         }
 
+        /// An admin's mute of this phone and its user's pause of receiving,
+        /// as Go's service keeps them in mute.json: until when in Unix
+        /// milliseconds, 0 for until it is lifted.
+        private struct MuteFile: Codable { var mute: Int64?, pause: Int64? }
+        private var muteURL: URL { url.deletingLastPathComponent().appendingPathComponent("mute.json") }
+
+        private func readMute() -> MuteFile {
+            (try? Data(contentsOf: muteURL)).flatMap { try? JSONDecoder().decode(MuteFile.self, from: $0) } ?? MuteFile()
+        }
+
+        private func writeMute(_ change: (inout MuteFile) -> Void) throws {
+            try lock.withLock {
+                var m = readMute()
+                change(&m)
+                try JSONEncoder().encode(m).write(to: muteURL, options: .atomic)
+            }
+        }
+
+        /// A mute or pause that still holds, nil for one that ended.
+        private static func holding(_ until: Int64?) -> Int64? {
+            guard let until else { return nil }
+            return until == 0 || until > Int64(Date().timeIntervalSince1970 * 1000) ? until : nil
+        }
+
+        /// Until when an admin muted this phone, 0 for until an admin
+        /// unmutes it; nil while it is not muted.
+        var mutedUntilMS: Int64? { lock.withLock { Self.holding(readMute().mute) } }
+        /// Until when this phone takes no copies from the group, 0 for until
+        /// its user turns them on again; nil while it takes them.
+        var pausedUntilMS: Int64? { lock.withLock { Self.holding(readMute().pause) } }
+
+        func setMute(_ until: Int64?) throws { try writeMute { $0.mute = until } }
+        func setPause(_ until: Int64?) throws { try writeMute { $0.pause = until } }
+
         /// Gives a phone that just made or joined a group the sync mode of a
         /// new device, own, unless it has one from an earlier group.
         func newDevice() throws {
@@ -1944,7 +2026,7 @@ final class LiveGroup: GroupController {
 
         /// What a command that was taken changes beyond its result: the new
         /// sync mode, or sync away from home turned off.
-        enum Change { case mode(String), awayOff }
+        enum Change { case mode(String), awayOff, mute }
 
         /// Carries out a command a member sent: a mode or away-off command
         /// an admin of the group signed for me, not expired and not carried
@@ -1984,6 +2066,16 @@ final class LiveGroup: GroupController {
             switch body.type {
             case "mode":
                 break
+            case "mute", "unmute":
+                let on = body.type == "mute", ms = body.for_ms ?? 0
+                do {
+                    try setMute(on ? (ms > 0 ? now + ms : 0) : nil)
+                } catch {
+                    modeLog.error("cannot save the mute: \(String(reflecting: error), privacy: .public)")
+                    return (Member.CommandResult(id: body.id, status: "failed", reason: error.localizedDescription), nil)
+                }
+                modeLog.notice("\(body.by, privacy: .public) \(on ? "muted" : "unmuted", privacy: .public) this phone")
+                return (Member.CommandResult(id: body.id, status: "done"), .mute)
             case "paste-off", "actions-off":
                 // This phone takes no remote paste and has no quick
                 // actions, so nothing of them stays on.
@@ -2133,9 +2225,10 @@ final class LiveGroup: GroupController {
     /// The copy from another device that waits for this phone: younger
     /// than the group's live window and not yet taken; for what the app
     /// takes by itself (byItself), also in a sync mode that takes the
-    /// group's copies, while the button works in every mode.
+    /// group's copies and while the user has not paused them, while the
+    /// button works in every mode.
     private func pending(_ node: MemberNode, device: String, byItself: Bool) async -> Member.Event? {
-        guard !byItself || Member.receives(modeBox.mode), let cur = await node.current, !cur.isMark, !cur.unread, cur.origin != device,
+        guard !byItself || Member.receives(modeBox.mode) && modeBox.pausedUntilMS == nil, let cur = await node.current, !cur.isMark, !cur.unread, cur.origin != device,
               cur.id != takenID, cur.ageMS < (recordBox?.incomingMS ?? Records.defaultIncomingMS) else { return nil }
         if cur.media?.isFiles == true || Images.part(of: cur.media) != nil { return cur }
         return await node.usable == nil ? nil : cur
@@ -2192,7 +2285,8 @@ final class LiveGroup: GroupController {
             try await take(e)
             return fetched(e)
         }
-        let board = try given ?? Self.readBoard()
+        let board: AppModel.Board
+        if let given { board = given } else { board = try await Self.readBoard() }
         var usable = await node.usable?.text
         let media = await node.current?.media
         if let sum = Images.part(of: media)?.sha256 { usable = Images.key(sum) }
@@ -2212,15 +2306,18 @@ final class LiveGroup: GroupController {
 
     /// What the clipboard holds, read by the app itself, which iOS may ask
     /// the user to allow: a text first, as most copies with an image carry
-    /// its text too.
-    private static func readBoard() throws -> AppModel.Board {
-        let pb = UIPasteboard.general
-        let text = pb.hasStrings ? pb.string : nil
-        let image = text == nil ? Images.read(pb) : nil
-        if text == nil, image == nil, pb.numberOfItems > 0 {
-            throw ClipboardUnreadable(items: pb.numberOfItems, hasStrings: pb.hasStrings, types: pb.types, changeCount: pb.changeCount)
-        }
-        return AppModel.Board(text: text, image: image)
+    /// its text too. Read off the main thread: the read waits while iOS
+    /// asks, and on the main thread the app froze until the user answered.
+    nonisolated private static func readBoard() async throws -> AppModel.Board {
+        try await Task.detached(priority: .userInitiated) {
+            let pb = UIPasteboard.general
+            let text = pb.hasStrings ? pb.string : nil
+            let image = text == nil ? Images.read(pb) : nil
+            if text == nil, image == nil, pb.numberOfItems > 0 {
+                throw ClipboardUnreadable(items: pb.numberOfItems, hasStrings: pb.hasStrings, types: pb.types, changeCount: pb.changeCount)
+            }
+            return AppModel.Board(text: text, image: image)
+        }.value
     }
 
     /// The start of a text the button fetched, on one line, for the line

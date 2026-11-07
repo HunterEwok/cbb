@@ -235,9 +235,12 @@ class CommandsTest {
             Commands.action(pc, "lock", tag, adminBy, now, admin, adminCA),
             Commands.actionsOff(pc, tag, by, now, root),
             Commands.paste(pc, "sealed <text>", group = tag, by = adminBy, now = now, signer = admin, adminCA = adminCA, seal = sealPublic()),
+            Commands.mute(pc, 3_600_000, tag, adminBy, now, admin, adminCA),
+            Commands.unmute(pc, tag, by, now, root),
         )
         // The last one is sealed, for Go to open: a phone opens none.
-        for (c in commands.dropLast(1)) Commands.verify(c, set, pc, now.toEpochMilli())
+        // The eighth is sealed, for Go to open: a phone opens none.
+        for ((i, c) in commands.withIndex()) if (i != 7) Commands.verify(c, set, pc, now.toEpochMilli())
         val out = Wire.obj(
             "group_ca" to Wire.bytes(ca),
             "records" to JsonArray(set.records.map { it.toJson() }),
@@ -347,5 +350,31 @@ class CommandsTest {
         // A character that would cross the limit goes whole.
         assertEquals("a".repeat(Member.MAX_REASON - 1), Member.cleanReason("a".repeat(Member.MAX_REASON - 1) + "é"))
         assertTrue(Member.cleanReason("é".repeat(300)).toByteArray().size <= Member.MAX_REASON)
+    }
+
+    /**
+     * A mute command carries its time, and none for until an unmute; a time past 30 days is refused. The hello
+     * carries a mute and reads a time out of range as 30 days, as Go does.
+     */
+    @Test
+    fun mute() {
+        val root = SoftwareSigner()
+        val tag = "0123456789abcdef"
+        val by = "0123456789abcdef0123456789abcdef"
+        for ((ms, want) in listOf(900_000L to 900_000L, 0L to 0L)) {
+            assertEquals(want, Commands.parse(Commands.mute(pc, ms, tag, by, now, root).body).forMS)
+        }
+        assertFailsWith<IllegalArgumentException> { Commands.mute(pc, Commands.MAX_MUTE_MS + 1, tag, by, now, root) }
+        assertEquals("unmute", Commands.parse(Commands.unmute(pc, tag, by, now, root).body).type)
+
+        val hello = Member.Hello(wallMS = 1, muted = true, mutedForMS = 60_000)
+        val back = Member.decode(Member.encode(Member.Message.Hello(Member.Role.PHONE, hello)).let { it.copyOfRange(4, it.size) })
+        assertEquals(Member.Message.Hello(Member.Role.PHONE, hello), back)
+        val none = String(Member.encode(Member.Message.Hello(Member.Role.PHONE, Member.Hello(wallMS = 1))).let { it.copyOfRange(4, it.size) })
+        assertTrue("muted" !in none)
+        val long = Member.decode("""{"t":"hello","role":"full","hello":{"wall_ms":1,"muted":true,"muted_for_ms":99999999999}}""".toByteArray())
+        val got = (long as Member.Message.Hello).hello
+        assertTrue(got.muted)
+        assertEquals(Commands.MAX_MUTE_MS, got.mutedForMS)
     }
 }

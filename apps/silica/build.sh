@@ -5,7 +5,7 @@
 # Builds the Aurora app's RPMs:
 #   build.sh prepare      the Rust core for armv7hl and aarch64 (core/, through
 #                         lite/ffi/bind.sh aurora) and the icons (icons/, from
-#                         apps/design/icon with ImageMagick); needs rustup
+#                         apps/design/icon/aurora.png with ImageMagick); needs rustup
 #   build.sh rpm TARGET [SYSTEM]
 #                         builds the RPM in the Platform SDK, where mb2 runs, for
 #                         a target snapshot such as AuroraOS-5.1.5.105-base-armv7hl.default;
@@ -23,7 +23,7 @@ prepare)
 	command -v magick >/dev/null && convert="magick"
 	for size in 86 108 128 172; do
 		mkdir -p "$here/icons/${size}x$size"
-		$convert "$here/../design/icon/light.png" -resize "${size}x$size" "$here/icons/${size}x$size/tools.cbb.aurora.png"
+		$convert "$here/../design/icon/aurora.png" -resize "${size}x$size" "$here/icons/${size}x$size/tools.cbb.aurora.png"
 		cp "$here/icons/${size}x$size/tools.cbb.aurora.png" "$here/icons/${size}x$size/harbour-cbb.png"
 	done
 	;;

@@ -119,6 +119,9 @@ private fun Summary(d: LiveGroup.Device) {
         }
         add(Line(stringResource(R.string.role), stringResource(roleTitle(d.role, d.rootless))))
         if (d.forwardOnly) add(Line(stringResource(R.string.copies), stringResource(R.string.copies_forward_only)))
+        d.muted?.let { m ->
+            add(Line(stringResource(R.string.copies), m.until?.let { stringResource(R.string.muted_until, shortTime(it, date = true)) } ?: stringResource(R.string.muted_until_unmuted)))
+        }
         d.standing?.let { add(Line(stringResource(R.string.in_the_group), stringResource(it))) }
         d.hub?.let { add(Line(stringResource(R.string.away_title), stringResource(if (it == LiveGroup.HubMark.IN_USE) R.string.group_hub_in_use else R.string.group_hub))) }
         d.mode?.let { m -> modeTitle(m)?.let { add(Line(stringResource(R.string.sync_mode), stringResource(it))) } }
@@ -217,6 +220,7 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
     var pasting by remember { mutableStateOf(false) }
     var acting by remember { mutableStateOf(false) }
     var hubbing by remember { mutableStateOf(false) }
+    var muting by remember { mutableStateOf(false) }
     if (choosingMode) ModeChoice(d, dismiss = { choosingMode = false }) { mode -> scope.launch { model.setMode(d.id, mode) } }
     // Every phone sets its own sync mode; an admin sets any other device's.
     if (!model.isAdmin) {
@@ -257,11 +261,19 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
             HorizontalDivider(color = palette.line)
             Action("⚡", stringResource(R.string.quick_actions)) { acting = true }
         }
+        // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").
+        HorizontalDivider(color = palette.line)
+        if (d.muted != null) {
+            Action("🔊", stringResource(R.string.unmute)) { scope.launch { model.setMuted(d.id, false) } }
+        } else {
+            Action("🔇", stringResource(R.string.mute), danger = true) { muting = true }
+        }
         if (!d.isSelf) {
             HorizontalDivider(color = palette.line)
             Action("✕", stringResource(R.string.remove), danger = true) { removing = true }
         }
     }
+    if (muting) MuteChoice(dismiss = { muting = false }) { ms -> scope.launch { model.setMuted(d.id, true, ms) } }
     if (removing) {
         Confirm(
             title = stringResource(R.string.remove_title, d.name),
@@ -453,6 +465,35 @@ private fun Switch(title: String, on: Boolean, change: (Boolean) -> Unit) {
         Text(title, modifier = Modifier.weight(1f))
         androidx.compose.material3.Switch(checked = on, onCheckedChange = null)
     }
+}
+
+/** How long an admin mutes a device: its copies then reach no device of the group, and it still takes theirs. */
+@Composable
+private fun MuteChoice(dismiss: () -> Unit, choose: (Long) -> Unit) {
+    val palette = LocalPalette.current
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text(stringResource(R.string.mute)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.mute_note), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+                for (t in PauseTime.entries) {
+                    Text(
+                        stringResource(if (t == PauseTime.EVER) R.string.mute_ever else t.title),
+                        color = palette.text,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).focusRing().clickable(role = Role.Button) {
+                            dismiss()
+                            choose(t.ms)
+                        }.padding(vertical = Tokens.spacingMedium),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.cancel)) } },
+        containerColor = palette.surface,
+        titleContentColor = palette.text,
+        textContentColor = palette.textDim,
+    )
 }
 
 /** The sync modes to pick from, the device's own marked. */

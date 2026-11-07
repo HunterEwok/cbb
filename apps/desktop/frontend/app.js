@@ -235,7 +235,14 @@ function render() {
   renderAlerts(inGroup ? s.status : undefined);
   for (const b of document.querySelectorAll("[data-layout]")) b.setAttribute("aria-checked", String(b.dataset.layout === s.settings.layout));
   $("bar").hidden = !inGroup;
-  $("send").disabled = $("fetch").disabled = $("update").disabled = s.busy;
+  $("send").disabled = $("fetch").disabled = $("update").disabled = $("listen").disabled = s.busy;
+  // The quick switch: one tap pauses receiving or takes copies again,
+  // holding it picks a time (docs/design.md, "Muting a device").
+  const paused = !!s.status?.paused;
+  $("listen").setAttribute("aria-pressed", String(!paused));
+  $("listen").textContent = paused
+    ? (s.status.paused_until_ms ? t("Not taking copies until %s", clock(s.status.paused_until_ms)) : t("Not taking copies"))
+    : t("Taking copies");
   // The newest release the group passed around, when this computer runs an older one.
   $("update").hidden = !s.status?.update;
   $("update").textContent = s.status?.update ? t("Update to %s", s.status.update) : "";
@@ -288,6 +295,21 @@ function renderAlerts(st) {
     p.className = l.newer ? "alert newer" : "alert";
     p.textContent = "⚠ " + l.text;
     box.append(p);
+    if (l.unmute) {
+      // A muted admin or root ends its own mute; another computer waits.
+      const me = state.devices.find((x) => x.self);
+      if (!me?.admin) continue;
+      const row = document.createElement("div");
+      row.className = "buttons";
+      const b = document.createElement("button");
+      b.className = "glass";
+      b.textContent = t("Unmute");
+      b.disabled = state.busy;
+      b.onclick = () => act("Unmute", me.id);
+      row.append(b);
+      box.append(row);
+      continue;
+    }
     if (!l.resolve && l.remove.length === 0) continue;
     if (!root) {
       const d = document.createElement("p");
@@ -322,6 +344,31 @@ function renderAlerts(st) {
   }
 }
 
+// A time of day, or a date and a time when it is not today.
+function clock(ms) {
+  const at = new Date(ms), now = new Date();
+  return at.toDateString() === now.toDateString()
+    ? at.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" })
+    : at.toLocaleString(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+// muteUntil says how long a device's mute lasts.
+const muteUntil = (ms) => ms ? t("Muted until %s", clock(ms)) : t("Muted until an admin unmutes it");
+
+// pickTime asks for how long, in the mute dialog; it resolves to the
+// milliseconds, 0 for until it is ended, or null.
+function pickTime(title, text, forever) {
+  return new Promise((resolve) => {
+    const dlg = $("mute-dialog");
+    $("mute-title").textContent = title;
+    $("mute-text").textContent = text;
+    $("mute-forever").textContent = forever;
+    dlg.onclose = () => resolve(dlg.returnValue === "" || dlg.returnValue === "cancel" ? null : Number(dlg.returnValue));
+    dlg.returnValue = "";
+    dlg.showModal();
+  });
+}
+
 // A wait in days, hours or minutes.
 function roughly(ms) {
   const h = Math.floor(ms / 3600000);
@@ -334,6 +381,9 @@ function roughly(ms) {
 // the devices whose removal does.
 function alertLines(st) {
   const out = [];
+  if (st.muted) out.push({ text: st.muted_until_ms
+    ? t("An admin muted this computer until %s: its copies do not reach the group.", clock(st.muted_until_ms))
+    : t("An admin muted this computer: its copies do not reach the group until an admin unmutes it."), unmute: true, remove: [] });
   if (st.stop === "full") out.push({ text: t("The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides."), remove: [] });
   if (st.stop === "secrets") out.push({ text: t("The group sends no secrets until its root decides."), remove: [] });
   for (const c of st.conflicts ?? []) {
@@ -435,12 +485,12 @@ function cell(ref, level, name, inner) {
 function deviceTile(d, level) {
   return cell("d:" + d.id, level, d.name, `<button class="tile${d.id === selected ? " selected" : ""}" data-id="${esc(d.id)}">` +
     `<span class="top">${glyph(d)}${dot(d.online || d.self)}</span><span class="name">${esc(d.name)}</span>` +
-    `<span class="dim small">${esc([systems[d.os], d.self && t("This computer")].filter(Boolean).join(" · "))}</span></button>`);
+    `<span class="dim small">${esc([systems[d.os], d.self && t("This computer"), d.muted && t("muted")].filter(Boolean).join(" · "))}</span></button>`);
 }
 
 function deviceRow(d, level, inside) {
   return cell("d:" + d.id, level, d.name, `<button class="row${d.id === selected ? " selected" : ""}${inside ? " inside" : ""}" data-id="${esc(d.id)}">${glyph(d, 32)}` +
-    `<span class="name">${esc(d.name)}</span><span class="dim">${esc([systemWithVersion(d), d.self && t("This computer")].filter(Boolean).join(" · "))}</span>${dot(d.online || d.self)}</button>`);
+    `<span class="name">${esc(d.name)}</span><span class="dim">${esc([systemWithVersion(d), d.self && t("This computer"), d.muted && t("muted")].filter(Boolean).join(" · "))}</span>${dot(d.online || d.self)}</button>`);
 }
 
 // A collection as a tile: up to four of its devices' icons, its name and
@@ -648,6 +698,7 @@ function renderDetail() {
   if (d.forward_only) lines.push([t("Copies"), t("Passes them on, reads none")]);
   if (d.hub) lines.push([t("Away from home"), state.status?.away?.hub_device === d.id ? t("The group's hub, in use now") : t("The group's hub")]);
   if (d.mode) lines.push([t("Sync mode"), modeName(d.mode)]);
+  if (d.muted) lines.push([t("Copies"), muteUntil(d.muted_until_ms)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
   lines.push([t("Device ID"), d.id, true]);
 
@@ -658,6 +709,9 @@ function renderDetail() {
     if (d.frozen && me.root) actions.push(["unfreeze", t("Unfreeze")]);
     if (!d.self && d.admin && !d.root && !d.frozen && d.role === "full") actions.push(["freeze", t("Freeze"), true]);
     if (me.root && !d.admin && !d.frozen && d.role === "full") actions.push(["admin", t("Make it an admin")]);
+    // Any admin mutes any device, this one and the root too; the last word counts.
+    if (d.muted) actions.push(["unmute", t("Unmute")]);
+    else if (d.online || d.self) actions.push(["mute", t("Mute")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   // Any computer leaves by itself; the root only when it is alone, which the service checks.
@@ -770,6 +824,14 @@ async function deviceAction(action) {
       await act("SetHub", hubTunnel(state.status?.away), addr ?? "default", key ?? "");
       break;
     }
+    case "mute": {
+      const ms = await pickTime(t("Mute %s?", d.name), t("Its copies do not reach the group until then; it still takes the group's copies. Any admin unmutes it."), t("Until an admin unmutes it"));
+      if (ms !== null) await act("Mute", d.id, ms);
+      break;
+    }
+    case "unmute":
+      await act("Unmute", d.id);
+      break;
     case "freeze":
       if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);
       break;
@@ -927,6 +989,25 @@ $("away").addEventListener("change", async (e) => {
 });
 
 $("details").addEventListener("change", (e) => saveSettings({ details: e.target.checked }));
+
+// The quick switch: a tap turns receiving off until turned on again, or
+// on; holding it (or its context menu) picks a time first.
+let holdTimer = null, held = false;
+async function pauseFor() {
+  const ms = await pickTime(t("Take no copies from the group?"), t("This computer's own copies still go out."), t("Until I turn it on"));
+  if (ms !== null) await act("PauseReceiving", true, ms);
+}
+$("listen").addEventListener("pointerdown", () => {
+  held = false;
+  holdTimer = setTimeout(() => { held = true; pauseFor(); }, 600);
+});
+for (const ev of ["pointerup", "pointerleave", "pointercancel"]) $("listen").addEventListener(ev, () => clearTimeout(holdTimer));
+$("listen").addEventListener("contextmenu", (e) => { e.preventDefault(); clearTimeout(holdTimer); held = true; pauseFor(); });
+$("listen").addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (held) { held = false; return; }
+  act("PauseReceiving", !state.status?.paused, 0);
+});
 document.addEventListener("keydown", (e) => {
   if (document.querySelector("dialog[open]")) return;
   // Alt and the arrow keys move the focused tile in Arrange mode; Home and

@@ -68,6 +68,16 @@ they look, so both apps are built to the same plan.
    under Face ID or the fingerprint: remove the device of a claim or one of the two admins,
    or void both histories; on any other device it says that the root decides.
 
+   **Muting** (docs/design.md, "Muting a device"): under the button a quick switch says
+   whether the phone takes the group's copies. A tap keeps them out of the clipboard, or takes
+   them again; a long press keeps them out for 15 minutes, an hour, 8 hours or until it is
+   turned on. The phone's own copies still go out, and the pause lasts across restarts in
+   `mute.json` beside the group's file, as on the computers. On an admin phone a device's page
+   has "Mute" with the same times ("Until an admin unmutes it" for the last), a `mute` command
+   signed after Face ID or the fingerprint, and "Unmute"; a muted device says so on its tile,
+   its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
+   says so until an admin unmutes it, an admin phone itself on its own page.
+
    **Images and files** (docs/design.md, "Images and files"): the button sends an image on
    the clipboard as PNG or JPEG (HEIC and other formats are converted) and fetches a
    computer's image whole before it writes it, an image by its hash: the same image twice is
@@ -355,6 +365,12 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   second the pasteboard gets its items back, unless the user copied meanwhile. Typing posts
   Unicode key events, which no layout changes. It refuses without the permission, on the lock
   screen, in a session not on the screen, and under Secure Event Input.
+- **Muting** (docs/design.md, "Muting a device"): beside "Fetch" a quick switch keeps the
+  group's copies out of this Mac (`mute` over the control socket, no password): a click turns
+  it off or on again, its menu turns it off for 15 minutes, an hour, 8 hours or until it is
+  turned on. On an admin, a device's page has "Mute" with the same times (`cbb mute -on`,
+  "Until an admin unmutes it" for the last) and "Unmute"; a muted device says so on its tile,
+  its row and its summary, and this Mac's own mute is an alert, with "Unmute" on an admin.
 - **Join a phone's group**: on a Mac in no group, the button runs `cbb pair -app FILE` as the
   administrator, and the sheet shows the QR code that cbb writes into the file (JSON: `qr`,
   `expires`, `port`) while it waits for the phone, with the code as text and the time left.
@@ -397,6 +413,9 @@ service and its clipboard agent keep syncing without it.
   changes nothing and says nothing.
 - **The hub's line**: on every device's page, as in the Mac app (`hubLine` in `app.js`,
   `MakeHub` and `StopHub` in `desk.go`).
+- **Muting**: as in the Mac app; the switch is the third button of the bottom bar, a tap
+  toggles it and holding it (or its context menu) picks the time (`PauseReceiving`, `Mute`
+  and `Unmute` in `desk.go`).
 - **Join a phone's group**: a computer in no group shows the button, which runs `cbb pair
   -app FILE` as the administrator, as the Mac app does: the dialog shows the QR code cbb
   writes into the file the app made, and Cancel removes the file. On Linux the file is
@@ -924,7 +943,7 @@ the app on real devices.
 - `apps/desktop/` — the tray app for Linux and Windows (Go, Wails 3), a Go module of its own.
 - `apps/design/` — tokens and the icon (`icon/light.png` and `icon/dark.png`, the clipboard
   drawings; `go run ./tools/icon` sets each on a fill of its colour as the iPhone app's icon
-  for light and dark mode, and the Android app takes the same drawings; `icon/tray/` holds the single-colour glyph of
+  for light and dark mode, and the Android app takes the same drawings; `icon/aurora.svg` is the Aurora app's launcher icon in the style of Aurora's own (a dark teal tile, the clipboard and the key with circuit traces), with `icon/aurora.png` drawn from it at 1024 px for `apps/silica/build.sh`; `icon/tray/` holds the single-colour glyph of
   the Mac's menu bar and the tray in three states, which the tool copies into the Mac app's asset catalog as template
   images and turns into the tray's symbolic SVGs and white and black PNGs for Linux and white and black ICOs for Windows in `apps/desktop/trayicon`); `go run ./tools/tokens` turns `tokens.json` into
   `apps/ios/CBB/Theme/Tokens.swift` and the Android apps' `Tokens.kt` and fails when a palette misses the

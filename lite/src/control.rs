@@ -79,6 +79,9 @@ pub struct Header {
     /// In actions-off, every device of the group; only an admin does it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub all: bool,
+    /// In mute, how long, 0 for until unmute.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub for_ms: i64,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -105,6 +108,17 @@ pub struct Status {
     /// The sync mode: own, shared, receive or send; empty when in no group.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub mode: String,
+    /// Whether an admin muted this device, until muted_until_ms in Unix
+    /// milliseconds, 0 for until an admin unmutes it; whether its user
+    /// paused receiving, until paused_until_ms, 0 for until cbb unmute.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub muted: bool,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub muted_until_ms: i64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused: bool,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub paused_until_ms: i64,
     /// Sync away from home; None while it is off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub away: Option<Away>,
@@ -295,6 +309,10 @@ pub fn is_admin(op: &str) -> bool {
             | "write"
             | "inject"
             | "injected"
+            // This device's own pause of receiving (design.md, "Muting a
+            // device"); the lite member mutes no other device.
+            | "mute"
+            | "unmute"
     )
 }
 

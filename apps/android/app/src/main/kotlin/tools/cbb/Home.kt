@@ -13,6 +13,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import java.text.DateFormat
+import java.util.Date
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -172,6 +179,7 @@ private fun HomeMain(model: AppModel, open: (HomePage) -> Unit, openCollection: 
         Summary(model)
         Alerts(model)
         SyncButton(model)
+        ListenSwitch(model)
         model.message?.let { NoteText(it, dim = true) }
         Devices(model, search, layout, select, openCollection)
         Hint(model)
@@ -193,6 +201,7 @@ private fun WideHome(model: AppModel, selected: String?, select: (String?) -> Un
             }
             Summary(model)
             Alerts(model)
+            ListenSwitch(model)
             model.message?.let { NoteText(it, dim = true) }
             // The orbit keeps the group's order; Arrange mode and a search show tiles.
             if (layout == DeviceLayout.ORBIT && !arrange.on && !search.active) {
@@ -366,6 +375,67 @@ private fun Summary(model: AppModel) {
             style = MaterialTheme.typography.bodySmall,
             color = LocalPalette.current.textDim,
         )
+    }
+    // An admin's mute of this phone, which an admin ends.
+    model.devices.firstOrNull { it.isSelf }?.muted?.let { m ->
+        Text(
+            m.until?.let { stringResource(R.string.muted_self_until, shortTime(it, date = true)) } ?: stringResource(R.string.muted_self),
+            style = MaterialTheme.typography.bodySmall,
+            color = LocalPalette.current.danger,
+        )
+    }
+}
+
+/** How long the quick switch keeps the group's copies out, or an admin's mute lasts; 0 for until it is lifted. */
+internal enum class PauseTime(val ms: Long, @StringRes val title: Int) {
+    QUARTER(900_000, R.string.pause_quarter),
+    HOUR(3_600_000, R.string.pause_hour),
+    EIGHT(28_800_000, R.string.pause_eight),
+    EVER(0, R.string.pause_ever),
+}
+
+/** A time of day, with the date when asked, in the user's format. */
+internal fun shortTime(ms: Long, date: Boolean = false): String {
+    val f = if (date) DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) else DateFormat.getTimeInstance(DateFormat.SHORT)
+    return f.format(Date(ms))
+}
+
+/**
+ * The quick switch for taking copies from the group: a tap turns it off or
+ * on again, a long press turns it off for a time. This phone's own copies
+ * still go out (docs/design.md, "Muting a device").
+ */
+@Composable
+private fun ListenSwitch(model: AppModel) {
+    val scope = rememberCoroutineScope()
+    val palette = LocalPalette.current
+    val pause = model.pause
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Text(
+            when {
+                pause == null -> stringResource(R.string.pause_taking)
+                pause.until == null -> stringResource(R.string.pause_not_taking)
+                else -> stringResource(R.string.pause_not_taking_until, shortTime(pause.until))
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (pause == null) palette.textDim else palette.danger,
+            modifier = Modifier.heightIn(min = 48.dp).focusRing().combinedClickable(
+                role = Role.Switch,
+                onClickLabel = stringResource(if (pause == null) R.string.pause_turn_off else R.string.pause_turn_on),
+                onClick = { scope.launch { model.pauseReceiving(if (pause == null) 0 else null) } },
+                onLongClickLabel = stringResource(R.string.pause_for_a_time),
+                onLongClick = { open = true },
+            ).padding(vertical = Tokens.spacingSmall),
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (t in PauseTime.entries) {
+                DropdownMenuItem(text = { Text(stringResource(t.title)) }, onClick = {
+                    open = false
+                    scope.launch { model.pauseReceiving(t.ms) }
+                })
+            }
+        }
     }
 }
 
@@ -573,7 +643,19 @@ internal fun DeviceSubtitle(d: LiveGroup.Device) {
         LiveGroup.HubMark.HUB -> "$standing · ${stringResource(R.string.hub_mark)}"
         null -> standing
     }
-    Text(text, style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val palette = LocalPalette.current
+    if (d.muted != null) {
+        // Muted shows in the danger colour, after where it stands.
+        Text(
+            buildAnnotatedString {
+                append("$text · ")
+                withStyle(SpanStyle(color = palette.danger)) { append(stringResource(R.string.muted_mark)) }
+            },
+            style = MaterialTheme.typography.bodySmall, color = palette.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+        return
+    }
+    Text(text, style = MaterialTheme.typography.bodySmall, color = palette.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 /** One element for TalkBack, which says whether it is online. */

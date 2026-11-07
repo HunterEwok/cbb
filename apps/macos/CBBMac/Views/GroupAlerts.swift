@@ -18,7 +18,14 @@ struct GroupAlerts: View {
                 ForEach(lines) { line in
                     Label { Text(verbatim: line.text) } icon: { Image(systemName: "exclamationmark.triangle") }
                         .foregroundStyle(palette.danger)
-                    if model.isRoot {
+                    if line.unmute {
+                        if model.isAdmin, let me = model.this {
+                            Button { Task { await model.unmute(me.id) } } label: { Text("Unmute") }
+                                .disabled(model.busy)
+                        } else {
+                            Text("An admin of the group ends it.").font(.callout).foregroundStyle(palette.textDim)
+                        }
+                    } else if model.isRoot {
                         HStack {
                             if line.resolve {
                                 Button { Task { await model.resolve() } } label: { Text("Void both histories") }
@@ -45,6 +52,8 @@ struct GroupAlerts: View {
         var text: String
         var resolve = false
         var remove: [String] = []
+        /// An admin's mute of this Mac, which an admin ends.
+        var unmute = false
         var id: String { text }
     }
 
@@ -89,6 +98,13 @@ struct GroupAlerts: View {
                 out.append(Line(text: String(localized: "\(c.by) claims the group, and the group is stopped until its root decides."), remove: [c.by]))
             default:
                 break
+            }
+        }
+        if st.muted == true {
+            if let until = MacModel.date(ms: st.mutedUntilMS) {
+                out.append(Line(text: String(localized: "An admin muted this Mac until \(until.formatted(date: .abbreviated, time: .shortened)): its copies do not reach the group."), unmute: true))
+            } else {
+                out.append(Line(text: String(localized: "An admin muted this Mac: its copies do not reach the group until an admin unmutes it."), unmute: true))
             }
         }
         if let n = st.newer, n > 0 {

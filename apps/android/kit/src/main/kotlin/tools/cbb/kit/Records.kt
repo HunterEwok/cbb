@@ -123,7 +123,7 @@ object Records {
     val POWERS = listOf("admit", "freeze", "hub", "remove", "remove-admins", "renew", "takeover", "thaw")
 
     /** The commands an admin may sign. */
-    val COMMANDS = listOf("action", "actions-off", "away-off", "hub", "mode", "paste", "paste-off")
+    val COMMANDS = listOf("action", "actions-off", "away-off", "hub", "mode", "mute", "paste", "paste-off", "unmute")
 
     /** What the apps give an admin computer under a phone's root. */
     val COMPUTER_POWERS = listOf("admit", "freeze", "hub", "remove", "renew")
