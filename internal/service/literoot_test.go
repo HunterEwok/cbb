@@ -152,6 +152,11 @@ func TestLiteRoot(t *testing.T) {
 	}
 	root.stop()
 	root = startLite(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
+	// The control socket answers while the service still loads its group.
+	waitFor(t, "the root back in its group", func() bool {
+		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && st.Status.Group != ""
+	})
 	must("", "unfreeze", "desk")
 	waitFor(t, "the laptop unfrozen", listed("desk", true))
 
