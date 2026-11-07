@@ -18,8 +18,6 @@ mod away;
 mod away;
 #[cfg(feature = "tunnel")]
 mod awg;
-#[cfg(feature = "tunnel")]
-pub mod vless;
 mod control;
 mod device;
 pub mod discovery;
@@ -47,6 +45,8 @@ pub mod tls;
 mod tunnel;
 mod update;
 pub mod uptime;
+#[cfg(feature = "tunnel")]
+pub mod vless;
 pub mod wire;
 
 use std::io::{Read, Write};

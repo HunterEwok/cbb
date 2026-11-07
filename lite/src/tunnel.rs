@@ -142,8 +142,7 @@ impl State {
     /// those of hubs in the order, with an address, each hub that gave its
     /// key for the next period once more with that key, right after.
     pub fn hubs_to_try(&self, order: &[String]) -> Vec<Hub> {
-        let mut hubs: Vec<&Hub> =
-            self.hubs.iter().filter(|h| order.contains(&h.device) && h.reachable()).collect();
+        let mut hubs: Vec<&Hub> = self.hubs.iter().filter(|h| order.contains(&h.device) && h.reachable()).collect();
         hubs.sort_by_key(|h| order.iter().position(|d| *d == h.device));
         let mut out = Vec::new();
         for h in hubs {

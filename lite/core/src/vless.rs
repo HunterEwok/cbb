@@ -300,7 +300,8 @@ pub fn parse_head(buf: &[u8]) -> Result<Option<Head>> {
     let head = core::str::from_utf8(buf.get(..end).ok_or_else(bad)?).map_err(|_| bad())?;
     let mut lines = head.split("\r\n");
     let status_line = lines.next().ok_or_else(bad)?;
-    let rest = status_line.strip_prefix("HTTP/1.1 ").or_else(|| status_line.strip_prefix("HTTP/1.0 ")).ok_or_else(bad)?;
+    let rest =
+        status_line.strip_prefix("HTTP/1.1 ").or_else(|| status_line.strip_prefix("HTTP/1.0 ")).ok_or_else(bad)?;
     let code = rest.get(..3).ok_or_else(bad)?;
     if !code.bytes().all(|b| b.is_ascii_digit()) || rest.as_bytes().get(3).is_some_and(|&b| b != b' ') {
         return Err(bad());
@@ -466,12 +467,14 @@ mod tests {
         assert!(bad("endpoint", "192.0.2.7:0".into()));
         assert!(bad("endpoint", "192.0.2.7:0443".into()));
         assert!(bad("endpoint", "cbb.example.org:443".into()));
-        assert!(Link::from_offer(&{
-            let mut o = offer();
-            o["endpoint"] = "[2001:db8::1]:443".into();
-            o
-        })
-        .is_ok());
+        assert!(
+            Link::from_offer(&{
+                let mut o = offer();
+                o["endpoint"] = "[2001:db8::1]:443".into();
+                o
+            })
+            .is_ok()
+        );
         assert!(bad("server_name", "Cbb.example.org".into()));
         assert!(bad("server_name", "localhost".into()));
         assert!(bad("server_name", "-a.example.org".into()));
@@ -519,7 +522,9 @@ mod tests {
 
     #[test]
     fn reads_responses() {
-        let h = parse_head(b"HTTP/1.1 200 OK\r\nX-Padding: XXX\r\nTransfer-Encoding: chunked\r\n\r\nrest").unwrap().unwrap();
+        let h = parse_head(b"HTTP/1.1 200 OK\r\nX-Padding: XXX\r\nTransfer-Encoding: chunked\r\n\r\nrest")
+            .unwrap()
+            .unwrap();
         assert_eq!((h.status, h.body, h.close), (200, Body::Chunked, false));
         assert_eq!(h.len, 63);
         let h = parse_head(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nConnection: close\r\n\r\n").unwrap().unwrap();

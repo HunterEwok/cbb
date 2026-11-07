@@ -120,7 +120,9 @@ fn tls_config() -> Result<ClientConfig> {
         }
         None => {
             let p = ROOTS.iter().map(std::path::Path::new).find(|p| p.exists()).ok_or_else(|| {
-                Error::msg("the system has no CA certificates for the way over VLESS; install them or set SSL_CERT_FILE")
+                Error::msg(
+                    "the system has no CA certificates for the way over VLESS; install them or set SSL_CERT_FILE",
+                )
             })?;
             (p.to_path_buf(), read_roots(p)?)
         }
