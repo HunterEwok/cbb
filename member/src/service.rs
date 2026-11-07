@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -148,8 +148,9 @@ struct Service {
     acts: Mutex<remotepaste::Limiter>,
     pending: Mutex<Option<WriteReq>>, // a write decided while no watcher was connected
     /// The seq of the latest write: a copy of images or files fetched after
-    /// a newer write is not written.
-    latest: AtomicU64,
+    /// a newer write is not written. A mutex, as 32-bit MIPS has no 64-bit
+    /// atomics.
+    latest: Mutex<u64>,
     /// The latest copy of images or files this member made or wrote, which
     /// paste-media opens.
     media: Mutex<Option<Arc<Event>>>,
@@ -209,7 +210,7 @@ pub fn run(cfg: Config) -> Result<()> {
         pastes: Mutex::new(remotepaste::Limiter::default()),
         acts: Mutex::new(remotepaste::Limiter::default()),
         pending: Mutex::new(None),
-        latest: AtomicU64::new(0),
+        latest: Mutex::new(0),
         media: Mutex::new(None),
         limits: Mutex::new(copies::Limits::load(&cfg.state_dir).unwrap_or_else(|e| {
             log(&format!("cbb: {}; the largest copy is the default", e.for_log()));
@@ -1112,7 +1113,10 @@ impl Service {
     /// A copy of images or files goes whole to the watchers that take it,
     /// once fetched; the others get its plain-text alternative, if any.
     fn deliver(self: &Arc<Self>, w: WriteReq) {
-        self.latest.fetch_max(w.seq, Ordering::SeqCst);
+        {
+            let mut latest = self.latest.lock().unwrap();
+            *latest = (*latest).max(w.seq);
+        }
         let Some(ev) = w.event.clone() else {
             if !self.send_writes(|_| Some(w.clone())) {
                 *self.pending.lock().unwrap() = Some(w);
@@ -1130,7 +1134,7 @@ impl Service {
             std::thread::spawn(move || {
                 let limit = svc.limits.lock().unwrap().home as u64;
                 let fetched = node.fetch(&ev, limit);
-                if svc.latest.load(Ordering::SeqCst) != w.seq {
+                if *svc.latest.lock().unwrap() != w.seq {
                     return; // a newer write came
                 }
                 if let Err(e) = &fetched {
