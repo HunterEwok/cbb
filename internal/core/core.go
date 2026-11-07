@@ -2,11 +2,11 @@
 // Copyright (C) 2026 HunterEwok
 
 // Package core calls the Rust core's one entry point (docs/core-api.md):
-// JSON bytes in, JSON bytes out, through the C functions of lite/ffi
-// (lite/ffi/include/cbb_core.h). A build links the core with cgo under the
+// JSON bytes in, JSON bytes out, through the C functions of ffi/
+// (ffi/include/cbb_core.h). A build links the core with cgo under the
 // tag cbbcore, after building the library:
 //
-//	(cd lite && cargo build --locked --release -p cbb-ffi)
+//	cargo build --locked --release -p cbb-ffi
 //	go test -tags cbbcore ./internal/core
 //
 // The builds for Windows, macOS and FreeBSD run the same core as
@@ -14,8 +14,8 @@
 // built and laid over cbb_core.wasm here by an overlay, so that it never
 // lands in the source tree:
 //
-//	sh lite/wasm/build.sh
-//	go test -overlay lite/target/cbb-core-overlay.json -tags cbbwasm ./internal/core
+//	sh wasm/build.sh
+//	go test -overlay target/cbb-core-overlay.json -tags cbbwasm ./internal/core
 //
 // Without either tag Call says the core is not linked.
 package core

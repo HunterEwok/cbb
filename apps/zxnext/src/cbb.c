@@ -4,7 +4,7 @@
 // .cbb: the CBB dot command for the ZX Spectrum Next. It talks
 // to the lite member on the Next's own Raspberry Pi over the UART between
 // them, by typing `cbb next ...` at NextPi's shell (docs/roadmap.md, item 14;
-// the frames are in lite/README.md, "ZX Spectrum Next").
+// the frames are in member/README.md, "ZX Spectrum Next").
 
 #include <arch/zxn.h>
 #include <arch/zxn/esxdos.h>
@@ -554,7 +554,7 @@ static int copy_words(int argc, char **argv)
 // While the network runs, the commands go through the driver (calls 7
 // and 8): it sends the Pi frames of what link_send() gets and keeps the
 // Pi's frames for link_recv(), and the link on the Pi runs the command as
-// NextPi's shell would (lite/src/nextlink/link.rs). A driver without the
+// NextPi's shell would (member/src/nextlink/link.rs). A driver without the
 // calls has the network stop for them and start again after.
 #define DRV_CBB_OUT 7
 #define DRV_CBB_IN 8

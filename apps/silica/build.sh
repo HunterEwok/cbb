@@ -4,7 +4,7 @@
 #
 # Builds the Aurora app's RPMs:
 #   build.sh prepare      the Rust core for armv7hl and aarch64 (core/, through
-#                         lite/ffi/bind.sh aurora) and the icons (icons/, from
+#                         ffi/bind.sh aurora) and the icons (icons/, from
 #                         apps/design/icon/aurora.png with ImageMagick); needs rustup
 #                         and the GNU cross compilers for armhf and arm64
 #   build.sh rpm TARGET [SYSTEM]
@@ -17,9 +17,9 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 case ${1:-} in
 prepare)
-	"$here/../../lite/ffi/bind.sh" aurora "$here/core"
+	"$here/../../ffi/bind.sh" aurora "$here/core"
 	mkdir -p "$here/core/include"
-	cp "$here/../../lite/ffi/include/cbb_core.h" "$here/core/include/"
+	cp "$here/../../ffi/include/cbb_core.h" "$here/core/include/"
 	convert=convert
 	command -v magick >/dev/null && convert="magick"
 	for size in 86 108 128 172; do

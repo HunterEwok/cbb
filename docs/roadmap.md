@@ -54,7 +54,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
    uses `/opt` and SteamOS's keep list (not yet run on a real Steam Deck); the signed
    `.pkg` for macOS waits for the Apple developer account.
 - **11.** The lite member in Rust: done on Linux and OpenWrt. On the Arduino Nano ESP32 see item
-    15; other ESP32 boards follow on the same `lite/core`.
+    15; other ESP32 boards follow on the same `core/`.
 - **13.** Device keys in hardware: done for Linux and Windows with a TPM (Windows not yet
     tested on a real PC) and for a Mac's Secure Enclave; sealing the Mac's tunnel key
     follows. See
@@ -74,18 +74,18 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     never sees anything but ciphertext. A dot command on the Next, `.cbb`, talks to the lite
     member over the internal UART the way NextPi's own tools do (`.pisend`): it copies a text
     to the group, pastes the latest one, and joins by drawing the QR code for the phone app
-    on the Next's screen (`cbb next`, lite/README.md). The UART is a trace on the Next's
+    on the Next's screen (`cbb next`, member/README.md). The UART is a trace on the Next's
     board and never leaves the case, so it carries the texts in the clear. The Pi converts
     between UTF-8 and the Spectrum character set: printable ASCII first, with every other
     character shown as `?`; Cyrillic follows later as an encoding of its own. No other
     device takes part: a Next without a Pi is future research (below), not a reason to lean
     on a computer in the group.
-- **15.** **The Arduino Nano ESP32** (an ESP32-S3) as a lite member, on the same `lite/core` as
+- **15.** **The Arduino Nano ESP32** (an ESP32-S3) as a lite member, on the same `core/` as
     the other ESP32 boards, with the member protocol and TLS 1.3 on the board itself. Done:
-    the firmware (`lite/esp32`) builds, keeps its settings in flash, joins the Wi-Fi network
+    the firmware (`esp32/`) builds, keeps its settings in flash, joins the Wi-Fi network
     set on its USB console, joins a group by the phone, passes its self-test in QEMU, and
     types as a USB keyboard in the layout set for the host; its network code
-    (`lite/embassy`) also runs on Linux over a TAP interface, where CI has a Go member admit
+    (`embassy/`) also runs on Linux over a TAP interface, where CI has a Go member admit
     it by the phone. Next: sync on the board, OTA updates (item 29), and a library for one's
     own Arduino sketches may follow. It ships as a ready firmware flashed over USB with one
     command.
@@ -101,7 +101,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     window and menu bar item over the installed service are there already (`apps/macos`,
     [apps.md](apps.md#the-mac-app)).
 - **25.** Devices that are hard to type into: the Android TV variant of the app, the Nano
-    ESP32's USB and Bluetooth LE keyboards (`lite/esp32/README.md`), the Android phone and a
+    ESP32's USB and Bluetooth LE keyboards (`esp32/README.md`), the Android phone and a
     Linux computer as a Bluetooth keyboard ([apps.md](apps.md#android-the-bluetooth-keyboard),
     `cbb keyboard`), and a computer as the remote of an Android TV, a Google TV or a Roku
     (`cbb remote`) are done; the Apple TV, Samsung and LG remotes, and the remotes in the
@@ -327,7 +327,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **51.** **Planned for 0.7, research.** Arduino boards whose Wi-Fi module is an ESP32, as
     devices of their own: the Uno R4 WiFi (an RA4M1 with an ESP32-S3 module), and the Nano 33
     IoT, MKR WiFi 1010 and Nano RP2040 Connect (u-blox NINA-W10x, a classic ESP32). Our
-    firmware on the module makes it the lite member (`lite/core`, TLS 1.3, joining by the
+    firmware on the module makes it the lite member (`core/`, TLS 1.3, joining by the
     phone's QR code), and the board's main chip only types the texts as a USB keyboard and
     shows them, over the UART or SPI already between the two, in frames like `cbb next`'s:
     the split of the ZX Spectrum Next, where the Pi is the member and the Z80 only types.
@@ -335,7 +335,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     own Wi-Fi firmware is gone while ours is on (its updater puts it back). To find out:
     whether each module takes new firmware without an external programmer (the Uno R4
     WiFi's through Arduino's own tool, NINA through the SerialNINAPassthrough sketch), and
-    whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `lite/core` with TLS 1.3, which
+    whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `core/` with TLS 1.3, which
     builds today for the C6 and the S3 only. The Uno R4 WiFi first.
 - **52.** **Planned for 0.7.** A clipboard history in the phone apps, where the system keeps
     none (the iPhone has none, even in iOS 27; Android only on some phones). The computers
@@ -537,7 +537,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     only the forwarder's port, streams only the mirror, the registrations' ID neither), the
     hub's tunnel (`internal/tunnel/onlycbb_test.go`), the phones' hub
     (`mobile/cbbtun/onlycbb_test.go`), the relay (`internal/relay/onlycbb_test.go`) and the
-    lite member's tunnel, whose end a fake hub on GotaTun sends to (`lite/src/tunnel.rs`,
+    lite member's tunnel, whose end a fake hub on GotaTun sends to (`member/src/tunnel.rs`,
     `link_reaches_nothing_from_the_tunnel`); the forwarder's `FuzzForwardWire` sends a
     packet only to an endpoint it knows. The check of cbb.tools is written down in
     docs/maintaining.md, "Ways out carry only cbb", and was run on 2026-11-07.
@@ -908,13 +908,13 @@ a site.
   ported from amneziawg-go (MIT, already in `internal/third_party/amneziawg-go`) to a
   sans-I/O layer in `cbb_core` under `src/third_party`, checked against it with interop
   vectors, an end-to-end test against a hub with `-obfuscate` and fuzzing of the incoming
-  packets, so the lite member also reaches an obfuscated hub (today `lite/src/tunnel.rs`
+  packets, so the lite member also reaches an obfuscated hub (today `member/src/tunnel.rs`
   refuses one). WireGuard's Noise and keys stay GotaTun's; the layer recomputes `mac1` for
   the changed message types. Padding inside the encrypted packets and random rekey times
-  live inside GotaTun and need a small patch of it (`[patch]` in `lite/Cargo.toml`, as for
+  live inside GotaTun and need a small patch of it (`[patch]` in `Cargo.toml`, as for
   the ring stand-in). The same layer serves the ESP32 later. As built, the layer is
-  `lite/src/awg.rs` (checked end to end against the Go hub), and the VLESS client
-  `lite/src/vless.rs` over HTTP/1.1 with `cbb_core::vless`, checked against the Go forwarder
+  `member/src/awg.rs` (checked end to end against the Go hub), and the VLESS client
+  `member/src/vless.rs` over HTTP/1.1 with `cbb_core::vless`, checked against the Go forwarder
   behind a web server (`TestLiteMemberAwayXHTTP`); the blind relay (item 28) comes later.
 
 Steps: the protocol and the Go forwarder and hub first, with Xray's XHTTP transport; then
@@ -1143,7 +1143,7 @@ Questions to study before anything is planned for them.
   several KB/s; (2) our own firmware for the ESP-01, which then is the member and the
   Z80 only shows the text, with about 80 KB of RAM for TLS 1.3 and at the cost of the AT
   programs that need the stock firmware; (3) an ESP32 module in place of the ESP-01 in
-  its socket, running `lite/core`, if such a module exists for that socket. To measure:
+  its socket, running `core/`, if such a module exists for that socket. To measure:
   the cost of P-256 on the Z80N and the RAM a TLS 1.3 member needs on the ESP8266.
 - **No gateway and no plain tier.** A device too weak for the member protocol does not
   lean on another member over the network to do its part, neither through a gateway with

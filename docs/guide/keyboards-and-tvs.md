@@ -78,7 +78,7 @@ The board is a lite member of your group. On its console:
 - `type TEXT` types on the connected Bluetooth device, or else on the USB one.
 
 The group's remote pastes to the board are typed the same way. The board's own guide is in
-[lite/esp32](../../lite/esp32/README.md).
+[esp32/](../../esp32/README.md).
 
 ## A computer as the TV's remote
 

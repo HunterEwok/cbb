@@ -8,7 +8,7 @@ page that explains it.
 |---|---|
 | **group** | The devices that share one clipboard: phones, computers, lite members, watches and TVs. A group has no central server; its members trust each other through certificates signed by the group's keys. See [how it works](../guide/how-it-works.md). |
 | **member** | A device in a group. A **full member** runs the Go service (`cbb` on Linux, macOS, Windows, FreeBSD and routers); a **lite member** runs the small `cbb` in Rust; a **phone** runs the app. |
-| **lite member** | `cbb` for small Linux devices and routers, without the group's keys: it joins by the phone's QR code or a computer's code, syncs, and cannot admit or remove devices. See [the lite member](../../lite/README.md). |
+| **lite member** | `cbb` for small Linux devices and routers, without the group's keys: it joins by the phone's QR code or a computer's code, syncs, and cannot admit or remove devices. See [the lite member](../../member/README.md). |
 | **rootless** | A full member or a lite member on Linux installed without `sudo`, as its user's own service: it syncs, but every program of that user can read its keys, so it is never the root, an admin or a hub. See [installing](../guide/install.md#without-sudo-rootless). |
 | **root** | The device that holds the group's root key: the phone or the computer that made the group. It makes admins and has the last word over them. |
 | **admin** | A device the root has made an admin: it admits new devices, removes them, renames them and signs commands for the others. Phones, computers and watches can be admins. |

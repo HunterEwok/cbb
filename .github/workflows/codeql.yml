@@ -73,7 +73,7 @@ jobs:
         # and the Kotlin compiler inside Gradle's process. The runner image has the Android SDK.
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null
-          # The Rust the core's libraries are built with (lite/ffi), and cargo-ndk.
+          # The Rust the core's libraries are built with (ffi/), and cargo-ndk.
           rustup toolchain install "$(sed -n 's/^cbb.rust=//p' gradle.properties)" --profile minimal \
             --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
           cargo install --locked cargo-ndk@4.1.2

@@ -77,9 +77,9 @@ func TestFloor(t *testing.T) {
 
 func TestLLVMAndJaCoCo(t *testing.T) {
 	llvm := write(t, "rust.json", `{"data":[{"files":[
-{"filename":"/w/lite/core/src/certs.rs","summary":{"lines":{"count":10,"covered":9}}},
-{"filename":"/w/lite/core/src/third_party/cpace.rs","summary":{"lines":{"count":10,"covered":0}}},
-{"filename":"/w/lite/src/main.rs","summary":{"lines":{"count":4,"covered":1}}}]}]}`)
+{"filename":"/w/core/src/certs.rs","summary":{"lines":{"count":10,"covered":9}}},
+{"filename":"/w/core/src/third_party/cpace.rs","summary":{"lines":{"count":10,"covered":0}}},
+{"filename":"/w/member/src/main.rs","summary":{"lines":{"count":4,"covered":1}}}]}]}`)
 	jacoco := write(t, "kit.xml", `<?xml version="1.0"?><!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" "report.dtd">
 <report name="kit"><package name="p"><sourcefile name="A.kt"><counter type="LINE" missed="1" covered="1"/></sourcefile>
 <counter type="LINE" missed="1" covered="1"/></package><counter type="INSTRUCTION" missed="5" covered="5"/><counter type="LINE" missed="3" covered="7"/></report>`)

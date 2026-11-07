@@ -414,7 +414,7 @@ func pairOne(ctx context.Context, hub, d *Device) (string, error) {
 	join := adminCmd(d) + " pair -code"
 	if d.OS == "linux-lite" {
 		// The lite member joins as its service's user, which alone may
-		// write its keys (lite/README.md); the bench user has sudo.
+		// write its keys (member/README.md); the bench user has sudo.
 		join = "sudo -n -u cbb " + cbbCmd(d) + " pair -code"
 	}
 	if d.OS == "linux-lite" || addr != "" {

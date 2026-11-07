@@ -17,7 +17,7 @@ device that only passes it on cannot read it, change it or forge one. Each devic
 | **Root** | the phone that made the group (or the computer, [without the app](without-app.md)) | holds the group's key, adds and removes devices, makes admins |
 | **Admin** | a second phone, or a computer the root chose | adds and removes devices, like the root |
 | **Member** | every computer and phone | syncs the clipboard |
-| **Lite member** | a small Linux device: a router, a Raspberry Pi Zero | syncs, never adds anyone ([lite member](../../lite/README.md)) |
+| **Lite member** | a small Linux device: a router, a Raspberry Pi Zero | syncs, never adds anyone ([lite member](../../member/README.md)) |
 | **Rootless member** | a Linux computer installed without `sudo` | syncs like a member, never the root, an admin or a hub ([below](#rootless-members)) |
 | **Hub** | a computer at home, or a phone while its app is open, if you want one | lets your devices sync when they are away from home; one that only passes copies on reads none |
 
@@ -66,7 +66,7 @@ and the others go on syncing.
 cross the router, so devices on different networks do not find each other by themselves.
 The phone apps remember each computer's addresses from its QR code and still reach it; a
 lite member can be told a computer's address
-([`-peer`](../../lite/README.md#install)); and for
+([`-peer`](../../member/README.md#install)); and for
 everything else a hub (below) joins both sides.
 
 ## Away from home: the hub

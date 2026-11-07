@@ -74,14 +74,14 @@ jobs:
           cache: false # a release builds from scratch
       - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
         run: |
-          CBB_SOURCE="$GITHUB_SHA" sh lite/wasm/build.sh
-          sh lite/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
+          CBB_SOURCE="$GITHUB_SHA" sh wasm/build.sh
+          sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
       - name: build
         run: |
           ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
           # Every release build runs the Rust core under wazero, never Go's
           # own rules, which only the tests use.
-          overlay=$GITHUB_WORKSPACE/lite/target/cbb-core-overlay.json
+          overlay=$GITHUB_WORKSPACE/target/cbb-core-overlay.json
           if [ "$GOOS" = windows ]; then
             # cbbw.exe is the same program without a console window, for the agent.
             go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
@@ -273,7 +273,7 @@ jobs:
       - name: bind the phones' tunnel and build the Rust core, which the app links
         run: |
           mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework
-          sh lite/ffi/bind.sh ios apps/ios/CbbCore
+          sh ffi/bind.sh ios apps/ios/CbbCore
       - name: generate the Xcode project
         working-directory: apps/ios
         run: |
@@ -360,7 +360,7 @@ jobs:
             ;;
           esac
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n 's/^cbb.ndk=//p' gradle.properties)" >/dev/null </dev/null
-          # The Rust the core's libraries are built with (lite/ffi), and cargo-ndk.
+          # The Rust the core's libraries are built with (ffi/), and cargo-ndk.
           rustup toolchain install "$(sed -n 's/^cbb.rust=//p' gradle.properties)" --profile minimal \
             --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
           cargo install --locked cargo-ndk@4.1.2
@@ -417,11 +417,10 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --target ${{ matrix.target }}
           rustup default stable
-      - name: build (static, linked with rust-lld; see lite/.cargo/config.toml)
-        working-directory: lite
+      - name: build (static, linked with rust-lld; see .cargo/config.toml)
         run: CBB_VERSION="${GITHUB_REF_NAME#v}" CBB_SOURCE="$GITHUB_SHA" cargo build --locked --release --target ${{ matrix.target }}
       - name: archive, with the crates' licenses and the installer
-        run: sh lite/packaging/archive.sh lite/target/${{ matrix.target }}/release/cbb ${{ matrix.target }} ${{ matrix.name }} "$RUNNER_TEMP/dist"
+        run: sh member/packaging/archive.sh target/${{ matrix.target }}/release/cbb ${{ matrix.target }} ${{ matrix.name }} "$RUNNER_TEMP/dist"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ARCHIVE }}
@@ -450,10 +449,10 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/zig"
           "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.15.2 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
-      - name: build (static, soft float, without sync away from home; see lite/packaging/mips.sh)
-        run: CBB_VERSION="${GITHUB_REF_NAME#v}" CBB_SOURCE="$GITHUB_SHA" sh lite/packaging/mips.sh ${{ matrix.arch }}
+      - name: build (static, soft float, without sync away from home; see member/packaging/mips.sh)
+        run: CBB_VERSION="${GITHUB_REF_NAME#v}" CBB_SOURCE="$GITHUB_SHA" sh member/packaging/mips.sh ${{ matrix.arch }}
       - name: archive, with the crates' licenses and the installer
-        run: sh lite/packaging/archive.sh lite/target/${{ matrix.target }}/release/cbb ${{ matrix.target }} ${{ matrix.name }} "$RUNNER_TEMP/dist"
+        run: sh member/packaging/archive.sh target/${{ matrix.target }}/release/cbb ${{ matrix.target }} ${{ matrix.name }} "$RUNNER_TEMP/dist"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ARCHIVE }}
@@ -582,10 +581,10 @@ jobs:
           go run ./tools/sbom go -o dist/sbom-go.cdx.json -version "$GITHUB_REF_NAME" \
             dist/cbb-linux-*.tar.gz dist/cbb-darwin-*.tar.gz \
             dist/cbb-freebsd-*.tar.gz dist/cbb-windows-*.zip
-          go run ./tools/sbom cargo -o dist/sbom-lite.cdx.json -version "$GITHUB_REF_NAME" -manifest lite/Cargo.toml \
+          go run ./tools/sbom cargo -o dist/sbom-lite.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
             -package cbb-lite \
             -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl
-          go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$GITHUB_REF_NAME" -manifest lite/Cargo.toml \
+          go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
             -package cbb-ffi \
             -target aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
           go run ./tools/sbom swift -o dist/sbom-ios-kit.cdx.json -version "$GITHUB_REF_NAME" apps/ios/CBBKit/Package.resolved

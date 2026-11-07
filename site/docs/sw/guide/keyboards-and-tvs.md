@@ -52,7 +52,7 @@ Bodi hii ni mwanachama mwepesi wa kikundi chako. Kwenye kiweko chake:
 - `layout ru` au `layout us` na `rate N` huweka mpangilio na kasi.
 - `type TEXT` huandika kwenye kifaa cha Bluetooth kilichounganishwa, au la sivyo kwenye cha USB.
 
-Ubandikaji wa mbali wa kikundi kwenda kwenye bodi huandikwa vivyo hivyo. Mwongozo wa bodi yenyewe uko katika [lite/esp32](../../lite/esp32/README.md).
+Ubandikaji wa mbali wa kikundi kwenda kwenye bodi huandikwa vivyo hivyo. Mwongozo wa bodi yenyewe uko katika [esp32/](../../esp32/README.md).
 
 ## Kompyuta kama rimoti ya televisheni
 

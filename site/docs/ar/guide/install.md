@@ -18,7 +18,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 
 يسأل اللصق عن بُعد على GNOME وKDE مرة واحدة، في مربع حوار على الحاسوب، قبل أن يسمح لأول لصق من مشرف بالضغط على المفاتيح. لتخطي مربع الحوار أضف `--uinput` (`... | sudo sh -s -- --uinput`): عندها يضغط مساعد صغير مفاتيح اللصق (Shift+Insert وEnter) نيابةً عمّن يستخدم الشاشة، ولا يفعل ذلك أبدًا في شاشة تسجيل الدخول أو القفل.
 
-الأجهزة الصغيرة التي يكفيها أن تزامن، كالراوتر أو Raspberry Pi Zero، يمكنها استخدام [العضو الخفيف](../../lite/README.md) الأخف بدلًا من ذلك: `... | sudo sh -s -- --lite`.
+الأجهزة الصغيرة التي يكفيها أن تزامن، كالراوتر أو Raspberry Pi Zero، يمكنها استخدام [العضو الخفيف](../../member/README.md) الأخف بدلًا من ذلك: `... | sudo sh -s -- --lite`.
 
 ### من دون sudo (بلا root)
 
@@ -28,7 +28,7 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --rootless
 ```
 
-يعمل كخدمة خلفية خاصة بك ما دمت مسجّلًا الدخول، ويزامن كأي عضو. استخدمه فقط حين يتعذر التثبيت العادي: فأي برنامج تشغّله يستطيع نسخ مفاتيحه، لذلك لا يمكن أن يكون أبدًا جذر المجموعة أو مشرفًا أو المحور ([كيف يعمل](how-it-works.md#rootless-members))، وليست له قواعد جدار حماية ولا TPM ولا `--console` ولا `--uinput`. ولإبقائه يعمل بعد تسجيل الخروج، ينفّذ مسؤول النظام مرة واحدة `sudo loginctl enable-linger YOUR-USER`. وللإزالة: `sh ~/.local/share/cbb/uninstall.sh`. ويُثبَّت العضو الخفيف بهذه الطريقة أيضًا، بالخيارين `--lite --rootless` ([العضو الخفيف](../../lite/README.md#without-sudo-rootless)).
+يعمل كخدمة خلفية خاصة بك ما دمت مسجّلًا الدخول، ويزامن كأي عضو. استخدمه فقط حين يتعذر التثبيت العادي: فأي برنامج تشغّله يستطيع نسخ مفاتيحه، لذلك لا يمكن أن يكون أبدًا جذر المجموعة أو مشرفًا أو المحور ([كيف يعمل](how-it-works.md#rootless-members))، وليست له قواعد جدار حماية ولا TPM ولا `--console` ولا `--uinput`. ولإبقائه يعمل بعد تسجيل الخروج، ينفّذ مسؤول النظام مرة واحدة `sudo loginctl enable-linger YOUR-USER`. وللإزالة: `sh ~/.local/share/cbb/uninstall.sh`. ويُثبَّت العضو الخفيف بهذه الطريقة أيضًا، بالخيارين `--lite --rootless` ([العضو الخفيف](../../member/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 

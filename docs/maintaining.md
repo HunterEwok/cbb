@@ -143,10 +143,10 @@ environment secret**.
   without signing;
 - **Android app**: the Kotlin kit's tests and its cross tests with the Go code, and the app
   built, unit-tested and linted;
-- **lite member (Rust)**: `cargo fmt`, `clippy` and the tests of `lite/`, the ARM64 and
+- **lite member (Rust)**: `cargo fmt`, `clippy` and the tests of the Rust workspace, the ARM64 and
   ARMv6 builds, and the e2e test of the lite member among Go members;
 - **lite core on the ESP32**: the lite protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
-  ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`lite/esp32`) built, its console and
+  ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`esp32/`) built, its console and
   flash settings tested and its self-test run in Espressif's QEMU (both downloaded by hash);
 - **ZX Spectrum Next**: the tests of the `.cbb` frame parser on the host, and the dot commands `.cbb`
   and `.pibridge` built with z88dk (from its release source, checked by hash, cached);
@@ -189,8 +189,8 @@ Rules for workflows:
   `releases/latest/download/` has fixed names for `get.sh`; each holds `cbb/` with the
   binary, `LICENSE`, `THIRD_PARTY_NOTICES` (the licenses of the Go modules, the copied code
   and Go itself, written by `packaging/archive.sh`) and `packaging/`. The
-  `cbb-lite-linux-*` archives hold `cbb-lite/` in the same way (`lite/packaging/archive.sh`), with the crates'
-  licenses (`lite/packaging/notices.sh`), the same Linux installer and the lite member's unit.
+  `cbb-lite-linux-*` archives hold `cbb-lite/` in the same way (`member/packaging/archive.sh`), with the crates'
+  licenses (`member/packaging/notices.sh`), the same Linux installer and the lite member's unit.
 - Published with `SHA256SUMS` and a build provenance attestation
   (`actions/attest-build-provenance`), which users can check with `gh attestation verify`.
 - What a release is built from: a software bill of materials in CycloneDX 1.6 JSON for each
@@ -199,8 +199,8 @@ Rules for workflows:
   - `sbom-go.cdx.json`: the Go modules of every program in the archives (`cbb` and the tray
     app), read from the programs' own build information, and Go's standard library;
   - `sbom-lite.cdx.json`: the crates the lite member is built with on its targets, without the
-    ones only tests and build scripts use, with their checksums from `lite/Cargo.lock`;
-  - `sbom-phone-core.cdx.json`: the same for the Rust core both phone apps link (`lite/ffi`);
+    ones only tests and build scripts use, with their checksums from `Cargo.lock`;
+  - `sbom-phone-core.cdx.json`: the same for the Rust core both phone apps link (`ffi/`);
   - `sbom-ios-kit.cdx.json`: the Swift packages of the iPhone kit (`Package.resolved`);
   - `sbom-android.cdx.json`: the Maven modules of the Android app's two builds and the Wear OS
     app, listed by `packaging/sbom.init.gradle.kts`, an init script that leaves the apps' build
@@ -232,7 +232,7 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   certificate as proof that the key was made on the YubiKey.
   Their public keys go into `packaging/get.sh` (`release_roots`), `packaging/windows/get.ps1`
   (`$releaseRoots`) and the programs (`internal/release.Roots`, the lite member's
-  `update::ROOTS` in `lite/src/update.rs`, and the phone kits' `Releases.roots`, which
+  `update::ROOTS` in `member/src/update.rs`, and the phone kits' `Releases.roots`, which
   also turn on the Android app's own update).
 - **The release key**, in the Mac's Secure Enclave, asking for Touch ID at each signature:
   `swift tools/release-sign/se.swift create ~/.config/cbb-release/release.se`. A root
