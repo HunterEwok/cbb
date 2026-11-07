@@ -115,6 +115,14 @@ impl State {
         Ok(State { version: 1, group: group.to_string(), key: random_key()?, psk: random_key()?, hubs: vec![] })
     }
 
+    /// A state with a key the app keeps itself, as a phone does (lite/ffi).
+    pub fn with_key(key: &[u8]) -> Result<State> {
+        if key.len() != 32 || key.iter().all(|&b| b == 0) {
+            return Err(Error::msg("the tunnel key is not 32 bytes, or is zeros"));
+        }
+        Ok(State { version: 1, group: String::new(), key: key.to_vec(), psk: random_key()?, hubs: vec![] })
+    }
+
     /// Reads dir/tunnel.json; None if there is none.
     pub fn load(dir: &Path) -> Result<Option<State>> {
         let path = dir.join(FILE_NAME);
@@ -181,6 +189,11 @@ impl State {
     pub fn public_key(&self) -> Vec<u8> {
         PublicKey::from(&self.secret()).as_bytes().to_vec()
     }
+}
+
+/// A new tunnel key, which a phone's app keeps (lite/ffi).
+pub fn new_key() -> Result<Vec<u8>> {
+    random_key()
 }
 
 /// 32 random bytes, for a key.

@@ -90,6 +90,8 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
 pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
+#[cfg(feature = "tunnel")]
+pub mod tunnel;
 
 /// Hands an answer to C: its bytes, which the caller gives back with
 /// `cbb_free`, their length written to `answer_len` when not null.
@@ -326,6 +328,26 @@ pub unsafe extern "C" fn cbb_member_stop(m: *mut member::Member) {
         let m = unsafe { Box::from_raw(m) };
         m.stop();
     }
+}
+
+/// The phones' tunnel to the hub (src/tunnel.rs lists the requests): answers
+/// the `len` bytes at `request` with bytes the caller gives back with
+/// `cbb_free`, their length written to `answer_len`. Null only when
+/// `answer_len` or `request` is null.
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes and `answer_len` to a
+/// writable `size_t`, for the time of the call.
+#[cfg(feature = "tunnel")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_tunnel(request: *const u8, len: usize, answer_len: *mut usize) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request, not null.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(tunnel::call(req), answer_len)
 }
 
 #[cfg(test)]

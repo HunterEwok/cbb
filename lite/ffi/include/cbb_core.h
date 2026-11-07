@@ -80,6 +80,15 @@ uint8_t *cbb_member_copy(const cbb_member *m, const uint8_t *request, size_t len
 uint8_t *cbb_member_peers(const cbb_member *m, size_t *answer_len);
 void cbb_member_stop(cbb_member *m);
 
+/*
+ * The phones' tunnel to the hub (src/tunnel.rs), only in a library built with
+ * the feature tunnel (the iPhone and Android apps): request is JSON with its
+ * "op" (new_key, public_key, start, status, stop); the answer, given back
+ * with cbb_free, is {"ok": ...} or {"error": {...}}. A started tunnel's
+ * loopback port leads to the hub's member port.
+ */
+uint8_t *cbb_tunnel(const uint8_t *request, size_t len, size_t *answer_len);
+
 #ifdef __cplusplus
 }
 #endif

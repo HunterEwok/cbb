@@ -17,6 +17,10 @@ All notable changes to cbb are documented in this file. The format follows
   packet-up requests, its UDP addresses tried first only with AmneziaWG
   (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server). REALITY stays
   with the full member.
+- The phones' tunnel in Rust (lite/ffi, `cbb_tunnel`, feature `tunnel`): the lite member's
+  WireGuard with AmneziaWG and VLESS with XHTTP behind a loopback port, for the iPhone and
+  Android apps in place of the Go tunnel (`TestRustPhoneTunnel` against the Go hub). The apps
+  move to it once their node runs in Rust.
 - CI's job "go test with the Rust core" runs the whole Go suite as the release builds are
   made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the

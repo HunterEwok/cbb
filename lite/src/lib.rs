@@ -42,7 +42,7 @@ pub mod sealkey;
 mod service;
 pub mod tls;
 #[cfg(feature = "tunnel")]
-mod tunnel;
+pub mod tunnel;
 mod update;
 pub mod uptime;
 #[cfg(feature = "tunnel")]

@@ -21,7 +21,7 @@ pub enum Verdict {
 }
 
 /// The user of the process at the other end of s, from the kernel.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub fn uid(s: &UnixStream) -> Option<u32> {
     let mut cred = libc::ucred { pid: 0, uid: 0, gid: 0 };
     let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
@@ -34,7 +34,7 @@ pub fn uid(s: &UnixStream) -> Option<u32> {
 }
 
 /// The user of the process at the other end of s, from the kernel.
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
 pub fn uid(s: &UnixStream) -> Option<u32> {
     let (mut uid, mut gid) = (0, 0);
     // SAFETY: uid and gid are valid for the kernel to write, and the
