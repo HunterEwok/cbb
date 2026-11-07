@@ -19,6 +19,20 @@ public extension FrameTransport {
     var peerChain: [Data] { [] }
 }
 
+/// A connection that can be closed, which makes a blocked read or write
+/// fail: a TLS connection in the app, a socket in tests.
+public protocol ClosableTransport: FrameTransport {
+    func close()
+    /// The peer's leaf certificate from the TLS handshake, DER; nil when
+    /// there is none.
+    var peerCertificate: Data? { get }
+}
+
+extension ClosableTransport {
+    public var peerCertificate: Data? { nil }
+    public var peerChain: [Data] { peerCertificate.map { [$0] } ?? [] }
+}
+
 extension FrameTransport {
     func writeFrame(_ f: Pairing.Frame) async throws { try await write(Pairing.encode(f)) }
 

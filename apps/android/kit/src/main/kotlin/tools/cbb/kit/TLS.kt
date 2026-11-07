@@ -191,8 +191,8 @@ class TLSTransport private constructor(private val socket: SSLSocket, private va
 
 /**
  * Listens for TLS 1.3 connections, as a phone does while it shows its join
- * QR code (docs/protocol.md, section 6, "The joiner listens") and while it
- * is the group's hub (MemberListener). It requires a client certificate and
+ * QR code (docs/protocol.md, section 6, "The joiner listens") and for a
+ * remote invitation's pairing window. It requires a client certificate and
  * lets verifyChain decide on it. It listens on every address, or on address.
  */
 class TLSListener(

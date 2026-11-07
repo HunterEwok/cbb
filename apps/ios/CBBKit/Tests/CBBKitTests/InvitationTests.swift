@@ -48,7 +48,7 @@ final class InvitationTests: XCTestCase {
     func run(joinerSecret: Data, answer: Bool) async throws -> (Outcome, Result<(PhoneGroup, PairingMember.Admitted), Error>, Asked, Data) {
         let rootKey = SoftwareSigner()
         let root = try PhoneGroup.create(caSigner: rootKey, memberKey: SoftwareSigner().publicKeyDER, now: t0)
-        let joiner = SyncEngine.newID(), joinerCert = try GroupCertificates.selfSigned(device: joiner, signer: SoftwareSigner())
+        let joiner = Member.newID(), joinerCert = try GroupCertificates.selfSigned(device: joiner, signer: SoftwareSigner())
         let (m, j) = Pipe.pair()
         let asked = Asked()
         let invitation = PairingMember.Invitation(secret: secret) { req in

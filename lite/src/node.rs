@@ -16,7 +16,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
@@ -107,6 +107,9 @@ pub struct Peer {
     /// What it supports beyond its protocol version: `media` from one that
     /// serves the content of media events.
     pub features: Vec<String>,
+    /// Its certificate chain as the handshake checked it, leaf first, DER:
+    /// for a phone's app, which renews it and checks what it may do.
+    pub chain: Vec<Vec<u8>>,
 }
 
 /// The most device IDs a reach message is read for.
@@ -115,8 +118,13 @@ const MAX_REACH: usize = 256;
 const MAX_PASSED: usize = 4096;
 
 /// Gets the messages a peer sends that the node does not handle itself:
-/// `admin`, `hubs` and `credentials` for a phone's app, which keeps them.
+/// `admin`, `hubs`, `credentials` and `evidence` for a phone's app, which
+/// keeps them.
 pub type OnMessage = Box<dyn Fn(&DeviceId, &Message) + Send + Sync>;
+
+/// Gets each peer once its hello is taken, for a phone's app, which may
+/// answer it: renew its certificate, send it an admin CA or tunnel offers.
+pub type OnPeer = Box<dyn Fn(&Peer) + Send + Sync>;
 
 /// Called with a tunnel offer and the device that sent it.
 /// Gets a tunnel offer from the group's root or an admin, and whether the
@@ -181,8 +189,16 @@ pub struct Node {
     waiting: Mutex<HashMap<String, Waiting>>,
     /// The commands a phone passed on, by ID: where each came from, and
     /// when it expires (docs/protocol.md, section 15).
-    passed: Mutex<HashMap<String, (DeviceId, i64)>>,
+    passed: Mutex<HashMap<String, Passed>>,
     on_message: RwLock<Option<OnMessage>>,
+    on_peer: RwLock<Option<OnPeer>>,
+    /// Counts the times this member closed its connections to connect again
+    /// (reconnect, a new tunnel key): the dial loops dial those at once.
+    reconnects: AtomicUsize,
+    /// The attestations of this member's keys, which every peer gets after
+    /// its hello (docs/protocol.md, section 17, "Evidence"): a phone's app
+    /// sets them.
+    evidence: RwLock<Vec<serde_json::Value>>,
     /// The sealed blobs of copies with images or files, for a phone's app,
     /// which makes, fetches and serves them; None on the lite member.
     content: Option<Arc<Store>>,
@@ -190,6 +206,37 @@ pub struct Node {
     /// for a phone's app, which shows it and fetches images or files.
     on_change: RwLock<Option<OnChange>>,
 }
+
+/// The ID of a command as its body names it, for the result of one that
+/// is refused before it is verified: the sender takes a result by its
+/// command's ID, and one without it waits until it times out. Empty when
+/// the body names none.
+pub fn command_id(r: &Record) -> String {
+    CommandHead::of(r).map(|h| h.id).unwrap_or_default()
+}
+
+/// How a dial ended (Node::dial_ended).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Dialed {
+    /// The connection came up (or one to the peer was up already).
+    pub up: bool,
+    /// This member ended it to connect again: dial at once.
+    pub again: bool,
+}
+
+/// A command a phone passed on: where it came from, when it expires, and
+/// whether its result went back already. It is passed on once until it
+/// expires, whatever its result.
+struct Passed {
+    from: DeviceId,
+    expires_ms: i64,
+    answered: bool,
+}
+
+/// Checks a connection a listener took, by the source port of its loopback
+/// connection and the device its certificate names, before it is served:
+/// a blind relay's calls only from the device the relay announced.
+pub type Admit = Arc<dyn Fn(u16, &DeviceId) -> bool + Send + Sync>;
 
 /// Gets a copy that became the group's current one.
 pub type OnChange = Box<dyn Fn(&Event) + Send + Sync>;
@@ -247,6 +294,9 @@ impl CommandHead {
 
 struct Conn {
     id: DeviceId,
+    /// The peer's address: a loopback one for a tunnel's or relay's
+    /// connection.
+    addr: SocketAddr,
     sock: TcpStream,
     tls: Mutex<tls::Session>,
     tx: SyncSender<Out>,
@@ -304,6 +354,9 @@ impl Node {
             waiting: Mutex::new(HashMap::new()),
             passed: Mutex::new(HashMap::new()),
             on_message: RwLock::new(None),
+            on_peer: RwLock::new(None),
+            reconnects: AtomicUsize::new(0),
+            evidence: RwLock::new(Vec::new()),
             content: None,
             on_change: RwLock::new(None),
         }
@@ -346,6 +399,7 @@ impl Node {
     /// them.
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
         *self.tunnel_key.write().unwrap() = key;
+        self.reconnects.fetch_add(1, Ordering::SeqCst);
         for c in self.conns.lock().unwrap().values() {
             if c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full") {
                 c.close(true);
@@ -355,6 +409,7 @@ impl Node {
 
     /// Connects to every member again, so that the hellos say what changed.
     pub fn reconnect(&self) {
+        self.reconnects.fetch_add(1, Ordering::SeqCst);
         for c in self.conns.lock().unwrap().values() {
             c.close(true);
         }
@@ -407,6 +462,15 @@ impl Node {
         self.conns.lock().unwrap().contains_key(id)
     }
 
+    /// Reports whether a connection to the device is up that a dial to
+    /// addr would not replace: any one for a home address; for a loopback
+    /// one (a tunnel's or relay's port), only one through a loopback port,
+    /// since a connection at home may have gone quiet once the peer took
+    /// the way through the tunnel, and the tunnel's then replaces it.
+    pub fn connected_for(&self, id: &DeviceId, addr: &SocketAddr) -> bool {
+        self.conns.lock().unwrap().get(id).is_some_and(|c| !replaces(addr, &c.addr))
+    }
+
     /// How far the records stop the exchange: "secrets" or "full", empty
     /// when nothing stops.
     pub fn stop(&self) -> String {
@@ -440,6 +504,16 @@ impl Node {
     /// Sets what gets the messages the node leaves to its app.
     pub fn on_message(&self, f: OnMessage) {
         *self.on_message.write().unwrap() = Some(f);
+    }
+
+    /// Sets what gets each peer once its hello is taken.
+    pub fn on_peer(&self, f: OnPeer) {
+        *self.on_peer.write().unwrap() = Some(f);
+    }
+
+    /// Sets the attestations every peer gets after its hello from now on.
+    pub fn set_evidence(&self, list: Vec<serde_json::Value>) {
+        *self.evidence.write().unwrap() = list;
     }
 
     /// Closes every connection with a goodbye and makes no new one until
@@ -660,6 +734,23 @@ impl Node {
         to
     }
 
+    /// Sends a command to the members that pass it on (docs/protocol.md,
+    /// section 15): the group's hubs connected, full members, and the
+    /// phones among the root and the admins, as the phone that is the hub;
+    /// returns those it went to.
+    fn send_to_passers(&self, m: &Message) -> Vec<DeviceId> {
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        let mut to = Vec::new();
+        for c in conns.iter().filter(|c| !c.records_only) {
+            let role = c.peer.lock().unwrap().as_ref().map(|p| p.role.clone()).unwrap_or_default();
+            if (role == "full" || role == "phone") && self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
+                self.enqueue(c, Out::Message(m.clone()));
+                to.push(c.id.clone());
+            }
+        }
+        to
+    }
+
     /// Takes records this member's app signed (an admin's or the root's),
     /// keeps them and sends them to every peer.
     pub fn add_own_records(&self, rs: &[Record]) {
@@ -682,7 +773,7 @@ impl Node {
         } else if head.kind == "hub" {
             false
         } else {
-            !self.send_to_hubs(&m).is_empty()
+            !self.send_to_passers(&m).is_empty()
         };
         let res = if sent {
             rx.recv_timeout(timeout).map_err(|_| Error::msg(format!("{to} did not answer in time")))
@@ -703,9 +794,9 @@ impl Node {
             }
             return;
         }
-        let back = self.passed.lock().unwrap().get_mut(&res.id).map(|(origin, exp)| {
-            *exp = i64::MIN; // passed back once
-            origin.clone()
+        let back = self.passed.lock().unwrap().get_mut(&res.id).filter(|p| !p.answered).map(|p| {
+            p.answered = true; // passed back once
+            p.from.clone()
         });
         if let Some(origin) = back {
             if res.by.is_empty() {
@@ -724,17 +815,32 @@ impl Node {
         let now = uptime::wall_ms();
         {
             let mut passed = self.passed.lock().unwrap();
-            passed.retain(|_, (_, exp)| *exp > now);
-            if passed.contains_key(&head.id) || passed.len() >= MAX_PASSED {
+            passed.retain(|_, p| p.expires_ms > now);
+            // An expired command, or one that claims to live longer than a
+            // command may, is not passed on (docs/protocol.md, section 15).
+            let lifetime = cbb_core::command::COMMAND_LIFETIME_MS + cbb_core::command::COMMAND_AHEAD_MS;
+            if head.expires_ms <= now
+                || head.expires_ms.saturating_sub(now) > lifetime
+                || passed.contains_key(&head.id)
+                || passed.len() >= MAX_PASSED
+            {
                 return;
             }
             let c = self.conns.lock().unwrap().get(&to).cloned();
             let Some(c) = c.filter(|c| !c.records_only && &c.id != from) else { return };
-            let exp = head.expires_ms.min(now + cbb_core::command::COMMAND_LIFETIME_MS + 1000);
-            passed.insert(head.id.clone(), (from.clone(), exp));
+            passed.insert(head.id.clone(), Passed { from: from.clone(), expires_ms: head.expires_ms, answered: false });
             self.enqueue(&c, Out::Message(wire::command(&r)));
         }
         self.logf(&format!("cbb: passed a command from {from} on to {to}"));
+    }
+
+    /// How far the peers read the sealed blob of the current copy id, and
+    /// its size; None when id is not the current copy or has no blob.
+    pub fn served(&self, id: &str) -> Option<(u64, u64)> {
+        let ev = self.engine.current().filter(|e| e.id == id)?;
+        let blob = ev.blob?;
+        let store = self.content.as_ref()?;
+        Some((store.served(&blob.sha256), u64::try_from(blob.size).unwrap_or(0)))
     }
 
     /// The devices list from the records.
@@ -924,6 +1030,14 @@ impl Node {
     /// address given by hand; the device is then the one the certificate
     /// names. A device already connected is not connected twice.
     pub fn dial(&self, addr: SocketAddr, peer: Option<DeviceId>) -> Result<()> {
+        self.dial_ended(addr, peer).map(|_| ())
+    }
+
+    /// As dial, telling how the dial ended: whether the connection came up
+    /// (its end afterwards, a goodbye or a broken connection, is logged and
+    /// is no failure to dial), and whether this member ended it to connect
+    /// again (reconnect, a new tunnel key), so that it is dialed at once.
+    pub fn dial_ended(&self, addr: SocketAddr, peer: Option<DeviceId>) -> Result<Dialed> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
         }
@@ -945,11 +1059,16 @@ impl Node {
         let cfg = tls::member_client(&ident, peer.clone(), tls::refused(&self.records), &tls::clock())?;
         let conn = tls::Session::client(Arc::new(cfg), tls::server_name(peer.as_ref()))?;
         let (conn, id, chain) = self.handshake(&sock, conn, addr, Usage::Server)?;
-        if self.connected(&id) {
+        if self.connected_for(&id, &addr) {
             let _ = sock.shutdown(Shutdown::Both);
-            return Ok(());
+            return Ok(Dialed { up: true, again: false });
         }
-        self.run(sock, conn, id, chain, addr)
+        let before = self.reconnects.load(Ordering::SeqCst);
+        // How it ended is logged; a connection that came up and ended is
+        // dialed again at once when this member ended it to connect again,
+        // else after a second.
+        let _ = self.run(sock, conn, id, chain, addr);
+        Ok(Dialed { up: true, again: self.reconnects.load(Ordering::SeqCst) != before })
     }
 
     /// Runs a connection that a member (a phone or a lite member)
@@ -957,6 +1076,18 @@ impl Node {
     /// to the same device. handshaken is called once the handshake is over,
     /// whether it worked or not.
     pub fn accept(&self, sock: TcpStream, addr: SocketAddr, handshaken: &mut dyn FnMut()) -> Result<()> {
+        self.accept_checked(sock, addr, handshaken, None)
+    }
+
+    /// As accept, with the listener's check of the peer (Admit), which
+    /// refuses the connection before it is served.
+    pub fn accept_checked(
+        &self,
+        sock: TcpStream,
+        addr: SocketAddr,
+        handshaken: &mut dyn FnMut(),
+        admit: Option<&Admit>,
+    ) -> Result<()> {
         if self.is_closed() {
             return Err(Error::msg("the service is stopping"));
         }
@@ -971,6 +1102,11 @@ impl Node {
         let res = self.handshake(&sock, conn, addr, Usage::Client);
         handshaken();
         let (conn, id, chain) = res?;
+        if let Some(admit) = admit
+            && !admit(addr.port(), &id)
+        {
+            return Err(Error::msg(format!("{id} at {addr} is not the caller this listener expects")));
+        }
         self.run(sock, conn, id, chain, addr)
     }
 
@@ -1009,6 +1145,7 @@ impl Node {
         let (tx, rx) = mpsc::sync_channel(QUEUE_LEN);
         let c = Arc::new(Conn {
             id: id.clone(),
+            addr,
             sock,
             tls: Mutex::new(conn),
             tx,
@@ -1115,7 +1252,9 @@ impl Node {
                 }
                 let (mut h, body) = wire::decode_hello(m.hello.as_ref())?;
                 h.current = h.current.and_then(|e| e.sealed).and_then(|s| self.take(s, &c.id));
-                *c.peer.lock().unwrap() = Some(peer_of(&c.id, &m.role, &body, c.records_only));
+                let mut peer = peer_of(&c.id, &m.role, &body, c.records_only);
+                peer.chain = c.chain.iter().map(|x| x.der.clone()).collect();
+                *c.peer.lock().unwrap() = Some(peer.clone());
                 if !c.records_only {
                     let out = self
                         .engine
@@ -1131,6 +1270,14 @@ impl Node {
                     }
                 }
                 drop(st);
+                if !c.records_only {
+                    for e in self.evidence.read().unwrap().iter() {
+                        self.enqueue(c, Out::Message(wire::evidence(e)));
+                    }
+                }
+                if let Some(f) = self.on_peer.read().unwrap().as_ref() {
+                    f(&peer);
+                }
                 // A peer that holds older entry points, or none, gets ours
                 // (docs/protocol.md, section 16, "Entry points").
                 let now = uptime::wall_ms();
@@ -1219,6 +1366,7 @@ impl Node {
                                 by: me.to_string(),
                                 status: "refused".into(),
                                 reason: "this device takes no commands".into(),
+                                tunnel: None,
                             }),
                         ),
                     }
@@ -1251,7 +1399,13 @@ impl Node {
                         p.reach = reach;
                     }
                 }
-                "admin" | "hubs" | "credentials" => {
+                // A hub share only from a device that may be a hub, by the
+                // records and the chain it proved (docs/protocol.md, section
+                // 11, "Several hubs").
+                "hubs" if !self.records.lock().unwrap().hub_peer(c.id.as_str(), &c.chain) => {
+                    self.logf(&format!("cbb: ignored a hub share from {}: it may not be a hub of the group", c.id));
+                }
+                "admin" | "hubs" | "credentials" | "evidence" => {
                     if let Some(f) = self.on_message.read().unwrap().as_ref() {
                         f(&c.id, &m);
                     }
@@ -1434,7 +1588,16 @@ impl Read for TlsReader<'_> {
                 }
             }
             self.buf.resize(16 << 10, 0);
-            let n = (&self.c.sock).read(&mut self.buf)?;
+            // The read timeout is EAGAIN (WouldBlock) on Linux and Android,
+            // ETIMEDOUT elsewhere: either means nothing came for TIMEOUT,
+            // although the peer pings every 5 s.
+            let n = (&self.c.sock).read(&mut self.buf).map_err(|e| match e.kind() {
+                io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut => io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("nothing came for {} s, not even a ping", TIMEOUT.as_secs()),
+                ),
+                _ => e,
+            })?;
             if n == 0 {
                 return Ok(0);
             }
@@ -1615,6 +1778,14 @@ fn read_any(r: &mut impl Read) -> Result<Frame> {
     Ok(Frame::Message(Box::new(wire::decode(&data)?)))
 }
 
+/// Whether a dial to addr replaces the connection up at up: a dial
+/// through a loopback port (a tunnel's, a relay's) replaces one at home,
+/// which may have gone quiet once the peer took the tunnel; nothing else
+/// replaces a connection that is up.
+fn replaces(addr: &SocketAddr, up: &SocketAddr) -> bool {
+    addr.ip().is_loopback() && !up.ip().is_loopback()
+}
+
 /// A peer as its hello presents it, with what is not valid left out.
 fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool) -> Peer {
     let valid = |s: &str, ok: &[&str]| if ok.contains(&s) { s.to_string() } else { String::new() };
@@ -1637,6 +1808,7 @@ fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool
         reach: Vec::new(),
         records_only,
         features: body.features.iter().take(32).filter(|f| f.len() <= 32).cloned().collect(),
+        chain: Vec::new(),
     }
 }
 
@@ -1725,6 +1897,30 @@ mod tests {
         remember_found(&mut home, &id(0), false, || Duration::ZERO);
         remember_found(&mut home, &id(MAX_HOME), true, || Duration::ZERO);
         assert!(home.contains_key(&id(MAX_HOME)));
+    }
+
+    /// The tunnel's port replaces a connection at home to the same device,
+    /// which a peer that took the tunnel leaves quiet (the Android
+    /// emulator's c2_awayThroughHub waited 15 s for it); nothing else
+    /// replaces a connection that is up.
+    #[test]
+    fn a_tunnel_replaces_a_connection_at_home() {
+        let a = |s: &str| s.parse::<std::net::SocketAddr>().unwrap();
+        assert!(super::replaces(&a("127.0.0.1:4000"), &a("10.0.2.2:8764")));
+        assert!(super::replaces(&a("[::1]:4000"), &a("192.168.1.5:8764")));
+        assert!(!super::replaces(&a("127.0.0.1:4000"), &a("127.0.0.1:5000")));
+        assert!(!super::replaces(&a("10.0.2.2:8764"), &a("127.0.0.1:4000")));
+        assert!(!super::replaces(&a("10.0.2.2:8764"), &a("10.0.2.3:8764")));
+    }
+
+    /// A command refused before it is verified (expired, or signed by no
+    /// admin) still answers with its ID, which the sender takes the result
+    /// by; it waited until it timed out.
+    #[test]
+    fn a_refused_command_keeps_its_id() {
+        let rec = |body: &[u8]| crate::records::Record { body: body.to_vec(), sig: Vec::new(), chain: Vec::new() };
+        assert_eq!(super::command_id(&rec(br#"{"type":"mode","to":"aa","id":"c1","expires_ms":5}"#)), "c1");
+        assert_eq!(super::command_id(&rec(b"not json")), "");
     }
 
     #[test]

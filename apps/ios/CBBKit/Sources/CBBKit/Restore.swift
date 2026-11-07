@@ -89,7 +89,7 @@ public struct Restore: Sendable {
 
     private init(signer: any CertificateSigner & Sendable, adminCA: Data, admin: Data, groupTag: String?, memberKey: Data, now: Date) throws {
         (self.signer, self.adminCA, self.admin, self.groupTag) = (signer, adminCA, admin, groupTag)
-        device = SyncEngine.newID()
+        device = Member.newID()
         memberCert = try GroupCertificates.member(device: device, publicKey: memberKey, ca: adminCA, caSigner: signer, now: now)
     }
 

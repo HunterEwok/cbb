@@ -26,6 +26,7 @@ struct CBBApp: App {
         // The phone is the group's hub while the app is open (D-64).
         .onChange(of: scenePhase, initial: true) { _, phase in
             model.group.setForeground(phase == .active)
+            model.group.setBackground(phase == .background)
             // A copy from another device that waits comes in as the app opens.
             if phase == .active { Task { await model.takePending() } }
             if phase == .background { BackgroundRefresh.schedule() }

@@ -137,47 +137,4 @@ object Content {
 
     /** The blob or a part does not match its hash, or does not open. */
     class Mismatch : Exception("the copy's content does not match")
-
-    /**
-     * Fetches the sealed blob of event from the connected members that
-     * serve content, its origin first, checks it against its hash, opens it
-     * with the copy's key, and returns the bytes of the manifest's parts that
-     * are no folders, in order, each checked against its own hash
-     * (docs/protocol.md, section 4, "The blob" and "Content"). It throws when
-     * no member has it whole, it is over limit or does not match.
-     */
-    fun parts(node: MemberNode, event: Member.Event, limit: Long = Media.MAX_MEDIA): List<ByteArray> {
-        val m = event.media ?: throw IllegalArgumentException("the copy holds no images or files")
-        if (m.size == 0L) return m.parts.filter { !it.dir }.map { ByteArray(0) }
-        val blob = event.sealed?.blob ?: throw Unread()
-        val key = event.key ?: throw Unread()
-        if (m.size > limit || blob.size > Blob.sizeOf(limit)) throw TooLarge(m.size, limit)
-        val peers = node.mediaPeers.sortedBy { if (it == event.origin) 0 else 1 }
-        if (peers.isEmpty()) throw MemberNode.ProtocolException("no member that serves images and files is connected")
-        var last: Exception? = null
-        for (p in peers) {
-            val out = java.io.ByteArrayOutputStream()
-            try {
-                node.fetch(p, blob.sha256, blob.size) { _, data -> out.write(data) }
-                val d = out.toByteArray()
-                if (!MemoryContent.sha256(d).contentEquals(blob.sha256)) {
-                    last = Mismatch()
-                    continue
-                }
-                return Blob.open(key, blob, d, m)
-            } catch (e: InterruptedException) {
-                throw e
-            } catch (e: Exception) {
-                last = e
-            }
-        }
-        throw last!!
-    }
-
-    /** The bytes of part of event, as parts gets them. */
-    fun bytes(node: MemberNode, event: Member.Event, part: Media.Part, limit: Long = Media.MAX_MEDIA): ByteArray {
-        val i = event.media?.parts?.filter { !it.dir }?.indexOf(part) ?: -1
-        if (part.dir || i < 0) throw IllegalArgumentException("not a part of the copy that holds bytes")
-        return parts(node, event, limit)[i]
-    }
 }

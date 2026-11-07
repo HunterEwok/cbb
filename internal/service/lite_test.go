@@ -367,7 +367,7 @@ func TestFFIMember(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
 		t.Fatalf("admitting the phone: %v", err)
 	}
-	next("Joined ")
+	me, _, _ := strings.Cut(next("Joined "), " ")
 	call := func(op string, args any) map[string]any {
 		t.Helper()
 		req, err := json.Marshal(map[string]any{"op": op, "args": args})
@@ -391,9 +391,37 @@ func TestFFIMember(t *testing.T) {
 	}
 	sends := func(board string) bool { return call("sends", map[string]any{"board": board})["sends"].(bool) }
 
-	// The app hands in the computer's address, as Bonjour finds it.
+	// The app hands in the computer's address, as Bonjour finds it, and
+	// hears of the computer with its certificate chain once its hello came.
 	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
+	var peer struct {
+		Device string   `json:"device"`
+		Chain  []string `json:"chain"`
+	}
+	if err := json.Unmarshal([]byte(next("PEER ")), &peer); err != nil || peer.Device == "" || len(peer.Chain) == 0 {
+		t.Fatalf("the peer event: %+v %v", peer, err)
+	}
 	waitFor(t, "the phone connected", func() bool { return peers() == 1 })
+
+	// A command for the phone itself other than a mute, which the member
+	// carries out, goes to the app, whose answer goes back.
+	answered := make(chan error, 1)
+	go func() {
+		_, err := pi.do(t, control.Header{Op: control.OpMode, Device: me, Name: "receive"}, "")
+		answered <- err
+	}()
+	token, cmd, _ := strings.Cut(next("COMMAND "), " ")
+	if !strings.Contains(cmd, `"body"`) {
+		t.Fatalf("the command event carries %s", cmd)
+	}
+	call("answer", map[string]any{"token": json.Number(token), "status": "done"})
+	if err := <-answered; err != nil {
+		t.Fatalf("the phone's answer to the mode: %v", err)
+	}
+	// A tunnel key goes into the hellos; a key of the wrong size does not.
+	key := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+	call("tunnel_key", map[string]any{"key": key, "psk": key})
+	call("tunnel_key", map[string]any{})
 
 	// The computer's copy waits for the phone until the app takes it; then
 	// the clipboard holds the group's text, and the button sends nothing.

@@ -87,11 +87,12 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `internal/pasteboard/pasteboard_windows.go` (the Win32 clipboard), `internal/winpaste` (remote paste:
   Ctrl+V or SendInput's Unicode keys, the secure desktop and integrity checks), `packaging/windows`
   (`install.ps1`, `uninstall.ps1`, `get.ps1`); CI's `windows installer` job runs them.
-- `apps/ios/CBBKit`: the phone's protocol core: `Pairing*`, `Member`, `SyncEngine`,
-  `MemberNode`, `Records`, `Certificates`, `PhoneGroup`, `Discovery`/`BonjourBrowser`,
-  `TLSTransport`, `KeychainIdentity`, `SecKeySigner`, `AwayFromHome` (sync away from home through
-  `Cbbtun.xcframework`); `cbb-interop` plays the phone
-  in Go tests.
+- `apps/ios/CBBKit`: the phone's kit: `CoreMember` (the member in the Rust core, lite/ffi's
+  `cbb_member_*`, which syncs; the app hands it addresses and answers its events), `Pairing*`,
+  `Member` (the wire format, for pairing and restoring), `Records`, `Certificates`,
+  `PhoneGroup`, `Discovery`/`BonjourBrowser` (finding the members and their addresses),
+  `TLSTransport` (pairing), `KeychainIdentity`, `SecKeySigner`, `AwayFromHome` (sync away from
+  home through `Cbbtun.xcframework`); `cbb-interop` plays the phone in Go tests.
 - `lite/`: the lite member in Rust (its command is `cbb` too): no CA keys, joins by the phone's QR code,
   dials the Linux members and listens for phones and Macs (mDNS TXT `r=lite`). Its protocol core is the crate `lite/core` (`cbb_core`: `certs`,
   `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for the lite member's tunnel), CPace under `src/third_party`, the
@@ -108,8 +109,9 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   for the phones: `hub.rs` a hub for several clients and guests, `forward.rs` its registration
   with the forwarder, `relay.rs` the link to the blind relay).
 - `lite/ffi`: the core's one entry point (`cbb_core::api`, docs/core-api.md) as C functions (`include/cbb_core.h`)
-  for Go and the phone kits (`Core.swift` through the module `CCbbCore`, `Core.kt` through JNA); `bind.sh` builds the
-  iPhone's and Android's libraries and the host's for `swift test`.
+  for Go and the phone kits (`Core.swift` through the module `CCbbCore`, `Core.kt` through JNA), and with the feature
+  `member` the phones' member (`CoreMember.swift`, `CoreMember.kt`); `bind.sh` builds the iPhone's and Android's
+  libraries and the host's for `swift test`, each with the member.
 - `lite/esp32`: the firmware for the Arduino Nano ESP32 (ESP32-S3), its own workspace, built
   with the Xtensa toolchain (`cargo +esp`) and rust-lld; esp-hal is pinned to a git commit
   until a release carries its fix for Rust 1.99; `console.rs` (the USB console), `store.rs`
@@ -132,7 +134,10 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   GTK 4/WebKitGTK; `desk.go` over `internal/control`, `admin_*.go` run cbb through pkexec or
   UAC, `frontend/` plain HTML/JS with `tokens.js` from `tools/tokens` and `l10n/ru.json`);
   CI's `tray app` jobs.
-- `apps/android/kit`: the phone's protocol core in Kotlin, the Android twin of the Swift kit;
+- `apps/android/kit`: the phone's kit in Kotlin, the Android twin of the Swift kit: `CoreMember` (the member in
+  the Rust core through JNA, which syncs), pairing, records, certificates, restoring, credentials; the Kotlin
+  node, its sync engine's network part and its member listener and dialer are gone (D-86), as are the Swift
+  kit's (`MemberNode`, `SyncEngine`, `MemberListener`, `MemberDialer`); `TLSTransport` stays for pairing;
   `apps/android/app`: the Compose app (`WatchLink` tells the Wear OS watch, `BluetoothKeyboard` types
   on a paired device with the kit's `Keyboard` tables), in two flavors: `full` (GitHub, the watch, its own update) and `fdroid` (no Play services; `src/fdroid`, `packaging/fdroid`, reproducible, CI's `fdroid` job);
   `apps/android/wear`: the Wear OS app, through the phone over the Wearable Data Layer;

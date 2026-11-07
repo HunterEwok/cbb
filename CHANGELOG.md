@@ -37,6 +37,21 @@ All notable changes to cbb are documented in this file. The format follows
   admin's app signed, passes commands on to the devices behind it, and shows each peer as its
   hello presents it; the button's rule is the core's too. `cbb_member_copy` and
   `cbb_member_peers` gave way to it, and the Aurora app calls it.
+- The member's events and calls for what the phones' apps answer themselves: an event for
+  each peer whose hello it took, with the certificate chain the handshake checked (to renew
+  it, send it its admin CA, answer its tunnel key as the hub), one for the tunnel offers of
+  the root and the admins, and one for each command for the phone itself other than `mute`
+  and `unmute`, which the member carries out, that the app answers with `answer` within ten
+  seconds; `tunnel_key`, `evidence`, `disconnect` and
+  `served` (how far the peers read a copy's images or files). A hub command's result keeps
+  the new hub's offer through a phone that passes it back, and a phone sends a command for a
+  device it is not connected to through an admin phone that is, as the hub. A phone's member
+  port is of a kind: on the home network every address, for the hub's tunnel and a blind
+  relay's calls the loopback address only, and a relay's call is served only when the app
+  names its caller (the `caller` event and op) and its certificate names that device. The
+  credentials and a hub's share go to one peer when the app says so (`to`, `except`); a
+  command a phone passes on goes out once until it expires; a phone takes tunnel offers and
+  hub shares only from a device that may be a hub, by its chain.
 - The bench's fleet checks the copies sealed end to end: through a hub that only passes them
   on, text and a 20 MB file arrive both ways and neither its memory nor its disk ever holds them in
   the clear (S25), a paste command passes through it sealed (S26), making and stopping such a
@@ -1172,6 +1187,17 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The iPhone and Android apps sync through the phones' member in the Rust core (D-86), as
+  the Aurora app does, in place of their own Swift and Kotlin nodes: one implementation of
+  the member protocol, the clipboard rule and the button for every phone. The apps still
+  find the computers themselves (Bonjour, NSD) and hand their addresses in, keep their keys,
+  pairing and the records they sign, run the tunnel and the relay, whose loopback ports they
+  hand in, and answer the member's events; the phone as the hub listens on one member port
+  for the tunnel, the relay and the home network. The member pauses while the app is in the
+  background, and the iPhone's background refresh resumes it for its pass; the iPhone's
+  share sends through a member of its own and waits until a computer fetched what it
+  shared. `lite/ffi/bind.sh` builds every library with the member. The cross tests against
+  Go play the phone through the kits' `CoreMember` (`cbb-interop`, `InteropMain`).
 - The Go service seals and opens copies through the Rust core in the release builds
   (`seal_copy_to` and `open_copy`, docs/core-api.md), as the phones and the lite member do,
   so that every member reads and writes sealed copies with the same code; a build without
@@ -1555,6 +1581,11 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A peer that sent a certificate the member refuses, as a device of another group dialing a
+  lite member or a phone's member, brought its process down: after the handshake failed, the
+  core's TLS session asked rustls for its alert with an empty buffer while rustls still
+  pointed into the bytes it had kept, and rustls panicked. The session now hands it the bytes
+  it kept, only while it has records queued.
 - Every member checks the role of a copy's origin when it takes the copy: one from a hub that
   only passes copies on is dropped, as docs/protocol.md section 11 says, in Go and in the Rust
   core that the lite member and the phones use.

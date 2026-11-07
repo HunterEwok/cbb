@@ -5,10 +5,11 @@ import Foundation
 
 /// The newest signed entry points this phone holds (docs/protocol.md,
 /// section 16, "Entry points"), kept in a file: the computers of the group
-/// send them after the hello, and the phone's hub registers with the
+/// send them after the hello, the phone's member in the core keeps them
+/// there (reload reads them again), and the phone's hub registers with the
 /// project's forwarder through the ways in they name. The signature is what
 /// the phone trusts, so any peer may send them.
-public final class EntriesFile: EntriesKeeper, @unchecked Sendable {
+public final class EntriesFile: @unchecked Sendable {
     private let url: URL
     private let roots: [Data]
     private let now: @Sendable () -> Date
@@ -19,13 +20,18 @@ public final class EntriesFile: EntriesKeeper, @unchecked Sendable {
     public init(url: URL, roots: [Data] = Releases.roots, now: @escaping @Sendable () -> Date = { Date() },
                 log: @escaping @Sendable (String) -> Void = { _ in }) {
         (self.url, self.roots, self.now, self.log) = (url, roots, now, log)
-        if let data = try? Data(contentsOf: url), let set = try? JSONDecoder().decode(Releases.EntriesSet.self, from: data) {
-            do {
-                let (e, seen) = try Releases.checkEntries(set, roots: roots, nowMS: nowMS, seen: Releases.Seen())
-                held = (set, e, seen)
-            } catch {
-                log("the entry points kept in \(url.lastPathComponent): \(error)")
-            }
+        reload()
+    }
+
+    /// Reads the file again: the phone's member in the core keeps the
+    /// entry points the computers send there and passes them on.
+    public func reload() {
+        guard let data = try? Data(contentsOf: url), let set = try? JSONDecoder().decode(Releases.EntriesSet.self, from: data) else { return }
+        do {
+            let (e, seen) = try Releases.checkEntries(set, roots: roots, nowMS: nowMS, seen: Releases.Seen())
+            lock.withLock { held = (set, e, seen) }
+        } catch {
+            log("the entry points kept in \(url.lastPathComponent): \(error)")
         }
     }
 

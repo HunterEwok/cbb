@@ -10,7 +10,7 @@ final class RecordsTests: XCTestCase {
         let now = Date()
         let ca = SoftwareSigner()
         var g = try PhoneGroup.create(caSigner: ca, memberKey: SoftwareSigner().publicKeyDER, name: "My\u{7}iPhone", now: now)
-        let pc = SyncEngine.newID()
+        let pc = Member.newID()
         let cert = try GroupCertificates.member(device: pc, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: ca, now: now)
         g.computers.append(.init(device: pc, name: "pi", os: "linux", cert: cert, admitted: now))
         _ = try g.record(device: pc, name: "pi", role: "full", key: Records.keyHash(cert: cert), caSigner: ca, now: now)
@@ -24,7 +24,7 @@ final class RecordsTests: XCTestCase {
         let digest = g.records.digest
         XCTAssertNotNil(digest)
         XCTAssertThrowsError(try g.revoke(device: g.device, caSigner: ca, now: Date()))
-        XCTAssertThrowsError(try g.revoke(device: SyncEngine.newID(), caSigner: ca, now: Date()))
+        XCTAssertThrowsError(try g.revoke(device: Member.newID(), caSigner: ca, now: Date()))
         _ = try g.revoke(device: pc, caSigner: ca, now: Date())
         XCTAssertEqual(g.devices.map(\.id), [g.device])
         XCTAssertTrue(g.computers.isEmpty)
@@ -86,41 +86,19 @@ final class RecordsTests: XCTestCase {
         try (enc.encode(out) + Data("\n".utf8)).write(to: URL(fileURLWithPath: dir).appendingPathComponent("swift-records.json"))
     }
 
-    /// A RecordStore over a RecordSet.
-    final class Store: RecordStore, @unchecked Sendable {
-        let lock = NSLock()
-        var set = RecordSet()
-        let groupCA: Data
-        init(groupCA: Data, set: RecordSet = RecordSet()) { (self.groupCA, self.set) = (groupCA, set) }
-        var digest: String? { lock.withLock { set.digest } }
-        var all: [Member.Record] { lock.withLock { set.records } }
-        func add(_ rs: [Member.Record]) -> [Member.Record] {
-            lock.withLock { rs.filter { set.add($0, groupCA: groupCA) } }
-        }
-    }
-
+    /// Records the app's root key signs go to the connected peers at once,
+    /// and a peer's app reads them from its member.
     func testNodesExchangeRecords() async throws {
-        var (g, ca, pc) = try makeGroup()
-        let phoneStore = Store(groupCA: g.groupCA, set: g.records)
-        let peerStore = Store(groupCA: g.groupCA)
-        let phone = MemberNode(engine: SyncEngine(device: g.device, clock: HybridClock()), name: "iPhone", records: phoneStore)
-        let peer = MemberNode(engine: SyncEngine(device: pc, clock: HybridClock()), name: "pi", role: .full, records: peerStore)
-        let (a, b) = Pipe.pair()
-        let ta = Task { try await phone.serve(a, peer: pc) }
-        let tb = Task { try await peer.serve(b) }
-        // The hello's digest differs, so the phone sends its records.
-        for _ in 0..<200 where peerStore.digest != phoneStore.digest { try await Task.sleep(nanoseconds: 10_000_000) }
-        XCTAssertEqual(peerStore.digest, phoneStore.digest)
-        // A revocation made later is sent at once.
-        let r = try g.revoke(device: pc, caSigner: ca, now: Date())
-        _ = phoneStore.add([r])
-        await phone.sendRecords([r])
-        for _ in 0..<200 where peerStore.digest != phoneStore.digest { try await Task.sleep(nanoseconds: 10_000_000) }
-        XCTAssertEqual(peerStore.set.revoked.count, 1)
-        let connected = await phone.connected
-        XCTAssertEqual(connected, [pc])
-        await phone.close(peer: pc)
-        try await ta.value
-        try await tb.value
+        var t = try CoreGroup(test: self)
+        let (phone, peer) = (t.phones[0], t.phones[1])
+        try await t.connect(1, to: 0)
+        XCTAssertEqual(Set(try peer.member.records().map(\.body)), Set(t.g.records.records.map(\.body)))
+        let r = try t.g.rename(device: peer.device, to: "Kitchen phone", caSigner: t.ca, now: Date())
+        try phone.member.addRecords([r])
+        try await peer.until("the new record") { try peer.member.records().contains(r) }
+        var set = RecordSet()
+        _ = set.addAll(try peer.member.records(), groupCA: t.g.groupCA)
+        XCTAssertEqual(set.devices.first { $0.id == peer.device }?.name, "Kitchen phone")
+        XCTAssertEqual(phone.member.connected(), [peer.device])
     }
 }

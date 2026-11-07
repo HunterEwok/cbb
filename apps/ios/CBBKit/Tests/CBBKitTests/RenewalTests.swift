@@ -33,30 +33,22 @@ final class RenewalTests: XCTestCase {
         XCTAssertNotEqual(mine.memberCert, g.memberCert)
     }
 
+    /// An admin phone renews a peer's certificate from the chain its hello
+    /// event carries, and the peer's app gets the renewed one to keep.
     func testNodeSendsRenewal() async throws {
-        let t0 = Date()
-        let ca = SoftwareSigner()
-        let g = try PhoneGroup.create(caSigner: ca, memberKey: SoftwareSigner().publicKeyDER, now: t0)
-        let pc = SyncEngine.newID()
-        let pcCert = try GroupCertificates.member(device: pc, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: ca, now: t0)
-        let later = t0.addingTimeInterval(500 * day)
-        let groupCA = g.groupCA
-        let phone = MemberNode(engine: SyncEngine(device: g.device, clock: HybridClock()), name: "iPhone",
-                               renew: { (try? GroupCertificates.renewal(chain: $0, groupCA: groupCA, caSigner: ca, now: later)).map { MemberNode.Renewal(cert: $0) } })
-        let got = Changes()
-        let peer = MemberNode(engine: SyncEngine(device: pc, clock: HybridClock()), name: "pi", role: .full,
-                              onCert: { got.add($0.base64EncodedString()) })
-        let (a, b) = Pipe.pair()
-        a.peerCertificate = pcCert
-        let ta = Task { try await phone.serve(a, peer: pc) }
-        let tb = Task { try await peer.serve(b) }
-        for _ in 0..<200 where got.all.isEmpty { try await Task.sleep(nanoseconds: 10_000_000) }
-        let renewed = try XCTUnwrap(got.all.first.flatMap { Data(base64Encoded: $0) })
-        XCTAssertEqual(try GroupCertificates.verifyMember(renewed, groupCA: groupCA, now: later), pc)
-        XCTAssertEqual(got.all.count, 1, "one renewal per connection")
-        await phone.closeAll()
-        try await ta.value
-        try await tb.value
+        let t = try CoreGroup(test: self)
+        let (phone, peer) = (t.phones[0], t.phones[1])
+        try await t.connect(1, to: 0)
+        let p = try await phone.peer(peer.device)
+        XCTAssertEqual(p.chain.first, peer.cert)
+        // A certificate for the same key, as a renewal issues it once one is due.
+        XCTAssertEqual(try GroupCertificates.verifyMember(chain: p.chain, roots: t.g.trusted, now: Date()), peer.device)
+        let renewed = try GroupCertificates.member(device: peer.device, publicKey: peer.key.publicKeyDER, ca: t.g.groupCA, caSigner: t.ca,
+                                                   now: Date().addingTimeInterval(3600))
+        XCTAssertNotEqual(renewed, peer.cert)
+        XCTAssertTrue(try phone.member.sendCert(to: peer.device, cert: renewed, issuer: nil))
+        let kept = try await peer.next("the renewed certificate") { if case let .identity(c, _, _) = $0, c == renewed { return c }; return nil }
+        XCTAssertEqual(try GroupCertificates.verifyMember(kept, groupCA: t.g.groupCA, now: Date()), peer.device)
     }
 
     /// Writes a member's key, certificate and the renewal the phone issues
@@ -69,13 +61,13 @@ final class RenewalTests: XCTestCase {
         let ca = SoftwareSigner()
         let g = try PhoneGroup.create(caSigner: ca, memberKey: SoftwareSigner().publicKeyDER, now: t0)
         let key = SoftwareSigner()
-        let pc = SyncEngine.newID()
+        let pc = Member.newID()
         let cert = try GroupCertificates.member(device: pc, publicKey: key.publicKeyDER, ca: g.groupCA, caSigner: ca, now: t0)
         let renewed = try XCTUnwrap(GroupCertificates.renewal(of: cert, groupCA: g.groupCA, caSigner: ca, now: t0.addingTimeInterval(500 * day)))
         // An admin phone renews the same certificate from its admin CA,
         // which the cert message carries.
         let adminKey = SoftwareSigner()
-        let adminCA = try GroupCertificates.adminCA(device: SyncEngine.newID(), publicKey: adminKey.publicKeyDER, root: g.groupCA,
+        let adminCA = try GroupCertificates.adminCA(device: Member.newID(), publicKey: adminKey.publicKeyDER, root: g.groupCA,
                                                     rootSigner: ca)
         let byAdmin = try XCTUnwrap(GroupCertificates.renewal(chain: [cert], groupCA: g.groupCA, caSigner: adminKey, adminCA: adminCA,
                                                               now: t0.addingTimeInterval(500 * day)))
