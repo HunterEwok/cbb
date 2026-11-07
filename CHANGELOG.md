@@ -1696,6 +1696,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On a big-endian router (MIPS) a known network is told by its gateway again: the gateway's
+  address in `/proc/net/route` was read with its bytes reversed, in Go and in Rust, so it never
+  matched the ARP table.
 - A peer that sent a certificate the member refuses, as a device of another group dialing a
   lite member or a phone's member, brought its process down: after the handshake failed, the
   core's TLS session asked rustls for its alert with an empty buffer while rustls still
