@@ -364,6 +364,15 @@ impl Awg {
 mod tests {
     use super::*;
 
+    /// A key of the test's own, new each time.
+    fn key() -> [u8; 32] {
+        let mut k = [0u8; 32];
+        getrandom::fill(&mut k).unwrap();
+        k
+    }
+
+    static HEADER_KEY: std::sync::OnceLock<[u8; 32]> = std::sync::OnceLock::new();
+
     fn settings() -> Obfuscation {
         Obfuscation {
             jc: 3,
@@ -376,7 +385,8 @@ mod tests {
                 Range { min: 2_147_483_664, max: 2_147_549_199 },
                 Range { min: 3_221_225_488, max: 3_221_291_023 },
             ],
-            header_key: [7; 32],
+            // The same for every end in a run, as a group's settings are.
+            header_key: *HEADER_KEY.get_or_init(key),
         }
     }
 
@@ -385,7 +395,7 @@ mod tests {
     /// key makes.
     #[test]
     fn handshakes_and_data_go_both_ways() {
-        let (a, b) = ([1u8; 32], [2u8; 32]);
+        let (a, b) = (key(), key());
         let mut to_b = Awg::new(settings(), &b, &a);
         let mut to_a = Awg::new(settings(), &a, &b);
         let mut init = vec![0u8; INITIATION];
@@ -415,7 +425,7 @@ mod tests {
     /// passed on, nor one changed on the way.
     #[test]
     fn foreign_messages_are_dropped() {
-        let (a, b, c) = ([1u8; 32], [2u8; 32], [3u8; 32]);
+        let (a, b, c) = (key(), key(), key());
         let mut to_c = Awg::new(settings(), &c, &a);
         let mut b_side = Awg::new(settings(), &a, &b);
         let mut resp = vec![0u8; RESPONSE];
