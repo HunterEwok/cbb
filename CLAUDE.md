@@ -83,7 +83,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   by gomobile into an AAR and an xcframework (CI's `phone tunnel` jobs); a loopback port leads
   to the hub's member port, and the kits dial it with their own member TLS. Its Rust
   replacement is `ffi/src/tunnel.rs` (`cbb_tunnel`, `cbb_tunnel_register`,
-  `cbb_tunnel_relay`, feature `tunnel`; `TestRustPhone*` run it through the example
+  `cbb_tunnel_relay`, `cbb_tunnel_relay_credentials`, feature `tunnel`; `TestRustPhone*` run it through the example
   `tunnel-on-linux`); the apps move to it, and cbbtun goes, once their node runs in Rust.
 - Windows: `cmd/cbb/platform_windows.go` (the Windows service, logs),
   `internal/service/control_windows.go` (the socket's access list),

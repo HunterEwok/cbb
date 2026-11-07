@@ -92,6 +92,16 @@ func startRustPhone(t *testing.T, bin string, env ...string) *rustPhone {
 // call sends one request and returns its "ok", failing on an error.
 func (p *rustPhone) call(t *testing.T, req any) map[string]any {
 	t.Helper()
+	ok, err := p.try(t, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ok
+}
+
+// try sends req and returns its answer, or the error the library gave.
+func (p *rustPhone) try(t *testing.T, req any) (map[string]any, error) {
+	t.Helper()
 	b, _ := json.Marshal(req)
 	if _, err := p.in.Write(append(b, '\n')); err != nil {
 		t.Fatal(err)
@@ -107,9 +117,9 @@ func (p *rustPhone) call(t *testing.T, req any) map[string]any {
 		t.Fatal(err)
 	}
 	if a.Error != nil {
-		t.Fatalf("%s: %v", b, a.Error)
+		return nil, fmt.Errorf("%s: %v", b, a.Error)
 	}
-	return a.OK
+	return a.OK, nil
 }
 
 func rustThrough(t *testing.T, bin string, obf *tunnel.Obfuscation, xhttp bool) {
@@ -717,4 +727,212 @@ func TestRustPhoneRelay(t *testing.T) {
 		}
 	}
 	p.call(t, map[string]any{"op": "relay_stop", "id": id})
+}
+
+// TestRustPhoneRelayCredentials: the phone's link starts with its member
+// certificate, then registers again with the group's server credentials
+// (docs/protocol.md, section 18) at a relay that serves a fixed list of
+// groups, so that it shows the period credential and the group's root; a
+// Go member registers the same way, the relay knows both by pseudonyms,
+// and the phone's events still name the Go member by its device ID.
+func TestRustPhoneRelayCredentials(t *testing.T) {
+	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
+	}
+	now := time.Now()
+	ca, err := group.NewGroupCA(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, err := relay.NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := relay.Listen(relay.Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{group.Tag(ca.Cert)}, Logf: t.Logf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		r.Serve(ctx)
+	}()
+	link := relay.Link{Endpoint: netip.MustParseAddrPort(r.Addr().String()), Pin: keys.Pin()}
+
+	// The period, the two server keys and the lists.
+	tag, _ := group.NewPeriodTag()
+	periodKey, _ := group.NewKey()
+	period, err := group.SignPeriod(group.Tag(ca.Cert), tag, &periodKey.PublicKey, 1, now, ca.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pb, _ := period.Open()
+	phoneServer, _ := group.NewKey()
+	pcServer, _ := group.NewKey()
+	phoneHash, pcHash := group.PublicKeyHash(&phoneServer.PublicKey), group.PublicKeyHash(&pcServer.PublicKey)
+	hubs, err := group.SignHubs(pb, []group.KeyHash{pcHash}, nil, 1, periodKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	members, err := group.SignMembers(pb, []group.KeyHash{phoneHash, pcHash}, 1, periodKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	others, err := group.SignMembers(pb, []group.KeyHash{pcHash}, 2, periodKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pcID := string(group.NewDeviceID())
+	pcCert, err := group.ServerCertificate(pcServer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wgPC, _ := tunnel.NewPrivateKey()
+	pcDone := make(chan struct{})
+	echoed := make(chan error, 4)
+	go func() {
+		defer close(pcDone)
+		relay.Join(ctx, relay.MemberConfig{
+			Link: link, Self: pcID, Key: wgPC,
+			Cert: func() tls.Certificate { return tls.Certificate{} },
+			Credentialed: func() (relay.Credentialed, bool) {
+				return relay.Credentialed{Cert: pcCert, Self: group.Pseudonym(pcHash), Creds: []group.Credential{hubs, members},
+					Period: period, Roots: [][]byte{ca.Cert.Raw}}, true
+			},
+			Want: func(string) bool { return true },
+			Dialed: func(ctx context.Context, _ string, c net.Conn) error {
+				// The phone's member listener echoes.
+				msg := "hello from the computer\n"
+				_, err := c.Write([]byte(msg))
+				if err == nil {
+					var got string
+					if got, err = bufio.NewReader(c).ReadString('\n'); err == nil && got != msg {
+						err = fmt.Errorf("a wrong echo %q", got)
+					}
+				}
+				echoed <- err
+				<-ctx.Done()
+				return err
+			},
+			Called: func(ctx context.Context, _ string, c net.Conn) error {
+				line, err := bufio.NewReader(c).ReadString('\n')
+				if err == nil {
+					_, err = c.Write([]byte(line))
+				}
+				<-ctx.Done()
+				return err
+			},
+			Logf: t.Logf,
+		})
+	}()
+	defer func() {
+		cancel()
+		<-served
+		<-pcDone
+	}()
+
+	phone := string(group.NewDeviceID())
+	memberKey, _ := group.NewKey()
+	leaf, err := ca.IssueMember(group.DeviceID(phone), &memberKey.PublicKey, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkcs8 := func(k *ecdsa.PrivateKey) []byte {
+		b, err := x509.MarshalPKCS8PrivateKey(k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	point := func(k *ecdsa.PrivateKey) []byte {
+		b, err := k.PublicKey.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	pin, _ := base64.StdEncoding.DecodeString(keys.Pin())
+	wg, _ := tunnel.NewPrivateKey()
+	p := startRustPhone(t, bin)
+	id := p.call(t, map[string]any{"op": "relay_start", "key": wg[:], "device": phone, "endpoint": link.Endpoint.String(),
+		"pins": [][]byte{pin}, "chain": [][]byte{leaf.Raw, ca.Cert.Raw}, "public": point(memberKey),
+		"member_port": echoServer(t), "test_key": pkcs8(memberKey)})["id"]
+	defer p.call(t, map[string]any{"op": "relay_stop", "id": id})
+
+	creds := func(cs ...group.Credential) map[string]any {
+		return map[string]any{"op": "relay_credentials", "id": id, "public": point(phoneServer), "test_key": pkcs8(phoneServer),
+			"credentials": cs, "roots": [][]byte{ca.Cert.Raw}, "names": map[string]string{group.Pseudonym(pcHash): pcID}}
+	}
+	if _, err := p.try(t, creds(hubs, others, period)); err == nil {
+		t.Error("credentials whose members' list leaves the phone out")
+	}
+	p.call(t, creds(hubs, members, period))
+
+	var through, online bool
+	var last []any
+	deadline := time.Now().Add(30 * time.Second)
+	for !(through && online) {
+		if time.Now().After(deadline) {
+			t.Fatalf("through %v, online %v; events %v", through, online, last)
+		}
+		evs, _ := p.call(t, map[string]any{"op": "test_events"})["events"].([]any)
+		for _, e := range evs {
+			e := e.(map[string]any)
+			last = append(last, e)
+			if len(last) > 20 {
+				last = last[1:]
+			}
+			switch e["type"] {
+			case "calling":
+				if e["peer"] != pcID {
+					t.Fatalf("a call from %v, want the computer by its ID", e["peer"])
+				}
+				select {
+				case err := <-echoed:
+					if err != nil {
+						t.Fatal(err)
+					}
+				case <-time.After(15 * time.Second):
+					t.Fatal("the computer's call did not come through")
+				}
+				through = true
+			case "dial":
+				if e["peer"] != pcID {
+					t.Fatalf("a dial to %v, want the computer by its ID", e["peer"])
+				}
+				echoThroughPort(t, e["port"])
+				through = true
+			case "changed":
+				if on, _ := e["online"].([]any); e["connected"] == true && len(on) == 1 {
+					if on[0] != pcID {
+						t.Fatalf("online %v, want the computer by its ID", on)
+					}
+					online = true
+				}
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// echoThroughPort dials the loopback port a dial event named and checks
+// that the other end echoes a line.
+func echoThroughPort(t *testing.T, port any) {
+	t.Helper()
+	c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", fmt.Sprint(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	msg := "hello from the phone\n"
+	c.SetDeadline(time.Now().Add(15 * time.Second))
+	if _, err := c.Write([]byte(msg)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := bufio.NewReader(c).ReadString('\n'); err != nil || got != msg {
+		t.Fatalf("the phone's dial: %q, %v", got, err)
+	}
 }

@@ -11,8 +11,11 @@
 //! over them between the two devices; here they are only passed to the
 //! app's own ports. The phones' kits (ffi/) use it.
 //!
-//! Registering with the group's credentials (section 18) in place of the
-//! member certificate is not done here yet.
+//! Once the period's members' credential lists the device's server key,
+//! it registers with the group's credentials (section 18) in place of the
+//! member certificate and the records (`Credentialed`): the relay then
+//! knows it by its pseudonym, and the link names the other devices to the
+//! app by the device IDs their pseudonyms stand for.
 
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
@@ -24,6 +27,8 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use cbb_core::credential::{self, Credential};
 
 use crate::certs::{self, b64};
 use crate::error::{Error, Result};
@@ -48,6 +53,12 @@ const DIAL_WAIT: Duration = Duration::from_secs(10);
 const MAX_MEMBERS: usize = 64;
 const MAX_CALLS: usize = 16;
 const MAX_RECORDS: usize = 1024;
+/// The most roots a device shows a relay that serves a fixed list of
+/// groups, and the most pseudonyms the app names.
+const MAX_ROOTS: usize = 8;
+const MAX_NAMES: usize = 1024;
+/// How often a registered link looks whether its credentials changed.
+const CREDENTIAL_CHECK: Duration = Duration::from_secs(1);
 const MAX_LINE: usize = 64 << 10;
 const TICK: Duration = Duration::from_millis(100);
 
@@ -84,6 +95,80 @@ pub struct Config {
     pub records: Arc<Mutex<Vec<Value>>>,
     /// The app's member listener on the loopback address.
     pub member_port: u16,
+    /// What the device registers with in place of the member certificate
+    /// and the records, when set; each registration takes it as it is, and
+    /// a change ends the registration, so that the next one uses it.
+    pub credentials: Arc<Mutex<Option<Arc<Credentialed>>>>,
+}
+
+/// What a device registers with when the period's members' credential
+/// lists its server key (docs/protocol.md, section 18), as Go's
+/// relay.Credentialed.
+pub struct Credentialed {
+    /// The certificate of the server key (`certs::server_cert_by`).
+    cert: Vec<u8>,
+    key: Arc<dyn crate::identity::ExternalKey>,
+    /// The period's hubs' and members' credentials.
+    creds: Vec<Credential>,
+    /// The period credential and the group's roots, the group CA first,
+    /// shown only to a relay that asks for them.
+    period: Option<Credential>,
+    roots: Vec<Vec<u8>>,
+    /// The device's pseudonym, and the device each pseudonym of the
+    /// group's other devices stands for.
+    name: String,
+    names: HashMap<String, String>,
+}
+
+impl Credentialed {
+    /// Takes the device's server key for the period, the period's hubs'
+    /// and members' credentials, which must list the key, with the period
+    /// credential if the app has it, the group's roots, DER, and the
+    /// pseudonyms of the group's other devices with their device IDs.
+    pub fn new(
+        key: Arc<dyn crate::identity::ExternalKey>,
+        creds: Vec<Credential>,
+        roots: Vec<Vec<u8>>,
+        names: HashMap<String, String>,
+        now_ms: i64,
+    ) -> Result<Credentialed> {
+        let spki = certs::p256_spki_of(&key.public());
+        if certs::p256_spki(&spki).is_none() {
+            return Err(Error::msg("the server key is not a P-256 key"));
+        }
+        let hash = certs::sha256(&spki);
+        let (mut listed, mut period) = (Vec::new(), None);
+        for c in creds {
+            if c.open()?.kind == credential::PERIOD {
+                period = Some(c);
+            } else {
+                listed.push(c);
+            }
+        }
+        let p = credential::check_presented(&listed, now_ms)?;
+        if !p.members.as_ref().is_some_and(|m| m.members.contains(&hash)) {
+            return Err(Error::msg("the members' credential does not list the server key"));
+        }
+        if roots.len() > MAX_ROOTS || names.len() > MAX_NAMES {
+            return Err(Error::msg("too many roots or pseudonyms"));
+        }
+        if !names.iter().all(|(n, d)| valid_name(n) && certs::is_id(d)) {
+            return Err(Error::msg("a pseudonym or its device ID is not valid"));
+        }
+        let cert = certs::server_cert_by(&key.public(), &mut |tbs| crate::identity::sign_external(&*key, tbs))?;
+        Ok(Credentialed { cert, key, creds: listed, period, roots, name: credential::pseudonym(&hash), names })
+    }
+
+    /// What it registers with: the name and the credentials' IDs. Only a
+    /// change of these makes the link register again.
+    fn id(&self) -> String {
+        let mut k = self.name.clone();
+        for c in &self.creds {
+            k.push(' ');
+            k.push_str(&certs::hex(&certs::sha256(&c.body)));
+        }
+        k
+    }
 }
 
 /// How the link stands.
@@ -141,7 +226,13 @@ fn run(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) {
     while !stop.load(Ordering::SeqCst) {
         let start = Instant::now();
         let err = match once(cfg, events, stop) {
-            Ok(()) => return,
+            Ok(false) => return,
+            Ok(true) => {
+                events
+                    .log("cbb: sync away from home: the group's credentials changed; registering with the relay again");
+                backoff = MIN_BACKOFF;
+                continue;
+            }
             Err(e) => e,
         };
         if stop.load(Ordering::SeqCst) {
@@ -162,6 +253,8 @@ fn run(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) {
 struct Challenge {
     #[serde(with = "b64")]
     e: Vec<u8>,
+    #[serde(default)]
+    roots: bool,
 }
 
 #[derive(Serialize)]
@@ -172,6 +265,10 @@ struct Claim {
     proof: Vec<u8>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     records: Vec<Value>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    credentials: Vec<Credential>,
+    #[serde(with = "b64::list", skip_serializing_if = "Vec::is_empty")]
+    roots: Vec<Vec<u8>>,
 }
 
 #[derive(Deserialize, Default)]
@@ -210,16 +307,43 @@ struct Note {
     error: String,
 }
 
-/// One registration with its tunnel and watch, until it ends or stop.
-fn once(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) -> Result<()> {
-    let mut reg = Registrar::connect(cfg.endpoint, &cfg.pins, &cfg.chain, &cfg.key, PROTOCOL, "relay")?;
+/// One registration with its tunnel and watch, until it ends or stop
+/// (false), or until the credentials change (true).
+fn once(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) -> Result<bool> {
+    let cred = cfg.credentials.lock().ok().and_then(|c| c.clone());
+    // With credentials the relay gets a fresh WireGuard key at each
+    // registration, so the key links no two of them.
+    let wg_key: [u8; 32] = match &cred {
+        Some(_) => tunnel::new_key()?.try_into().map_err(|_| Error::msg("a bad WireGuard key"))?,
+        None => cfg.wg_key,
+    };
+    let (chain, key) = match &cred {
+        Some(c) => (core::slice::from_ref(&c.cert), &c.key),
+        None => (cfg.chain.as_slice(), &cfg.key),
+    };
+    let mut reg = Registrar::connect(cfg.endpoint, &cfg.pins, chain, key, PROTOCOL, "relay")?;
     let proof_key = reg.export(PROOF_LABEL)?;
     let ch: Challenge = reg.read(stop)?;
-    let (public, proof) = prove(&cfg.wg_key, &ch.e, &proof_key)
-        .ok_or_else(|| Error::msg("registering with the relay: a bad challenge"))?;
-    let mut records = cfg.records.lock().map(|r| r.clone()).unwrap_or_default();
-    records.truncate(MAX_RECORDS);
-    reg.write(&Claim { key: public.to_vec(), proof, records })?;
+    let (public, proof) =
+        prove(&wg_key, &ch.e, &proof_key).ok_or_else(|| Error::msg("registering with the relay: a bad challenge"))?;
+    let mut claim =
+        Claim { key: public.to_vec(), proof, records: Vec::new(), credentials: Vec::new(), roots: Vec::new() };
+    match &cred {
+        Some(c) => {
+            claim.credentials = c.creds.clone();
+            if ch.roots {
+                // A relay that serves a fixed list of groups knows them by
+                // their roots.
+                claim.credentials.extend(c.period.clone());
+                claim.roots = c.roots.clone();
+            }
+        }
+        None => {
+            claim.records = cfg.records.lock().map(|r| r.clone()).unwrap_or_default();
+            claim.records.truncate(MAX_RECORDS);
+        }
+    }
+    reg.write(&claim)?;
     let w: Welcome = reg.read(stop)?;
     if !w.error.is_empty() {
         return Err(Error::msg(format!("the relay refused the registration: {}", w.error)));
@@ -242,9 +366,12 @@ fn once(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) -> 
         let events = events.clone();
         Arc::new(move |line: &str| events.log(line))
     };
-    let link = Link::start_at(&State::with_key(&cfg.wg_key)?, &hub, own, RELAY_ADDR, log)?;
+    let link = Link::start_at(&State::with_key(&wg_key)?, &hub, own, RELAY_ADDR, log)?;
     let s = Arc::new(Session {
         cfg: cfg.clone(),
+        name: cred.as_ref().map_or_else(|| cfg.device.clone(), |c| c.name.clone()),
+        names: cred.as_ref().map(|c| c.names.clone()).unwrap_or_default(),
+        was: cred.as_ref().map(|c| c.id()),
         events: events.clone(),
         at: link.local(),
         stop: AtomicBool::new(false),
@@ -269,6 +396,11 @@ struct SessionState {
 /// pass, all ended with it.
 struct Session {
     cfg: Arc<Config>,
+    /// The device's name at the relay, the device each pseudonym there
+    /// stands for, and what the registration was made with.
+    name: String,
+    names: HashMap<String, String>,
+    was: Option<String>,
     events: Arc<dyn Events>,
     /// The tunnel's loopback port to the relay's member port.
     at: SocketAddr,
@@ -282,7 +414,7 @@ struct Session {
 static NEXT_CONN: AtomicU64 = AtomicU64::new(1);
 
 impl Session {
-    fn watch(self: &Arc<Self>, reg: &mut Registrar, link: &Link, stop: &AtomicBool) -> Result<()> {
+    fn watch(self: &Arc<Self>, reg: &mut Registrar, link: &Link, stop: &AtomicBool) -> Result<bool> {
         let mut w = TcpStream::connect_timeout(&self.at, SETUP_TIMEOUT)
             .map_err(|e| Error::msg(format!("the relay's tunnel does not answer: {e}")))?;
         w.set_write_timeout(Some(SETUP_TIMEOUT)).map_err(io_err)?;
@@ -290,12 +422,19 @@ impl Session {
             .map_err(|e| Error::msg(format!("the relay's tunnel does not answer: {e}")))?;
         w.set_read_timeout(Some(Duration::from_millis(250))).map_err(io_err)?;
         let started = Instant::now();
+        let mut checked = started;
         let mut heard = false;
         let mut inbox = Vec::new();
         let mut buf = [0u8; 4096];
         loop {
             if stop.load(Ordering::SeqCst) {
-                return Ok(());
+                return Ok(false);
+            }
+            if checked.elapsed() >= CREDENTIAL_CHECK {
+                checked = Instant::now();
+                if self.credentials_changed() {
+                    return Ok(true);
+                }
             }
             if reg.next_frame(stop).is_err() {
                 return Err(Error::msg("the relay ended the registration"));
@@ -315,6 +454,19 @@ impl Session {
                 Err(e) => return Err(Error::msg(format!("the relay's watch ended: {e}"))),
             }
         }
+    }
+
+    /// Whether the app changed what the device registers with since this
+    /// registration.
+    fn credentials_changed(&self) -> bool {
+        let Ok(c) = self.cfg.credentials.lock() else { return false };
+        c.as_ref().map(|c| c.id()) != self.was
+    }
+
+    /// The device a name at the relay stands for: the device of a pseudonym
+    /// the app named, or the name itself.
+    fn device(&self, name: &str) -> String {
+        self.names.get(name).cloned().unwrap_or_else(|| name.to_string())
     }
 
     fn note(self: &Arc<Self>, n: Note) -> Result<()> {
@@ -371,7 +523,7 @@ impl Session {
                 keep
             });
             for p in &online {
-                if st.dialers.contains_key(p) || self.cfg.device.as_str() >= p.as_str() {
+                if st.dialers.contains_key(p) || self.name.as_str() >= p.as_str() {
                     continue;
                 }
                 let stop = Arc::new(AtomicBool::new(false));
@@ -389,7 +541,12 @@ impl Session {
 
     fn report(&self) {
         let r = match self.state.lock() {
-            Ok(st) => Report { connected: true, online: st.online.clone(), through: st.through, error: None },
+            Ok(st) => Report {
+                connected: true,
+                online: st.online.iter().map(|p| self.device(p)).collect(),
+                through: st.through,
+                error: None,
+            },
             Err(_) => return,
         };
         self.events.changed(&r);
@@ -401,7 +558,7 @@ impl Session {
         let mut backoff = MIN_BACKOFF;
         while !stop.load(Ordering::SeqCst) && !self.stop.load(Ordering::SeqCst) {
             let mut wait = WANT_CHECK;
-            if self.events.wanted(peer) {
+            if self.events.wanted(&self.device(peer)) {
                 let start = Instant::now();
                 let r = self.open(&Request { dial: peer, ..Request::default() }).and_then(|c| self.run(peer, c, true));
                 if stop.load(Ordering::SeqCst) || self.stop.load(Ordering::SeqCst) {
@@ -409,7 +566,8 @@ impl Session {
                 }
                 if let Err(e) = r {
                     self.events.log(&format!(
-                        "cbb: sync away from home: connecting to {peer} through the relay: {}",
+                        "cbb: sync away from home: connecting to {} through the relay: {}",
+                        self.device(peer),
                         e.for_log()
                     ));
                 }
@@ -429,7 +587,11 @@ impl Session {
         if let Err(e) = r
             && !self.stop.load(Ordering::SeqCst)
         {
-            self.events.log(&format!("cbb: sync away from home: answering {peer} through the relay: {}", e.for_log()));
+            self.events.log(&format!(
+                "cbb: sync away from home: answering {} through the relay: {}",
+                self.device(peer),
+                e.for_log()
+            ));
         }
     }
 
@@ -484,7 +646,7 @@ impl Session {
     fn dialed(&self, peer: &str, c: &TcpStream) -> Result<()> {
         let ln = TcpListener::bind("127.0.0.1:0").map_err(io_err)?;
         ln.set_nonblocking(true).map_err(io_err)?;
-        self.events.dial(peer, ln.local_addr().map_err(io_err)?.port());
+        self.events.dial(&self.device(peer), ln.local_addr().map_err(io_err)?.port());
         let until = Instant::now() + DIAL_WAIT;
         let k = loop {
             match ln.accept() {
@@ -493,7 +655,7 @@ impl Session {
                 Err(e) => return Err(io_err(e)),
             }
             if Instant::now() >= until || self.stop.load(Ordering::SeqCst) {
-                return Err(Error::msg(format!("the app did not take the connection to {peer}")));
+                return Err(Error::msg(format!("the app did not take the connection to {}", self.device(peer))));
             }
             std::thread::sleep(Duration::from_millis(20));
         };
@@ -506,7 +668,7 @@ impl Session {
             .map_err(io_err)?;
         // The app learns whose connection it is before a byte of TLS
         // reaches it.
-        self.events.calling(peer, k.local_addr().map_err(io_err)?.port());
+        self.events.calling(&self.device(peer), k.local_addr().map_err(io_err)?.port());
         self.splice(c, k)
     }
 
