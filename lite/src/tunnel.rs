@@ -13,8 +13,8 @@ use std::io::{self, Read, Write};
 use std::net::{Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::os::fd::AsRawFd;
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -91,6 +91,22 @@ pub struct Hub {
     /// offer gave them (src/awg.rs reads them).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub obfuscation: Option<serde_json::Value>,
+    /// The way to the hub's forwarder over VLESS with XHTTP, as the offer
+    /// gave it (src/vless.rs reads it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vless: Option<serde_json::Value>,
+}
+
+/// The hubs that VLESS reached last, which try it first the next time
+/// (docs/protocol.md, section 11, "VLESS").
+static VLESS_FIRST: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+impl Hub {
+    /// Reports whether the offer gives a way to the hub: an address, or
+    /// VLESS.
+    pub fn reachable(&self) -> bool {
+        !self.endpoints.is_empty() || self.vless.is_some()
+    }
 }
 
 impl State {
@@ -127,7 +143,7 @@ impl State {
     /// key for the next period once more with that key, right after.
     pub fn hubs_to_try(&self, order: &[String]) -> Vec<Hub> {
         let mut hubs: Vec<&Hub> =
-            self.hubs.iter().filter(|h| order.contains(&h.device) && !h.endpoints.is_empty()).collect();
+            self.hubs.iter().filter(|h| order.contains(&h.device) && h.reachable()).collect();
         hubs.sort_by_key(|h| order.iter().position(|d| *d == h.device));
         let mut out = Vec::new();
         for h in hubs {
@@ -176,13 +192,12 @@ fn random_key() -> Result<Vec<u8>> {
 }
 
 /// Checks the offer of the hub `from` and returns what this member keeps of
-/// it. A hub that hides its tunnel with AmneziaWG is taken (src/awg.rs);
-/// one reached over VLESS is refused.
+/// it: with AmneziaWG's settings (src/awg.rs) and the way over VLESS with
+/// XHTTP (src/vless.rs), if it has them. REALITY is refused, as rustls
+/// cannot make a browser's ClientHello.
 pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
-    if o.vless.is_some() {
-        return Err(Error::msg(
-            "the group's hub is reached over VLESS, which the lite member cannot speak yet; it syncs at home only",
-        ));
+    if let Some(v) = &o.vless {
+        cbb_core::vless::Link::from_offer(v)?;
     }
     if let Some(v) = &o.obfuscation {
         crate::awg::Obfuscation::from_offer(v)?;
@@ -213,6 +228,7 @@ pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
         endpoints,
         next: o.next_key.clone(),
         obfuscation: o.obfuscation.clone(),
+        vless: o.vless.clone(),
     })
 }
 
@@ -233,6 +249,9 @@ pub fn addr(id: &str) -> Option<Ipv6Addr> {
 /// The running link to the hub. Dropping it stops it.
 pub struct Link {
     port: u16,
+    /// The way over VLESS, which the pump's thread sends to; it stops
+    /// after that thread.
+    _vless: Option<crate::vless::Client>,
     stop: Arc<AtomicBool>,
     answered: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -241,11 +260,30 @@ pub struct Link {
 impl Link {
     /// Starts the link of this device (me) to the hub.
     pub fn start(st: &State, hub: &Hub, me: &DeviceId, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<Link> {
-        if hub.endpoints.is_empty() {
+        if !hub.reachable() {
             return Err(Error::msg("the group's hub has no address away from home yet"));
         }
         let own = addr(me.as_str()).ok_or_else(|| Error::msg(format!("{me} is not a device ID")))?;
         let peer = addr(&hub.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", hub.device)))?;
+        // With VLESS, the hub's addresses are tried over UDP only when its
+        // tunnel is hidden with AmneziaWG, and VLESS after them, or first
+        // when it reached the hub the last time.
+        let vless = match &hub.vless {
+            Some(v) => Some(crate::vless::Client::start(v, log.clone())?),
+            None => None,
+        };
+        let mut endpoints = match (&vless, &hub.obfuscation) {
+            (Some(_), None) => Vec::new(),
+            _ => hub.endpoints.clone(),
+        };
+        let vless_at = vless.as_ref().map(|v| v.addr());
+        if let Some(at) = vless_at {
+            if VLESS_FIRST.lock().unwrap().contains(&hub.device) {
+                endpoints.insert(0, at);
+            } else {
+                endpoints.push(at);
+            }
+        }
         let ln = TcpListener::bind("127.0.0.1:0").context("cannot open the tunnel's local port")?;
         ln.set_nonblocking(true).context("cannot open the tunnel's local port")?;
         let port = ln.local_addr().context("cannot open the tunnel's local port")?.port();
@@ -271,13 +309,14 @@ impl Link {
         );
         let stop = Arc::new(AtomicBool::new(false));
         let answered = Arc::new(AtomicBool::new(false));
-        let mut pump = Pump::new(tunn, limiter, hub.endpoints.clone(), ln, own, peer, answered.clone(), log)?;
+        let mut pump = Pump::new(tunn, limiter, endpoints, ln, own, peer, answered.clone(), log)?;
         pump.awg = awg;
+        pump.vless = vless_at.map(|at| (hub.device.clone(), at));
         let thread = {
             let stop = stop.clone();
             std::thread::spawn(move || pump.run(&stop))
         };
-        Ok(Link { port, stop, answered, thread: Some(thread) })
+        Ok(Link { port, _vless: vless, stop, answered, thread: Some(thread) })
     }
 
     /// The local port that leads to the hub's member port.
@@ -377,6 +416,8 @@ struct Pump {
     said: bool,
     /// AmneziaWG around the messages, for a hub that hides its tunnel.
     awg: Option<crate::awg::Awg>,
+    /// The hub and the local address of its way over VLESS, if it has one.
+    vless: Option<(String, SocketAddr)>,
 }
 
 /// A UDP socket of the endpoint's family.
@@ -428,6 +469,7 @@ impl Pump {
             log,
             said: false,
             awg: None,
+            vless: None,
         })
     }
 
@@ -481,6 +523,20 @@ impl Pump {
         {
             (self.log)(&format!("cbb: sending to the hub at {ep}: {e}"));
             self.said = true;
+        }
+    }
+
+    /// Notes that the hub answered, and through which way.
+    fn answer(&mut self) {
+        if self.answered.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        if let Some((hub, at)) = &self.vless {
+            let mut first = VLESS_FIRST.lock().unwrap();
+            first.retain(|h| h != hub);
+            if self.endpoints[self.current] == *at {
+                first.push(hub.clone());
+            }
         }
     }
 
@@ -567,7 +623,7 @@ impl Pump {
             };
             match self.tunn.handle_incoming_packet(wg) {
                 TunnResult::WriteToNetwork(p) => {
-                    self.answered.store(true, Ordering::SeqCst);
+                    self.answer();
                     self.send(Packet::from(p).as_ref());
                     // A new session sends what waited for it.
                     let mut mtu = gotatun::tun::MtuWatcher::new(MTU as u16);
@@ -577,7 +633,7 @@ impl Pump {
                     }
                 }
                 TunnResult::WriteToTunnel(p) => {
-                    self.answered.store(true, Ordering::SeqCst);
+                    self.answer();
                     let ip: &[u8] = p.as_ref();
                     // Only what comes from the hub's own address, as
                     // WireGuard's allowed IPs would have it.
@@ -783,7 +839,12 @@ mod tests {
         let hub = hub_from_offer(&id, &serde_json::from_str(awg).unwrap()).unwrap();
         assert!(hub.obfuscation.is_some());
         let vless = r#"{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","vless":{}}"#;
-        assert!(hub_from_offer(&id, &serde_json::from_str(vless).unwrap()).unwrap_err().message().contains("VLESS"));
+        assert!(hub_from_offer(&id, &serde_json::from_str(vless).unwrap()).is_err(), "empty VLESS settings");
+        let xhttp = r#"{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","vless":{"transport":"xhttp","endpoint":"192.0.2.7:443","server_name":"cbb.example.org","path":"/AbC-12_xyz0123456/a-group-of-its-own","id":"6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d"}}"#;
+        let hub = hub_from_offer(&id, &serde_json::from_str(xhttp).unwrap()).unwrap();
+        assert!(hub.endpoints.is_empty() && hub.reachable(), "VLESS alone is a way");
+        let reality = r#"{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","vless":{"endpoint":"192.0.2.7:443","public_key":"AAAA","short_id":"ab","server_name":"cbb.example.org","id":"6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d"}}"#;
+        assert!(hub_from_offer(&id, &serde_json::from_str(reality).unwrap()).is_err(), "REALITY");
         let short = r#"{"hub_key":"AQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="}"#;
         assert!(hub_from_offer(&id, &serde_json::from_str(short).unwrap()).is_err());
 

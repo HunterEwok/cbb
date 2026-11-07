@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -25,11 +26,14 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/actions"
 	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/mdns"
 	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/phone"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
 // publishLite puts a lite member on the fake network, as the real one
@@ -973,6 +977,128 @@ func TestLiteMemberAwayObfuscated(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the lite member has it", func() bool { return away.paste(t) == "to the lite member, hidden" })
+}
+
+// TestLiteMemberAwayXHTTP checks the lite member's way over VLESS with
+// XHTTP: the hub is reached only through a forwarder whose VLESS sits
+// behind a TLS web server with an RSA certificate from a CA, which the lite
+// member trusts through SSL_CERT_FILE. The offer's UDP address leads
+// nowhere, so the lite member tries it, then VLESS, and copies go both
+// ways inside it. CBB_LITE names the binary.
+func TestLiteMemberAwayXHTTP(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vlessAddr := free.Addr().String()
+	free.Close()
+	web, ca := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+	roots := filepath.Join(t.TempDir(), "roots.pem")
+	if err := os.WriteFile(roots, ca, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json"),
+		VLESS: &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	var h hub
+	pi := startService(t, &h, "pi")
+	dir := joinLite(t, bin, pi)
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(),
+		ForwarderKey: forward.Pin(cert.Leaf), VLESS: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the hub registers with the forwarder", func() bool {
+		a := pi.status(t).Away
+		return a != nil && a.Forwarder != nil && a.Forwarder.Registered
+	})
+	piID := pi.status(t).Device
+	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	waitFor(t, "the lite member at home", func() bool {
+		st, err := home.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && len(st.Status.Peers) == 1
+	})
+	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the lite member keeps the hub's offer with VLESS", func() bool {
+		a := home.status(t).Away
+		return a != nil && a.HubDevice == piID
+	})
+	home.stop()
+
+	// No UDP gets through: the offer's address becomes one that nobody
+	// answers.
+	dead, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dead.Close()
+	file := filepath.Join(dir, "tunnel.json")
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st map[string]any
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	hubs, _ := st["hubs"].([]any)
+	if len(hubs) != 1 {
+		t.Fatalf("tunnel.json keeps %d hubs: %s", len(hubs), raw)
+	}
+	kept := hubs[0].(map[string]any)
+	if kept["vless"] == nil || kept["obfuscation"] == nil {
+		t.Fatalf("tunnel.json keeps no VLESS or AmneziaWG settings: %s", raw)
+	}
+	kept["endpoints"] = []string{dead.LocalAddr().String()}
+	if raw, err = json.Marshal(st); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	away := startLiteEnv(t, bin, dir, []string{"SSL_CERT_FILE=" + roots}, "-no-mdns", "-no-listen")
+	waitUpTo(t, 60*time.Second, "the lite member reaches the hub over VLESS", func() bool {
+		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
+	})
+	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the lite member, over VLESS"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the lite member, over VLESS" })
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the lite member, over VLESS"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the lite member has it", func() bool { return away.paste(t) == "to the lite member, over VLESS" })
 }
 
 // TestLiteRootless runs the lite member as a rootless install (D-79): its

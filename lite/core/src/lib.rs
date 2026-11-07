@@ -77,4 +77,5 @@ pub mod third_party {
 pub mod tls;
 #[cfg(test)]
 mod vectors;
+pub mod vless;
 pub mod wire;

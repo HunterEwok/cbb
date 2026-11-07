@@ -18,6 +18,8 @@ mod away;
 mod away;
 #[cfg(feature = "tunnel")]
 mod awg;
+#[cfg(feature = "tunnel")]
+pub mod vless;
 mod control;
 mod device;
 pub mod discovery;

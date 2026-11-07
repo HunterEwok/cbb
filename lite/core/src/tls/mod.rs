@@ -16,6 +16,8 @@
 mod exporter;
 mod provider;
 mod session;
+#[cfg(feature = "web")]
+pub mod web;
 
 use alloc::format;
 use alloc::string::{String, ToString};
