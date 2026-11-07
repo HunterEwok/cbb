@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
 
 // automated names the suites that run each case of
-// docs/testbench-catalogue.md, in part or in full; "ci" is a test that CI
+// docs/testbench-catalogue.md, in part or in full (catCase.missing tells
+// which); "ci" is a test that CI
 // runs on every pull request instead, such as the tray app's window in a
 // headless browser. A test checks that every ID here is in the catalogue
 // and that the suites exist.
@@ -57,6 +59,8 @@ var automated = map[string][]string{
 	"E1": {"fleet"}, "E2": {"fleet"}, "E4": {"fleet"}, "O7": {"fleet"}, "O8": {"fleet"},
 	"S17": {"fleet"}, "S23": {"fleet"}, "G31": {"fleet"}, "G32": {"fleet"}, "K14": {"fleet"}, "K11": {"fleet"}, "G41": {"fleet"}, "Y6": {"fleet"}, "I3": {"fleet"}, "I8": {"fleet"}, "I9": {"fleet"}, "I10": {"fleet"}, "I11": {"fleet"}, "I12": {"fleet"}, "I2": {"fleet"}, "I4": {"fleet"}, "I6": {"fleet"}, "I7": {"fleet"}, "O9": {"fleet"}, "U9": {"fleet"}, "O6": {"fleet"}, "O15": {"fleet"}, "G17": {"fleet"}, "G8": {"fleet"}, "S22": {"fleet"}, "I1": {"fleet"},
 	"I5": {"fleet"}, "I20": {"fleet"}, "S12": {"fleet"}, "G15": {"fleet"}, "S7": {"fleet"}, "S6": {"fleet"}, "H5": {"fleet"},
+	"M8": {"fleet"}, "M9": {"fleet"}, "M10": {"fleet"},
+	"W44": {"fleet"}, "W45": {"fleet"}, "W46": {"time"}, "W47": {"time"}, "W48": {"fleet"}, "S25": {"fleet"}, "S26": {"fleet"}, "W43": {"fleet"}, "Y36": {"fleet"},
 	"W17": {"fleet"}, "D1": {"fleet"}, "S1": {"fleet"}, "S2": {"fleet"}, "S9": {"fleet"}, "S18": {"fleet"}, "O10": {"fleet"}, "Y34": {"fleet"}, "I25": {"fleet"}, "W2": {"fleet"}, "D10": {"fleet"},
 	// The desktops' own clipboards.
 	"Y24": {"desktop"}, "Y25": {"desktop"}, "Y31": {"desktop"}, "Y32": {"desktop"},
@@ -82,7 +86,7 @@ var automated = map[string][]string{
 	// Swift and Kotlin phones admit a Go joiner by its QR code (G10, the fleet's
 	// G17 the refusals), a takeover (G28), a computer made an admin (G36), the
 	// watch's shared vectors (G38), the attestation and EK chains (K10).
-	"G10": {"ci"}, "G28": {"ci"}, "G36": {"ci"}, "G38": {"ci"}, "K10": {"ci"},
+	"G10": {"ci"}, "G28": {"ci"}, "G36": {"ci", "phone"}, "G38": {"ci"}, "K10": {"ci"},
 	// The published workflow's check of every release (release-check).
 	"I22": {"ci"},
 	// The time-scaled build.
@@ -99,6 +103,47 @@ type catCase struct {
 	How      []string // the kinds of section 0.1: real, fleet, time, feed, ui, helper, person
 	Needs    []string // what is missing for it, empty when nothing is
 	Old      []string // the IDs of testbench-cases.md it replaces
+}
+
+// suiteKinds tells which kinds of section 0.1 each suite stands for: the
+// suites that run on the real devices are "real", and the desktop suite
+// drives helpers there too; the fleet has its own helpers (the forge, a
+// clipboard manager's stand-in) and the feed; the phone suite is the
+// Android app's screens beside the fleet; a CI test stands in for a
+// window ("ui") or the feed, never for the devices.
+var suiteKinds = map[string][]string{
+	"check": {"real"}, "smoke": {"real"}, "full": {"real"}, "faults": {"real"},
+	"away": {"real"}, "relay": {"real"}, "desktop": {"real", "helper"},
+	"fleet": {"fleet", "feed", "helper"}, "time": {"time", "fleet"},
+	"phone": {"ui", "fleet"}, "ci": {"ui", "feed"},
+}
+
+// missing lists the kinds of a case that the suites running it leave out:
+// none when the harness runs it in full, nil too when it does not run it at
+// all. A case that may run on the real devices or in the fleet ("real,
+// fleet") needs one of the two; the other kinds each need a suite of their
+// own, and a person is never a suite. It compares only where a case runs,
+// not every step its text asks for.
+func (c catCase) missing() []string {
+	ss := automated[c.ID]
+	if ss == nil {
+		return nil
+	}
+	have := map[string]bool{}
+	for _, s := range ss {
+		for _, k := range suiteKinds[s] {
+			have[k] = true
+		}
+	}
+	either := slices.Contains(c.How, "real") && slices.Contains(c.How, "fleet")
+	var out []string
+	for _, h := range c.How {
+		if have[h] || either && (h == "real" || h == "fleet") && (have["real"] || have["fleet"]) {
+			continue
+		}
+		out = append(out, h)
+	}
+	return out
 }
 
 // automatic tells whether the case can run without a person.
@@ -252,13 +297,14 @@ func checkCatalogue(cases []catCase, funcs []function) []string {
 }
 
 // tally counts one area's functions or cases.
-type tally struct{ all, covered, auto, run int }
+type tally struct{ all, covered, auto, run, full int }
 
 func (t *tally) add(o tally) {
 	t.all += o.all
 	t.covered += o.covered
 	t.auto += o.auto
 	t.run += o.run
+	t.full += o.full
 }
 
 // Coverage prints, by area, how many functions have a case, how many of them
@@ -294,6 +340,9 @@ func Coverage(w io.Writer, docs string) error {
 			}
 			if automated[id] != nil {
 				t.run = 1
+				if len(c.missing()) == 0 {
+					t.full = 1
+				}
 			}
 		}
 		fa[a].add(t)
@@ -305,7 +354,7 @@ func Coverage(w io.Writer, docs string) error {
 		}
 	}
 	needs := map[string][]string{}
-	var person []string
+	var person, partly []string
 	for _, c := range cases {
 		a := area(c.ID)
 		if ca[a] == nil {
@@ -320,25 +369,33 @@ func Coverage(w io.Writer, docs string) error {
 		}
 		if automated[c.ID] != nil {
 			t.run = 1
+			if m := c.missing(); len(m) == 0 {
+				t.full = 1
+			} else {
+				partly = append(partly, c.ID+" ("+strings.Join(m, ", ")+")")
+			}
 		}
 		ca[a].add(t)
 		for _, n := range c.Needs {
 			needs[n] = append(needs[n], c.ID)
 		}
 	}
-	fmt.Fprintf(w, "%-4s %28s   %s\n", "", "functions", "cases")
-	fmt.Fprintf(w, "%-4s %6s %7s %6s %6s   %5s %6s %5s\n", "area", "all", "a case", "auto", "run", "all", "auto", "run")
+	fmt.Fprintf(w, "%-4s %35s   %s\n", "", "functions", "cases")
+	fmt.Fprintf(w, "%-4s %6s %7s %6s %6s %6s   %5s %6s %5s %5s\n", "area", "all", "a case", "auto", "run", "full", "all", "auto", "run", "full")
 	var ft, ct tally
 	for _, a := range order {
 		f, c := fa[a], ca[a]
 		ft.add(*f)
 		ct.add(*c)
-		fmt.Fprintf(w, "%-4s %6d %7d %6d %6d   %5d %6d %5d\n", a, f.all, f.covered, f.auto, f.run, c.all, c.auto, c.run)
+		fmt.Fprintf(w, "%-4s %6d %7d %6d %6d %6d   %5d %6d %5d %5d\n", a, f.all, f.covered, f.auto, f.run, f.full, c.all, c.auto, c.run, c.full)
 	}
-	fmt.Fprintf(w, "%-4s %6d %7d %6d %6d   %5d %6d %5d\n", "all", ft.all, ft.covered, ft.auto, ft.run, ct.all, ct.auto, ct.run)
-	fmt.Fprintf(w, "\nfunctions with a case %.1f%%, with a case that runs by itself %.1f%%, run by the harness today %.1f%%\n",
-		pct(ft.covered, ft.all), pct(ft.auto, ft.all), pct(ft.run, ft.all))
-	fmt.Fprintf(w, "cases that run by themselves %.1f%%, run by the harness today %.1f%%\n", pct(ct.auto, ct.all), pct(ct.run, ct.all))
+	fmt.Fprintf(w, "%-4s %6d %7d %6d %6d %6d   %5d %6d %5d %5d\n", "all", ft.all, ft.covered, ft.auto, ft.run, ft.full, ct.all, ct.auto, ct.run, ct.full)
+	fmt.Fprintf(w, "\nfunctions with a case %.1f%%, with a case that runs by itself %.1f%%, run by the harness today %.1f%%, of them in full %.1f%%\n",
+		pct(ft.covered, ft.all), pct(ft.auto, ft.all), pct(ft.run, ft.all), pct(ft.full, ft.all))
+	fmt.Fprintf(w, "cases that run by themselves %.1f%%, run by the harness today %.1f%%, of them in full %.1f%%\n", pct(ct.auto, ct.all), pct(ct.run, ct.all), pct(ct.full, ct.all))
+	if len(partly) > 0 {
+		fmt.Fprintf(w, "\nrun in part, without (%d): %s\n", len(partly), strings.Join(partly, ", "))
+	}
 	if len(uncovered) > 0 {
 		fmt.Fprintf(w, "\nfunctions without a case:\n  %s\n", strings.Join(uncovered, "\n  "))
 	}

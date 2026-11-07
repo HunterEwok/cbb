@@ -248,13 +248,14 @@ func (s *Service) sendOffersLocked() {
 
 // tunnelOffered keeps an offer for this member's key: the sender's own,
 // or that of another of the group's hubs the sender passes on. Only the
-// group's root or an admin can be a hub, and only one may pass an offer on.
+// group's root, an admin or a computer whose record makes it a hub that
+// only passes copies on can be a hub, and only one may pass an offer on.
 // One passed on when the sender moved the hub elsewhere (Moved) makes this
 // member forget the sender's own. A hub above the one this member uses is
 // tried at once.
 func (s *Service) tunnelOffered(from group.DeviceID, chain []*x509.Certificate, o node.TunnelOffer) error {
-	if !s.adminPeer(from, chain) {
-		return errors.New("only the group's root or an admin can be its hub; the offer is ignored")
+	if !s.hubPeer(from, chain) {
+		return errors.New("only the group's root, an admin or a hub its records name can be its hub; the offer is ignored")
 	}
 	hub := from
 	if o.Hub != "" {

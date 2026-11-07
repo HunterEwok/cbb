@@ -444,3 +444,26 @@ func TestSoakFlat(t *testing.T) {
 		t.Error("descriptors that doubled passed")
 	}
 }
+
+func TestCaseMissing(t *testing.T) {
+	saved := automated
+	defer func() { automated = saved }()
+	automated = map[string][]string{
+		"X1": {"fleet"}, "X2": {"fleet"}, "X3": {"desktop"}, "X4": {"phone"}, "X5": {"fleet"},
+	}
+	for _, tc := range []struct {
+		c    catCase
+		want string
+	}{
+		{catCase{ID: "X1", How: []string{"real", "fleet"}}, ""},
+		{catCase{ID: "X2", How: []string{"real"}}, "real"},
+		{catCase{ID: "X3", How: []string{"real", "helper", "person"}}, "person"},
+		{catCase{ID: "X4", How: []string{"ui", "real"}}, "real"},
+		{catCase{ID: "X5", How: []string{"fleet", "time"}}, "time"},
+		{catCase{ID: "X6", How: []string{"fleet"}}, ""},
+	} {
+		if got := strings.Join(tc.c.missing(), ","); got != tc.want {
+			t.Errorf("%s %v: missing %q, want %q", tc.c.ID, tc.c.How, got, tc.want)
+		}
+	}
+}
