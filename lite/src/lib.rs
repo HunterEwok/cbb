@@ -25,6 +25,8 @@ pub mod entries;
 pub mod error;
 pub mod files;
 #[cfg(feature = "tunnel")]
+pub mod forward;
+#[cfg(feature = "tunnel")]
 pub mod hub;
 pub mod identity;
 mod interfaces;

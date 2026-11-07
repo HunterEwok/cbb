@@ -350,6 +350,32 @@ pub unsafe extern "C" fn cbb_tunnel(request: *const u8, len: usize, answer_len: 
     to_c(tunnel::call(req), answer_len)
 }
 
+/// Registers a hub of `cbb_tunnel` with the group's forwarder (src/tunnel.rs
+/// tells the request), signing its TLS with the app's member key through
+/// `sign` and `ctx`, as `cbb_member_start` does; the answer is as
+/// `cbb_tunnel`'s.
+///
+/// # Safety
+///
+/// As `cbb_tunnel`; `sign` must stay callable with `ctx`, from any thread,
+/// until the hub stops or registers again.
+#[cfg(feature = "tunnel")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_tunnel_register(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request, not null.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(tunnel::register(req, sign, ctx as usize), answer_len)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

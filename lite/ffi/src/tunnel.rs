@@ -32,7 +32,19 @@
 //!   (docs/protocol.md, section 12) whose guest tunnel leads to the window;
 //! - `guest_admitted` with `id` and `guest`: the window admitted the device,
 //!   whose connections now go to the member port for 2 minutes;
-//!   `guest_close` with `id` and `guest` drops the guest.
+//!   `guest_close` with `id` and `guest` drops the guest;
+//! - `hub_set_records` with `id` and `records`: the group's authority
+//!   records the next registration with the forwarder carries.
+//!
+//! `cbb_tunnel_register` registers a hub with the group's forwarder
+//! (docs/protocol.md, section 13), signing its TLS with the app's member
+//! key through a callback: `{"id", "endpoint", "pins", "chain", "public",
+//! "records", "vless_id"}`, where `chain` is the member certificate, its
+//! admin CA if any and the group's roots, and `public` the member key's
+//! public point. The registration holds until the hub stops or registers
+//! again; `hub_status` then carries `forwarder`: `{"registered", "seen",
+//! "vless", "error"}`, with `seen` where the forwarder reaches the hub and
+//! `vless` the VLESS settings for the hub's offers.
 //!
 //! The answer is `{"ok": ...}` or `{"error": {"message", "details"}}`.
 
@@ -45,13 +57,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use cbb_core::certs::{self, DeviceId};
 use cbb_core::error::{Error, Result};
 use cbb_core::invite;
+use cbb_lite::forward::{self, Registration, Report};
 use cbb_lite::hub::{self, Hub, Peer};
 use cbb_lite::tunnel::{self, Link, State};
 use cbb_lite::wire::TunnelOffer;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::join::answer;
+use crate::join::{AppKey, SignFn, answer};
 
 /// The log lines a tunnel keeps until the app asks for its status.
 const MAX_LOG: usize = 200;
@@ -114,9 +127,37 @@ enum Request {
         id: u64,
         guest: u64,
     },
+    HubSetRecords {
+        id: u64,
+        records: Vec<Value>,
+    },
     HubStop {
         id: u64,
     },
+}
+
+/// A registration with the forwarder (`cbb_tunnel_register`).
+#[derive(Deserialize)]
+struct Register {
+    id: u64,
+    endpoint: String,
+    #[serde(with = "certs::b64::list")]
+    pins: Vec<Vec<u8>>,
+    #[serde(with = "certs::b64::list")]
+    chain: Vec<Vec<u8>>,
+    #[serde(with = "certs::b64")]
+    public: Vec<u8>,
+    #[serde(default)]
+    records: Option<Vec<Value>>,
+    #[serde(default)]
+    vless_id: Option<String>,
+}
+
+/// A hub's registration with the forwarder and how it stands.
+struct Forwarding {
+    _registration: Registration,
+    report: Arc<Mutex<Report>>,
+    records: Arc<Mutex<Vec<Value>>>,
 }
 
 /// One of the hub's clients: its device ID, its tunnel key and the
@@ -131,7 +172,9 @@ struct Client {
 }
 
 struct RunningHub {
+    forwarding: Option<Forwarding>,
     hub: Hub,
+    key: [u8; 32],
     device: String,
     /// The hub's public key and AmneziaWG settings, which its invitations
     /// carry.
@@ -295,7 +338,14 @@ fn handle(request: &[u8]) -> Result<Value> {
         Request::HubStatus { id } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
             let log: Vec<String> = r.log.lock().map(|mut l| l.drain(..).collect()).unwrap_or_default();
-            Ok(json!({ "udp_port": r.hub.udp_port(), "log": log }))
+            let forwarder = r.forwarding.as_ref().map(|f| f.report.lock().map(|r| r.clone()).unwrap_or_default());
+            Ok(json!({ "udp_port": r.hub.udp_port(), "log": log, "forwarder": forwarder }))
+        }),
+        Request::HubSetRecords { id, records } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            let f = r.forwarding.as_ref().ok_or_else(|| Error::msg(format!("the hub {id} is not registered")))?;
+            *f.records.lock().map_err(|_| Error::msg("the hub's records are broken"))? = records;
+            Ok(json!({}))
         }),
         Request::HubStop { id } => {
             let gone = hubs(|t| Ok(t.remove(&id)))?;
@@ -363,7 +413,9 @@ fn hub_start(
         t.insert(
             id,
             RunningHub {
+                forwarding: None,
                 hub,
+                key,
                 device: device.to_string(),
                 public,
                 obfuscation: obfuscation.cloned(),
@@ -375,6 +427,52 @@ fn hub_start(
         Ok(())
     })?;
     Ok(json!({ "id": id, "udp_port": port }))
+}
+
+/// Registers the hub with the forwarder (the module's comment), signing
+/// with the app's member key through sign.
+pub fn register(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
+    answer(register_hub(request, sign, ctx))
+}
+
+fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
+    let req: Register = serde_json::from_slice(request)
+        .map_err(|e| Error::msg(format!("the registration request does not decode: {e}")))?;
+    let endpoint: SocketAddr =
+        req.endpoint.parse().map_err(|_| Error::msg("the forwarder's address is not ip:port"))?;
+    let pins = req
+        .pins
+        .iter()
+        .map(|p| key32(p).map_err(|_| Error::msg("a forwarder's pin is not 32 bytes")))
+        .collect::<Result<Vec<_>>>()?;
+    if pins.is_empty() {
+        return Err(Error::msg("the forwarder has no pin"));
+    }
+    if req.chain.is_empty() {
+        return Err(Error::msg("the hub has no member certificate"));
+    }
+    let records = Arc::new(Mutex::new(req.records.unwrap_or_default()));
+    let report = Arc::new(Mutex::new(Report::default()));
+    // The old registration, if any, stops outside the table's lock: it may
+    // take a moment.
+    let old = hubs(|t| {
+        let r = t.get_mut(&req.id).ok_or_else(|| Error::msg(format!("there is no hub {}", req.id)))?;
+        let cfg = forward::Config {
+            endpoint,
+            pins,
+            chain: req.chain,
+            key: Arc::new(AppKey { public: req.public, sign, ctx }),
+            wg_key: r.key,
+            obfuscation: r.obfuscation.clone(),
+            vless_id: req.vless_id,
+            records: records.clone(),
+            send: r.hub.sender(),
+        };
+        let registration = Registration::start(cfg, report.clone(), logger(r.log.clone()));
+        Ok(r.forwarding.replace(Forwarding { _registration: registration, report, records }))
+    })?;
+    drop(old);
+    Ok(json!({}))
 }
 
 fn peers(clients: &[Client]) -> Result<Vec<Peer>> {

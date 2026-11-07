@@ -82,6 +82,7 @@ pub fn is_guest(a: &Ipv6Addr) -> bool {
 /// The running hub. Dropping it stops it and every connection through it.
 pub struct Hub {
     port: u16,
+    out: Arc<UdpSocket>,
     peers: Arc<Mutex<Option<Vec<Peer>>>>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -107,6 +108,7 @@ impl Hub {
         let udp = UdpSocket::bind(listen).context("cannot open the hub's UDP port")?;
         udp.set_nonblocking(true).context("cannot open the hub's UDP port")?;
         let port = udp.local_addr().context("cannot open the hub's UDP port")?.port();
+        let out = Arc::new(udp.try_clone().context("cannot open the hub's UDP port")?);
         let secret = StaticSecret::from(*key);
         let public = PublicKey::from(&secret);
         let listen_awg = obf.clone().map(|o| crate::awg::Awg::new(o, public.as_bytes(), public.as_bytes()));
@@ -143,12 +145,21 @@ impl Hub {
             let stop = stop.clone();
             std::thread::spawn(move || pump.run(&stop))
         };
-        Ok(Hub { port, peers: shared, stop, thread: Some(thread) })
+        Ok(Hub { port, out, peers: shared, stop, thread: Some(thread) })
     }
 
     /// The hub's WireGuard UDP port.
     pub fn udp_port(&self) -> u16 {
         self.port
+    }
+
+    /// Sends datagrams from the hub's WireGuard port, as the hellos to the
+    /// forwarder go; one that cannot go out now is dropped.
+    pub fn sender(&self) -> crate::forward::SendFn {
+        let out = self.out.clone();
+        Arc::new(move |to, data| {
+            let _ = out.send_to(data, to);
+        })
     }
 
     /// Replaces the hub's clients; a client left out is cut off at once.

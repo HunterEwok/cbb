@@ -248,6 +248,83 @@ pub fn member_client(
     Ok(cfg)
 }
 
+/// A server known only by the pin of its key: the SHA-256 of its
+/// certificate's SubjectPublicKeyInfo (a forwarder's or a relay's).
+struct PinVerifier {
+    pins: Vec<certs::KeyHash>,
+}
+
+impl fmt::Debug for PinVerifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PinVerifier")
+    }
+}
+
+impl ServerCertVerifier for PinVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _: &[CertificateDer<'_>],
+        _: &ServerName<'_>,
+        _: &[u8],
+        _: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        let c = Cert::parse(end_entity).map_err(|e| tls_err(e.message()))?;
+        if !self.pins.contains(&c.key_hash()) {
+            return Err(tls_err("the server's key is not the one given for it"));
+        }
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _: &[u8],
+        _: &CertificateDer<'_>,
+        _: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        no_tls12()
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        m: &[u8],
+        c: &CertificateDer<'_>,
+        d: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        verify_sig(m, c, d)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        vec![provider::SCHEME]
+    }
+}
+
+/// The client configuration for a server known only by the pin of its key,
+/// a forwarder or a relay (docs/protocol.md, sections 13 and 14): TLS 1.3
+/// only, ALPN alpn, and this member's certificate chain with a key kept
+/// outside the core, such as a phone's.
+pub fn pinned_client(
+    chain: Vec<Vec<u8>>,
+    key: Arc<dyn crate::identity::ExternalKey>,
+    pins: Vec<certs::KeyHash>,
+    alpn: &[u8],
+    clock: &Clock,
+) -> Result<rustls::ClientConfig> {
+    if chain.is_empty() {
+        return Err(Error::msg("the certificate chain is empty"));
+    }
+    let chain = chain.into_iter().map(CertificateDer::from).collect();
+    let signer: Arc<dyn rustls::sign::SigningKey> = Arc::new(provider::ExternalSigningKey(key));
+    let certified = Arc::new(rustls::sign::CertifiedKey::new(chain, signer));
+    let mut cfg = client_builder(clock)?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(PinVerifier { pins }))
+        .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
+    cfg.alpn_protocols = vec![alpn.to_vec()];
+    cfg.resumption = rustls::client::Resumption::disabled();
+    Ok(cfg)
+}
+
 /// Checks a member that dialed this one.
 struct MemberClientVerifier {
     self_id: DeviceId,

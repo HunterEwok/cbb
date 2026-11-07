@@ -26,7 +26,7 @@ path = "src/main.rs"
 default = ["tunnel"]
 # Sync away from home. GotaTun needs 64-bit atomics, which 32-bit MIPS lacks,
 # so the MIPS builds leave it out (docs/roadmap.md, item 37).
-tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305", "dep:base64"]
+tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305", "dep:base64", "dep:hmac", "dep:sha2"]
 
 [dependencies]
 cbb-core = { path = "core", features = ["std", "tls"] }
@@ -45,6 +45,8 @@ getrandom = { version = "0.4", features = ["std"] }
 # already brings.
 blake2 = { version = "0.10.6", optional = true }
 chacha20 = { version = "0.9.1", optional = true }
+hmac = { version = "0.13", optional = true }
+sha2 = { version = "0.11", optional = true }
 chacha20poly1305 = { version = "0.10.1", optional = true }
 base64 = { version = "0.22.1", optional = true }
 # The way over VLESS (src/vless.rs): rustls with the core's provider, and

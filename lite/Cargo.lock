@@ -232,6 +232,7 @@ dependencies = [
  "chacha20poly1305 0.10.1",
  "getrandom 0.4.3",
  "gotatun",
+ "hmac 0.13.0",
  "if-addrs",
  "libc",
  "mdns-sd",
@@ -240,6 +241,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha2",
  "smoltcp",
 ]
 
