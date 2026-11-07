@@ -596,7 +596,7 @@ impl Pump {
     /// Takes the datagrams from the hub through WireGuard.
     fn receive(&mut self) -> bool {
         let mut busy = false;
-        let mut buf = [0u8; 2048];
+        let mut buf = vec![0u8; 2048];
         loop {
             let (n, from) = match self.udp.recv_from(&mut buf) {
                 Ok(r) => r,
