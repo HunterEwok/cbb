@@ -116,7 +116,7 @@ final class AppModelTests: XCTestCase {
             hasGroup = true
             computers = [.init(id: "a", name: "pi", online: true)]
         }
-        func sync() async throws -> AppModel.SyncResult { .sent(to: []) }
+        func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { .sent(to: []) }
         var refreshed = 0
         func refresh() async { refreshed += 1 }
         var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true, paused: paused)] }

@@ -74,9 +74,6 @@ final class LiveGroup: GroupController {
         return SecureEnclave.isAvailable
         #endif
     }
-    /// How recent a computer's copy must be for the button to fetch it
-    /// first, as on Android (SyncRule).
-    static let recentCopyMS: Int64 = 45_000
     /// How long the button waits for a computer to connect before it says
     /// none is.
     static let connectWait: Duration = .seconds(5)
@@ -245,6 +242,25 @@ final class LiveGroup: GroupController {
     }
 
     var keyLevel: String? { state?.isRoot == true ? state?.keyLevel : nil }
+
+    /// How long a copy from another device stays live after it arrives, in
+    /// milliseconds, as the group's records set it.
+    var incomingMS: Int64 { state?.incomingMS ?? Records.defaultIncomingMS }
+
+    /// Sets how long a copy from another device stays live after it
+    /// arrives: a copies record, signed after Face ID by the root or an
+    /// admin and sent to every member (docs/protocol.md, section 10, "The
+    /// copies setting").
+    func setIncoming(ms: Int64) async throws {
+        guard state?.isAdmin == true else { throw PhoneGroup.Failure.notAdmin }
+        let ca = try await caSigner(reason: String(localized: "Change how long a copy from another device lasts", bundle: .app))
+        guard var g = state else { throw PhoneGroup.Failure.notAdmin }
+        let r = try g.setIncoming(ms: ms, caSigner: ca, now: Date())
+        try g.save(to: file)
+        state = g
+        groupChanged()
+        await node?.sendRecords([r])
+    }
 
     /// Sets the group's key level (docs/guide/keys.md, "The three levels"):
     /// a settings record, signed with the root key after Face ID and sent
@@ -1389,24 +1405,22 @@ final class LiveGroup: GroupController {
             sharing = share
         }
         let offered: Data? = isHub ? nil : awayState.flatMap { try? GoTunnels().publicKey($0.key) }
-        let modeBox = modeBox, device = g.device, recent = Self.recentCopyMS
+        let modeBox = modeBox, device = g.device
         let node = MemberNode(engine: SyncEngine(device: g.device, clock: HybridClock()), name: UIDevice.current.name, os: "ios",
                               device: Self.ownDevice, records: box, renew: { renewer.renew($0) }, adminCA: { admins.group.computerAdminCA(for: $0) },
                               tunnelKey: offered, tunnelPSK: offered == nil ? nil : awayState?.psk, hub: answer, hubShare: sharing,
-                              // A copy of a moment ago from another device, in a sync
-                              // mode that takes the group's copies, while the app runs.
+                              // A live copy from another device, in a sync mode that
+                              // takes the group's copies, while the app runs
+                              // (docs/design.md, "The one button").
                               onChange: { [weak self] e in
-                                  guard Member.receives(modeBox.mode), modeBox.pausedUntilMS == nil, !e.isMark, e.origin != device, e.ageMS < recent else { return }
-                                  if let part = Images.part(of: e.media) {
-                                      Task { @MainActor in
-                                          do {
-                                              try await self?.receive(e, image: part)
-                                          } catch {
-                                              imageLog.error("fetching an image: \(String(reflecting: error), privacy: .public)")
-                                          }
+                                  guard Member.receives(modeBox.mode), modeBox.pausedUntilMS == nil, !e.isMark, !e.unread, e.origin != device, e.ageMS < box.incomingMS,
+                                        Images.part(of: e.media) != nil || e.media?.isFiles != true && !e.text.isEmpty else { return }
+                                  Task { @MainActor in
+                                      do {
+                                          try await self?.take(e)
+                                      } catch {
+                                          imageLog.error("fetching an image: \(String(reflecting: error), privacy: .public)")
                                       }
-                                  } else if !e.text.isEmpty {
-                                      Task { @MainActor in self?.write(e.text, kind: e.kind) }
                                   }
                               },
                               onTunnel: { from, offer in Task { await awayRef.value?.keep(from: from, offer: offer) } },
@@ -2109,6 +2123,9 @@ final class LiveGroup: GroupController {
 
         func replace(_ new: RecordSet) { lock.withLock { set = new } }
 
+        /// How long a copy from another device stays live after it arrives.
+        var incomingMS: Int64 { lock.withLock { set.incomingMS } }
+
         /// Whether device may be the hub for sync away from home.
         func mayHost(_ device: String) -> Bool { lock.withLock { set.mayHost(device) } }
 
@@ -2201,63 +2218,97 @@ final class LiveGroup: GroupController {
         }
     }
 
-    /// The one button, by the rule of Android's SyncRule: a computer's copy
-    /// of a moment ago comes to the phone; otherwise a new text on the phone
-    /// goes to the computers; otherwise the computers' latest text comes.
-    func sync() async throws -> AppModel.SyncResult {
-        guard let node, let g = state else { throw PendingGroup.Failure.noComputers }
-        online = await node.connected
-        // A text first, as most copies with an image carry its text too;
-        // an image compares by its hash.
-        let (text, image) = try await Self.readBoard()
-        let board = image?.key ?? text
-        let cur = await node.current
-        let curImage = Images.part(of: cur?.media)
-        let curFiles = cur?.media.flatMap { $0.isFiles ? $0 : nil }
-        // An image compares by its hash, a text by itself; files count
-        // until the button saved them once.
-        var usable = await node.usable
-        if let sum = curImage?.sha256 { usable = (Images.key(sum), .media) }
-        if let cur, curFiles != nil { usable = cur.id == savedFiles ? nil : (text: "\u{0}files:" + cur.id, kind: Member.Kind.media) }
-        func fetch() async throws -> AppModel.SyncResult {
-            if let cur, let curFiles {
-                guard await connected(node) else { throw PendingGroup.Failure.noComputers }
-                try await save(cur, files: curFiles)
-                savedFiles = cur.id
-                return .savedFiles
-            }
-            if let cur, let curImage {
-                try await receive(cur, image: curImage)
-            } else if let u = usable {
-                write(u.text, kind: u.kind)
-            }
-            let preview = curImage == nil && usable?.kind == .text ? usable.map { Self.preview($0.text) } : nil
-            return .fetched(from: cur.flatMap { c in devices.first { $0.id == c.origin && !$0.isSelf }?.name }, preview: preview)
-        }
-        if let cur, let u = usable, cur.origin != g.device, cur.via == .copy, cur.ageMS < Self.recentCopyMS, u.text != board {
-            return try await fetch()
-        }
-        if let t = board, !t.isEmpty, t != usable?.text {
-            guard await connected(node) else { throw PendingGroup.Failure.noComputers }
-            if let image {
-                _ = try await node.send(text: "", kind: .text, media: Content.manifest(store: content, data: [(image.type, image.data)]))
-            } else {
-                _ = try await node.send(text: t, kind: .text)
-            }
-            reached = await node.reached
-            return .sent(to: devices.filter { $0.online && !$0.isSelf }.map(\.name).sorted())
-        }
-        if let u = usable, u.text != board {
-            return try await fetch()
-        }
-        if !(await connected(node)) { throw PendingGroup.Failure.noComputers }
-        return .nothingNew
+    /// The ID of the last copy from another device this phone put in its
+    /// clipboard, or saved in Files, so it is taken once.
+    private var takenID: String?
+
+    /// The copy from another device that waits for this phone: younger
+    /// than the group's live window and not yet taken; for what the app
+    /// takes by itself (byItself), also in a sync mode that takes the
+    /// group's copies and while the user has not paused them, while the
+    /// button works in every mode.
+    private func pending(_ node: MemberNode, device: String, byItself: Bool) async -> Member.Event? {
+        guard !byItself || Member.receives(modeBox.mode) && modeBox.pausedUntilMS == nil, let cur = await node.current, !cur.isMark, !cur.unread, cur.origin != device,
+              cur.id != takenID, cur.ageMS < (recordBox?.incomingMS ?? Records.defaultIncomingMS) else { return nil }
+        if cur.media?.isFiles == true || Images.part(of: cur.media) != nil { return cur }
+        return await node.usable == nil ? nil : cur
     }
 
-    /// What the clipboard holds, a text or an image, which iOS may ask the
-    /// user to allow. Read off the main thread: the read waits while iOS
+    /// Puts a copy from another device in this phone's clipboard: a text,
+    /// an image fetched whole, or files saved in Files.
+    private func take(_ e: Member.Event) async throws {
+        guard e.id != takenID else { return }
+        if let files = e.media.flatMap({ $0.isFiles ? $0 : nil }) {
+            guard let node, await connected(node) else { throw PendingGroup.Failure.noComputers }
+            try await save(e, files: files)
+        } else if let part = Images.part(of: e.media) {
+            try await receive(e, image: part)
+        } else if !e.text.isEmpty {
+            write(e.text, kind: e.kind)
+        }
+        takenID = e.id
+    }
+
+    /// What the button says it fetched.
+    private func fetched(_ e: Member.Event) -> AppModel.SyncResult {
+        if e.media?.isFiles == true { return .savedFiles }
+        let preview = Images.part(of: e.media) == nil && e.kind == .text ? Self.preview(e.text) : nil
+        return .fetched(from: devices.first { $0.id == e.origin && !$0.isSelf }?.name, preview: preview)
+    }
+
+    /// Takes the copy that waits for this phone, when one does: at the
+    /// app's start or its return to the front, after the computers had a
+    /// moment to connect. nil when none waits.
+    func takePending() async -> AppModel.SyncResult? {
+        guard let node, let g = state else { return nil }
+        _ = await connected(node)
+        guard let e = await pending(node, device: g.device, byItself: true) else { return nil }
+        do {
+            try await take(e)
+        } catch {
+            imageLog.error("taking the waiting copy: \(String(reflecting: error), privacy: .public)")
+            return nil
+        }
+        return fetched(e)
+    }
+
+    /// The one button, and Back Tap through Shortcuts (docs/design.md, "The
+    /// one button"): a copy from another device that waits for this phone
+    /// comes in; otherwise what this phone copied goes out, however old,
+    /// unless it is the group's text already. board is what the paste
+    /// button or Shortcuts handed over; without it the button reads the
+    /// clipboard, and only when it sends.
+    func sync(board given: AppModel.Board?) async throws -> AppModel.SyncResult {
+        guard let node, let g = state else { throw PendingGroup.Failure.noComputers }
+        online = await node.connected
+        if let e = await pending(node, device: g.device, byItself: false) {
+            try await take(e)
+            return fetched(e)
+        }
+        let board: AppModel.Board
+        if let given { board = given } else { board = try await Self.readBoard() }
+        var usable = await node.usable?.text
+        let media = await node.current?.media
+        if let sum = Images.part(of: media)?.sha256 { usable = Images.key(sum) }
+        guard let key = board.key, !key.isEmpty, key != usable else {
+            if !(await connected(node)) { throw PendingGroup.Failure.noComputers }
+            return .nothingNew
+        }
+        guard await connected(node) else { throw PendingGroup.Failure.noComputers }
+        if let image = board.image {
+            _ = try await node.send(text: "", kind: .text, media: Content.manifest(store: content, data: [(image.type, image.data)]))
+        } else if let t = board.text {
+            _ = try await node.send(text: t, kind: .text)
+        }
+        reached = await node.reached
+        return .sent(to: devices.filter { $0.online && !$0.isSelf }.map(\.name).sorted())
+    }
+
+    /// What the clipboard holds, read by the app itself, which iOS may ask
+    /// the user to allow: a text first, as most copies with an image carry
+    /// its text too. Read off the main thread: the read waits while iOS
     /// asks, and on the main thread the app froze until the user answered.
-    nonisolated private static func readBoard() async throws -> (text: String?, image: Images.Copied?) {
+    nonisolated private static func readBoard() async throws -> AppModel.Board {
         try await Task.detached(priority: .userInitiated) {
             let pb = UIPasteboard.general
             let text = pb.hasStrings ? pb.string : nil
@@ -2265,7 +2316,7 @@ final class LiveGroup: GroupController {
             if text == nil, image == nil, pb.numberOfItems > 0 {
                 throw ClipboardUnreadable(items: pb.numberOfItems, hasStrings: pb.hasStrings, types: pb.types, changeCount: pb.changeCount)
             }
-            return (text, image)
+            return AppModel.Board(text: text, image: image)
         }.value
     }
 
@@ -2288,9 +2339,6 @@ final class LiveGroup: GroupController {
             try? await Task.sleep(for: .milliseconds(250))
         }
     }
-
-    /// The files event the button saved last, so it does not save them again.
-    private var savedFiles: String?
 
     /// Fetches the files a computer copied into the app's folder in Files,
     /// Received, with their folders; a name taken there gets a number.

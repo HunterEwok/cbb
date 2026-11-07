@@ -146,6 +146,14 @@ class AppModel(private val app: Context) {
     var keyLevelNote by mutableStateOf<Note?>(null)
         private set
 
+    /** How long a copy from another device stays live, in milliseconds, on an admin phone; null elsewhere. */
+    var incomingMS by mutableStateOf<Long?>(null)
+        private set
+
+    /** What the last change to how long a copy stays live said. */
+    var incomingNote by mutableStateOf<Note?>(null)
+        private set
+
     /** When the group's recovery key was made, on the root phone while the group has one. */
     var recoveryMade by mutableStateOf<java.time.Instant?>(null)
         private set
@@ -399,7 +407,7 @@ class AppModel(private val app: Context) {
     suspend fun sync() {
         busy = true
         try {
-            val (result, fetched) = withContext(Dispatchers.IO) { group.sync(Clipboard.readForSync(app)) }
+            val (result, fetched) = withContext(Dispatchers.IO) { group.sync { Clipboard.readForSync(app) } }
             when (fetched) {
                 is LiveGroup.Got.Text -> Clipboard.write(app, fetched.text, fetched.kind)
                 is LiveGroup.Got.Image -> Clipboard.writeImage(app, fetched.file, fetched.alt)
@@ -481,6 +489,7 @@ class AppModel(private val app: Context) {
         removed = withContext(Dispatchers.IO) { group.removed }
         recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
         keyLevel = withContext(Dispatchers.IO) { group.keyLevel }
+        incomingMS = if (admin) withContext(Dispatchers.IO) { group.incomingMS } else null
         notifier.observe(d)
         away = group.awayFromHome?.let { a ->
             // The last failure only while it is still trying; once connected or at home it is old news.
@@ -1012,6 +1021,19 @@ class AppModel(private val app: Context) {
             throw e
         } catch (e: PhoneGroup.BelowKeyLevel) {
             Note(R.string.key_level_own_key)
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+    }
+
+    /** Sets how long a copy from another device stays live after it arrives. */
+    suspend fun setIncoming(ms: Long) {
+        incomingNote = try {
+            group.setIncoming(ms)
+            Note(R.string.incoming_saved)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             describe(e)
         }

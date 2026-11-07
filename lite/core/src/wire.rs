@@ -238,6 +238,7 @@ pub fn known_role(r: &str) -> bool {
 pub fn hello(
     h: &Hello,
     records: String,
+    role: &str,
     name: &str,
     os: &str,
     device: &DeviceInfo,
@@ -271,14 +272,15 @@ pub fn hello(
         muted: mute.is_some(),
         muted_for_ms: mute.unwrap_or(0),
         // The lite member keeps its keys in a file, or in the ESP32's
-        // flash: "file", or "rootless" for a rootless install (D-79).
+        // flash: "file", or "rootless" for a rootless install (D-79); a
+        // phone's app that runs it, in its secure hardware: "hardware".
         key_store: key_store.into(),
         actions: actions.to_vec(),
         seal: seal.map(<[u8]>::to_vec),
         entries_seq: entries.1,
         entries_keys_seq: if entries.1 == 0 { 0 } else { entries.0 },
     };
-    Message { kind: "hello".into(), role: "lite".into(), hello: Some(to_value(&body)), ..Default::default() }
+    Message { kind: "hello".into(), role: role.into(), hello: Some(to_value(&body)), ..Default::default() }
 }
 
 /// A message part as JSON. The parts are plain structs of strings, numbers

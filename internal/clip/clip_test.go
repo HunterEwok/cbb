@@ -523,134 +523,67 @@ func TestWritePolicy(t *testing.T) {
 			t.Error("the desktop took the laptop's old copy into its clipboard")
 		}
 	})
-	t.Run("a member that wakes up gets the group's text", func(t *testing.T) {
+	t.Run("a member that wakes up keeps its own text", func(t *testing.T) {
 		w := newWorld()
 		a := w.member(idA)
-		a.Rejoin()
-		if res := join(t, w, a, idB, ptr(event(w, "copied while it slept", 2*time.Hour, 0))); !res.Write {
+		mustCopy(t, a, "copied before the sleep")
+		w.advance(3 * time.Hour)
+		if res := join(t, w, a, idB, ptr(event(w, "copied while it slept", 2*time.Hour, 0))); res.Write || localOf(a) != "copied before the sleep" {
+			t.Errorf("Reconcile() = %+v: an old copy overwrote the member's own text", res)
+		}
+	})
+	t.Run("a copy delivered late is written within the live window", func(t *testing.T) {
+		w := newWorld()
+		a := w.member(idA)
+		if res := join(t, w, a, idB, ptr(event(w, "copied a moment ago", 40*time.Second, 0))); !res.Write {
 			t.Errorf("Reconcile() = %+v, want Write", res)
 		}
 	})
-	t.Run("a hello taken before the wake-up was noticed is written after it", func(t *testing.T) {
+	t.Run("the live window ends", func(t *testing.T) {
 		w := newWorld()
 		a := w.member(idA)
-		ev := event(w, "copied while it slept", 10*time.Minute, 0)
-		w.advance(time.Hour)
-		if res := join(t, w, a, idB, ptr(ev)); res.Write {
-			t.Fatalf("Reconcile() before Rejoin = %+v, want no write", res)
-		}
-		a.Disconnected(idB)
-		a.Rejoin()
-		if res := join(t, w, a, idB, ptr(ev)); !res.Write || localOf(a) != "copied while it slept" {
-			t.Errorf("Reconcile() after Rejoin = %+v, want Write", res)
-		}
-		if res := join(t, w, a, idC, ptr(ev)); res.Write {
-			t.Error("the same event was written twice")
+		join(t, w, a, idB, nil)
+		if res := mustReceive(t, a, event(w, "a minute old", DefaultLiveWindow, 0)); res.Write {
+			t.Error("an event as old as the live window was written")
 		}
 	})
-	t.Run("a member that copied while away keeps its copy", func(t *testing.T) {
+	t.Run("the group sets the live window", func(t *testing.T) {
 		w := newWorld()
 		a := w.member(idA)
-		mustCopy(t, a, "copied while alone")
-		w.advance(time.Minute)
-		a.Rejoin()
-		if res := join(t, w, a, idB, ptr(event(w, "the group's text", 10*time.Minute, 0))); res.Write {
-			t.Error("a copy made while away was overwritten")
+		join(t, w, a, idB, nil)
+		a.SetLiveWindow(3 * time.Minute)
+		if res := mustReceive(t, a, event(w, "two minutes old", 2*time.Minute, 0)); !res.Write {
+			t.Errorf("Received() = %+v under a 3-minute window, want Write", res)
 		}
+		a.SetLiveWindow(10 * time.Second)
 		w.advance(time.Millisecond)
-		if res := mustReceive(t, a, event(w, "copied just now", time.Second, 0)); !res.Write {
-			t.Errorf("Received(live) = %+v, want Write", res)
+		if res := mustReceive(t, a, event(w, "fifteen seconds old", 15*time.Second, 0)); res.Write {
+			t.Error("an event older than a 10-second window was written")
+		}
+		a.SetLiveWindow(0)
+		if got := a.LiveWindow(); got != DefaultLiveWindow {
+			t.Errorf("SetLiveWindow(0) left %v, want %v", got, DefaultLiveWindow)
 		}
 	})
-	t.Run("a flapping connection inside the window keeps the protection", func(t *testing.T) {
+	t.Run("a forgotten event is never written", func(t *testing.T) {
 		w := newWorld()
 		a := w.member(idA)
-		mustCopy(t, a, "copied while alone")
-		a.Rejoin()
+		a.SetMode(Own)
 		join(t, w, a, idB, nil)
-		w.advance(5 * time.Second)
-		a.Disconnected(idB)
-		if res := join(t, w, a, idB, ptr(event(w, "older group text", 10*time.Minute, 0))); res.Write || localOf(a) != "copied while alone" {
-			t.Error("a Wi-Fi blip inside the window let the group's old text overwrite the copy")
+		ev := event(w, "from a device removed since", time.Second, 0)
+		mustReceive(t, a, ev)
+		if !a.Forget(ev.ID) {
+			t.Fatal("Forget() did not drop the current event")
 		}
-	})
-	t.Run("an earlier copy while away does not block a later wake-up", func(t *testing.T) {
-		w := newWorld()
-		a := w.member(idA)
-		mustCopy(t, a, "copied at the cafe")
-		a.Rejoin()
-		join(t, w, a, idB, nil) // home again; the window passes quietly
-		w.advance(3 * time.Hour)
-		a.Rejoin() // woke up, before the dead connection is noticed
-		a.Disconnected(idB)
-		w.advance(time.Second)
-		if res := join(t, w, a, idB, ptr(event(w, "copied while it slept", 20*time.Minute, 0))); !res.Write {
-			t.Error("a copy from an earlier absence blocked the group's text after a wake-up")
+		if _, ok := a.Current(); ok {
+			t.Error("the forgotten event is still current")
 		}
-	})
-	t.Run("peers leave first, then the member goes away", func(t *testing.T) {
-		w := newWorld()
-		a := w.member(idA)
-		mustCopy(t, a, "copied at the cafe")
-		a.Rejoin()
-		join(t, w, a, idB, nil) // home again; the window passes quietly
-		w.advance(time.Hour)
-		a.Disconnected(idB) // the peer goes away; a stays
-		w.advance(time.Hour)
-		a.Rejoin() // now a itself sleeps and wakes
-		if res := join(t, w, a, idB, ptr(event(w, "copied meanwhile", 20*time.Minute, 0))); !res.Write {
-			t.Error("a copy from an earlier absence blocked the group's text after a wake-up")
+		a.SetMode(Shared)
+		if res := join(t, w, a, idC, ptr(ev)); res.Write {
+			t.Error("the forgotten event came back in a hello and was written")
 		}
-	})
-	t.Run("a copy made alone, then a peer appears, then a wake-up", func(t *testing.T) {
-		w := newWorld()
-		mac := w.member(idA)
-		mustCopy(t, mac, "x")
-		join(t, w, mac, idB, nil) // a Linux desktop comes up; the Mac was not away
-		w.advance(time.Hour)
-		mac.Rejoin() // the Mac sleeps and wakes
-		mac.Disconnected(idB)
-		if res := join(t, w, mac, idB, ptr(event(w, "y", 10*time.Minute, 0))); !res.Write {
-			t.Error("a long-delivered copy made alone blocked the group's text at the wake-up")
-		}
-	})
-	t.Run("copies after a wake count as away until a hello is reconciled", func(t *testing.T) {
-		w := newWorld()
-		a := w.member(idA)
-		join(t, w, a, idB, nil)
-		a.Rejoin() // woke up at a cafe; the old connection still looks up
-		mustCopy(t, a, "copied at the cafe")
-		a.Disconnected(idB)
-		w.advance(time.Hour)
-		a.Rejoin() // home: the network is back
-		if res := join(t, w, a, idB, ptr(event(w, "group text", 5*time.Minute, 0))); res.Write {
-			t.Error("a copy made after a wake-up, over a stale connection, was overwritten")
-		}
-	})
-	t.Run("two connections to one peer", func(t *testing.T) {
-		w := newWorld()
-		a := w.member(idA)
-		join(t, w, a, idB, nil)
-		join(t, w, a, idB, nil)
-		a.Disconnected(idB)
-		if _, ok := a.Skews()[idB]; !ok {
-			t.Error("closing one of two connections dropped the peer's skew")
-		}
-		a.Rejoin()
-		mustReconcile(t, a, idB, Hello{Wall: w.wall})
-		mustCopy(t, a, "connected copy")
-		if a.offlineCopy {
-			t.Error("a copy made while one connection was still up counted as made while away")
-		}
-	})
-	t.Run("the rejoin window closes", func(t *testing.T) {
-		w := newWorld()
-		a := w.member(idA)
-		a.Rejoin()
-		join(t, w, a, idB, nil)
-		w.advance(DefaultRejoinWindow + time.Second)
-		if res := mustReceive(t, a, event(w, "late catch-up", 10*time.Minute, 0)); res.Write {
-			t.Error("an old event was written after the rejoin window closed")
+		if a.Forget("") || a.Forget(ev.ID) {
+			t.Error("Forget() dropped something twice")
 		}
 	})
 }
@@ -822,7 +755,6 @@ func simulate(t *testing.T, seed uint64, crashes bool) {
 		wall := func() time.Time { return time.UnixMilli(w.wall + offsets[id]) }
 		clock := hlc.NewClock(wall, marks[id], func(m hlc.Timestamp) error { marks[id] = m; return nil })
 		members[id] = New(Config{Self: id, Clock: clock, Wall: wall, Uptime: func() time.Duration { return w.up }})
-		members[id].Rejoin()
 	}
 	for _, id := range ids {
 		offsets[id] = int64(rng.IntN(6001) - 3000) // up to 3 s either way
@@ -946,7 +878,6 @@ func simulate(t *testing.T, seed uint64, crashes bool) {
 		case r == 10: // a member sleeps and wakes
 			id := ids[rng.IntN(len(ids))]
 			isolate(id)
-			members[id].Rejoin()
 		case r == 11 && crashes:
 			id := ids[rng.IntN(len(ids))]
 			isolate(id)

@@ -4773,6 +4773,66 @@
           }
         }
       }
+    },
+    "Change how long a copy from another device lasts": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить, сколько живёт копия с другого устройства"
+          }
+        }
+      }
+    },
+    "A copy from another device": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копия с другого устройства"
+          }
+        }
+      }
+    },
+    "Incoming copies": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Входящие копии"
+          }
+        }
+      }
+    },
+    "How long a copy from another device goes into the clipboard after it arrives. After that each device keeps what it copied itself, however old.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сколько времени после прихода копия с другого устройства попадает в буфер. Потом каждое устройство оставляет то, что скопировало само, как бы давно это ни было."
+          }
+        }
+      }
+    },
+    "Paste sends what you copied to the other devices. A copy from another device comes into this phone's clipboard by itself.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Вставить» отправляет скопированное на другие устройства. Копия с другого устройства попадает в буфер телефона сама."
+          }
+        }
+      }
+    },
+    "Fetches what another device copied in the last minute, or sends the text, as from Get Clipboard, to your devices.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Получает то, что другое устройство скопировало за последнюю минуту, или отправляет текст, например из «Получить буфер обмена», на ваши устройства."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

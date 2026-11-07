@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Tiles or a list, as the menu sets it; on a big screen also the orbit.
 enum DeviceLayout: String {
@@ -98,16 +99,21 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
                 summary
                 AlertsCard()
-                Button {
-                    Task { await model.sync() }
-                } label: {
-                    Text("Send or fetch")
+                // The system's paste button hands the clipboard over
+                // without asking (UIPasteControl); a copy from another
+                // device that waits comes in instead.
+                PasteButton(supportedContentTypes: [.plainText, .image]) { providers in
+                    Task { @MainActor in await model.sync(board: await AppModel.Board.load(providers)) }
                 }
-                .buttonStyle(AccentButtonStyle())
-                // Command-R on an iPad's keyboard, as in the toolbar of the big screen.
-                .keyboardShortcut("r")
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .tint(palette.accent)
+                .frame(maxWidth: .infinity)
                 .disabled(model.busy)
                 .sensoryFeedback(.success, trigger: model.message)
+                Text("Paste sends what you copied to the other devices. A copy from another device comes into this phone's clipboard by itself.")
+                    .font(.footnote)
+                    .foregroundStyle(palette.textDim)
                 ListenSwitch()
 
                 if let message = model.message {

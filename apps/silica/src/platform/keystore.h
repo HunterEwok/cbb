@@ -4,14 +4,19 @@
 // Where the phone keeps its member key, the one part of the key that differs
 // between the systems: keystore_tee.cpp on Aurora, a P-256 key in the app's
 // own OP-TEE token that never leaves it (docs/roadmap.md, item 60; the level
-// "hardware" of "Key levels"); a file on Sailfish OS later (level 3).
+// "hardware" of "Key levels"); keystore_file.cpp on Sailfish OS and Aurora 4,
+// a P-256 key in a file only the app reads (level 3, "file").
 #pragma once
 
 #include "errors.h"
 
 #include <QByteArray>
+#include <QString>
 
 namespace KeyStore {
+
+// Where the key lives, as the phone's hello says: "hardware" or "file".
+QString store();
 
 // Why the phone has no hardware key: no OP-TEE at all (Sailfish OS, the
 // emulator, a phone without a TEE), or the TEE failed.

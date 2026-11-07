@@ -315,7 +315,7 @@ class GroupTest {
             runBlocking { model.sync() }
             // A computer's copy of a moment ago, from an earlier test, is what the button
             // fetches first instead of sending.
-            until((SyncRule.RECENT_COPY_MS / 1000).toInt() + 15, "no copy of a moment ago from another device: ${model.group.recentCopy}") {
+            until((model.group.incomingMS / 1000).toInt() + 15, "no copy of a moment ago from another device: ${model.group.recentCopy}") {
                 model.group.recentCopy == null
             }
             setClip(text)
@@ -340,8 +340,10 @@ class GroupTest {
         val stamp = System.currentTimeMillis()
         val dir = File(context.cacheDir, "bench").apply { mkdirs() }
         val sent = File(dir, "o11-$stamp.txt").apply { writeText("cbb-bench phone O11 from the phone $stamp\n") }
+        // The phone's node as the test began: one made while it runs starts without the copies before it.
+        val nodeAtStart = model.group.nodeNumber
         val note = runBlocking { model.sendShared(listOf(Uri.fromFile(sent))) }
-        assertEquals("Share says ${model.message}", R.string.files_sent, note.text)
+        assertEquals("Share says ${model.message}; ${phoneSide(nodeAtStart)}", R.string.files_sent, note.text)
         var saved = ""
         try {
             until(60, "${Bench.PC} saves the phone's file") {
@@ -350,7 +352,7 @@ class GroupTest {
                 saved.contains("from the phone $stamp")
             }
         } catch (e: AssertionError) {
-            throw AssertionError("${e.message}; cbb paste -o and the files give:\n$saved")
+            throw AssertionError("${e.message}; cbb paste -o and the files give:\n$saved\n${phoneSide(nodeAtStart)}\n${pcSide()}")
         }
         val back = "o11-back-$stamp.txt"
         val copied = Bench.run(Bench.PC, "mkdir -p /tmp/o11src && printf 'cbb-bench phone O11 from the computer $stamp' >/tmp/o11src/$back && cbb copy /tmp/o11src/$back 2>&1")
@@ -361,7 +363,10 @@ class GroupTest {
             }
         } catch (e: AssertionError) {
             // Read now, after the last sync, not when the wait began.
-            throw AssertionError("${e.message}; the button says ${model.message?.let { context.getString(it.text) + (it.detail?.let { d -> ": $d" } ?: "") }}; ${model.group.copyState}; cbb copy said: $copied\n${Bench.PC}'s log:\n${Bench.logs(Bench.PC)}")
+            throw AssertionError(
+                "${e.message}; the button says ${model.message?.let { context.getString(it.text) + (it.detail?.let { d -> ": $d" } ?: "") }}; " +
+                    "${model.group.copyState}; cbb copy said: $copied\n${phoneSide(nodeAtStart)}\n${pcSide()}",
+            )
         }
         val cr = context.contentResolver
         val uri = cr.query(
@@ -372,6 +377,23 @@ class GroupTest {
         val got = cr.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) }
         assertEquals("cbb-bench phone O11 from the computer $stamp", got)
     }
+
+    /**
+     * The phone's side of a copy that went missing, for a failure's message:
+     * whether its node was made again since the test began, the node's
+     * connections and what it sent, took and dropped lately (and the
+     * stopped nodes' the same), and its sync mode.
+     */
+    private fun phoneSide(nodeAtStart: Int): String {
+        val now = model.group.nodeNumber
+        val made = if (now == nodeAtStart) "the phone's node is the one from the test's start (#$now)" else "the phone's node was made again: #$nodeAtStart at the start, #$now now"
+        val self = model.group.devices.firstOrNull { it.isSelf }
+        return "$made; the phone is ${self?.id} in mode ${self?.mode}, online ${model.group.online}\nthe phone's nodes:\n${model.group.nodeDiagnostics}"
+    }
+
+    /** The computer's side: its status, with the members it is connected to, and its log. */
+    private fun pcSide(): String =
+        "${Bench.PC}'s status:\n${runCatching { Bench.run(Bench.PC, "cbb status 2>&1") }.getOrElse { it.toString() }}\n${Bench.PC}'s log:\n${Bench.logs(Bench.PC)}"
 
     /** Y35: a computer's secret comes onto the phone marked sensitive; cbb paste -terminal refuses it without -secret. */
     @Test

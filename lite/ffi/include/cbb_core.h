@@ -55,6 +55,23 @@ uint8_t *cbb_join_feed(cbb_join *j, const uint8_t *data, size_t len, int64_t now
 uint8_t *cbb_join_finish(cbb_join *j, int32_t saved, size_t *answer_len);
 void cbb_join_free(cbb_join *j);
 
+/*
+ * The member inside the app (src/member.rs), only in a library built with the
+ * feature member (the Aurora app): the lite member's node on threads of its
+ * own, with the app's key through sign. event gets each event as JSON,
+ * {"type":"write","text","kind","ttl_ms"} or {"type":"log","line"}, on any
+ * thread; ctx must stay valid for the rest of the process.
+ */
+typedef void (*cbb_event_fn)(void *ctx, const uint8_t *event, size_t len);
+
+typedef struct cbb_member cbb_member;
+
+cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sign, cbb_event_fn event, void *ctx,
+                             uint8_t **answer, size_t *answer_len);
+uint8_t *cbb_member_copy(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
+uint8_t *cbb_member_peers(const cbb_member *m, size_t *answer_len);
+void cbb_member_stop(cbb_member *m);
+
 #ifdef __cplusplus
 }
 #endif

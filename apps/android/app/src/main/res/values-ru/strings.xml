@@ -475,6 +475,12 @@
     <string name="reason_make_recovery">Сделать ключ восстановления</string>
     <string name="reason_remove_recovery">Удалить ключ восстановления</string>
     <string name="reason_key_level">Изменить, какие ключи могут быть у админов</string>
+    <string name="reason_incoming">Изменить, сколько живёт копия с другого устройства</string>
+    <string name="incoming_title">Копии с других устройств</string>
+    <string name="incoming_seconds">%d с</string>
+    <string name="incoming_minutes">%d мин</string>
+    <string name="incoming_body">Сколько копия с другого устройства ждёт, чтобы попасть в буфер обмена этого устройства, считая от момента копирования. Потом она пропадает, и кнопка отправляет то, что скопировали здесь. Вся группа следует этой настройке.</string>
+    <string name="incoming_saved">Сохранено. Все устройства группы следуют этой настройке.</string>
     <string name="key_level_title">Ключи админов</string>
     <string name="key_level_proven">Только доказанное железо</string>
     <string name="key_level_hardware">Ключи в железе</string>

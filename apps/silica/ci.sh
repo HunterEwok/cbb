@@ -4,7 +4,9 @@
 #
 # CI's build of the Aurora app: ci.sh PSDK ARCH OUT sets up the Platform SDK in
 # PSDK (psdk.sh, with sudo), builds the Rust core and the icons, builds the RPM
-# for ARCH (armv7hl or aarch64) and copies it into OUT. With
+# for ARCH (armv7hl or aarch64) and copies it into OUT. SYSTEM in the
+# environment picks the package, as for psdk.sh: aurora5 (the default),
+# aurora4 or sailfish. With
 # SIGN_KEY_FILE and SIGN_CERT_FILE (the developer certificate's key
 # and certificate, PEM) and KEY_PASSPHRASE (the key's password) set, it signs
 # the RPM; without them the RPM stays unsigned.
@@ -16,16 +18,23 @@ mkdir -p "$3"
 out=$(cd "$3" && pwd)
 here=$(cd "$(dirname "$0")" && pwd)
 
-sudo "$here/psdk.sh" "$psdk" setup "$arch"
+system=${SYSTEM:-aurora5}
+case $system in
+sailfish) name=harbour-cbb ;;
+*) name=tools.cbb.aurora ;;
+esac
+sdk=$(SYSTEM=$system "$here/psdk.sh" "$psdk" name)
+
+sudo SYSTEM="$system" "$here/psdk.sh" "$psdk" setup "$arch"
 "$here/build.sh" prepare
 home=$psdk/root/home/builder
 sudo rm -rf "$home/silica"
 sudo cp -a "$here" "$home/silica"
 sudo rm -rf "$home/silica/build"
 sudo chroot "$psdk/root" chown -R builder /home/builder/silica
-sudo "$here/psdk.sh" "$psdk" run "~/silica/build.sh rpm AuroraOS-5.1.5.105-base-$arch.default"
+sudo SYSTEM="$system" "$here/psdk.sh" "$psdk" run "~/silica/build.sh rpm $sdk-$arch.default $system"
 # builder's home is not the caller's to read.
-rpm=$(sudo sh -c "ls $home/silica/build/*/RPMS/tools.cbb.aurora-*.$arch.rpm")
+rpm=$(sudo sh -c "ls $home/silica/build/*/RPMS/$name-*.$arch.rpm")
 
 if [ -n "${SIGN_KEY_FILE:-}" ]; then
 	# The key goes into the SDK only for the one command and is removed after.

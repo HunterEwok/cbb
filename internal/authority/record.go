@@ -57,6 +57,16 @@ const (
 	DefaultDelay = 72 * 3600 * 1000
 )
 
+// MinIncoming and MaxIncoming bound how long an incoming copy stays live,
+// the incoming_ms of a copies record, and DefaultIncoming is that time
+// without one (one minute), all in milliseconds (docs/protocol.md, section
+// 4, "Writing the member's own clipboard").
+const (
+	MinIncoming     = 5 * 1000
+	MaxIncoming     = 3600 * 1000
+	DefaultIncoming = 60 * 1000
+)
+
 // KeyLevels are the key levels a settings record may set (docs/roadmap.md,
 // "Key levels"): only proven hardware keys, hardware keys (the default),
 // or files allowed too.
@@ -75,6 +85,7 @@ const (
 	TypeHubs       = "hubs"
 	TypeRecovery   = "recovery"
 	TypeHandover   = "handover"
+	TypeCopies     = "copies"
 )
 
 // MaxHubs is how many devices a hubs record names.
@@ -204,6 +215,10 @@ type Body struct {
 
 	// Hubs is the user's main hubs, in the order they serve.
 	Hubs []string `json:"hubs,omitempty"`
+
+	// IncomingMS is how long a copy from another device stays live on
+	// each member after it arrives, in a copies record.
+	IncomingMS *int64 `json:"incoming_ms,omitempty"`
 }
 
 // fields lists, for each type, the fields beyond those every record has
@@ -221,6 +236,7 @@ var (
 		TypeHubs:       set("hubs"),
 		TypeRecovery:   set("admin", "cert"),
 		TypeHandover:   set("admin"),
+		TypeCopies:     set("incoming_ms"),
 	}
 	common = []string{"v", "alg", "type", "group", "signer", "seq", "time_ms"}
 )
@@ -265,6 +281,7 @@ func (b *Body) present() []string {
 	add(len(b.Heads) > 0, "heads")
 	add(len(b.Keep) > 0, "keep")
 	add(len(b.Hubs) > 0, "hubs")
+	add(b.IncomingMS != nil, "incoming_ms")
 	return names
 }
 
@@ -385,6 +402,10 @@ func (b *Body) check() error {
 		return sortedHashes(b.Keep, "keep")
 	case TypeHubs:
 		return checkHubs(b.Hubs)
+	case TypeCopies:
+		if d := b.IncomingMS; d == nil || *d < MinIncoming || *d > MaxIncoming {
+			return fmt.Errorf("authority: a copies record needs incoming_ms from %d to %d", MinIncoming, MaxIncoming)
+		}
 	case TypeRecovery:
 		if b.Admin == nil || len(b.Cert) == 0 {
 			return errors.New("authority: a recovery record needs admin and cert")

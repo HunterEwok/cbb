@@ -3,9 +3,14 @@
 
 #include "core.h"
 
+#include "platform/keystore.h"
+
 #include <cbb_core.h>
 
+#include <QCoreApplication>
 #include <QJsonDocument>
+
+#include <cstring>
 
 namespace Core {
 
@@ -13,7 +18,7 @@ QJsonValue call(const QString &op, const QJsonValue &args, Failure *failure)
 {
     const uint32_t got = cbb_abi();
     if (got != uint32_t(abi)) {
-        *failure = {QStringLiteral("This build of CBB is broken."),
+        *failure = {QCoreApplication::translate("Errors", "This build of CBB is broken."),
                     QStringLiteral("core: the linked core speaks ABI %1, not %2").arg(got).arg(abi)};
         return QJsonValue();
     }
@@ -24,14 +29,14 @@ QJsonValue call(const QString &op, const QJsonValue &args, Failure *failure)
     size_t len = 0;
     uint8_t *answer = cbb_call(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), &len);
     if (!answer) {
-        *failure = {QStringLiteral("This build of CBB is broken."), QStringLiteral("core: no answer to %1").arg(op)};
+        *failure = {QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("core: no answer to %1").arg(op)};
         return QJsonValue();
     }
     QJsonParseError parse;
     const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(reinterpret_cast<const char *>(answer), int(len)), &parse);
     cbb_free(answer, len);
     if (!doc.isObject()) {
-        *failure = {QStringLiteral("This build of CBB is broken."),
+        *failure = {QCoreApplication::translate("Errors", "This build of CBB is broken."),
                     QStringLiteral("core: the answer to %1 does not read: %2").arg(op, parse.errorString())};
         return QJsonValue();
     }
@@ -48,7 +53,7 @@ QJsonValue call(const QString &op, const QJsonValue &args, Failure *failure)
         return QJsonValue();
     }
     if (!a.contains(QStringLiteral("ok"))) {
-        *failure = {QStringLiteral("This build of CBB is broken."),
+        *failure = {QCoreApplication::translate("Errors", "This build of CBB is broken."),
                     QStringLiteral("core: the answer to %1 has neither ok nor error").arg(op)};
         return QJsonValue();
     }
@@ -65,6 +70,35 @@ QString versionLine(Failure *failure)
         .arg(v.value(QStringLiteral("core")).toString())
         .arg(v.value(QStringLiteral("abi")).toInt())
         .arg(source.isEmpty() ? QStringLiteral("unknown") : source);
+}
+
+QJsonObject take(uint8_t *answer, size_t len, const QString &what, Failure *failure)
+{
+    if (!answer) {
+        *failure = {QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("%1: no answer").arg(what)};
+        return QJsonObject();
+    }
+    const QJsonObject a = QJsonDocument::fromJson(QByteArray(reinterpret_cast<const char *>(answer), int(len))).object();
+    cbb_free(answer, len);
+    if (a.contains(QStringLiteral("error"))) {
+        const QJsonObject e = a.value(QStringLiteral("error")).toObject();
+        *failure = {e.value(QStringLiteral("message")).toString(), QStringLiteral("%1: %2").arg(what, e.value(QStringLiteral("details")).toString())};
+        return QJsonObject();
+    }
+    return a.value(QStringLiteral("ok")).toObject();
+}
+
+int32_t signDigest(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
+{
+    Failure failure;
+    const QByteArray der = KeyStore::sign(QByteArray(reinterpret_cast<const char *>(digest), 32), &failure);
+    if (der.isEmpty() || der.size() > 72) {
+        Errors::log(QStringLiteral("key: the key did not sign: %1 %2").arg(failure.message, failure.details));
+        return 1;
+    }
+    std::memcpy(sig, der.constData(), size_t(der.size()));
+    *sigLen = size_t(der.size());
+    return 0;
 }
 
 } // namespace Core

@@ -412,8 +412,9 @@ func TestSecretsKeepTheirKind(t *testing.T) {
 }
 
 func TestHelloCarriesAnOldTextAfterRejoin(t *testing.T) {
-	// A text copied long ago reaches a member that was away, and only
-	// then: a member that merely lost its peers keeps its clipboard.
+	// A text copied long ago reaches a member that was away, or that merely
+	// lost its peers, as the group's text, and never its clipboard: it is
+	// older than the live window.
 	for _, rejoin := range []bool{true, false} {
 		t.Run(fmt.Sprintf("rejoin=%v", rejoin), func(t *testing.T) {
 			var c clock
@@ -428,11 +429,7 @@ func TestHelloCarriesAnOldTextAfterRejoin(t *testing.T) {
 			}
 			link(t, mac, pi)
 			waitPeers(t, mac, 1)
-			if rejoin {
-				waitWrite(t, mac, "copied long ago")
-			} else {
-				noWrite(t, mac, "copied long ago", 300*time.Millisecond)
-			}
+			noWrite(t, mac, "copied long ago", 300*time.Millisecond)
 			if ev, ok := mac.engine.Current(); !ok || ev.Text != "copied long ago" {
 				t.Errorf("the group text did not arrive: %+v", ev)
 			}

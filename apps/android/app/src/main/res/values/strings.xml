@@ -479,6 +479,12 @@
     <string name="reason_make_recovery">Make a recovery key</string>
     <string name="reason_remove_recovery">Remove the recovery key</string>
     <string name="reason_key_level">Change which keys may be admins</string>
+    <string name="reason_incoming">Change how long a copy from another device lasts</string>
+    <string name="incoming_title">Copies from other devices</string>
+    <string name="incoming_seconds">%d s</string>
+    <string name="incoming_minutes">%d min</string>
+    <string name="incoming_body">How long a copy from another device waits to go into this device\'s clipboard, counted from when it was copied. After that it is gone, and the button sends what this device copied. The whole group follows it.</string>
+    <string name="incoming_saved">Saved. Every device of the group follows it.</string>
     <string name="key_level_title">Admin keys</string>
     <string name="key_level_proven">Proven hardware only</string>
     <string name="key_level_hardware">Keys in hardware</string>

@@ -57,6 +57,8 @@ public enum Records {
         public var key_level: String?
         // hubs
         public var hubs: [String]?
+        // copies: how long a copy from another device stays live after it arrives
+        public var incoming_ms: Int64?
 
         public init(type: String, signer: Data, timeMS: Int64) {
             (self.type, self.signer, self.time_ms) = (type, signer, timeMS)
@@ -96,11 +98,12 @@ public enum Records {
             if let t = takeover_delay_ms { try c.encode(t, forKey: .takeover_delay_ms) }
             try put(key_level, .key_level)
             try put(hubs, .hubs)
+            if let t = incoming_ms { try c.encode(t, forKey: .incoming_ms) }
         }
 
         private enum Key: String, CodingKey {
             case v, alg, type, signer, time_ms, device, name, role, os, key, admin, powers, commands, store, kind, proof, holds_root, seal, forward_only
-            case keys, records, root, cert, takeover_delay_ms, key_level, hubs
+            case keys, records, root, cert, takeover_delay_ms, key_level, hubs, incoming_ms
         }
     }
 
@@ -127,6 +130,11 @@ public enum Records {
 
     /// The hash of the key a certificate certifies.
     public static func keyHash(cert: Data) throws -> Data { keyHash(spki: try CertificateInfo(der: cert).publicKey) }
+
+    /// How long a copy from another device stays live after it arrives
+    /// without a copies record, and the bounds of one, in milliseconds.
+    public static let defaultIncomingMS: Int64 = 60_000
+    public static let incomingBounds: ClosedRange<Int64> = 5_000...3_600_000
 
     public static let file = "file"
     public static let hardware = "hardware"
@@ -310,6 +318,9 @@ public struct RecordSet: Codable, Equatable, Sendable {
         public var recovery: Data?
         /// The key level of the current root's newest settings; nil means hardware.
         public var key_level: String?
+        /// How long a copy from another device stays live after it arrives,
+        /// from the copies record that counts; nil means a minute.
+        public var incoming_ms: Int64?
     }
 
     /// A conflict of the state: kind is admins, claims or two_histories.
@@ -457,6 +468,9 @@ public struct RecordSet: Codable, Equatable, Sendable {
     public var revoked: Set<Data> { Set(view.state.revoked ?? []) }
     /// The key hash of the group's recovery key, while one counts.
     public var recovery: Data? { view.state.recovery }
+    /// How long a copy from another device stays live after it arrives, in
+    /// milliseconds (docs/protocol.md, section 10, "The copies setting").
+    public var incomingMS: Int64 { view.state.incoming_ms.flatMap { $0 > 0 ? $0 : nil } ?? Records.defaultIncomingMS }
     /// The group's key level (Records.keyLevels): hardware when the root set none.
     public var keyLevel: String { view.state.key_level.flatMap { $0.isEmpty ? nil : $0 } ?? Records.hardware }
     /// The records a new member gets in the Welcome, to check the

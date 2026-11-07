@@ -105,7 +105,7 @@ func TestSlug(t *testing.T) {
 func TestCheckCommands(t *testing.T) {
 	files := map[string][]byte{
 		"cmd/cbb/main.go":       []byte("switch cmd {\n\tcase \"copy\":\n\tcase \"away\":\n}\n"),
-		"lite/src/main.rs":      []byte("match c {\n    \"watch\" => cmd_watch(&g, rest),\n    \"run\" => cmd_run(&g, rest),\n}\n"),
+		"lite/src/lib.rs":       []byte("match c {\n    \"watch\" => cmd_watch(&g, rest),\n    \"run\" => cmd_run(&g, rest),\n}\n"),
 		"docs/reference/cli.md": []byte("`cbb copy` sends. `cbb watch` is not lite.\n\n## The lite member\n\n`cbb run` runs.\n\n## Other\n"),
 	}
 	got := checkCommands(files)

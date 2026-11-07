@@ -696,10 +696,10 @@ func (n *Node) CopiedMedia(m *clip.Manifest, text string, via clip.Via) (bool, e
 	return true, nil
 }
 
-// Rejoin tells the engine that the member was away: the service started, or
-// the machine woke up. First it closes every connection and waits, for at
-// most two seconds, until they are gone; new connections wait meanwhile, so
-// every hello after the absence counts.
+// Rejoin starts over after the member was away: the service started, or the
+// machine woke up. It closes every connection and waits, for at most two
+// seconds, until they are gone; new connections wait meanwhile, so every
+// peer greets it again with a fresh hello.
 func (n *Node) Rejoin() {
 	n.rejoinMu.Lock()
 	defer n.rejoinMu.Unlock()
@@ -718,7 +718,6 @@ wait:
 			break wait
 		}
 	}
-	n.cfg.Engine.Rejoin()
 
 	n.mu.Lock()
 	n.rejoining = nil

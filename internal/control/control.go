@@ -49,6 +49,7 @@ const (
 	OpTakeover    = "takeover"       // client → service: on an admin, take the group over from the lost root Name names
 	OpDelay       = "takeover-delay" // client → service: on the root, set how long a claim waits to Value, a duration
 	OpKeyLevel    = "key-level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
+	OpIncoming    = "incoming"       // client → service: on the root or an admin, set how long a copy from another device stays live to Value, a duration
 	OpRecovery    = "recovery"       // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
 	OpHandover    = "handover"       // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
@@ -255,6 +256,10 @@ type Status struct {
 	// KeyLevel is the group's key level: which keys may be its root, an
 	// admin or a hub (proven, hardware or files).
 	KeyLevel string `json:"key_level,omitempty"`
+	// IncomingMS is how long a copy from another device stays live after
+	// it arrives, as the group's records set it (one minute by default):
+	// written to the clipboard until then, never after.
+	IncomingMS int64 `json:"incoming_ms,omitempty"`
 	// KeyProblem says why this device's own key is in a file although the
 	// machine has a TPM it may use; empty when nothing failed.
 	KeyProblem string `json:"key_problem,omitempty"`

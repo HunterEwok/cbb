@@ -1839,13 +1839,26 @@ jobs:
           # goes off in the emulated modem and in Android; right after boot
           # telephony can drop the request, so it is asked again until the
           # Wi-Fi carries the default route, with the Wi-Fi turned off and
-          # on once halfway. A suite that would fail on that later stops
-          # here and says what the phone's networks are.
+          # on once halfway. With no network at all, the Wi-Fi is asked
+          # to join the emulator's access point. Every 10 tries it prints
+          # the route and the Wi-Fi's state, so a suite that stops here
+          # shows how the phone's networks went.
           wifi_default() { "$adb" shell ip route get 8.8.8.8 2>/dev/null | grep -q 'dev wlan0'; }
+          wifi_state() {
+            "$adb" shell ip route get 8.8.8.8 2>&1 || true
+            "$adb" shell cmd wifi status 2>&1 | head -5 || true
+          }
           for i in $(seq 60); do
             "$adb" emu gsm data off >/dev/null 2>&1 || true
             "$adb" shell svc data disable || true
             wifi_default && break
+            if ! "$adb" shell ip route get 8.8.8.8 >/dev/null 2>&1; then
+              "$adb" shell cmd wifi connect-network AndroidWifi open >/dev/null 2>&1 || true
+            fi
+            if [ $((i % 10)) = 0 ]; then
+              echo "try $i:"
+              wifi_state
+            fi
             if [ "$i" = 30 ]; then
               "$adb" shell svc wifi disable || true
               sleep 2
@@ -1856,8 +1869,11 @@ jobs:
           if wifi_default; then
             echo "the emulator's default network is its Wi-Fi after $i tries"
           else
-            "$adb" shell ip route get 8.8.8.8 || true
+            wifi_state
+            "$adb" shell ip addr 2>&1 | grep -E '^[0-9]+:|inet ' || true
+            "$adb" shell settings get global airplane_mode_on || true
             "$adb" shell dumpsys connectivity | grep -E 'Active default network|NetworkAgentInfo\{' | cut -c1-400 || true
+            "$adb" shell dumpsys wifi | grep -E 'Wi-Fi is|mWifiInfo|SupplicantState' | head -10 | cut -c1-400 || true
             echo "::error::the emulator's default network is not its Wi-Fi"
             exit 1
           fi
@@ -1976,7 +1992,7 @@ jobs:
         run: |
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
-          cargo clippy --locked -p cbb-ffi --features join --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
       - name: cargo test (the interop vectors in testdata/interop too), with coverage
@@ -2150,8 +2166,8 @@ jobs:
       - name: the Aurora app's joining through lite/ffi joins a computer's group as a phone
         working-directory: .
         run: |
-          (cd lite && cargo build --locked --release -p cbb-ffi --features join --example join-on-linux)
-          CBB_JOIN_ON_LINUX="$PWD/lite/target/release/examples/join-on-linux" go test -race ./internal/service -run TestFFIJoiner -v
+          (cd lite && cargo build --locked --release -p cbb-ffi --features member --example phone-on-linux)
+          CBB_PHONE_ON_LINUX="$PWD/lite/target/release/examples/phone-on-linux" go test -race ./internal/service -run TestFFIJoiner -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64
@@ -2307,13 +2323,20 @@ jobs:
           retention-days: 14
 
   silica:
-    name: Aurora app (${{ matrix.arch }})
+    name: Aurora app (${{ matrix.system }}, ${{ matrix.arch }})
     needs: changes
     if: needs.changes.outputs.silica == 'true'
     strategy:
       fail-fast: false
       matrix:
-        arch: [armv7hl, aarch64]
+        # One code, a package per system (apps/silica/packaging); Aurora 4's
+        # SDK has armv7hl only.
+        include:
+          - { system: aurora5, arch: armv7hl }
+          - { system: aurora5, arch: aarch64 }
+          - { system: aurora4, arch: armv7hl }
+          - { system: sailfish, arch: armv7hl }
+          - { system: sailfish, arch: aarch64 }
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -2328,10 +2351,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/psdk/dl
-          key: aurora-psdk-${{ matrix.arch }}-${{ hashFiles('apps/silica/psdk.sh') }}
-      - name: the RPM, unsigned (apps/silica/ci.sh; the workflow aurora signs one)
+          key: psdk-${{ matrix.system }}-${{ matrix.arch }}-${{ hashFiles('apps/silica/psdk.sh') }}
+      - name: the RPM, unsigned (apps/silica/ci.sh; the workflow aurora signs Aurora 5's)
         env:
           ARCH: ${{ matrix.arch }}
+          SYSTEM: ${{ matrix.system }}
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q p7zip-full imagemagick

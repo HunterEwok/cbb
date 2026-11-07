@@ -196,17 +196,25 @@ lite/ffi/bind.sh host OUT                             # the static library, for 
 The app for Aurora OS and Sailfish OS (`apps/silica`, Qt 5.6 with Silica QML around the same
 core; docs/roadmap.md, item 60): one code in `src/` and `qml/`, and what differs by system in
 `src/platform/` (where the key is kept, the application shell) and `packaging/<target>` (the
-`.spec` and `.desktop`), chosen by qmake's `CBB_TARGET`. Only `aurora5` builds so far. The
-RPM is built in Aurora's Platform SDK 5.1.5, which `psdk.sh` sets up (as root, about 10 GB);
-CI's `Aurora app` jobs build both architectures unsigned (`ci.sh`), and the workflow
-`aurora` signs them with the developer certificate after the maintainer approves
-([docs/maintaining.md](docs/maintaining.md#signing-for-aurora-os)).
+`.spec` and `.desktop`), chosen by qmake's `CBB_TARGET`: `aurora5` (the key in OP-TEE),
+`aurora4` and `sailfish` (the package `harbour-cbb`), the last two with the key in a file
+(level 3). Each RPM is built in its system's Platform SDK (Aurora 5.1.5, Aurora 4.0.2,
+Sailfish OS 4.6), which `psdk.sh` sets up as root (about 10 GB) for the `SYSTEM` in the
+environment; CI's `Aurora app` jobs build every package and architecture unsigned
+(`ci.sh`), and the workflow `aurora` signs Aurora 5's with the developer certificate after
+the maintainer approves ([docs/maintaining.md](docs/maintaining.md#signing-for-aurora-os)).
+The translations are `translations/cbb-<language>.ts`, English being the source: a new
+`qsTr` text, or a message passed to `QCoreApplication::translate("Errors", ...)`, gets an
+entry in each.
 
 ```sh
 sudo apps/silica/psdk.sh /srv/psdk setup armv7hl   # the SDK, its tooling and a target
 apps/silica/build.sh prepare   # the core for armv7hl and aarch64, the icons (rustup, ImageMagick)
 sudo cp -a apps/silica /srv/psdk/root/home/builder/ && sudo chroot /srv/psdk/root chown -R builder /home/builder/silica
 sudo apps/silica/psdk.sh /srv/psdk run '~/silica/build.sh rpm AuroraOS-5.1.5.105-base-armv7hl.default'
+# Sailfish OS: the same with SYSTEM=sailfish and its own folder
+sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos setup armv7hl
+sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos run '~/silica/build.sh rpm SailfishOS-4.6.0.13-armv7hl.default sailfish'
 ```
 
 The differential run of all four implementations (Go, Rust, JDK 17 and Docker for the Swift

@@ -57,6 +57,9 @@ Commands:
   keys [proven|hardware|files]
                           Show or set which keys may be the group's root, an admin or a hub
                           (on the root; hardware by default, files for a root with a key in a file).
+  incoming [duration]     Show or set how long a copy from another device stays live after it
+                          arrives, 5s to 1h (on the root or an admin; 1m by default): it goes
+                          into the clipboard until then, and never after.
   recovery [-yubikey]     Claim the group with its recovery key, typed from the sheet or on a
                           YubiKey, when every phone with the group is lost; it waits as a
                           takeover does.
@@ -166,6 +169,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdTakeover(rest, stdout, stderr)
 	case "keys":
 		return cmdKeys(rest, stdout, stderr)
+	case "incoming":
+		return cmdIncoming(rest, stdout, stderr)
 	case "recovery":
 		return cmdRecovery(rest, stdin, stdout, stderr)
 	case "handover":

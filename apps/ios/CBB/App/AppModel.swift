@@ -49,6 +49,11 @@ protocol GroupController: AnyObject {
     var keyLevel: String? { get }
     /// Sets the group's key level; only the root phone does.
     func setKeyLevel(_ level: String) async throws
+    /// How long a copy from another device stays live after it arrives, in
+    /// milliseconds.
+    var incomingMS: Int64 { get }
+    /// Sets it; the root and the admin phones do.
+    func setIncoming(ms: Int64) async throws
     /// Unfreezes an admin computer that another admin froze.
     func unfreeze(_ id: String) async throws
     /// Whether this phone holds the group's root.
@@ -105,8 +110,12 @@ protocol GroupController: AnyObject {
     /// The same with the recovery key on a YubiKey, held to the phone
     /// twice: for this phone's certificate, then for the claim.
     func restoreWithCard(pin: String) async throws
-    /// Sends what this phone holds, or fetches the computers' recent copy.
-    func sync() async throws -> AppModel.SyncResult
+    /// Takes the copy from another device that waits for this phone, or
+    /// sends what it holds: board, or the clipboard read when it sends.
+    func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult
+    /// Takes the copy from another device that waits for this phone, when
+    /// one does; nil when none does.
+    func takePending() async -> AppModel.SyncResult?
     /// Updates which computers are online.
     func refresh() async
     /// Sync away from home: whether it is on, where it stands and its last
@@ -154,6 +163,9 @@ extension GroupController {
     func removeRecovery() async throws { throw PhoneGroup.Failure.notRoot }
     var keyLevel: String? { nil }
     func setKeyLevel(_ level: String) async throws { throw PhoneGroup.Failure.notRoot }
+    var incomingMS: Int64 { Records.defaultIncomingMS }
+    func setIncoming(ms: Int64) async throws { throw PhoneGroup.Failure.notAdmin }
+    func takePending() async -> AppModel.SyncResult? { nil }
     func resolve(_ ids: [Data]) async throws {}
     var handedOver: Bool { false }
     func takeHandedGroup() async throws {}
@@ -268,6 +280,31 @@ final class AppModel: ObservableObject {
 
     /// This phone's pause of the group's copies; nil while it takes them.
     var pause: Hold? { devices.first(where: \.isSelf)?.paused }
+
+    /// What the phone's clipboard holds, as the paste button or Shortcuts
+    /// hands it to the app: a text, or an image.
+    struct Board {
+        var text: String?
+        var image: Images.Copied?
+        /// What the button compares with the group's text: an image by its
+        /// hash, which no text equals.
+        var key: String? { image?.key ?? text }
+
+        /// The board an item provider of the paste button holds: a text
+        /// first, as most copies with an image carry its text too.
+        static func load(_ providers: [NSItemProvider]) async -> Board {
+            for p in providers where p.canLoadObject(ofClass: NSString.self) {
+                let text: String? = await withCheckedContinuation { c in
+                    _ = p.loadObject(ofClass: NSString.self) { s, _ in c.resume(returning: s as? String) }
+                }
+                if let text, !text.isEmpty { return Board(text: text) }
+            }
+            for p in providers {
+                if let image = await Images.load(p) { return Board(image: image) }
+            }
+            return Board()
+        }
+    }
 
     enum SyncResult: Equatable {
         /// Sent to the computers connected, by name (none known: empty).
@@ -638,12 +675,13 @@ final class AppModel: ObservableObject {
         phase = .start
     }
 
-    /// The one big button.
-    func sync() async {
+    /// The one big button: the paste button hands over board; a button
+    /// that is not one lets the app read the clipboard when it sends.
+    func sync(board: Board? = nil) async {
         busy = true
         defer { busy = false }
         do {
-            let result = try await group.sync()
+            let result = try await group.sync(board: board)
             message = Self.said(result)
             if let message { Island.flash(message) }
             feel(result == .nothingNew ? .warning : .success)
@@ -683,10 +721,20 @@ final class AppModel: ObservableObject {
         UINotificationFeedbackGenerator().notificationOccurred(kind)
     }
 
+    /// Takes the copy from another device that waits for this phone, as
+    /// the app comes to the front, and says so.
+    func takePending() async {
+        guard let result = await group.takePending() else { return }
+        message = Self.said(result)
+        if let message { Island.flash(message) }
+        computers = group.computers
+    }
+
     /// The sync the Shortcuts action runs, with the app perhaps just
     /// started for it: the Home button's, after waiting up to wait for a
-    /// computer to connect. Returns what it says.
-    func syncFromShortcut(wait: Duration = .seconds(5), progress: Progress? = nil) async -> String {
+    /// computer to connect, with text from Shortcuts' Get Clipboard, which
+    /// an app in the background cannot read itself. Returns what it says.
+    func syncFromShortcut(text: String? = nil, wait: Duration = .seconds(5), progress: Progress? = nil) async -> String {
         let deadline = ContinuousClock.now + wait
         if group.hasGroup, !computers.contains(where: \.online) {
             let line = String(localized: "Connecting to the computers…", bundle: .app)
@@ -701,7 +749,7 @@ final class AppModel: ObservableObject {
         }
         progress?.completedUnitCount = 1
         progress?.localizedDescription = String(localized: "Syncing…", bundle: .app)
-        await sync()
+        await sync(board: text.map { Board(text: $0) })
         return message ?? ""
     }
 
@@ -733,6 +781,7 @@ final class AppModel: ObservableObject {
         removed = group.removed
         recoveryMade = group.recoveryMade
         keyLevel = group.keyLevel
+        incomingMS = group.incomingMS
         await refreshAway()
         await refreshHub()
         await refreshRelay()
@@ -1182,6 +1231,21 @@ final class AppModel: ObservableObject {
         recoveryMade = group.recoveryMade
     }
 
+    /// How long a copy from another device stays live after it arrives, in
+    /// milliseconds.
+    @Published private(set) var incomingMS = Records.defaultIncomingMS
+
+    /// Sets how long a copy from another device stays live after it arrives.
+    func setIncoming(ms: Int64) async {
+        do {
+            try await group.setIncoming(ms: ms)
+            message = String(localized: "Saved. Every device of the group follows it.", bundle: .app)
+        } catch {
+            message = Self.describe(error)
+        }
+        incomingMS = group.incomingMS
+    }
+
     /// Sets which keys may be the group's admins and hubs.
     func setKeyLevel(_ level: String) async {
         do {
@@ -1470,6 +1534,6 @@ final class PendingGroup: GroupController {
     func makeAdmin(_ id: String) async throws {}
     func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws { throw Failure.notReady }
     func join(show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
-    func sync() async throws -> AppModel.SyncResult { throw Failure.noComputers }
+    func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { throw Failure.noComputers }
     func refresh() async {}
 }

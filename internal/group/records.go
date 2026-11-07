@@ -52,6 +52,7 @@ const (
 	RecordHubs       = authority.TypeHubs
 	RecordRecovery   = authority.TypeRecovery
 	RecordHandover   = authority.TypeHandover
+	RecordCopies     = authority.TypeCopies
 )
 
 // Device roles in device records: the member roles, and watch

@@ -12,13 +12,13 @@
 // hello only as a mark without its text, so the group converges on it too.
 //
 // The member's own clipboard is a separate, local matter (Local). An event
-// that becomes the group's current event is written there when it is live
-// (copied at most a minute ago), or, in the window after the member itself
-// was away (Rejoin), unless the member copied something before it was in sync
-// with the group again. So a member that returns with an old copy does not
-// overwrite the clipboards of the others, a member that wakes up gets the
-// latest text, and a copy made while away is replaced only by a live copy
-// made after it.
+// that becomes the group's current event is written there while it is live:
+// its age, which the members measure as a duration and pass on, never by
+// their clocks, is below the group's live window (a minute unless an admin
+// set another, docs/protocol.md section 10, "The copies setting"). After
+// that it is gone for the clipboard, and the member's own text, however old,
+// stays. So a member that returns with an old copy does not overwrite the
+// clipboards of the others, and a member that was away keeps its own.
 //
 // Copies reach the engine two ways: Copied for what a clipboard watcher
 // reports, which says nothing when the clipboard did not really change, and
@@ -55,11 +55,9 @@ const (
 	// DefaultSecretTTL is how long after the copy a secret stays current.
 	DefaultSecretTTL = 60 * time.Second
 	// DefaultLiveWindow is how long after the copy an event is still written
-	// to the clipboards of the members it reaches.
+	// to the clipboards of the members it reaches, unless the group's
+	// records set another (SetLiveWindow).
 	DefaultLiveWindow = 60 * time.Second
-	// DefaultRejoinWindow is how long after Rejoin a new current event is
-	// still written although it is old.
-	DefaultRejoinWindow = 30 * time.Second
 	// DefaultSecretMemory is how long the engine recognises the text of a
 	// secret after it expired, so that it stays secret when offered again.
 	DefaultSecretMemory = 12 * time.Hour
@@ -300,8 +298,7 @@ type Config struct {
 	Wall         func() time.Time     // the wall clock, sent in hellos for skew reports; time.Now if nil
 	Uptime       func() time.Duration // local durations, counting sleep; uptime.Now if nil
 	SecretTTL    time.Duration        // DefaultSecretTTL if zero
-	LiveWindow   time.Duration        // DefaultLiveWindow if zero
-	RejoinWindow time.Duration        // DefaultRejoinWindow if zero
+	LiveWindow   time.Duration        // DefaultLiveWindow if zero; SetLiveWindow changes it
 	SecretMemory time.Duration        // DefaultSecretMemory if zero
 	Mode         Mode                 // the sync mode at the start; SetMode changes it
 	// Seal, if set, seals each event this member makes to the group's
@@ -332,11 +329,8 @@ type Engine struct {
 	mute  *time.Time
 	pause *time.Time
 
-	peers       map[string]int // open connections per peer
-	synced      bool           // a hello was reconciled since the last Rejoin, and a connection is up
-	offlineCopy bool           // a copy made before this member was back in sync
-	rejoined    bool           // Rejoin was called at least once
-	rejoinAt    time.Duration  // uptime of the last Rejoin
+	peers  map[string]int // open connections per peer
+	window time.Duration  // the live window
 }
 
 // localText is the text of the member's own clipboard, as far as cbb
@@ -370,9 +364,6 @@ func New(cfg Config) *Engine {
 	if cfg.LiveWindow == 0 {
 		cfg.LiveWindow = DefaultLiveWindow
 	}
-	if cfg.RejoinWindow == 0 {
-		cfg.RejoinWindow = DefaultRejoinWindow
-	}
 	if cfg.SecretMemory == 0 {
 		cfg.SecretMemory = DefaultSecretMemory
 	}
@@ -384,9 +375,53 @@ func New(cfg Config) *Engine {
 		skews:   make(map[string]time.Duration),
 		peers:   make(map[string]int),
 	}
-	e.mode = cfg.Mode
+	e.mode, e.window = cfg.Mode, cfg.LiveWindow
 	rand.Read(e.key[:])
 	return e
+}
+
+// SetLiveWindow changes how long after the copy an event from another
+// member is still written to the local clipboard, as the group's records
+// set it; zero sets DefaultLiveWindow. It applies to the events that become
+// current after it.
+func (e *Engine) SetLiveWindow(d time.Duration) {
+	if d <= 0 {
+		d = DefaultLiveWindow
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.window = d
+}
+
+// LiveWindow returns the live window SetLiveWindow set.
+func (e *Engine) LiveWindow() time.Duration {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.window
+}
+
+// CurrentCopy returns the ID and the sealed copy of the group's current
+// event, live or not, so that the caller can check its origin against the
+// group's records again; nil when it has none or came unsealed.
+func (e *Engine) CurrentCopy() (string, *Sealed) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.current.ID, e.current.Sealed
+}
+
+// Forget drops the group's current event when it is the event id: its
+// origin was removed from the group, so its copy no longer counts and is
+// never written (docs/protocol.md, section 4, "Writing the member's own
+// clipboard"). What the local clipboard already holds stays. It reports
+// whether it dropped one.
+func (e *Engine) Forget(id string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if id == "" || e.current.ID != id {
+		return false
+	}
+	e.current, e.copiedAt = Event{}, 0
+	return true
 }
 
 // Mode returns the sync mode.
@@ -580,7 +615,6 @@ func (e *Engine) Copied(text string, kind Kind, via Via) (Event, bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	now := e.cfg.Uptime()
-	e.settle(now)
 	sum := e.sum(text)
 	switch {
 	case e.localHas(text, now), e.written.has(sum, now, echoWindow):
@@ -623,7 +657,6 @@ func (e *Engine) Send(text string, kind Kind, via Via) (Event, Result, error) {
 		return Event{}, Result{}, ErrMuted
 	}
 	now := e.cfg.Uptime()
-	e.settle(now)
 	sum := e.sum(text)
 	if e.secrets.has(sum, now, e.cfg.SecretMemory) {
 		kind = Secret
@@ -657,7 +690,6 @@ func (e *Engine) SendMedia(m *Manifest, text string, via Via) (Event, Result, er
 		return Event{}, Result{}, ErrMuted
 	}
 	now := e.cfg.Uptime()
-	e.settle(now)
 	held := e.localHolds(ev, now)
 	ev, err := e.newMedia(ev, now)
 	if err != nil {
@@ -684,7 +716,6 @@ func (e *Engine) CopiedMedia(m *Manifest, text string, via Via) (Event, bool, er
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	now := e.cfg.Uptime()
-	e.settle(now)
 	switch {
 	case e.localHolds(ev, now), e.written.has(e.sum(ev.key()), now, echoWindow):
 		return Event{}, false, nil
@@ -725,7 +756,6 @@ func (e *Engine) newMedia(ev Event, now time.Duration) (Event, error) {
 	e.seen.add(ev.ID)
 	e.current, e.copiedAt = ev, now
 	e.local = localText{text: ev.Text, kind: Media, media: ev.Media, at: now}
-	e.offlineCopy = !e.synced || len(e.peers) == 0
 	return ev, nil
 }
 
@@ -764,7 +794,6 @@ func (e *Engine) newEvent(text string, kind Kind, via Via, sum [sha256.Size]byte
 	if kind == Secret {
 		e.secrets.add(sum, now)
 	}
-	e.offlineCopy = !e.synced || len(e.peers) == 0
 	return ev, nil
 }
 
@@ -839,27 +868,6 @@ func (e *Engine) Disconnected(peer string) {
 	}
 	delete(e.peers, peer)
 	delete(e.skews, peer)
-	if len(e.peers) == 0 {
-		e.settle(e.cfg.Uptime())
-		e.synced = false
-	}
-}
-
-// Rejoin records that this member itself was away: the service just started,
-// or the machine woke up. The caller first closes the connections from before
-// the absence. Until a hello is reconciled again, copies count as made while
-// away; and for the next RejoinWindow an event that becomes the group's
-// current event is written to the local clipboard even when it is old, unless
-// such a copy was made. So is the current event when a hello brings it again
-// after it was taken before Rejoin, as by a hello that came right after
-// waking up. A member that only lost its peers, because they went away, must
-// not call Rejoin: its clipboard is kept.
-func (e *Engine) Rejoin() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	now := e.cfg.Uptime()
-	e.settle(now)
-	e.rejoined, e.rejoinAt, e.synced = true, now, false
 }
 
 // Reconcile applies the hello that a peer sent when the connection started.
@@ -887,7 +895,6 @@ func (e *Engine) Reconcile(peer string, h Hello) (Result, error) {
 	if h.Current != nil {
 		res = e.receive(*h.Current)
 	}
-	e.synced = len(e.peers) > 0
 	return res, nil
 }
 
@@ -921,12 +928,6 @@ func (e *Engine) receive(ev Event) Result {
 			fwd := ev
 			return e.decideWrite(Result{Forward: &fwd}, now)
 		}
-		// A member that took the current event before it noticed that it
-		// had been away, such as a hello right after waking up, writes it
-		// when it is back in sync.
-		if e.rejoined && !e.synced && e.inRejoinWindow(now) {
-			return e.decideWrite(Result{}, now)
-		}
 		return Result{}
 	}
 	e.cfg.Clock.Observe(ev.Time)
@@ -944,35 +945,18 @@ func (e *Engine) receive(ev Event) Result {
 }
 
 // decideWrite decides whether the new current event goes to the local
-// clipboard: when the sync mode lets the group's copies in, and the event is
-// live, or in the rejoin window when no copy was made before this member was
-// back in sync.
+// clipboard: when the sync mode lets the group's copies in and the event is
+// younger than the live window. An older one never does: the member's own
+// text, however old, stays.
 func (e *Engine) decideWrite(res Result, now time.Duration) Result {
-	e.settle(now)
-	if !e.mode.Receives() || e.paused() || !e.live() || e.localHolds(e.current, now) {
-		return res
-	}
-	if now-e.copiedAt > e.cfg.LiveWindow && (!e.inRejoinWindow(now) || e.offlineCopy) {
+	if !e.mode.Receives() || e.paused() || !e.live() || e.localHolds(e.current, now) || now-e.copiedAt >= e.window {
 		return res
 	}
 	e.seq++
 	res.Write, res.Seq = true, e.seq
 	e.local = localText{text: e.current.Text, kind: e.current.Kind, media: e.current.Media, at: e.copiedAt}
 	e.written.add(e.sum(e.current.key()), now)
-	e.offlineCopy = false
 	return res
-}
-
-// settle forgets a copy made while away once it no longer matters: the
-// member is in sync again and the rejoin window has closed.
-func (e *Engine) settle(now time.Duration) {
-	if e.offlineCopy && e.synced && !e.inRejoinWindow(now) {
-		e.offlineCopy = false
-	}
-}
-
-func (e *Engine) inRejoinWindow(now time.Duration) bool {
-	return e.rejoined && now-e.rejoinAt < e.cfg.RejoinWindow
 }
 
 // live reports whether the group's current event has a text that may be used.

@@ -5,6 +5,8 @@ package tools.cbb
 import tools.cbb.SyncRule.Action
 import tools.cbb.kit.Member
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -12,31 +14,39 @@ class SyncRuleTest {
     private val me = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     private val pc = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
-    private fun event(origin: String, text: String, ageMS: Long, via: Member.Via = Member.Via.COPY) =
-        Member.Event("e", origin, via, Member.Timestamp(1, 0), ageMS, Member.Kind.TEXT, text)
+    private fun event(origin: String, text: String, ageMS: Long) =
+        Member.Event("e", origin, Member.Via.COPY, Member.Timestamp(1, 0), ageMS, Member.Kind.TEXT, text)
+
+    private val text = "from the pc" to Member.Kind.TEXT
+
+    private fun waits(e: Member.Event?, usable: Pair<String, Member.Kind>? = text, receives: Boolean = true, taken: String? = null) =
+        SyncRule.waiting(e, usable, me, 60_000, receives, taken)
+
+    @Test
+    fun aCopyWaits() {
+        // Another device's copy within the live window waits for the phone.
+        assertTrue(waits(event(pc, "from the pc", 1_000)))
+        // Once the window has passed it is gone.
+        assertFalse(waits(event(pc, "from the pc", 60_000)))
+        // The phone's own copy, a copy the phone took already, a mode that takes no copies, and nothing usable never wait.
+        assertFalse(waits(event(me, "sent", 1_000)))
+        assertFalse(waits(event(pc, "from the pc", 1_000), taken = "e"))
+        assertFalse(waits(event(pc, "from the pc", 1_000), receives = false))
+        assertFalse(waits(event(pc, "from the pc", 1_000), usable = null))
+        assertFalse(waits(null))
+    }
 
     @Test
     fun theButton() {
-        val recent = event(pc, "from the pc", 1_000)
-        // A computer's copy of a moment ago comes first, even over a new text on the phone.
-        assertEquals(Action.FETCH, SyncRule.decide("on the phone", recent, "from the pc" to Member.Kind.TEXT, me))
-        // Once the phone has it, nothing is new.
-        assertEquals(Action.NOTHING, SyncRule.decide("from the pc", recent, "from the pc" to Member.Kind.TEXT, me))
-        // An older copy: the phone's new text goes.
-        val old = event(pc, "from the pc", 60_000)
-        assertEquals(Action.SEND, SyncRule.decide("on the phone", old, "from the pc" to Member.Kind.TEXT, me))
-        // Nothing on the phone: the latest comes.
-        assertEquals(Action.FETCH, SyncRule.decide(null, old, "from the pc" to Member.Kind.TEXT, me))
-        assertEquals(Action.FETCH, SyncRule.decide("", old, "from the pc" to Member.Kind.TEXT, me))
-        // The phone's own event is not fetched first.
-        val mine = event(me, "sent", 1_000)
-        assertEquals(Action.SEND, SyncRule.decide("new", mine, "sent" to Member.Kind.TEXT, me))
-        // A copy that came through Universal Clipboard is not fetched first either.
-        val handoff = event(pc, "x", 1_000, Member.Via.UNIVERSAL_CLIPBOARD)
-        assertEquals(Action.SEND, SyncRule.decide("new", handoff, "x" to Member.Kind.TEXT, me))
-        // Nothing anywhere.
-        assertEquals(Action.NOTHING, SyncRule.decide(null, null, null, me))
-        assertEquals(Action.SEND, SyncRule.decide("first", null, null, me))
+        // A copy that waits comes in, and the phone's clipboard is not even read.
+        assertEquals(Action.FETCH, SyncRule.decide(true, { throw AssertionError("read the clipboard") }, text))
+        // Otherwise what the phone copied goes, however old.
+        assertEquals(Action.SEND, SyncRule.decide(false, { "on the phone" }, text))
+        assertEquals(Action.SEND, SyncRule.decide(false, { "first" }, null))
+        // Unless it is the group's text already, or there is nothing.
+        assertEquals(Action.NOTHING, SyncRule.decide(false, { "from the pc" }, text))
+        assertEquals(Action.NOTHING, SyncRule.decide(false, { null }, text))
+        assertEquals(Action.NOTHING, SyncRule.decide(false, { "" }, null))
     }
 
     @Test
