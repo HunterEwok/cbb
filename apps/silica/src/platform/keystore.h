@@ -48,6 +48,13 @@ Key ensure(Which which = Which::Member);
 // member protocol's signatures are. Empty on failure.
 QByteArray sign(const QByteArray &digest, Failure *failure, Which which = Which::Member);
 
+// Deletes both keys, the member key and the admin key, when the phone
+// leaves its group (D-83): the next ensure makes a new member key, so the
+// phone joins again as a new device. Its old key stays in the group's
+// records until an admin removes it, and removing it then revokes only that
+// key. Missing keys are no failure. Blocks; call it off the GUI thread.
+bool forget(Failure *failure);
+
 // ECDSA's raw r||s, as PKCS#11 gives it, in DER.
 QByteArray derSignature(const QByteArray &raw);
 

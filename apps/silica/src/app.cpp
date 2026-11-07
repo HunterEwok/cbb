@@ -30,6 +30,17 @@ private:
     KeyStore::Which m_which;
 };
 
+// Runs KeyStore::forget in a thread of its own.
+class ForgetThread : public QThread
+{
+public:
+    bool ok = false;
+    Failure failure;
+
+protected:
+    void run() override { ok = KeyStore::forget(&failure); }
+};
+
 } // namespace
 
 App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLanguage(language())
@@ -144,6 +155,8 @@ void App::startJoin(bool admin)
 
 void App::leave()
 {
+    if (m_busy)
+        return;
     m_node.stop();
     Failure failure;
     if (!Membership::remove(&failure)) {
@@ -154,6 +167,30 @@ void App::leave()
     m_member = Membership();
     show(QString());
     emit groupChanged();
+
+    // The keys go too (D-83): a phone that joined again with its old member
+    // key would share it with its old device record, and removing that
+    // record revokes the key, so the new one would go with it. The next key
+    // is made right after, for the next join.
+    m_publicKey.clear();
+    m_keyFingerprint.clear();
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ForgetThread;
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const bool ok = thread->ok;
+        thread->deleteLater();
+        m_busy = false;
+        if (!ok) {
+            emit keyChanged();
+            show(Errors::shown(failure));
+            return;
+        }
+        Errors::log(QStringLiteral("key: deleted the member and admin keys"));
+        setUpKey();
+    });
+    thread->start();
 }
 
 void App::startMember()

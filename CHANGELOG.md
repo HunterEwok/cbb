@@ -42,7 +42,8 @@ All notable changes to cbb are documented in this file. The format follows
   leaves it when its time is up) and sends what the user copied when the app comes to the
   front or from the pull-down menu, since Aurora lets no app read the clipboard in the
   background. The main page shows the members connected and the last copy; "Leave the group"
-  deletes the membership on the phone.
+  deletes the membership and the phone's keys (D-83), so the phone joins again as a new
+  device with a new key, and removing its old record does not take the new one along.
 - The same app as packages for Aurora OS 4 (armv7hl) and Sailfish OS (`harbour-cbb`,
   armv7hl and aarch64, not yet tested on a phone), which keep the phone's key in a file
   that only the app reads (level 3) and say so in their hello; CI builds all five packages.
