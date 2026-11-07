@@ -13,7 +13,9 @@ import android.webkit.MimeTypeMap
 import tools.cbb.kit.Content
 import tools.cbb.kit.Media
 import tools.cbb.kit.Member
-import tools.cbb.kit.MemberNode
+import tools.cbb.kit.CoreMember
+import tools.cbb.kit.Core
+import tools.cbb.kit.Blob
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -77,21 +79,43 @@ object Files {
      * Downloads/CBB, with its folders; it returns how many it
      * saved. A name taken there gets a number from Android.
      */
-    fun save(context: Context, node: MemberNode, e: Member.Event, m: Media.Manifest): Int {
+    /** The folder in the cache the node opens a fetched copy into, emptied after each. */
+    const val FETCHED = "fetched"
+
+    /**
+     * Fetches the images or files of the copy e through the node into a new
+     * folder of the cache and returns its parts there, each checked against
+     * its hash. It throws when the copy is over the limit, is not sealed to
+     * this phone, or no connected device has it whole.
+     */
+    fun fetch(context: Context, node: CoreMember, e: CoreMember.Copy): List<CoreMember.Fetched> {
+        val m = e.media ?: throw IllegalArgumentException("the copy holds no images or files")
         if (m.size > Images.MAX_COPY) throw Content.TooLarge(m.size, Images.MAX_COPY)
-        val tmp = File(context.cacheDir, "files").apply { mkdirs() }
+        if (e.unread) throw Content.Unread()
+        val out = File(File(context.cacheDir, FETCHED).apply { deleteRecursively(); mkdirs() }, e.id)
+        return try {
+            node.fetch(e.id, Blob.sizeOf(Images.MAX_COPY), out)
+        } catch (x: Core.Refusal) {
+            throw LiveGroup.Unavailable(x.message, x)
+        }
+    }
+
+    fun save(context: Context, node: CoreMember, e: CoreMember.Copy, m: Media.Manifest): Int {
         val cr = context.contentResolver
         var saved = 0
         // The copy's sealed blob holds the bytes of all its files, fetched
         // and opened before any is saved.
-        val data = ArrayDeque(Content.parts(node, e, Images.MAX_COPY))
-        for (p in m.parts) {
+        val parts = try {
+            fetch(context, node, e)
+        } catch (x: Exception) {
+            File(context.cacheDir, FETCHED).deleteRecursively()
+            throw x
+        }
+        for (p in parts) {
             if (p.dir) continue
-            val bytes = data.removeFirstOrNull() ?: ByteArray(0)
             val path = p.path ?: continue
-            val f = File(tmp, "part")
+            val f = p.file
             try {
-                f.writeBytes(bytes)
                 val name = path.substringAfterLast('/')
                 val dir = path.substringBeforeLast('/', "")
                 val values = ContentValues().apply {
@@ -114,6 +138,7 @@ object Files {
                 f.delete()
             }
         }
+        File(context.cacheDir, FETCHED).deleteRecursively()
         return saved
     }
 }

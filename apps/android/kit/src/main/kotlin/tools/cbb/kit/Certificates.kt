@@ -40,6 +40,14 @@ class SoftwareSigner(val keyPair: KeyPair = generate()) : CertificateSigner {
             sign()
         }
 
+    /** An ECDSA signature, DER, of a SHA-256 digest: what the Rust member's signing callback asks for. */
+    fun signDigest(digest: ByteArray): ByteArray =
+        Signature.getInstance("NONEwithECDSA").run {
+            initSign(keyPair.private)
+            update(digest)
+            sign()
+        }
+
     companion object {
         fun generate(): KeyPair =
             KeyPairGenerator.getInstance("EC").run {

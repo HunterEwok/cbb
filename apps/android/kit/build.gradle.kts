@@ -44,7 +44,7 @@ val lite = rootDir.resolve("../../../lite").canonicalFile
 val coreDir = lite.resolve("target/release").path
 val buildCore by tasks.registering(Exec::class) {
     workingDir = lite
-    commandLine("cargo", "build", "--locked", "--release", "-p", "cbb-ffi")
+    commandLine("cargo", "build", "--locked", "--release", "-p", "cbb-ffi", "--features", "member")
 }
 
 tasks.test {

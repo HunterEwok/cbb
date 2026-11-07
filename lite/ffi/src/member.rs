@@ -10,8 +10,10 @@
 //! through one call, `cbb_member_call`, a JSON request `{op, args}` and its
 //! answer, as `cbb_call` asks the core (docs/core-api.md, "The member").
 
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use cbb_core::authority::Record;
@@ -21,9 +23,10 @@ use cbb_core::error::{Error, Result};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{Change, Order, Signer};
 use cbb_core::media::Part;
+use cbb_core::wire::CommandResult;
 use cbb_lite::content::Source;
 use cbb_lite::node::{Peer, WriteReq};
-use cbb_lite::phone::{self, Member as Node};
+use cbb_lite::phone::{self, Listen, Member as Node};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -200,6 +203,20 @@ fn ten_seconds() -> u64 {
     10_000
 }
 
+/// How long a command for the phone itself waits for the app's answer.
+const ANSWER_WAIT: Duration = Duration::from_secs(10);
+/// How long a relay's call waits for the app to name its caller.
+const CALLER_WAIT: Duration = Duration::from_secs(5);
+
+#[derive(Deserialize)]
+struct AnswerArgs {
+    /// The command event's token.
+    token: u64,
+    status: String,
+    #[serde(default)]
+    reason: String,
+}
+
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum Event<'a> {
@@ -222,6 +239,33 @@ enum Event<'a> {
     Message {
         from: String,
         message: Value,
+    },
+    /// A peer whose hello the node took, as `peers` shows it.
+    Peer {
+        peer: Value,
+    },
+    /// A tunnel offer of the group's root or an admin (docs/protocol.md,
+    /// section 11), as it came.
+    Tunnel {
+        from: String,
+        offer: Value,
+    },
+    /// A command for this phone itself (docs/protocol.md, section 15), which
+    /// a peer sent: the app checks and carries it out, and answers with
+    /// `answer` and the token within ten seconds, or it is refused.
+    Command {
+        token: u64,
+        from: String,
+        command: Value,
+    },
+    /// A call that came to the relay's port from the loopback port `port`:
+    /// the app names the device the relay announced from there with the op
+    /// `caller` and the token, within five seconds, or the call is closed;
+    /// `device` is the one its certificate names.
+    Caller {
+        token: u64,
+        port: u16,
+        device: String,
     },
     /// The phone's place in the group changed: a certificate an admin
     /// renewed, or a new root. The app keeps it in its file.
@@ -283,6 +327,7 @@ fn peer_json(p: &Peer) -> Value {
         "reach": p.reach.iter().map(ToString::to_string).collect::<Vec<_>>(),
         "records_only": p.records_only,
         "features": p.features,
+        "chain": p.chain.iter().map(|c| b64(c)).collect::<Vec<_>>(),
     })
 }
 
@@ -308,6 +353,18 @@ fn args<T: for<'de> Deserialize<'de>>(v: Value) -> Result<T> {
 
 fn device(s: &str) -> Result<DeviceId> {
     DeviceId::parse(s)
+}
+
+/// What a member port is for: `home` (every address), `tunnel` or `relay`
+/// (the loopback address); None when the request names none.
+fn listen_kind(v: &Value) -> Result<Option<Listen>> {
+    match v.as_str() {
+        None => Ok(None),
+        Some("home") => Ok(Some(Listen::Home)),
+        Some("tunnel") => Ok(Some(Listen::Tunnel)),
+        Some("relay") => Ok(Some(Listen::Relay)),
+        Some(k) => Err(Error::msg(format!("a member port is for home, tunnel or relay, not {k:?}"))),
+    }
 }
 
 #[derive(Serialize)]
@@ -342,8 +399,27 @@ impl Events {
     }
 }
 
+/// The commands for the phone itself that wait for the app's answer, by
+/// token.
+#[derive(Default)]
+struct Answers {
+    next: AtomicU64,
+    waiting: Mutex<HashMap<u64, mpsc::SyncSender<CommandResult>>>,
+    /// The relay's calls that wait for the app to name their caller.
+    callers: Mutex<HashMap<u64, mpsc::SyncSender<Option<String>>>>,
+}
+
+/// The lock's value, also after a thread panicked holding it.
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 pub struct Member {
     node: Arc<Node>,
+    answers: Arc<Answers>,
+    events: Events,
+    /// Set by stop: the member stays allocated, and answers no more.
+    stopped: std::sync::atomic::AtomicBool,
 }
 
 impl Member {
@@ -415,7 +491,36 @@ impl Member {
                     message: serde_json::to_value(m).unwrap_or(Value::Null),
                 });
             }));
-            Ok(Member { node: Arc::new(node) })
+            node.on_peer(Box::new(move |p: &Peer| ev.send(&Event::Peer { peer: peer_json(p) })));
+            node.on_tunnel(Box::new(move |from, offer, _| {
+                ev.send(&Event::Tunnel { from: from.to_string(), offer: offer.clone() });
+            }));
+            let answers = Arc::new(Answers::default());
+            let waiting = answers.clone();
+            node.on_command(Arc::new(move |from: &DeviceId, r: &Record| {
+                let id = serde_json::from_slice::<Value>(&r.body)
+                    .ok()
+                    .and_then(|v| v.get("id").and_then(Value::as_str).map(String::from))
+                    .unwrap_or_default();
+                let token = waiting.next.fetch_add(1, Ordering::SeqCst);
+                let (tx, rx) = mpsc::sync_channel(1);
+                lock(&waiting.waiting).insert(token, tx);
+                ev.send(&Event::Command {
+                    token,
+                    from: from.to_string(),
+                    command: serde_json::to_value(r).unwrap_or(Value::Null),
+                });
+                let got = rx.recv_timeout(ANSWER_WAIT);
+                lock(&waiting.waiting).remove(&token);
+                let mut res = got.unwrap_or_else(|_| CommandResult {
+                    status: "refused".into(),
+                    reason: "the app did not answer".into(),
+                    ..CommandResult::default()
+                });
+                res.id = id;
+                res
+            }));
+            Ok(Member { node: Arc::new(node), answers, events: ev, stopped: std::sync::atomic::AtomicBool::new(false) })
         })();
         match made {
             Ok(m) => (Some(m), answer(Ok(serde_json::json!({})))),
@@ -426,6 +531,9 @@ impl Member {
     /// Answers a request of cbb_member_call, `{op, args}`.
     pub fn call(&self, request: &[u8]) -> Vec<u8> {
         answer((|| -> Result<Value> {
+            if self.stopped.load(Ordering::SeqCst) {
+                return Err(Error::msg("the member stopped"));
+            }
             let r: Request = serde_json::from_slice(request)
                 .map_err(|e| Error::msg(format!("the member's request does not decode: {e}")))?;
             self.op(&r.op, r.args)
@@ -480,6 +588,11 @@ impl Member {
                 let parts = n.fetch(&a.id, a.max, std::path::Path::new(&a.out))?;
                 Ok(json!({ "parts": parts.iter().map(|(p, at)| part_json(p, at)).collect::<Vec<_>>() }))
             }
+            "served" => {
+                let id = arg(&a, "id").as_str().ok_or_else(|| Error::msg("served needs the copy's id"))?;
+                let (served, size) = n.served(id).unwrap_or((0, 0));
+                Ok(json!({ "served": served, "size": size }))
+            }
             // Finding the members, listening, the app's life.
             "found" => {
                 let a: FoundArgs = args(a)?;
@@ -499,10 +612,19 @@ impl Member {
             "listen" => {
                 let port =
                     u16::try_from(arg(&a, "port").as_u64().unwrap_or(0)).map_err(|_| Error::msg("not a port"))?;
-                Ok(json!({ "port": n.listen(port)? }))
+                let what = listen_kind(arg(&a, "kind"))?.unwrap_or(Listen::Home);
+                let admit = (what == Listen::Relay).then(|| self.caller_check());
+                Ok(json!({ "port": n.listen(what, port, admit)? }))
             }
             "unlisten" => {
-                n.unlisten();
+                n.unlisten(listen_kind(arg(&a, "kind"))?);
+                done()
+            }
+            "caller" => {
+                let token = arg(&a, "token").as_u64().ok_or_else(|| Error::msg("caller needs the call's token"))?;
+                let tx = lock(&self.answers.callers).remove(&token);
+                let tx = tx.ok_or_else(|| Error::msg("no call waits for that caller"))?;
+                let _ = tx.try_send(arg(&a, "device").as_str().map(String::from));
                 done()
             }
             "pause" => {
@@ -521,8 +643,8 @@ impl Member {
                 n.set_mute(arg(&a, "until_ms").as_i64());
                 done()
             }
-            // The user's pause of the group's copies: `{"pause": true,
-            // "for_ms"}` (0 for until it is turned on) or `{"pause": false}`.
+            // The phone's sync: `{"on": false, "for_ms"}` (0 for until it
+            // is turned on) or `{"on": true}`.
             "sync" => {
                 let a: SyncArgs = args(a)?;
                 if a.on && a.for_ms != 0 {
@@ -539,6 +661,40 @@ impl Member {
                 Ok(json!({ "peers": ps.iter().map(peer_json).collect::<Vec<_>>() }))
             }
             "records" => Ok(json!({ "records": n.records() })),
+            // The phone's own part.
+            "answer" => {
+                let a: AnswerArgs = args(a)?;
+                let tx = lock(&self.answers.waiting).remove(&a.token);
+                let tx = tx.ok_or_else(|| Error::msg("no command waits for that answer"))?;
+                let _ = tx.try_send(CommandResult { status: a.status, reason: a.reason, ..CommandResult::default() });
+                done()
+            }
+            "tunnel_key" => {
+                #[derive(Deserialize)]
+                struct K {
+                    #[serde(with = "certs::b64::opt", default)]
+                    key: Option<Vec<u8>>,
+                    #[serde(with = "certs::b64::opt", default)]
+                    psk: Option<Vec<u8>>,
+                }
+                let k: K = args(a)?;
+                let keys = match (k.key, k.psk) {
+                    (Some(key), Some(psk)) if key.len() == 32 && psk.len() == 32 => Some((key, psk)),
+                    (None, None) => None,
+                    _ => return Err(Error::msg("a tunnel key and its preshared key are 32 bytes each")),
+                };
+                n.set_tunnel_key(keys);
+                done()
+            }
+            "evidence" => {
+                let list = arg(&a, "evidence").as_array().cloned().unwrap_or_default();
+                n.set_evidence(list);
+                done()
+            }
+            "disconnect" => {
+                n.disconnect(&device(arg(&a, "device").as_str().unwrap_or_default())?);
+                done()
+            }
             // What the group's records stop, for the alerts card.
             "alerts" => Ok(json!({ "alerts": n.alerts() })),
             // Sync away from home: on with new tunnel keys, or off; and its
@@ -599,15 +755,34 @@ impl Member {
                 Ok(json!({ "sent": n.send_tunnel(&device(&a.to)?, &offer) }))
             }
             "send_hubs" => {
-                let to = n.send_hubs(arg(&a, "share"));
+                let only = arg(&a, "to").as_str().map(device).transpose()?;
+                let to = n.send_hubs(arg(&a, "share"), only.as_ref());
                 Ok(json!({ "to": to.iter().map(ToString::to_string).collect::<Vec<_>>() }))
             }
             "send_credentials" => {
-                let to = n.send_credentials(arg(&a, "credentials"));
+                let only = arg(&a, "to").as_str().map(device).transpose()?;
+                let except = arg(&a, "except").as_str().map(device).transpose()?;
+                let to = n.send_credentials(arg(&a, "credentials"), only.as_ref(), except.as_ref());
                 Ok(json!({ "to": to.iter().map(ToString::to_string).collect::<Vec<_>>() }))
             }
             _ => Err(Error::msg(format!("the member has no operation {op:?}"))),
         }
+    }
+
+    /// The check of the relay's port: the app names the device the relay
+    /// announced from the call's loopback port, and the call is served only
+    /// when its certificate names the same device.
+    fn caller_check(&self) -> cbb_lite::node::Admit {
+        let (answers, ev) = (self.answers.clone(), self.events);
+        Arc::new(move |port: u16, id: &DeviceId| {
+            let token = answers.next.fetch_add(1, Ordering::SeqCst);
+            let (tx, rx) = mpsc::sync_channel(1);
+            lock(&answers.callers).insert(token, tx);
+            ev.send(&Event::Caller { token, port, device: id.to_string() });
+            let named = rx.recv_timeout(CALLER_WAIT).ok().flatten();
+            lock(&answers.callers).remove(&token);
+            named.as_deref() == Some(id.as_str())
+        })
     }
 
     /// Whether sync is off and whether an admin muted the phone:
@@ -623,8 +798,11 @@ impl Member {
         })
     }
 
+    /// Stops the member once; calls answer that it stopped from then on.
     pub fn stop(&self) {
-        self.node.stop();
+        if !self.stopped.swap(true, Ordering::SeqCst) {
+            self.node.stop();
+        }
     }
 
     /// Signs a change to a device of the group, or a command for it, with

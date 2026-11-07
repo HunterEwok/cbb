@@ -9,8 +9,11 @@ repository stays under the GNU AGPL v3.0 only ([LICENSE](../LICENSE)).
 This document specifies protocol version 1 of Copy Beyond Borders as the code in this
 repository implements it, so that another implementation can interoperate with it. Four
 implementations follow it today: Go (`cbb`, the computers and the servers), Rust (the lite
-member, `lite/core`), Swift (`CBBKit`) and Kotlin (`apps/android/kit`), with
-shared test vectors in `testdata/interop`. [design.md](design.md) explains why the protocol
+member, `lite/core`, whose member the phones' apps run too, through `lite/ffi`), Swift
+(`CBBKit`) and Kotlin (`apps/android/kit`), with shared test vectors in `testdata/interop`.
+The phones' kits keep pairing, restoring, the records they sign and the credentials; the
+member protocol of section 4 runs in the Rust core's member on every phone (docs/core-api.md,
+"The member"). [design.md](design.md) explains why the protocol
 is the way it is; this document only says what it is, and the threats it answers are in the
 [threat model](threat-model.md).
 
@@ -229,7 +232,10 @@ its new device ID as the instance, its listening port in the SRV record and `v=1
 member publishes and browses with the `mdns-sd` crate (`lite/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=lite`), with the addresses of its interfaces except
-loopback.
+loopback. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
+resolve the members to their addresses and hand those to the member in the Rust core, which
+starts with its own mDNS off; a phone that is the hub publishes its home port the same way
+(`BonjourPublisher`, `NsdPublisher`).
 
 A full member SHOULD publish, answer queries and take connections on the member port only on
 an interface whose network it knows (design.md, "Known networks"); elsewhere it only
@@ -324,7 +330,8 @@ rescanned every 10 s.
 ## 4. Member protocol
 
 Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
-`internal/service/members.go`.
+`internal/service/members.go`; the lite member's and the phones' `lite/src/node.rs` and
+`lite/src/phone.rs`.
 
 ### Who dials whom
 
@@ -1370,11 +1377,11 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
   mDNS does not reach. TLS checks the peer as for a found member.
 - **Renewal and revocation.** The admin phones renew certificates with `cert` messages, as
   an admin computer does (CBBKit's
-  `GroupCertificates.renewal` and `MemberNode`'s `renew`; the app also renews its own
-  certificate at start). The Android app's root and admin keys sign only right after the
-  user's authentication, one signature each, so it notes a peer that is due and sends its
-  `cert` message on the peer's connection once the user confirms it, the next time the app
-  is open (`MemberNode.sendCert`). Revocation and the devices list are section 10, and a second admin
+  `GroupCertificates.renewal`, from the chain of the phone's member's `peer` event, sent
+  with its `send_cert`; the app also renews its own certificate at start). The Android
+  app's root and admin keys sign only right after the user's authentication, one signature
+  each, so it notes a peer that is due and sends its `cert` message on the peer's connection
+  once the user confirms it, the next time the app is open. Revocation and the devices list are section 10, and a second admin
   phone is the way back when a phone is lost.
 
 ## 10. Admin CAs, device records and revocation
@@ -2117,7 +2124,8 @@ The keys of the group's WireGuard tunnel for sync away from home ([design.md](de
 "Sync away from home"). Implemented in Go (`internal/tunnel`, `internal/node`,
 `internal/service/tunnel.go`); the tunnel carries the member protocol between Go members
 ("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
-`tunnel` message (Swift `MemberNode`, Kotlin `MemberNode`) and bind the tunnel itself from
+`tunnel` message (through the phones' member in the Rust core: `tunnel_key`, the `tunnel`
+event, `send_tunnel`) and bind the tunnel itself from
 Go (`mobile/cbbtun`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
 the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
@@ -2174,10 +2182,10 @@ XHTTP (`lite/src/vless.rs`); it refuses an offer whose `vless` is REALITY and th
   offers. The tunnel addresses follow from the device IDs (fd00:cbb::/32 followed by the
   first 96 bits of the ID), so the offer does not carry them.
 - A phone can be the hub while its app is open ([design.md](design.md), "The phone as the
-  hub", D-64): its kit listens for member connections (`MemberListener`, on the loopback
-  address, where `mobile/cbbtun`'s `Hub` leads each connection through the tunnel) and
-  admits clients and answers with the offer by the rules above (`PhoneHub`, MemberNode's
-  `hub`); `cbbtun`'s `SetClients` takes the clients it keeps.
+  hub", D-64): its member in the Rust core listens for member connections (`listen`; the
+  tunnel's `mobile/cbbtun` `Hub` leads each connection through the tunnel to that port) and
+  the app admits clients and answers with the offer by the rules above (`PhoneHub`, from the
+  member's `peer` events); `cbbtun`'s `SetClients` takes the clients it keeps.
 - When records revoke a device (section 10, "Certificates", on the chain it presented), the hub
   MUST forget its key at once.
 - All of this happens inside member TLS, so a device gets into the tunnel only after it met
@@ -3662,7 +3670,8 @@ the lists, the signatures and types, and a server's check), and passes the vecto
 registers with no server, so it signs none and keeps none. The phones' kits do what Go does
 (`Credentials.kt`, `Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
 `CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
-and pass them on in `MemberNode`, and pass the same vectors. A phone registers with a relay
+and pass them on through the phone's member in the Rust core (`send_credentials`, its
+`message` events), and pass the same vectors. A phone registers with a relay
 by them once the members' credential lists its server key (`CredentialStore.registration`,
 cbbtun's `Relay.SetCredentials`, or in Rust `cbb_tunnel_relay_credentials`, lite/src/relay.rs,
 with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay

@@ -8,9 +8,11 @@
 //! opens a fetched one into the app's folder, each part checked against
 //! its hash in the manifest.
 
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use cbb_core::copy::{self, Blob, KEY_SIZE, SEALED_SEGMENT, SEGMENT};
 use cbb_core::media::{self, MAX_MEDIA, Manifest, Part};
@@ -35,6 +37,9 @@ pub enum Source {
 /// The blobs in a folder of the member's state.
 pub struct Store {
     dir: PathBuf,
+    /// How far the peers read each blob, by its SHA-256: a phone's share
+    /// stays until a computer fetched what it shared.
+    served: Mutex<HashMap<Vec<u8>, u64>>,
 }
 
 fn hex(b: &[u8]) -> String {
@@ -43,7 +48,7 @@ fn hex(b: &[u8]) -> String {
 
 impl Store {
     pub fn open(state_dir: &Path) -> Store {
-        Store { dir: state_dir.join("content") }
+        Store { dir: state_dir.join("content"), served: Mutex::new(HashMap::new()) }
     }
 
     fn path(&self, sum: &[u8]) -> PathBuf {
@@ -75,7 +80,20 @@ impl Store {
         f.seek(SeekFrom::Start(offset)).ok()?;
         let mut out = vec![0u8; len.min((size - offset) as usize)];
         f.read_exact(&mut out).ok()?;
+        let end = offset.saturating_add(out.len() as u64);
+        let mut served = self.served.lock().unwrap();
+        // The member keeps the last eight blobs; a few more are counted.
+        if served.len() >= 64 && !served.contains_key(sum) {
+            served.clear();
+        }
+        let at = served.entry(sum.to_vec()).or_insert(0);
+        *at = (*at).max(end);
         Some(out)
+    }
+
+    /// How far the peers read the blob sum, in bytes.
+    pub fn served(&self, sum: &[u8]) -> u64 {
+        self.served.lock().unwrap().get(sum).copied().unwrap_or(0)
     }
 
     /// Keeps the fetched blob in partial as the blob sum, once its size is
@@ -402,6 +420,11 @@ mod tests {
         // A range of it reads as served.
         let all = std::fs::read(dir.join("content").join(super::hex(&blob.sha256))).unwrap();
         assert_eq!(store.read(&blob.sha256, 10, 100).unwrap(), all[10..110]);
+        // How far the peers read it counts up to the end of each read.
+        assert_eq!(store.served(&blob.sha256), 110);
+        assert!(store.read(&blob.sha256, 0, all.len() + 10).is_some());
+        assert_eq!(store.served(&blob.sha256), all.len() as u64);
+        assert_eq!(store.served(&[0u8; 32]), 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

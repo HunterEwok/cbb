@@ -58,15 +58,22 @@ moves the bytes.
 
 ### The member
 
-Built with the feature `member` too (`bind.sh aurora` today; the iPhone and Android apps move
-onto it next), the library runs the lite member's own node in the app's process once the phone
+Built with the feature `member` too (every library `bind.sh` builds: the iPhone, Android and
+Aurora apps run it), the library runs the lite member's own node in the app's process once the phone
 is in a group (`lite/ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
 app's data directory, the phone's name, system and versions, its identity (device,
 certificate, issuer, group CA, roots), its public key, its secret for sealed messages and the
 same signing callback, and a callback that gets each event as JSON from the node's threads:
 `write`, a text for the phone's clipboard, with its kind and, for a secret, how long it may
 stay; `copy`, a copy that became the group's current one from another member (below);
-`message`, an `admin`, `hubs` or `credentials` message a peer sent, for the app to keep;
+`message`, an `admin`, `hubs`, `credentials` or `evidence` message a peer sent, for the app to keep;
+`peer`, a peer whose hello the node took, as `peers` shows it, for the app to answer (renew
+its certificate, send it its admin CA, answer its tunnel key as the hub); `tunnel`, a tunnel
+offer of the group's root or an admin, for the app's tunnel; `command`, a command for the
+phone itself with a `token`, which the app checks against the records, carries out and
+answers with `answer` within ten seconds, or the phone refuses it; `caller`, a call to the
+relay's port with a `token`, its loopback `port` and the `device` its certificate names, which
+the app answers with the op `caller` within five seconds, or the call is closed;
 `log`, a line for the app's log; `identity`, the certificate, issuer and roots after an admin
 renewed the certificate or a takeover made a new root, which the app keeps in its own file, as
 the core keeps no identity file for a key it does not hold; `mute`, an admin muted the phone or
@@ -91,13 +98,19 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `took` | `id` | `{}`: the app took that copy into the clipboard, or saved its files |
 | `sends` | `board`: the clipboard's key | `{"sends"}`: whether the button sends it: it is neither the group's copy nor what this phone itself sent from its clipboard or took into it last |
 | `fetch` | `id`, `max` (bytes of the sealed blob), `out` (a new folder) | `{"parts"}`: each part with `file`, where it is, each checked against its hash |
+| `served` | `id` | `{"served", "size"}`: how far the peers read the sealed blob of the group's copy `id` this phone made, and its size; 0 and 0 for a copy that is no longer the group's or holds no bytes, as the iPhone's share waits until a computer fetched what it shared |
 | `found`, `lost` | `key` (the app's name for the member), `addrs` (`host:port`, loopback too for the tunnel), `device` (optional) | `{}`: dial it again and again, or stop |
-| `listen`, `unlisten` | `port` (0 for any) | `{"port"}`: the member port for the members that dial this phone as the group's hub, which the app publishes with `r=phone` |
+| `listen`, `unlisten` | `port` (0 for any), `kind`: `home` (the default: every address, for the members that dial this phone as the group's hub at home, which the app publishes with `r=phone`), `tunnel` (the loopback address, for the hub's tunnel) or `relay` (the loopback address, for a blind relay's calls: each waits for the app to name its caller, a `caller` event, and is served only when its certificate names that device); `unlisten` without `kind` closes every port | `{"port"}`: the member port, one already open for that kind staying |
+| `caller` | `token` (a `caller` event's), `device` (the device the relay announced from the call's loopback port, or null) | `{}` |
 | `pause`, `resume`, `wait` | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `waiting`, `pause` |
 | `mute` | `until_ms` (null unmutes) | `{}` |
 | `sync` | `on`, `for_ms` (only with `on: false`; 0 for until it is turned on) | the state, as `muted` gives it: turns the phone's sync on or off, saved in `sync.json` (design.md, "Sync on and off"); the members see it at the next connection |
 | `muted` | none | `{"sync_off", "sync_off_ms", "muted", "muted_ms"}`: how long sync stays off and an admin's mute lasts, 0 for until lifted |
-| `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features}]`, as their hellos and reach messages present them |
+| `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features, chain}]`, as their hellos and reach messages present them, `chain` the certificates the handshake checked, leaf first |
+| `answer` | `token` (a `command` event's), `status` (`done`, `refused` or `failed`), `reason` | `{}`: the result the command's sender gets |
+| `tunnel_key` | `key`, `psk` (32 bytes each, base64), or neither while sync away from home is off | `{}`: what the hellos offer the group's hubs; the phone connects to the full members again |
+| `evidence` | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
+| `disconnect` | `device` | `{}`: the connection to it ends with a goodbye; it is dialed again later |
 | `records` | none | `{"records"}` |
 | `devices` | none | `{"devices"}`: every device of the group as the app shows it, `[{device, name, role, os, admin, root, frozen, online, self, listed}]`: the group's device records, whether it is connected and whether it is this phone, then the connected members no record lists yet (`listed` false) |
 | `alerts` | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
@@ -105,13 +118,15 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
 | `send_cert`, `send_admin_ca`, `send_tunnel` | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |
-| `send_hubs`, `send_credentials` | `share`, `credentials` | `{"to"}` |
+| `send_hubs`, `send_credentials` | `share`, `credentials`; `to` (optional: that member only, as a peer that just connected); for `send_credentials` `except` (optional: every member but that one, which sent them) | `{"to"}`: those it went to; without `to` the hubs go to the group's hubs connected, the credentials to every member |
 
 A phone's node passes on a command for another device when it is connected to it, as
-protocol.md section 15 says. For itself it carries out the `mute` and `unmute` commands an
-admin sends, keeps both in `mute.json` as the lite member does, and refuses the other commands,
-which a phone has nothing to carry out for. It keeps the sealed blobs
-of the copies with images or files it made or fetched in `content/` of its data directory,
+protocol.md section 15 says: once until it expires, never one that has expired or claims to live
+longer than a command may. For itself it carries out the `mute` and `unmute` commands an
+admin sends, keeps both in `mute.json` as the lite member does, and tells the app (the `mute`
+event); every other command for the phone goes to the app as a `command` event, as the lite
+member refuses it. A phone takes tunnel offers and hub shares only from a device the records
+let be a hub, by the chain it proved. It keeps the sealed blobsof the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
 both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the

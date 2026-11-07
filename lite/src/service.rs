@@ -481,11 +481,17 @@ impl Service {
     fn command(&self, peer: &crate::certs::DeviceId, c: &crate::records::Record) -> wire::CommandResult {
         let refused = |id: &str, why: String| {
             (self.log)(&format!("cbb: refused a command from {peer}: {why}"));
-            wire::CommandResult { id: id.to_string(), by: String::new(), status: "refused".into(), reason: why }
+            wire::CommandResult {
+                id: id.to_string(),
+                by: String::new(),
+                status: "refused".into(),
+                reason: why,
+                tunnel: None,
+            }
         };
         let node = match self.node() {
             Ok(n) => n,
-            Err(e) => return refused("", e.message().to_string()),
+            Err(e) => return refused(&crate::node::command_id(c), e.message().to_string()),
         };
         let now = uptime::wall_ms();
         let me = node.identity().id.to_string();
@@ -497,7 +503,7 @@ impl Service {
         };
         let mut body = match verified {
             Ok(b) => b,
-            Err(e) => return refused("", e.message().to_string()),
+            Err(e) => return refused(&crate::node::command_id(c), e.message().to_string()),
         };
         if body.sealed() {
             let Some(secret) = crate::sealkey::secret() else {
@@ -550,6 +556,7 @@ impl Service {
                     by: String::new(),
                     status: "done".into(),
                     reason: String::new(),
+                    tunnel: None,
                 };
                 match self.all_actions_off(&node) {
                     Ok(()) => (self.log)(&format!("cbb: {} turned the quick actions off here", body.by)),
@@ -567,6 +574,7 @@ impl Service {
                     by: String::new(),
                     status: "done".into(),
                     reason: String::new(),
+                    tunnel: None,
                 };
                 match self.away().and_then(|a| a.turn_off()) {
                     Ok(()) => {
@@ -593,6 +601,7 @@ impl Service {
                     by: String::new(),
                     status: "done".into(),
                     reason: String::new(),
+                    tunnel: None,
                 };
                 let until = if body.for_ms == 0 { 0 } else { uptime::wall_ms() + body.for_ms };
                 if let Err(e) = self.set_muted(&node, body.kind == "mute", until, &body.by) {
@@ -608,6 +617,7 @@ impl Service {
                     by: String::new(),
                     status: "done".into(),
                     reason: String::new(),
+                    tunnel: None,
                 };
                 match remotepaste::save(&self.state_dir, remotepaste::Settings::default()) {
                     Ok(()) => (self.log)(&format!("cbb: {} turned remote paste off here", body.by)),
@@ -631,10 +641,17 @@ impl Service {
                 by: String::new(),
                 status: "failed".into(),
                 reason: e.message().to_string(),
+                tunnel: None,
             };
         }
         (self.log)(&format!("cbb: {} turned sync {} here", body.by, if body.mode == "own" { "off" } else { "on" }));
-        wire::CommandResult { id: body.id, by: String::new(), status: "done".into(), reason: String::new() }
+        wire::CommandResult {
+            id: body.id,
+            by: String::new(),
+            status: "done".into(),
+            reason: String::new(),
+            tunnel: None,
+        }
     }
 
     /// Carries out an action command that verify_command took, as a full
@@ -648,6 +665,7 @@ impl Service {
             by: String::new(),
             status: "refused".into(),
             reason: String::new(),
+            tunnel: None,
         };
         match actions::load(&self.state_dir) {
             Err(e) => {
@@ -706,6 +724,7 @@ impl Service {
             by: String::new(),
             status: "done".into(),
             reason: String::new(),
+            tunnel: None,
         };
         if body.action == actions::RESTART {
             std::thread::spawn(|| {
@@ -785,6 +804,7 @@ impl Service {
             by: String::new(),
             status: "refused".into(),
             reason: String::new(),
+            tunnel: None,
         };
         match remotepaste::load(&self.state_dir) {
             Err(e) => {
@@ -850,6 +870,7 @@ impl Service {
             by: String::new(),
             status: "refused".into(),
             reason: String::new(),
+            tunnel: None,
         };
         if text.is_empty() {
             res.reason = "the text has nothing that may be pasted: only control characters".into();

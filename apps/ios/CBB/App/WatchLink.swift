@@ -143,7 +143,7 @@ extension WatchLink {
             try await AppModel.shared.group.deliverFromWatch(signed)
             await AppModel.shared.refresh()
             return [WatchState.doneKey: true]
-        } catch MemberNode.Failure.notConnected {
+        } catch CoreMember.Failure.notConnected {
             return [WatchState.refusedKey: String(localized: "The iPhone is not connected to that device. Open CBB on the iPhone, then try again.", bundle: .app)]
         } catch {
             return [WatchState.refusedKey: AppModel.describe(error)]

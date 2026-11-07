@@ -19,6 +19,51 @@ import kotlin.test.assertTrue
 
 /** The phone as the group's hub: admitting clients by their tunnel keys, and the offers over member TLS. */
 class PhoneHubTest {
+    /** The phone as the hub answers a client's tunnel key, as its hello offers it, with its own offer under the client's preshared key. */
+    @Test
+    fun answersTheTunnelKeyOverTLS() = CoreGroup().use { t ->
+        val (phone, client) = t.phones
+        val hub = PhoneHub(key(1))
+        hub.endpoints = listOf("203.0.113.1:8764")
+        client.member.setTunnelKey(key(2) to key(7))
+        t.connect(1, 0)
+        val p = phone.peer(client.device)
+        for (o in hub.offers(p.device, p.tunnelKey!!, p.tunnelPSK, emptyList())) phone.member.sendTunnel(p.device, o)
+        val offer = client.next("the hub's offer") { (it as? CoreMember.Event.Tunnel)?.offer }
+        assertTrue(offer.psk.contentEquals(key(7)), "the client's own preshared key")
+        assertTrue(offer.hubKey.contentEquals(key(1)))
+        assertEquals(listOf("203.0.113.1:8764"), offer.endpoints)
+        assertEquals(listOf(client.device), hub.clients.map { it.device })
+    }
+
+    /** A device of another group does not get through the hub's port. */
+    @Test
+    fun refusesAStranger() = CoreGroup().use { t ->
+        CoreGroup().use { other ->
+            val hub = t.root
+            val port = hub.member.listen(CoreMember.Listen.HOME)
+            other.phones[1].member.found("stranger", listOf("127.0.0.1:$port"), hub.device)
+            Thread.sleep(2_000)
+            assertTrue(hub.member.peers().isEmpty(), "a device of another group got in")
+            assertTrue(other.phones[1].member.peers().isEmpty())
+        }
+    }
+
+    /** The relay's port serves a call only when the app names its caller and its certificate names the same device. */
+    @Test
+    fun servesOnlyTheAnnouncedCaller() = CoreGroup().use { t ->
+        val (a, b) = t.phones
+        val port = b.member.listen(CoreMember.Listen.RELAY)
+        a.member.found("relay", listOf("127.0.0.1:$port"), b.device)
+        val first = b.next("the first call") { it as? CoreMember.Event.Caller }
+        assertEquals(a.device, first.device)
+        b.member.caller(first.token, SyncEngine.newID())
+        val second = b.next("the second call") { (it as? CoreMember.Event.Caller)?.takeIf { c -> c.token != first.token } }
+        assertTrue(b.member.peers().isEmpty(), "a call named wrong was served")
+        b.member.caller(second.token, a.device)
+        b.until("the announced caller connected") { b.connected() == setOf(a.device) }
+    }
+
     private val now = Instant.now()
 
     private fun key(b: Int) = ByteArray(32) { b.toByte() }
@@ -131,127 +176,4 @@ class PhoneHubTest {
         assertEquals(hub.vless, hub.offer(c)?.vless)
     }
 
-    /**
-     * A computer dials the phone's member listener with a tunnel key in its
-     * hello and gets the hub's offer; the hub ignores an offer it gets.
-     */
-    @Test
-    fun answersTheTunnelKeyOverTLS() {
-        val caKey = SoftwareSigner()
-        val ca = GroupCertificates.groupCA(caKey, now, pathLength = 1)
-        fun member(): Triple<String, SoftwareSigner, ByteArray> {
-            val id = SyncEngine.newID()
-            val k = SoftwareSigner()
-            return Triple(id, k, GroupCertificates.member(id, k.publicKeyDER, ca, caKey, now))
-        }
-        val (phoneID, phoneKey, phoneCert) = member()
-        val (pcID, pcKey, pcCert) = member()
-        val hub = PhoneHub(key(1))
-        hub.endpoints = listOf("203.0.113.1:8764")
-        val saved = LinkedBlockingQueue<List<PhoneHub.Client>>()
-        val phone = MemberNode(
-            SyncEngine(phoneID, HybridClock()), "Pixel",
-            tunnelKey = { key(5) to key(6) },
-            onTunnel = { _, _ -> error("the hub took an offer") },
-            hub = { device, k, psk, _ -> hub.offers(device, k, psk, emptyList(), changed = { saved.add(it) }) },
-            hubShare = { _, _ -> hub.share() },
-        )
-        val errors = LinkedBlockingQueue<Exception>()
-        val listener = MemberListener(phone, phoneKey.keyPair.private, listOf(phoneCert), { listOf(ca) }, onError = { errors.add(it) })
-        val offers = LinkedBlockingQueue<Pair<String?, Member.TunnelOffer>>()
-        val shares = LinkedBlockingQueue<Member.HubShare>()
-        val pc = MemberNode(
-            SyncEngine(pcID, HybridClock()), "PC", role = Member.Role.FULL, tunnelKey = { key(2) to key(8) },
-            onTunnel = { p, o -> offers.add(p to o) }, onHubs = { _, _, h -> shares.add(h) },
-        )
-        try {
-            val t = TLSTransport.dial("127.0.0.1", listener.port, Member.ALPN, pcKey.keyPair.private, listOf(pcCert)) {
-                runCatching { GroupCertificates.verifyMember(it, listOf(ca), now) }.getOrNull() == phoneID
-            }
-            val dialled = Background { pc.serve(t, phoneID) }
-            val (from, offer) = assertNotNull(offers.poll(10, TimeUnit.SECONDS))
-            assertEquals(phoneID, from)
-            assertContentEquals(key(1), offer.hubKey)
-            assertEquals(listOf("203.0.113.1:8764"), offer.endpoints)
-            val client = assertNotNull(saved.poll(1, TimeUnit.SECONDS)).single()
-            assertEquals(pcID, client.device)
-            assertContentEquals(client.psk, offer.psk)
-            assertContentEquals(key(8), offer.psk, "the client's own preshared key")
-            val share = assertNotNull(shares.poll(10, TimeUnit.SECONDS))
-            assertTrue(share.serving)
-            assertEquals(listOf(pcID), share.clients.map { it.device })
-            assertEquals(0, share.offer?.psk?.size)
-            waitUntil { phone.connected == setOf(pcID) }
-            pc.closeAll()
-            dialled.join()
-        } finally {
-            listener.stop()
-        }
-        assertTrue(errors.isEmpty(), "the listener failed: ${errors.peek()}")
-    }
-
-    /** A peer whose certificate is not the group's gets no connection. */
-    @Test
-    fun refusesAStranger() {
-        val caKey = SoftwareSigner()
-        val ca = GroupCertificates.groupCA(caKey, now, pathLength = 1)
-        val otherKey = SoftwareSigner()
-        val other = GroupCertificates.groupCA(otherKey, now, pathLength = 1)
-        val phoneKey = SoftwareSigner()
-        val phoneID = SyncEngine.newID()
-        val phoneCert = GroupCertificates.member(phoneID, phoneKey.publicKeyDER, ca, caKey, now)
-        val strangerKey = SoftwareSigner()
-        val strangerCert = GroupCertificates.member(SyncEngine.newID(), strangerKey.publicKeyDER, other, otherKey, now)
-        val phone = MemberNode(SyncEngine(phoneID, HybridClock()), "Pixel")
-        val listener = MemberListener(phone, phoneKey.keyPair.private, listOf(phoneCert), { listOf(ca) })
-        try {
-            assertFailsWith<java.io.IOException> {
-                val t = TLSTransport.dial("127.0.0.1", listener.port, Member.ALPN, strangerKey.keyPair.private, listOf(strangerCert)) { true }
-                // TLS 1.3 may finish on the client before the server refuses it.
-                t.read(4)
-            }
-            assertEquals(0, phone.peers)
-        } finally {
-            listener.stop()
-        }
-    }
-
-    /** A relay's call is served only when the certificate names the device the relay announced for its port. */
-    @Test
-    fun servesOnlyTheAnnouncedCaller() {
-        val caKey = SoftwareSigner()
-        val ca = GroupCertificates.groupCA(caKey, now, pathLength = 1)
-        val phoneKey = SoftwareSigner()
-        val phoneID = SyncEngine.newID()
-        val phoneCert = GroupCertificates.member(phoneID, phoneKey.publicKeyDER, ca, caKey, now)
-        val pcKey = SoftwareSigner()
-        val pcID = SyncEngine.newID()
-        val pcCert = GroupCertificates.member(pcID, pcKey.publicKeyDER, ca, caKey, now)
-        val phone = MemberNode(SyncEngine(phoneID, HybridClock()), "Pixel")
-        val errors = LinkedBlockingQueue<Exception>()
-        val ports = LinkedBlockingQueue<Int>()
-        val announced = AtomicReference<String?>(SyncEngine.newID())
-        val listener = MemberListener(phone, phoneKey.keyPair.private, listOf(phoneCert), { listOf(ca) }, onError = { errors.add(it) },
-            caller = { port -> ports.add(port); announced.get() })
-        val pc = MemberNode(SyncEngine(pcID, HybridClock()), "PC", role = Member.Role.FULL)
-        try {
-            // Another device was announced: the connection closes.
-            val t = TLSTransport.dial("127.0.0.1", listener.port, Member.ALPN, pcKey.keyPair.private, listOf(pcCert)) { true }
-            assertFailsWith<java.io.IOException> { t.read(4) }
-            assertIs<MemberListener.NotTheCaller>(assertNotNull(errors.poll(10, TimeUnit.SECONDS)))
-            assertTrue(assertNotNull(ports.poll(1, TimeUnit.SECONDS)) > 0)
-            assertEquals(0, phone.peers)
-
-            announced.set(pcID)
-            val t2 = TLSTransport.dial("127.0.0.1", listener.port, Member.ALPN, pcKey.keyPair.private, listOf(pcCert)) {
-                runCatching { GroupCertificates.verifyMember(it, listOf(ca), now) }.getOrNull() == phoneID
-            }
-            val dialled = Background { pc.serve(t2, phoneID) }
-            waitUntil { phone.connected == setOf(pcID) }
-            pc.closeAll()
-            dialled.join()
-        } finally {
-            listener.stop()
-        }
-    }
 }

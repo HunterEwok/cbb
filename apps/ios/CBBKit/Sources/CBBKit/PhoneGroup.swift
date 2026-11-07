@@ -122,7 +122,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// sealed messages (SealKey), when it has one.
     public static func create(caSigner: CertificateSigner, memberKey: Data, name: String = "iPhone", seal: Data? = nil, now: Date) throws -> PhoneGroup {
         let ca = try GroupCertificates.groupCA(signer: caSigner, now: now, pathLength: 1)
-        let device = SyncEngine.newID()
+        let device = Member.newID()
         let cert = try GroupCertificates.member(device: device, publicKey: memberKey, ca: ca, caSigner: caSigner, now: now)
         var g = PhoneGroup(device: device, groupCA: ca, memberCert: cert, computers: [])
         _ = try g.record(device: device, name: Self.validName(name), role: "phone", os: "ios", key: Records.keyHash(spki: memberKey),
@@ -477,10 +477,19 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// and this phone is an admin: the root issues it from its root, an
     /// admin from its admin CA, which the cert message carries, whoever
     /// issued the old one (as a removed admin did).
-    public func renewal(chain: [Data], caSigner: CertificateSigner, now: Date) -> MemberNode.Renewal? {
+    public func renewal(chain: [Data], caSigner: CertificateSigner, now: Date) -> Renewal? {
         guard isAdmin, let cert = try? GroupCertificates.renewal(chain: chain, roots: trusted, caSigner: caSigner, adminCA: adminCA, now: now)
         else { return nil }
-        return MemberNode.Renewal(cert: cert, issuer: adminCA)
+        return Renewal(cert: cert, issuer: adminCA)
+    }
+
+    /// A renewed member certificate for a peer, DER, and the admin CA that
+    /// issued it; nil when a root did. The peer gets it in a cert message
+    /// (CoreMember.sendCert).
+    public struct Renewal: Equatable, Sendable {
+        public var cert: Data
+        public var issuer: Data?
+        public init(cert: Data, issuer: Data? = nil) { (self.cert, self.issuer) = (cert, issuer) }
     }
 
     /// The devices of the group, from the records.
@@ -677,7 +686,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     }
 
     private mutating func recovery(for publicKey: Data, rootSigner: CertificateSigner, now: Date) throws -> (adminCA: Data, record: Member.Record) {
-        let ca = try GroupCertificates.adminCA(device: SyncEngine.newID(), publicKey: publicKey, root: currentRoot, rootSigner: rootSigner)
+        let ca = try GroupCertificates.adminCA(device: Member.newID(), publicKey: publicKey, root: currentRoot, rootSigner: rootSigner)
         var b = Records.Body(type: "recovery", signer: Self.signer(rootSigner), timeMS: Records.ms(now))
         (b.admin, b.cert) = (try Records.keyHash(cert: ca), ca)
         return (ca, try sign(b, caSigner: rootSigner))

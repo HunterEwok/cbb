@@ -31,7 +31,7 @@ class Member : public QObject
     Q_OBJECT
     Q_PROPERTY(bool running READ running NOTIFY changed)
     Q_PROPERTY(QStringList peers READ peers NOTIFY changed)
-    // Every device of the group, as cbb_member_devices lists it: maps with
+    // Every device of the group, as the member's devices op lists it: maps with
     // device, name, role, os, admin, root, frozen, online, self and listed.
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
     // What the group's records stop and what ends it (docs/core-api.md, the

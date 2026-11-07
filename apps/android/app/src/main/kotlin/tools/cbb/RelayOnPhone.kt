@@ -5,7 +5,7 @@ package tools.cbb
 
 import tools.cbb.kit.CredentialStore
 import tools.cbb.kit.Member
-import tools.cbb.kit.TLSTransport
+import tools.cbb.kit.FrameTransport
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -115,9 +115,9 @@ class RelayOnPhone(
     load: () -> RelaySettings?,
     private val save: (RelaySettings?) -> Unit,
     /** Reaches peer's member TLS through the port of a dialed connection, checking that the peer is peer. */
-    private val dialPeer: (port: Int, peer: String) -> TLSTransport,
+    private val dialPeer: (port: Int, peer: String) -> FrameTransport,
     /** Runs a connection until it ends. */
-    private val serve: (TLSTransport, peer: String) -> Unit,
+    private val serve: (FrameTransport, peer: String) -> Unit,
     /** Whether the phone reaches a device another way now, as on the home network. */
     private val elsewhere: (String) -> Boolean,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },

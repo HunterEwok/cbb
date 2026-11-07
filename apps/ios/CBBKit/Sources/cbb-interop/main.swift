@@ -16,7 +16,8 @@
 // plays the phone as a member (internal/node, TestSwiftMemberTLS): it makes
 // a key in the keychain and prints "key <SubjectPublicKeyInfo, base64>",
 // reads "cert <DER, base64>" and "ca <DER, base64>" from standard input,
-// dials the Go member PEER with TLS, sends "from swift", waits for "from
+// dials the Go member PEER through the phone's member in the Rust core
+// (CoreMember), sends "from swift", waits for "from
 // go", then for Go's picture "go picture", which it fetches, sends its
 // bytes reversed as "phone picture", which Go fetches, waits for "done",
 // and prints "ok".
@@ -115,7 +116,7 @@ final class SocketTransport: FrameTransport {
 
 #if canImport(Network)
 func memberTLS(host: String, port: UInt16, peer: String) async throws {
-    let label = "cbb-interop-member-\(SyncEngine.newID())"
+    let label = "cbb-interop-member-\(Member.newID())"
     let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
     let secret = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
     print("key \(signer.publicKeyDER.base64EncodedString())")
@@ -128,55 +129,48 @@ func memberTLS(host: String, port: UInt16, peer: String) async throws {
         return d
     }
     let cert = try field("cert"), ca = try field("ca")
-    var set = RecordSet()
-    _ = set.addAll(try JSONDecoder().decode([Member.Record].self, from: try field("records")), groupCA: ca)
+    let records = try JSONDecoder().decode([Member.Record].self, from: try field("records"))
     guard let me = try CertificateInfo(der: cert).commonName else { throw TLSTransport.Failure.notReady("no device ID") }
-    let identity = try KeychainIdentity.identity(certificate: cert, key: signer.key, label: label, storeKey: false)
-    let tls = TLSTransport(host: host, port: port, alpn: Member.alpn, identity: identity) { leaf in
-        (try? GroupCertificates.verifyMember(leaf, groupCA: ca, now: Date())) == peer
-    }
-    try await tls.start()
-    let (changes, cont) = AsyncStream<Member.Event>.makeStream()
-    let store = MemoryContent()
-    let records = set
-    let copies = CopyKeys(device: me, cert: cert, issuer: nil, signer: signer, secret: secret, records: { records })
-    let node = MemberNode(engine: SyncEngine(device: me, clock: HybridClock()), name: "iPhone", onChange: { cont.yield($0) }, content: store,
-                          copies: copies)
-    let serving = Task { try await node.serve(tls, peer: peer) }
+    // The phone's member in the Rust core, as the app runs it: it dials the
+    // Go member at the address handed in and signs with the keychain key.
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-interop-\(Member.newID())")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let member = try CoreMember(.init(dir: dir.appendingPathComponent("member"), name: "iPhone", device: me, publicKeyDER: signer.publicKeyDER,
+                                      seal: secret, cert: cert, issuer: nil, groupCA: ca, roots: [ca])) { try signer.signature(digest: $0) }
+    defer { member.stop() }
+    try member.addRecords(records)
+    try member.found("go", addrs: ["\(host):\(port)"], device: peer)
     let timeout = Task {
-        try await Task.sleep(nanoseconds: 15_000_000_000)
-        cont.finish()
+        try await Task.sleep(nanoseconds: 30_000_000_000)
+        member.stop()
     }
-    while await node.peers == 0 {
-        try await Task.sleep(nanoseconds: 50_000_000)
-    }
-    try await node.send(text: "from swift", kind: .text)
-    var events = changes.makeAsyncIterator()
-    func waitFor(_ text: String) async throws -> Member.Event {
+    defer { timeout.cancel() }
+    var events = member.events.makeAsyncIterator()
+    func waitFor(_ text: String) async throws -> CoreMember.Copy {
         while let e = await events.next() {
-            if e.text == text { return e }
+            if case let .copy(c) = e, c.text == text { return c }
         }
-        throw TLSTransport.Failure.notReady("no \"\(text)\" within 15 s")
+        throw TLSTransport.Failure.notReady("no \"\(text)\" within 30 s")
     }
+    guard try await member.wait(timeout: .seconds(15)) else { throw TLSTransport.Failure.notReady("the Go member did not connect") }
+    try member.copy("from swift")
     _ = try await waitFor("from go")
     // Go's picture, fetched, goes back reversed for Go to fetch.
     let picture = try await waitFor("go picture")
-    guard let part = picture.media?.parts.first, picture.media?.parts.count == 1 else {
-        throw TLSTransport.Failure.notReady("Go's picture has no part")
-    }
-    let png = try await Content.data(from: node, event: picture, part: part)
-    try await node.send(text: "phone picture", kind: .text, media: Content.manifest(store: store, data: [("image/png", Data(png.reversed()))]))
+    guard picture.media?.parts.count == 1 else { throw TLSTransport.Failure.notReady("Go's picture has no part") }
+    let parts = try await member.fetch(picture.id, max: Media.blobSize(Media.maxMedia), into: dir.appendingPathComponent("picture"))
+    guard let file = parts.first?.file else { throw TLSTransport.Failure.notReady("Go's picture did not open") }
+    let png = try Data(contentsOf: URL(fileURLWithPath: file))
+    try member.copyMedia([.data(Data(png.reversed()), type: "image/png")], text: "phone picture")
     _ = try await waitFor("done")
-    timeout.cancel()
     print("ok")
-    await node.closeAll()
-    try await serving.value
 }
 
 func joinTLS(host: String, port: UInt16, code: String) async throws {
-    let label = "cbb-interop-joiner-\(SyncEngine.newID())"
+    let label = "cbb-interop-joiner-\(Member.newID())"
     let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
-    let cert = try GroupCertificates.selfSigned(device: SyncEngine.newID(), signer: signer)
+    let cert = try GroupCertificates.selfSigned(device: Member.newID(), signer: signer)
     let identity = try KeychainIdentity.identity(certificate: cert, key: signer.key, label: label, storeKey: false)
     // The window's certificate is checked by the code's exchange, not here.
     let tls = TLSTransport(host: host, port: port, alpn: Pairing.alpn, identity: identity) { _ in true }
@@ -198,7 +192,7 @@ func joinTLS(host: String, port: UInt16, code: String) async throws {
 func restoreTLS(host: String, port: UInt16, key: Data, cert: Data, tag: String) async throws {
     let qr = try Core.recoverySheet(key: key, cert: cert, group: tag).qr
     guard case let .key(sheet) = try Core.readRecoverySheet(qr) else { throw TLSTransport.Failure.notReady("the sheet's QR code does not read") }
-    let label = "cbb-interop-restore-\(SyncEngine.newID())"
+    let label = "cbb-interop-restore-\(Member.newID())"
     let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
     let now = Date()
     let r = try Restore(key: sheet, memberKey: signer.publicKeyDER, now: now)
@@ -226,7 +220,7 @@ final class GroupBox: @unchecked Sendable {
 func inviteWindow(secret: Data, yes: Bool) async throws {
     let now = Date()
     let caSigner = SoftwareSigner()
-    let label = "cbb-interop-hub-\(SyncEngine.newID())"
+    let label = "cbb-interop-hub-\(Member.newID())"
     let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
     let box = GroupBox(try PhoneGroup.create(caSigner: caSigner, memberKey: signer.publicKeyDER, now: now))
     let identity = try KeychainIdentity.identity(certificate: box.group.memberCert, key: signer.key, label: label, storeKey: false)
@@ -331,7 +325,7 @@ do {
         let fp = args[5]
         // The member key is made in the keychain, as the app makes it, and
         // the group's certificate is issued for it.
-        let label = "cbb-interop-\(SyncEngine.newID())"
+        let label = "cbb-interop-\(Member.newID())"
         let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
         group = try PhoneGroup.create(caSigner: caSigner, memberKey: signer.publicKeyDER, now: now)
         let identity = try KeychainIdentity.identity(certificate: group.memberCert, key: signer.key, label: label, storeKey: false)

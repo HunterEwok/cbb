@@ -500,19 +500,25 @@ pub unsafe extern "C" fn cbb_admit_free(a: *mut admit::Admit) {
     }
 }
 
-/// Stops the member and frees it; null does nothing. Its callbacks may still
-/// run for a moment on threads that were in the middle of a call. The
+/// Stops the member; null does nothing. The member stays valid for the rest
+/// of the process, as its callbacks' context does: another thread of the
+/// app may be in `cbb_member_call` with it right now, or about to be (an
+/// event's handler, as the member restarts), and a call after the stop
+/// answers that the member stopped. Freeing it here let such a call read
+/// freed memory, and the Android app crashed on a restart. Its callbacks may
+/// still run for a moment on threads that were in the middle of a call. The
 /// secret for sealed messages stays the first member's for the process.
 ///
 /// # Safety
 ///
-/// `m` must be null or a member of `cbb_member_start`, not stopped before.
+/// `m` must be null or a member of `cbb_member_start`; stopping it again
+/// does nothing.
 #[cfg(feature = "member")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cbb_member_stop(m: *mut member::Member) {
     if !m.is_null() {
-        // SAFETY: m is a box cbb_member_start let go of.
-        let m = unsafe { Box::from_raw(m) };
+        // SAFETY: m is a box cbb_member_start let go of and nothing frees.
+        let m = unsafe { &*m };
         m.stop();
     }
 }

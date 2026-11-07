@@ -18,6 +18,14 @@ public struct SoftwareSigner: CertificateSigner, Sendable {
     public init(_ key: P256.Signing.PrivateKey = .init()) { self.key = key }
     public var publicKeyDER: Data { key.publicKey.derRepresentation }
     public func signature(for data: Data) throws -> Data { try key.signature(for: data).derRepresentation }
+
+    /// An ECDSA signature, DER, of a SHA-256 digest, as the core's member
+    /// asks its key for one (the core's sign_digest).
+    public func signature(digest: Data) throws -> Data {
+        struct Args: Encodable { var pkcs8: Data, digest: Data }
+        struct Answer: Decodable { var sig: Data }
+        return try Core.run("sign_digest", Args(pkcs8: key.derRepresentation, digest: digest), as: Answer.self).sig
+    }
 }
 
 /// The group's certificates, with the profiles of docs/protocol.md,

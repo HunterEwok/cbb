@@ -17,6 +17,7 @@ private let hubLog = Logger(subsystem: "tools.cbb", category: "hub")
 private let modeLog = Logger(subsystem: "tools.cbb", category: "mode")
 private let keysLog = Logger(subsystem: "tools.cbb", category: "keys")
 private let imageLog = Logger(subsystem: "tools.cbb", category: "images")
+private let syncLog = Logger(subsystem: "tools.cbb", category: "sync")
 
 /// The phone's own group (docs/protocol.md, section 9): its root CA key in
 /// the Secure Enclave, signing only after Face ID or the passcode (a
@@ -82,11 +83,11 @@ final class LiveGroup: GroupController {
     /// The revocation list the root checks evidence against.
     private let attestStatus: AttestStatus
     private(set) var state: PhoneGroup?
-    private var node: MemberNode?
-    /// The images this phone copied, which the computers fetch from it.
-    private let content = MemoryContent(maxBytes: 2 * Images.maxCopy)
+    /// The phone's member in the Rust core, which syncs (docs/core-api.md,
+    /// "The member"), and the task that takes its events.
+    private var node: CoreMember?
+    private var events: Task<Void, Never>?
     private var browser: BonjourBrowser?
-    private var dialer: MemberDialer?
     private var relay: Relay?
     private var recordBox: RecordBox?
     /// The group's server credentials (docs/protocol.md, section 18) and
@@ -96,21 +97,26 @@ final class LiveGroup: GroupController {
     private var renewer: Renewer?
     private var admins: AdminBox?
     private var away: AwayFromHome?
-    /// The phone as the group's hub, and while it runs its member
-    /// listeners: on the loopback address for the tunnel, and on a home
-    /// network, published by Bonjour.
+    /// The phone as the group's hub, and while it runs the member's ports:
+    /// on the loopback address for the tunnel, and on a home network on
+    /// every address, published by Bonjour.
     private var hub: HubOnPhone?
-    private var tunnelListener: (listener: MemberListener, port: UInt16)?
-    private var homeListener: MemberListener?
-    /// The phone at a blind relay, and while it runs its member listener on
-    /// the loopback address, which serves the relay's calls.
+    private var tunnelPort: UInt16?
+    private var homePort: UInt16?
+    private var publisher: BonjourPublisher?
+    /// The phone at a blind relay, and while it runs the member's port on
+    /// the loopback address, which serves only the calls the relay
+    /// announced, each only when its certificate names the caller.
     private var blindRelay: RelayOnPhone?
-    private var relayListener: (listener: MemberListener, port: UInt16)?
-    /// This phone's TLS identity, for the hub's listeners.
+    private var relayPort: UInt16?
+    /// This phone's TLS identity, for an invitation's pairing window.
     private var memberIdentity: SecIdentity?
     /// Whether the app is in front: the phone is the hub only then (iOS
     /// gives an app no way to keep it running in the background).
     private var foreground = false
+    /// Whether the app is in the background, where the member closes its
+    /// connections and makes none, but for a background refresh.
+    private var background = false
     /// The network the phone is on, as the hub remembers home networks.
     private var network: String?
     private let paths = NWPathMonitor()
@@ -237,7 +243,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([made.record])
+        sendRecords([made.record])
         return made.sheet
     }
 
@@ -259,7 +265,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
     }
 
     /// Sets the group's key level (docs/guide/keys.md, "The three levels"):
@@ -273,7 +279,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
     }
 
     /// Puts the group's recovery key on a YubiKey held to the phone (Core
@@ -305,7 +311,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([record])
+        sendRecords([record])
         return slot
     }
 
@@ -319,7 +325,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
     }
 
     /// The label of the key this phone signs with: the root key, or the
@@ -349,15 +355,40 @@ final class LiveGroup: GroupController {
     }
 
     func refresh() async {
-        online = await node?.connected ?? []
-        reached = await node?.reached ?? []
-        infos = await node?.devices ?? [:]
-        modes = await node?.modes ?? [:]
-        mutes = await node?.muted ?? [:]
-        actions = await node?.actions ?? [:]
-        offers = await node?.offeredAdminKeys ?? [:]
-        keyStores = await node?.keyStores ?? [:]
+        take(peers: (try? node?.peers()) ?? [])
+        pullRecords()
+        entries.reload()
         await finishTakeOverIfDue()
+    }
+
+    /// Keeps what the connected members' hellos and reach messages say.
+    private func take(peers ps: [CoreMember.Peer]) {
+        online = Set(ps.map(\.device))
+        reached = Set(ps.flatMap(\.reach)).subtracting(online).subtracting(state.map { [$0.device] } ?? [])
+        infos = Dictionary(ps.compactMap { p in p.info.map { (p.device, $0) } }, uniquingKeysWith: { a, _ in a })
+        modes = Dictionary(ps.compactMap { p in p.mode.isEmpty ? nil : (p.device, p.mode) }, uniquingKeysWith: { a, _ in a })
+        mutes = Dictionary(ps.compactMap { p in p.mutedUntilMS().map { (p.device, $0) } }, uniquingKeysWith: { a, _ in a })
+        actions = Dictionary(ps.map { ($0.device, $0.actions) }, uniquingKeysWith: { a, _ in a })
+        offers = Dictionary(ps.compactMap { p in p.adminKey.map { (p.device, $0) } }, uniquingKeysWith: { a, _ in a })
+        keyStores = Dictionary(ps.compactMap { p in p.keyStore.isEmpty ? nil : (p.device, p.keyStore) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// Hands records this phone's root or admin key signed to the member,
+    /// which keeps them and sends them to every peer.
+    private func sendRecords(_ rs: [Member.Record]) {
+        do {
+            try node?.addRecords(rs)
+        } catch {
+            keysLog.error("handing the member records: \(String(reflecting: error), privacy: .public)")
+        }
+    }
+
+    /// Takes in the records the member got from its peers.
+    private func pullRecords() {
+        guard let node, let rs = try? node.records(), !rs.isEmpty, let g = state else { return }
+        var set = g.records
+        guard !set.addAll(rs, groupCA: g.groupCA).isEmpty else { return }
+        adopt(set)
     }
 
     // MARK: Keys
@@ -470,7 +501,7 @@ final class LiveGroup: GroupController {
                     groupChanged()
                     // A group made on this phone has it as its hub from the start (D-64).
                     if made { try? await setPhoneHub(true) }
-                    await node?.sendRecords(g.records.records)
+                    sendRecords(g.records.records)
                     guard admitted.confirmed else { throw Failure.notConfirmed }
                     return
                 } catch let e as PairingMember.Failure {
@@ -582,7 +613,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords(g.records.records)
+        sendRecords(g.records.records)
         return admitted
     }
 
@@ -601,7 +632,7 @@ final class LiveGroup: GroupController {
         let se = Self.secureEnclave
         let admin = try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
             ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
-        let device = SyncEngine.newID()
+        let device = Member.newID()
         let cert = try GroupCertificates.selfSigned(device: device, signer: member)
         let id = try identity(certificate: cert, member)
         let fingerprint = Pairing.fingerprint(cert: cert)
@@ -677,7 +708,7 @@ final class LiveGroup: GroupController {
         let se = Self.secureEnclave
         let admin = try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
             ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
-        let cert = try GroupCertificates.selfSigned(device: SyncEngine.newID(), signer: member)
+        let cert = try GroupCertificates.selfSigned(device: Member.newID(), signer: member)
         let id = try identity(certificate: cert, member)
         let info = Pairing.Info(name: PhoneGroup.validName(UIDevice.current.name), os: "ios", adminKey: admin.publicKeyDER,
                                 seal: Self.sealKey())
@@ -905,8 +936,8 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
-        await node?.close(peer: id)
+        sendRecords([r])
+        try? node?.disconnect(id)
     }
 
     /// Whether the group removed this phone: its records, once it has
@@ -934,10 +965,7 @@ final class LiveGroup: GroupController {
         stopRelay()
         (hub, blindRelay) = (nil, nil)
         await away?.stop()
-        await dialer?.stop()
-        browser?.stop()
-        await node?.closeAll()
-        (node, browser, dialer, relay, recordBox, renewer, admins, away) = (nil, nil, nil, nil, nil, nil, nil, nil)
+        stopNode()
         credentialBox = nil
         memberIdentity = nil
         forgetCredentials()
@@ -952,7 +980,7 @@ final class LiveGroup: GroupController {
         try? RelayKeychain.save(nil)
         let dir = file.deletingLastPathComponent()
         entries.remove()
-        for url in [file, credentialsURL, dir.appendingPathComponent("attest-status")] {
+        for url in [file, credentialsURL, dir.appendingPathComponent("attest-status"), memberDir] {
             try? FileManager.default.removeItem(at: url)
         }
         (online, offers, keyStores, infos, modes, actions, mutes) = ([], [:], [:], [:], [:], [:], [:])
@@ -972,7 +1000,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
     }
 
     /// Unfreezes an admin computer that another admin froze
@@ -986,7 +1014,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
     }
 
     /// Gives a device another name (docs/protocol.md, section 10): a device
@@ -1006,7 +1034,7 @@ final class LiveGroup: GroupController {
             try g.save(to: file)
             state = g
             groupChanged()
-            await node?.sendRecords([r])
+            sendRecords([r])
             keysLog.info("recorded what the attestation of \(peer, privacy: .public) shows")
         } catch {
             keysLog.error("the attestation of \(peer, privacy: .public): \(String(reflecting: error), privacy: .public)")
@@ -1021,7 +1049,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
     }
 
     /// Sets the sync mode of a connected computer (docs/protocol.md, section
@@ -1030,14 +1058,14 @@ final class LiveGroup: GroupController {
     func setMode(_ id: String, to mode: String) async throws {
         if id == state?.device {
             try modeBox.set(mode)
-            await node?.set(mode: mode)
+            try? node?.setMode(mode)
             return
         }
-        guard let node else { throw MemberNode.Failure.notConnected }
+        guard let node else { throw CoreMember.Failure.notConnected }
         let ca = try await caSigner(reason: String(localized: "Change a computer's sync mode", bundle: .app))
         guard let g = state else { return }
         let c = try g.modeCommand(to: id, mode: mode, caSigner: ca, now: Date())
-        let r = try await node.command(c, to: id)
+        let r = try await node.command(c)
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
@@ -1064,14 +1092,14 @@ final class LiveGroup: GroupController {
         guard state?.isAdmin == true else { throw PhoneGroup.Failure.notAdmin }
         if id == state?.device {
             try modeBox.setMute(on ? (forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0) : nil)
-            await restartSync()
+            try? node?.setMute(untilMS: modeBox.mutedUntilMS)
             return
         }
-        guard let node else { throw MemberNode.Failure.notConnected }
+        guard let node else { throw CoreMember.Failure.notConnected }
         let ca = try await caSigner(reason: on ? String(localized: "Mute a device", bundle: .app) : String(localized: "Unmute a device", bundle: .app))
         guard let g = state else { return }
         let c = on ? try g.muteCommand(to: id, forMS: forMS, caSigner: ca, now: Date()) : try g.unmuteCommand(to: id, caSigner: ca, now: Date())
-        let r = try await node.command(c, to: id, via: g.records.hubOrder)
+        let r = try await node.command(c)
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
@@ -1080,13 +1108,13 @@ final class LiveGroup: GroupController {
     /// after Face ID, passed on by a hub of the group connected to it when this phone
     /// is not; the computer answers once the text is in, or why not.
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {
-        guard let node else { throw MemberNode.Failure.notConnected }
+        guard let node else { throw CoreMember.Failure.notConnected }
         let ca = try await caSigner(reason: String(localized: "Paste on a device", bundle: .app))
         guard let g = state else { return }
         let c = try g.pasteCommand(to: id, text: text, method: method, enter: enter, secret: secret, caSigner: ca, now: Date())
         // The computer waits 5 s for its target, and 5 ms more for each typed byte.
         let wait = 10 + (method == "type" ? Double(text.utf8.count) * 0.005 : 0)
-        let r = try await node.command(c, to: id, timeout: wait, via: g.records.hubOrder)
+        let r = try await node.command(c, timeout: .milliseconds(Int64(wait * 1000)))
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
@@ -1095,23 +1123,23 @@ final class LiveGroup: GroupController {
     /// ID, names it; the device defines what it does and runs it only when
     /// its user turned it on there.
     func runAction(_ id: String, name: String) async throws {
-        guard let node else { throw MemberNode.Failure.notConnected }
+        guard let node else { throw CoreMember.Failure.notConnected }
         let ca = try await caSigner(reason: String(localized: "Run a quick action", bundle: .app))
         guard let g = state else { return }
         let c = try g.actionCommand(to: id, name: name, caSigner: ca, now: Date())
         // A preset may take 20 s to start, and an own action runs up to 15 s.
-        let r = try await node.command(c, to: id, timeout: 25, via: g.records.hubOrder)
+        let r = try await node.command(c, timeout: .seconds(25))
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
     /// Turns every quick action off on a device; only its user turns them
     /// on again.
     func actionsOff(_ id: String) async throws {
-        guard let node else { throw MemberNode.Failure.notConnected }
+        guard let node else { throw CoreMember.Failure.notConnected }
         let ca = try await caSigner(reason: String(localized: "Run a quick action", bundle: .app))
         guard let g = state else { return }
         let c = try g.actionsOffCommand(to: id, caSigner: ca, now: Date())
-        let r = try await node.command(c, to: id, via: g.records.hubOrder)
+        let r = try await node.command(c)
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
@@ -1136,7 +1164,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
         return WatchState.Admission(device: request.device, adminCA: ca, group: g.tag)
     }
 
@@ -1165,12 +1193,13 @@ final class LiveGroup: GroupController {
             try g.save(to: file)
             state = g
             groupChanged()
-            await node?.sendRecords([r])
+            sendRecords([r])
             return
         }
         guard let to = o?["to"] as? String else { throw PhoneGroup.Failure.notForWatch }
-        guard let node else { throw MemberNode.Failure.notConnected }
-        let res = try await node.command(r, to: to, timeout: 25, via: state?.records.hubOrder ?? [])
+        guard let node else { throw CoreMember.Failure.notConnected }
+        _ = to
+        let res = try await node.command(r, timeout: .seconds(25))
         if !res.done { throw CommandRefused(reason: res.reason ?? res.status) }
     }
 
@@ -1195,8 +1224,8 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords(rs)
-        await node?.send(adminCA: ca, to: id)
+        sendRecords(rs)
+        _ = try? node?.sendAdminCA(to: id, ca: ca)
     }
 
     /// Removes the phone that holds the group's root, when it is lost: this
@@ -1219,7 +1248,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
     }
 
     /// Takes the group the root handed to this phone (`cbb handover`,
@@ -1240,7 +1269,7 @@ final class LiveGroup: GroupController {
         try g.save(to: file)
         state = g
         groupChanged()
-        await node?.sendRecords([r])
+        sendRecords([r])
         await finishTakeOverIfDue()
     }
 
@@ -1267,8 +1296,8 @@ final class LiveGroup: GroupController {
             try g.save(to: file)
             state = g
             groupChanged()
-            await node?.sendRecords(rs)
-            if let lost { await node?.close(peer: lost) }
+            sendRecords(rs)
+            if let lost { try? node?.disconnect(lost) }
             if let lost, await away?.hub == lost {
                 try await setPhoneHub(true)
             } else {
@@ -1299,7 +1328,7 @@ final class LiveGroup: GroupController {
 
     /// The newest signed entry points the computers sent (docs/protocol.md,
     /// section 16, "Entry points"), entries.json beside the group's file.
-    private lazy var entries = EntriesFile(url: file.deletingLastPathComponent().appendingPathComponent("entries.json"),
+    private lazy var entries = EntriesFile(url: memberDir.appendingPathComponent("entries.json"),
                                            log: { hubLog.error("\($0, privacy: .public)") })
 
     /// Drops the credentials and the keys for the servers of an earlier
@@ -1320,7 +1349,7 @@ final class LiveGroup: GroupController {
         let renewer = renewer
         let root: (() -> CertificateSigner?)? = state?.isRoot == true ? { renewer?.signer() } : nil
         let signed = box.refresh(member: member, keys: periodKeys, rootSigner: root)
-        if !signed.isEmpty { Task { await node.sendCredentials(signed) } }
+        if !signed.isEmpty { _ = try? node.sendCredentials(signed) }
         blindRelay?.setCredentials(box.relayCredentials(keys: periodKeys))
     }
 
@@ -1354,6 +1383,8 @@ final class LiveGroup: GroupController {
         guard g != state else { return }
         try? g.save(to: file)
         state = g
+        recordBox?.replace(g.records)
+        admins?.group = g
         relay?.allowed = Self.allowed(g)
         credentialBox?.group = g
         refreshCredentials()
@@ -1363,18 +1394,26 @@ final class LiveGroup: GroupController {
 
     // MARK: Syncing
 
-    /// Starts finding and dialing the computers, once there is a group.
+    /// The folder where the phone's member in the core keeps the records,
+    /// the entry points and the images and files, beside the group's file.
+    private var memberDir: URL { file.deletingLastPathComponent().appendingPathComponent("member", isDirectory: true) }
+
+    /// Starts the phone's member in the core and finding the computers,
+    /// once there is a group.
     private func startSync() throws {
         guard let g = state, node == nil else { return }
         let signer = try memberSigner()
         let id = try identity(g, signer)
+        try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
+        Self.moveEntries(from: file.deletingLastPathComponent(), to: memberDir)
+        let node = try CoreMember(.init(dir: memberDir, name: UIDevice.current.name, osVersion: Self.ownDevice.osVersion ?? "",
+                                        version: Self.ownDevice.version ?? "", device: g.device, publicKeyDER: signer.publicKeyDER,
+                                        seal: try SealKey.secret(), cert: g.memberCert, issuer: g.memberIssuer, groupCA: g.groupCA,
+                                        roots: g.trusted)) { try signer.signature(digest: $0) }
+        try node.addRecords(g.records.records)
+        try node.setMode(modeBox.mode)
+        if let muted = modeBox.mutedUntilMS { try node.setMute(untilMS: muted) }
         let box = RecordBox(groupCA: g.groupCA, set: g.records)
-        // The copies this phone makes are sealed to the group's readers and
-        // signed; the others' are checked and opened (docs/protocol.md,
-        // section 4).
-        let copies = CopyKeys(device: g.device, cert: g.memberCert, issuer: g.memberIssuer, signer: signer,
-                              secret: try SealKey.secret(), records: { box.snapshot })
-        box.onAdd = { [weak self] set in Task { @MainActor in self?.adopt(set) } }
         let credentials = CredentialBox(url: credentialsURL, group: g)
         credentials.onAdd = { [weak self] in Task { @MainActor in self?.refreshCredentials() } }
         // An admin phone renews the computers' certificates when they
@@ -1385,143 +1424,279 @@ final class LiveGroup: GroupController {
         // when the computer still offers the key.
         let admins = AdminBox(group: g)
         // Sync away from home: the hellos offer the tunnel key while it is
-        // on, and the hub's answer goes to AwayFromHome.
+        // on, and the hubs' offers go to AwayFromHome. The phone as the hub
+        // answers the tunnel keys of the hellos, shares its clients with the
+        // group's other hubs and passes their offers on; it is no client
+        // itself (D-64; docs/protocol.md, section 11, "Several hubs").
         let awayState = AwayKeychain.load()
-        let awayRef = Ref<AwayFromHome>()
-        // The phone as the hub answers the tunnel keys of the hellos, shares
-        // its clients with the group's other hubs and passes their offers
-        // on; it is no client itself (D-64; docs/protocol.md, section 11,
-        // "Several hubs").
         let hub = HubOnPhone(device: g.device, tunnels: GoHubTunnels(), state: HubKeychain.load(), save: { try HubKeychain.save($0) },
                              log: { what, error in hubLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
         let isHub = g.isAdmin && hub.isOn
-        var answer: (@Sendable (String, Data, Data?, [Data]) -> [Member.TunnelOffer])?
-        var sharing: (@Sendable (String, [Data]) -> Member.HubShare?)?
-        let nodeRef = Ref<MemberNode>()
-        if isHub {
-            let share: @Sendable (String, [Data]) -> Member.HubShare? = { peer, chain in box.mayHost(peer, chain: chain) ? hub.share() : nil }
-            answer = { device, key, psk, _ in
-                // A client admitted now is shared with the other hubs at
-                // once, so that it reaches them when this phone is off.
-                hub.offers(device: device, key: key, psk: psk, order: box.hubOrder,
-                           admitted: { Task { await nodeRef.value?.sendHubs(share) } })
-            }
-            sharing = share
-        }
-        let offered: Data? = isHub ? nil : awayState.flatMap { try? GoTunnels().publicKey($0.key) }
-        let modeBox = modeBox, device = g.device
-        let node = MemberNode(engine: SyncEngine(device: g.device, clock: HybridClock()), name: UIDevice.current.name, os: "ios",
-                              device: Self.ownDevice, records: box, renew: { renewer.renew($0) }, adminCA: { admins.group.computerAdminCA(for: $0) },
-                              tunnelKey: offered, tunnelPSK: offered == nil ? nil : awayState?.psk, hub: answer, hubShare: sharing,
-                              // A live copy from another device, in a sync mode that
-                              // takes the group's copies, while the app runs
-                              // (docs/design.md, "The one button").
-                              onChange: { [weak self] e in
-                                  guard Member.receives(modeBox.mode), modeBox.pausedUntilMS == nil, !e.isMark, !e.unread, e.origin != device, e.ageMS < box.incomingMS,
-                                        Images.part(of: e.media) != nil || e.media?.isFiles != true && !e.text.isEmpty else { return }
-                                  Task { @MainActor in
-                                      do {
-                                          try await self?.take(e)
-                                      } catch {
-                                          imageLog.error("fetching an image: \(String(reflecting: error), privacy: .public)")
-                                      }
-                                  }
-                              },
-                              onTunnel: { from, offer in Task { await awayRef.value?.keep(from: from, offer: offer) } },
-                              onHubs: { from, _, share in
-                                  guard isHub else {
-                                      // A client keeps the sharing hub's offer with its own preshared key, as any hub's.
-                                      guard let o = share.offer else { return }
-                                      Task {
-                                          guard let away = awayRef.value, let psk = await away.psk else { return }
-                                          await away.keep(from: from, offer: o.with(psk: psk, hub: nil))
-                                      }
-                                      return
-                                  }
-                                  guard hub.shared(from: from, share, known: { box.knows($0) }) else { return }
-                                  Task { await nodeRef.value?.sendTunnels { hub.offers(for: $0, order: box.hubOrder) } }
-                              },
-                              mode: modeBox.mode,
-                              mutedUntilMS: modeBox.mutedUntilMS,
-                              onCommand: { [weak self] peer, c in
-                                  let (result, change) = modeBox.take(c, from: peer, records: box, me: device)
-                                  switch change {
-                                  case let .mode(mode)?: Task { await nodeRef.value?.set(mode: mode) }
-                                  case .mute?:
-                                      // Connects again once the result has gone back, so
-                                      // that the hellos say whether it is muted.
-                                      Task { @MainActor in
-                                          try? await Task.sleep(for: .milliseconds(500))
-                                          await self?.restartSync()
-                                      }
-                                  case .awayOff?:
-                                      // Connects again once the result has gone back on the
-                                      // connection that brought the command.
-                                      Task { @MainActor in
-                                          try? await Task.sleep(for: .milliseconds(500))
-                                          do { try await self?.setAwayFromHome(false) } catch {
-                                              modeLog.error("cannot turn sync away from home off: \(String(reflecting: error), privacy: .public)")
-                                          }
-                                      }
-                                  case nil: break
-                                  }
-                                  return result
-                              },
-                              onEvidence: { [weak self] peer, chain, e in
-                                  Task { @MainActor in await self?.evidenceReceived(from: peer, chain: chain, e) }
-                              },
-                              content: content, credentials: credentials, copies: copies, entries: entries)
-        nodeRef.value = node
+        if !isHub, let s = awayState, let key = try? GoTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
         let relay = Relay(group: g.tag, device: g.device)
         relay.allowed = Self.allowed(g)
-        // Through the tunnel the phone dials the hub's member port with the
-        // same TLS as at home, and only while the hub is not found here.
-        let chain = Self.chain(g), roots = g.trusted
+        // Through the tunnel the phone dials the hub's member port at its
+        // loopback port, with the same TLS as at home, and only while the
+        // hub is not found here.
         let away = AwayFromHome(
             device: g.device, tunnels: GoTunnels(), state: awayState, save: { try AwayKeychain.save($0) },
             atHome: { hub in await relay.atHome(hub) },
-            dial: { port, hub in
-                let t = TLSTransport(endpoint: .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port) ?? .any),
-                                     alpn: Member.alpn, identity: id, chain: chain) { peer in
-                    (try? GroupCertificates.verifyMember(chain: peer, roots: roots, now: Date())) == hub
-                }
-                try await t.start()
-                return t
-            },
-            serve: { t, hub in try await node.serve(t, peer: hub) },
+            dial: { port, hub in try await Self.reach(node, key: "away", port: port, device: hub) },
+            serve: { link, _ in try await (link as? Link)?.served() },
             mayHost: { box.mayHost($0) },
             order: { box.hubOrder },
             log: { what, error in awayLog.error("\(what, privacy: .public): \(String(reflecting: error), privacy: .public)") },
             isPhone: { box.isPhone($0) })
-        awayRef.value = away
-        Task { await away.start() }
-        // At a blind relay the phone dials the device the relay joined, with
-        // the same TLS as at home, while it is not found here.
+        // At a blind relay the phone dials the device the relay joined at
+        // the relay link's loopback port, while it is not found here.
         let blindRelay = RelayOnPhone(
             device: g.device, links: GoRelayLinks(), settings: RelayKeychain.load(), save: { try RelayKeychain.save($0) },
-            dial: { port, peer in
-                let t = TLSTransport(endpoint: .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port) ?? .any),
-                                     alpn: Member.alpn, identity: id, chain: chain) { c in
-                    (try? GroupCertificates.verifyMember(chain: c, roots: roots, now: Date())) == peer
-                }
-                try await t.start()
-                return t
-            },
-            serve: { t, peer in try await node.serve(t, peer: peer) },
+            dial: { port, peer in try await Self.reach(node, key: "relay:\(peer)", port: port, device: peer) },
+            serve: { link, _ in try await (link as? Link)?.served() },
             elsewhere: { relay.found($0) },
             log: { what, error in relayLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
         let browser = BonjourBrowser(log: { browseLog.notice("\($0, privacy: .public)") }) { found in relay.update(found) }
-        let dialer = MemberDialer(node: node, group: g.tag,
-                                  dial: browser.dialer(identity: id, chain: Self.chain(g), roots: g.trusted) { relay.addresses[$0] ?? [] })
-        relay.dialer = dialer
+        relay.attach(node: node, browser: browser)
         // The computers at known addresses are dialed even while browsing finds nothing.
         relay.addresses = g.addresses
         browser.start()
-        (self.node, self.browser, self.dialer, self.relay, self.recordBox, self.renewer, self.admins, self.away) =
-            (node, browser, dialer, relay, box, renewer, admins, away)
+        (self.node, self.browser, self.relay, recordBox, self.renewer, self.admins, self.away) = (node, browser, relay, box, renewer, admins, away)
         (self.hub, self.blindRelay, memberIdentity, credentialBox) = (hub, blindRelay, id, credentials)
+        let handler = Handler(node: node, box: box, renewer: renewer, admins: admins, hub: isHub ? hub : nil, credentials: credentials,
+                              modeBox: modeBox, device: g.device)
+        handler.away = away
+        handler.blindRelay = blindRelay
+        events = Task { @MainActor [weak self] in
+            for await e in node.events {
+                handler.handle(e)
+                self?.handled(e)
+            }
+        }
+        Task { await away.start() }
+        if background { try? node.pause() }
         refreshHub()
         refreshCredentials()
+    }
+
+    /// The entry points an earlier version kept beside the group's file go
+    /// to the member's folder, where the core keeps them now.
+    nonisolated static func moveEntries(from dir: URL, to memberDir: URL) {
+        let old = dir.appendingPathComponent("entries.json"), new = memberDir.appendingPathComponent("entries.json")
+        guard FileManager.default.fileExists(atPath: old.path) else { return }
+        if !FileManager.default.fileExists(atPath: new.path) { try? FileManager.default.moveItem(at: old, to: new) }
+        try? FileManager.default.removeItem(at: old)
+    }
+
+    /// A connection the member made at a loopback port (the tunnel's, the
+    /// relay link's), as AwayFromHome and RelayOnPhone serve one: it lasts
+    /// while the member is connected to the device, and closing it stops the
+    /// dialing.
+    final class Link: ClosableTransport, @unchecked Sendable {
+        let node: CoreMember
+        let key: String
+        let device: String
+        private let lock = NSLock()
+        private var closed = false
+
+        init(node: CoreMember, key: String, device: String) { (self.node, self.key, self.device) = (node, key, device) }
+
+        /// Returns once the connection ended or was closed.
+        func served() async throws {
+            while !lock.withLock({ closed }), node.connected().contains(device) {
+                try await Task.sleep(for: .milliseconds(500))
+            }
+            close()
+        }
+
+        func close() {
+            guard lock.withLock({ () -> Bool in defer { closed = true }; return !closed }) else { return }
+            try? node.lost(key)
+        }
+
+        enum Failure: Error { case notAStream }
+        func write(_ data: Data) async throws { throw Failure.notAStream }
+        func read(exactly n: Int) async throws -> Data { throw Failure.notAStream }
+    }
+
+    /// Hands the member the loopback port as the device key leads there and
+    /// waits up to 10 s for it to connect.
+    nonisolated static func reach(_ node: CoreMember, key: String, port: UInt16, device: String) async throws -> ClosableTransport {
+        try node.found(key, addrs: ["127.0.0.1:\(port)"], device: device)
+        let link = Link(node: node, key: key, device: device)
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !node.connected().contains(device) {
+            guard ContinuousClock.now < deadline else {
+                link.close()
+                throw TLSTransport.Failure.timedOut
+            }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        return link
+    }
+
+    /// What the member's events ask of the group, off the main actor's
+    /// state: the parts that answer at once (renewals, admin CAs, the hub's
+    /// offers, credentials, commands for this phone).
+    final class Handler: @unchecked Sendable {
+        let node: CoreMember
+        let box: RecordBox
+        let renewer: Renewer
+        let admins: AdminBox
+        /// The phone as the hub, while it is one.
+        let hub: HubOnPhone?
+        let credentials: CredentialBox
+        let modeBox: ModeBox
+        let device: String
+        var away: AwayFromHome?
+        var blindRelay: RelayOnPhone?
+
+        init(node: CoreMember, box: RecordBox, renewer: Renewer, admins: AdminBox, hub: HubOnPhone?, credentials: CredentialBox,
+             modeBox: ModeBox, device: String) {
+            (self.node, self.box, self.renewer, self.admins, self.hub) = (node, box, renewer, admins, hub)
+            (self.credentials, self.modeBox, self.device) = (credentials, modeBox, device)
+        }
+
+        func handle(_ e: CoreMember.Event) {
+            switch e {
+            case let .peer(p):
+                answer(p)
+            case let .tunnel(from, offer):
+                // A hub is no client: it gets the other hubs' offers in their shares.
+                guard hub == nil, offer.isValid, box.mayHost(from) else { return }
+                Task { await away?.keep(from: from, offer: offer) }
+            case let .message(from, .hubs(share)):
+                // The member took it only from a device that may be a hub, by its chain.
+                guard box.mayHost(from) else { return }
+                guard let hub else {
+                    // A client keeps the sharing hub's offer with its own preshared key, as any hub's.
+                    guard let o = share.offer, let away else { return }
+                    Task {
+                        guard let psk = await away.psk else { return }
+                        await away.keep(from: from, offer: o.with(psk: psk, hub: nil))
+                    }
+                    return
+                }
+                guard hub.shared(from: from, share, known: { self.box.knows($0) }) else { return }
+                for p in (try? node.peers()) ?? [] {
+                    for o in hub.offers(for: p.device, order: box.hubOrder) { _ = try? node.sendTunnel(to: p.device, offer: o) }
+                }
+            case let .message(from, .credentials(cs)):
+                guard !cs.isEmpty, cs.count <= ServerCredentials.maxCredentials else { return }
+                let fresh = credentials.add(cs)
+                // New ones go on to the others, not back to the sender.
+                if !fresh.isEmpty { _ = try? node.sendCredentials(fresh, except: from) }
+            case let .caller(token, port, _):
+                // The device the relay said calls from that loopback port, once.
+                try? node.caller(token, device: blindRelay?.caller(port: port))
+            case let .command(token, from, c):
+                command(token, from: from, c)
+            default:
+                break
+            }
+        }
+
+        /// Answers a peer's hello: renews its certificate when it is due,
+        /// sends a computer this root made an admin its admin CA again, and
+        /// on the hub answers its tunnel key with offers and shares the hub's
+        /// clients with it.
+        private func answer(_ p: CoreMember.Peer) {
+            guard !p.recordsOnly else { return }
+            if !p.chain.isEmpty, let renewed = renewer.renew(p.chain) {
+                _ = try? node.sendCert(to: p.device, cert: renewed.cert, issuer: renewed.issuer)
+            }
+            if let key = p.adminKey, let ca = admins.group.computerAdminCA(for: key) {
+                _ = try? node.sendAdminCA(to: p.device, ca: ca)
+            }
+            if let hub, !p.chain.isEmpty {
+                if let key = p.tunnelKey {
+                    let psk = p.tunnelPSK.flatMap { $0.count == 32 ? $0 : nil }
+                    // A client admitted now is shared with the other hubs at
+                    // once, so that it reaches them when this phone is off.
+                    let offers = hub.offers(device: p.device, key: key, psk: psk, order: box.hubOrder, admitted: { [self] in shareWithHubs(hub) })
+                    for o in offers { _ = try? node.sendTunnel(to: p.device, offer: o) }
+                }
+                if box.mayHost(p.device, chain: p.chain), let share = hub.share() { _ = try? node.sendHubs(share, to: p.device) }
+            }
+            // The credentials kept go to this peer, after its hello.
+            let all = credentials.all
+            if !all.isEmpty { _ = try? node.sendCredentials(all, to: p.device) }
+        }
+
+        /// Shares the hub's clients with each connected peer that may be a
+        /// hub, by its chain.
+        private func shareWithHubs(_ hub: HubOnPhone) {
+            guard let share = hub.share() else { return }
+            for p in (try? node.peers()) ?? [] where box.mayHost(p.device, chain: p.chain) {
+                _ = try? node.sendHubs(share, to: p.device)
+            }
+        }
+
+        /// Carries out a command for this phone and answers it; what it
+        /// changes beyond its result comes once the result has gone back.
+        private func command(_ token: UInt64, from: String, _ c: Member.Record) {
+            let (result, change) = modeBox.take(c, from: from, records: box, me: device)
+            try? node.answer(token, result: result)
+            switch change {
+            case let .mode(mode)?: try? node.setMode(mode)
+            case .mute?:
+                // Connects again once the result has gone back, so that the
+                // hellos say whether it is muted.
+                let (node, modeBox) = (node, modeBox)
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    try? node.setMute(untilMS: modeBox.mutedUntilMS)
+                }
+            case .awayOff?: break // the app turns it off, on the main actor
+            case nil: break
+            }
+        }
+    }
+
+    /// What the member's events change on the main actor: the copies that
+    /// come in, the records and peers it shows, evidence, the log.
+    private func handled(_ e: CoreMember.Event) {
+        switch e {
+        case let .copy(c):
+            guard let node, let g = state, c.origin != g.device, Member.receives(modeBox.mode), modeBox.pausedUntilMS == nil,
+                  (try? node.waiting())?.id == c.id else { return }
+            Task {
+                do {
+                    try await take(c)
+                } catch {
+                    imageLog.error("taking a copy: \(String(reflecting: error), privacy: .public)")
+                }
+            }
+        case .peer:
+            take(peers: (try? node?.peers()) ?? [])
+            pullRecords()
+        case let .message(from, .evidence(ev)):
+            let chain = ((try? node?.peers()) ?? []).first { $0.device == from }?.chain ?? []
+            guard !chain.isEmpty else { return }
+            Task { await evidenceReceived(from: from, chain: chain, ev) }
+        case let .command(_, _, c):
+            // Sync away from home turned off by an admin, once the result has
+            // gone back on the connection that brought the command.
+            guard (try? JSONSerialization.jsonObject(with: c.body) as? [String: Any])?["type"] as? String == "away-off" else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(500))
+                do { try await self.setAwayFromHome(false) } catch {
+                    modeLog.error("cannot turn sync away from home off: \(String(reflecting: error), privacy: .public)")
+                }
+            }
+        case let .mute(muted, forMS, by):
+            // The member carried out an admin's mute or unmute; the phone
+            // shows it.
+            try? modeBox.setMute(muted ? (forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0) : nil)
+            modeLog.notice("\(by, privacy: .public) \(muted ? "muted" : "unmuted", privacy: .public) this phone")
+        case let .log(line):
+            syncLog.notice("\(line, privacy: .public)")
+        case .identity:
+            // The core kept the certificate an admin renewed for this phone;
+            // the app renews its own (renewOwnCertificate) and keeps that.
+            syncLog.notice("the member got a renewed certificate or a new root")
+        default:
+            break
+        }
     }
 
     /// Stops syncing and starts again, with a renewed certificate.
@@ -1531,12 +1706,19 @@ final class LiveGroup: GroupController {
         stopRelay()
         (hub, blindRelay) = (nil, nil)
         await away?.stop()
-        await dialer?.stop()
-        browser?.stop()
-        await node?.closeAll()
-        (node, browser, dialer, relay, recordBox, renewer, admins, away) = (nil, nil, nil, nil, nil, nil, nil, nil)
+        stopNode()
         credentialBox = nil
         try? startSync()
+    }
+
+    /// Stops the member, its events and the browsing.
+    private func stopNode() {
+        events?.cancel()
+        browser?.stop()
+        node?.stop()
+        (node, events, browser, relay, recordBox, renewer, admins, away) = (nil, nil, nil, nil, nil, nil, nil, nil)
+        publisher?.stop()
+        (publisher, tunnelPort, homePort, relayPort) = (nil, nil, nil, nil)
     }
 
     // MARK: The phone as the hub
@@ -1583,7 +1765,7 @@ final class LiveGroup: GroupController {
     /// the root.
     func moveHub(to id: String) async throws {
         guard let hub, hub.isOn, let fw = hub.forwarder else { throw HubOnPhone.Failure.notRunning }
-        guard let node else { throw MemberNode.Failure.notConnected }
+        guard let node else { throw CoreMember.Failure.notConnected }
         if state?.records.mayHost(id) != true { try await makeAdmin(id, allowFileKey: false) }
         let ca = try await caSigner(reason: String(localized: "Move the hub to a computer", bundle: .app))
         guard let g = state, let away else { return }
@@ -1595,18 +1777,26 @@ final class LiveGroup: GroupController {
         let offer: Member.TunnelOffer
         do {
             let c = try g.hubCommand(to: id, forwarder: (fw.endpoint, fw.pin), clients: clients, caSigner: ca, now: Date())
-            let r = try await node.command(c, to: id, timeout: 20)
+            let r = try await node.command(c, timeout: .seconds(20))
             guard r.done, let o = r.tunnel else { throw CommandRefused(reason: r.reason ?? r.status) }
             offer = o
         } catch {
             if !wasOn { try? await away.turnOff() }
             throw error
         }
-        let sent = await node.sendTunnel { hub.movedOffer(device: $0, newHub: id, offer: offer) }
+        var sent: [String] = []
+        for p in (try? node.peers()) ?? [] {
+            if let o = hub.movedOffer(device: p.device, newHub: id, offer: offer), (try? node.sendTunnel(to: p.device, offer: o)) == true {
+                sent.append(p.device)
+            }
+        }
         // The clients that came through the tunnel get the offer before it
-        // closes: each connection ends after the offer and a goodbye, and
+        // closes: each connection ends after the offer, with a goodbye, and
         // the last packets get a second more.
-        await node.sayGoodbye(to: sent, timeout: Self.moveGrace)
+        try? await Task.sleep(for: .seconds(1))
+        for d in sent { try? node.disconnect(d) }
+        let grace = ContinuousClock.now + Self.moveGrace
+        while ContinuousClock.now < grace, !node.connected().isDisjoint(with: sent) { try? await Task.sleep(for: .milliseconds(200)) }
         try? await Task.sleep(for: .seconds(1))
         try hub.turnOff()
         await away.keep(from: id, offer: offer.with(psk: psk, hub: nil))
@@ -1626,7 +1816,7 @@ final class LiveGroup: GroupController {
     /// level limits: this phone signs its record so first, and no copy is
     /// sealed to it from then on.
     func makeHub(_ id: String, forwardOnly: Bool = false) async throws {
-        guard let node else { throw MemberNode.Failure.notConnected }
+        guard let node else { throw CoreMember.Failure.notConnected }
         let current = state?.devices.first { $0.id == id }
         if forwardOnly {
             if current?.forwardOnly != true {
@@ -1636,7 +1826,7 @@ final class LiveGroup: GroupController {
                     try g.save(to: file)
                     state = g
                     groupChanged()
-                    await node.sendRecords([r])
+                    sendRecords([r])
                 }
             }
         } else if state?.records.mayHost(id) != true || current?.forwardOnly == true {
@@ -1656,7 +1846,7 @@ final class LiveGroup: GroupController {
             psk = p
         }
         let c = try g.hubCommand(to: id, forwarder: (fw.endpoint, fw.pin), clients: clients, caSigner: ca, now: Date())
-        let r = try await node.command(c, to: id, timeout: 20)
+        let r = try await node.command(c, timeout: .seconds(20))
         guard r.done else { throw CommandRefused(reason: r.reason ?? r.status) }
         if let o = r.tunnel, let psk { await away?.keep(from: id, offer: o.with(psk: psk, hub: nil)) }
     }
@@ -1666,17 +1856,28 @@ final class LiveGroup: GroupController {
     func setForeground(_ on: Bool) {
         foreground = on
         refreshHub()
-        // Back at the front without a computer: iOS may have ended the
-        // browsing in the background, so it starts again.
-        if on, let node, let browser {
-            let dialer = dialer
-            Task {
-                if await node.connected.isEmpty {
-                    browser.restart()
-                    await dialer?.hurry()
-                }
-            }
-        }
+        // Back at the front the member connects at once, and without a
+        // computer browsing starts again too, as iOS may have ended it.
+        guard on, let node else { return }
+        background = false
+        try? node.resume()
+        if node.connected().isEmpty { browser?.restart() }
+    }
+
+    /// The app went to the background, or came back from it: there the
+    /// member closes its connections with a goodbye and makes none, as iOS
+    /// would end them anyway.
+    func setBackground(_ on: Bool) {
+        background = on
+        guard let node else { return }
+        if on { try? node.pause() } else { try? node.resume() }
+    }
+
+    /// One pass of the background refresh (BackgroundRefresh): the member
+    /// connects while it runs, and in the background lets go again after.
+    func backgroundPass(_ running: Bool) {
+        guard let node, background else { return }
+        if running { try? node.resume() } else { try? node.pause() }
     }
 
     /// Makes this phone the group's hub, or stops it being the hub. A hub
@@ -1768,51 +1969,51 @@ final class LiveGroup: GroupController {
     private func hubDone() async { await hubWork?.value }
 
     /// Runs the hub's parts that the moment calls for: with the hub on and
-    /// the app in front, the member listener on the loopback address and
-    /// the tunnel with its registration; on a home network besides, the
-    /// member listener there, published by Bonjour. Otherwise it stops
-    /// them.
+    /// the app in front, the member port on the loopback address and the
+    /// tunnel with its registration; on a home network besides, the member
+    /// port on every address, published by Bonjour. Otherwise it stops them.
     private func updateHub() async {
-        guard let hub, let node, let g = state, let id = memberIdentity, g.isAdmin, hub.isOn, foreground,
-              let member = try? memberSigner() else { return stopHub() }
-        let roots = g.trusted, chain = Self.chain(g)
-        let onError: @Sendable (Error) -> Void = { hubLog.error("a member connection to the hub failed: \(String(reflecting: $0), privacy: .public)") }
-        if tunnelListener == nil {
+        guard let hub, let node, let g = state, g.isAdmin, hub.isOn, foreground, let member = try? memberSigner() else { return stopHub() }
+        if tunnelPort == nil {
             do {
-                let l = try MemberListener(node: node, identity: id, chain: chain, trusted: { roots }, onError: onError)
-                tunnelListener = (l, try await l.start())
+                tunnelPort = try node.listen(.tunnel)
             } catch {
                 hubLog.error("the hub cannot listen: \(String(reflecting: error), privacy: .public)")
                 return
             }
         }
-        guard let port = tunnelListener?.port, self.hub === hub else { return }
+        guard let port = tunnelPort, self.hub === hub else { return }
         let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
-        hub.start(.init(memberPort: port, chain: g.memberChain + roots, sign: sign, records: g.records.authorityRecords,
+        entries.reload()
+        hub.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords,
                         ways: entries.ways(for: HubState.Forwarder.projectHost)))
-        guard hub.isHome(network) else {
-            homeListener?.stop()
-            homeListener = nil
-            return
-        }
-        guard homeListener == nil else { return }
-        let service = (name: g.device, txt: ["v": "1", "g": g.tag, "r": "phone"])
+        guard hub.isHome(network) else { return stopHome() }
+        guard homePort == nil else { return }
         for p in [Self.memberPort, 0] {
-            guard let l = try? MemberListener(node: node, identity: id, chain: chain, trusted: { roots }, port: p, loopback: false,
-                                              service: service, onError: onError) else { continue }
-            if (try? await l.start()) != nil {
-                homeListener = l
-                return
+            guard let home = try? node.listen(.home, port: p) else { continue }
+            homePort = home
+            do {
+                publisher = try BonjourPublisher(name: g.device, port: home, txt: ["v": "1", "g": g.tag, "r": "phone"])
+            } catch {
+                hubLog.error("the hub cannot publish itself on the home network: \(String(reflecting: error), privacy: .public)")
             }
+            return
         }
         hubLog.error("the hub cannot listen on the home network")
     }
 
+    private func stopHome() {
+        publisher?.stop()
+        publisher = nil
+        if homePort != nil { try? node?.unlisten(.home) }
+        homePort = nil
+    }
+
     private func stopHub() {
-        homeListener?.stop()
-        tunnelListener?.listener.stop()
-        (homeListener, tunnelListener) = (nil, nil)
+        stopHome()
+        if tunnelPort != nil { try? node?.unlisten(.tunnel) }
+        tunnelPort = nil
         hub?.stop()
     }
 
@@ -1829,24 +2030,20 @@ final class LiveGroup: GroupController {
     // MARK: The blind relay
 
     /// Runs the link to the blind relay while it is on and the app is in
-    /// front, with its member listener on the loopback address, which
-    /// serves only the calls the relay announced and only when the
-    /// certificate names the caller; otherwise it stops them.
+    /// front, with the member's port on the loopback address, which serves
+    /// only the calls the relay announced and only when the certificate
+    /// names the caller (the caller events); otherwise it stops them.
     private func updateRelay() async {
-        guard let r = blindRelay, let node, let g = state, let id = memberIdentity, r.isOn, foreground,
-              let member = try? memberSigner() else { return stopRelay() }
-        if relayListener == nil {
-            let roots = g.trusted
+        guard let r = blindRelay, let node, let g = state, r.isOn, foreground, let member = try? memberSigner() else { return stopRelay() }
+        if relayPort == nil {
             do {
-                let l = try MemberListener(node: node, identity: id, chain: Self.chain(g), trusted: { roots }, caller: { r.caller(port: $0) },
-                                           onError: { relayLog.error("a call through the relay failed: \(String(reflecting: $0), privacy: .public)") })
-                relayListener = (l, try await l.start())
+                relayPort = try node.listen(.relay)
             } catch {
                 relayLog.error("the relay's calls cannot be taken: \(String(reflecting: error), privacy: .public)")
                 return
             }
         }
-        guard let port = relayListener?.port, blindRelay === r else { return }
+        guard let port = relayPort, blindRelay === r else { return }
         let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
         // The relay takes the member chain and the group's roots after it, as a forwarder (docs/protocol.md, section 14).
         r.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords))
@@ -1854,8 +2051,8 @@ final class LiveGroup: GroupController {
     }
 
     private func stopRelay() {
-        relayListener?.listener.stop()
-        relayListener = nil
+        if relayPort != nil { try? node?.unlisten(.relay) }
+        relayPort = nil
         blindRelay?.stop()
     }
 
@@ -1925,7 +2122,7 @@ final class LiveGroup: GroupController {
 
         /// A renewal for a peer's chain, leaf first, when it is due and this
         /// phone may renew it.
-        func renew(_ chain: [Data]) -> MemberNode.Renewal? {
+        func renew(_ chain: [Data]) -> PhoneGroup.Renewal? {
             guard group.isAdmin, let cert = chain.first,
                   GroupCertificates.isDue(cert, groupCA: group.adminCA ?? group.currentRoot, now: Date()),
                   let signer = signer() else { return nil }
@@ -2105,7 +2302,7 @@ final class LiveGroup: GroupController {
         }
     }
 
-    final class RecordBox: RecordStore, @unchecked Sendable {
+    final class RecordBox: @unchecked Sendable {
         private let lock = NSLock()
         private var set: RecordSet
         let groupCA: Data
@@ -2156,17 +2353,20 @@ final class LiveGroup: GroupController {
         func noSecrets(to device: String?) -> Bool { lock.withLock { set.noSecrets(to: device) } }
     }
 
-    /// Passes what the browser finds to the dialer, with the computers it
+    /// Passes what the browser finds to the member, with the computers it
     /// does not find at the addresses they had when admitted, only the
     /// devices that are in the group's list: a removed computer is not
-    /// dialed.
+    /// dialed. The member dials each by the addresses Bonjour resolves.
     final class Relay: @unchecked Sendable {
         private let lock = NSLock()
-        private var _dialer: MemberDialer?
+        private var node: CoreMember?
+        private var browser: BonjourBrowser?
         private var _allowed: Set<String>? = []
         private var _addresses: [String: [String]] = [:]
         private var last: Set<FoundMember> = []
         private var foundAt: [String: TimeInterval] = [:]
+        /// The devices handed to the member now, with their addresses.
+        private var handed: [String: [String]] = [:]
         /// The group tag of the members at known addresses.
         let group: String
         /// This phone's device ID, never dialed: as a hub it announces
@@ -2177,10 +2377,14 @@ final class LiveGroup: GroupController {
             self.group = group
             self.device = device
         }
-        var dialer: MemberDialer? {
-            get { lock.withLock { _dialer } }
-            set { lock.withLock { _dialer = newValue } }
+
+        /// The member that dials what browsing finds, and the browser that
+        /// resolves the addresses.
+        func attach(node: CoreMember, browser: BonjourBrowser) {
+            lock.withLock { (self.node, self.browser) = (node, browser) }
+            update(lock.withLock { last })
         }
+
         /// The device IDs to dial; nil dials every member found.
         var allowed: Set<String>? {
             get { lock.withLock { _allowed } }
@@ -2203,133 +2407,132 @@ final class LiveGroup: GroupController {
         static let nearGrace: TimeInterval = 30
 
         /// Whether the browser finds device on the home network now, and
-        /// either found it within nearGrace or the dialer is connected to it.
+        /// either found it within nearGrace or the member is connected to it.
         func atHome(_ device: String) async -> Bool {
-            let (at, d): (TimeInterval?, MemberDialer?) = lock.withLock { (foundAt[device], _dialer) }
+            let (at, n): (TimeInterval?, CoreMember?) = lock.withLock { (foundAt[device], node) }
             guard let at else { return false }
             if ProcessInfo.processInfo.systemUptime - at < Self.nearGrace { return true }
-            return await d?.connected.contains(device) ?? false
+            return n?.connected().contains(device) ?? false
         }
 
         /// Whether the browser finds device on the home network now, where
-        /// the dialer reaches it directly.
+        /// the member reaches it directly.
         func found(_ device: String) -> Bool { lock.withLock { foundAt[device] != nil } }
 
+        /// Whether addr is host:port with an IP address, as the member dials.
+        static func numeric(_ addr: String) -> Bool {
+            guard let (host, _) = JoinCode.split(addr) else { return false }
+            return IPv4Address(host) != nil || IPv6Address(host) != nil
+        }
+
         func update(_ found: Set<FoundMember>) {
-            let (d, members): (MemberDialer?, Set<FoundMember>) = lock.withLock {
+            let (n, b, members, known): (CoreMember?, BonjourBrowser?, Set<FoundMember>, [String: [String]]) = lock.withLock {
                 last = found
                 let now = ProcessInfo.processInfo.systemUptime
                 foundAt = Dictionary(uniqueKeysWithValues: Set(found.filter { $0.group == group }.map(\.device)).map { ($0, foundAt[$0] ?? now) })
-                let all = Discovery.withKnown(found, known: Set(_addresses.keys), group: group).filter { $0.device != device }
-                return (_dialer, _allowed.map { a in all.filter { a.contains($0.device) } } ?? all)
+                let all = Discovery.withKnown(found, known: Set(_addresses.keys), group: group).filter { $0.group == group && $0.device != device }
+                return (node, browser, _allowed.map { a in all.filter { a.contains($0.device) } } ?? all, _addresses)
             }
-            guard let d else { return }
-            Task { await d.update(members) }
+            guard let n else { return }
+            let found = Set(found.map(\.device))
+            Task {
+                var want: [String: [String]] = [:]
+                for m in members {
+                    // Browsing's addresses first, then those it had when admitted.
+                    let resolved = found.contains(m.device) ? await b?.addresses(of: m.device) ?? [] : []
+                    let addrs = resolved + JoinCode.ordered(known[m.device] ?? []).filter { !resolved.contains($0) && Self.numeric($0) }
+                    if !addrs.isEmpty { want[m.device] = addrs }
+                }
+                let (gone, changed): ([String], [String: [String]]) = self.lock.withLock {
+                    let gone = self.handed.keys.filter { want[$0] == nil }
+                    let changed = want.filter { self.handed[$0.key] != $0.value }
+                    self.handed = want
+                    return (gone, changed)
+                }
+                for d in gone { try? n.lost(d) }
+                for (d, addrs) in changed { try? n.found(d, addrs: addrs, device: d) }
+            }
         }
     }
 
-    /// The ID of the last copy from another device this phone put in its
-    /// clipboard, or saved in Files, so it is taken once.
-    private var takenID: String?
-
-    /// What this phone itself sent from its clipboard or took into it last,
-    /// as the button compares it (AppModel.Board.key): the button sends the
-    /// clipboard only when it holds something else (sends).
-    private var ownKey: String?
-
-    /// The copy from another device that waits for this phone: younger
-    /// than the group's live window and not yet taken; for what the app
-    /// takes by itself (byItself), also in a sync mode that takes the
-    /// group's copies and while the user has not paused them, while the
-    /// button works in every mode.
-    private func pending(_ node: MemberNode, device: String, byItself: Bool) async -> Member.Event? {
-        guard !byItself || Member.receives(modeBox.mode) && modeBox.pausedUntilMS == nil, let cur = await node.current, !cur.isMark, !cur.unread, cur.origin != device,
-              cur.id != takenID, cur.ageMS < (recordBox?.incomingMS ?? Records.defaultIncomingMS) else { return nil }
-        if cur.media?.isFiles == true || Images.part(of: cur.media) != nil { return cur }
-        return await node.usable == nil ? nil : cur
+    /// The copy from another device that waits for this phone, by the
+    /// core's rule (docs/design.md, "The one button"): younger than the
+    /// group's live window and not yet taken; for what the app takes by
+    /// itself (byItself), also in a sync mode that takes the group's copies
+    /// and while the user has not paused them, while the button works in
+    /// every mode.
+    private func pending(_ node: CoreMember, byItself: Bool) -> CoreMember.Copy? {
+        guard !byItself || Member.receives(modeBox.mode) && modeBox.pausedUntilMS == nil else { return nil }
+        return try? node.waiting()
     }
 
     /// Puts a copy from another device in this phone's clipboard: a text,
-    /// an image fetched whole, or files saved in Files.
-    private func take(_ e: Member.Event) async throws {
-        guard e.id != takenID else { return }
-        if let files = e.media.flatMap({ $0.isFiles ? $0 : nil }) {
-            guard let node, await connected(node) else { throw PendingGroup.Failure.noComputers }
-            try await save(e, files: files)
-        } else if let part = Images.part(of: e.media) {
-            try await receive(e, image: part)
-            ownKey = part.sha256.map(Images.key)
-        } else if !e.text.isEmpty {
-            write(e.text, kind: e.kind)
-            ownKey = e.text
+    /// an image fetched whole, or files saved in Files; then it waits no
+    /// more.
+    private func take(_ c: CoreMember.Copy) async throws {
+        guard let node else { throw PendingGroup.Failure.noComputers }
+        if let files = c.media.flatMap({ $0.isFiles ? $0 : nil }) {
+            guard await connected(node) else { throw PendingGroup.Failure.noComputers }
+            try await save(c, files: files)
+        } else if let part = Images.part(of: c.media) {
+            try await receive(c, image: part)
+        } else if !c.text.isEmpty {
+            write(c.text, kind: c.kind)
         }
-        takenID = e.id
+        try node.took(c.id)
     }
 
     /// What the button says it fetched.
-    private func fetched(_ e: Member.Event) -> AppModel.SyncResult {
-        if e.media?.isFiles == true { return .savedFiles }
-        let preview = Images.part(of: e.media) == nil && e.kind == .text ? Self.preview(e.text) : nil
-        return .fetched(from: devices.first { $0.id == e.origin && !$0.isSelf }?.name, preview: preview)
+    private func fetched(_ c: CoreMember.Copy) -> AppModel.SyncResult {
+        if c.media?.isFiles == true { return .savedFiles }
+        let preview = Images.part(of: c.media) == nil && c.kind == .text ? Self.preview(c.text) : nil
+        return .fetched(from: devices.first { $0.id == c.origin && !$0.isSelf }?.name, preview: preview)
     }
 
     /// Takes the copy that waits for this phone, when one does: at the
     /// app's start or its return to the front, after the computers had a
     /// moment to connect. nil when none waits.
     func takePending() async -> AppModel.SyncResult? {
-        guard let node, let g = state else { return nil }
+        guard let node, state != nil else { return nil }
         _ = await connected(node)
-        guard let e = await pending(node, device: g.device, byItself: true) else { return nil }
+        guard let c = pending(node, byItself: true) else { return nil }
         do {
-            try await take(e)
+            try await take(c)
         } catch {
             imageLog.error("taking the waiting copy: \(String(reflecting: error), privacy: .public)")
             return nil
         }
-        return fetched(e)
+        return fetched(c)
     }
 
     /// The one button, and Back Tap through Shortcuts (docs/design.md, "The
     /// one button"): a copy from another device that waits for this phone
     /// comes in; otherwise what this phone copied goes out, however old,
-    /// unless it is the group's text already or what this phone sent or
-    /// took last (sends). board is what the paste
-    /// button or Shortcuts handed over; without it the button reads the
-    /// clipboard, and only when it sends.
+    /// unless it is the group's copy already or what this phone sent or
+    /// took last, as the core's member decides (sends). board is what the
+    /// paste button or Shortcuts handed over; without it the button reads
+    /// the clipboard, and only when it sends.
     func sync(board given: AppModel.Board?) async throws -> AppModel.SyncResult {
-        guard let node, let g = state else { throw PendingGroup.Failure.noComputers }
-        online = await node.connected
-        if let e = await pending(node, device: g.device, byItself: false) {
-            try await take(e)
-            return fetched(e)
+        guard let node, state != nil else { throw PendingGroup.Failure.noComputers }
+        online = node.connected()
+        if let c = pending(node, byItself: false) {
+            try await take(c)
+            return fetched(c)
         }
         let board: AppModel.Board
         if let given { board = given } else { board = try await Self.readBoard() }
-        var usable = await node.usable?.text
-        let media = await node.current?.media
-        if let sum = Images.part(of: media)?.sha256 { usable = Images.key(sum) }
-        guard let key = board.key, Self.sends(key, usable: usable, own: ownKey) else {
+        guard let key = board.key, try node.sends(board: key) else {
             if !(await connected(node)) { throw PendingGroup.Failure.noComputers }
             return .nothingNew
         }
         guard await connected(node) else { throw PendingGroup.Failure.noComputers }
         if let image = board.image {
-            _ = try await node.send(text: "", kind: .text, media: Content.manifest(store: content, data: [(image.type, image.data)]))
+            try node.copyMedia([.data(image.data, type: image.type)], board: true)
         } else if let t = board.text {
-            _ = try await node.send(text: t, kind: .text)
+            try node.copy(t)
         }
-        ownKey = key
-        reached = await node.reached
+        take(peers: (try? node.peers()) ?? [])
         return .sent(to: devices.filter { $0.online && !$0.isSelf }.map(\.name).sorted())
-    }
-
-    /// Whether the button sends the clipboard's key: not empty, not the
-    /// group's text already (usable), and not what this phone itself sent
-    /// or took last (own). Without own, a text the phone sent before it
-    /// shared an image or files would go out again over that newer copy, as
-    /// the group's copy is then the image or the files.
-    nonisolated static func sends(_ key: String, usable: String?, own: String?) -> Bool {
-        !key.isEmpty && key != usable && key != own
     }
 
     /// What the clipboard holds, read by the app itself, which iOS may ask
@@ -2359,20 +2562,34 @@ final class LiveGroup: GroupController {
     /// Whether a computer is connected, waiting up to connectWait for one:
     /// back from the background, the connections iOS dropped take a moment
     /// to come back. Keeps online, and so the dots, in step.
-    private func connected(_ node: MemberNode) async -> Bool {
+    private func connected(_ node: CoreMember) async -> Bool {
         let deadline = ContinuousClock.now + Self.connectWait
         while true {
-            online = await node.connected
+            online = node.connected()
             if !online.isEmpty || ContinuousClock.now >= deadline { return !online.isEmpty }
             try? await Task.sleep(for: .milliseconds(250))
         }
     }
 
+    /// Fetches the images or files of the copy c into a new folder of its
+    /// own, which the caller removes; each part with where it is.
+    private func fetch(_ c: CoreMember.Copy, limit: Int64) async throws -> (dir: URL, parts: [CoreMember.Fetched]) {
+        guard let node else { throw PendingGroup.Failure.noComputers }
+        if let size = c.media?.size, size > limit { throw Content.Failure.tooLarge(size: size, limit: limit) }
+        if c.unread { throw Content.Failure.unread }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-fetch-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        do {
+            return (dir, try await node.fetch(c.id, max: Media.blobSize(limit), into: dir.appendingPathComponent("copy", isDirectory: true)))
+        } catch {
+            try? FileManager.default.removeItem(at: dir)
+            throw error
+        }
+    }
+
     /// Fetches the files a computer copied into the app's folder in Files,
     /// Received, with their folders; a name taken there gets a number.
-    private func save(_ e: Member.Event, files m: Media.Manifest) async throws {
-        guard let node else { throw PendingGroup.Failure.noComputers }
-        if m.size > Images.maxCopy { throw Content.Failure.tooLarge(size: m.size, limit: Images.maxCopy) }
+    private func save(_ c: CoreMember.Copy, files m: Media.Manifest) async throws {
         let fm = FileManager.default
         let root = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Received", isDirectory: true)
         // Each top-level name of the copy, made free in Received.
@@ -2390,38 +2607,31 @@ final class LiveGroup: GroupController {
             }
             return parts.dropFirst().reduce(root.appendingPathComponent(renamed[parts[0]]!)) { $0.appendingPathComponent($1) }
         }
-        // The copy's sealed blob holds the bytes of all its files, fetched
-        // and opened before any is written.
-        var data = try await Content.parts(from: node, event: e, limit: Images.maxCopy)[...]
-        for p in m.parts {
-            guard let path = p.path else {
-                if !p.dir { data = data.dropFirst() }
-                continue
-            }
+        // The copy's sealed blob holds the bytes of all its files, fetched,
+        // opened and checked by the member before any is placed.
+        let (dir, parts) = try await fetch(c, limit: Images.maxCopy)
+        defer { try? fm.removeItem(at: dir) }
+        for p in parts {
+            guard let path = p.path, !path.isEmpty else { continue }
             let url = target(path)
             if p.dir {
                 try fm.createDirectory(at: url, withIntermediateDirectories: true)
                 continue
             }
-            let bytes = data.popFirst() ?? Data()
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let tmp = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).part")
-            do {
-                try bytes.write(to: tmp)
-                try fm.moveItem(at: tmp, to: url)
-            } catch {
-                try? fm.removeItem(at: tmp)
-                throw error
-            }
+            try fm.moveItem(at: URL(fileURLWithPath: p.file), to: url)
         }
+        _ = m
     }
 
     /// Fetches a computer's image whole and puts it on this phone's
     /// clipboard, with its text.
-    private func receive(_ e: Member.Event, image part: Media.Part) async throws {
-        guard let node else { throw PendingGroup.Failure.noComputers }
-        let data = try await Content.data(from: node, event: e, part: part, limit: Images.maxCopy)
-        Images.write(data, type: part.type ?? "image/png", alt: e.text)
+    private func receive(_ c: CoreMember.Copy, image part: Media.Part) async throws {
+        let (dir, parts) = try await fetch(c, limit: Images.maxCopy)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        guard let got = parts.first(where: { !$0.dir && $0.type == part.type }) else { throw Content.Failure.noParts }
+        let data = try Data(contentsOf: URL(fileURLWithPath: got.file))
+        Images.write(data, type: part.type ?? "image/png", alt: c.text)
     }
 
     /// Puts a text into the phone's clipboard; a secret stays on this phone
@@ -2429,7 +2639,7 @@ final class LiveGroup: GroupController {
     private func write(_ text: String, kind: Member.Kind) {
         if kind == .secret {
             UIPasteboard.general.setItems([[UTType.plainText.identifier: text]],
-                                          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(SyncEngine.secretTTL)])
+                                          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(Member.secretTTL)])
         } else {
             UIPasteboard.general.string = text
         }

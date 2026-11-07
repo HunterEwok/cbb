@@ -9,11 +9,7 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import tools.cbb.kit.Discovery
 import tools.cbb.kit.FoundMember
-import tools.cbb.kit.GroupCertificates
-import tools.cbb.kit.Member
-import tools.cbb.kit.TLSTransport
 import java.net.InetSocketAddress
-import java.time.Instant
 
 /**
  * Browses for the Linux members with NsdManager: the services of type
@@ -73,35 +69,6 @@ class NsdBrowser(context: Context, private val onChange: (Set<FoundMember>) -> U
 
     /** The address of a found member, to dial. */
     fun address(device: String): InetSocketAddress? = synchronized(lock) { found[device]?.second }
-
-    /**
-     * A dial function for MemberDialer: TLS 1.3 to the member's address with
-     * the member ALPN protocol and this phone's key, presenting chain (its
-     * certificate, then the admin CA that issued it, if one did), accepting
-     * only that device's certificate from one of roots, the group's roots
-     * (docs/protocol.md, section 10, "Roots"). A member browsing does not
-     * find is dialed at the addresses known gives for it, one after another.
-     */
-    fun dialer(
-        member: KeystoreSigner,
-        chain: List<ByteArray>,
-        roots: List<ByteArray>,
-        known: (String) -> List<String> = { emptyList() },
-    ): (FoundMember) -> TLSTransport = { m ->
-        val addrs = address(m.device)?.let { listOf(it.hostString to it.port) }
-            ?: SyncRule.ordered(known(m.device)).mapNotNull(SyncRule::split)
-        var failure: Exception = TLSTransport.Failure("${m.device} is not found")
-        addrs.firstNotNullOfOrNull { (host, port) ->
-            try {
-                TLSTransport.dial(host, port, Member.ALPN, member.privateKey, chain) { peer ->
-                    runCatching { GroupCertificates.verifyMember(peer, roots, Instant.now()) }.getOrNull() == m.device
-                }
-            } catch (e: Exception) {
-                failure = e
-                null
-            }
-        } ?: throw failure
-    }
 
     /** NsdManager resolves one service at a time before Android 14; the found ones wait their turn. */
     private fun resolveNext() {

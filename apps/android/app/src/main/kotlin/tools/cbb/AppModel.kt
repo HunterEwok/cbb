@@ -18,7 +18,6 @@ import tools.cbb.kit.Content
 import tools.cbb.kit.CopyKeys
 import tools.cbb.kit.InvitationWindow
 import tools.cbb.kit.JoinCode
-import tools.cbb.kit.MemberNode
 import tools.cbb.kit.PairingJoiner
 import tools.cbb.kit.PairingMember
 import tools.cbb.kit.Pairing
@@ -577,7 +576,7 @@ class AppModel(private val app: Context) {
             Note(R.string.hub_move_refused, e.reason, error = true)
         } catch (e: HubOnPhone.NotRunning) {
             describe(e, R.string.hub_move_not_running)
-        } catch (e: MemberNode.ProtocolException) {
+        } catch (e: LiveGroup.NotConnected) {
             describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
@@ -782,7 +781,7 @@ class AppModel(private val app: Context) {
         } catch (e: LiveGroup.CommandRefused) {
             Log.e(TAG, app.getString(refused), e)
             Note(refused, e.reason, error = true)
-        } catch (e: MemberNode.ProtocolException) {
+        } catch (e: LiveGroup.NotConnected) {
             describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
@@ -803,7 +802,7 @@ class AppModel(private val app: Context) {
         } catch (e: LiveGroup.CommandRefused) {
             Log.e(TAG, app.getString(R.string.error_paste_refused), e)
             Note(R.string.error_paste_refused, e.reason, error = true)
-        } catch (e: MemberNode.ProtocolException) {
+        } catch (e: LiveGroup.NotConnected) {
             describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
@@ -884,7 +883,7 @@ class AppModel(private val app: Context) {
         } catch (e: LiveGroup.CommandRefused) {
             Log.e(TAG, app.getString(R.string.error_command_refused), e)
             Note(R.string.error_command_refused, e.reason, error = true)
-        } catch (e: MemberNode.ProtocolException) {
+        } catch (e: LiveGroup.NotConnected) {
             describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
@@ -901,7 +900,7 @@ class AppModel(private val app: Context) {
         } catch (e: LiveGroup.CommandRefused) {
             Log.e(TAG, app.getString(R.string.error_command_refused), e)
             Note(R.string.error_command_refused, e.reason, error = true)
-        } catch (e: MemberNode.ProtocolException) {
+        } catch (e: LiveGroup.NotConnected) {
             describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
@@ -1068,7 +1067,7 @@ class AppModel(private val app: Context) {
         } catch (e: LiveGroup.CommandRefused) {
             Log.e(TAG, app.getString(R.string.make_hub_refused), e)
             Note(R.string.make_hub_refused, e.reason, error = true)
-        } catch (e: MemberNode.ProtocolException) {
+        } catch (e: LiveGroup.NotConnected) {
             describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
@@ -1230,8 +1229,8 @@ class AppModel(private val app: Context) {
             is Arrangement.Refused -> R.string.error_arrangement
             is Content.Unread -> R.string.error_copy_unread
             is CopyKeys.NoRecords -> R.string.error_copy_no_records
-            is MemberNode.Muted -> R.string.error_muted
-            is MemberNode.MissingException, is MemberNode.ProtocolException, is Content.Mismatch -> R.string.error_image_unavailable
+            is LiveGroup.Muted -> R.string.error_muted
+            is LiveGroup.Unavailable, is LiveGroup.NotConnected, is Content.Mismatch -> R.string.error_image_unavailable
             is PairingMember.Failure ->
                 if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_wrong_code else R.string.error_refused
             is PhoneGroup.Failure -> R.string.error_generic

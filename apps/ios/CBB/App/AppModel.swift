@@ -135,6 +135,11 @@ protocol GroupController: AnyObject {
     func addHomeNetwork() async throws
     /// Tells the group whether the app is in front, where the hub works.
     func setForeground(_ on: Bool)
+    /// The app went to the background (true) or came back from it.
+    func setBackground(_ on: Bool)
+    /// One pass of the background refresh begins (true) or ends: the
+    /// member connects for it, and lets go again after.
+    func backgroundPass(_ running: Bool)
     /// Opens a remote invitation on this phone, the hub, for a device far
     /// away; ask asks the user about the device that uses it, ended gets
     /// its name or why it ended without one.
@@ -192,6 +197,8 @@ extension GroupController {
     func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {}
     func addHomeNetwork() async throws {}
     func setForeground(_ on: Bool) {}
+    func setBackground(_ on: Bool) {}
+    func backgroundPass(_ running: Bool) {}
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation {
         throw HubOnPhone.Failure.notRunning
@@ -758,6 +765,8 @@ final class AppModel: ObservableObject {
     /// a computer to connect, then gives the records a moment to arrive.
     /// The clipboard stays as it is: iOS lets only the app in front read it.
     func refreshInBackground(wait: Duration = .seconds(20), records: Duration = .seconds(3)) async {
+        group.backgroundPass(true)
+        defer { group.backgroundPass(false) }
         let deadline = ContinuousClock.now + wait
         while group.hasGroup, ContinuousClock.now < deadline {
             await refresh()
@@ -1471,12 +1480,12 @@ final class AppModel: ObservableObject {
         if let r = error as? LiveGroup.CommandRefused {
             return String(localized: "The computer refused: \(r.reason)", bundle: .app)
         }
-        if let f = error as? MemberNode.Failure {
+        if let f = error as? CoreMember.Failure {
             switch f {
             case .notConnected: return String(localized: "The computer is not connected to this phone. Try again when it shows online.", bundle: .app)
-            case .timedOut, .closed: return String(localized: "The computer did not answer. It may run an older version of CBB.", bundle: .app)
+            case .timedOut: return String(localized: "The computer did not answer. It may run an older version of CBB.", bundle: .app)
             case .muted: return String(localized: "An admin muted this phone, so its copies stay on it.", bundle: .app)
-            default: break
+            case .gone: break
             }
         }
         if let f = error as? Content.Failure, case .tooLarge = f {
@@ -1488,7 +1497,7 @@ final class AppModel: ObservableObject {
         if error is CopyKeys.Failure {
             return String(localized: "This phone does not have the group's device list yet, so it cannot seal or read copies. Try again once a computer is connected.", bundle: .app)
         }
-        if error is Content.Failure || (error as? MemberNode.Failure) == .missing {
+        if error is Content.Failure || (error as? CoreMember.Failure) == .gone {
             return String(localized: "Could not get the image from the computers. Copy it there again, then try again.", bundle: .app)
         }
         if error is LiveGroup.ClipboardUnreadable {

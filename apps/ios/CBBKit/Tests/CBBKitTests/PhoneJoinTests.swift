@@ -13,7 +13,7 @@ final class PhoneJoinTests: XCTestCase {
     /// A device that listens for pairing: its device ID, member key and
     /// self-signed certificate.
     struct Listener {
-        let device = SyncEngine.newID()
+        let device = Member.newID()
         let key = SoftwareSigner()
         let cert: Data
         init() throws { cert = try GroupCertificates.selfSigned(device: device, signer: key) }
