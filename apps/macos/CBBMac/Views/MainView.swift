@@ -286,6 +286,9 @@ struct DeviceTile: View {
             } else {
                 Text(verbatim: device.system ?? "").font(.caption).foregroundStyle(palette.textDim)
             }
+            if device.isSelf {
+                Text("This Mac").font(.caption).foregroundStyle(palette.textDim)
+            }
         }
         .padding(Tokens.spacingMedium)
         .frame(maxWidth: .infinity, alignment: .leading)

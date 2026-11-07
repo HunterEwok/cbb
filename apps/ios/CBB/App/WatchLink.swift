@@ -93,20 +93,19 @@ final class WatchLink: NSObject {
         var s = WatchState()
         s.hasGroup = model.phase == .home
         s.group = s.hasGroup ? model.group.groupTag : nil
-        // In the user's order, a collection's devices one after another.
+        // In the user's order, as the phone's own list has it, the phone
+        // among them; a collection's devices one after another.
         let arranged: [(AppModel.Computer, String?)] = model.arranged.flatMap { item -> [(AppModel.Computer, String?)] in
             switch item {
             case .device(let d): [(d, nil)]
             case .collection(let c, let ds): ds.map { ($0, c.name) }
             }
         }
-        // The phone itself first, as the phone's own list has it.
-        let me = model.devices.first(where: \.isSelf).map {
-            WatchState.Device(id: $0.id, name: $0.name, symbol: $0.kind.symbol, online: true, can: [], phone: true)
-        }
-        s.devices = (me.map { [$0] } ?? []) + arranged.map { d, c in
-            WatchState.Device(id: d.id, name: d.name, symbol: d.kind.symbol, online: d.online,
-                              can: model.group.watchActions(for: d.id), actions: d.actions, collection: c)
+        s.devices = arranged.map { d, c in
+            d.isSelf
+                ? WatchState.Device(id: d.id, name: d.name, symbol: d.kind.symbol, online: true, can: [], collection: c, phone: true)
+                : WatchState.Device(id: d.id, name: d.name, symbol: d.kind.symbol, online: d.online,
+                                    can: model.group.watchActions(for: d.id), actions: d.actions, collection: c)
         }
         s.away = model.away.map { a in
             guard a.on else { return .off }

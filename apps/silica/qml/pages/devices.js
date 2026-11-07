@@ -4,6 +4,19 @@
 // Words and icons for a device of cbb_member_devices (docs/core-api.md),
 // shared by the main page's tiles and list and the device's page.
 
+// The devices with this phone first, as every app shows the device it runs
+// on until the user moves it (moving tiles is not on Aurora yet).
+function selfFirst(list) {
+    var out = []
+    for (var i = 0; i < list.length; i++)
+        if (list[i].self)
+            out.push(list[i])
+    for (var j = 0; j < list.length; j++)
+        if (!list[j].self)
+            out.push(list[j])
+    return out
+}
+
 // The name of its system, "device" for firmware without one.
 function system(d) {
     switch (d.os) {

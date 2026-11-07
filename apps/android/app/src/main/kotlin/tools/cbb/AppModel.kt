@@ -1092,15 +1092,14 @@ class AppModel(private val app: Context) {
         }
     }
 
-    /** This phone's own ID, which the arrangement leaves out. */
+    /** This phone's own ID: first in the arrangement until the user moves it. */
     private val selfId: String? get() = devices.firstOrNull { it.isSelf }?.id
 
-    /** The devices and collections below this phone, in the user's order: the group's order until the user changes it. */
+    /** The devices and collections, this phone among them, in the user's order: the group's order, this phone first, until the user changes it. */
     val arranged: List<Arranged>
         get() {
-            val others = devices.filter { !it.isSelf }
-            val a = arrangement ?: return others.map { Arranged.Device(it) }
-            val byId = others.associateBy { it.id }
+            val a = arrangement ?: return devices.sortedByDescending { it.isSelf }.map { Arranged.Device(it) }
+            val byId = devices.associateBy { it.id }
             return a.view(devices.map { it.id }, selfId).mapNotNull { item ->
                 when (item) {
                     is Arrangement.Item.Device -> byId[item.id]?.let { Arranged.Device(it) }

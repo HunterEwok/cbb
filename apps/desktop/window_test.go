@@ -271,7 +271,9 @@ func (w *window) waitSettings(d *Desk, ok func(Settings) bool) {
 func (w *window) collections(t *testing.T) {
 	w.t = t
 	d := w.open("en")
-	w.wait(`$all("#devices .tile").length === 14 && $all(".cell[draggable]").length === 13`)
+	w.wait(`$all("#devices .tile").length === 14 && $all(".cell[draggable]").length === 14`)
+	// This computer comes first, and moves as the others do.
+	w.wait(`$order()[0] === "d:self" && $q('.cell[data-ref="d:self"] .tile').textContent.includes("This computer")`)
 
 	w.eval(`$menu("d:win")`, nil)
 	w.wait(`$q("#tile-menu").open`)
@@ -320,9 +322,12 @@ func (w *window) collections(t *testing.T) {
 	w.wait(`$q("#tile-menu").open`)
 	w.eval(`$clickText("#tile-menu-items button", "Ungroup")`, nil)
 	w.wait(`!$q("[data-open]") && $all("#devices .tile").length === 14`)
+	// The group's order: this computer first, then the others as listed.
 	var group []string
 	for _, dev := range w.svc.devices {
-		if !dev.Self {
+		if dev.Self {
+			group = append([]string{"d:" + dev.ID}, group...)
+		} else {
 			group = append(group, "d:"+dev.ID)
 		}
 	}

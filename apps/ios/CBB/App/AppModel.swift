@@ -1294,15 +1294,16 @@ final class AppModel: ObservableObject {
 
     static let arrangementKey = "deviceArrangement"
 
-    /// This phone's own ID, which the arrangement leaves out.
+    /// This phone's own ID: first in the arrangement until the user moves it.
     private var selfID: String? { devices.first(where: \.isSelf)?.id }
 
-    /// The devices and collections below this phone, in the user's order:
-    /// the group's order until the user changes it.
+    /// The devices and collections, this phone among them, in the user's
+    /// order: the group's order, this phone first, until the user changes it.
     var arranged: [Arranged] {
-        let others = devices.filter { !$0.isSelf }
-        guard let a = arrangement else { return others.map { .device($0) } }
-        let byID = Dictionary(others.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        guard let a = arrangement else {
+            return (devices.filter(\.isSelf) + devices.filter { !$0.isSelf }).map { .device($0) }
+        }
+        let byID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return a.view(devices: devices.map(\.id), self: selfID).compactMap { item in
             switch item {
             case .device(let id): byID[id].map { .device($0) }

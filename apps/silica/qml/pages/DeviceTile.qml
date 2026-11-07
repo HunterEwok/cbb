@@ -6,12 +6,13 @@ import Sailfish.Silica 1.0
 import "devices.js" as Devices
 
 // A device's tile on the main page (docs/apps.md, "Screens", Home): its
-// icon, a live dot, its name, its system and its mark.
+// icon, a live dot, its name, its system and, on a line of its own, its
+// mark, so a narrow tile cuts neither.
 BackgroundItem {
     id: tile
     property var device
 
-    height: Theme.itemSizeExtraLarge + Theme.paddingLarge
+    height: words.y + nameLabel.height + 2 * systemLabel.height + Theme.paddingMedium
 
     Item {
         id: glyph
@@ -46,12 +47,14 @@ BackgroundItem {
     }
 
     Column {
+        id: words
         anchors.top: glyph.bottom
         anchors.topMargin: Theme.paddingSmall
         x: Theme.paddingSmall
         width: parent.width - 2 * Theme.paddingSmall
 
         Label {
+            id: nameLabel
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: Devices.name(tile.device)
@@ -60,9 +63,18 @@ BackgroundItem {
             truncationMode: TruncationMode.Fade
         }
         Label {
+            id: systemLabel
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: [Devices.system(tile.device), Devices.mark(tile.device)].filter(function(s) { return s !== "" }).join(" · ")
+            text: Devices.system(tile.device)
+            font.pixelSize: Theme.fontSizeExtraSmall
+            color: Theme.secondaryColor
+            truncationMode: TruncationMode.Fade
+        }
+        Label {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: Devices.mark(tile.device)
             font.pixelSize: Theme.fontSizeExtraSmall
             color: Theme.secondaryColor
             truncationMode: TruncationMode.Fade

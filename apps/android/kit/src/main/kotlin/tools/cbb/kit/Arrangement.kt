@@ -53,6 +53,10 @@ class Arrangement private constructor(val group: String, items: List<Item>) {
         private set
 
     companion object {
+        /** devices with self, this device, first: the group's order as the app shows it. */
+        internal fun selfFirst(devices: List<String>, self: String?): List<String> =
+            if (self == null || self !in devices) devices else listOf(self) + devices.filter { it != self }
+
         const val VERSION = 1
         const val MAX_COLLECTIONS = 32
         const val MAX_NAME = 64 // bytes
@@ -125,11 +129,11 @@ class Arrangement private constructor(val group: String, items: List<Item>) {
      * What the app shows: the stored items in order without the devices
      * that are not listed, collections without listed devices left out
      * unless they were just made, then the listed devices that appear
-     * nowhere, in the order given. self, this device, is never among them:
-     * the app shows it first.
+     * nowhere, in the order given. self, this device, is an item as the
+     * others are, first while the stored items do not place it.
      */
     fun view(devices: List<String>, self: String?): List<Item> {
-        val listed = devices.filter { it != self }.toSet()
+        val listed = devices.toSet()
         val seen = mutableSetOf<String>()
         val out = mutableListOf<Item>()
         for (it in items) {
@@ -141,7 +145,10 @@ class Arrangement private constructor(val group: String, items: List<Item>) {
                 }
             }
         }
-        for (d in devices) if (d in listed && seen.add(d)) out += Item.Device(d)
+        for (d in selfFirst(devices, self)) {
+            if (!seen.add(d)) continue
+            if (d == self) out.add(0, Item.Device(d)) else out += Item.Device(d)
+        }
         return out
     }
 
@@ -165,7 +172,7 @@ class Arrangement private constructor(val group: String, items: List<Item>) {
 
     /**
      * Makes the change, on the arrangement as view shows it for devices
-     * (self left out); the stored items then hold the whole order. move puts
+     * (self among them); the stored items then hold the whole order. move puts
      * an item before another, or at the end of its level (a device in a
      * collection: the end of the collection); a device before a device in a
      * collection joins it, a collection never goes into one. into appends a
@@ -184,8 +191,12 @@ class Arrangement private constructor(val group: String, items: List<Item>) {
                 is Item.Collection -> shown += it.devices
             }
         }
-        for (d in devices) if (d != self && d in shown && w.find(d) < 0) w.items += Item.Device(d)
-        w.apply(op, devices, shown)
+        val ordered = selfFirst(devices, self)
+        for (d in ordered) {
+            if (d !in shown || w.find(d) >= 0) continue
+            if (d == self) w.items.add(0, Item.Device(d)) else w.items += Item.Device(d)
+        }
+        w.apply(op, ordered, shown)
         items = w.items.toList()
     }
 

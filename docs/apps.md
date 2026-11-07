@@ -703,7 +703,8 @@ view setting like tiles, list or orbit:
   to the group, the hub, the forwarder or the relay. The watches show their phone's.
 - **One level.** A device is in at most one collection, and a collection holds devices
   only, as folders on a phone's home screen.
-- **This device** ("this phone", "this computer") always comes first and does not move.
+- **This device** ("this phone", "this computer", "this Mac") is a tile as the others are:
+  first by default, and the user may move it, or put it in a collection, as any other.
 - **Display only in 0.6**: the order, the collections, a collection tile's summary, the
   watch's sections and the remote paste device picker. Actions on a whole collection may
   come later; a remote paste to several devices never.
@@ -726,7 +727,7 @@ The rules:
    list are skipped, and so is a collection none of whose devices is listed (one made
    empty a moment ago stays). Listed devices that appear nowhere follow at the end of the
    top level, in the app's order, so a new device shows up last and outside every
-   collection.
+   collection; this device, while the stored items do not place it, comes first instead.
 2. **Prune.** IDs that are not listed are dropped only when the list is whole (the group
    loaded and this device in it), so the empty list of a start or a reconnection loses
    nothing. A collection that loses its last device that way goes away.
@@ -742,7 +743,7 @@ The rules:
    device now comes. A collection that a move or *out* empties goes away. New
    collections take the smallest free ID `cN`.
 6. **The default.** Until the user changes something nothing is stored, and the order is
-   the app's as before.
+   the app's, this device first. *reset* brings that order back.
 
 The apps reach every change in an Arrange mode, with a menu path, VoiceOver and TalkBack
 actions and the keyboard for each drag.

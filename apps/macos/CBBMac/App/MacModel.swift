@@ -113,12 +113,11 @@ final class MacModel: ObservableObject {
 
     static let arrangementKey = "deviceArrangement"
 
-    /// The devices and collections below this Mac, in the user's order: the
-    /// group's order until the user changes it.
+    /// The devices and collections, this Mac among them, in the user's
+    /// order: the group's order, this Mac first, until the user changes it.
     var arranged: [Arranged] {
-        let others = self.others
-        guard let a = arrangement else { return others.map { .device($0) } }
-        let byID = Dictionary(others.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        guard let a = arrangement else { return ((this.map { [$0] } ?? []) + others).map { .device($0) } }
+        let byID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return a.view(devices: devices.map(\.id), self: this?.id).compactMap { item in
             switch item {
             case .device(let id): byID[id].map { .device($0) }

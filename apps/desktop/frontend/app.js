@@ -443,7 +443,8 @@ function alertLines(st) {
 
 function renderArranged(box, others) {
   const list = state.settings.layout === "list";
-  const byId = new Map(others.map((d) => [d.id, d]));
+  // This computer is a tile as the others are: first until it is moved.
+  const byId = new Map(state.devices.map((d) => [d.id, d]));
   let head = "";
   if (others.length > 12) {
     head += `<div class="search"><input class="field" id="search" type="search" placeholder="${esc(t("Search devices"))}" ` +
@@ -475,16 +476,14 @@ function renderArranged(box, others) {
         : `<div class="tiles">${ds.map((d) => deviceTile(d, level)).join("")}</div>`;
   } else {
     const items = (state.arranged ?? []).filter((it) => it.collection || byId.has(it.device));
-    // This computer first, as on the phones; it stays out of the arrangement.
-    const me = state.devices.find((d) => d.self);
     if (list) {
-      body = `<div class="list">${me ? deviceRow(me) : ""}${items.map((it) => {
+      body = `<div class="list">${items.map((it) => {
         if (!it.collection) return deviceRow(byId.get(it.device), "top");
         const c = it.collection, ds = c.devices.map((id) => byId.get(id)).filter(Boolean);
         return collectionRow(c, ds) + ds.map((d) => deviceRow(d, "c:" + c.id, true)).join("");
       }).join("")}</div>`;
     } else {
-      body = `<div class="tiles">${me ? deviceTile(me) : ""}${items.map((it) => it.collection
+      body = `<div class="tiles">${items.map((it) => it.collection
         ? collectionTile(it.collection, it.collection.devices.map((id) => byId.get(id)).filter(Boolean))
         : deviceTile(byId.get(it.device), "top")).join("")}</div>`;
     }
@@ -513,7 +512,8 @@ function cell(ref, level, name, inner) {
 function deviceTile(d, level) {
   return cell("d:" + d.id, level, d.name, `<button class="tile${d.id === selected ? " selected" : ""}" data-id="${esc(d.id)}">` +
     `<span class="top">${glyph(d)}${dot(d.online || d.self)}</span><span class="name">${esc(d.name)}</span>` +
-    `<span class="dim small">${esc([systems[d.os], d.self && t("This computer"), d.muted && t("muted")].filter(Boolean).join(" · "))}</span></button>`);
+    `<span class="dim small">${esc([systems[d.os], d.muted && t("muted")].filter(Boolean).join(" · "))}</span>` +
+    (d.self ? `<span class="dim small">${esc(t("This computer"))}</span>` : "") + `</button>`);
 }
 
 function deviceRow(d, level, inside) {
