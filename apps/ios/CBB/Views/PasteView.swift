@@ -65,16 +65,25 @@ struct PasteView: View {
     /// (iOS asks once whether the app may read it, unless its Settings allow it).
     private func send() {
         editing = false
-        let text = text.isEmpty ? (UIPasteboard.general.string ?? "") : text
-        guard !text.isEmpty else {
-            model.message = String(localized: "The clipboard holds no text.", bundle: .app)
-            return
-        }
         sending = true
+        let typed = text
         Task {
+            let text = typed.isEmpty ? await Self.clipboardText() : typed
+            guard !text.isEmpty else {
+                model.message = String(localized: "The clipboard holds no text.", bundle: .app)
+                sending = false
+                return
+            }
             let done = await model.paste(device.id, text: text, method: typing ? "type" : "paste", enter: enter, secret: secret)
             sending = false
             if done { dismiss() }
         }
+    }
+
+    /// The clipboard's text, read off the main thread: the read waits while
+    /// iOS asks the user to allow it, and on the main thread the app froze
+    /// until the user answered.
+    nonisolated static func clipboardText() async -> String {
+        await Task.detached(priority: .userInitiated) { UIPasteboard.general.string ?? "" }.value
     }
 }

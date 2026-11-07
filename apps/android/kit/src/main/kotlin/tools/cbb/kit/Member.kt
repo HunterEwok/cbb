@@ -303,6 +303,13 @@ object Member {
         /** The seq of the newest entries.json the sender holds and of the keys.json it came with (section 16, "Entry points"); 0 for none. */
         val entriesSeq: Long = 0,
         val entriesKeysSeq: Long = 0,
+        /**
+         * Whether an admin muted the sender, whose copies then do not reach
+         * the group, and for how long still in milliseconds, 0 for until an
+         * admin unmutes it (section 4; design.md, "Muting a device").
+         */
+        val muted: Boolean = false,
+        val mutedForMS: Long = 0,
     ) {
         override fun equals(other: Any?): Boolean =
             other is Hello && wallMS == other.wallMS && current == other.current && records == other.records && keyStore == other.keyStore &&
@@ -310,7 +317,8 @@ object Member {
                 name == other.name && os == other.os && adminKey.contentEqualsOrNull(other.adminKey) &&
                 tunnelKey.contentEqualsOrNull(other.tunnelKey) &&
                 tunnelPSK.contentEqualsOrNull(other.tunnelPSK) && device == other.device && mode == other.mode &&
-                groupCA.contentEqualsOrNull(other.groupCA) && entriesSeq == other.entriesSeq && entriesKeysSeq == other.entriesKeysSeq
+                groupCA.contentEqualsOrNull(other.groupCA) && entriesSeq == other.entriesSeq && entriesKeysSeq == other.entriesKeysSeq &&
+                muted == other.muted && mutedForMS == other.mutedForMS
 
         override fun hashCode(): Int = wallMS.hashCode()
     }
@@ -704,6 +712,8 @@ object Member {
                 "group_ca" to Wire.bytes(m.hello.groupCA),
                 "entries_seq" to if (m.hello.entriesSeq > 0) Wire.num(m.hello.entriesSeq) else null,
                 "entries_keys_seq" to if (m.hello.entriesSeq > 0) Wire.num(m.hello.entriesKeysSeq) else null,
+                "muted" to if (m.hello.muted) JsonPrimitive(true) else null,
+                "muted_for_ms" to if (m.hello.muted) Wire.num(m.hello.mutedForMS) else null,
             ),
         )
         is Message.Event -> Wire.obj("t" to Wire.str("event"), "event" to m.event?.toJson())
@@ -827,6 +837,9 @@ object Member {
                             groupCA = h.optBytes("group_ca"),
                             entriesSeq = h.optLong("entries_seq") ?: 0,
                             entriesKeysSeq = h.optLong("entries_keys_seq") ?: 0,
+                            muted = h.optBool("muted") ?: false,
+                            // A time out of range counts as 30 days, as Go reads it.
+                            mutedForMS = if (h.optBool("muted") == true) (h.optLong("muted_for_ms") ?: 0).coerceIn(0, Commands.MAX_MUTE_MS) else 0,
                         ),
                     )
                 }

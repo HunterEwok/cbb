@@ -35,6 +35,8 @@ public enum Commands {
         public var kind: String?
         public var text: String?
         public var action: String?
+        /// mute: how long, up to maxMuteMS; nil or 0 for until unmute.
+        public var for_ms: Int64?
     }
 
     /// What a hub command tells the new hub (section 11, "Moving the
@@ -69,7 +71,7 @@ public enum Commands {
     /// The most clients a hub command hands over, as many as a hub keeps.
     public static let maxHubClients = 256
 
-    public enum Failure: Error { case unknownMode(String), badHubOrder, badPaste, badAction(String) }
+    public enum Failure: Error { case unknownMode(String), badHubOrder, badPaste, badAction(String), badMute }
 
     /// The longest name of a quick action, and the most a hello lists.
     public static let maxActionName = 32
@@ -115,6 +117,27 @@ public enum Commands {
                                   adminCA: Data? = nil, seal: Data? = nil, id: String = newID()) throws -> Member.Record {
         let ms = Records.ms(now)
         return try sign(Body(type: "actions-off", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS),
+                        signer: signer, adminCA: adminCA, seal: seal)
+    }
+
+    /// A mute command for the device to: its copies stop reaching the
+    /// group for forMS milliseconds, 0 for until an unmute command
+    /// (design.md, "Muting a device"). Signed as mode.
+    public static func mute(to: String, forMS: Int64 = 0, group: String, by: String, now: Date, signer: CertificateSigner,
+                            adminCA: Data? = nil, seal: Data? = nil, id: String = newID()) throws -> Member.Record {
+        guard (0...maxMuteMS).contains(forMS) else { throw Failure.badMute }
+        let ms = Records.ms(now)
+        return try sign(Body(type: "mute", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS,
+                             for_ms: forMS > 0 ? forMS : nil),
+                        signer: signer, adminCA: adminCA, seal: seal)
+    }
+
+    /// An unmute command for the device to: it ends an admin's mute there.
+    /// Signed as mode.
+    public static func unmute(to: String, group: String, by: String, now: Date, signer: CertificateSigner,
+                              adminCA: Data? = nil, seal: Data? = nil, id: String = newID()) throws -> Member.Record {
+        let ms = Records.ms(now)
+        return try sign(Body(type: "unmute", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS),
                         signer: signer, adminCA: adminCA, seal: seal)
     }
 
@@ -218,6 +241,9 @@ public enum Commands {
     /// The members every command's body has.
     static let fields = ["v", "type", "group", "by", "to", "id", "time_ms", "expires_ms"]
 
+    /// The longest mute a command gives: 30 days (Go's group.MaxMute).
+    public static let maxMuteMS: Int64 = 30 * 24 * 3_600_000
+
     /// The keys of a hub order's clients as their strings, to check their form.
     private struct RawHub: Decodable {
         struct Order: Decodable {
@@ -252,12 +278,16 @@ public enum Commands {
         // As in Go, an empty string is no paste and no action.
         guard b.type == "paste" || (b.enter != true && (b.kind ?? "").isEmpty && (b.text ?? "").isEmpty) else { throw refuse("a \(b.type) command carries a paste") }
         guard b.type == "action" || (b.action ?? "").isEmpty else { throw refuse("a \(b.type) command names an action") }
+        guard b.type == "mute" || (b.for_ms ?? 0) == 0 else { throw refuse("a \(b.type) command gives a time") }
         switch b.type {
         case "mode": guard let m = b.mode, !m.isEmpty, b.hub == nil else { throw refuse("a mode command names no mode") }
         case "hub":
             guard let h = b.hub, (b.mode ?? "").isEmpty else { throw refuse("a hub command has no order") }
             guard h.valid else { throw refuse("a hub command's order is not valid") }
-        case "paste-off", "actions-off", "away-off": guard b.hub == nil, (b.mode ?? "").isEmpty else { throw refuse("a \(b.type) command carries an order") }
+        case "mute":
+            guard b.hub == nil, (b.mode ?? "").isEmpty else { throw refuse("a mute command carries an order") }
+            guard (0...maxMuteMS).contains(b.for_ms ?? 0) else { throw refuse("a mute command's time is not from 0 to \(maxMuteMS) ms") }
+        case "paste-off", "actions-off", "away-off", "unmute": guard b.hub == nil, (b.mode ?? "").isEmpty else { throw refuse("a \(b.type) command carries an order") }
         case "action":
             guard b.hub == nil, (b.mode ?? "").isEmpty else { throw refuse("an action command carries an order") }
             guard validActionName(b.action ?? "") else { throw refuse("an action command names no valid action") }

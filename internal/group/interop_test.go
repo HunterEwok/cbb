@@ -479,8 +479,8 @@ func TestGoTakeoverVectors(t *testing.T) {
 // TestSwiftCommand checks the commands a phone kit signed
 // (swift-command.json, which the kits' tests write) with the records it
 // signed: mode commands with the root's key and with an admin CA's, a hub, a
-// paste, a paste-off, an action and an actions-off command are taken, for
-// the device they name.
+// paste, a paste-off, an action, an actions-off, a mute and an unmute
+// command are taken, for the device they name.
 func TestSwiftCommand(t *testing.T) {
 	dir := os.Getenv("CBB_INTEROP_OUT")
 	if dir == "" {
@@ -513,9 +513,10 @@ func TestSwiftCommand(t *testing.T) {
 	// Two mode commands, by the root and by an admin, a hub command by the
 	// root with one client, a typed paste by the admin, paste-off by the
 	// root, lock by the admin, actions-off by the root, and a paste by the
-	// admin sealed to the key of go-sealed-commands.json.
-	if len(v.Commands) != 8 {
-		t.Fatalf("%d commands, want 8", len(v.Commands))
+	// admin sealed to the key of go-sealed-commands.json, then a mute for an
+	// hour by the admin and an unmute by the root.
+	if len(v.Commands) != 10 {
+		t.Fatalf("%d commands, want 10", len(v.Commands))
 	}
 	var sealed sealedVectors
 	data, err = os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "go-sealed-commands.json"))
@@ -552,6 +553,12 @@ func TestSwiftCommand(t *testing.T) {
 		}
 		if i == 6 && got.Type != CommandActionsOff {
 			t.Errorf("the actions-off command: %+v", got)
+		}
+		if i == 8 && (got.Type != CommandMute || got.ForMS != time.Hour.Milliseconds()) {
+			t.Errorf("the mute command: %+v", got)
+		}
+		if i == 9 && got.Type != CommandUnmute {
+			t.Errorf("the unmute command: %+v", got)
 		}
 		if i == 7 {
 			if got.V != sealedCommandVersion || got.Text != "" {

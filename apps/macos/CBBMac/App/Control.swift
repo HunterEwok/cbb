@@ -29,10 +29,15 @@ enum Control {
         var method: String?
         var enter: Bool?
         var refused: Bool?
+        /// mute and unmute: the device an admin mutes, nil for this Mac's
+        /// own pause of receiving, and for how long, nil for until ended.
+        var device: String?
+        var forMS: Int64?
 
         enum CodingKeys: String, CodingKey {
-            case op, kind, len, error, detail, done, name, status, devices, inject, seq, method, enter, refused
+            case op, kind, len, error, detail, done, name, status, devices, inject, seq, method, enter, refused, device
             case pasteOnly = "paste_only"
+            case forMS = "for_ms"
         }
 
         init(op: String, name: String? = nil) {
@@ -59,6 +64,20 @@ enum Control {
         var conflicts: [Conflict]?
         /// How many records of a later version the service keeps.
         var newer: Int?
+        /// An admin muted this Mac: its copies do not reach the group until
+        /// mutedUntilMS, nil or 0 for until an admin unmutes it. Its user
+        /// paused receiving until pausedUntilMS, nil or 0 for until it is
+        /// turned on again (docs/design.md, "Muting a device").
+        var muted: Bool?
+        var mutedUntilMS: Int64?
+        var paused: Bool?
+        var pausedUntilMS: Int64?
+
+        enum CodingKeys: String, CodingKey {
+            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, paused
+            case mutedUntilMS = "muted_until_ms"
+            case pausedUntilMS = "paused_until_ms"
+        }
     }
 
     /// A claim to take the group over that waits or stops the group.
@@ -148,9 +167,14 @@ enum Control {
         /// Its sync mode, as its hello says; nil when it says none or is
         /// not connected.
         var mode: String?
+        /// An admin muted it, as its hello says, until mutedUntilMS, 0 for
+        /// until an admin unmutes it.
+        var muted = false
+        var mutedUntilMS: Int64 = 0
 
         enum CodingKeys: String, CodingKey {
-            case id, name, role, os, form, version, mac, store, admin, root, frozen, online, mode, hub
+            case id, name, role, os, form, version, mac, store, admin, root, frozen, online, mode, hub, muted
+            case mutedUntilMS = "muted_until_ms"
             case forwardOnly = "forward_only"
             case osVersion = "os_version"
             case lastSeenMS = "last_seen_ms"
@@ -186,6 +210,8 @@ enum Control {
             forwardOnly = try c.decodeIfPresent(Bool.self, forKey: .forwardOnly) ?? false
             hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
             mode = try c.decodeIfPresent(String.self, forKey: .mode)
+            muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
+            mutedUntilMS = try c.decodeIfPresent(Int64.self, forKey: .mutedUntilMS) ?? 0
         }
     }
 

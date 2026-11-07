@@ -132,6 +132,11 @@ class MemberNode(
     /** This phone's sync mode, which the hellos state; null for a phone without one, which shares. */
     private val mode: () -> String? = { null },
     /**
+     * Until when an admin muted this phone, in Unix milliseconds, 0 for until an admin unmutes it, null while it is
+     * not muted; the hellos say so (section 4).
+     */
+    private val mutedUntil: () -> Long? = { null },
+    /**
      * Carries out a command a peer sent (docs/protocol.md, section 15), with
      * the device ID the caller of serve named the peer by, and returns the
      * result the peer gets; without it every command is refused.
@@ -224,6 +229,9 @@ class MemberNode(
     /** What fetch throws when the peer does not hold the part whole. */
     class MissingException : Exception("the device does not have this content")
 
+    /** An admin muted this phone: its copies do not reach the group. */
+    class Muted : Exception("an admin muted this phone: its copies do not reach the group")
+
     /** The current event with its age as of now. */
     val current: Member.Event? get() = synchronized(lock) { engine.currentEvent }
 
@@ -261,6 +269,15 @@ class MemberNode(
     val actions: Map<String, List<String>>
         get() = synchronized(lock) {
             conns.mapNotNull { c -> val p = c.peer; val a = c.actions; if (p != null && a.isNotEmpty()) p to a else null }.toMap()
+        }
+
+    /**
+     * The admin's mutes the connected members' hellos report, by device ID: until when in Unix milliseconds on
+     * this phone's clock, 0 for until an admin unmutes it.
+     */
+    val muted: Map<String, Long>
+        get() = synchronized(lock) {
+            conns.mapNotNull { c -> val p = c.peer; val u = c.mutedUntil; if (p != null && u != null) p to u else null }.toMap()
         }
 
     /** Where the connected members' hellos say their keys live, by device ID, where the caller of serve named them. */
@@ -391,6 +408,9 @@ class MemberNode(
      * cannot be sealed.
      */
     fun send(text: String, kind: Member.Kind, via: Member.Via = Member.Via.COPY, media: Media.Manifest? = null): Member.Event = synchronized(lock) {
+        // An admin's mute keeps every copy of this phone from the group.
+        val until = mutedUntil()
+        if (until != null && (until == 0L || until > System.currentTimeMillis())) throw Muted()
         val sealedBlob = if (media != null && copies != null) (content ?: throw Content.NoParts()).sealBlob(media) else null
         val e = engine.local(text, kind, via, media, sealedBlob?.first, sealedBlob?.second)
         trace("sent ${e.brief} to ${conns.filter { it.peerRole != null && !it.recordsOnly }.map { it.peer }}")
@@ -420,7 +440,15 @@ class MemberNode(
                 records = records?.digest, tunnelKey = keys?.first, tunnelPSK = keys?.second, os = os, device = device, mode = mode(),
                 keyStore = Records.HARDWARE, media = content != null,
                 entriesKeysSeq = entries?.order?.first ?: 0, entriesSeq = entries?.order?.second ?: 0,
-            )
+            ).let { h ->
+                val until = mutedUntil()
+                val left = (until ?: 0) - System.currentTimeMillis()
+                when {
+                    until == 0L -> h.copy(muted = true, mutedForMS = 0)
+                    until != null && left > 0 -> h.copy(muted = true, mutedForMS = left)
+                    else -> h
+                }
+            }
             c.enqueue(Member.Message.Hello(role, hello))
         }
         c.start()
@@ -451,6 +479,7 @@ class MemberNode(
                         c.actions = m.hello.actions
                         c.device = m.hello.device?.cleaned
                         c.mode = m.hello.mode
+                        c.mutedUntil = if (!m.hello.muted) null else if (m.hello.mutedForMS > 0) System.currentTimeMillis() + m.hello.mutedForMS else 0
                         c.peerMedia = m.hello.media
                         c.peerRole = m.role
                         val r = engine.reconcile(m.hello.copy(current = m.hello.current?.let { take(it, c.peer) }))
@@ -871,6 +900,9 @@ class MemberNode(
         @Volatile var actions: List<String> = emptyList()
         @Volatile var device: Member.DeviceInfo? = null
         @Volatile var mode: String? = null
+
+        /** Until when the peer's hello says an admin muted it, 0 for until an admin unmutes it; null when not muted. */
+        @Volatile var mutedUntil: Long? = null
 
         /** The other members the peer says it is connected to, from its last reach message. */
         @Volatile var reach: List<String> = emptyList()

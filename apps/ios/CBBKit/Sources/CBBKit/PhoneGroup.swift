@@ -529,6 +529,22 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
                                        seal: sealKey(of: device))
     }
 
+    /// A mute command that keeps the copies of the member device from the
+    /// whole group for forMS milliseconds, 0 for until an unmute command
+    /// (design.md, "Muting a device"); any admin phone signs one.
+    public func muteCommand(to device: String, forMS: Int64, caSigner: CertificateSigner, now: Date) throws -> Member.Record {
+        guard isAdmin else { throw Failure.notAdmin }
+        return try Commands.mute(to: device, forMS: forMS, group: tag, by: self.device, now: now, signer: caSigner, adminCA: adminCA,
+                                 seal: sealKey(of: device))
+    }
+
+    /// An unmute command that ends an admin's mute of the member device.
+    public func unmuteCommand(to device: String, caSigner: CertificateSigner, now: Date) throws -> Member.Record {
+        guard isAdmin else { throw Failure.notAdmin }
+        return try Commands.unmute(to: device, group: tag, by: self.device, now: now, signer: caSigner, adminCA: adminCA,
+                                   seal: sealKey(of: device))
+    }
+
     /// A hub command that makes the admin computer to the group's hub in
     /// place of this phone (section 11, "Moving the hub"), signed with this
     /// phone's root or admin key, with the hub's clients and its forwarder.
