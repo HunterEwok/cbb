@@ -245,6 +245,23 @@ impl State {
         Ok(State { version: 1, group: String::new(), key: key.to_vec(), psk: random_key()?, ..State::empty() })
     }
 
+    /// The state of a device that meets its group at the relay r, as Go's
+    /// away relay makes it: its own keys and nothing of a hub's.
+    pub fn meeting_at(&self, r: Forwarder) -> State {
+        let [key_sealed_for, _, _] = self.sealed_for.clone();
+        State {
+            group: self.group.clone(),
+            key: self.key.clone(),
+            key_tpm: self.key_tpm.clone(),
+            key_se: self.key_se.clone(),
+            psk: self.psk.clone(),
+            keys_in_file: self.keys_in_file,
+            relay: Some(r),
+            sealed_for: [key_sealed_for, Vec::new(), Vec::new()],
+            ..State::empty()
+        }
+    }
+
     fn empty() -> State {
         State {
             version: 1,
@@ -406,6 +423,12 @@ impl State {
     /// The device's public key, which its hellos offer the hub.
     pub fn public_key(&self) -> Vec<u8> {
         PublicKey::from(&self.secret()).as_bytes().to_vec()
+    }
+
+    /// The device's own private key, with which it registers with its
+    /// relay.
+    pub fn private_key(&self) -> [u8; 32] {
+        self.key.as_slice().try_into().unwrap_or([0; 32])
     }
 
     /// The key the hub serves its clients with: the period's, else its own.

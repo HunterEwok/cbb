@@ -128,6 +128,11 @@ pub struct Header {
     pub forwarder: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub forwarder_key: String,
+    /// away relay: the relay's address, with its key's pin or `default`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay_key: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub obfuscate: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -298,6 +303,10 @@ pub struct Away {
     /// On the hub, its forwarder; None without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub forwarder: Option<Forwarder>,
+    /// On a device that meets the others at a relay, its link to it; None
+    /// without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<Relay>,
     /// What went wrong last, for the user.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
@@ -317,6 +326,24 @@ pub struct Forwarder {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub seen: String,
     /// Why the hub is not registered, and the underlying error.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub detail: String,
+}
+
+/// A device's link to its blind relay, as Go's control.Relay.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct Relay {
+    #[serde(default)]
+    pub endpoint: String,
+    /// Registered, with its tunnel.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub connected: bool,
+    /// The other devices of the group on the relay.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub online: Vec<String>,
+    /// Why it is not connected, and the underlying error.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]

@@ -90,6 +90,17 @@ impl Entries {
         self.held.lock().unwrap().as_ref().filter(|h| now_ms < h.expires_ms).map(|h| h.set.clone())
     }
 
+    /// The keys keys.json of the list held names for the project's relay
+    /// `name` (each a SubjectPublicKeyInfo, DER), while the list has not
+    /// expired; none when it names none.
+    pub fn relay_keys(&self, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
+        let Some(set) = self.current(now_ms) else { return Vec::new() };
+        let Ok(set) = serde_json::from_value::<Set>(set) else { return Vec::new() };
+        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
+        let Ok(keys) = release::verify_keys(&set.keys, &roots, now_ms, &Seen::default()) else { return Vec::new() };
+        keys.keys.into_iter().filter(|k| k.usage == "relay" && k.name == name).map(|k| k.key).collect()
+    }
+
     /// Takes a list a peer sent when it checks out and is newer than the one
     /// held, keeps it in the file and reports whether it did.
     pub fn take(&self, v: &Value, now_ms: i64) -> Result<bool> {

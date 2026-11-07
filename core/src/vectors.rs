@@ -661,6 +661,60 @@ fn go_credentials() {
     assert!(forged.open().is_err());
     // Encoding again gives the same JSON as Go's.
     assert_eq!(serde_json::to_value(&hubs).unwrap(), v["hubs"]);
+
+    // A member's store takes them as Go's Credentials.Add, the period
+    // first whatever the order.
+    let member = |k: &KeyHash| s.devices().iter().any(|d| !d.frozen && d.keys.contains(k));
+    let servers: Vec<Credential> = v["servers"].as_array().unwrap().iter().map(cred).collect();
+    let mut all = vec![members.clone(), hubs.clone()];
+    all.extend(servers.iter().cloned());
+    all.push(period.clone());
+    let mut st = credential::Store::new(&tag);
+    let (fresh, errs) = st.add(&ca.spki, &member, &all);
+    assert!(errs.is_empty(), "{errs:?}");
+    assert_eq!(fresh.len(), all.len());
+    assert!(st.add(&ca.spki, &member, &all).0.is_empty(), "taken twice");
+    assert_eq!(st.all().len(), all.len());
+    assert_eq!(st.period(&ca.spki).map(|(c, _)| c), Some(period.clone()));
+    let first = servers[0].signer();
+    let sk = st.server(&first).unwrap();
+    assert_eq!(st.member_of_server(&sk), Some(first));
+    assert!(!st.list_stale(&hb.hubs, &st.server_keys(&l.hubs), true));
+    assert!(st.list_stale(&hb.hubs, &[], true), "a list that names a kept server key");
+    assert!(!st.period_stale(&ca.spki, &member, p.expires_ms - credential::PERIOD_LIFETIME_MS));
+    assert!(st.period_stale(&ca.spki, &member, p.expires_ms), "an old period");
+    assert!(st.period_stale(&ca.spki, &|_| false, p.expires_ms - credential::PERIOD_LIFETIME_MS), "a member left");
+    // Another root's period, and a server key no member signed, are refused.
+    let mut other = credential::Store::new(&tag);
+    assert!(other.add(&hubs.key, &member, std::slice::from_ref(&period)).0.is_empty());
+    let mut lone = credential::Store::new(&tag);
+    lone.add(&ca.spki, &member, std::slice::from_ref(&period));
+    let (fresh, errs) = lone.add(&ca.spki, &|_| false, &servers);
+    assert!(fresh.is_empty() && errs.len() == servers.len());
+}
+
+/// What Go makes of credentials signed here: the signing functions give
+/// bodies that check out and verify, with the lists padded.
+#[test]
+fn signs_credentials() {
+    use crate::credential::{self, HUBS};
+    let pkcs8 = crate::identity::new_key().unwrap();
+    let spki = crate::certs::p256_spki_of(&crate::identity::public_key(&pkcs8).unwrap());
+    let mut sign = |b: &[u8]| crate::identity::sign(&pkcs8, b);
+    let tag = credential::new_period_tag().unwrap();
+    assert!(credential::valid_tag(&tag));
+    let now = 1_700_000_000_000;
+    let p = credential::period_body("0123456789abcdef", &tag, &spki, credential::next_version(0, now), now);
+    let pc = credential::sign(p.clone(), &spki, &mut sign).unwrap();
+    let pb = pc.open().unwrap();
+    assert_eq!(pb.expires_ms, now + credential::PERIOD_LIFETIME_MS);
+    assert_eq!(pb.version, 1_700_000_000);
+    let h = credential::hubs_body(&pb, &[[7; 32]], &[], credential::next_version(pb.version, now)).unwrap();
+    let hc = credential::sign(h, &spki, &mut sign).unwrap();
+    let hb = hc.open().unwrap();
+    assert_eq!((hb.kind.as_str(), hb.group.as_str(), hb.hubs.len(), hb.admins.len()), (HUBS, tag.as_str(), 4, 4));
+    assert_eq!(hb.hubs[0], [7; 32]);
+    assert!(credential::check_presented(&[hc, pc], now).is_ok());
 }
 
 /// What a watch's admin key may do (docs/protocol.md, section 10, "Watches"),

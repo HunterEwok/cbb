@@ -491,6 +491,11 @@ impl Node {
         *self.on_command.write().unwrap() = Some(f);
     }
 
+    /// The project's signed entry points this member holds.
+    pub fn entries(&self) -> &Entries {
+        &self.entries
+    }
+
     /// The group's records.
     pub fn records(&self) -> Arc<Mutex<Records>> {
         self.records.clone()

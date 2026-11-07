@@ -27,6 +27,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/phone"
+	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
@@ -1252,4 +1253,184 @@ func TestLiteNetwork(t *testing.T) {
 	if err != nil || !strings.Contains(out, "publishes itself and takes connections here") {
 		t.Fatalf("cbb network: %v\n%s", err, out)
 	}
+}
+
+// TestLiteRelay runs the Rust service in a group without a hub: it meets
+// the Go desk at a blind relay, and once it is away from home they sync
+// through it (docs/design.md, "Blind relay").
+func TestLiteRelay(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	var h hub
+	desk := startService(t, &h, "desk")
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair -full: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr())
+	waitFor(t, "the Rust member connected to the desk", func() bool {
+		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
+	})
+	r, keys := startRelay(t, desk.status(t).Group)
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: "nope", Consent: true}, ""); err == nil {
+		t.Error("a relay with a bad key")
+	}
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin()}, ""); err == nil || !strings.Contains(err.Error(), "learns") {
+		t.Errorf("a relay without consent: %v", err)
+	}
+	for _, s := range []*testService{desk, rust} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
+			t.Fatalf("cbb global relay on the %s: %v", s.name, err)
+		}
+	}
+	deskID, rustID := desk.status(t).Device, rust.status(t).Device
+	waitUpTo(t, 60*time.Second, "both meet at the relay", func() bool {
+		a, b := desk.status(t).Away, rust.status(t).Away
+		return a != nil && a.Relay != nil && a.Relay.Connected && slices.Equal(a.Relay.Online, []string{rustID}) &&
+			b != nil && b.Relay != nil && b.Relay.Connected && slices.Equal(b.Relay.Online, []string{deskID})
+	})
+	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+	if err != nil || !strings.Contains(string(raw), r.Addr().String()) {
+		t.Errorf("tunnel.json with the relay: %v\n%s", err, raw)
+	}
+
+	// Away from home the Rust member knows no address of the desk: the
+	// relay joins them.
+	rust.stop()
+	rust = startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen")
+	waitUpTo(t, 30*time.Second, "the Rust member reaches the desk through the relay", func() bool {
+		st := rust.status(t)
+		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == deskID
+	})
+	if _, err := rust.do(t, control.Header{Op: control.OpCopy}, "via the relay"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the desk has it", func() bool { return desk.paste(t) == "via the relay" })
+	if _, err := desk.do(t, control.Header{Op: control.OpCopy}, "back home"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust member has it", func() bool { return rust.paste(t) == "back home" })
+
+	// Turning sync away from home off leaves the relay.
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "off"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the relay drops the Rust member", func() bool {
+		_, n := r.Stats()
+		return n == 1
+	})
+}
+
+// startRelay runs a blind relay for the group of tag until the test ends.
+func startRelay(t *testing.T, tag string) (*relay.Relay, relay.Keys) {
+	t.Helper()
+	keys, err := relay.NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := relay.Listen(relay.Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{tag}, Logf: t.Logf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		r.Serve(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-served
+	})
+	return r, keys
+}
+
+// TestLiteRelayRoot runs the Rust service as the root of a group that meets
+// at a blind relay: it starts the period and signs the hubs' and the
+// members' credentials (docs/protocol.md, section 18), with which both
+// devices register there, and the Go laptop and it sync through the relay.
+func TestLiteRelayRoot(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	dir := t.TempDir()
+	root := startLite(t, bin, dir, "-no-mdns")
+	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
+		t.Fatalf("cbb new: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust root in its group", func() bool {
+		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && st.Status.Group != "" && st.Status.Role == "full"
+	})
+	var h hub
+	laptop := startService(t, &h, "laptop")
+	jc := laptop.dial(t)
+	defer jc.Close()
+	code := pair.NewCode()
+	m, err := jc.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
+	if err != nil || len(m.Addrs) == 0 {
+		t.Fatalf("the laptop's listening join: %v, %+v", err, m)
+	}
+	qr := phone.JoinQR(phone.JoinCode{Code: code, Addrs: m.Addrs, Fingerprint: m.Fingerprint})
+	if out, err := runCLI(cli, root.socket, qr+"\n", "pair", "-qr"); err != nil || !strings.Contains(out, "laptop joined the group") {
+		t.Fatalf("cbb pair -qr: %v\n%s", err, out)
+	}
+	if m, err := jc.Receive(); err != nil || m.Error != "" {
+		t.Fatalf("the laptop's join ended with %+v, %v", m, err)
+	}
+	root.stop()
+	root = startLite(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
+	laptopID, rootID := laptop.status(t).Device, root.status(t).Device
+	waitFor(t, "the Rust root connected to the laptop", func() bool {
+		p := root.status(t).Peers
+		return len(p) == 1 && p[0].ID == laptopID
+	})
+	r, keys := startRelay(t, laptop.status(t).Group)
+	for _, s := range []*testService{root, laptop} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
+			t.Fatalf("cbb global relay on the %s: %v", s.name, err)
+		}
+	}
+	// The root's credentials: the period, both server keys, the hubs' and
+	// the members' credential.
+	waitUpTo(t, 30*time.Second, "the Rust root signs the group's credentials", func() bool {
+		raw, err := os.ReadFile(filepath.Join(dir, "credentials.json"))
+		var all []json.RawMessage
+		return err == nil && json.Unmarshal(raw, &all) == nil && len(all) == 5
+	})
+	waitUpTo(t, 60*time.Second, "both meet at the relay with the credentials", func() bool {
+		a, b := root.status(t).Away, laptop.status(t).Away
+		return a != nil && a.Relay != nil && a.Relay.Connected && slices.Equal(a.Relay.Online, []string{laptopID}) &&
+			b != nil && b.Relay != nil && b.Relay.Connected && slices.Equal(b.Relay.Online, []string{rootID})
+	})
+
+	root.stop()
+	root = startLite(t, bin, dir, "-no-mdns")
+	waitUpTo(t, 30*time.Second, "the Rust root reaches the laptop through the relay", func() bool {
+		st := root.status(t)
+		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == laptopID
+	})
+	if _, err := root.do(t, control.Header{Op: control.OpCopy}, "from the root"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the laptop has it", func() bool { return laptop.paste(t) == "from the root" })
 }

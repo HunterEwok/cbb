@@ -53,8 +53,14 @@ All notable changes to cbb are documented in this file. The format follows
   (`hub -on DEVICE -forward-only`), which a Rust member can be too (`TestLiteForwardOnly`).
   It keeps the known networks as Go does (`networks.json`, `cbb network`, the interfaces it
   keeps quiet on in `cbb status`), publishing itself and taking connections on the member
-  port only there (`TestLiteNetwork`). The hub's key periods, the relay and invitations come
-  next.
+  port only there (`TestLiteNetwork`). It keeps the group's server credentials as Go does
+  (`credentials.json`, `server-keys.json`): it takes and passes on those its peers send,
+  signs its server key for each period, and as the root starts the periods and signs the
+  hubs' and the members' credentials. It meets the group at a blind relay (`cbb global
+  relay`, with the relay's key or `default` for the project's), registering there with those
+  credentials once they list it, and syncs through it with the members it reaches no other
+  way (`TestLiteRelay`, and `TestLiteRelayRoot` as the group's root). The hub's key periods,
+  the project's relay's moves and invitations come next.
 - The Rust `cbb` service takes images and files as the Go service does: `cbb copy FILE`, a
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and

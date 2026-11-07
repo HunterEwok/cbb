@@ -264,9 +264,31 @@ ends, the Go service described below is still the computers' member.
   DEVICE -forward-only` on an admin that admitted the device signs its record with
   `forward_only` first (`Admin::mark_forward_only`); such a Rust member takes the hub command
   without being an admin once that record is in, seals no copies (`node::FORWARD_ONLY`) and
-  refuses paste and action commands (`TestLiteForwardOnly`). The pins of a newer
-  `keys.json`, the server credentials and the hub's key periods, the relay and
-  invitations are still Go's.
+  refuses paste and action commands (`TestLiteForwardOnly`).
+- **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
+  `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
+  of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in
+  the TPM or the Secure Enclave through cbb-helper where it can put them there, as Go's
+  `ServerKeys`). Every peer gets them in a `credentials` message after its hello; new ones a
+  peer sends are kept and passed on. When the records or the credentials change, and twice a
+  day, the service brings them up to date as Go's `refreshCredential`: the root starts a
+  period when the one kept is due or a member that sent its server key left; every member
+  signs its server key for the period; the root signs the hubs' and the members'
+  credentials with the period key when their lists are stale, and an admin that the hubs'
+  credential lists signs the members' credential (`credential::sign` and the `*_body`
+  functions, the key behind a callback).
+- **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
+  user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
+  the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in
+  ones). The run loop keeps the phones' link (`relay.rs`) running in place of the hubs
+  (`away/meet.rs`): it registers with the member certificate and the records, or once the
+  members' credential lists the device's server key with the credentials (Go's
+  `relayCredentials`), and registers again when they change. A connection the relay brings
+  to dial is dialed through its loopback port; a call comes to a loopback port of its own,
+  where the node serves it only when the certificate names the device the relay said calls.
+  Status shows the link as Go's `relay` (`TestLiteRelay`, `TestLiteRelayRoot`). Fetching
+  newer signed lists and the next address when the project's relay fails, the hub's key
+  periods and invitations are still Go's.
 
 ### Linux components
 

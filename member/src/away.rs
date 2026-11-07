@@ -24,6 +24,7 @@ use crate::uptime;
 use crate::wire::TunnelOffer;
 
 mod hubs;
+mod meet;
 mod movehub;
 mod serve;
 
@@ -60,6 +61,11 @@ pub struct Away {
     via: Option<SocketAddr>,
     /// The hub, while this device serves as one.
     serving: Mutex<Option<serve::Serving>>,
+    /// The link to the blind relay, while the device meets the group there.
+    meeting: Mutex<Option<meet::Meeting>>,
+    /// The group's server credentials, which the relay link registers with
+    /// once they list this device.
+    credentials: Mutex<Option<Arc<crate::credentials::Credentials>>>,
     /// Why the hub, while it serves, is to try the hubs above it.
     standby: Mutex<Option<String>>,
     /// The hub passes a hub above's offer on before it gives way.
@@ -98,6 +104,8 @@ impl Away {
             using: Mutex::new(None),
             via: None,
             serving: Mutex::new(None),
+            meeting: Mutex::new(None),
+            credentials: Mutex::new(None),
             standby: Mutex::new(None),
             giving_way: AtomicBool::new(false),
             log,
@@ -109,6 +117,12 @@ impl Away {
     pub fn via(mut self, via: Option<SocketAddr>) -> Away {
         self.via = via;
         self
+    }
+
+    /// Gives the group's server credentials, which the relay link
+    /// registers with once they list this device.
+    pub fn set_credentials(&self, c: Arc<crate::credentials::Credentials>) {
+        *self.credentials.lock().unwrap() = Some(c);
     }
 
     /// Whether this device is one of the group's hubs.
@@ -142,6 +156,7 @@ impl Away {
         let mut st = self.st.lock().unwrap();
         State::remove(&self.dir)?;
         self.stop_serving();
+        self.meeting.lock().unwrap().take();
         if st.take().is_some() {
             (self.log)("cbb: sync away from home is off");
         }
@@ -237,6 +252,14 @@ impl Away {
             return error.map(|(e, d)| control::Away { error: e, detail: d, ..Default::default() });
         };
         let mut a = control::Away { keys_in_file: true, ..Default::default() };
+        if let Some(r) = &st.relay {
+            let (relay, through) = self.meeting_status(r);
+            (a.relay, a.through) = (Some(relay), through);
+            if let Some((e, d)) = error {
+                (a.error, a.detail) = (e, d);
+            }
+            return Some(a);
+        }
         let using = self.using.lock().unwrap().clone().map(|(d, _)| d);
         let hubs = st.hubs_above(&node.hub_order(), self.me.as_str());
         // A hub waiting as the client of a hub above shows that hub.
@@ -288,6 +311,11 @@ impl Away {
         let mut lost = grace_over();
         while !node.is_closed() {
             let st = self.st.lock().unwrap().clone();
+            // A group that meets at a relay has no hub.
+            if self.meet(&node, st.as_ref()) {
+                std::thread::sleep(Duration::from_secs(1));
+                continue;
+            }
             let hubs = st.as_ref().map(|s| s.hubs_above(&node.hub_order(), self.me.as_str())).unwrap_or_default();
             match &st {
                 Some(s) if s.is_hub => {

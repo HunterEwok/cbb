@@ -340,16 +340,31 @@ pub fn run(cfg: Config) -> Result<()> {
         let svc = svc.clone();
         node.on_command(Arc::new(move |peer, c| svc.command(peer, c)));
     }
+    // The group's server credentials (docs/protocol.md, section 18), which
+    // the relays check.
+    let creds = crate::credentials::Credentials::load(&cfg.state_dir, &node, log.clone());
+    away.set_credentials(creds.clone());
     // A computer that is no admin offers an admin key for the root to
     // certify, and keeps the admin CA the root sends for it.
-    if node.role() == "full" {
+    let full = node.role() == "full";
+    if full {
         match crate::admin::admin_key_offer(&cfg.state_dir, &node.identity()) {
             Ok(offer) => node.offer_admin_key(offer),
             Err(e) => log(&format!("cbb: making the admin key: {}", e.for_log())),
         }
-        let (dir, n, log, away) = (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone(), away.clone());
+    }
+    {
+        let (dir, n, log, away, creds) =
+            (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone(), away.clone(), creds.clone());
         node.on_message(Box::new(move |from, m| {
             let Some(node) = n.upgrade() else { return };
+            if let (Some(v), "credentials") = (m.credentials.as_ref(), m.kind.as_str()) {
+                creds.received(&node, from, v);
+                return;
+            }
+            if !full {
+                return;
+            }
             if let Some(der) = m.admin_ca.as_deref().filter(|_| m.kind == "admin")
                 && let Err(e) = crate::admin::become_admin(&dir, &node, der)
             {
@@ -383,9 +398,14 @@ pub fn run(cfg: Config) -> Result<()> {
     {
         // On a hub, a member's hello brings its tunnel key, which the hub
         // admits, and gets the hub's offers back.
-        let (away, n) = (away.clone(), Arc::downgrade(&node));
+        // Every peer gets the group's server credentials after its hello.
+        let (away, n, creds) = (away.clone(), Arc::downgrade(&node), creds.clone());
         node.on_hello(Box::new(move |from, peer, chain| match n.upgrade() {
-            Some(node) => away.hello(&node, from, peer, chain),
+            Some(node) => {
+                let mut out = away.hello(&node, from, peer, chain);
+                out.extend(creds.message());
+                out
+            }
             None => Vec::new(),
         }));
     }
@@ -396,13 +416,22 @@ pub fn run(cfg: Config) -> Result<()> {
         // the root then. A root also renews the admin CAs of the admins
         // connected that have one from an earlier root, and a hub forgets
         // the clients the records remove.
-        let (node, dir, name, log, away) =
-            (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone(), away.clone());
+        let (node, dir, name, log, away, creds) =
+            (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone(), away.clone(), creds.clone());
         std::thread::spawn(move || {
             let (mut last, mut failed) = (String::new(), String::new());
             let renewed = std::sync::Mutex::new(std::collections::HashMap::new());
+            // The server credentials are brought up to date when the records
+            // or the credentials change, and twice a day for the period.
+            let (mut cred_seen, mut cred_at) = ((String::new(), u64::MAX), std::time::Instant::now());
             while !node.is_closed() {
                 crate::admin::renew_admin_cas(&dir, &node, &renewed);
+                let seen = (node.records().lock().unwrap().digest(), creds.changes());
+                if seen != cred_seen || cred_at.elapsed() >= CREDENTIAL_CHECK {
+                    creds.refresh(&node);
+                    cred_seen = (node.records().lock().unwrap().digest(), creds.changes());
+                    cred_at = std::time::Instant::now();
+                }
                 // A hub drops the clients the records now refuse, and every
                 // member the offers of devices that may no longer be hubs.
                 away.prune(&node);
@@ -458,6 +487,9 @@ pub fn run(cfg: Config) -> Result<()> {
 /// the hardware when cbb-helper holds the device key.
 /// How often the claims to take the group over are looked at again.
 const CLAIM_CHECK: Duration = Duration::from_secs(2);
+/// How often the server credentials are looked at when nothing changed, as
+/// Go's renewEvery.
+const CREDENTIAL_CHECK: Duration = Duration::from_secs(12 * 3600);
 
 /// Every claim of the records with its state: what changes when a claim
 /// takes effect.
@@ -658,9 +690,7 @@ impl Service {
                 node.reconnect();
             }
             "hub-off" => away.stop_hub(&node, h.force)?,
-            "relay" => {
-                return Err(Error::msg("meeting at a relay is not on the Rust service yet; use a hub of the group"));
-            }
+            "relay" => node.set_tunnel_key(Some(away.meet_at(&node, h)?)),
             n => return Err(Error::msg(format!("unknown cbb global {n:?}"))),
         }
         let status = Status { away: away.status(&node), ..Default::default() };

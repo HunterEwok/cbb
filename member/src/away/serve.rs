@@ -310,23 +310,8 @@ impl Away {
     /// the group's records, which show the forwarder it is the root or an
     /// admin, and hellos from its WireGuard port.
     fn register(&self, node: &Node, st: &State, f: &Forwarder, hub: &Hub) -> Result<Forwarding> {
-        let ident = node.identity();
-        let key: Arc<dyn cbb_core::identity::ExternalKey> = match &ident.external {
-            Some(k) => k.clone(),
-            None => Arc::new(cbb_core::identity::FileKey::new(&ident.key)?),
-        };
-        let (roots, records) = {
-            let rs = node.records();
-            let rs = rs.lock().unwrap();
-            (rs.roots(), rs.all())
-        };
-        let mut chain = ident.chain();
-        for c in std::iter::once(ident.group_ca.clone()).chain(roots) {
-            if !chain.contains(&c.der) {
-                chain.push(c.der);
-            }
-        }
-        let records = records.iter().filter_map(|r| serde_json::to_value(r).ok()).collect();
+        let super::meet::Shown { key, chain } = super::meet::shown(node)?;
+        let records = super::meet::node_records(node);
         let pins =
             if f.project { PROJECT_PINS.iter().map(|p| pin_bytes(p)).collect() } else { vec![pin_bytes(&f.pin)] };
         let cfg = forward::Config {
@@ -568,7 +553,7 @@ fn pin_bytes(pin: &str) -> Result<[u8; 32]> {
 }
 
 /// An IPv4 address mapped into IPv6 is the IPv4 address.
-fn unmapped(ep: SocketAddr) -> SocketAddr {
+pub(super) fn unmapped(ep: SocketAddr) -> SocketAddr {
     match ep {
         SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
             Some(v4) => SocketAddr::from((v4, v6.port())),

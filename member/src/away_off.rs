@@ -72,6 +72,12 @@ impl Away {
 
     pub fn prune(&self, _node: &Node) {}
 
+    pub fn set_credentials(&self, _c: Arc<crate::credentials::Credentials>) {}
+
+    pub fn meet_at(&self, _node: &Node, _h: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
+        self.turn_on()
+    }
+
     pub fn is_hub(&self) -> bool {
         false
     }

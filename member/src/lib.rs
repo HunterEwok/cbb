@@ -23,6 +23,7 @@ pub mod button;
 pub mod content;
 mod control;
 mod copies;
+pub mod credentials;
 mod device;
 pub mod discovery;
 pub mod entries;
