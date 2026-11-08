@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,10 +56,40 @@ func TestMediaAway(t *testing.T) {
 	})
 	waitFor(t, "the Mac meets the hub", func() bool { return len(mac.status(t).Peers) == 1 })
 
+	// The Rust service keeps a copy's sealed blob under its own hash, not
+	// its parts: there a copy has arrived when a file at least as large as
+	// the part is in the cache that was not before the copy was made.
+	before := map[[sha256.Size]byte]map[*testService]map[string]bool{}
+	files := func(s *testService) map[string]bool {
+		es, _ := os.ReadDir(filepath.Join(s.dir, contentDir))
+		names := map[string]bool{}
+		for _, e := range es {
+			names[e.Name()] = true
+		}
+		return names
+	}
+	send := func(s *testService, name string, p sentPart) error {
+		snap := map[*testService]map[string]bool{}
+		for _, q := range []*testService{pi, deck, mac} {
+			snap[q] = files(q)
+		}
+		before[sha256.Sum256(p.data)] = snap
+		return s.copyMedia(t, name, p)
+	}
 	has := func(s *testService, data []byte) bool {
 		sum := sha256.Sum256(data)
-		_, err := os.Stat(filepath.Join(s.dir, contentDir, hex.EncodeToString(sum[:])))
-		return err == nil
+		if rustService() == "" {
+			_, err := os.Stat(filepath.Join(s.dir, contentDir, hex.EncodeToString(sum[:])))
+			return err == nil
+		}
+		es, _ := os.ReadDir(filepath.Join(s.dir, contentDir))
+		for _, e := range es {
+			fi, err := e.Info()
+			if err == nil && !strings.HasSuffix(e.Name(), ".part") && !before[sum][s][e.Name()] && fi.Size() >= int64(len(data)) {
+				return true
+			}
+		}
+		return false
 	}
 	// Megabytes through the tunnel's WireGuard and TCP in the process take
 	// a fraction of a second, but ten times as long under the race
@@ -73,12 +104,12 @@ func TestMediaAway(t *testing.T) {
 
 	// From home to the deck, and from the deck home, through the hub.
 	fromMac := file("from-mac.bin", randomBytes(2<<20+7))
-	if err := mac.copyMedia(t, "from-mac.bin", fromMac); err != nil {
+	if err := send(mac, "from-mac.bin", fromMac); err != nil {
 		t.Fatal(err)
 	}
 	arrives(deck, fromMac)
 	fromDeck := file("from-deck.bin", randomBytes(1<<20+3))
-	if err := deck.copyMedia(t, "from-deck.bin", fromDeck); err != nil {
+	if err := send(deck, "from-deck.bin", fromDeck); err != nil {
 		t.Fatal(err)
 	}
 	arrives(mac, fromDeck)
@@ -88,7 +119,7 @@ func TestMediaAway(t *testing.T) {
 		t.Fatal(err)
 	}
 	large := file("large.bin", randomBytes(2<<20))
-	if err := mac.copyMedia(t, "large.bin", large); err != nil {
+	if err := send(mac, "large.bin", large); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the deck sees the copy", func() bool { return deck.paste(t) == "large.bin" })
@@ -98,7 +129,7 @@ func TestMediaAway(t *testing.T) {
 	}
 	// One within it still goes.
 	small := file("small.bin", randomBytes(512<<10))
-	if err := mac.copyMedia(t, "small.bin", small); err != nil {
+	if err := send(mac, "small.bin", small); err != nil {
 		t.Fatal(err)
 	}
 	arrives(deck, small)
@@ -109,7 +140,7 @@ func TestMediaAway(t *testing.T) {
 		t.Fatal(err)
 	}
 	large = file("large.bin", randomBytes(2<<20))
-	if err := mac.copyMedia(t, "large again", large); err != nil {
+	if err := send(mac, "large again", large); err != nil {
 		t.Fatal(err)
 	}
 	waitUpTo(t, 30*time.Second, "the hub fetches the copy", func() bool { return has(pi, large.data) })

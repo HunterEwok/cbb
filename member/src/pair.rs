@@ -241,7 +241,7 @@ pub fn listen(
                 if e.details().contains(Refusal::WrongCode.message()) {
                     failures += 1;
                     if failures >= MAX_FAILURES {
-                        return Err(Error::with("the pairing failed", Refusal::TooMany));
+                        return Err(Error::with(format!("pair: {}", Refusal::TooMany), Refusal::TooMany));
                     }
                 }
             }

@@ -59,7 +59,7 @@ esac
 
 identifier=tools.cbb.cli
 case $bin in
-*/cbb-helper | cbb-helper) identifier=tools.cbb.helper ;;
+*/cbb-helper | cbb-helper | */cbb-helper-* | cbb-helper-*) identifier=tools.cbb.helper ;;
 esac
 sign "$bin" --identifier "$identifier" --entitlements "$entitlements"
 codesign --verify --strict --verbose=2 "$bin"

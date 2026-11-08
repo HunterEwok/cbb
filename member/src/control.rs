@@ -204,6 +204,9 @@ pub struct Part {
 pub struct Media {
     pub max_copy: i64,
     pub max_copy_away: i64,
+    /// Why the last copy's images or files were not fetched, as Go's.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub failed: String,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -279,6 +282,12 @@ pub struct Status {
     /// cbb leave.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub removed: bool,
+    /// The records freeze this admin computer's admin key, as Go's.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub frozen: bool,
+    /// The admin that took the group over from this root, as Go's.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub taken_over_by: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media: Option<Media>,
     /// The group's key level: which keys may be its root, an admin or a hub.
@@ -291,6 +300,38 @@ pub struct Status {
     /// How long a copy from another device stays live after it arrives.
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub incoming_ms: i64,
+    /// The claims to take the group over that wait or stop the group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claims: Vec<Claim>,
+    /// The conflicts that stop the group until its root decides.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<Conflict>,
+    /// How many records of a later version this member keeps.
+    #[serde(default, skip_serializing_if = "is_zero_u")]
+    pub newer: usize,
+}
+
+/// A claim to take the group over, as Go's control.Claim: who claims it
+/// (a device's name, or the key hash), pending, competing or disputed, and
+/// how long a pending one still waits.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Claim {
+    pub by: String,
+    pub state: String,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub left_ms: i64,
+}
+
+/// A conflict of the group's records, as Go's control.Conflict: admins,
+/// claims or two_histories, and the signers' devices.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Conflict {
+    pub kind: String,
+    pub devices: Vec<String>,
+}
+
+fn is_zero_u(n: &usize) -> bool {
+    *n == 0
 }
 
 /// A quick action as the device's user set it, with the names of the Go
@@ -411,20 +452,59 @@ pub struct Device {
     pub role: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
+    /// Where its keys live: file, hardware, proven or rootless; empty when
+    /// the member does not say.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub store: String,
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub skew_ms: i64,
+    /// What its hello says about its device; empty when it says nothing or
+    /// is not connected.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub form: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub os_version: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mac: String,
+    /// Its sync mode, as its hello says.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mode: String,
+    /// An admin muted it, until muted_until_ms (Unix milliseconds; 0 for
+    /// until an admin unmutes it).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub muted: bool,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub muted_until_ms: i64,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub admin: bool,
     /// It holds the group's root.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub root: bool,
+    /// An admin computer another admin froze.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub frozen: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub online: bool,
+    /// When this member last saw it connected, Unix milliseconds.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub last_seen_ms: i64,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[serde(rename = "self")]
     pub this: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub listed: bool,
+    /// The records let it be a hub.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub may_hub: bool,
+    /// A hub that only passes the copies on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub forward_only: bool,
+    /// One of the group's hubs, as this device knows: itself while it is a
+    /// hub, or a hub whose offer it keeps.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hub: bool,
 }
 
 /// A header and its payload.

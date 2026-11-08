@@ -71,6 +71,11 @@ const TYPING_CHECK: Duration = Duration::from_millis(500);
 const MAX_WANTED: usize = 16;
 
 /// How long a request waits for a device in a group to start.
+/// How long a copy's images or files are fetched before they are given
+/// up, and the pause before a fetch that no peer gave is tried again, as
+/// Go's fetchFor and fetchRetry.
+const FETCH_FOR: Duration = Duration::from_secs(30 * 60);
+const FETCH_RETRY: Duration = Duration::from_secs(2);
 const START_WAIT: Duration = Duration::from_secs(10);
 const INJECT_WAIT: Duration = Duration::from_secs(5);
 const TYPE_WAIT: Duration = Duration::from_millis(5);
@@ -199,6 +204,8 @@ struct Service {
     /// The latest copy of images or files this member made or wrote, which
     /// paste-media opens.
     media: Mutex<Option<Arc<Event>>>,
+    /// Why the last copy's images or files were not fetched.
+    fetch_failed: Mutex<String>,
     /// This device's largest copy of images or files (cbb config).
     limits: Mutex<copies::Limits>,
     state_dir: PathBuf,
@@ -220,8 +227,15 @@ struct Service {
     /// The device left a group made before 0.6 at this start, which status
     /// says while it is in no group, as Go's leftOld.
     left_old: bool,
+    /// Why identity.json cannot be read: the service then runs without
+    /// its group and takes only cbb leave, as Go's.
+    broken: Mutex<Option<String>>,
     /// One cbb new at a time, so two requests cannot make two groups.
     creating: Mutex<()>,
+    /// The address this device joined at, given by hand, as an SSH forward
+    /// or a VPN address that discovery cannot find: the group that starts
+    /// next keeps a connection there (keep_joined).
+    joined_at: Mutex<Option<SocketAddr>>,
     /// The pairing running here: a window for a code, or an admission by
     /// a QR code; one at a time.
     pairing: Mutex<Option<Pairing>>,
@@ -275,6 +289,10 @@ pub fn log_line(s: &str) {
 }
 
 /// Runs the service until SIGTERM or SIGINT.
+/// What the user sees when the device's group file cannot be read, as Go's
+/// errBroken.
+const BROKEN: &str = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or leave the group (cbb leave) and join again";
+
 pub fn run(cfg: Config) -> Result<()> {
     // SAFETY: the handler only stores to an atomic.
     unsafe {
@@ -304,6 +322,7 @@ pub fn run(cfg: Config) -> Result<()> {
         pending: Mutex::new(None),
         latest: Mutex::new(0),
         media: Mutex::new(None),
+        fetch_failed: Mutex::new(String::new()),
         limits: Mutex::new(copies::Limits::load(&cfg.state_dir).unwrap_or_else(|e| {
             log(&format!("cbb: {}; the largest copy is the default", e.for_log()));
             copies::Limits::default()
@@ -316,7 +335,9 @@ pub fn run(cfg: Config) -> Result<()> {
         name: cfg.name.clone(),
         full: cfg.full,
         left_old,
+        broken: Mutex::new(None),
         creating: Mutex::new(()),
+        joined_at: Mutex::new(None),
         pairing: Mutex::new(None),
         port: Mutex::new(None),
     });
@@ -353,11 +374,24 @@ pub fn run(cfg: Config) -> Result<()> {
         if STOP.load(Ordering::SeqCst) {
             let _ = std::fs::remove_file(&cfg.socket);
             let _ = std::fs::remove_file(&admin_socket);
+            if LEFT.load(Ordering::SeqCst) {
+                return Err(Error::msg("restarting after leaving the group"));
+            }
             return Ok(());
         }
-        match Identity::load(&cfg.state_dir)? {
-            Some(id) => break id,
-            None => {
+        match Identity::load(&cfg.state_dir) {
+            Ok(Some(id)) => break id,
+            Err(e) => {
+                let mut broken = svc.broken.lock().unwrap();
+                if broken.is_none() {
+                    log(&format!("cbb: {BROKEN} ({})", e.for_log()));
+                    *broken = Some(e.for_log());
+                }
+                drop(broken);
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            Ok(None) => {
+                *svc.broken.lock().unwrap() = None;
                 if !said {
                     log("cbb: this device is in no group yet; run cbb pair");
                     said = true;
@@ -383,6 +417,9 @@ pub fn run(cfg: Config) -> Result<()> {
     let away =
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
     let presence = presence_of(&ident, &records, &cfg.name, cfg.full);
+    // The blobs of the copies are a cache that a service starts empty, as
+    // Go's: the group's current copy is fetched again when it is pasted.
+    crate::content::empty(&cfg.state_dir, &|s| log(s));
     let node = {
         let svc = svc.clone();
         Arc::new(
@@ -416,6 +453,11 @@ pub fn run(cfg: Config) -> Result<()> {
         let svc = svc.clone();
         node.on_command(Arc::new(move |peer, c| svc.command(peer, c)));
     }
+    {
+        let svc = svc.clone();
+        node.on_relay(Box::new(move |ev| svc.relayed(ev)));
+    }
+    node.set_away_limit(u64::try_from(svc.limits.lock().unwrap().away).unwrap_or(0));
     // The group's server credentials (docs/protocol.md, section 18), which
     // the relays check.
     let creds = crate::credentials::Credentials::load(&cfg.state_dir, &node, log.clone());
@@ -475,9 +517,20 @@ pub fn run(cfg: Config) -> Result<()> {
         // On a hub, a member's hello brings its tunnel key, which the hub
         // admits, and gets the hub's offers back.
         // Every peer gets the group's server credentials after its hello.
-        let (away, n, creds) = (away.clone(), Arc::downgrade(&node), creds.clone());
+        let (away, n, creds, dir, log) =
+            (away.clone(), Arc::downgrade(&node), creds.clone(), cfg.state_dir.clone(), log.clone());
         node.on_hello(Box::new(move |from, peer, chain| match n.upgrade() {
             Some(node) => {
+                // The root records what the hello says about the device,
+                // as Go's ensureListed, away from the connection's thread.
+                if matches!(peer.role.as_str(), "full" | "lite") {
+                    let (node, dir, peer, log) = (node.clone(), dir.clone(), peer.clone(), log.clone());
+                    std::thread::spawn(move || {
+                        if let Err(e) = (crate::admin::Admin { node: &node, dir: &dir }).list_from_hello(&peer) {
+                            log(&format!("cbb: recording {} in the devices list: {}", peer.id, e.for_log()));
+                        }
+                    });
+                }
                 let mut out = away.hello(&node, from, peer, chain);
                 out.extend(creds.message());
                 out
@@ -499,7 +552,15 @@ pub fn run(cfg: Config) -> Result<()> {
             // The server credentials are brought up to date when the records
             // or the credentials change, and twice a day for the period.
             let (mut cred_seen, mut cred_at) = ((String::new(), usize::MAX), std::time::Instant::now());
+            // A root's resolve may have voided both histories of this
+            // device's key: what it signed is signed again (signed.rs).
+            let mut resign_seen = String::new();
             while !node.is_closed() {
+                let digest = node.records().lock().unwrap().digest();
+                if digest != resign_seen {
+                    resign_seen = digest;
+                    crate::signed::resign_voided(&dir, &node);
+                }
                 crate::admin::renew_admin_cas(&dir, &node);
                 let seen = (node.records().lock().unwrap().digest(), creds.changes());
                 if seen != cred_seen || cred_at.elapsed() >= CREDENTIAL_CHECK {
@@ -528,6 +589,9 @@ pub fn run(cfg: Config) -> Result<()> {
         });
     }
     *svc.away.write().unwrap() = Some(away.clone());
+    if let Some(addr) = svc.joined_at.lock().unwrap().take() {
+        keep_joined(node.clone(), away.clone(), addr, log.clone());
+    }
     let port = cfg.port.and_then(|p| discovery::listen(node.clone(), p, log.clone()));
     *svc.port.lock().unwrap() = port;
     if let Some(p) = port {
@@ -1652,28 +1716,98 @@ impl Service {
         *self.media.lock().unwrap() = Some(ev.clone());
         let Some(m) = ev.media.clone() else { return };
         let alt = (!w.text.is_empty()).then(|| WriteReq { kind: Kind::Text, media: None, event: None, ..w.clone() });
-        let node = self.node().ok().filter(|_| self.watchers.lock().unwrap().iter().any(|x| x.board && x.takes(&m)));
-        let takers = node.is_some();
+        // The parts are fetched as Go's setMedia does, whether or not a
+        // watcher takes them, and a copy over the limit is refused.
+        let node = self.node().ok();
+        let takers = node.is_some() && self.watchers.lock().unwrap().iter().any(|x| x.board && x.takes(&m));
         if let Some(node) = node {
             let svc = self.clone();
             let (alt, m) = (alt.clone(), m.clone());
             std::thread::spawn(move || {
-                let limit = svc.limits.lock().unwrap().home as u64;
-                let fetched = node.fetch(&ev, limit);
+                let limit = svc.limits.lock().unwrap().home;
+                let size = ev.sealed.as_ref().and_then(|s| s.blob.as_ref()).map_or(0, |b| b.size);
+                let fetched = if size > limit {
+                    Err(Error::msg(format!(
+                        "a {} copy from {} is over this device's limit of {}",
+                        copies::size_text(size),
+                        ev.origin,
+                        copies::size_text(limit)
+                    )))
+                } else {
+                    // Until a newer write comes.
+                    Self::fetch_retrying(&node, &ev, limit, || *svc.latest.lock().unwrap() == w.seq)
+                };
                 if *svc.latest.lock().unwrap() != w.seq {
                     return; // a newer write came
                 }
-                if let Err(e) = &fetched {
-                    (svc.log)(&format!("cbb: fetching a copy's images or files: {}", e.for_log()));
+                if fetched.is_ok() {
+                    (svc.log)(&format!("cbb: fetched a copy of {}", copies::size_text(size)));
                 }
-                let whole = fetched.is_ok().then_some(w);
-                svc.send_writes(|x| if x.takes(&m) { whole.clone().or_else(|| alt.clone()) } else { None });
+                let mut failed = svc.fetch_failed.lock().unwrap();
+                match &fetched {
+                    Ok(()) => failed.clear(),
+                    Err(e) => {
+                        (svc.log)(&format!("cbb: fetching a copy's images or files: {}", e.for_log()));
+                        *failed = e.message().to_string();
+                    }
+                }
+                drop(failed);
+                if takers {
+                    let whole = fetched.is_ok().then_some(w);
+                    svc.send_writes(|x| if x.takes(&m) { whole.clone().or_else(|| alt.clone()) } else { None });
+                }
             });
         }
         let Some(alt) = alt else { return };
         if !self.send_writes(|x| if x.takes(&m) && takers { None } else { Some(alt.clone()) }) && !takers {
             *self.pending.lock().unwrap() = Some(alt);
         }
+    }
+
+    /// Fetches the blob of ev, as Go's fetchAll: again after a pause while
+    /// no peer gives it, as when the hub has yet to fetch it, until it
+    /// arrives, wanted says it is wanted no more, or FETCH_FOR passes.
+    fn fetch_retrying(node: &Node, ev: &Event, limit: i64, wanted: impl Fn() -> bool) -> Result<()> {
+        let start = std::time::Instant::now();
+        loop {
+            let res = node.fetch(ev, limit as u64);
+            if res.is_ok() || !wanted() || start.elapsed() >= FETCH_FOR {
+                return res;
+            }
+            std::thread::sleep(FETCH_RETRY);
+        }
+    }
+
+    /// Takes an event this member passes on without writing it, as Go's
+    /// relayed: a hub fetches the blob of the group's current copy within
+    /// its limit away from home, so that the members that reach only it
+    /// can fetch it from its cache.
+    fn relayed(self: &Arc<Self>, ev: &Event) {
+        let Some(size) = ev.sealed.as_ref().and_then(|s| s.blob.as_ref()).map(|b| b.size) else { return };
+        let (Ok(node), Ok(away)) = (self.node(), self.away()) else { return };
+        if !away.is_hub() || node.engine.current_copy().is_none_or(|(id, _)| id != ev.id) {
+            return;
+        }
+        let limit = self.limits.lock().unwrap().away;
+        if size > limit {
+            (self.log)(&format!(
+                "cbb: not passing a copy of {} on to the members away from home: it is over this hub's limit of {} away from home",
+                copies::size_text(size),
+                copies::size_text(limit)
+            ));
+            return;
+        }
+        let (ev, svc) = (ev.clone(), self.clone());
+        std::thread::spawn(move || {
+            // While it is the group's current copy.
+            let current = || node.engine.current_copy().is_some_and(|(id, _)| id == ev.id);
+            match Self::fetch_retrying(&node, &ev, limit, current) {
+                Ok(()) => {
+                    (svc.log)(&format!("cbb: fetched a copy of {} to pass on away from home", copies::size_text(size)))
+                }
+                Err(e) => (svc.log)(&format!("cbb: fetching a copy to pass on away from home: {}", e.for_log())),
+            }
+        });
     }
 
     /// Sends each watcher that holds a clipboard the write pick gives it;
@@ -1716,6 +1850,12 @@ impl Service {
             let _ = control::write(&mut out, &control::failure(&e));
             return;
         }
+        let broken = self.broken.lock().unwrap().clone();
+        if let Some(detail) = broken.filter(|_| m.header.op != "leave") {
+            let h = Header { error: BROKEN.to_string(), detail, done: true, ..Default::default() };
+            let _ = control::write(&mut out, &control::reply(h, Vec::new()));
+            return;
+        }
         if m.header.op == "watch" {
             self.watch(m, r, out);
             return;
@@ -1737,7 +1877,7 @@ impl Service {
             let _ = control::write(&mut out, &answer);
             return;
         }
-        if m.header.op == "pair" && m.header.addrs.is_empty() {
+        if m.header.op == "pair" && m.header.addrs.is_empty() && m.header.code.is_empty() {
             if let Err(e) = self.pair_window(&m, r, &mut out) {
                 (self.log)(&format!("cbb: pair: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
@@ -1948,7 +2088,7 @@ impl Service {
     /// Images and files in cbb status and cbb config.
     fn media_status(&self) -> control::Media {
         let l = *self.limits.lock().unwrap();
-        control::Media { max_copy: l.home, max_copy_away: l.away }
+        control::Media { max_copy: l.home, max_copy_away: l.away, failed: self.fetch_failed.lock().unwrap().clone() }
     }
 
     fn request(&self, m: &Message) -> Result<Message> {
@@ -1960,6 +2100,9 @@ impl Service {
                 if !h.name.is_empty() {
                     let l = copies::Limits::set(&self.state_dir, &h.name, &h.value)?;
                     *self.limits.lock().unwrap() = l;
+                    if let Ok(node) = self.node() {
+                        node.set_away_limit(u64::try_from(l.away).unwrap_or(0));
+                    }
                     (self.log)(&format!(
                         "cbb: the largest copy is {} at home and {} away from home now",
                         copies::size_text(l.home),
@@ -2048,6 +2191,14 @@ impl Service {
                         ..Default::default()
                     })
                     .collect();
+                // Read apart: a guard in the literal would live through it,
+                // and group_status takes the records too.
+                let (key_level, incoming_ms) = {
+                    let records = node.records();
+                    let st = records.lock().unwrap().state();
+                    (st.key_level, st.incoming_ms)
+                };
+                let group = group_status(&node);
                 let status = Status {
                     device: id.id.to_string(),
                     group: id.tag(),
@@ -2072,61 +2223,20 @@ impl Service {
                         .unwrap_or_default(),
                     actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
                     stop: node.stop(),
-                    removed: node.removed(),
+                    removed: node.removed() && !group.frozen && group.taken_over_by.is_empty(),
                     media: Some(self.media_status()),
-                    key_level: {
-                        let l = node.records().lock().unwrap().state().key_level;
-                        if l.is_empty() { "hardware".into() } else { l }
-                    },
+                    key_level: if key_level.is_empty() { "hardware".into() } else { key_level },
                     key_problem: String::new(),
-                    incoming_ms: node
-                        .records()
-                        .lock()
-                        .unwrap()
-                        .state()
-                        .incoming_ms
-                        .unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
+                    incoming_ms: incoming_ms.unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
                     quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
+                    ..group
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
             }
             "devices" => {
                 let node = self.node()?;
-                let me = node.identity().id.to_string();
-                let peers = node.peers();
-                let root = node.records().lock().unwrap().state().root_device;
-                let mut out: Vec<Device> = node
-                    .devices()
-                    .into_iter()
-                    .map(|d| Device {
-                        os: peers
-                            .iter()
-                            .find(|p| p.id.as_str() == d.id && !p.os.is_empty())
-                            .map_or(d.os.clone(), |p| p.os.clone()),
-                        online: peers.iter().any(|p| p.id.as_str() == d.id),
-                        this: d.id == me,
-                        root: d.id == root,
-                        listed: true,
-                        id: d.id,
-                        name: d.name,
-                        role: d.role,
-                        admin: d.admin,
-                        ..Default::default()
-                    })
-                    .collect();
-                for p in peers {
-                    if !out.iter().any(|d| d.id == p.id.as_str()) {
-                        out.push(Device {
-                            id: p.id.to_string(),
-                            name: p.name,
-                            role: p.role,
-                            os: p.os,
-                            online: true,
-                            ..Default::default()
-                        });
-                    }
-                }
-                Ok(control::reply(Header { devices: out, ..Default::default() }, Vec::new()))
+                let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
+                Ok(control::reply(Header { devices: devices(&node, &hubs), ..Default::default() }, Vec::new()))
             }
             "away" => self.global(h),
             // The networks this device is on now are known: the user says
@@ -2195,7 +2305,10 @@ impl Service {
             "paste-receive" => self.set_receive(h),
             "keyboard" | "remote" => {
                 let p = self.peripherals.serve(&h.op, h, &m.payload)?;
-                let status = Status { keyboard: p.keyboard, tvs: p.tvs, ..Default::default() };
+                // With the paste targets, which a TV that pastes joins, as
+                // Go's status.
+                let status =
+                    Status { keyboard: p.keyboard, tvs: p.tvs, paste: self.paste_status(), ..Default::default() };
                 Ok(control::reply(Header { status: Some(status), done: true, ..Default::default() }, Vec::new()))
             }
             "action-set" => self.set_action(h),
@@ -2229,14 +2342,18 @@ impl Service {
                     if h.for_ms != 0 {
                         return Err(Error::msg("-on turns another device's sync on or off with no time"));
                     }
-                    let name = self.admin(|a| a.sync_on(&h.device, on))?;
-                    return Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()));
+                    if let Some(name) = self.admin(|a| a.sync_on(&h.device, on))? {
+                        return Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()));
+                    }
                 }
                 if on && h.for_ms != 0 {
                     return Err(Error::msg("a time goes only with cbb sync off"));
                 }
                 self.set_sync(on, h.for_ms)?;
-                Ok(control::reply(Header::default(), Vec::new()))
+                // The answer carries the status, as Go's.
+                let status =
+                    Message { header: Header { op: "status".into(), ..Default::default() }, payload: Vec::new() };
+                self.request(&status)
             }
             "new" => self.new_group(),
             "revoke" => {
@@ -2290,13 +2407,65 @@ impl Service {
             }
             "pair" => {
                 let _slot = self.take_pairing(|| Ok(Pairing::Qr))?;
-                let name = self.admin(|a| a.admit_by_qr(&h.code, &h.addrs, &h.fingerprint, h.admins))?;
+                let name = if h.addrs.is_empty() && h.fingerprint.is_empty() {
+                    // A code alone: the device that shows it waits on the
+                    // network, as Go's pairFind.
+                    cbb_core::pair::normalize_code(&h.code)?;
+                    let waiting = crate::discovery::find_joiners(crate::discovery::PAIRING_BROWSE)?;
+                    let mut tried = Vec::new();
+                    let mut name = None;
+                    for (addrs, fp) in waiting {
+                        let addrs: Vec<String> = addrs.iter().map(|a| a.to_string()).collect();
+                        match self.admin(|a| a.admit_by_qr(&h.code, &addrs, &fp, h.admins)) {
+                            Ok(n) => {
+                                name = Some(n);
+                                break;
+                            }
+                            Err(e) => tried.push(e.for_log()),
+                        }
+                    }
+                    name.ok_or_else(|| Error::msg(tried.join("; ")))?
+                } else {
+                    self.admin(|a| a.admit_by_qr(&h.code, &h.addrs, &h.fingerprint, h.admins))?
+                };
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "leave" => {
                 // The node stops first, so nothing writes the group's files
                 // again; the service then restarts in no group.
-                self.node.read().unwrap().clone().ok_or_else(|| Error::msg(crate::leave::NOTHING_TO_LEAVE))?.close();
+                let node = self.node.read().unwrap().clone();
+                if node.is_none() && self.broken.lock().unwrap().is_some() {
+                    // A damaged identity.json: leaving deletes it with the
+                    // rest, and the service starts again in no group.
+                    let res = crate::leave::leave_group(&self.state_dir);
+                    if res.is_ok() {
+                        *self.broken.lock().unwrap() = None;
+                        (self.log)(
+                            "cbb: this device left its damaged group: the group's files are deleted; it restarts in no group",
+                        );
+                        std::thread::spawn(|| {
+                            std::thread::sleep(RESTART_AFTER);
+                            LEFT.store(true, Ordering::SeqCst);
+                            STOP.store(true, Ordering::SeqCst);
+                        });
+                    }
+                    return res.map(|()| control::reply(Header::default(), Vec::new()));
+                }
+                let node = node.ok_or_else(|| Error::msg(crate::leave::NOTHING_TO_LEAVE))?;
+                // The group's root leaves only alone, as Go's leave: nobody
+                // could add or remove a device after it.
+                let me = node.identity().id.to_string();
+                if node.records().lock().unwrap().root_member().is_some_and(|(id, _)| id == me) {
+                    let others: Vec<String> =
+                        node.devices().into_iter().filter(|d| d.id != me).map(|d| d.name).collect();
+                    if !others.is_empty() {
+                        return Err(Error::msg(format!(
+                            "this device is the group's root, and the group has other devices ({}): make one of them an admin (cbb admin) and hand the group over to it (cbb handover) first, or remove them",
+                            others.join(", ")
+                        )));
+                    }
+                }
+                node.close();
                 let res = crate::leave::leave_group(&self.state_dir);
                 match &res {
                     Ok(()) => (self.log)(
@@ -2346,20 +2515,41 @@ impl Service {
     /// pair -invite itself.
     fn join(&self, m: &Message, r: control::Reader<UnixStream>, out: &mut UnixStream) -> Result<()> {
         let h = &m.header;
-        if !h.invite.is_empty() {
-            return Err(Error::msg("join with an invitation through cbb pair -invite on this device"));
-        }
         if matches!(Identity::load(&self.state_dir), Ok(Some(_))) {
             return Err(Error::msg("this device is already in a group"));
         }
-        let code = cbb_core::pair::normalize_code(&h.code).map_err(|r| Error::msg(r.message()))?;
+        let code = if h.invite.is_empty() {
+            cbb_core::pair::normalize_code(&h.code).map_err(|r| Error::msg(r.message()))?
+        } else {
+            String::new()
+        };
         let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;
         let (mut joiner, save) = crate::joiner(&self.state_dir, &self.name)?;
         if self.full {
             joiner = joiner.as_computer(crate::admin::os_name());
         }
         let log = self.log.clone();
-        let id = if h.listen {
+        let id = if !h.invite.is_empty() {
+            // A remote invitation, as Go's joinInvite: sync away from home
+            // goes on with it, which a key in a file needs the user's
+            // consent for.
+            if !joiner.key.is_empty() && !h.consent {
+                return Err(Error::msg(
+                    "a device that joins with an invitation syncs away from home, and this one keeps its keys in files, so it needs your consent; run cbb pair -invite and read what it says",
+                ));
+            }
+            let shared: &UnixStream = out;
+            let shown = |fp: &str| {
+                let _ = control::write(
+                    &mut &*shared,
+                    &control::reply(Header { fingerprint: fp.to_string(), ..Default::default() }, Vec::new()),
+                );
+            };
+            // The client may hang up; the join goes on.
+            let mut r = r;
+            std::thread::spawn(move || while r.read().is_ok() {});
+            crate::away::join_invite(&self.state_dir, &joiner, &*save, &h.invite, &shown, log)?
+        } else if h.listen {
             let mut r = r;
             let ln = std::net::TcpListener::bind(("::", 0))
                 .or_else(|_| std::net::TcpListener::bind(("0.0.0.0", 0)))
@@ -2383,7 +2573,9 @@ impl Service {
             let addrs = if h.address.is_empty() {
                 crate::discovery::find_pairing(crate::discovery::PAIRING_BROWSE)?
             } else {
-                vec![crate::resolve(&h.address)?]
+                let a = crate::resolve(&h.address)?;
+                *self.joined_at.lock().unwrap() = Some(a);
+                vec![a]
             };
             let mut last = Error::msg("no address to dial");
             let mut joined = None;
@@ -2465,7 +2657,7 @@ impl Service {
                 "{} got its certificate but did not confirm that it stored it; check it with cbb status there, and pair it again if needed",
                 j.name
             ))),
-            Err(why) => Err(Error::with("the pairing failed", why)),
+            Err(why) => Err(Error::with(format!("pair: {}", why), why)),
         }
     }
 
@@ -2558,7 +2750,18 @@ impl Service {
         }
         let board = !m.header.paste_only && target != TMUX && !keyboard;
         let (images, files, html) = (m.header.images, m.header.files, m.header.html);
-        if board && let (Ok(text), Ok(kind)) = (String::from_utf8(m.payload), kind_of(&m.header.kind)) {
+        // A write decided while no watcher was connected, if the member's
+        // own text is still that, goes to this watcher in place of the
+        // stale text its clipboard holds, as Go's.
+        let missed = if board {
+            self.pending.lock().unwrap().take().filter(|w| node.engine.local().is_some_and(|(t, _, _)| t == w.text))
+        } else {
+            None
+        };
+        if board
+            && missed.is_none()
+            && let (Ok(text), Ok(kind)) = (String::from_utf8(m.payload), kind_of(&m.header.kind))
+        {
             node.engine.clipboard_is(&text, kind);
         }
         let (tx, rx) = mpsc::sync_channel::<ToWatcher>(WATCH_QUEUE);
@@ -2567,12 +2770,7 @@ impl Service {
         {
             return;
         }
-        // A write decided while no watcher was connected, if the member's
-        // own text is still that.
-        if board
-            && let Some(w) = self.pending.lock().unwrap().take()
-            && node.engine.local().is_some_and(|(t, _, _)| t == w.text)
-        {
+        if let Some(w) = missed {
             let _ = tx.try_send(ToWatcher::Write(w));
         }
         let id = self.next_watcher.fetch_add(1, Ordering::SeqCst);
@@ -2787,6 +2985,170 @@ impl Drop for PairingSlot<'_> {
             self.node.set_window_open(false);
         }
     }
+}
+
+/// The claims, conflicts and newer records of the group's state for
+/// status, as Go's groupStatus.
+fn group_status(node: &Node) -> Status {
+    let ident = node.identity();
+    let own: Vec<cbb_core::certs::Cert> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
+    let records = node.records();
+    let rs = records.lock().unwrap();
+    let st = rs.state();
+    // An old root that an admin took the group over from, or a frozen
+    // admin, is refused but not removed, as Go's statusWithRemoved says.
+    let taken = rs.taken_over(&own);
+    let refused = matches!(rs.refused(&own), Some(cbb_core::group::Refusal::Refused(_)));
+    let frozen = taken.is_none() && refused && own.iter().any(|c| rs.frozen(&c.key_hash()));
+    // A signer's device for the user, as Go's SignerName.
+    let name = |k: &cbb_core::authority::Hash| -> String {
+        st.devices
+            .iter()
+            .find(|d| d.admin.as_ref() == Some(k))
+            .or_else(
+                || if st.roots.contains(k) { st.devices.iter().find(|d| d.device == st.root_device) } else { None },
+            )
+            .map_or_else(|| k.text(), |d| d.name.clone())
+    };
+    Status {
+        claims: st
+            .claims
+            .iter()
+            .filter(|c| matches!(c.state, "pending" | "competing" | "disputed"))
+            .map(|c| control::Claim { by: name(&c.claimant), state: c.state.into(), left_ms: c.left_ms })
+            .collect(),
+        conflicts: st
+            .conflicts
+            .iter()
+            .map(|c| control::Conflict { kind: c.kind.into(), devices: c.signers.iter().map(name).collect() })
+            .collect(),
+        newer: st.newer.len(),
+        frozen,
+        taken_over_by: taken
+            .map(|(dev, _)| st.devices.iter().find(|d| d.device == dev).map_or(dev, |d| d.name.clone()))
+            .unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
+/// Keeps a member connection up to the member that admitted this device at
+/// addr, the address the user gave for the join, as Go's dialJoined: that
+/// member syncs with it at once, and when it is the group's hub it learns
+/// this device's tunnel key as soon as sync away from home is turned on
+/// here. It stops once this device knows a hub of the group, whose tunnel
+/// reaches it from then on, or when the member stops.
+fn keep_joined(node: Arc<Node>, away: Arc<Away>, addr: SocketAddr, log: Arc<dyn Fn(&str) + Send + Sync>) {
+    const MIN: Duration = Duration::from_secs(1);
+    const MAX: Duration = Duration::from_secs(30);
+    std::thread::spawn(move || {
+        let mut backoff = MIN;
+        while !node.is_closed() && away.known_hubs(&node.hub_order()).is_empty() {
+            let start = std::time::Instant::now();
+            // While another way connects this device to the group, as
+            // discovery, it waits.
+            if !node.peers().is_empty() {
+                std::thread::sleep(MIN);
+                continue;
+            }
+            if let Err(e) = node.dial(addr, None) {
+                log(&format!("cbb: connection at {addr}, where this device joined: {}", e.for_log()));
+            }
+            if start.elapsed() > MAX {
+                backoff = MIN;
+            }
+            std::thread::sleep(backoff);
+            backoff = (backoff * 2).min(MAX);
+        }
+    });
+}
+
+/// The group's devices as cbb devices lists them, as Go's devices: the
+/// records' devices, this device if no record lists it yet, then the
+/// connected members no record lists, with what their hellos say.
+fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
+    let ident = node.identity();
+    let me = ident.id.to_string();
+    let peers = node.peers();
+    let now = uptime::wall_ms();
+    let (list, root, may_hub) = {
+        let records = node.records();
+        let rs = records.lock().unwrap();
+        let list = rs.devices();
+        let may_hub: Vec<bool> = list.iter().map(|d| rs.may_host(&d.id)).collect();
+        (list, rs.state().root_device, may_hub)
+    };
+    let fill = |mut d: Device| {
+        d.this = d.id == me;
+        d.root = d.id == root;
+        d.hub = hubs.contains(&d.id);
+        let peer = peers.iter().find(|p| p.id.as_str() == d.id);
+        if peer.is_some() || d.this {
+            d.online = true;
+            d.last_seen_ms = now;
+        }
+        if d.this {
+            let own = crate::device::own();
+            (d.form, d.os_version, d.version, d.mac) =
+                (own.form.clone(), own.os_version.clone(), own.version.clone(), own.mac.clone());
+            d.mode = node.engine.mode().name().into();
+            if let Some(left) = node.engine.mute_left() {
+                d.muted = true;
+                d.muted_until_ms = if left > 0 { now + left } else { 0 };
+            }
+        }
+        if let Some(p) = peer {
+            (d.form, d.os_version, d.version, d.mac) =
+                (p.device.form.clone(), p.device.os_version.clone(), p.device.version.clone(), p.device.mac.clone());
+            d.mode.clone_from(&p.mode);
+            d.muted = p.muted;
+            d.muted_until_ms = if p.muted && p.muted_for_ms > 0 { now + p.muted_for_ms } else { 0 };
+        }
+        d
+    };
+    let mut out: Vec<Device> = list
+        .into_iter()
+        .zip(may_hub)
+        .map(|(d, may_hub)| {
+            let os =
+                peers.iter().find(|p| p.id.as_str() == d.id && !p.os.is_empty()).map_or(d.os.clone(), |p| p.os.clone());
+            fill(Device {
+                os,
+                store: d.store,
+                admin: d.admin,
+                frozen: d.frozen,
+                forward_only: d.forward_only,
+                listed: true,
+                may_hub,
+                id: d.id,
+                name: d.name,
+                role: d.role,
+                ..Default::default()
+            })
+        })
+        .collect();
+    if !out.iter().any(|d| d.id == me) {
+        out.push(fill(Device {
+            id: me.clone(),
+            name: node.name().into(),
+            role: node.role().into(),
+            os: node.os().into(),
+            store: crate::admin::own_store(&ident).into(),
+            ..Default::default()
+        }));
+    }
+    for p in &peers {
+        if !out.iter().any(|d| d.id == p.id.as_str()) {
+            out.push(fill(Device {
+                id: p.id.to_string(),
+                name: p.name.clone(),
+                role: p.role.clone(),
+                os: p.os.clone(),
+                store: p.key_store.clone(),
+                ..Default::default()
+            }));
+        }
+    }
+    out
 }
 
 #[cfg(test)]

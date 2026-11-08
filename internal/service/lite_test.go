@@ -100,8 +100,9 @@ func startLiteEnv(t *testing.T, bin, dir string, env []string, args ...string) *
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	s.done = make(chan error, 1)
-	go func() { s.done <- cmd.Wait() }()
+	done := make(chan error, 1)
+	s.done = done
+	go func() { done <- cmd.Wait() }()
 	s.cancel = func() {
 		cmd.Process.Signal(os.Interrupt)
 		time.AfterFunc(5*time.Second, func() { cmd.Process.Kill() })

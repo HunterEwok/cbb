@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/netip"
 	"os"
@@ -49,6 +50,9 @@ type hub struct {
 	// hidden members neither see the others nor are seen, as on another
 	// network.
 	hidden map[string]bool
+	// rust are the Rust services started on this hub, which publish by
+	// mDNS themselves.
+	rust map[*testService]bool
 }
 
 // hide puts the member with this device ID on another network.
@@ -60,7 +64,21 @@ func (h *hub) hide(id string) {
 	h.hidden[id] = true
 	h.mu.Unlock()
 	h.update()
+	if rustService() != "" {
+		// A Rust service looks for its device ID in CBB_TEST_ELSEWHERE.
+		os.WriteFile(filepath.Join(elsewhereDir(), id), nil, 0o600)
+	}
 }
+
+// elsewhereDir is the folder the Rust services read as CBB_TEST_ELSEWHERE:
+// a file named by a device ID puts that device on another network.
+var elsewhereDir = sync.OnceValue(func() string {
+	d, err := os.MkdirTemp("", "cbb-elsewhere")
+	if err != nil {
+		panic(err)
+	}
+	return d
+})
 
 type fakeDiscovery struct {
 	h      *hub
@@ -126,16 +144,155 @@ func (d *fakeDiscovery) SetTXT(txt []string) {
 }
 
 // txtOf returns the TXT record that the member with this device ID
-// publishes.
+// publishes: a Go service's from the hub, else one that real mDNS finds.
 func (h *hub) txtOf(id string) []string {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	for m := range h.members {
 		if m.cfg.ID == id && !m.cfg.BrowseOnly {
+			h.mu.Unlock()
 			return m.peer().TXT
 		}
 	}
+	h.mu.Unlock()
+	// A Rust service shows in the shared browse once it announced itself.
+	for deadline := time.Now().Add(5 * time.Second); rustService() != ""; time.Sleep(100 * time.Millisecond) {
+		if p, ok := h.found(id); ok || time.Now().After(deadline) {
+			return p.TXT
+		}
+	}
 	return nil
+}
+
+// anyPublishes says whether a member publishes the TXT string kv, in the
+// hub or, beside Rust services, by real mDNS.
+func (h *hub) anyPublishes(kv string) bool {
+	h.mu.Lock()
+	for m := range h.members {
+		if !m.cfg.BrowseOnly && slices.Contains(m.peer().TXT, kv) {
+			h.mu.Unlock()
+			return true
+		}
+	}
+	h.mu.Unlock()
+	if rustService() == "" {
+		return false
+	}
+	h.found("")
+	realBrowse.mu.Lock()
+	defer realBrowse.mu.Unlock()
+	for _, p := range realBrowse.peers {
+		if slices.Contains(p.TXT, kv) {
+			return true
+		}
+	}
+	return false
+}
+
+// found is the member with this device ID that real mDNS finds, where the
+// tests run Rust services (CBB_TEST_RUST_SERVICE): one browser runs for
+// all the tests.
+func (h *hub) found(id string) (mdns.Peer, bool) {
+	if rustService() == "" {
+		return mdns.Peer{}, false
+	}
+	realBrowse.once.Do(func() {
+		realBrowse.peers = map[string]mdns.Peer{}
+		r, err := mdns.New(mdns.Config{ID: "browse-test", BrowseOnly: true, OnPeers: func(peers []mdns.Peer) {
+			realBrowse.mu.Lock()
+			realBrowse.peers = map[string]mdns.Peer{}
+			for _, p := range peers {
+				realBrowse.peers[p.ID] = p
+			}
+			realBrowse.mu.Unlock()
+		}})
+		if err == nil {
+			go r.Run(context.Background())
+		}
+	})
+	realBrowse.mu.Lock()
+	defer realBrowse.mu.Unlock()
+	p, ok := realBrowse.peers[id]
+	return p, ok
+}
+
+var realBrowse struct {
+	once  sync.Once
+	mu    sync.Mutex
+	peers map[string]mdns.Peer
+}
+
+// realDiscovery is a Go service's discovery beside Rust services: real
+// mDNS, so that both find each other, while the hub still keeps its TXT
+// for txtOf and its hiding, which stops the real responder.
+type realDiscovery struct {
+	fake *fakeDiscovery
+	cfg  DiscoveryConfig
+	mu   sync.Mutex
+	r    *mdns.Responder
+}
+
+func (h *hub) discoverReal(c DiscoveryConfig) (Discovery, error) {
+	fc := c
+	fc.OnPeers = nil
+	return &realDiscovery{fake: &fakeDiscovery{h: h, cfg: fc, txt: slices.Clone(c.TXT), kick: make(chan struct{}, 1)}, cfg: c}, nil
+}
+
+func (d *realDiscovery) Run(ctx context.Context) error {
+	go d.fake.Run(ctx)
+	for ctx.Err() == nil {
+		d.fake.h.mu.Lock()
+		hidden := d.fake.h.hidden[d.cfg.ID]
+		d.fake.h.mu.Unlock()
+		if hidden {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		d.fake.mu.Lock()
+		txt := slices.Clone(d.fake.txt)
+		d.fake.mu.Unlock()
+		r, err := mdnsDiscovery(DiscoveryConfig{ID: d.cfg.ID, Port: d.cfg.Port, TXT: txt, BrowseOnly: d.cfg.BrowseOnly,
+			Publish: d.cfg.Publish, Only: d.cfg.Only, OnPeers: d.cfg.OnPeers, Logf: d.cfg.Logf})
+		if err != nil {
+			return err
+		}
+		d.mu.Lock()
+		d.r = r.(*mdns.Responder)
+		d.mu.Unlock()
+		rctx, cancel := context.WithCancel(ctx)
+		go func() {
+			// Hiding puts the member on another network: the responder
+			// says goodbye and stops.
+			for rctx.Err() == nil {
+				d.fake.h.mu.Lock()
+				hidden := d.fake.h.hidden[d.cfg.ID]
+				d.fake.h.mu.Unlock()
+				if hidden {
+					if d.cfg.OnPeers != nil {
+						d.cfg.OnPeers(nil)
+					}
+					cancel()
+					return
+				}
+				time.Sleep(200 * time.Millisecond)
+			}
+		}()
+		r.Run(rctx)
+		cancel()
+		d.mu.Lock()
+		d.r = nil
+		d.mu.Unlock()
+	}
+	return nil
+}
+
+func (d *realDiscovery) SetTXT(txt []string) {
+	d.fake.SetTXT(txt)
+	d.mu.Lock()
+	r := d.r
+	d.mu.Unlock()
+	if r != nil {
+		r.SetTXT(txt)
+	}
 }
 
 // update tells every member about the others: it replaces the list each
@@ -179,6 +336,7 @@ type testService struct {
 	done     chan error
 	accepted atomic.Int32 // member connections accepted
 	cfg      func(*Config)
+	rust     bool // the Rust service (CBB_TEST_RUST_SERVICE)
 
 	mu         sync.Mutex
 	memberAddr string // where the member port listens
@@ -231,6 +389,14 @@ func startService(t *testing.T, h *hub, name string) *testService {
 	return startRole(t, h, name, group.OSLinux)
 }
 
+// startGoService starts the Go service even where CBB_TEST_RUST_SERVICE
+// names the Rust one: for tests of what only the Go service has, such as
+// its package's settings for tests.
+func startGoService(t *testing.T, h *hub, name string) *testService {
+	t.Helper()
+	return startWith(t, h, name, group.OSLinux, func(*Config) {})
+}
+
 func startRole(t *testing.T, h *hub, name string, system string) *testService {
 	t.Helper()
 	return startWith(t, h, name, system, nil)
@@ -275,7 +441,14 @@ func rustService() string { return os.Getenv("CBB_TEST_RUST_SERVICE") }
 func startIn(t *testing.T, h *hub, s *testService) *testService {
 	t.Helper()
 	if bin := rustService(); bin != "" && s.cfg == nil && s.os == group.OSLinux {
-		return startRust(t, bin, s)
+		r := startRust(t, bin, s)
+		h.mu.Lock()
+		if h.rust == nil {
+			h.rust = map[*testService]bool{}
+		}
+		h.rust[r] = true
+		h.mu.Unlock()
+		return r
 	}
 	s.socket, s.done = filepath.Join(s.dir, "c.sock"), make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -300,6 +473,23 @@ func startIn(t *testing.T, h *hub, s *testService) *testService {
 		lookupIP: func(context.Context, string) ([]netip.Addr, error) {
 			return nil, errors.New("tests look up no names")
 		},
+	}
+	if rustService() != "" {
+		// Beside Rust services, which find their peers by mDNS, a Go one
+		// does too, on every address, as a release runs.
+		cfg.Discover, cfg.joinListen, cfg.joinAddrs = h.discoverReal, nil, nil
+		cfg.browseFor = 5 * time.Second
+		cfg.listen = func() (net.Listener, error) {
+			ln, err := net.Listen("tcp", ":0")
+			if err != nil {
+				return nil, err
+			}
+			s.mu.Lock()
+			s.memberAddr = fmt.Sprintf("127.0.0.1:%d", ln.Addr().(*net.TCPAddr).Port)
+			s.mu.Unlock()
+			return countingListener{ln, &s.accepted}, nil
+		}
+		cfg.joinListen = func() (net.Listener, error) { return net.Listen("tcp", ":0") }
 	}
 	if s.cfg != nil {
 		s.cfg(&cfg)
@@ -401,7 +591,15 @@ func pairWith(t *testing.T, admin, s *testService) {
 	t.Helper()
 	c, code := openWindow(t, admin)
 	defer c.Close()
-	if _, err := s.do(t, control.Header{Op: control.OpJoin, Code: code}, ""); err != nil {
+	join := control.Header{Op: control.OpJoin, Code: code}
+	if admin.rust && !s.rust {
+		// A Go service's fresh browse does not hear a Rust service's
+		// answers when both run on one host, as here, only its
+		// announcements: it joins at the address. A Rust joiner finds the
+		// window by mDNS.
+		join.Address = admin.addr()
+	}
+	if _, err := s.do(t, join, ""); err != nil {
 		t.Fatalf("join on %s: %v", s.name, err)
 	}
 	m, err := c.Receive()
@@ -499,10 +697,12 @@ func TestThreeMembers(t *testing.T) {
 
 func TestOneConnectionBetweenTwo(t *testing.T) {
 	// Only the member with the lower device ID dials, so the one with the
-	// higher ID accepts the only connection between them.
+	// higher ID accepts the only connection between them. The connections
+	// are counted at the Go service's listener; the Rust one keeps the same
+	// rule (member/src/discovery.rs).
 	var h hub
-	a := startService(t, &h, "alpha")
-	b := startService(t, &h, "beta")
+	a := startGoService(t, &h, "alpha")
+	b := startGoService(t, &h, "beta")
 	pairWith(t, a, b)
 	waitFor(t, "connected", func() bool { return len(a.status(t).Peers) == 1 && len(b.status(t).Peers) == 1 })
 	since := a.status(t).Peers[0]
@@ -773,9 +973,10 @@ func TestPairingWindow(t *testing.T) {
 }
 
 func TestConcurrentPairs(t *testing.T) {
-	// Two pairs at once open one window.
+	// Two pairs at once open one window. The count is of the Go service's
+	// discoveries.
 	var h hub
-	a := startService(t, &h, "alpha")
+	a := startGoService(t, &h, "alpha")
 	if _, err := a.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -908,6 +1109,24 @@ func (h *hub) memberAddr(t *testing.T, id string) string {
 			if m.cfg.ID == id {
 				addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(int(m.cfg.Port)))
 			}
+		}
+		if addr == "" {
+			rust := slices.Collect(maps.Keys(h.rust))
+			h.mu.Unlock()
+			// A Rust service says where it listens, hidden or not.
+			for _, s := range rust {
+				c, err := control.Dial(control.AdminSocketFor(s.socket))
+				if err != nil {
+					continue // stopped, or not yet listening
+				}
+				c.SetDeadline(time.Now().Add(5 * time.Second))
+				m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpStatus}})
+				c.Close()
+				if err == nil && m.Status != nil && m.Status.Device == id {
+					addr = s.addr()
+				}
+			}
+			h.mu.Lock()
 		}
 		return addr != ""
 	})
@@ -1868,7 +2087,22 @@ func TestPairingAcrossARenewal(t *testing.T) {
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
-	r := startLiteEnv(t, bin, s.dir, nil, "-full", "-port", "0", "-name", s.name)
-	r.name, r.os = s.name, s.os
+	r := startLiteEnv(t, bin, s.dir, []string{"CBB_TEST_ELSEWHERE=" + elsewhereDir()}, "-full", "-port", "0", "-name", s.name)
+	r.name, r.os, r.rust = s.name, s.os, true
+	// It ends with an error after cbb leave, for systemd to start it again,
+	// where Go's Run returns ErrLeft.
+	inner := r.done
+	r.done = make(chan error, 1)
+	go func() {
+		err := <-inner
+		r.logMu.Lock()
+		for _, l := range r.lines {
+			if err != nil && strings.Contains(l, "restarting after leaving the group") {
+				err = ErrLeft
+			}
+		}
+		r.logMu.Unlock()
+		r.done <- err
+	}()
 	return r
 }

@@ -28,6 +28,8 @@ use crate::hub::{self, Hub};
 use crate::node::{Node, OnPairing};
 use crate::window::{self, Window};
 
+/// How long an invitation waits for a hub's tunnel that is starting.
+const TUNNEL_START: Duration = Duration::from_secs(10);
 /// How long an invitation is valid unless the admin asks otherwise, and at
 /// most, as Go's invite.DefaultLifetime and MaxLifetime.
 const DEFAULT_LIFETIME: Duration = Duration::from_secs(3600);
@@ -218,6 +220,12 @@ impl Away {
         peer: hub::Peer,
         window: Arc<Window>,
     ) -> Result<([u8; 32], Vec<std::net::SocketAddr>, Option<cbb_core::invite::Obfuscation>)> {
+        // A hub that was just made starts its tunnel in a moment: the
+        // invitation waits for it, or for its failure, a little.
+        let until = Instant::now() + TUNNEL_START;
+        while self.serving.lock().unwrap().is_none() && self.error.lock().unwrap().is_none() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(100));
+        }
         let cur = self.st.lock().unwrap();
         let st = cur.as_ref().filter(|s| s.is_hub).ok_or_else(|| {
             Error::msg("invitations come from the group's hub, and this device is not the hub; make it the hub with cbb global hub, or invite on the hub")

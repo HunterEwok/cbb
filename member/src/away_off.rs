@@ -94,6 +94,10 @@ impl Away {
         false
     }
 
+    pub fn known_hubs(&self, _order: &[String]) -> Vec<String> {
+        Vec::new()
+    }
+
     pub fn take_hub(&self, _node: &Arc<Node>, _by: &str, _order: &serde_json::Value) -> Result<TunnelOffer> {
         Err(Error::msg("sync away from home is off on this computer; this build has no tunnel"))
     }

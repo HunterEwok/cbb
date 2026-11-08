@@ -184,6 +184,8 @@ func TestRemoteAppleTVName(t *testing.T) {
 		tv := appletvtest.New(t)
 		defer func(f func(context.Context, string) string) { peripheral.AppleTVName = f }(peripheral.AppleTVName)
 		peripheral.AppleTVName = func(context.Context, string) string { return announced }
+		// cbb-helper beside the Rust service stands in the same way.
+		t.Setenv("CBB_TEST_APPLETV_NAME", announced)
 		var h hub
 		deck := startService(t, &h, "deck")
 		if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "add", Address: tv.Addr(), Value: "appletv"}, ""); err != nil {

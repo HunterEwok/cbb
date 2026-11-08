@@ -697,6 +697,13 @@ pub fn new_vless_id() -> String {
     crate::vless::random_uuid()
 }
 
+/// A random port of the dynamic range, where a link's connections start.
+fn first_port() -> u16 {
+    let mut b = [0u8; 2];
+    let _ = getrandom::fill(&mut b);
+    49152 + u16::from_le_bytes(b) % (u16::MAX - 49152)
+}
+
 /// 32 random bytes, for a key.
 fn random_key() -> Result<Vec<u8>> {
     let mut key = vec![0u8; 32];
@@ -706,11 +713,11 @@ fn random_key() -> Result<Vec<u8>> {
 
 /// Checks the offer of the hub `from` and returns what this member keeps of
 /// it: with AmneziaWG's settings (src/awg.rs) and the way over VLESS with
-/// XHTTP (src/vless.rs), if it has them. REALITY is refused, as rustls
-/// cannot make a browser's ClientHello.
+/// XHTTP (src/vless.rs), if it has them. REALITY, as rustls cannot make a
+/// browser's ClientHello, only when cbb-helper makes that way.
 pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
     if let Some(v) = &o.vless {
-        cbb_core::vless::Link::from_offer(v)?;
+        crate::vless::check_offer(v)?;
     }
     if let Some(v) = &o.obfuscation {
         crate::awg::Obfuscation::from_offer(v)?;
@@ -995,7 +1002,11 @@ impl Pump {
             sockets: SocketSet::new(Vec::new()),
             bridges: Vec::new(),
             peer,
-            next_port: 49152,
+            // A random first port: a link that starts again, as after a
+            // restart or when the hub moved, would otherwise reuse the ports
+            // of the last one, whose connections the hub's TCP may still
+            // hold, and its SYNs would go unanswered.
+            next_port: first_port(),
             answered,
             log,
             said: false,

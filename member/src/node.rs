@@ -16,7 +16,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
@@ -59,6 +59,8 @@ const RECORDS_CHUNK: usize = 1 << 20;
 /// The slowest transfer a frame is given time for.
 const MIN_RATE: usize = 16 << 10;
 /// The most gets a peer may have waiting on a connection.
+/// How long a hub command waits for its receiver to connect again.
+const RECONNECT_WAIT: Duration = Duration::from_secs(5);
 const MAX_GETS: usize = 64;
 /// The most peers whose release archive a member keeps.
 const MAX_ARCHIVES: usize = 256;
@@ -211,6 +213,8 @@ pub struct Node {
     paused: AtomicBool,
     /// Wakes the dial loops early: the member resumed or found an address.
     kick: (Mutex<u64>, Condvar),
+    /// Counts redial: the records may let in devices refused until now.
+    redials: AtomicU64,
     /// The commands this member sent, by ID, waiting for their results.
     waiting: Mutex<HashMap<String, Waiting>>,
     /// The commands a phone passed on, by ID: where each came from, and
@@ -231,6 +235,7 @@ pub struct Node {
     /// Gets each copy that becomes the group's current one from a peer,
     /// for a phone's app, which shows it and fetches images or files.
     on_change: RwLock<Option<OnChange>>,
+    on_relay: RwLock<Option<OnChange>>,
     /// Takes the pairing connections joiners dial to the member port, on
     /// a computer that may open a pairing window; None elsewhere, where
     /// the port speaks only the member protocol.
@@ -403,6 +408,7 @@ impl Node {
             keep_identity: None,
             paused: AtomicBool::new(false),
             kick: (Mutex::new(0), Condvar::new()),
+            redials: AtomicU64::new(0),
             waiting: Mutex::new(HashMap::new()),
             passed: Mutex::new(HashMap::new()),
             on_message: RwLock::new(None),
@@ -411,6 +417,7 @@ impl Node {
             evidence: RwLock::new(Vec::new()),
             content: None,
             on_change: RwLock::new(None),
+            on_relay: RwLock::new(None),
             on_pairing: RwLock::new(None),
             window_open: AtomicBool::new(false),
         }
@@ -445,6 +452,11 @@ impl Node {
     /// The role its hellos present: `lite`, `full` or `phone`.
     pub fn role(&self) -> &str {
         &self.presence.role
+    }
+
+    /// The name its hellos present.
+    pub fn name(&self) -> &str {
+        &self.presence.name
     }
 
     /// The system its hellos present.
@@ -584,6 +596,30 @@ impl Node {
         (self.log)(s)
     }
 
+    /// The identity member connections present, as Go's memberTLSCert: on
+    /// the admin that took the group over, the certificate from before the
+    /// takeover (prev_cert) while that lasts, so that a member that missed
+    /// the takeover, which knows only the old root, verifies it and takes
+    /// the root record over the connection. It stops 240 days before that
+    /// certificate ends, so that no admin renews the root's certificate
+    /// from its admin CA.
+    fn tls_identity(&self) -> Arc<Identity> {
+        let ident = self.identity();
+        let Ok(f) = crate::identity::admin_fields(&self.state_dir) else { return ident };
+        let der = |k: &str| -> Option<Vec<u8>> { cbb_core::certs::b64::deserialize(f.get(k)?.clone()).ok() };
+        let Some(prev) = der("prev_cert").and_then(|d| Cert::parse(&d).ok()) else { return ident };
+        const RENEW_BEFORE: i64 = 240 * 24 * 3600;
+        if uptime::wall_ms() / 1000 >= prev.not_after.saturating_sub(RENEW_BEFORE)
+            || prev.public_key() != ident.cert.public_key()
+        {
+            return ident;
+        }
+        let mut shown = (*ident).clone();
+        shown.issuer = der("prev_issuer").and_then(|d| Cert::parse(&d).ok());
+        shown.cert = prev;
+        Arc::new(shown)
+    }
+
     /// Reports whether a connection to the device is up.
     pub fn connected(&self, id: &DeviceId) -> bool {
         self.conns.lock().unwrap().contains_key(id)
@@ -688,6 +724,20 @@ impl Node {
         let (m, cv) = &self.kick;
         *m.lock().unwrap() += 1;
         cv.notify_all();
+    }
+
+    /// Makes the dial loops of the members not connected try at once, the
+    /// ones that wait for the other member to dial too, as Go's redial: the
+    /// records may let in devices refused until now, as a thaw does, and a
+    /// refused member would otherwise wait out its backoff.
+    pub fn redial(&self) {
+        self.redials.fetch_add(1, Ordering::SeqCst);
+        self.kick();
+    }
+
+    /// How many times redial was called.
+    pub fn redials(&self) -> u64 {
+        self.redials.load(Ordering::SeqCst)
     }
 
     /// Waits up to d, or until kick; reports whether it was kicked.
@@ -962,6 +1012,7 @@ impl Node {
     /// Takes records this member's app signed (an admin's or the root's),
     /// keeps them and sends them to every peer.
     pub fn add_own_records(&self, rs: &[Record]) {
+        crate::signed::note(&self.state_dir, rs, &|s| self.logf(s));
         let me = self.identity().id.clone();
         self.add_records(rs, &me);
     }
@@ -976,7 +1027,22 @@ impl Node {
         let (tx, rx) = mpsc::sync_channel(1);
         self.waiting.lock().unwrap().insert(head.id.clone(), Waiting { to: to.clone(), tx });
         let m = wire::command(r);
-        let sent = if self.send_to(&to, m.clone()) {
+        // A hub command goes only straight, and a peer that ended its
+        // connection to connect again, as with a new hello, is back within
+        // moments.
+        let connected = || {
+            let until = std::time::Instant::now() + RECONNECT_WAIT;
+            loop {
+                if self.send_to(&to, m.clone()) {
+                    return true;
+                }
+                if head.kind != "hub" || std::time::Instant::now() >= until {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        };
+        let sent = if connected() {
             true
         } else if head.kind == "hub" {
             false
@@ -1123,6 +1189,21 @@ impl Node {
         }
         if out.write {
             self.write(&ev, out.seq);
+        } else if let Some(f) = self.on_relay.read().unwrap().as_ref() {
+            f(&ev);
+        }
+    }
+
+    /// Sets what gets each event this member passes on without writing it,
+    /// as Go's OnRelay.
+    pub fn on_relay(&self, f: OnChange) {
+        *self.on_relay.write().unwrap() = Some(f);
+    }
+
+    /// Sets the largest blob served through the group's tunnel.
+    pub fn set_away_limit(&self, n: u64) {
+        if let Some(s) = &self.content {
+            s.set_away_limit(n);
         }
     }
 
@@ -1272,7 +1353,7 @@ impl Node {
         let _ = sock.set_nodelay(true);
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
         sock.set_write_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
-        let ident = self.identity();
+        let ident = self.tls_identity();
         let cfg = tls::member_client(&ident, peer.clone(), tls::refused(&self.records), &tls::clock())?;
         let conn = tls::Session::client(Arc::new(cfg), tls::server_name(peer.as_ref()))?;
         let (conn, id, chain) = self.handshake(&sock, conn, addr, Usage::Server)?;
@@ -1353,10 +1434,17 @@ impl Node {
             Some(Tunneled::Member(_)) => None,
             Some(Tunneled::Guest(p, _)) => Some(p.clone()),
         };
-        let (ident, refused, clock) = (self.identity(), tls::refused(&self.records), tls::clock());
+        let (refused, clock) = (tls::refused(&self.records), tls::clock());
+        // A pairing binds the certificate that the admitting member knows
+        // as its own, so an open window, or a guest's invitation, presents
+        // the current one.
         let (cfg, exporter) = match pairing {
-            Some(_) => tls::member_or_pair_server(&ident, refused, &clock)?,
-            None => (tls::member_server(&ident, refused, &clock)?, Arc::new(tls::Exporter::default())),
+            Some(_) => {
+                let pairs = self.window_open.load(Ordering::SeqCst) || matches!(tunneled, Some(Tunneled::Guest(..)));
+                let ident = if pairs { self.identity() } else { self.tls_identity() };
+                tls::member_or_pair_server(&ident, refused, &clock)?
+            }
+            None => (tls::member_server(&self.tls_identity(), refused, &clock)?, Arc::new(tls::Exporter::default())),
         };
         let mut conn = tls::Session::server(Arc::new(cfg))?;
         let res = tls::handshake(&mut conn, &sock, &format!("the TLS handshake with {addr} failed"));
@@ -1429,8 +1517,8 @@ impl Node {
 
     fn run(&self, sock: TcpStream, conn: tls::Session, id: DeviceId, chain: Vec<Cert>, addr: SocketAddr) -> Result<()> {
         sock.set_read_timeout(Some(TIMEOUT)).context("the connection broke")?;
-        let why = self.records.lock().unwrap().refused(&chain);
-        let records_only = matches!(why, Some(Refusal::NotListed | Refusal::Stopped));
+        let why = self.records.lock().unwrap().refused_peer(&chain);
+        let records_only = matches!(why, Some(Refusal::NotListed | Refusal::Stopped | Refusal::TakenOver));
         if !records_only
             && !addr.ip().to_canonical().is_loopback()
             && let (Some(n), Ok(local)) = (self.networks.read().unwrap().clone(), sock.local_addr())
@@ -1819,10 +1907,19 @@ impl Node {
     /// Keeps a certificate an admin renewed for this member, or this
     /// member's app for itself.
     pub fn renewed(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<()> {
+        self.take_cert(self.identity().with_cert_from(der, issuer)?)
+    }
+
+    /// Takes the member certificate that this device, whose claim made it
+    /// the group's root, issued itself from the new root.
+    pub fn took_over(&self, der: &[u8]) -> Result<()> {
+        self.take_cert(self.identity().with_cert_of_takeover(der)?)
+    }
+
+    fn take_cert(&self, mut next: Identity) -> Result<()> {
         // The records are checked before the identity is locked: the
         // records' holders lock them first and the identity after
         // (add_records, settle).
-        let mut next = self.identity().with_cert_from(der, issuer)?;
         let chain: Vec<Cert> = std::iter::once(next.cert.clone()).chain(next.issuer.clone()).collect();
         let records = self.records.lock().unwrap();
         // Its own device record may come after it, as right after joining:
@@ -1873,15 +1970,36 @@ impl Node {
     /// Trusts the roots the records lead to now: a new root that took the
     /// group over is trusted from now on.
     fn adopt_roots(&self, st: &Records) {
+        // A set that is empty, as after a records file that could not be
+        // read, says nothing yet: the peers give the records again.
+        if st.is_empty() {
+            return;
+        }
         let roots = st.roots();
         let mut ident = self.ident.write().unwrap();
-        if roots.iter().map(|c| &c.der).ne(ident.roots.iter().map(|c| &c.der)) {
-            let mut next = (**ident).clone();
-            next.roots = roots;
-            match self.save_identity(&next) {
-                Ok(()) => *ident = Arc::new(next),
-                Err(e) => self.logf(&format!("cbb: keeping the group's new root: {}", e.for_log())),
+        if roots.iter().map(|c| &c.der).eq(ident.roots.iter().map(|c| &c.der)) {
+            return;
+        }
+        let own: Vec<Cert> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
+        if st.taken_over(&own).is_some() {
+            // A root an admin took the group over from keeps its root key,
+            // so that removing that admin undoes the takeover.
+            return;
+        }
+        let mut next = (**ident).clone();
+        next.roots = roots;
+        match self.save_identity(&next) {
+            Ok(()) => {
+                match next.roots.last() {
+                    None => self.logf("cbb: the group's root is its first one again"),
+                    Some(r) => self.logf(&format!(
+                        "cbb: the group has a new root, {}",
+                        r.common_name.as_deref().unwrap_or_default()
+                    )),
+                }
+                *ident = Arc::new(next);
             }
+            Err(e) => self.logf(&format!("cbb: keeping the group's new root: {}", e.for_log())),
         }
     }
 
@@ -1893,7 +2011,7 @@ impl Node {
         self.apply_copy_rules();
         let st = self.records.lock().unwrap();
         for c in self.conns.lock().unwrap().values() {
-            if let Some(Refusal::Refused(why)) = st.refused(&c.chain) {
+            if let Some(Refusal::Refused(why)) = st.refused_peer(&c.chain) {
                 self.logf(&format!("cbb: closing the connection to {}: {why}", c.id));
                 c.close(true);
             }
@@ -1922,10 +2040,20 @@ impl Node {
             fresh
         };
         self.apply_copy_rules();
+        // A thaw lets in devices refused until now, and a claim, a resolve,
+        // a settings, a checkpoint or a recovery record may, as Go's
+        // updateRecords.
+        use cbb_core::authority::{
+            Body, TYPE_CHECKPOINT, TYPE_CLAIM, TYPE_RECOVERY, TYPE_RESOLVE, TYPE_SETTINGS, TYPE_THAW,
+        };
+        let lets_in = [TYPE_THAW, TYPE_CLAIM, TYPE_RESOLVE, TYPE_SETTINGS, TYPE_CHECKPOINT, TYPE_RECOVERY];
+        if fresh.iter().any(|r| Body::parse(&r.body).is_ok_and(|b| lets_in.contains(&b.kind.as_str()))) {
+            self.redial();
+        }
         // Pass them on, and drop the connections that are refused now.
         let st = self.records.lock().unwrap();
         for c in self.conns.lock().unwrap().values() {
-            match st.refused(&c.chain) {
+            match st.refused_peer(&c.chain) {
                 Some(Refusal::Refused(why)) => {
                     // The records that refuse it go first, so that it
                     // hears it was removed or frozen, as Go's settleRecords.
@@ -1943,10 +2071,10 @@ impl Node {
                     c.close(false);
                     continue;
                 }
-                Some(Refusal::Stopped) if !c.records_only => {
+                Some(why @ (Refusal::Stopped | Refusal::TakenOver)) if !c.records_only => {
                     self.logf(&format!(
                         "cbb: {}; the connection to {} carries records only from now on",
-                        Refusal::Stopped.why(),
+                        why.why(),
                         c.id
                     ));
                     c.close(false);
@@ -2160,8 +2288,11 @@ fn next_piece(c: &Conn, store: &Store, releases: &Releases) -> Option<Vec<u8>> {
     let mut gets = c.gets.lock().unwrap();
     let g = gets.front_mut()?;
     let want = usize::try_from(g.length).unwrap_or(0).min(wire::MAX_CHUNK_DATA);
-    let read = store
-        .read(&g.sha256, g.offset as u64, want)
+    // Through the group's tunnel only the blobs within the limit away from
+    // home; the archives of a signed release go there too.
+    let read = (!c.tunneled || store.serves_away(&g.sha256))
+        .then(|| store.read(&g.sha256, g.offset as u64, want))
+        .flatten()
         .or_else(|| releases.read(&g.sha256, g.offset as u64, want, uptime::wall_ms()));
     match read {
         Some(data) if !data.is_empty() => {

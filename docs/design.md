@@ -211,6 +211,11 @@ ends, the Go service described below is still the computers' member.
   watchers; one typed after its answer stops when remote paste goes off, which the helper
   reads in the same folder, or when `cbb`'s records no longer take its command, when `cbb`
   sends `peripheral-stop` (`TestLitePeripherals`).
+- **The way over VLESS inside REALITY.** rustls makes no browser's ClientHello, so for a
+  hub that offers REALITY `cbb` asks `vless-dial` with the hub's VLESS settings: the helper
+  runs Go's `internal/vless` client and answers with the way's ID and a local UDP port, to
+  which `cbb`'s tunnel sends its WireGuard packets; `vless-close` with the ID ends the way.
+  The way over XHTTP `cbb` makes itself (`member/src/vless.rs`).
 - **The agent.** `cbb agent`, which the user's session starts, links that session's clipboard
   with the service: it starts its own `cbb-helper`, with the session's whole environment (its
   display and D-Bus), and asks it `agent` with the service's socket. The helper runs the Go

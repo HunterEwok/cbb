@@ -41,9 +41,22 @@ const PHONE_HUB_WAIT: Duration = Duration::from_secs(5);
 const STEADY: Duration = Duration::from_secs(30);
 /// How long the member stays on a hub that is not the first in the order
 /// before it tries the ones above again.
-const UP_CHECK: Duration = Duration::from_secs(300);
+const UP_CHECK_SECS: u64 = 300;
+
+/// How long a device stays on a hub below the first before it tries the
+/// ones above again, as Go's upCheck: five minutes, or CBB_UP_CHECK
+/// seconds, which tests set shorter.
+fn up_check() -> Duration {
+    static UP: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+    *UP.get_or_init(|| {
+        Duration::from_secs(std::env::var("CBB_UP_CHECK").ok().and_then(|v| v.parse().ok()).unwrap_or(UP_CHECK_SECS))
+    })
+}
 /// How long discovery is given to find the hub at home after the service
 /// starts, before the tunnel is tried.
+/// How long the links with a hub's key and its key for the next period
+/// wait together for the handshake that answers.
+const KEYS_WAIT: Duration = Duration::from_secs(5);
 const FIRST_WAIT: Duration = Duration::from_secs(5);
 
 /// Sync away from home on this device.
@@ -88,9 +101,22 @@ impl Away {
         let mut error = None;
         let st = match State::load(&dir) {
             Ok(Some(st)) if st.group == group => Some(st),
+            // A state made before this device joined, as one that turned
+            // sync away from home on in no group, takes this group.
+            Ok(Some(mut st)) if st.group.is_empty() => {
+                st.group = group.clone();
+                match st.save(&dir) {
+                    Ok(()) => Some(st),
+                    Err(e) => {
+                        log(&format!("cbb: sync away from home is off: {}", e.for_log()));
+                        None
+                    }
+                }
+            }
             Ok(Some(_)) => {
-                if let Err(e) = State::remove(&dir) {
-                    log(&format!("cbb: {}", e.for_log()));
+                match State::remove(&dir) {
+                    Ok(()) => log("cbb: sync away from home is off, since this device is in another group now"),
+                    Err(e) => log(&format!("cbb: sync away from home is off: {}", e.for_log())),
                 }
                 None
             }
@@ -305,6 +331,11 @@ impl Away {
         {
             a.hub_device = h.device.clone();
             a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();
+            // A client says how the hub it uses hides its tunnel, as Go's.
+            if !st.is_hub {
+                a.obfuscated = h.obfuscation.is_some();
+                a.vless = h.vless.is_some();
+            }
             a.through = self.through.load(Ordering::SeqCst)
                 && using.as_deref() == Some(h.device.as_str())
                 && DeviceId::parse(&h.device).is_ok_and(|id| node.connected(&id));
@@ -327,7 +358,7 @@ impl Away {
     /// Dials, through the tunnel, the first hub in the group's order that
     /// answers, whenever no hub is found at home or connected, until the
     /// service stops; on a hub below the first it tries the ones above
-    /// again after UP_CHECK. A hub serves while no hub above it answers
+    /// again after up_check(). A hub serves while no hub above it answers
     /// (Go's reachHubs with standby): starting, it tries them once; once it
     /// loses the hub above, it tries them for a minute (standby_grace); while it
     /// serves, it tries them again every HUB_RECHECK and when a hub above
@@ -405,18 +436,36 @@ impl Away {
                 continue;
             }
             let mut reached = false;
-            for (hub, id) in hubs.iter().zip(&ids) {
-                let mut hub = hub.clone();
-                if let Some(v) = self.via {
-                    hub.endpoints = vec![v];
-                }
-                let link = match Link::start(&st, &hub, &self.me, self.log.clone()) {
-                    Ok(l) => l,
-                    Err(e) => {
-                        self.fail(&e);
-                        continue;
+            let mut i = 0;
+            while i < hubs.len() {
+                // A hub that gave its key for the next period comes twice,
+                // with each key: both are tried at once, so the one that
+                // gets no answer costs no time (Go's reachHubs).
+                let n = hubs[i..].iter().take_while(|h| h.device == hubs[i].device).count();
+                let (tries, id) = (&hubs[i..i + n], &ids[i]);
+                i += n;
+                let mut started = Vec::new();
+                for hub in tries {
+                    let mut hub = hub.clone();
+                    if let Some(v) = self.via {
+                        hub.endpoints = vec![v];
                     }
-                };
+                    match Link::start(&st, &hub, &self.me, self.log.clone()) {
+                        Ok(l) => started.push((hub, l)),
+                        Err(e) => self.fail(&e),
+                    }
+                }
+                if started.len() > 1 {
+                    let until = Instant::now() + KEYS_WAIT;
+                    while Instant::now() < until && !started.iter().any(|(_, l)| l.answered()) {
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                    if let Some(k) = started.iter().position(|(_, l)| l.answered()) {
+                        started.swap(0, k);
+                    }
+                    started.truncate(1);
+                }
+                let Some((hub, link)) = started.pop() else { continue };
                 links += 1;
                 *self.using.lock().unwrap() = Some((hub.device.clone(), links));
                 if hub.device != hubs[0].device {
@@ -424,7 +473,7 @@ impl Away {
                     // after a while.
                     let (away, node, id, n) = (self.clone(), node.clone(), id.clone(), links);
                     std::thread::spawn(move || {
-                        std::thread::sleep(UP_CHECK);
+                        std::thread::sleep(up_check());
                         if away.using.lock().unwrap().as_ref().is_some_and(|(_, m)| *m == n) {
                             node.disconnect(&id);
                         }

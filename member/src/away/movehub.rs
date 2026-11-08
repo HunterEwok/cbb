@@ -125,7 +125,7 @@ impl Away {
 
     /// The group's hubs this device knows, as Go's knownHubs: itself while
     /// it is a hub, and the hubs in the group's order whose offers it keeps.
-    fn known_hubs(&self, order: &[String]) -> Vec<String> {
+    pub fn known_hubs(&self, order: &[String]) -> Vec<String> {
         let cur = self.st.lock().unwrap();
         let Some(st) = cur.as_ref() else { return Vec::new() };
         let mut out: Vec<String> =

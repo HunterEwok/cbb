@@ -66,6 +66,7 @@ mod third_party {
     pub mod pcsclite;
 }
 mod service;
+mod signed;
 mod sync;
 mod sys;
 pub mod tls;

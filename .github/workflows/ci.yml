@@ -2183,10 +2183,10 @@ jobs:
           # Both exit 1, which pipefail would take for the grep's answer.
           for _ in $(seq 20); do
             out=$(sudo cbb status 2>&1) || true
-            case $out in *'in no group'*) break ;; esac
+            case $out in *'Not in a group'*) break ;; esac
             sleep 0.5
           done
-          echo "$out" | grep -q 'in no group'
+          echo "$out" | grep -q 'Not in a group'
           out=$(sudo cbb invite 2>&1) || true
           echo "$out" | grep -q 'command of a full member'
           # The full member cannot take over the lite member's keys.
@@ -2218,7 +2218,7 @@ jobs:
           test ! -e /usr/local/bin/cbb
           ~/.local/bin/cbb version | grep -q 'lite member'
           out=$(~/.local/bin/cbb status 2>&1) || true
-          echo "$out" | grep -q 'in no group'
+          echo "$out" | grep -q 'Not in a group'
           if ~/.local/bin/cbb paste-receive on -console 2>"$RUNNER_TEMP/err"; then
             echo "a rootless lite member took the console" >&2
             exit 1

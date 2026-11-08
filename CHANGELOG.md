@@ -7,6 +7,31 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Go service's tests run on the Rust service (`CBB_TEST_RUST_SERVICE` names its
+  binary): a Linux member with the default settings is then the Rust service, which finds
+  the others by mDNS, beside Go services that answer by mDNS too. The Rust service now
+  answers as Go's does where they differed: `cbb devices` lists what Go's lists (where
+  each device keeps its keys, its system and version, its mode and mute, last seen, may
+  be a hub); status names claims to take the group over and conflicts; a damaged
+  identity.json keeps the service running without its group, saying so and taking only
+  `cbb leave`; the root records what a computer's hello says (its system, its keys in
+  hardware or a rootless install); an admin signs again what the root's resolve voided,
+  from the log `signed.json` that Go keeps too; a copy over the limit says so in status;
+  `cbb pair` with a code alone admits the computer that waits to join; a remote
+  invitation joins through the service; the root leaves only alone; a joiner waits 2 s
+  for a second pairing window, as Go's. A takeover finishes as soon as its claim takes
+  effect, the old root presents its earlier certificate until the members follow, learns
+  of the takeover over a connection that carries records only, keeps its root key and
+  undoes the takeover by removing the admin; a hub fetches the group's current copy for
+  the devices away from home even with sync off, serves through its tunnel only what is
+  within its limit away from home, and a fetch that no peer gives is tried again; the
+  copies' cache starts empty, as Go's. The way over VLESS inside REALITY goes through
+  cbb-helper (`vless-dial`, `vless-close`), since rustls makes no browser's ClientHello; a
+  client tries a hub's current and next key at once; a restarted tunnel link starts at a
+  random port, not one the hub still holds; `cbb devices` marks the hubs; a device that
+  joined by address dials it again until it finds a hub; after a thaw, or a record that
+  may change the root, the members not connected are dialed at once, and a full member
+  dials one with a lower device ID that has not dialed it for 30 s, as Go's.
 - The Docker e2e (tools/e2e/e2e.sh) runs the Rust service too, with cbb-helper beside it
   and the Go cbb's commands against its socket, in CI's e2e job: the Rust service
   answers status in no group, and joins with a code (`join`: the member whose pairing

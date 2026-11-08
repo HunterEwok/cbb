@@ -420,14 +420,14 @@ impl Exchange {
     pub fn reply(&mut self, body: &[u8]) -> core::result::Result<Vec<u8>, Failure> {
         let reply: Frame = decode(body)?;
         if !reply.error.is_empty() {
-            return Err(Error::with("the pairing failed", Refusal::of(&reply.error)).into());
+            return Err(Error::with(format!("pair: {}", Refusal::of(&reply.error)), Refusal::of(&reply.error)).into());
         }
         let peer_ad = reply.ad.unwrap_or_default();
         self.st.finish(&reply.msg.unwrap_or_default(), &peer_ad).context("the pairing failed")?;
         let member: MemberAd = serde_json::from_slice(&peer_ad).context("the member's description does not decode")?;
         if self.member_first && self.st.verify(&reply.tag.unwrap_or_default()).is_err() {
             return Err(Failure {
-                error: Error::with("the pairing failed", Refusal::WrongCode),
+                error: Error::with(format!("pair: {}", Refusal::WrongCode), Refusal::WrongCode),
                 send: frame(&Frame { error: "wrong-code".into(), ..Default::default() }).ok(),
             });
         }
@@ -446,7 +446,7 @@ impl Exchange {
             self.member.as_ref().ok_or_else(|| Error::msg("the pairing failed: the frames came out of order"))?;
         let last: Frame = decode(body)?;
         if !last.error.is_empty() {
-            return Err(Error::with("the pairing failed", Refusal::of(&last.error)));
+            return Err(Error::with(format!("pair: {}", Refusal::of(&last.error)), Refusal::of(&last.error)));
         }
         let proved = self.member_first || last.tag.as_deref().is_some_and(|t| self.st.verify(t).is_ok());
         let Some(welcome) = last.welcome.filter(|_| proved) else {

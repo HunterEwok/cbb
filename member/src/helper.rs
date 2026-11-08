@@ -178,11 +178,16 @@ impl Helper {
             Err(mpsc::RecvTimeoutError::Disconnected) => return Err(op_err("it stopped before it answered")),
         };
         if !ans.header.error.is_empty() {
-            let msg = ans.header.error.clone();
-            return Err(if ans.header.detail.is_empty() {
-                Error::msg(msg)
+            // The detail is the helper's whole error, which the Go service
+            // shows as it is, as a TV's name before what the TV said; the
+            // short error drops what it wrapped.
+            let h = &ans.header;
+            return Err(if h.detail.is_empty() {
+                Error::msg(h.error.clone())
+            } else if h.detail.starts_with(&h.error) {
+                Error::msg(h.detail.clone())
             } else {
-                Error::with(msg, Remote(ans.header.detail.clone()))
+                Error::with(h.error.clone(), Remote(h.detail.clone()))
             });
         }
         Ok(ans)

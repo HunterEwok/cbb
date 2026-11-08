@@ -234,7 +234,7 @@ impl Window {
     ) -> Result<()> {
         if let Err(why) = self.acquire(&sock, addr.ip()) {
             refuse(sock, session, why);
-            return Err(Error::with("the pairing failed", why));
+            return Err(Error::with(format!("pair: {}", why), why));
         }
         let view = admit::GroupView::of(&node.records().lock().unwrap());
         // The identity the handshake just presented: a certificate renewed
@@ -319,7 +319,7 @@ impl Window {
                 Outcome::Confirm(_) => return Err(Error::msg("a window with a code asks no admin")),
                 Outcome::Admitted(a) => {
                     if !self.commit() {
-                        return Err(Error::with("the pairing failed", Refusal::Closed));
+                        return Err(Error::with(format!("pair: {}", Refusal::Closed), Refusal::Closed));
                     }
                     // From here on the device counts as admitted: the
                     // Welcome may reach it even if this side sees an error.
@@ -333,7 +333,11 @@ impl Window {
                 }
                 Outcome::Failed { error, wrong_code } => {
                     let _ = sock.write_all(&step.send);
-                    return Err(if wrong_code { Error::with("the pairing failed", Refusal::WrongCode) } else { error });
+                    return Err(if wrong_code {
+                        Error::with(format!("pair: {}", Refusal::WrongCode), Refusal::WrongCode)
+                    } else {
+                        error
+                    });
                 }
             }
             if !step.send.is_empty() {

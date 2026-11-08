@@ -519,7 +519,7 @@ impl Admission {
         // refused before the exchange.
         if self.view.devices.contains(device.as_str()) {
             self.send(&Out { error: "taken", ..Default::default() });
-            return Err(fail(Error::with("the pairing failed", Refusal::Taken)));
+            return Err(fail(Error::with(format!("pair: {}", Refusal::Taken), Refusal::Taken)));
         }
         let (Some(msg), Some(ad)) = (f.msg, f.ad) else {
             return Err(fail(Error::msg("the joining device sent a bad first frame")));
@@ -552,12 +552,12 @@ impl Admission {
     /// device in an invitation's window, else issues and sends the Welcome.
     fn confirm(&mut self, f: In, st: Box<cpace::State>, joiner: Joiner, now_ms: i64) -> Result<Outcome> {
         if !f.error.is_empty() {
-            return Err(Error::with("the pairing failed", Refusal::of(&f.error)));
+            return Err(Error::with(format!("pair: {}", Refusal::of(&f.error)), Refusal::of(&f.error)));
         }
         if st.verify(&f.tag.unwrap_or_default()).is_err() {
             self.send(&Out { error: "wrong-code", ..Default::default() });
             return Ok(Outcome::Failed {
-                error: Error::with("the pairing failed", Refusal::WrongCode),
+                error: Error::with(format!("pair: {}", Refusal::WrongCode), Refusal::WrongCode),
                 wrong_code: true,
             });
         }
@@ -590,7 +590,10 @@ impl Admission {
             },
             State::Asking { .. } => {
                 self.send(&Out { error: Refusal::Declined.code(), ..Default::default() });
-                Outcome::Failed { error: Error::with("the pairing failed", Refusal::Declined), wrong_code: false }
+                Outcome::Failed {
+                    error: Error::with(format!("pair: {}", Refusal::Declined), Refusal::Declined),
+                    wrong_code: false,
+                }
             }
             _ => Outcome::Failed { error: Error::msg("nothing waits for the admin's answer"), wrong_code: false },
         };

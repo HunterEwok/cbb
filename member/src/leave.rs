@@ -26,6 +26,7 @@ pub const GROUP_FILES: &[&str] = &[
     remotepaste::LOG_FILE,
     actions::LOG_FILE,
     crate::mute::FILE_NAME,
+    crate::signed::FILE_NAME,
     records::OLD_GROUP_DIR,
     records::FILE_NAME,
 ];

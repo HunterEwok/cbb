@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/helper"
+	"github.com/HunterEwok/cbb/internal/peripheral"
 	"github.com/HunterEwok/cbb/internal/version"
 )
 
@@ -44,9 +46,16 @@ func run(args []string, in io.Reader, out, errw io.Writer, terminal bool) int {
 
 // newServer is the helper with every operation this build serves.
 func newServer() *helper.Server {
+	// The service's tests stand in for an Apple TV's mDNS name, as they do
+	// in their own process (peripheral.AppleTVName), when the helper runs
+	// beside the Rust service.
+	if name, ok := os.LookupEnv("CBB_TEST_APPLETV_NAME"); ok {
+		peripheral.AppleTVName = func(context.Context, string) string { return name }
+	}
 	s := helper.New(version.String())
 	s.HandleKeys()
 	s.HandlePeripherals(os.Stderr)
 	s.HandleAgent(os.Stderr)
+	s.HandleVLESS()
 	return s
 }
