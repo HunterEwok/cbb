@@ -309,6 +309,9 @@ pub struct Status {
     /// How many records of a later version this member keeps.
     #[serde(default, skip_serializing_if = "is_zero_u")]
     pub newer: usize,
+    /// When this device's member certificate ends, in Unix milliseconds.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub cert_ends_ms: i64,
 }
 
 /// A claim to take the group over, as Go's control.Claim: who claims it

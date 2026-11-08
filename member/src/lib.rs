@@ -62,6 +62,7 @@ mod remotepaste;
 mod rootless;
 pub mod sealkey;
 mod sekey;
+mod status_text;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod third_party {
     pub mod pcsclite;
@@ -718,21 +719,6 @@ fn cmd_copy(g: &Global, args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Names an operating system for the user, as cbb status does.
-fn os_name(os: &str) -> &str {
-    match os {
-        "linux" => "Linux",
-        "windows" => "Windows",
-        "macos" => "macOS",
-        "ios" => "iOS",
-        "android" => "Android",
-        "aurora" => "Aurora OS",
-        "sailfish" => "Sailfish OS",
-        "none" => "device",
-        _ => "?",
-    }
-}
-
 fn cmd_paste(g: &Global, args: &[String]) -> Result<()> {
     let (mut terminal, mut lines, mut secret) = (false, false, false);
     for a in args {
@@ -783,56 +769,14 @@ fn terminal_text(text: &str, all: bool) -> (String, usize) {
 
 fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
     if !args.is_empty() {
-        return Err(Error::msg("status takes no arguments"));
+        return Err(cli::usage("status takes no arguments"));
     }
-    let m =
-        request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
-    let s = m.header.status.unwrap_or_default();
-    if s.group.is_empty() {
-        // As Go's writeStatus.
-        println!("{}", s.version);
-        if s.left_old_group {
-            println!("This device left its group, which was made before 0.6: groups are set up again from 0.6 on.");
-        }
-        println!("Not in a group. Run cbb new here to start one, or cbb pair to join one.");
-        return Ok(());
-    }
-    println!("device  {}\ngroup   {}\nrole    {}\nversion {}", s.device, s.group, s.role, s.version);
-    if !s.mode.is_empty() {
-        println!("mode    {}", s.mode);
-    }
-    match s.stop.as_str() {
-        "full" => println!(
-            "The group is stopped: its members exchange records only, no clipboard, until the group's root decides."
-        ),
-        "secrets" => println!("The group sends no secrets until its root decides."),
-        _ => {}
-    }
-    if s.removed {
-        println!(
-            "This device was removed from the group: its members refuse it. To join this group again or another one, leave it here first: sudo cbb leave, then cbb pair."
-        );
-    }
-    if s.peers.is_empty() {
-        println!("no members connected");
-    }
-    print_away(s.away.as_ref());
-    if s.group.is_empty() {
-        return Ok(());
-    }
-    let devs =
-        request(g, &control::Message::new(control::Header { op: "devices".into(), ..Default::default() }, Vec::new()))?;
-    for d in devs.header.devices {
-        let mut marks = [(d.this, "this device"), (d.online, "online"), (d.admin, "admin")]
-            .iter()
-            .filter(|(on, _)| *on)
-            .map(|(_, s)| s.to_string())
-            .collect::<Vec<_>>();
-        if let Some(p) = s.peers.iter().find(|p| p.id == d.id) {
-            marks.push(format!("clock {:+} ms", p.skew_ms));
-        }
-        println!("{}  {:<24} {:<8} {:<8} {}", d.id, d.name, os_name(&d.os), d.role, marks.join(", "));
-    }
+    let ask = |op: &str| {
+        request(g, &control::Message::new(control::Header { op: op.into(), ..Default::default() }, Vec::new()))
+    };
+    let s = ask("status")?.header.status.ok_or_else(|| Error::msg("the service sent no status"))?;
+    let devs = if s.group.is_empty() { Vec::new() } else { ask("devices")?.header.devices };
+    print!("{}", status_text::write_status(&s, &devs, uptime::wall_ms()));
     Ok(())
 }
 
@@ -1234,36 +1178,10 @@ fn cmd_global(g: &Global, args: &[String]) -> Result<()> {
         _ => return Err(cli::usage("cbb global [on|off]")),
     }
     let m = request(g, &control::Message::new(h, Vec::new()))?;
-    print_away(m.header.status.and_then(|s| s.away).as_ref());
+    let mut out = String::new();
+    status_text::write_away(&mut out, m.header.status.and_then(|s| s.away).as_ref());
+    print!("{out}");
     Ok(())
-}
-
-/// Prints sync away from home as cbb global on a full member does.
-fn print_away(a: Option<&control::Away>) {
-    let Some(a) = a else {
-        println!("Sync away from home: off (cbb global on turns it on).");
-        return;
-    };
-    match () {
-        _ if a.hub_device.is_empty() && !a.keys_in_file => println!("Sync away from home: off."),
-        _ if a.hub_device.is_empty() => {
-            println!("Sync away from home: on; waiting to meet the group's hub on the home network.")
-        }
-        _ if a.through => {
-            println!("Sync away from home: on; connected to the hub {} through the tunnel.", a.hub_device)
-        }
-        _ => println!(
-            "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.",
-            a.hub_device,
-            a.endpoints.join(", ")
-        ),
-    }
-    if !a.error.is_empty() {
-        println!("  Last problem: {}.", a.error.trim_end_matches('.'));
-        if !a.detail.is_empty() && error::show_details() {
-            println!("  Detail: {}", a.detail);
-        }
-    }
 }
 
 fn cmd_watch(g: &Global, args: &[String]) -> Result<()> {

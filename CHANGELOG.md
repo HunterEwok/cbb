@@ -11,6 +11,8 @@ All notable changes to cbb are documented in this file. The format follows
   exit codes (2 for a wrong use): `new`, `remove`, `rename`, `takeover -delay`, `incoming`,
   `keys`, `global hubs`, `freeze`, `unfreeze`, `admin`, `resolve`, `handover`, `mute`,
   `unmute`, `config` and `network`; `TestRustCommandLine` runs them against Rust services.
+  Its `cbb status` prints what the Go cbb's does, with the devices' table, and the Rust
+  service tells when this device's certificate ends.
   `cbb mute` and `cbb unmute` go through the administrator's socket, as in the Go service, and
   a command that does not reach a device names why.
 - The Go service's tests run on the Rust service (`CBB_TEST_RUST_SERVICE` names its

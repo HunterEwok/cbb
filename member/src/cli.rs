@@ -170,7 +170,7 @@ pub(crate) fn keys(g: &Global, args: &[String]) -> Result<()> {
 }
 
 /// What the group's key level lets in (Go's keyLevelLine).
-fn key_level_line(level: &str) -> &'static str {
+pub(crate) fn key_level_line(level: &str) -> &'static str {
     match level {
         "proven" => {
             "Key level proven: only keys that attestation proves are in hardware may be the group's root, an admin or a hub."

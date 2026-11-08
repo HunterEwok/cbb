@@ -2380,6 +2380,7 @@ impl Service {
                     key_problem: String::new(),
                     incoming_ms: incoming_ms.unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
                     quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
+                    cert_ends_ms: id.cert.not_after * 1000,
                     ..group
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
