@@ -7,9 +7,9 @@
 #   reproduce.sh CHECKOUT ELSEWHERE
 # CHECKOUT, the repository, is built where it is. ELSEWHERE, a new or empty directory, gets
 # its committed files without .git, as a tarball has them, and is built there with another
-# time zone, umask, Go build cache and cargo target directory. Both need what the app's
+# time zone, umask and cargo target directory. Both need what the app's
 # build needs: the Android SDK with the NDK of cbb.ndk (apps/android/gradle.properties), the
-# Rust of cbb.rust with the Android targets and cargo-ndk, Go and a JDK. CI's fdroid job runs
+# Rust of cbb.rust with the Android targets and cargo-ndk, and a JDK. CI's fdroid job runs
 # it.
 set -eu
 if [ $# -ne 2 ]; then
@@ -32,8 +32,7 @@ apk=apps/android/app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigne
 (
 	umask 077
 	TZ=Pacific/Kiritimati
-	GOCACHE=$work/gocache
-	export TZ GOCACHE
+	export TZ
 	cd "$two/apps/android" && ./gradlew --no-daemon :app:assembleFdroidRelease
 )
 

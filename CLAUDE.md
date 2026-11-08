@@ -79,12 +79,13 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   forwarder, for networks that block WireGuard: the forwarder's side passes every packet to its
   own UDP port, the client's side is a local UDP port for WireGuard (docs/protocol.md,
   sections 11 and 13).
-- `mobile/cbbtun`: the phones' tunnel to the hub, the same WireGuard in the app's process, bound
-  by gomobile into an AAR and an xcframework (CI's `phone tunnel` jobs); a loopback port leads
-  to the hub's member port, and the kits dial it with their own member TLS. Its Rust
-  replacement is `ffi/src/tunnel.rs` (`cbb_tunnel`, `cbb_tunnel_register`,
-  `cbb_tunnel_relay`, `cbb_tunnel_relay_credentials`, feature `tunnel`; `TestRustPhone*` run it through the example
-  `tunnel-on-linux`); the apps move to it, and cbbtun goes, once their node runs in Rust.
+- `ffi/src/tunnel.rs`: the phones' tunnel to the hub, the lite member's WireGuard in the app's
+  process (`cbb_tunnel`, `cbb_tunnel_register`, `cbb_tunnel_relay`,
+  `cbb_tunnel_relay_credentials`, feature `tunnel`), wrapped by the kits' `RustTunnel`: the
+  client, the phone as the group's hub (registered with the forwarder, inside VLESS when its TCP
+  port does not answer) and the link to the blind relay; a loopback port leads to the hub's
+  member port, and the kits dial it with their own member TLS. `TestRustPhone*` run it through
+  the example `tunnel-on-linux`.
 - Windows: `cmd/cbb/platform_windows.go` (the Windows service, logs),
   `internal/service/control_windows.go` (the socket's access list),
   `internal/pasteboard/pasteboard_windows.go` (the Win32 clipboard), `internal/winpaste` (remote paste:
@@ -95,7 +96,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `Member` (the wire format, for pairing and restoring), `Records`, `Certificates`,
   `PhoneGroup`, `Discovery`/`BonjourBrowser` (finding the members and their addresses),
   `TLSTransport` (pairing), `KeychainIdentity`, `SecKeySigner`, `AwayFromHome` (sync away from
-  home through `Cbbtun.xcframework`); `cbb-interop` plays the phone in Go tests.
+  home through `RustTunnel`); `cbb-interop` plays the phone in Go tests.
 - The Rust workspace (`Cargo.toml` at the top, its crates beside `cmd/` and `internal/`): `member/` is
   the lite member in Rust (its command is `cbb` too): no CA keys, joins by the phone's QR code,
   dials the Linux members and listens for phones and Macs (mDNS TXT `r=lite`). Its protocol core is the crate `core/` (`cbb_core`: `certs`,

@@ -85,8 +85,7 @@ if [ -z "$phone" ]; then
 	exit 1
 fi
 
-# The tunnel and the Rust core the app links, when not built yet.
-[ -d Cbbtun.xcframework ] || "$root/mobile/cbbtun/bind.sh" ios "$PWD/Cbbtun.xcframework"
+# The Rust core the app links, with the tunnel, when not built yet.
 [ -d CbbCore/iphoneos ] || sh "$root/ffi/bind.sh" ios "$PWD/CbbCore"
 
 if [ "$all" = 1 ]; then

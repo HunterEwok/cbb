@@ -13,8 +13,8 @@ import java.security.SecureRandom
  * The phone as the group's hub while its app is open (docs/design.md, "The
  * phone as the hub", D-64): the clients it admits by the tunnel keys their
  * hellos offer, and the offers it answers with (docs/protocol.md, section
- * 11), by the same rules as a computer's hub. The tunnel itself is cbbtun's
- * Hub, which takes clientsJson.
+ * 11), by the same rules as a computer's hub. The tunnel itself is
+ * RustTunnel.Hub, which takes clientsJson.
  *
  * publicKey is the hub's WireGuard public key. The methods are thread-safe.
  */
@@ -25,7 +25,7 @@ class PhoneHub(val publicKey: ByteArray, clients: List<Client> = emptyList()) {
      * only taking it from another hub.
      */
     class Client(val device: String, val key: ByteArray, val psk: ByteArray, val met: Boolean = false) {
-        /** As cbbtun and the other hubs take it; met only to keep it. */
+        /** As the tunnel and the other hubs take it; met only to keep it. */
         fun toJson(keep: Boolean = false): JsonObject = Wire.obj(
             "device" to Wire.str(device),
             "key" to Wire.bytes(key),
@@ -59,8 +59,8 @@ class PhoneHub(val publicKey: ByteArray, clients: List<Client> = emptyList()) {
 
     /**
      * Whether the clients may come over VLESS: the offers then wait for
-     * vless, the way to the forwarder that its answer gives (cbbtun's
-     * Status).
+     * vless, the way to the forwarder that its answer gives (the hub's
+     * status).
      */
     @Volatile var vlessOnly: Boolean = false
 
@@ -214,7 +214,7 @@ class PhoneHub(val publicKey: ByteArray, clients: List<Client> = emptyList()) {
         gone.map { it.device }
     }
 
-    /** The clients as cbbtun's StartHub and SetClients take them. */
+    /** The clients as the tunnel's hub_start and hub_set_clients take them. */
     val clientsJson: String get() = JsonArray(clients.map { it.toJson() }).toString()
 
     companion object {
