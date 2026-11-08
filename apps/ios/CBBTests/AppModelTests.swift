@@ -190,7 +190,7 @@ final class AppModelTests: XCTestCase {
     /// The house turns sync off for a time or until it is turned on again,
     /// and on; an admin mutes a device and unmutes it; a mute that ended
     /// holds no more.
-    func testSyncOffAndMute() async {
+    func testPauseAndMute() async {
         let g = FakeGroup()
         g.computers = [.init(id: "a", name: "pi", online: true)]
         let m = AppModel(group: g)
@@ -213,7 +213,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(AppModel.Hold(ms: 1_000))
         XCTAssertNil(AppModel.Hold(ms: nil))
         XCTAssertEqual(AppModel.Hold(ms: 0), AppModel.Hold(until: nil))
-        XCTAssertEqual(AppModel.describe(CoreMember.Failure.muted, details: false, log: false), "An admin muted this phone, so its copies stay on it.")
+        XCTAssertEqual(AppModel.describe(CoreMember.Failure.muted, details: false, log: false), String(localized: "An admin muted this phone, so its copies stay on it.", bundle: .app))
     }
 
     func testMakeAdmin() async {
@@ -374,7 +374,7 @@ final class AppModelTests: XCTestCase {
 
     /// The phone's own key is made once, at the first launch without a
     /// group.
-    func testPreparedOnce() {
+    func testWelcomeOnce() {
         let defaults = freshDefaults()
         let g = FakeGroup()
         AppModel(group: g, defaults: defaults).prepare()
@@ -383,11 +383,31 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(g.prepared, 1, "the key is made only at the first launch")
     }
 
-    func testNotPreparedWithAGroup() {
+    func testNoWelcomeWithAGroup() {
         let g = FakeGroup()
         g.hasGroup = true
         AppModel(group: g, defaults: freshDefaults()).prepare()
         XCTAssertEqual(g.prepared, 0)
+    }
+
+    /// Joining from Start keeps the key the first launch made; it is not made again.
+    func testJoiningEndsTheWelcome() {
+        let defaults = freshDefaults()
+        let g = FakeGroup()
+        let m = AppModel(group: g, defaults: defaults)
+        m.prepare()
+        m.startJoining()
+        XCTAssertEqual(m.phase, .joining)
+        AppModel(group: g, defaults: defaults).prepare()
+        XCTAssertEqual(g.prepared, 1)
+    }
+
+    /// Start's language menu offers the system's language first and every translation.
+    func testLanguageOfferedOnStart() {
+        XCTAssertEqual(LanguageChoice.allCases.first, .system)
+        XCTAssertEqual(Set(LanguageChoice.translations), Set(LanguageChoice.allCases.filter { $0 != .system }))
+        XCTAssertTrue(LanguageChoice.translations.contains(.en))
+        XCTAssertTrue(LanguageChoice.translations.contains(.ru))
     }
 
     func testLanguageChoice() {
